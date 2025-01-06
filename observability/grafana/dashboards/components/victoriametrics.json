@@ -1,0 +1,3202 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Overview for single node VictoriaMetrics v1.57.0 or higher",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 3,
+  "links": [
+    {
+      "icon": "doc",
+      "tags": [],
+      "targetBlank": true,
+      "title": "Single server Wiki",
+      "type": "link",
+      "url": "https://docs.VictoriaMetrics.com/"
+    },
+    {
+      "icon": "external link",
+      "tags": [],
+      "targetBlank": true,
+      "title": "Found a bug?",
+      "type": "link",
+      "url": "https://github.com/VictoriaMetrics/VictoriaMetrics/issues"
+    },
+    {
+      "icon": "external link",
+      "tags": [],
+      "targetBlank": true,
+      "title": "New releases",
+      "tooltip": "",
+      "type": "link",
+      "url": "https://github.com/VictoriaMetrics/VictoriaMetrics/releases"
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 6,
+      "panels": [],
+      "title": "Stats",
+      "type": "row"
+    },
+    {
+      "description": "",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "id": 85,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<div style=\"text-align: center;\">$version</div>",
+        "mode": "markdown"
+      },
+      "pluginVersion": "11.4.0",
+      "title": "Version",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "uid": "$ds"
+      },
+      "description": "How many datapoints are in storage",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 4,
+        "y": 1
+      },
+      "id": 26,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "exemplar": true,
+          "expr": "sum(vm_rows{job=\"$job\", instance=~\"$instance\", type!=\"indexdb\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Total datapoints",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "uid": "$ds"
+      },
+      "description": "Total amount of used disk space",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 9,
+        "y": 1
+      },
+      "id": 81,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "exemplar": true,
+          "expr": "sum(vm_data_size_bytes{job=\"$job\", type!=\"indexdb\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Disk space usage",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "uid": "$ds"
+      },
+      "description": "Average disk usage per datapoint.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 14,
+        "y": 1
+      },
+      "id": 82,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "exemplar": true,
+          "expr": "sum(vm_data_size_bytes{job=\"$job\", type!=\"indexdb\"}) / sum(vm_rows{job=\"$job\", type!=\"indexdb\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Bytes per point",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "uid": "$ds"
+      },
+      "description": "Total size of allowed memory via flag `-memory.allowedPercent`",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 19,
+        "y": 1
+      },
+      "id": 79,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "exemplar": true,
+          "expr": "sum(vm_allowed_memory_bytes{job=\"$job\", instance=~\"$instance\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Allowed memory",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "datasource",
+        "uid": "grafana"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1800
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 4,
+        "x": 0,
+        "y": 3
+      },
+      "id": 87,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "exemplar": true,
+          "expr": "vm_app_uptime_seconds{job=\"$job\", instance=\"$instance\"}",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Uptime",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "uid": "$ds"
+      },
+      "description": "How many entries inverted index contains. This value is proportional to the number of unique timeseries in storage(cardinality).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 4,
+        "y": 3
+      },
+      "id": 38,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "exemplar": true,
+          "expr": "sum(vm_rows{job=\"$job\", instance=~\"$instance\", type=\"indexdb\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Index size",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "uid": "$ds"
+      },
+      "description": "The minimum free disk space left",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 9,
+        "y": 3
+      },
+      "id": 80,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "exemplar": true,
+          "expr": "min(vm_free_disk_space_bytes{job=\"$job\", instance=~\"$instance\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Min free disk space",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "uid": "$ds"
+      },
+      "description": "Total number of available CPUs for VM process",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 14,
+        "y": 3
+      },
+      "id": 77,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "exemplar": true,
+          "expr": "sum(vm_available_cpu_cores{job=\"$job\", instance=~\"$instance\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Available CPU",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "uid": "$ds"
+      },
+      "description": "Total size of available memory for VM process",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 2,
+        "w": 5,
+        "x": 19,
+        "y": 3
+      },
+      "id": 78,
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "text": {},
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "exemplar": true,
+          "expr": "sum(vm_available_memory_bytes{job=\"$job\", instance=~\"$instance\"})",
+          "format": "time_series",
+          "instant": true,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Available memory",
+      "type": "stat"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 24,
+      "panels": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "* `*` - unsupported query path\n* `/write` - insert into VM\n* `/metrics` - query VM system metrics\n* `/query` - query instant values\n* `/query_range` - query over a range of time\n* `/series` - match a certain label set\n* `/label/{}/values` - query a list of label values (variables mostly)",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 6
+          },
+          "id": 12,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(vm_http_requests_total{job=\"$job\", instance=~\"$instance\", path!~\"/favicon.ico\"}[$__interval])) by (path) > 0",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{path}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Requests rate ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "The less time it takes is better.\n* `*` - unsupported query path\n* `/write` - insert into VM\n* `/metrics` - query VM system metrics\n* `/query` - query instant values\n* `/query_range` - query over a range of time\n* `/series` - match a certain label set\n* `/label/{}/values` - query a list of label values (variables mostly)",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 6
+          },
+          "id": 22,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "max(vm_request_duration_seconds{job=\"$job\", instance=~\"$instance\", quantile=~\"(0.5|0.99)\"}) by (path, quantile) > 0",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "{{quantile}} ({{path}})",
+              "refId": "A"
+            }
+          ],
+          "title": "Query duration ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows the number of active time series with new data points inserted during the last hour. High value may result in ingestion slowdown. \n\nSee following link for details:",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 14
+          },
+          "id": 51,
+          "links": [
+            {
+              "targetBlank": true,
+              "title": "troubleshooting",
+              "url": "https://github.com/VictoriaMetrics/VictoriaMetrics/blob/master/README.md#troubleshooting"
+            }
+          ],
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "vm_cache_entries{job=\"$job\", instance=~\"$instance\", type=\"storage/hour_metric_ids\"}",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "Active time series",
+              "refId": "A"
+            }
+          ],
+          "title": "Active time series ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "VictoriaMetrics stores various caches in RAM. Memory size for these caches may be limited with -`memory.allowedPercent` flag. Line `max allowed` shows max allowed memory size for cache.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "max allowed"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "#C4162A",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 14
+          },
+          "id": 33,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_cache_size_bytes{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "size",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "max(vm_allowed_memory_bytes{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "max allowed",
+              "refId": "B"
+            }
+          ],
+          "title": "Cache size ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows how many ongoing insertions (not API /write calls) on disk are taking place, where:\n* `max` - equal to number of CPUs;\n* `current` - current number of goroutines busy with inserting rows into underlying storage.\n\nEvery successful API /write call results into flush on disk. However, these two actions are separated and controlled via different concurrency limiters. The `max` on this panel can't be changed and always equal to number of CPUs. \n\nWhen `current` hits `max` constantly, it means storage is overloaded and requires more CPU.\n\n",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "decimals": 0,
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "max"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "#C4162A",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 22
+          },
+          "id": 59,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_concurrent_addrows_capacity{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "max",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_concurrent_addrows_current{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "current",
+              "refId": "B"
+            }
+          ],
+          "title": "Concurrent flushes on disk ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "* `*` - unsupported query path\n* `/write` - insert into VM\n* `/metrics` - query VM system metrics\n* `/query` - query instant values\n* `/query_range` - query over a range of time\n* `/series` - match a certain label set\n* `/label/{}/values` - query a list of label values (variables mostly)",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 22
+          },
+          "id": 35,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "exemplar": true,
+              "expr": "sum(rate(vm_http_request_errors_total{job=\"$job\", instance=\"$instance\"}[$__interval])) by (path) > 0",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{path}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Requests error rate ($instance)",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Performance",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 14,
+      "panels": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "How many datapoints are inserted into storage per second",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byValue",
+                  "options": {
+                    "op": "gte",
+                    "reducer": "allIsZero",
+                    "value": 0
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": true,
+                      "tooltip": true,
+                      "viz": false
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 7
+          },
+          "id": 10,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(vm_rows_inserted_total{job=\"$job\", instance=\"$instance\"}[$__interval])) by (type) > 0",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Datapoints ingestion rate ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows the time needed to reach the 100% of disk capacity based on the following params:\n* free disk space;\n* row ingestion rate;\n* dedup rate;\n* compression.\n\nUse this panel for capacity planning in order to estimate the time remaining for running out of the disk space.\n\n",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byValue",
+                  "options": {
+                    "op": "gte",
+                    "reducer": "allIsZero",
+                    "value": 0
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": true,
+                      "tooltip": true,
+                      "viz": false
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 7
+          },
+          "id": 73,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "min"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "vm_free_disk_space_bytes{job=\"$job\", instance=\"$instance\"} / ignoring(path) ((rate(vm_rows_added_to_storage_total{job=\"$job\", instance=\"$instance\"}[1d]) - ignoring(type) rate(vm_deduplicated_samples_total{job=\"$job\", instance=\"$instance\", type=\"merge\"}[1d])) * scalar(sum(vm_data_size_bytes{job=\"$job\", instance=\"$instance\", type!=\"indexdb\"}) / sum(vm_rows{job=\"$job\", instance=\"$instance\", type!=\"indexdb\"})))",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "title": "Storage full ETA ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows how many datapoints are in the storage and what is average disk usage per datapoint.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "bytes-per-datapoint"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  },
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 15
+          },
+          "id": 30,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_rows{job=\"$job\", instance=~\"$instance\", type != \"indexdb\"})",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "total datapoints",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_data_size_bytes{job=\"$job\", instance=~\"$instance\", type!=\"indexdb\"}) / sum(vm_rows{job=\"$job\", instance=~\"$instance\", type != \"indexdb\"})",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "bytes-per-datapoint",
+              "refId": "B"
+            }
+          ],
+          "title": "Datapoints ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "How many datapoints are in RAM queue waiting to be written into storage. The number of pending data points should be in the range from 0 to `2*<ingestion_rate>`, since VictoriaMetrics pushes pending data to persistent storage every second.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pending index entries"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "none"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 3
+                  },
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 15
+          },
+          "id": 34,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "vm_pending_rows{job=\"$job\", instance=~\"$instance\", type=\"storage\"}",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "pending datapoints",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "vm_pending_rows{job=\"$job\", instance=~\"$instance\", type=\"indexdb\"}",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "pending index entries",
+              "refId": "B"
+            }
+          ],
+          "title": "Pending datapoints ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows amount of on-disk space occupied by data points and the remaining disk space at `-storageDataPath`",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 23
+          },
+          "id": 53,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_data_size_bytes{job=\"$job\", instance=~\"$instance\", type!=\"indexdb\"})",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "Used",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "vm_free_disk_space_bytes{job=\"$job\", instance=\"$instance\"}",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "Free",
+              "refId": "B"
+            }
+          ],
+          "title": "Disk space usage - datapoints ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Data parts of LSM tree.\nHigh number of parts could be an evidence of slow merge performance - check the resource utilization.\n* `indexdb` - inverted index\n* `storage/small` - recently added parts of data ingested into storage(hot data)\n* `storage/big` -  small parts gradually merged into big parts (cold data)",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 23
+          },
+          "id": 36,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_parts{job=\"$job\", instance=\"$instance\"}) by (type)",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "title": "LSM parts ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows amount of on-disk space occupied by inverted index.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 31
+          },
+          "id": 55,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "exemplar": true,
+              "expr": "vm_data_size_bytes{job=\"$job\", instance=~\"$instance\", type=\"indexdb\"}",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "disk space used",
+              "refId": "A"
+            }
+          ],
+          "title": "Disk space usage - index ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "The number of on-going merges in storage nodes.  It is expected to have high numbers for `storage/small` metric.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "decimals": 0,
+              "links": [],
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 31
+          },
+          "id": 62,
+          "options": {
+            "alertThreshold": true,
+            "legend": {
+              "calcs": [
+                "mean",
+                "lastNotNull",
+                "max"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_active_merges{job=\"$job\", instance=\"$instance\"}) by(type)",
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Active merges ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows how many rows were ignored on insertion due to corrupted or out of retention timestamps.",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 39
+          },
+          "id": 58,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "exemplar": true,
+              "expr": "sum(vm_rows_ignored_total{job=\"$job\", instance=\"$instance\"}) by (reason)",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{reason}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Rows ignored ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "The number of rows merged per second by storage nodes.",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 39
+          },
+          "id": 64,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(vm_rows_merged_total{job=\"$job\", instance=\"$instance\"}[5m])) by(type)",
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Merge speed ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows the rate of logging the messages by their level. Unexpected spike in rate is a good reason to check logs.",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 47
+          },
+          "id": 67,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(vm_log_messages_total{job=\"$job\", instance=\"$instance\"}[5m])) by (level) ",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "{{level}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Logging rate ($instance)",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Storage",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "id": 71,
+      "panels": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows the rate and total number of new series created over last 24h.\n\nHigh churn rate tightly connected with database performance and may result in unexpected OOM's or slow queries. It is recommended to always keep an eye on this metric to avoid unexpected cardinality \"explosions\".\n\nThe higher churn rate is, the more resources required to handle it. Consider to keep the churn rate as low as possible.\n\nGood references to read:\n* https://www.robustperception.io/cardinality-is-key\n* https://www.robustperception.io/using-tsdb-analyze-to-investigate-churn-and-cardinality",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 40
+          },
+          "id": 66,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(vm_new_timeseries_created_total{job=\"$job\", instance=\"$instance\"}[5m]))",
+              "interval": "",
+              "legendFormat": "churn rate",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(increase(vm_new_timeseries_created_total{job=\"$job\", instance=\"$instance\"}[24h]))",
+              "interval": "",
+              "legendFormat": "new series over 24h",
+              "refId": "B"
+            }
+          ],
+          "title": "Churn rate ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Slow queries rate according to `search.logSlowQueryDuration` flag, which is `5s` by default.",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 40
+          },
+          "id": 60,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(vm_slow_queries_total{job=\"$job\", instance=\"$instance\"}[5m]))",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "slow queries rate",
+              "refId": "A"
+            }
+          ],
+          "title": "Slow queries rate ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "The percentage of slow inserts comparing to total insertion rate during the last 5 minutes. \n\nThe less value is better. If percentage remains high (>50%) during extended periods of time, then it is likely more RAM is needed for optimal handling of the current number of active time series. \n\nIn general, VictoriaMetrics requires ~1KB or RAM per active time series, so it should be easy calculating the required amounts of RAM for the current workload according to capacity planning docs. But the resulting number may be far from the real number because the required amounts of memory depends on may other factors such as the number of labels per time series and the length of label values.",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 48
+          },
+          "id": 68,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(vm_slow_row_inserts_total{job=\"$job\", instance=\"$instance\"}[5m])) / sum(rate(vm_rows_inserted_total{job=\"$job\", instance=\"$instance\"}[5m]))",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "slow inserts percentage",
+              "refId": "A"
+            }
+          ],
+          "title": "Slow inserts ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "VictoriaMetrics limits the number of labels per each metric with `-maxLabelsPerTimeseries` command-line flag.\n\nThis prevents from ingesting metrics with too many labels. The value of `maxLabelsPerTimeseries` must be adjusted for your workload.\n\nWhen limit is exceeded (graph is > 0) - extra labels are dropped, which could result in unexpected identical time series.",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 12,
+            "y": 48
+          },
+          "id": 74,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "exemplar": true,
+              "expr": "sum(increase(vm_metrics_with_dropped_labels_total{job=\"$job\", instance=\"$instance\"}[5m]))",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "limit exceeded",
+              "refId": "A"
+            }
+          ],
+          "title": "Labels limit exceeded ($instance)",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Troubleshooting",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 46,
+      "panels": [
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 37
+          },
+          "id": 44,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(go_memstats_sys_bytes{job=\"$job\", instance=\"$instance\"}) + sum(vm_cache_size_bytes{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "requested from system",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(go_memstats_heap_inuse_bytes{job=\"$job\", instance=\"$instance\"}) + sum(vm_cache_size_bytes{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "heap inuse",
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(go_memstats_stack_inuse_bytes{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "stack inuse",
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(process_resident_memory_bytes{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "resident",
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "exemplar": true,
+              "expr": "sum(process_resident_memory_anon_bytes{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "resident anonymous",
+              "refId": "E"
+            }
+          ],
+          "title": "Memory usage ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 37
+          },
+          "id": 57,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "rate(process_cpu_seconds_total{job=\"$job\", instance=\"$instance\"}[5m])",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "CPU cores used",
+              "refId": "A"
+            }
+          ],
+          "title": "CPU ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Panel shows the number of open file descriptors in the OS.\nReaching the limit of open files can cause various issues and must be prevented.\n\nSee how to change limits here https://medium.com/@muhammadtriwibowo/set-permanently-ulimit-n-open-files-in-ubuntu-4d61064429a",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 45
+          },
+          "id": 75,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(process_open_fds{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "open",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "min(process_max_fds{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "max",
+              "refId": "B"
+            }
+          ],
+          "title": "Open FDs ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows the number of bytes read/write from the storage layer.",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 45
+          },
+          "id": 76,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(process_io_storage_read_bytes_total{job=\"$job\", instance=\"$instance\"}[5m]))",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "read",
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(process_io_storage_written_bytes_total{job=\"$job\", instance=\"$instance\"}[5m]))",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "write",
+              "refId": "B"
+            }
+          ],
+          "title": "Disk writes/reads ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 53
+          },
+          "id": 47,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(go_goroutines{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "gc duration",
+              "refId": "A"
+            }
+          ],
+          "title": "Goroutines ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "Shows avg GC duration",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 53
+          },
+          "id": 42,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(go_gc_duration_seconds_sum{job=\"$job\", instance=\"$instance\"}[5m]))\n/\nsum(rate(go_gc_duration_seconds_count{job=\"$job\", instance=\"$instance\"}[5m]))",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "avg gc duration",
+              "refId": "A"
+            }
+          ],
+          "title": "GC duration ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 61
+          },
+          "id": 48,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(process_num_threads{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "intervalFactor": 2,
+              "legendFormat": "threads",
+              "refId": "A"
+            }
+          ],
+          "title": "Threads ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 61
+          },
+          "id": 37,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(vm_tcplistener_conns{job=\"$job\", instance=\"$instance\"})",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "connections",
+              "refId": "A"
+            }
+          ],
+          "title": "TCP connections ($instance)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "uid": "$ds"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "links": []
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 69
+          },
+          "id": 49,
+          "options": {
+            "alertThreshold": true
+          },
+          "pluginVersion": "8.0.0",
+          "targets": [
+            {
+              "datasource": {
+                "uid": "$ds"
+              },
+              "expr": "sum(rate(vm_tcplistener_accepts_total{job=\"$job\", instance=\"$instance\"}[$__interval]))",
+              "format": "time_series",
+              "hide": false,
+              "intervalFactor": 1,
+              "legendFormat": "connections",
+              "refId": "A"
+            }
+          ],
+          "title": "TCP connections rate ($instance)",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Resource usage",
+      "type": "row"
+    }
+  ],
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 40,
+  "tags": [
+    "VictoriaMetrics",
+    "vmsingle"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "VictoriaMetrics",
+          "value": "victoriametrics"
+        },
+        "includeAll": false,
+        "name": "ds",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "victoria-metrics",
+          "value": "victoria-metrics"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$ds"
+        },
+        "definition": "label_values(vm_app_version{version=~\"victoria-metrics-.*\"}, job)",
+        "includeAll": false,
+        "name": "job",
+        "options": [],
+        "query": {
+          "query": "label_values(vm_app_version{version=~\"victoria-metrics-.*\"}, job)",
+          "refId": "VictoriaMetrics-job-Variable-Query"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "v1.108.1",
+          "value": "v1.108.1"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$ds"
+        },
+        "definition": "label_values(vm_app_version{job=\"$job\", instance=\"$instance\"},  version)",
+        "hide": 2,
+        "includeAll": false,
+        "name": "version",
+        "options": [],
+        "query": {
+          "query": "label_values(vm_app_version{job=\"$job\", instance=\"$instance\"},  version)",
+          "refId": "VictoriaMetrics-version-Variable-Query"
+        },
+        "refresh": 1,
+        "regex": "/.*-tags-(v\\d+\\.\\d+\\.\\d+)/",
+        "sort": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "self",
+          "value": "self"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$ds"
+        },
+        "definition": "label_values(vm_app_version{job=~\"$job\"}, instance)",
+        "includeAll": false,
+        "name": "instance",
+        "options": [],
+        "query": {
+          "query": "label_values(vm_app_version{job=~\"$job\"}, instance)",
+          "refId": "VictoriaMetrics-instance-Variable-Query"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
+  },
+  "timezone": "",
+  "title": "VictoriaMetrics",
+  "uid": "wNf0q_kZk",
+  "version": 2,
+  "weekStart": ""
+}

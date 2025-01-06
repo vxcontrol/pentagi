@@ -1,0 +1,36 @@
+You need to refine planned subtask list according to the user's task.
+
+{{if .Tasks}}
+All tasks which executed before this one:
+{{range .Tasks}}
+- Task ID: {{.ID}}
+- Task user's input: {{.Input}}
+- Status: {{.Status}}
+- Result: {{.Result}}
+{{end}}
+{{end}}
+
+{{if .CompletedSubtasks}}
+All completed subtasks for this task:
+{{range .CompletedSubtasks}}
+- Subtask ID: {{.ID}}
+- Title: {{.Title}}
+- Description: {{.Description}}
+- Status: {{.Status}}
+- Result: {{.Result}}
+{{end}}
+{{end}}
+
+User's task to refine the subtasks list bellow:
+{{.Task.Input}}
+
+{{if .PlannedSubtasks}}
+All planned subtasks for this task which you need to refine:
+{{range .PlannedSubtasks}}
+- Subtask ID: {{.ID}}
+- Title: {{.Title}}
+- Description: {{.Description}}
+{{end}}
+{{else}}
+No planned subtasks for this task. All subtasks are completed, please check their statuses and results.
+{{end}}

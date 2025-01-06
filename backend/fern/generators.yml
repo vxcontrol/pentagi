@@ -1,0 +1,15 @@
+default-group: local
+groups:
+  local:
+    generators:
+      - name: fernapi/fern-go-sdk
+        version: 0.33.0
+        config:
+          importPath: pentagi/pkg/observability/langfuse/api
+          packageName: api
+          inlinePathParameters: true
+        output:
+          location: local-file-system
+          path: ../pkg/observability/langfuse/api
+api:
+  path: langfuse/openapi.yml

@@ -1,0 +1,26 @@
+You need to generate subtasks for decomposing the user's task.
+
+{{if .Tasks}}
+All tasks which executed before this one:
+{{range .Tasks}}
+- Task ID: {{.ID}}
+- Task user's input: {{.Input}}
+- Status: {{.Status}}
+- Result: {{.Result}}
+{{end}}
+{{end}}
+
+{{if .Subtasks}}
+All subtasks which generated before for previous tasks:
+{{range .Subtasks}}
+- Task ID: {{.TaskID}}
+- Subtask ID: {{.ID}}
+- Title: {{.Title}}
+- Description: {{.Description}}
+- Status: {{.Status}}
+- Result: {{.Result}}
+{{end}}
+{{end}}
+
+User's task to decompose:
+{{.Task.Input}}

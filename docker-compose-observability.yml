@@ -1,0 +1,237 @@
+volumes:
+  grafana-data:
+    driver: local
+  victoriametrics-data:
+    driver: local
+  clickhouse-data:
+    driver: local
+
+networks:
+  observability-network:
+    driver: bridge
+    external: true
+    name: observability-network
+  langfuse-network:
+    driver: bridge
+    external: true
+    name: langfuse-network
+  pentagi-network:
+    driver: bridge
+    external: true
+    name: pentagi-network
+
+services:
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: always
+    container_name: grafana
+    hostname: grafana
+    expose:
+      - 3000/tcp
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_EXPLORE_ENABLED: true
+      GF_ALERTING_ENABLED: true
+      GF_UNIFIED_ALERTING_ENABLED: true
+      GF_FEATURE_TOGGLES_ENABLE: traceToMetrics,alertingSimplifiedRouting,alertingQueryAndExpressionsStepMode
+    ports:
+      - 127.0.0.1:3000:3000
+    volumes:
+      - ./observability/grafana/config:/etc/grafana:rw
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:rw
+      - grafana-data:/var/lib/grafana:rw
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - observability-network
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: always
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.ignored-mount-points
+      - ^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)
+    container_name: node_exporter
+    hostname: node-exporter
+    expose:
+      - 9100/tcp
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    deploy:
+      mode: global
+    depends_on:
+      otel:
+        condition: service_started
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - observability-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    restart: always
+    command:
+      - --store_container_labels=false
+      - --docker_only=true
+      - --disable_root_cgroup_stats=true
+    container_name: cadvisor
+    hostname: cadvisor
+    expose:
+      - 8080/tcp
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    depends_on:
+      otel:
+        condition: service_started
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - observability-network
+
+  otel:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    restart: always
+    entrypoint:
+      - '/otelcol-contrib'
+      - '--config'
+      - '/etc/otel/config.yml'
+      - '--set'
+      - 'service.telemetry.logs.level=warn'
+    container_name: otel
+    hostname: otelcol
+    expose:
+      - 8148/tcp
+      - 4318/tcp
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ./observability/otel:/etc/otel:rw
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - observability-network
+      - langfuse-network
+      - pentagi-network
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.108.1
+    restart: always
+    command:
+      - --storageDataPath=/storage
+      - --graphiteListenAddr=:2003
+      - --opentsdbListenAddr=:4242
+      - --httpListenAddr=:8428
+      - --influxListenAddr=:8089
+      - --selfScrapeInterval=10s
+    container_name: victoriametrics
+    hostname: victoriametrics
+    expose:
+      - 8428/tcp
+    volumes:
+      - victoriametrics-data:/storage:rw
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - observability-network
+
+  clickstore:
+    image: clickhouse/clickhouse-server:24
+    restart: always
+    container_name: clickstore
+    hostname: clickstore
+    expose:
+      - 9000/tcp
+    environment:
+      CLICKHOUSE_DB: jaeger
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    ulimits: 
+      nofile:
+        hard: 262144
+        soft: 262144
+    volumes:
+      - ./observability/clickhouse/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml:ro
+      - clickhouse-data:/var/lib/clickhouse:rw
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - observability-network
+
+  loki:
+    image: grafana/loki:3.3.2
+    restart: always
+    command: -config.file=/etc/loki/config.yml
+    container_name: loki
+    hostname: loki
+    expose:
+      - 3100/tcp
+    volumes:
+      - ./observability/loki/config.yml:/etc/loki/config.yml:ro
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - observability-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56.0
+    restart: always
+    command:
+      - --grpc-storage-plugin.binary=/etc/jaeger/bin/jaeger-clickhouse-linux-arm64
+      - --grpc-storage-plugin.configuration-file=/etc/jaeger/plugin-config.yml
+      - --grpc-storage-plugin.log-level=info
+    container_name: jaeger
+    hostname: jaeger
+    expose:
+      - 16686/tcp
+      - 14250/tcp
+      - 14268/tcp
+      - 5778/tcp
+      - 5775/udp
+      - 6831/udp
+      - 6832/udp
+    ulimits:
+      nofile:
+        hard: 65000
+        soft: 65000
+      nproc: 65535
+    volumes:
+      - ./observability/jaeger:/etc/jaeger:rw
+    environment:
+      SPAN_STORAGE_TYPE: grpc-plugin
+    depends_on:
+      clickstore:
+        condition: service_healthy
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - observability-network

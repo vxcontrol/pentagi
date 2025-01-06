@@ -1,0 +1,3825 @@
+basePath: /api/v1
+definitions:
+  ErrorResponse:
+    properties:
+      code:
+        example: Internal
+        type: string
+      error:
+        example: original server error message
+        type: string
+      msg:
+        example: internal server error
+        type: string
+      status:
+        example: error
+        type: string
+    type: object
+  SuccessResponse:
+    properties:
+      data:
+        type: object
+      status:
+        example: success
+        type: string
+    type: object
+  gqlerror.Error:
+    properties:
+      extensions:
+        additionalProperties: true
+        type: object
+      locations:
+        items:
+          $ref: '#/definitions/gqlerror.Location'
+        type: array
+      message:
+        type: string
+      path:
+        items: {}
+        type: array
+    type: object
+  gqlerror.Location:
+    properties:
+      column:
+        type: integer
+      line:
+        type: integer
+    type: object
+  graphql.RawParams:
+    properties:
+      extensions:
+        additionalProperties: true
+        type: object
+      headers:
+        $ref: '#/definitions/http.Header'
+      operationName:
+        type: string
+      query:
+        type: string
+      variables:
+        additionalProperties: true
+        type: object
+    type: object
+  graphql.Response:
+    properties:
+      data:
+        items:
+          type: integer
+        type: array
+      errors:
+        items:
+          $ref: '#/definitions/gqlerror.Error'
+        type: array
+      extensions:
+        additionalProperties: true
+        type: object
+      hasNext:
+        type: boolean
+      label:
+        type: string
+      path:
+        items: {}
+        type: array
+    type: object
+  http.Header:
+    additionalProperties:
+      items:
+        type: string
+      type: array
+    type: object
+  models.Agentlog:
+    properties:
+      created_at:
+        type: string
+      executor:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      initiator:
+        type: string
+      result:
+        type: string
+      subtask_id:
+        minimum: 0
+        type: integer
+      task:
+        type: string
+      task_id:
+        minimum: 0
+        type: integer
+    required:
+    - executor
+    - initiator
+    - task
+    type: object
+  models.AuthCallback:
+    properties:
+      code:
+        type: string
+      id_token:
+        type: string
+      scope:
+        type: string
+      state:
+        type: string
+    required:
+    - code
+    - id_token
+    - scope
+    - state
+    type: object
+  models.Container:
+    properties:
+      created_at:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      image:
+        type: string
+      local_dir:
+        type: string
+      local_id:
+        type: string
+      name:
+        type: string
+      status:
+        enum:
+        - starting
+        - running
+        - stopped
+        - deleted
+        - failed
+        type: string
+      type:
+        enum:
+        - primary
+        - secondary
+        type: string
+      updated_at:
+        type: string
+    required:
+    - image
+    - local_dir
+    - local_id
+    - name
+    - status
+    - type
+    type: object
+  models.CreateFlow:
+    properties:
+      functions:
+        $ref: '#/definitions/tools.Functions'
+      input:
+        example: user input for first task in the flow
+        type: string
+      provider:
+        example: openai
+        type: string
+    required:
+    - input
+    - provider
+    type: object
+  models.Flow:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      functions:
+        $ref: '#/definitions/tools.Functions'
+      id:
+        minimum: 0
+        type: integer
+      language:
+        maxLength: 70
+        type: string
+      model:
+        maxLength: 70
+        type: string
+      model_provider:
+        maxLength: 70
+        type: string
+      status:
+        enum:
+        - created
+        - running
+        - waiting
+        - finished
+        - failed
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        minimum: 0
+        type: integer
+    required:
+    - language
+    - model
+    - model_provider
+    - status
+    - title
+    type: object
+  models.FlowTasksSubtasks:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      functions:
+        $ref: '#/definitions/tools.Functions'
+      id:
+        minimum: 0
+        type: integer
+      language:
+        maxLength: 70
+        type: string
+      model:
+        maxLength: 70
+        type: string
+      model_provider:
+        maxLength: 70
+        type: string
+      status:
+        enum:
+        - created
+        - running
+        - waiting
+        - finished
+        - failed
+        type: string
+      tasks:
+        items:
+          $ref: '#/definitions/models.TaskSubtasks'
+        type: array
+      title:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        minimum: 0
+        type: integer
+    required:
+    - language
+    - model
+    - model_provider
+    - status
+    - tasks
+    - title
+    type: object
+  models.Login:
+    properties:
+      mail:
+        maxLength: 50
+        type: string
+      password:
+        maxLength: 100
+        minLength: 4
+        type: string
+    required:
+    - mail
+    - password
+    type: object
+  models.Msglog:
+    properties:
+      created_at:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      message:
+        type: string
+      result:
+        type: string
+      result_format:
+        type: string
+      subtask_id:
+        minimum: 0
+        type: integer
+      task_id:
+        minimum: 0
+        type: integer
+      type:
+        enum:
+        - thoughts
+        - browser
+        - terminal
+        - file
+        - search
+        - advice
+        - ask
+        - input
+        - done
+        type: string
+    required:
+    - message
+    - result_format
+    - type
+    type: object
+  models.Password:
+    properties:
+      confirm_password:
+        type: string
+      current_password:
+        maxLength: 100
+        minLength: 5
+        type: string
+      password:
+        maxLength: 100
+        type: string
+    required:
+    - current_password
+    - password
+    type: object
+  models.PatchFlow:
+    properties:
+      action:
+        default: stop
+        enum:
+        - stop
+        - input
+        type: string
+      input:
+        example: user input for waiting flow
+        type: string
+    required:
+    - action
+    type: object
+  models.PatchPrompt:
+    properties:
+      prompt:
+        type: string
+    required:
+    - prompt
+    type: object
+  models.Privilege:
+    properties:
+      id:
+        minimum: 0
+        type: integer
+      name:
+        maxLength: 70
+        type: string
+      role_id:
+        minimum: 0
+        type: integer
+    required:
+    - name
+    type: object
+  models.Prompt:
+    properties:
+      id:
+        minimum: 0
+        type: integer
+      prompt:
+        type: string
+      type:
+        type: string
+      user_id:
+        minimum: 0
+        type: integer
+    required:
+    - prompt
+    - type
+    type: object
+  models.ProtoAuthToken:
+    properties:
+      created_date:
+        type: string
+      token:
+        type: string
+      ttl:
+        maximum: 94608000
+        minimum: 1
+        type: integer
+    required:
+    - token
+    - ttl
+    type: object
+  models.ProtoAuthTokenRequest:
+    properties:
+      ttl:
+        default: 31536000
+        maximum: 94608000
+        minimum: 1
+        type: integer
+      type:
+        default: automation
+        enum:
+        - automation
+        type: string
+    required:
+    - ttl
+    - type
+    type: object
+  models.Role:
+    properties:
+      id:
+        minimum: 0
+        type: integer
+      name:
+        maxLength: 50
+        type: string
+    required:
+    - name
+    type: object
+  models.RolePrivileges:
+    properties:
+      id:
+        minimum: 0
+        type: integer
+      name:
+        maxLength: 50
+        type: string
+      privileges:
+        items:
+          $ref: '#/definitions/models.Privilege'
+        type: array
+    required:
+    - name
+    - privileges
+    type: object
+  models.Screenshot:
+    properties:
+      created_at:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      name:
+        type: string
+      url:
+        type: string
+    required:
+    - flow_id
+    - name
+    - url
+    type: object
+  models.Searchlog:
+    properties:
+      created_at:
+        type: string
+      engine:
+        enum:
+        - google
+        - tavily
+        - traversaal
+        - browser
+        type: string
+      executor:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      initiator:
+        type: string
+      query:
+        type: string
+      result:
+        type: string
+      subtask_id:
+        minimum: 0
+        type: integer
+      task_id:
+        minimum: 0
+        type: integer
+    required:
+    - engine
+    - executor
+    - initiator
+    - query
+    type: object
+  models.Subtask:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        minimum: 0
+        type: integer
+      result:
+        type: string
+      status:
+        enum:
+        - created
+        - running
+        - waiting
+        - finished
+        - failed
+        type: string
+      task_id:
+        minimum: 0
+        type: integer
+      title:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - description
+    - status
+    - title
+    type: object
+  models.Task:
+    properties:
+      created_at:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      input:
+        type: string
+      result:
+        type: string
+      status:
+        enum:
+        - created
+        - running
+        - waiting
+        - finished
+        - failed
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - input
+    - status
+    - title
+    type: object
+  models.TaskSubtasks:
+    properties:
+      created_at:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      input:
+        type: string
+      result:
+        type: string
+      status:
+        enum:
+        - created
+        - running
+        - waiting
+        - finished
+        - failed
+        type: string
+      subtasks:
+        items:
+          $ref: '#/definitions/models.Subtask'
+        type: array
+      title:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - input
+    - status
+    - subtasks
+    - title
+    type: object
+  models.Termlog:
+    properties:
+      container_id:
+        minimum: 0
+        type: integer
+      created_at:
+        type: string
+      id:
+        minimum: 0
+        type: integer
+      text:
+        type: string
+      type:
+        enum:
+        - stdin
+        - stdout
+        - stderr
+        type: string
+    required:
+    - container_id
+    - text
+    - type
+    type: object
+  models.User:
+    properties:
+      created_at:
+        type: string
+      hash:
+        type: string
+      id:
+        minimum: 0
+        type: integer
+      mail:
+        maxLength: 50
+        type: string
+      name:
+        maxLength: 70
+        type: string
+      password_change_required:
+        type: boolean
+      provider:
+        type: string
+      role_id:
+        minimum: 0
+        type: integer
+      status:
+        enum:
+        - created
+        - active
+        - blocked
+        type: string
+      type:
+        enum:
+        - local
+        - oauth
+        type: string
+    required:
+    - created_at
+    - mail
+    - status
+    - type
+    type: object
+  models.UserPassword:
+    properties:
+      created_at:
+        type: string
+      hash:
+        type: string
+      id:
+        minimum: 0
+        type: integer
+      mail:
+        maxLength: 50
+        type: string
+      name:
+        maxLength: 70
+        type: string
+      password:
+        maxLength: 100
+        type: string
+      password_change_required:
+        type: boolean
+      provider:
+        type: string
+      role_id:
+        minimum: 0
+        type: integer
+      status:
+        enum:
+        - created
+        - active
+        - blocked
+        type: string
+      type:
+        enum:
+        - local
+        - oauth
+        type: string
+    required:
+    - created_at
+    - mail
+    - password
+    - status
+    - type
+    type: object
+  models.UserRole:
+    properties:
+      created_at:
+        type: string
+      hash:
+        type: string
+      id:
+        minimum: 0
+        type: integer
+      mail:
+        maxLength: 50
+        type: string
+      name:
+        maxLength: 70
+        type: string
+      password_change_required:
+        type: boolean
+      provider:
+        type: string
+      role:
+        $ref: '#/definitions/models.Role'
+      role_id:
+        minimum: 0
+        type: integer
+      status:
+        enum:
+        - created
+        - active
+        - blocked
+        type: string
+      type:
+        enum:
+        - local
+        - oauth
+        type: string
+    required:
+    - created_at
+    - mail
+    - status
+    - type
+    type: object
+  models.UserRolePrivileges:
+    properties:
+      created_at:
+        type: string
+      hash:
+        type: string
+      id:
+        minimum: 0
+        type: integer
+      mail:
+        maxLength: 50
+        type: string
+      name:
+        maxLength: 70
+        type: string
+      password_change_required:
+        type: boolean
+      provider:
+        type: string
+      role:
+        $ref: '#/definitions/models.RolePrivileges'
+      role_id:
+        minimum: 0
+        type: integer
+      status:
+        enum:
+        - created
+        - active
+        - blocked
+        type: string
+      type:
+        enum:
+        - local
+        - oauth
+        type: string
+    required:
+    - created_at
+    - mail
+    - status
+    - type
+    type: object
+  models.Vecstorelog:
+    properties:
+      action:
+        enum:
+        - retrieve
+        - store
+        type: string
+      created_at:
+        type: string
+      executor:
+        type: string
+      filter:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      initiator:
+        type: string
+      query:
+        type: string
+      result:
+        type: string
+      subtask_id:
+        minimum: 0
+        type: integer
+      task_id:
+        minimum: 0
+        type: integer
+    required:
+    - action
+    - executor
+    - filter
+    - initiator
+    - query
+    - result
+    type: object
+  services.agentlogs:
+    properties:
+      agentlogs:
+        items:
+          $ref: '#/definitions/models.Agentlog'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.containers:
+    properties:
+      containers:
+        items:
+          $ref: '#/definitions/models.Container'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.flows:
+    properties:
+      flows:
+        items:
+          $ref: '#/definitions/models.Flow'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.info:
+    properties:
+      develop:
+        type: boolean
+      expires_at:
+        type: string
+      issued_at:
+        type: string
+      oauth:
+        type: boolean
+      privileges:
+        items:
+          type: string
+        type: array
+      providers:
+        items:
+          type: string
+        type: array
+      role:
+        $ref: '#/definitions/models.Role'
+      type:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+    type: object
+  services.msglogs:
+    properties:
+      msglogs:
+        items:
+          $ref: '#/definitions/models.Msglog'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.prompts:
+    properties:
+      prompts:
+        items:
+          $ref: '#/definitions/models.Prompt'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.roles:
+    properties:
+      roles:
+        items:
+          $ref: '#/definitions/models.RolePrivileges'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.screenshots:
+    properties:
+      screenshots:
+        items:
+          $ref: '#/definitions/models.Screenshot'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.searchlogs:
+    properties:
+      searchlogs:
+        items:
+          $ref: '#/definitions/models.Searchlog'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.subtasks:
+    properties:
+      subtasks:
+        items:
+          $ref: '#/definitions/models.Subtask'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.tasks:
+    properties:
+      tasks:
+        items:
+          $ref: '#/definitions/models.Task'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.termlogs:
+    properties:
+      termlogs:
+        items:
+          $ref: '#/definitions/models.Termlog'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.users:
+    properties:
+      total:
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/models.UserRole'
+        type: array
+    type: object
+  services.vecstorelogs:
+    properties:
+      total:
+        type: integer
+      vecstorelogs:
+        items:
+          $ref: '#/definitions/models.Vecstorelog'
+        type: array
+    type: object
+  tools.DisableFunction:
+    properties:
+      context:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+    required:
+    - context
+    - name
+    type: object
+  tools.ExternalFunction:
+    properties:
+      context:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      schema:
+        type: object
+      timeout:
+        example: 60
+        minimum: 1
+        type: integer
+      url:
+        example: https://example.com/api/v1/function
+        type: string
+    required:
+    - context
+    - name
+    - schema
+    - url
+    type: object
+  tools.Functions:
+    properties:
+      disabled:
+        items:
+          $ref: '#/definitions/tools.DisableFunction'
+        type: array
+      functions:
+        items:
+          $ref: '#/definitions/tools.ExternalFunction'
+        type: array
+      token:
+        type: string
+    type: object
+info:
+  contact:
+    email: team@pentagi.com
+    name: PentAGI Developer
+    url: https://pentagi.com
+  description: Swagger API for Penetration Testing Advanced General Intelligence PentAGI.
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit
+  termsOfService: http://swagger.io/terms/
+  title: PentAGI Swagger API
+  version: "1.0"
+paths:
+  /agentlogs/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: agentlogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.agentlogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting agentlogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting agentlogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve agentlogs list
+      tags:
+      - Agentlogs
+  /auth/authorize:
+    get:
+      parameters:
+      - default: /
+        description: URI to redirect user there after login
+        in: query
+        name: return_uri
+        type: string
+      - default: google
+        description: OAuth provider name (google, github, etc.)
+        in: query
+        name: provider
+        type: string
+      produces:
+      - application/json
+      responses:
+        "307":
+          description: redirect to SSO login page
+        "400":
+          description: invalid autorizarion query
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: authorize not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on autorizarion
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Login user into OAuth2 external system via HTTP redirect
+      tags:
+      - Public
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Login form JSON data
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.Login'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: login successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid login data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: invalid login or password
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: login not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on login
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Login user into system
+      tags:
+      - Public
+  /auth/login-callback:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Auth code from OAuth provider to exchange token
+        in: query
+        name: code
+        type: string
+      produces:
+      - application/json
+      responses:
+        "303":
+          description: redirect to registered return_uri path in the state
+        "400":
+          description: invalid login data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: invalid login or password
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: login not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on login
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Login user from external OAuth application
+      tags:
+      - Public
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Auth form JSON data
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.AuthCallback'
+      produces:
+      - application/json
+      responses:
+        "303":
+          description: redirect to registered return_uri path in the state
+        "400":
+          description: invalid login data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: invalid login or password
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: login not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on login
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Login user from external OAuth application
+      tags:
+      - Public
+  /auth/logout:
+    get:
+      parameters:
+      - default: /
+        description: URI to redirect user there after logout
+        in: query
+        name: return_uri
+        type: string
+      produces:
+      - application/json
+      responses:
+        "307":
+          description: redirect to input return_uri path
+      summary: Logout current user via HTTP redirect
+      tags:
+      - Public
+  /auth/logout-callback:
+    post:
+      consumes:
+      - application/json
+      responses:
+        "303":
+          description: logout successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+      summary: Logout current user from external OAuth application
+      tags:
+      - Public
+  /containers/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: containers list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.containers'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting containers not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting containers
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve containers list
+      tags:
+      - Containers
+  /flows/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flows list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.flows'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flows not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flows
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flows list
+      tags:
+      - Flows
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: flow model to create
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateFlow'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: flow created successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Flow'
+              type: object
+        "400":
+          description: invalid flow request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: creating flow not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on creating flow
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Create new flow with custom functions
+      tags:
+      - Flows
+  /flows/{flowID}:
+    delete:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: flow deleted successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Flow'
+              type: object
+        "403":
+          description: deleting flow not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting flow
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Delete flow by id
+      tags:
+      - Flows
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Flow'
+              type: object
+        "403":
+          description: getting flow not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow by id
+      tags:
+      - Flows
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: flow model to patch
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.PatchFlow'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow patched successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Flow'
+              type: object
+        "400":
+          description: invalid flow request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: patching flow not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on patching flow
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Patch flow
+      tags:
+      - Flows
+  /flows/{flowID}/agentlogs/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: agentlogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.agentlogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting agentlogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting agentlogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve agentlogs list by flow id
+      tags:
+      - Agentlogs
+  /flows/{flowID}/containers/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: containers list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.containers'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting containers not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting containers
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve containers list by flow id
+      tags:
+      - Containers
+  /flows/{flowID}/containers/{containerID}:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: container id
+        in: path
+        minimum: 0
+        name: containerID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: container info received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Container'
+              type: object
+        "403":
+          description: getting container not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: container not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting container
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve container info by id and flow id
+      tags:
+      - Containers
+  /flows/{flowID}/graph:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow graph received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.FlowTasksSubtasks'
+              type: object
+        "403":
+          description: getting flow graph not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow graph not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow graph
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow graph by id
+      tags:
+      - Flows
+  /flows/{flowID}/msglogs/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: msglogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.msglogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting msglogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting msglogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve msglogs list by flow id
+      tags:
+      - Msglogs
+  /flows/{flowID}/screenshots/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: screenshots list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.screenshots'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting screenshots not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting screenshots
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve screenshots list by flow id
+      tags:
+      - Screenshots
+  /flows/{flowID}/screenshots/{screenshotID}:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: screenshot id
+        in: path
+        minimum: 0
+        name: screenshotID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: screenshot info received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Screenshot'
+              type: object
+        "403":
+          description: getting screenshot not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: screenshot not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting screenshot
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve screenshot info by id and flow id
+      tags:
+      - Screenshots
+  /flows/{flowID}/screenshots/{screenshotID}/file:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: screenshot id
+        in: path
+        minimum: 0
+        name: screenshotID
+        required: true
+        type: integer
+      produces:
+      - image/png
+      - application/json
+      responses:
+        "200":
+          description: screenshot file
+          schema:
+            type: file
+        "403":
+          description: getting screenshot not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting screenshot
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve screenshot file by id and flow id
+      tags:
+      - Screenshots
+  /flows/{flowID}/searchlogs/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: searchlogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.searchlogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting searchlogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting searchlogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve searchlogs list by flow id
+      tags:
+      - Searchlogs
+  /flows/{flowID}/subtasks/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow subtasks list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.subtasks'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flow subtasks not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow subtasks
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow subtasks list
+      tags:
+      - Subtasks
+  /flows/{flowID}/tasks/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow tasks list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.tasks'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flow tasks not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow tasks
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow tasks list
+      tags:
+      - Tasks
+  /flows/{flowID}/tasks/{taskID}:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: task id
+        in: path
+        minimum: 0
+        name: taskID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow task received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Task'
+              type: object
+        "403":
+          description: getting flow task not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow task not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow task
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow task by id
+      tags:
+      - Tasks
+  /flows/{flowID}/tasks/{taskID}/graph:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: task id
+        in: path
+        minimum: 0
+        name: taskID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow task graph received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.FlowTasksSubtasks'
+              type: object
+        "403":
+          description: getting flow task graph not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow task graph not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow task graph
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow task graph by id
+      tags:
+      - Tasks
+  /flows/{flowID}/tasks/{taskID}/subtasks/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow task subtasks list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.subtasks'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flow task subtasks not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow subtasks
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow task subtasks list
+      tags:
+      - Subtasks
+  /flows/{flowID}/tasks/{taskID}/subtasks/{subtaskID}:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: task id
+        in: path
+        minimum: 0
+        name: taskID
+        required: true
+        type: integer
+      - description: subtask id
+        in: path
+        minimum: 0
+        name: subtaskID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow task subtask received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Subtask'
+              type: object
+        "403":
+          description: getting flow task subtask not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow task subtask not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow task subtask
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow task subtask by id
+      tags:
+      - Subtasks
+  /flows/{flowID}/termlogs/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: termlogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.termlogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting termlogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting termlogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve termlogs list by flow id
+      tags:
+      - Termlogs
+  /flows/{flowID}/vecstorelogs/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: vecstorelogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.vecstorelogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting vecstorelogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting vecstorelogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve vecstorelogs list by flow id
+      tags:
+      - Vecstorelogs
+  /graphql:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: graphql request
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/graphql.RawParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: graphql response
+          schema:
+            $ref: '#/definitions/graphql.Response'
+        "400":
+          description: invalid graphql request data
+          schema:
+            $ref: '#/definitions/graphql.Response'
+        "403":
+          description: unauthorized
+          schema:
+            $ref: '#/definitions/graphql.Response'
+        "500":
+          description: internal error on graphql request
+          schema:
+            $ref: '#/definitions/graphql.Response'
+      summary: Perform graphql requests
+      tags:
+      - GraphQL
+  /info:
+    get:
+      parameters:
+      - description: boolean arg to refresh current cookie, use explicit false
+        in: query
+        name: refresh_cookie
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: info received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.info'
+              type: object
+        "403":
+          description: getting info not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: user not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting information about system and config
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve current user and system settings
+      tags:
+      - Public
+  /msglogs/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: msglogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.msglogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting msglogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting msglogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve msglogs list
+      tags:
+      - Msglogs
+  /prompts/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: prompts list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.prompts'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting prompts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting prompts
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve prompts list
+      tags:
+      - Prompts
+  /prompts/{promptType}:
+    get:
+      parameters:
+      - description: prompt type
+        in: path
+        name: promptType
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: prompt received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Prompt'
+              type: object
+        "400":
+          description: invalid prompt request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting prompt not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: prompt not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting prompt
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve prompt by type
+      tags:
+      - Prompts
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: prompt model to update
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.PatchPrompt'
+      - description: prompt type
+        in: path
+        name: promptType
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: prompt updated successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Prompt'
+              type: object
+        "400":
+          description: invalid prompt request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: updating prompt not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: prompt not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on updating prompt
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Update prompt
+      tags:
+      - Prompts
+  /prompts/{promptType}/default:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: prompt type
+        in: path
+        name: promptType
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: prompt reset successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Prompt'
+              type: object
+        "400":
+          description: invalid prompt request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: updating prompt not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: prompt not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on resetting prompt
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Reset prompt by type to default value
+      tags:
+      - Prompts
+  /providers/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: providers list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    type: string
+                  type: array
+              type: object
+        "403":
+          description: getting providers not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve providers list
+      tags:
+      - Providers
+  /roles/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: roles list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.roles'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting roles not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting roles
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve roles list
+      tags:
+      - Roles
+  /roles/{roleID}:
+    get:
+      parameters:
+      - description: role id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: role received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.RolePrivileges'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting role not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting role
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve role by id
+      tags:
+      - Roles
+  /screenshots/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: screenshots list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.screenshots'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting screenshots not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting screenshots
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve screenshots list
+      tags:
+      - Screenshots
+  /searchlogs/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: searchlogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.searchlogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting searchlogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting searchlogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve searchlogs list
+      tags:
+      - Searchlogs
+  /termlogs/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: termlogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.termlogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting termlogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting termlogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve termlogs list
+      tags:
+      - Termlogs
+  /token:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Proto auth token request JSON data
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.ProtoAuthTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: token created successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ProtoAuthToken'
+              type: object
+        "400":
+          description: invalid requested token info
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: creating token not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on creating token
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Create new JWT token to use it into automation connections
+      tags:
+      - Proto
+  /user/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: user info received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserRolePrivileges'
+              type: object
+        "403":
+          description: getting current user not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: current user not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting current user
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve current user information
+      tags:
+      - Users
+  /user/password:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: container to validate and update account password
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.Password'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account password updated successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid account password form data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: updating account password not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: current user not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on updating account password
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Update password for current user (account)
+      tags:
+      - Users
+  /users/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: users list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.users'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting users not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting users
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve users list by filters
+      tags:
+      - Users
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: user model to create from
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.UserPassword'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: user created successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserRole'
+              type: object
+        "400":
+          description: invalid user request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: creating user not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on creating user
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Create new user
+      tags:
+      - Users
+  /users/{hash}:
+    delete:
+      parameters:
+      - description: hash in hex format (md5)
+        in: path
+        maxLength: 32
+        minLength: 32
+        name: hash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: user deleted successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "403":
+          description: deleting user not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: user not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting user
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Delete user by hash
+      tags:
+      - Users
+    get:
+      parameters:
+      - description: hash in hex format (md5)
+        in: path
+        maxLength: 32
+        minLength: 32
+        name: hash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: user received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserRolePrivileges'
+              type: object
+        "403":
+          description: getting user not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: user not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting user
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve user by hash
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: user model to update
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.UserPassword'
+      - description: user hash in hex format (md5)
+        in: path
+        maxLength: 32
+        minLength: 32
+        name: hash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: user updated successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserRole'
+              type: object
+        "400":
+          description: invalid user request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: updating user not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: user not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on updating user
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Update user
+      tags:
+      - Users
+  /vecstorelogs/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: vecstorelogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.vecstorelogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting vecstorelogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting vecstorelogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve vecstorelogs list
+      tags:
+      - Vecstorelogs
+swagger: "2.0"

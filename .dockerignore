@@ -1,0 +1,7 @@
+frontend/dist
+frontend/node_modules
+
+**/*.log
+**/*.env
+**/.DS_Store
+**/Thumbs.db

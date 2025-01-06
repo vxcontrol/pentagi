@@ -1,0 +1,15 @@
+version: "2"
+cloud:
+sql:
+  - engine: "postgresql"
+    queries: ["models/*.sql"]
+    schema: ["../migrations/sql/*.sql"]
+    gen:
+      go:
+        package: "database"
+        out: "../pkg/database"
+        sql_package: "database/sql"
+        emit_interface: true
+        emit_json_tags: true
+    database:
+      uri: ${DATABASE_URL}

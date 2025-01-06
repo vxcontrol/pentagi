@@ -1,0 +1,105 @@
+admin:
+  http:
+    host-port: :14269
+collector:
+  grpc:
+    tls:
+      cert: ""
+      client-ca: ""
+      enabled: false
+      key: ""
+  grpc-server:
+    host-port: :14250
+    max-message-size: 4194304
+  http:
+    tls:
+      cert: ""
+      client-ca: ""
+      enabled: false
+      key: ""
+  http-server:
+    host-port: :14268
+  num-workers: 100 
+  queue-size: 5000
+  queue-size-memory: "0"
+  tags: ""
+  zipkin:
+    allowed-headers: content-type
+    allowed-origins: '*'
+    host-port: ""
+config-file: ""
+dir: ./
+downsampling:
+  hashsalt: ""
+  ratio: "1"
+format: md
+http-server:
+  host-port: :5778
+log-level: info
+metrics-backend: prometheus
+metrics-http-route: /metrics
+processor:
+  jaeger-binary:
+    server-host-port: :6832
+    server-max-packet-size: 65000
+    server-queue-size: 1000
+    server-socket-buffer-size: 0
+    workers: 10
+  jaeger-compact:
+    server-host-port: :6831
+    server-max-packet-size: 65000
+    server-queue-size: 1000
+    server-socket-buffer-size: 0
+    workers: 10
+  zipkin-compact:
+    server-host-port: :5775
+    server-max-packet-size: 65000
+    server-queue-size: 1000
+    server-socket-buffer-size: 0
+    workers: 10
+query:
+  additional-headers: []
+  base-path: /
+  bearer-token-propagation: false
+  grpc:
+    tls:
+      cert: ""
+      client-ca: ""
+      enabled: false
+      key: ""
+  grpc-server:
+    host-port: :16685
+  http:
+    tls:
+      cert: ""
+      client-ca: ""
+      enabled: false
+      key: ""
+  http-server:
+    host-port: :16686
+  max-clock-skew-adjustment: 0s
+  static-files: ""
+  ui-config: ""
+reporter:
+  grpc:
+    discovery:
+      min-peers: 3
+    host-port: ""
+    retry:
+      max: "3"
+    tls:
+      ca: ""
+      cert: ""
+      enabled: false
+      key: ""
+      server-name: ""
+      skip-host-verify: false
+  type: grpc
+  sampling:
+   strategies-file: ""
+  strategies-reload-interval: 0s
+span-storage:
+  type: grpc-plugin
+status:
+  http:
+    host-port: :14269

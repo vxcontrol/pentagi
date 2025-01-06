@@ -1,0 +1,15 @@
+overwrite: true
+schema: "../backend/pkg/graph/schema.graphqls"
+documents: "src/**/*.graphql"
+generates:
+  generated/graphql.ts:
+    plugins:
+      - "typescript"
+      - "typescript-urql"
+      - "typescript-operations"
+      - "urql-introspection"
+    config:
+      withHooks: true
+  generated/graphql.schema.json:
+    plugins:
+      - "introspection"

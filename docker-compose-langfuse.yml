@@ -1,0 +1,235 @@
+volumes:
+  langfuse-postgres-data:
+    driver: local
+  langfuse-clickhouse-data:
+    driver: local
+  langfuse-clickhouse-logs:
+    driver: local
+  langfuse-minio-data:
+    driver: local
+
+networks:
+  langfuse-network:
+    driver: bridge
+    external: true
+    name: langfuse-network
+  pentagi-network:
+    driver: bridge
+    external: true
+    name: pentagi-network
+
+services:
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    restart: always
+    container_name: langfuse-worker
+    hostname: langfuse-worker
+    depends_on: &langfuse-depends-on
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment: &langfuse-worker-env
+      DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@langfuse-postgres:5432/${LANGFUSE_POSTGRES_DB:-langfuse}
+      SALT: ${LANGFUSE_SALT:-myglobalsalt} # change this to a random string
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000} # generate via `openssl rand -hex 32`
+      TELEMETRY_ENABLED: ${LANGFUSE_TELEMETRY_ENABLED:-false}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${LANGFUSE_OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${LANGFUSE_OTEL_SERVICE_NAME:-langfuse}
+      CLICKHOUSE_MIGRATION_URL: ${LANGFUSE_CLICKHOUSE_MIGRATION_URL:-clickhouse://langfuse-clickhouse:9000}
+      CLICKHOUSE_URL: ${LANGFUSE_CLICKHOUSE_URL:-http://langfuse-clickhouse:8123}
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_CLUSTER_ENABLED: ${LANGFUSE_CLICKHOUSE_CLUSTER_ENABLED:-false}
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_REGION:-auto}
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_ACCESS_KEY_ID:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: ${LANGFUSE_S3_ENDPOINT:-http://langfuse-minio:9000}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: ${LANGFUSE_S3_FORCE_PATH_STYLE:-true}
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: ${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: ${LANGFUSE_S3_REGION:-auto}
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_ACCESS_KEY_ID:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${LANGFUSE_S3_ENDPOINT:-http://langfuse-minio:9000}
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: ${LANGFUSE_S3_FORCE_PATH_STYLE:-true}
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: ${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
+      REDIS_HOST: ${LANGFUSE_REDIS_HOST:-langfuse-redis}
+      REDIS_PORT: ${LANGFUSE_REDIS_PORT:-6379}
+      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-myredissecret}
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - langfuse-network
+
+  langfuse-web:
+    image: langfuse/langfuse:3
+    restart: always
+    container_name: langfuse-web
+    hostname: langfuse-web
+    depends_on: *langfuse-depends-on
+    expose:
+      - 3000/tcp
+    ports:
+      - 127.0.0.1:4000:3000
+    environment:
+      <<: *langfuse-worker-env
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:4000}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-mysecret}
+      LANGFUSE_LOG_LEVEL: ${LANGFUSE_LOG_LEVEL:-debug}
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-ocm47619l0000872mcd2dlbqwb}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-PentAGI Demo}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-cm47619l0000872mcd2dlbqwb}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-PentAGI}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-5946031c-ae6c-4451-98d2-9882a59e1707} # change this to a random string
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-d9035680-89dd-4950-8688-7870720bf359} # change this to a random string
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@pentagi.com}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-admin}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-P3nTagIsD0d} # change this to a random password
+      LANGFUSE_SDK_CI_SYNC_PROCESSING_ENABLED: ${LANGFUSE_SDK_CI_SYNC_PROCESSING_ENABLED:-false}
+      LANGFUSE_READ_FROM_POSTGRES_ONLY: ${LANGFUSE_READ_FROM_POSTGRES_ONLY:-false}
+      LANGFUSE_READ_FROM_CLICKHOUSE_ONLY: ${LANGFUSE_READ_FROM_CLICKHOUSE_ONLY:-true}
+      LANGFUSE_RETURN_FROM_CLICKHOUSE: ${LANGFUSE_RETURN_FROM_CLICKHOUSE:-true}
+      # langfuse enterprise license key
+      LANGFUSE_EE_LICENSE_KEY: ${LANGFUSE_EE_LICENSE_KEY:-}
+      # custom oauth2
+      AUTH_CUSTOM_CLIENT_ID: ${LANGFUSE_AUTH_CUSTOM_CLIENT_ID}
+      AUTH_CUSTOM_CLIENT_SECRET: ${LANGFUSE_AUTH_CUSTOM_CLIENT_SECRET}
+      AUTH_CUSTOM_ISSUER: ${LANGFUSE_AUTH_CUSTOM_ISSUER}
+      AUTH_CUSTOM_NAME: ${LANGFUSE_AUTH_CUSTOM_NAME}
+      AUTH_CUSTOM_SCOPE: ${LANGFUSE_AUTH_CUSTOM_SCOPE:-openid email profile}
+      AUTH_CUSTOM_ALLOW_ACCOUNT_LINKING: ${LANGFUSE_AUTH_CUSTOM_ALLOW_ACCOUNT_LINKING:-true}
+      AUTH_CUSTOM_CLIENT_AUTH_METHOD: ${LANGFUSE_AUTH_CUSTOM_CLIENT_AUTH_METHOD}
+      AUTH_DISABLE_SIGNUP: ${LANGFUSE_AUTH_DISABLE_SIGNUP}
+      LANGFUSE_ALLOWED_ORGANIZATION_CREATORS: ${LANGFUSE_ALLOWED_ORGANIZATION_CREATORS}
+      AUTH_SESSION_MAX_AGE: ${LANGFUSE_AUTH_SESSION_MAX_AGE:-240}
+      LANGFUSE_DEFAULT_ORG_ID: ${LANGFUSE_DEFAULT_ORG_ID:-ocm47619l0000872mcd2dlbqwb}
+      LANGFUSE_DEFAULT_PROJECT_ID: ${LANGFUSE_DEFAULT_PROJECT_ID:-cm47619l0000872mcd2dlbqwb}
+      LANGFUSE_DEFAULT_ORG_ROLE: ${LANGFUSE_DEFAULT_ORG_ROLE:-VIEWER}
+      LANGFUSE_DEFAULT_PROJECT_ROLE: ${LANGFUSE_DEFAULT_PROJECT_ROLE:-VIEWER}
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - langfuse-network
+      - pentagi-network
+
+  clickhouse:
+    image: clickhouse/clickhouse-server
+    restart: always
+    user: "101:101"
+    container_name: langfuse-clickhouse
+    hostname: langfuse-clickhouse
+    environment:
+      CLICKHOUSE_DB: ${LANGFUSE_CLICKHOUSE_DB:-default}
+      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+    volumes:
+      - langfuse-clickhouse-data:/var/lib/clickhouse
+      - langfuse-clickhouse-logs:/var/log/clickhouse-server
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - langfuse-network
+
+  minio:
+    image: minio/minio
+    restart: always
+    container_name: langfuse-minio
+    hostname: langfuse-minio
+    command: server /data --console-address ":9001" --address ":9000" --json
+    environment:
+      MINIO_ROOT_USER: ${LANGFUSE_S3_ACCESS_KEY_ID:-minio}
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-miniosecret}
+      MINIO_BUCKET_NAME: ${LANGFUSE_S3_BUCKET:-langfuse}
+      MINIO_UPDATE: off
+    entrypoint: >
+      /bin/sh -c '
+        isAlive() { mc ready local >/dev/null 2>&1; }                      # check if Minio is alive
+        minio $0 "$@" --quiet & echo $! > /tmp/minio.pid                   # start Minio in the background
+        until isAlive; do sleep 1; done                                    # wait until Minio is alive
+        echo "MinIO is ready. Proceeding with setup..."
+        mc alias set myminio http://localhost:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}
+        mc mb myminio/$${MINIO_BUCKET_NAME}/ --ignore-existing             # create test bucket
+        mc anonymous set public myminio/$${MINIO_BUCKET_NAME}              # make the test bucket public
+        mc admin update myminio/$${MINIO_BUCKET_NAME}                      # update test bucket
+        echo "MinIO is configured. Trying to restart Minio..."
+        kill -s INT $(cat /tmp/minio.pid)                                  # try to stop Minio
+        while [ -e "/proc/$(cat /tmp/minio.pid)" ]; do sleep 0.5; done     # wait until Minio is stopped
+        rm /tmp/minio.pid                                                  # remove the pid file
+        echo "MinIO is configured and running..."
+        exec minio $0 "$@"                                                 # start Minio in the foreground
+      '
+    volumes:
+      - langfuse-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - langfuse-network
+
+  redis:
+    image: redis:7
+    restart: always
+    container_name: langfuse-redis
+    hostname: langfuse-redis
+    command: >
+      --requirepass ${LANGFUSE_REDIS_AUTH:-myredissecret}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - langfuse-network
+
+  postgres:
+    image: postgres:${LANGFUSE_POSTGRES_VERSION:-latest}
+    restart: always
+    container_name: langfuse-postgres
+    hostname: langfuse-postgres
+    environment:
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${LANGFUSE_POSTGRES_DB:-langfuse}
+    volumes:
+      - langfuse-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${LANGFUSE_POSTGRES_USER:-postgres}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - langfuse-network

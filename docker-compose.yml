@@ -1,0 +1,158 @@
+volumes:
+  pentagi-data:
+    driver: local
+  pentagi-ssl:
+    driver: local
+  scraper-ssl:
+    driver: local
+  pentagi-postgres-data:
+    driver: local
+
+networks:
+  pentagi-network:
+    driver: bridge
+    name: pentagi-network
+  observability-network:
+    driver: bridge
+    name: observability-network
+  langfuse-network:
+    driver: bridge
+    name: langfuse-network
+
+services:
+
+  pentagi:
+    image: vxcontrol/pentagi:latest
+    restart: unless-stopped
+    container_name: pentagi
+    hostname: pentagi
+    expose:
+      - 8443/tcp
+    ports:
+      - 127.0.0.1:8443:8443
+    depends_on:
+      - pgvector
+    environment:
+      - DOCKER_GID=998
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - COOKIE_SIGNING_SALT=${COOKIE_SIGNING_SALT:-}
+      - OPEN_AI_KEY=${OPEN_AI_KEY:-}
+      - OPEN_AI_SERVER_URL=${OPEN_AI_SERVER_URL:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_SERVER_URL=${ANTHROPIC_SERVER_URL:-}
+      - LLM_SERVER_URL=${LLM_SERVER_URL:-}
+      - LLM_SERVER_KEY=${LLM_SERVER_KEY:-}
+      - LLM_SERVER_MODEL=${LLM_SERVER_MODEL:-}
+      - PROXY_URL=${PROXY_URL:-}
+      - SCRAPER_PUBLIC_URL=${SCRAPER_PUBLIC_URL:-}
+      - SCRAPER_PRIVATE_URL=${SCRAPER_PRIVATE_URL:-}
+      - PUBLIC_URL=${PUBLIC_URL:-}
+      - STATIC_DIR=${STATIC_DIR:-}
+      - STATIC_URL=${STATIC_URL:-}
+      - SERVER_PORT=${SERVER_PORT:-8443}
+      - SERVER_HOST=${SERVER_HOST:-0.0.0.0}
+      - SERVER_SSL_CRT=${SERVER_SSL_CRT:-}
+      - SERVER_SSL_KEY=${SERVER_SSL_KEY:-}
+      - SERVER_USE_SSL=${SERVER_USE_SSL:-true}
+      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
+      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID:-}
+      - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET:-}
+      - DATABASE_URL=postgres://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GOOGLE_CX_KEY=${GOOGLE_CX_KEY:-}
+      - TRAVERSAAL_API_KEY=${TRAVERSAAL_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
+      - LANGFUSE_PROJECT_ID=${LANGFUSE_INIT_PROJECT_ID:-}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      - OTEL_HOST=${OTEL_HOST:-}
+      - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
+      - DOCKER_TLS_VERIFY=${DOCKER_TLS_VERIFY:-}
+      - DOCKER_CERT_PATH=${DOCKER_CERT_PATH:-}
+      - DOCKER_INSIDE=${DOCKER_INSIDE:-false}
+      - DOCKER_SOCKET=${DOCKER_SOCKET:-}
+      - DOCKER_NETWORK=${DOCKER_NETWORK:-}
+      - DOCKER_PUBLIC_IP=${DOCKER_PUBLIC_IP:-}
+      - DOCKER_WORK_DIR=${DOCKER_WORK_DIR:-}
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    volumes:
+      - pentagi-data:/opt/pentagi/data
+      - pentagi-ssl:/opt/pentagi/ssl
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: root:root # while using docker.sock
+    networks:
+      - pentagi-network
+      - observability-network
+      - langfuse-network
+
+  pgvector:
+    image: vxcontrol/pgvector:latest
+    restart: unless-stopped
+    container_name: pgvector
+    hostname: pgvector
+    expose:
+      - 5432/tcp
+    ports:
+      - 127.0.0.1:5432:5432
+    environment:
+      POSTGRES_USER: ${PENTAGI_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${PENTAGI_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${PENTAGI_POSTGRES_DB:-pentagidb}
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    volumes:
+      - pentagi-postgres-data:/var/lib/postgresql/data
+    networks:
+      - pentagi-network
+
+  pgexporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    restart: unless-stopped
+    depends_on:
+      - pgvector
+    container_name: pgexporter
+    hostname: pgexporter
+    expose:
+      - 9187/tcp
+    ports:
+      - 127.0.0.1:9187:9187
+    environment:
+      - DATA_SOURCE_NAME=pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
+      - DATA_SOURCE_USER=${PENTAGI_POSTGRES_USER:-postgres}
+      - DATA_SOURCE_PASS=${PENTAGI_POSTGRES_PASSWORD:-postgres}
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    networks:
+      - pentagi-network
+
+  scraper:
+    image: vxcontrol/scraper:latest
+    restart: always
+    container_name: scraper
+    hostname: scraper
+    expose:
+      - 443/tcp
+    ports:
+      - 127.0.0.1:9443:443
+    environment:
+      - MAX_CONCURRENT_SESSIONS=${LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS:-10}
+      - USERNAME=${LOCAL_SCRAPER_USERNAME:-someuser}
+      - PASSWORD=${LOCAL_SCRAPER_PASSWORD:-somepass}
+    logging:
+      options:
+        max-size: 50m
+        max-file: '7'
+    volumes:
+      - scraper-ssl:/usr/src/app/ssl
+    networks:
+      - pentagi-network
+    shm_size: 2g

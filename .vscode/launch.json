@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "go",
+            "request": "launch",
+            "name": "Launch Go Backend",
+            "program": "${workspaceFolder}/backend/cmd/pentagi/main.go",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "CORS_ORIGINS": "http://localhost:8080,http://localhost:8000",
+                "PUBLIC_URL": "http://localhost:8080",
+                "STATIC_URL": "http://localhost:8000",
+                "SERVER_PORT": "8080",
+                "SERVER_USE_SSL": "false",
+                "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
+            },
+            "cwd": "${workspaceFolder}",
+            "output": "${workspaceFolder}/build/__debug_bin",
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Frontend",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "dev"],
+            "env": {
+                "VITE_API_URL": "localhost:8080",
+                "PORT": "8000",
+            },
+            "cwd": "${workspaceFolder}/frontend",
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Browser",
+            "url": "http://localhost:8000",
+            "webRoot": "${workspaceFolder}/frontend/src"
+        },
+    ]
+}

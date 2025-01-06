@@ -1,0 +1,15 @@
+fragment flowOverviewFragment on Flow {
+  id
+  title
+  status
+}
+
+query flows {
+  flows {
+    ...flowOverviewFragment
+  }
+}
+
+query providers {
+  providers
+}

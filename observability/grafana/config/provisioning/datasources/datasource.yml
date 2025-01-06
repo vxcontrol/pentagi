@@ -1,0 +1,59 @@
+apiVersion: 1
+
+deleteDatasources:
+  - name: VictoriaMetrics
+  - name: Jaeger
+  - name: Loki
+
+datasources:
+
+  - name: VictoriaMetrics
+    uid: victoriametrics
+    type: prometheus
+    access: proxy
+    url: http://victoriametrics:8428
+    version: 1
+    editable: true
+    jsonData:
+      manageAlerts: true
+
+  - name: Jaeger
+    uid: jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    version: 1
+    editable: true
+    jsonData:
+      manageAlerts: false
+      nodeGraph:
+        enabled: true
+      tracesToLogs:
+        datasourceUid: loki
+        filterBySpanID: false
+        filterByTraceID: true
+        mapTagNamesEnabled: true
+        spanStartTimeShift: '-1m'
+        spanEndTimeShift: '1m'
+        mappedTags:
+          - key: otel.library.name
+            value: service_name
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    version: 1
+    editable: true
+    jsonData:
+      maxLines: 1000
+      manageAlerts: true
+      derivedFields:
+        - datasourceUid: jaeger
+          matcherRegex: trace_id
+          matcherType: label
+          name: traceid
+          url: '$${__value.raw}'
+          urlDisplayLabel: "Trace for this log"

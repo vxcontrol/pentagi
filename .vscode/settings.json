@@ -1,0 +1,9 @@
+{
+    "go.lintFlags": [
+        "-checks=\"all,-ST1005\""
+    ],
+    "go.testEnvVars": {
+      "WORKSPACE_DIR": "${workspaceFolder}/backend"
+    },
+    "go.testExplorer.enable": true,
+}
