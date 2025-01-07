@@ -1,0 +1,160 @@
+name: Docker build and push
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Go setup and cache
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      # Cache Go dependencies
+      - name: Go Mod Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      
+      # Node.js setup and cache
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '23'
+          cache: 'yarn'
+          cache-dependency-path: 'frontend/yarn.lock'
+
+      # Cache Yarn dependencies
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Yarn packages
+        uses: actions/cache@v3
+        id: yarn-cache
+        with:
+          path: |
+            ${{ steps.yarn-cache-dir-path.outputs.dir }}
+            frontend/node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('frontend/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      # Frontend lint and test
+      - name: Frontend - Install dependencies
+        if: steps.yarn-cache.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+        continue-on-error: true
+
+      - name: Frontend - Lint
+        working-directory: frontend
+        run: yarn lint
+        continue-on-error: true
+
+      - name: Frontend - Test
+        working-directory: frontend
+        run: yarn test
+        continue-on-error: true
+
+      # Backend lint and test
+      - name: Backend - Download dependencies
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        working-directory: backend
+        run: go mod download
+        continue-on-error: true
+
+      - name: Backend - Lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          working-directory: backend
+          args: --timeout=5m --issues-exit-code=0
+          skip-cache: false
+          skip-pkg-cache: false
+          skip-build-cache: false
+        continue-on-error: true
+
+      - name: Backend - Test
+        working-directory: backend
+        run: go test ./... -v
+        continue-on-error: true
+
+  docker-build:
+    needs: lint-and-test
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Extract version from tag (without 'v' prefix) and split into parts
+      - name: Extract version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            # Split version into major.minor.patch
+            IFS='.' read -r major minor patch <<< "$VERSION"
+            echo "major=${major}" >> $GITHUB_OUTPUT
+            echo "minor=${major}.${minor}" >> $GITHUB_OUTPUT
+            echo "patch=${major}.${minor}.${patch}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: vxcontrol/pentagi
+          tags: |
+            # For master branch - latest tag
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            # For version tags - major, minor and patch versions
+            type=raw,value=${{ steps.version.outputs.major }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=${{ steps.version.outputs.minor }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=${{ steps.version.outputs.patch }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64/v8
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

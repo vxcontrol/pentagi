@@ -1,0 +1,126 @@
+name: "\U0001F41B Bug report"
+description: "Report a bug in PentAGI"
+title: "[Bug]: "
+labels: ["bug"]
+assignees:
+  - asdek
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Please provide as much information as possible to help us diagnose and fix the issue.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      description: Which component of PentAGI is affected by this bug?
+      multiple: true
+      options:
+        - Core Services (Frontend UI/Backend API)
+        - AI Agents (Researcher/Developer/...)
+        - Security Tools Integration
+        - Memory System (Vector Store/Knowledge Base)
+        - Monitoring Stack Integration (Grafana/OpenTelemetry)
+        - Analytics Platform Integration (Langfuse)
+        - External Integrations (LLM/Search APIs)
+        - Documentation and User Experience
+        - Other (please specify in the description)
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Describe the bug
+      description: Please provide a clear and concise description of the bug, including expected and actual behavior.
+      placeholder: |
+        What happened:
+        - Actual behavior: When executing a penetration test against [target], the AI agent [behavior]
+        
+        What should happen:
+        - Expected behavior: The system should [expected outcome]
+        
+        Additional context:
+        - Task/Flow ID (if applicable): [ID from UI]
+        - Error messages: [any error messages from logs/UI]
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide detailed steps to reproduce the bug.
+      placeholder: |
+        1. Access PentAGI Web UI at [relative URL]
+        2. Start a new flow with parameters [...] or prompt [...]
+        3. Configure target system as [...]
+        4. Observe AI agent behavior in [...] or log from Langfuse
+        5. Error occurs when [...] or screenshot/export logs from Grafana
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: System Configuration
+      description: Please provide details about your setup
+      placeholder: |
+        PentAGI Version: [e.g., latest from Docker Hub]
+        Deployment Type:
+        - [ ] Docker Compose
+        - [ ] Custom Deployment
+        
+        Environment:
+        - Docker Version: [output of `docker --version`]
+        - Docker Compose Version: [output of `docker compose version`]
+        - Host OS: [e.g., Ubuntu 22.04, macOS 14.0]
+        - Available Resources:
+          - RAM: [e.g., 8GB]
+          - CPU: [e.g., 4 cores]
+          - Disk Space: [e.g., 50GB free]
+        
+        Enabled Features:
+        - [ ] Langfuse Analytics
+        - [ ] Grafana Monitoring
+        - [ ] Custom LLM Server
+        
+        Active Integrations:
+        - LLM Provider: [OpenAI/Anthropic/Custom]
+        - Search Systems: [Google/Tavily/Traversaal]
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Logs and Artifacts
+      description: |
+        Please provide relevant logs and artifacts. You can find logs using:
+        - Docker logs: `docker logs pentagi`
+        - Grafana dashboards (if enabled)
+        - Langfuse traces (if enabled)
+        - Browser console logs (for UI issues)
+      placeholder: |
+        ```
+        Paste logs here
+        ```
+        
+        For large logs, please use GitHub Gist and provide the link.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Screenshots or Recordings
+      description: |
+        If applicable, add screenshots or recordings to help explain your problem.
+        - For UI issues: Browser screenshots/recordings
+        - For agent behavior: Langfuse trace screenshots
+        - For monitoring: Grafana dashboard screenshots
+      placeholder: Drag and drop images/videos here, or paste links to external storage.
+    validations:
+      required: false
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Verification
+      description: Please verify the following before submitting
+      options:
+        - label: I have checked that this issue hasn't been already reported
+        - label: I have provided all relevant configuration files (with sensitive data removed)
+        - label: I have included relevant logs and error messages
+        - label: I am running the latest version of PentAGI
+    validations:
+      required: true

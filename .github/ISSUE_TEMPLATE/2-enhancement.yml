@@ -1,0 +1,115 @@
+name: "\U0001F680 Enhancement"
+description: "Suggest an enhancement for PentAGI"
+title: "[Enhancement]: "
+labels: ["enhancement"]
+assignees:
+  - asdek
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an enhancement to make PentAGI better! Please provide as much detail as possible to help us understand your suggestion.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Target Component
+      description: Which component of PentAGI would this enhancement affect?
+      multiple: true
+      options:
+        - Core Services (Frontend UI/Backend API)
+        - AI Agents (Researcher/Developer/Executor)
+        - Security Tools Integration
+        - Memory System (Vector Store/Knowledge Base)
+        - Monitoring Stack (Grafana/OpenTelemetry)
+        - Analytics Platform (Langfuse)
+        - External Integrations (LLM/Search APIs)
+        - Documentation and User Experience
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Enhancement Description
+      description: Please describe the enhancement you would like to see.
+      placeholder: |
+        Problem Statement:
+        - Current Limitation: [describe what's currently missing or could be improved]
+        - Use Case: [describe how you use PentAGI and why this enhancement would help]
+        
+        Proposed Solution:
+        - Feature Description: [detailed description of the enhancement]
+        - Expected Benefits: [how this would improve PentAGI]
+        
+        Example Scenario:
+        [Provide a concrete example of how this enhancement would be used]
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Technical Details
+      description: If you have technical suggestions for implementation, please share them.
+      placeholder: |
+        Implementation Approach:
+        - Architecture Changes: [any changes needed to current architecture]
+        - New Components: [any new services or integrations needed]
+        - Dependencies: [new tools or libraries required]
+        
+        Integration Points:
+        - AI Agents: [how it affects agent behavior]
+        - Memory System: [data storage requirements]
+        - Monitoring: [new metrics or traces needed]
+        
+        Security Considerations:
+        - [Any security implications to consider]
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Designs and Mockups
+      description: |
+        If applicable, provide mockups, diagrams, or examples to illustrate your enhancement.
+        - For UI changes: wireframes or mockups
+        - For architecture changes: system diagrams
+        - For agent behavior: sequence diagrams
+      placeholder: |
+        Drag and drop images here, or provide links to external design tools.
+        
+        For complex diagrams, you can use Mermaid syntax:
+        ```mermaid
+        sequenceDiagram
+            User->>PentAGI: Request
+            PentAGI->>NewComponent: Process
+            NewComponent->>User: Enhanced Response
+        ```
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Alternative Solutions
+      description: |
+        Please describe any alternative solutions or features you've considered.
+      placeholder: |
+        Alternative Approaches:
+        1. [First alternative approach]
+           - Pros: [benefits]
+           - Cons: [drawbacks]
+        
+        2. [Second alternative approach]
+           - Pros: [benefits]
+           - Cons: [drawbacks]
+        
+        Reason for Preferred Solution:
+        [Explain why your main proposal is better than these alternatives]
+    validations:
+      required: false
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Verification
+      description: Please verify the following before submitting
+      options:
+        - label: I have checked that this enhancement hasn't been already proposed
+        - label: This enhancement aligns with PentAGI's goal of autonomous penetration testing
+        - label: I have considered the security implications of this enhancement
+        - label: I have provided clear use cases and benefits
+    validations:
+      required: true
