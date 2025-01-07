@@ -374,7 +374,7 @@ mkdir pentagi && cd pentagi
 2. Copy `.env.example` to `.env` or download it:
 
 ```bash
-curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/main/.env.example
+curl -o .env https://raw.githubusercontent.com/vxcontrol/pentagi/master/.env.example
 ```
 
 3. Fill in the required API keys in `.env` file.
@@ -419,7 +419,7 @@ perl -i -pe 's/\s+#.*$//' .env
 6. Run the PentAGI stack:
 
 ```bash
-curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose.yml
 docker compose up -d
 ```
 
@@ -483,8 +483,8 @@ LANGFUSE_BASE_URL=http://langfuse-web:3000
 3. Run the Langfuse stack:
 
 ```bash
-curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/main/docker-compose.langfuse.yml
-docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up -d
+curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose-langfuse.yml
+docker compose -f docker-compose.yml -f docker-compose-langfuse.yml up -d
 ```
 
 Visit [localhost:4000](http://localhost:4000) to access Langfuse Web UI with credentials from `.env` file:
@@ -505,7 +505,7 @@ OTEL_HOST=otelcol:8148
 2. Run the observability stack:
 
 ```bash
-curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/main/docker-compose-observability.yml
+curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose-observability.yml
 docker compose -f docker-compose.yml -f docker-compose-observability.yml up -d
 ```
 
@@ -655,4 +655,4 @@ This project is made possible thanks to the following research and developments:
 
 ## 📄 License
 
-Copyright (c) PentAGI Development Team. [MIT License](https://github.com/vxcontrol/pentagi/blob/main/LICENSE)
+Copyright (c) PentAGI Development Team. [MIT License](https://github.com/vxcontrol/pentagi/blob/master/LICENSE)
