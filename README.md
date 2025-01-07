@@ -44,26 +44,42 @@ PentAGI is an innovative tool for automated security testing that leverages cutt
 ### System Context
 
 ```mermaid
-C4Context
-    title System Context Diagram
-
-    Person(pentester, "Security Engineer", "Security professional using the system")
-    System(pentagi, "PentAGI", "Autonomous penetration testing system")
+flowchart TB
+    classDef person fill:#08427B,stroke:#073B6F,color:#fff
+    classDef system fill:#1168BD,stroke:#0B4884,color:#fff
+    classDef external fill:#666666,stroke:#0B4884,color:#fff
     
-    System_Ext(target, "Target System", "System under test")
-    System_Ext(llm, "LLM Provider", "OpenAI/Anthropic/Custom")
-    System_Ext(search, "Search Systems", "Google/Tavily/Traversaal")
-    System_Ext(langfuse, "Langfuse UI", "LLM Observability Dashboard")
-    System_Ext(grafana, "Grafana", "System Monitoring Dashboard")
+    pentester["👤 Security Engineer
+    (User of the system)"]
     
-    Rel(pentester, pentagi, "Uses", "HTTPS")
-    Rel(pentester, langfuse, "Monitors AI", "HTTPS")
-    Rel(pentester, grafana, "Monitors System", "HTTPS")
-    Rel(pentagi, target, "Tests", "Various protocols")
-    Rel(pentagi, llm, "Queries", "HTTPS")
-    Rel(pentagi, search, "Searches", "HTTPS")
-    Rel(pentagi, langfuse, "Reports", "HTTPS")
-    Rel(pentagi, grafana, "Reports", "HTTPS")
+    pentagi["✨ PentAGI
+    (Autonomous penetration testing system)"]
+    
+    target["🎯 Target System
+    (System under test)"]
+    llm["🧠 LLM Provider
+    (OpenAI/Anthropic/Custom)"]
+    search["🔍 Search Systems
+    (Google/Tavily/Traversaal)"]
+    langfuse["📊 Langfuse UI
+    (LLM Observability Dashboard)"]
+    grafana["📈 Grafana
+    (System Monitoring Dashboard)"]
+    
+    pentester --> |Uses HTTPS| pentagi
+    pentester --> |Monitors AI HTTPS| langfuse
+    pentester --> |Monitors System HTTPS| grafana
+    pentagi --> |Tests Various protocols| target
+    pentagi --> |Queries HTTPS| llm
+    pentagi --> |Searches HTTPS| search
+    pentagi --> |Reports HTTPS| langfuse
+    pentagi --> |Reports HTTPS| grafana
+    
+    class pentester person
+    class pentagi system
+    class target,llm,search,langfuse,grafana external
+    
+    linkStyle default stroke:#ffffff,color:#ffffff
 ```
 
 <details>
@@ -392,7 +408,7 @@ TRAVERSAAL_API_KEY=your_traversaal_key
 ### Access Credentials
 - `PENTAGI_POSTGRES_USER` and `PENTAGI_POSTGRES_PASSWORD` - PostgreSQL credentials
 
-</details><br/>
+</details>
 
 5. Remove all inline comments from `.env` file if you want to use it in VSCode or other IDEs as a envFile option:
 
@@ -456,7 +472,7 @@ Langfuse provides advanced capabilities for monitoring and analyzing AI agent op
 - `LANGFUSE_S3_ACCESS_KEY_ID` - S3 access key ID
 - `LANGFUSE_S3_SECRET_ACCESS_KEY` - S3 secret access key
 
-</details><br/>
+</details>
 
 2. Enable integration with Langfuse for PentAGI service in `.env` file.
 
@@ -505,8 +521,7 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 > ```bash
 > alias pentagi="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml"
 > alias pentagi-up="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d"
-> alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml down"
-> ```
+> alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml down"```
 
 ### GitHub and Google OAuth Integration
 
@@ -536,13 +551,43 @@ For using Google OAuth you need to create a new OAuth application in your Google
 
 Run once `cd backend && go mod download` to install needed packages.
 
-For generating swagger files have to run `swag init -g ../../pkg/server/router.go -o pkg/server/docs/ --parseDependency --parseInternal --parseDepth 2 -d cmd/pentagi` before installing `swag` package via `go install github.com/swaggo/swag/cmd/swag@v1.8.7` command.
+For generating swagger files have to run 
 
-For generating graphql resolver files have to run `go run github.com/99designs/gqlgen --config ./gqlgen/gqlgen.yml` after that you can see the generated files in `pkg/graph` folder.
+```bash
+swag init -g ../../pkg/server/router.go -o pkg/server/docs/ --parseDependency --parseInternal --parseDepth 2 -d cmd/pentagi
+```
 
-For generating ORM methods (database package) from sqlc configuration `docker run --rm -v $(pwd):/src -w /src --network pentagi-network -e DATABASE_URL="{URL}" sqlc/sqlc generate -f sqlc/sqlc.yml`
+before installing `swag` package via 
 
-For generating Langfuse SDK from OpenAPI specification `fern generate --local` and to install fern-cli `npm install -g fern-api`
+```bash
+go install github.com/swaggo/swag/cmd/swag@v1.8.7
+```
+
+For generating graphql resolver files have to run 
+
+```bash
+go run github.com/99designs/gqlgen --config ./gqlgen/gqlgen.yml
+```
+
+after that you can see the generated files in `pkg/graph` folder.
+
+For generating ORM methods (database package) from sqlc configuration
+
+```bash
+docker run --rm -v $(pwd):/src -w /src --network pentagi-network -e DATABASE_URL="{URL}" sqlc/sqlc generate -f sqlc/sqlc.yml
+```
+
+For generating Langfuse SDK from OpenAPI specification
+
+```bash
+fern generate --local
+```
+
+and to install fern-cli
+
+```bash
+npm install -g fern-api
+```
 
 #### Testing
 

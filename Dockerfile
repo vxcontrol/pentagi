@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.yarn \
 RUN yarn build
 
 # STEP 2: Build the backend
-FROM golang:1.22-alpine as be-build
+FROM golang:1.23-alpine as be-build
 ENV CGO_ENABLED=1
 RUN apk add --no-cache gcc musl-dev
 
@@ -60,8 +60,8 @@ COPY --from=fe-build /frontend/dist /opt/pentagi/fe
 
 COPY LICENSE /opt/pentagi/LICENSE
 COPY NOTICE /opt/pentagi/NOTICE
-COPY EULA /opt/pentagi/EULA
-COPY EULA /opt/pentagi/fe/EULA.md
+COPY EULA.md /opt/pentagi/EULA
+COPY EULA.md /opt/pentagi/fe/EULA.md
 
 RUN chown -R pentagi:pentagi /opt/pentagi
 
