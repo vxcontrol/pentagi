@@ -1,6 +1,26 @@
 {
-  "importOrder": ["^@/(.*)$", "^[./]"],
-  "importOrderSeparation": true,
-  "importOrderSortSpecifiers": true,
-  "plugins": ["@trivago/prettier-plugin-sort-imports"]
+    "printWidth": 120,
+    "tabWidth": 4,
+    "useTabs": false,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "singleAttributePerLine": true,
+    "endOfLine": "auto",
+    "plugins": ["prettier-plugin-tailwindcss", "prettier-plugin-organize-imports"],
+    "overrides": [
+        {
+            "files": ["*.yml"],
+            "options": {
+                "tabWidth": 2
+            }
+        },
+        {
+            "files": ["*.xml"],
+            "options": {
+                "parser": "xml",
+                "plugins": ["@prettier/plugin-xml"]
+            }
+        }
+    ]
 }
