@@ -11,10 +11,10 @@ COPY ./backend/pkg/graph/schema.graphqls ../backend/pkg/graph/
 COPY frontend/ .
 
 # Install dependencies with package manager detection for SBOM
-RUN --mount=type=cache,target=/root/.yarn \
-    yarn install --frozen-lockfile --production=false
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
-RUN yarn build
+RUN npm run build
 
 # STEP 2: Build the backend
 FROM golang:1.23-alpine as be-build
