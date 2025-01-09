@@ -29,14 +29,14 @@ services:
     hostname: grafana
     expose:
       - 3000/tcp
+    ports:
+      - 127.0.0.1:3000:3000
     environment:
       GF_USERS_ALLOW_SIGN_UP: false
       GF_EXPLORE_ENABLED: true
       GF_ALERTING_ENABLED: true
       GF_UNIFIED_ALERTING_ENABLED: true
       GF_FEATURE_TOGGLES_ENABLE: traceToMetrics,alertingSimplifiedRouting,alertingQueryAndExpressionsStepMode
-    ports:
-      - 127.0.0.1:3000:3000
     volumes:
       - ./observability/grafana/config:/etc/grafana:rw
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:rw
@@ -116,6 +116,9 @@ services:
     expose:
       - 8148/tcp
       - 4318/tcp
+    ports:
+      - 127.0.0.1:8148:8148
+      - 127.0.0.1:4318:4318
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:
@@ -203,10 +206,21 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:1.56.0
     restart: always
-    command:
-      - --grpc-storage-plugin.binary=/etc/jaeger/bin/jaeger-clickhouse-linux-arm64
-      - --grpc-storage-plugin.configuration-file=/etc/jaeger/plugin-config.yml
-      - --grpc-storage-plugin.log-level=info
+    entrypoint: >
+      /bin/sh -c '
+      if [ "$$(uname -m)" = "x86_64" ]; then
+        ARCH="amd64"
+      elif [ "$$(uname -m)" = "aarch64" ]; then
+        ARCH="arm64"
+      else
+        echo "Unsupported architecture"
+        sleep 30
+        exit 1
+      fi &&
+      /go/bin/all-in-one-linux
+      --grpc-storage-plugin.binary=/etc/jaeger/bin/jaeger-clickhouse-linux-$$ARCH
+      --grpc-storage-plugin.configuration-file=/etc/jaeger/plugin-config.yml
+      --grpc-storage-plugin.log-level=info'
     container_name: jaeger
     hostname: jaeger
     expose:

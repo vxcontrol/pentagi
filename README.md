@@ -478,6 +478,9 @@ Langfuse provides advanced capabilities for monitoring and analyzing AI agent op
 
 ```bash
 LANGFUSE_BASE_URL=http://langfuse-web:3000
+LANGFUSE_PROJECT_ID= # default: value from ${LANGFUSE_INIT_PROJECT_ID}
+LANGFUSE_PUBLIC_KEY= # default: value from ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
+LANGFUSE_SECRET_KEY= # default: value from ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
 ```
 
 3. Run the Langfuse stack:
