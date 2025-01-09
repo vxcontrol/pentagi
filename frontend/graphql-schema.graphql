@@ -1,0 +1,253 @@
+fragment flowOverviewFragment on Flow {
+    id
+    title
+    status
+}
+
+query flows {
+    flows {
+        ...flowOverviewFragment
+    }
+}
+
+query providers {
+    providers
+}
+
+fragment flowFragment on Flow {
+    id
+    title
+    status
+    terminals {
+        ...terminalFragment
+    }
+    provider
+    createdAt
+    updatedAt
+}
+
+fragment terminalFragment on Terminal {
+    id
+    type
+    name
+    image
+    connected
+    createdAt
+}
+
+fragment taskFragment on Task {
+    id
+    title
+    status
+    input
+    result
+    flowId
+    subtasks {
+        ...subtaskFragment
+    }
+    createdAt
+    updatedAt
+}
+
+fragment subtaskFragment on Subtask {
+    id
+    status
+    title
+    description
+    result
+    taskId
+    createdAt
+    updatedAt
+}
+
+fragment terminalLogFragment on TerminalLog {
+    id
+    flowId
+    type
+    text
+    terminal
+    createdAt
+}
+
+fragment messageLogFragment on MessageLog {
+    id
+    type
+    message
+    result
+    resultFormat
+    flowId
+    taskId
+    subtaskId
+    createdAt
+}
+
+fragment screenshotFragment on Screenshot {
+    id
+    flowId
+    name
+    url
+    createdAt
+}
+
+fragment agentLogFragment on AgentLog {
+    id
+    flowId
+    initiator
+    executor
+    task
+    result
+    taskId
+    subtaskId
+    createdAt
+}
+
+fragment searchLogFragment on SearchLog {
+    id
+    flowId
+    initiator
+    executor
+    engine
+    query
+    result
+    taskId
+    subtaskId
+    createdAt
+}
+
+fragment vectorStoreLogFragment on VectorStoreLog {
+    id
+    flowId
+    initiator
+    executor
+    filter
+    query
+    action
+    result
+    taskId
+    subtaskId
+    createdAt
+}
+
+query flow($id: ID!) {
+    flow(flowId: $id) {
+        ...flowFragment
+    }
+    tasks(flowId: $id) {
+        ...taskFragment
+    }
+    screenshots(flowId: $id) {
+        ...screenshotFragment
+    }
+    terminalLogs(flowId: $id) {
+        ...terminalLogFragment
+    }
+    messageLogs(flowId: $id) {
+        ...messageLogFragment
+    }
+    agentLogs(flowId: $id) {
+        ...agentLogFragment
+    }
+    searchLogs(flowId: $id) {
+        ...searchLogFragment
+    }
+    vectorStoreLogs(flowId: $id) {
+        ...vectorStoreLogFragment
+    }
+}
+
+query tasks($flowId: ID!) {
+    tasks(flowId: $flowId) {
+        ...taskFragment
+    }
+}
+
+mutation createFlow($modelProvider: String!, $input: String!) {
+    createFlow(modelProvider: $modelProvider, input: $input) {
+        ...flowFragment
+    }
+}
+
+mutation deleteFlow($flowId: ID!) {
+    deleteFlow(flowId: $flowId)
+}
+
+mutation putUserInput($flowId: ID!, $input: String!) {
+    putUserInput(flowId: $flowId, input: $input)
+}
+
+mutation finishFlow($flowId: ID!) {
+    finishFlow(flowId: $flowId) {
+        ...flowFragment
+    }
+}
+
+subscription terminalLogAdded($flowId: ID!) {
+    terminalLogAdded(flowId: $flowId) {
+        ...terminalLogFragment
+    }
+}
+
+subscription messageLogAdded($flowId: ID!) {
+    messageLogAdded(flowId: $flowId) {
+        ...messageLogFragment
+    }
+}
+
+subscription messageLogUpdated($flowId: ID!) {
+    messageLogUpdated(flowId: $flowId) {
+        ...messageLogFragment
+    }
+}
+
+subscription screenshotAdded($flowId: ID!) {
+    screenshotAdded(flowId: $flowId) {
+        ...screenshotFragment
+    }
+}
+
+subscription agentLogAdded($flowId: ID!) {
+    agentLogAdded(flowId: $flowId) {
+        ...agentLogFragment
+    }
+}
+
+subscription searchLogAdded($flowId: ID!) {
+    searchLogAdded(flowId: $flowId) {
+        ...searchLogFragment
+    }
+}
+
+subscription vectorStoreLogAdded($flowId: ID!) {
+    vectorStoreLogAdded(flowId: $flowId) {
+        ...vectorStoreLogFragment
+    }
+}
+
+subscription flowUpdated($flowId: ID!) {
+    flowUpdated(flowId: $flowId) {
+        id
+        status
+        terminals {
+            ...terminalFragment
+        }
+        updatedAt
+    }
+}
+
+subscription taskCreated($flowId: ID!) {
+    taskCreated(flowId: $flowId) {
+        ...taskFragment
+    }
+}
+
+subscription taskUpdated($flowId: ID!) {
+    taskUpdated(flowId: $flowId) {
+        id
+        status
+        result
+        subtasks {
+            ...subtaskFragment
+        }
+        updatedAt
+    }
+}

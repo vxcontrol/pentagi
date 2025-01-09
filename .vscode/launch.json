@@ -8,12 +8,18 @@
             "program": "${workspaceFolder}/backend/cmd/pentagi/main.go",
             "envFile": "${workspaceFolder}/.env",
             "env": {
-                "CORS_ORIGINS": "http://localhost:8080,http://localhost:8000",
+                "CORS_ORIGINS": "http://localhost:*,https://localhost:*",
                 "PUBLIC_URL": "http://localhost:8080",
                 "STATIC_URL": "http://localhost:8000",
+                // Choose it instead of STATIC_URL to serve static files from a directory:
+                // "STATIC_DIR": "${workspaceFolder}/frontend/dist",
                 "SERVER_PORT": "8080",
                 "SERVER_USE_SSL": "false",
                 "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
+                // Langfuse (optional) uncomment to enable
+                // "LANGFUSE_BASE_URL": "http://localhost:4000",
+                // Observability (optional) uncomment to enable
+                // "OTEL_HOST": "localhost:8148"
             },
             "cwd": "${workspaceFolder}",
             "output": "${workspaceFolder}/build/__debug_bin",
@@ -26,7 +32,9 @@
             "runtimeArgs": ["run", "dev"],
             "env": {
                 "VITE_API_URL": "localhost:8080",
-                "PORT": "8000",
+                "VITE_USE_HTTPS": "false",
+                "VITE_PORT": "8000",
+                "VITE_HOST": "0.0.0.0",
             },
             "cwd": "${workspaceFolder}/frontend",
         },

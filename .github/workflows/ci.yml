@@ -41,40 +41,45 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '23'
-          cache: 'yarn'
-          cache-dependency-path: 'frontend/yarn.lock'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
 
-      # Cache Yarn dependencies
-      - name: Get yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+      # Cache npm dependencies
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
 
-      - name: Cache Yarn packages
+      - name: Cache npm packages
         uses: actions/cache@v3
-        id: yarn-cache
+        id: npm-cache
         with:
           path: |
-            ${{ steps.yarn-cache-dir-path.outputs.dir }}
+            ${{ steps.npm-cache-dir.outputs.dir }}
             frontend/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('frontend/yarn.lock') }}
+          key: ${{ runner.os }}-npm-${{ hashFiles('frontend/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-yarn-
+            ${{ runner.os }}-npm-
 
       # Frontend lint and test
       - name: Frontend - Install dependencies
-        if: steps.yarn-cache.outputs.cache-hit != 'true'
+        if: steps.npm-cache.outputs.cache-hit != 'true'
         working-directory: frontend
-        run: yarn install --frozen-lockfile
+        run: npm ci
+        continue-on-error: true
+
+      - name: Frontend - Prettier
+        working-directory: frontend
+        run: npm run prettier
         continue-on-error: true
 
       - name: Frontend - Lint
         working-directory: frontend
-        run: yarn lint
+        run: npm run lint
         continue-on-error: true
 
       - name: Frontend - Test
         working-directory: frontend
-        run: yarn test
+        run: npm run test
         continue-on-error: true
 
       # Backend lint and test
@@ -98,6 +103,21 @@ jobs:
       - name: Backend - Test
         working-directory: backend
         run: go test ./... -v
+        continue-on-error: true
+
+      - name: Backend - Test Build
+        working-directory: backend
+        env:
+          CGO_ENABLED: 0
+          GO111MODULE: on
+        run: |
+          # Build for AMD64
+          GOOS=linux GOARCH=amd64 go build -trimpath -o /tmp/pentagi-amd64 ./cmd/pentagi
+          echo "✓ Successfully built for linux/amd64"
+          
+          # Build for ARM64
+          GOOS=linux GOARCH=arm64 go build -trimpath -o /tmp/pentagi-arm64 ./cmd/pentagi
+          echo "✓ Successfully built for linux/arm64"
         continue-on-error: true
 
   docker-build:

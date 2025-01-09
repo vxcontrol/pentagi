@@ -4,6 +4,8 @@
 FROM node:23-slim as fe-build
 
 ENV NODE_ENV=production
+ENV VITE_BUILD_MEMORY_LIMIT=4096
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 WORKDIR /frontend
 
@@ -11,15 +13,33 @@ COPY ./backend/pkg/graph/schema.graphqls ../backend/pkg/graph/
 COPY frontend/ .
 
 # Install dependencies with package manager detection for SBOM
-RUN --mount=type=cache,target=/root/.yarn \
-    yarn install --frozen-lockfile --production=false
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --include=dev
 
-RUN yarn build
+# Build frontend with optimizations and parallel processing
+RUN npm run build -- \
+    --mode production \
+    --minify esbuild \
+    --outDir dist \
+    --emptyOutDir \
+    --sourcemap false \
+    --target es2020
 
 # STEP 2: Build the backend
-FROM golang:1.23-alpine as be-build
-ENV CGO_ENABLED=1
-RUN apk add --no-cache gcc musl-dev
+FROM golang:1.23-bookworm as be-build
+
+ENV CGO_ENABLED=0
+ENV GO111MODULE=on
+
+# Install build essentials
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    tzdata \
+    gcc \
+    g++ \
+    make \
+    git \
+    musl-dev
 
 WORKDIR /backend
 
@@ -29,6 +49,7 @@ COPY backend/ .
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
+# Build backend
 RUN go build -trimpath -o /pentagi ./cmd/pentagi
 
 # STEP 3: Build the final image

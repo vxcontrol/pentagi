@@ -14,17 +14,17 @@ elif [ "$SERVER_USE_SSL" = "true" ]; then
     openssl req \
         -new -x509 -days 3650 \
         -key ${SERVER_SSL_CA_KEY} \
-        -subj "/C=US/ST=NY/L=NY/O=PentAGI/OU=Org/CN=PentAGI CA" \
+        -subj "/C=US/ST=NY/L=NY/O=PentAGI/OU=Project/CN=PentAGI CA" \
         -out ${SERVER_SSL_CA_CRT}
     openssl req \
         -newkey rsa:4096 \
         -sha256 \
         -nodes \
         -keyout ${SERVER_SSL_KEY} \
-        -subj "/C=US/ST=NY/L=NY/O=PentAGI/OU=Org/CN=pentagi.local" \
+        -subj "/C=US/ST=NY/L=NY/O=PentAGI/OU=Project/CN=localhost" \
         -out ${SERVER_SSL_CSR}
     
-    echo "subjectAltName=DNS:localhost" > extfile.tmp
+    echo "subjectAltName=DNS:pentagi.local" > extfile.tmp
     echo "keyUsage=critical,digitalSignature,keyAgreement" >> extfile.tmp
     
     openssl x509 -req \

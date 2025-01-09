@@ -6,8 +6,10 @@
 backend/tmp
 backend/build
 
+frontend/coverage
 frontend/dist
 frontend/node_modules
+frontend/ssl
 
 build/*
 data/*
