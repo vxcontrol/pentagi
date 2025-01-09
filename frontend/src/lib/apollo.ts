@@ -27,7 +27,7 @@ const link = split(
     httpLink,
 );
 
-// Вспомогательные функции
+// Helper functions
 const addIncoming = (existing: any[], incoming: any, cache: any) => {
     const incomingId = cache.identify(incoming);
 

@@ -1,16 +1,21 @@
 {
     "name": "pentagi",
     "type": "module",
-    "version": "0.0.1",
+    "version": "0.2.0",
     "scripts": {
-        "build": "tsc && vite build",
+        "build": "npx tsc && vite build",
         "commit": "commit",
         "commitlint": "commitlint --edit",
         "dev": "vite",
         "graphql:generate": "graphql-codegen --config graphql-codegen.ts",
-        "lint": "eslint",
-        "lint:fix": "eslint --fix",
-        "prettier:fix": "npx prettier --write ."
+        "lint": "eslint \"src/**/*.{ts,tsx,js,jsx}\"",
+        "lint:fix": "eslint \"src/**/*.{ts,tsx,js,jsx}\" --fix",
+        "prettier": "npx prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
+        "prettier:fix": "npx prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
+        "ssl:generate": "tsx --eval 'import { generateCertificates } from \"./scripts/generate-ssl.ts\"; generateCertificates();'",
+        "test": "vitest run",
+        "test:coverage": "vitest run --coverage",
+        "test:watch": "vitest"
     },
     "dependencies": {
         "@apollo/client": "^3.11.10",
@@ -63,6 +68,7 @@
         "@graphql-codegen/typescript": "^4.1.1",
         "@graphql-codegen/typescript-operations": "^4.3.1",
         "@graphql-codegen/typescript-react-apollo": "^4.3.2",
+        "@prettier/plugin-xml": "^3.3.1",
         "@tailwindcss/typography": "^0.5.15",
         "@types/js-cookie": "^3.0.6",
         "@types/lodash": "^4.17.13",
@@ -70,6 +76,7 @@
         "@types/react": "^18.3.8",
         "@types/react-dom": "^18.3.0",
         "@vitejs/plugin-react-swc": "^3.7.0",
+        "@vitest/coverage-v8": "^2.1.4",
         "autoprefixer": "^10.4.20",
         "eslint": "^9.11.1",
         "eslint-config-hyoban": "^3.1.6",
@@ -80,18 +87,12 @@
         "prettier-plugin-tailwindcss": "^0.6.8",
         "simple-git-hooks": "^2.11.1",
         "tailwindcss": "^3.4.13",
+        "tsx": "^4.7.1",
         "typescript": "^5.6.2",
         "vite": "^5.4.7",
         "vite-plugin-html": "^3.2.2",
         "vite-tsconfig-paths": "^5.0.1",
         "vitest": "^2.1.4"
-    },
-    "simple-git-hooks": {
-        "pre-commit": "npx lint-staged",
-        "commit-msg": "npx --no -- commitlint --edit"
-    },
-    "lint-staged": {
-        "*": "eslint --fix"
     },
     "eslintConfig": {
         "extends": [

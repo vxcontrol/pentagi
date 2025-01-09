@@ -13,7 +13,7 @@ export default defineConfig(
         },
         lessOpinionated: true,
         preferESM: false,
-        ignores: ['public/mockServiceWorker.js', 'src/components/ui', 'pnpm-lock.yaml'],
+        ignores: ['public/mockServiceWorker.js', 'src/components/ui', 'pnpm-lock.yaml', 'src/graphql/types.ts'],
     },
     {
         settings: {

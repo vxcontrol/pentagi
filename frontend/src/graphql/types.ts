@@ -1304,7 +1304,7 @@ export function useVectorStoreLogAddedSubscription(
         VectorStoreLogAddedSubscription,
         VectorStoreLogAddedSubscriptionVariables
     > &
-    ({ variables: VectorStoreLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+        ({ variables: VectorStoreLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
 ) {
     const options = { ...defaultOptions, ...baseOptions };
     return Apollo.useSubscription<VectorStoreLogAddedSubscription, VectorStoreLogAddedSubscriptionVariables>(
