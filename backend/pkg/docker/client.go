@@ -46,6 +46,7 @@ type dockerClient struct {
 	hostDir  string
 	client   *client.Client
 	inside   bool
+	defImage string
 	socket   string
 	network  string
 	publicIP string
@@ -63,6 +64,7 @@ type DockerClient interface {
 	CopyToContainer(ctx context.Context, containerID string, dstPath string, content io.Reader, options types.CopyToContainerOptions) error
 	CopyFromContainer(ctx context.Context, containerID string, srcPath string) (io.ReadCloser, types.ContainerPathStat, error)
 	Cleanup(ctx context.Context) error
+	GetDefaultImage() string
 }
 
 func GetPrimaryContainerPorts(flowID int64) []int {
@@ -95,6 +97,10 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 	inside := cfg.DockerInside
 	network := cfg.DockerNetwork
 	publicIP := cfg.DockerPublicIP
+	defImage := strings.ToLower(cfg.DockerDefaultImage)
+	if defImage == "" {
+		defImage = defaultImage
+	}
 
 	// TODO: if this process running in a docker container, we need to use the host machine's data directory
 	// maybe there need to resolve the data directory path from volume list
@@ -133,6 +139,7 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		hostDir:  hostDir,
 		logger:   logger,
 		inside:   inside,
+		defImage: defImage,
 		socket:   socket,
 		network:  network,
 		publicIP: publicIP,
@@ -195,17 +202,27 @@ func (dc *dockerClient) SpawnContainer(
 		}
 	}
 
-	if err := dc.pullImage(ctx, config.Image); err != nil {
-		logger.WithError(err).Warnf("failed to pull image and using default image %s", defaultImage)
-		logger = logger.WithField("image", defaultImage)
+	fallbackDockerImage := func() error {
+		logger = logger.WithField("image", dc.defImage)
+		logger.Warn("try to use default image")
+		config.Image = dc.defImage
 
 		dbContainer, err = dc.db.UpdateContainerImage(ctx, database.UpdateContainerImageParams{
-			Image: defaultImage,
+			Image: config.Image,
 			ID:    dbContainer.ID,
 		})
 		if err != nil {
+			return fmt.Errorf("failed to update container image in database: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := dc.pullImage(ctx, config.Image); err != nil {
+		logger.WithError(err).Warnf("failed to pull image '%s' and using default image", config.Image)
+		if err := fallbackDockerImage(); err != nil {
 			defer updateContainerInfo(database.ContainerStatusFailed, "")
-			return database.Container{}, fmt.Errorf("failed to update container image in database: %w", err)
+			return database.Container{}, err
 		}
 	}
 
@@ -274,8 +291,41 @@ func (dc *dockerClient) SpawnContainer(
 
 	resp, err := dc.client.ContainerCreate(ctx, config, hostConfig, networkingConfig, nil, containerName)
 	if err != nil {
-		defer updateContainerInfo(database.ContainerStatusFailed, "")
-		return database.Container{}, fmt.Errorf("failed to create container: %w", err)
+		if config.Image == dc.defImage {
+			logger.WithError(err).Warn("failed to create container with default image")
+			defer updateContainerInfo(database.ContainerStatusFailed, "")
+			return database.Container{}, fmt.Errorf("failed to create container: %w", err)
+		}
+
+		logger.WithError(err).Warn("failed to create container, try to use default image")
+		if err := fallbackDockerImage(); err != nil {
+			defer updateContainerInfo(database.ContainerStatusFailed, "")
+			return database.Container{}, err
+		}
+
+		// try to cleanup previous container
+		containers, err := dc.client.ContainerList(ctx, container.ListOptions{})
+		if err != nil {
+			defer updateContainerInfo(database.ContainerStatusFailed, "")
+			return database.Container{}, fmt.Errorf("failed to list containers: %w", err)
+		}
+		options := container.RemoveOptions{
+			RemoveVolumes: true,
+			Force:         true,
+		}
+		for _, container := range containers {
+			// containerName is unique for PentAGI environment, so we can use it to find the container
+			if len(container.Names) > 0 && container.Names[0] == containerName {
+				_ = dc.client.ContainerRemove(ctx, container.ID, options)
+			}
+		}
+
+		// try to create container again with default image
+		resp, err = dc.client.ContainerCreate(ctx, config, hostConfig, networkingConfig, nil, containerName)
+		if err != nil {
+			defer updateContainerInfo(database.ContainerStatusFailed, "")
+			return database.Container{}, fmt.Errorf("failed to create container '%s': %w", config.Image, err)
+		}
 	}
 
 	containerID := resp.ID
@@ -450,6 +500,10 @@ func (dc *dockerClient) IsContainerRunning(ctx context.Context, containerID stri
 	}
 
 	return containerInfo.State.Running, err
+}
+
+func (dc *dockerClient) GetDefaultImage() string {
+	return dc.defImage
 }
 
 func (dc *dockerClient) ContainerExecCreate(

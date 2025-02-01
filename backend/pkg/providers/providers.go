@@ -105,7 +105,8 @@ func (pc *providerController) NewFlowProvider(
 	}
 
 	imageTmpl, err := prompter.RenderTemplate(templates.PromptTypeImageChooser, map[string]any{
-		"Input": input,
+		"DefaultImage": pc.docker.GetDefaultImage(),
+		"Input":        input,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get primary docker image template: %w", err)
@@ -115,7 +116,7 @@ func (pc *providerController) NewFlowProvider(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get primary docker image: %w", err)
 	}
-	image = strings.TrimSpace(image)
+	image = strings.ToLower(strings.TrimSpace(image))
 
 	languageTmpl, err := prompter.RenderTemplate(templates.PromptTypeLanguageChooser, map[string]any{
 		"Input": input,
