@@ -9,6 +9,15 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 WORKDIR /frontend
 
+# Install build essentials
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    tzdata \
+    gcc \
+    g++ \
+    make \
+    git
+
 COPY ./backend/pkg/graph/schema.graphqls ../backend/pkg/graph/
 COPY frontend/ .
 

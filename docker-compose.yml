@@ -76,6 +76,7 @@ services:
       - DOCKER_NETWORK=${DOCKER_NETWORK:-}
       - DOCKER_PUBLIC_IP=${DOCKER_PUBLIC_IP:-}
       - DOCKER_WORK_DIR=${DOCKER_WORK_DIR:-}
+      - DOCKER_DEFAULT_IMAGE=${DOCKER_DEFAULT_IMAGE:-}
     logging:
       options:
         max-size: 50m
