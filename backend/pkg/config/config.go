@@ -54,7 +54,7 @@ type Config struct {
 	LLMServerURL    string `env:"LLM_SERVER_URL"`
 	LLMServerKey    string `env:"LLM_SERVER_KEY"`
 	LLMServerModel  string `env:"LLM_SERVER_MODEL"`
-	LLMServerConfig string `env:"LLM_SERVER_CONFIG"`
+	LLMServerConfig string `env:"LLM_SERVER_CONFIG_PATH"`
 
 	// Google search engine
 	GoogleAPIKey string `env:"GOOGLE_API_KEY"`

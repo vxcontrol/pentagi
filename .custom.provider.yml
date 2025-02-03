@@ -1,5 +1,5 @@
 simple:
-  model: "mistralai/mistral-large-2411"
+  model: "meta-llama/llama-3.3-70b-instruct"
   temperature: 0.7
   top_p: 0.95
   n: 1
