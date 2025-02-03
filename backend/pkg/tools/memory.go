@@ -124,10 +124,10 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			)
 			buffer.WriteString(fmt.Sprintf("# Match score %f\n\n", doc.Score))
 			if taskID, ok := doc.Metadata["task_id"]; ok {
-				buffer.WriteString(fmt.Sprintf("# Task ID %d\n\n", taskID))
+				buffer.WriteString(fmt.Sprintf("# Task ID %v\n\n", taskID))
 			}
 			if subtaskID, ok := doc.Metadata["subtask_id"]; ok {
-				buffer.WriteString(fmt.Sprintf("# Subtask ID %d\n\n", subtaskID))
+				buffer.WriteString(fmt.Sprintf("# Subtask ID %v\n\n", subtaskID))
 			}
 			buffer.WriteString(fmt.Sprintf("# Tool Name '%s'\n\n", doc.Metadata["tool_name"]))
 			if toolDescription, ok := doc.Metadata["tool_description"]; ok {

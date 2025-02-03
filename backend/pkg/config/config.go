@@ -51,9 +51,10 @@ type Config struct {
 	AnthropicServerURL string `env:"ANTHROPIC_SERVER_URL" envDefault:"https://api.anthropic.com/v1"`
 
 	// Custom LLM provider
-	LLMServerURL   string `env:"LLM_SERVER_URL"`
-	LLMServerKey   string `env:"LLM_SERVER_KEY"`
-	LLMServerModel string `env:"LLM_SERVER_MODEL"`
+	LLMServerURL    string `env:"LLM_SERVER_URL"`
+	LLMServerKey    string `env:"LLM_SERVER_KEY"`
+	LLMServerModel  string `env:"LLM_SERVER_MODEL"`
+	LLMServerConfig string `env:"LLM_SERVER_CONFIG"`
 
 	// Google search engine
 	GoogleAPIKey string `env:"GOOGLE_API_KEY"`

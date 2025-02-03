@@ -46,6 +46,7 @@ require (
 	golang.org/x/sys v0.29.0
 	google.golang.org/api v0.183.0
 	google.golang.org/grpc v1.69.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -163,7 +164,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20250102185135-69823020774d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250102185135-69823020774d // indirect
 	google.golang.org/protobuf v1.36.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
 )

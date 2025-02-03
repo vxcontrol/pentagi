@@ -65,14 +65,42 @@ func New(cfg *config.Config) (provider.Provider, error) {
 		llms.WithTemperature(0.7),
 		llms.WithTopP(1.0),
 		llms.WithN(1),
-		llms.WithRepetitionPenalty(1.0),
 		llms.WithMaxTokens(4000),
 	}
 
-	return &customProvider{
-		llm:      client,
-		embedder: embedder,
-		options: map[provider.ProviderOptionsType][]llms.CallOption{
+	// load provider options from config file if specified
+	var options map[provider.ProviderOptionsType][]llms.CallOption
+	if cfg.LLMServerConfig != "" {
+		providerConfig, err := LoadConfig(cfg.LLMServerConfig, simple)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load provider config: %w", err)
+		}
+		if providerConfig != nil {
+			options = make(map[provider.ProviderOptionsType][]llms.CallOption)
+			for _, optType := range []provider.ProviderOptionsType{
+				provider.OptionsTypeSimple,
+				provider.OptionsTypeSimpleJSON,
+				provider.OptionsTypeAgent,
+				provider.OptionsTypeGenerator,
+				provider.OptionsTypeRefiner,
+				provider.OptionsTypeAdviser,
+				provider.OptionsTypeReflector,
+				provider.OptionsTypeSearcher,
+				provider.OptionsTypeEnricher,
+				provider.OptionsTypeCoder,
+				provider.OptionsTypeInstaller,
+				provider.OptionsTypePentester,
+			} {
+				if opts := providerConfig.GetOptionsForType(optType); opts != nil {
+					options[optType] = opts
+				}
+			}
+		}
+	}
+
+	// if no config file or empty config, use default options
+	if options == nil {
+		options = map[provider.ProviderOptionsType][]llms.CallOption{
 			provider.OptionsTypeSimple:     simple,
 			provider.OptionsTypeSimpleJSON: simple,
 			provider.OptionsTypeAgent:      simple,
@@ -85,7 +113,14 @@ func New(cfg *config.Config) (provider.Provider, error) {
 			provider.OptionsTypeCoder:      simple,
 			provider.OptionsTypeInstaller:  simple,
 			provider.OptionsTypePentester:  simple,
-		},
+		}
+	}
+
+	return &customProvider{
+		llm:      client,
+		model:    baseModel,
+		embedder: embedder,
+		options:  options,
 	}, nil
 }
 
