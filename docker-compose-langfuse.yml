@@ -21,7 +21,7 @@ networks:
 services:
   langfuse-worker:
     image: langfuse/langfuse-worker:3
-    restart: always
+    restart: unless-stopped
     container_name: langfuse-worker
     hostname: langfuse-worker
     depends_on: &langfuse-depends-on
@@ -72,7 +72,7 @@ services:
 
   langfuse-web:
     image: langfuse/langfuse:3
-    restart: always
+    restart: unless-stopped
     container_name: langfuse-web
     hostname: langfuse-web
     depends_on: *langfuse-depends-on
@@ -125,7 +125,7 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server
-    restart: always
+    restart: unless-stopped
     user: "101:101"
     container_name: langfuse-clickhouse
     hostname: langfuse-clickhouse
@@ -151,7 +151,7 @@ services:
 
   minio:
     image: minio/minio
-    restart: always
+    restart: unless-stopped
     container_name: langfuse-minio
     hostname: langfuse-minio
     command: server /data --console-address ":9001" --address ":9000" --json
@@ -194,7 +194,7 @@ services:
 
   redis:
     image: redis:7
-    restart: always
+    restart: unless-stopped
     container_name: langfuse-redis
     hostname: langfuse-redis
     command: >
@@ -213,7 +213,7 @@ services:
 
   postgres:
     image: postgres:${LANGFUSE_POSTGRES_VERSION:-latest}
-    restart: always
+    restart: unless-stopped
     container_name: langfuse-postgres
     hostname: langfuse-postgres
     environment:

@@ -137,7 +137,7 @@ services:
 
   scraper:
     image: vxcontrol/scraper:latest
-    restart: always
+    restart: unless-stopped
     container_name: scraper
     hostname: scraper
     expose:

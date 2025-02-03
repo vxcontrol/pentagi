@@ -24,7 +24,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.4.0
-    restart: always
+    restart: unless-stopped
     container_name: grafana
     hostname: grafana
     expose:
@@ -50,7 +50,7 @@ services:
 
   node-exporter:
     image: prom/node-exporter:v1.8.2
-    restart: always
+    restart: unless-stopped
     command:
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
@@ -78,7 +78,7 @@ services:
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.51.0
-    restart: always
+    restart: unless-stopped
     command:
       - --store_container_labels=false
       - --docker_only=true
@@ -104,7 +104,7 @@ services:
 
   otel:
     image: otel/opentelemetry-collector-contrib:0.116.1
-    restart: always
+    restart: unless-stopped
     entrypoint:
       - '/otelcol-contrib'
       - '--config'
@@ -134,7 +134,7 @@ services:
 
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.108.1
-    restart: always
+    restart: unless-stopped
     command:
       - --storageDataPath=/storage
       - --graphiteListenAddr=:2003
@@ -157,7 +157,7 @@ services:
 
   clickstore:
     image: clickhouse/clickhouse-server:24
-    restart: always
+    restart: unless-stopped
     container_name: clickstore
     hostname: clickstore
     expose:
@@ -188,7 +188,7 @@ services:
 
   loki:
     image: grafana/loki:3.3.2
-    restart: always
+    restart: unless-stopped
     command: -config.file=/etc/loki/config.yml
     container_name: loki
     hostname: loki
@@ -205,7 +205,7 @@ services:
 
   jaeger:
     image: jaegertracing/all-in-one:1.56.0
-    restart: always
+    restart: unless-stopped
     entrypoint: >
       /bin/sh -c '
       if [ "$$(uname -m)" = "x86_64" ]; then
