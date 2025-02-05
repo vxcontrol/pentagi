@@ -76,7 +76,7 @@
         "@types/react": "^18.3.8",
         "@types/react-dom": "^18.3.0",
         "@vitejs/plugin-react-swc": "^3.7.0",
-        "@vitest/coverage-v8": "^2.1.4",
+        "@vitest/coverage-v8": "^2.1.9",
         "autoprefixer": "^10.4.20",
         "eslint": "^9.11.1",
         "eslint-config-hyoban": "^3.1.6",
@@ -92,7 +92,7 @@
         "vite": "^5.4.14",
         "vite-plugin-html": "^3.2.2",
         "vite-tsconfig-paths": "^5.0.1",
-        "vitest": "^2.1.4"
+        "vitest": "^2.1.9"
     },
     "eslintConfig": {
         "extends": [
