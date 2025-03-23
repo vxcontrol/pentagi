@@ -15,7 +15,7 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-ole/go-ole v1.2.6
 	github.com/go-playground/validator/v10 v10.19.0
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/invopop/jsonschema v0.12.0
