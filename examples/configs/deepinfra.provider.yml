@@ -1,0 +1,84 @@
+simple:
+  model: "meta-llama/Llama-3.3-70B-Instruct"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 4000
+
+simple_json:
+  model: "google/gemma-3-27b-it"
+  temperature: 0.7
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  json: true
+
+agent:
+  model: "anthropic/claude-3-7-sonnet-latest"
+  temperature: 0.95
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+
+generator:
+  model: "anthropic/claude-3-7-sonnet-latest"
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 8000
+
+refiner:
+  model: "anthropic/claude-3-7-sonnet-latest"
+  temperature: 0.55
+  top_p: 0.95
+  n: 1
+  max_tokens: 8000
+
+adviser:
+  model: "anthropic/claude-3-7-sonnet-latest"
+  temperature: 0.9
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+
+reflector:
+  model: "google/gemma-3-27b-it"
+  temperature: 0.85
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+
+searcher:
+  model: "nvidia/Llama-3.1-Nemotron-70B-Instruct"
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 4000
+
+enricher:
+  model: "nvidia/Llama-3.1-Nemotron-70B-Instruct"
+  temperature: 0.5
+  top_p: 0.95
+  n: 1
+  max_tokens: 4000
+
+coder:
+  model: "anthropic/claude-3-7-sonnet-latest"
+  temperature: 0.9
+  top_p: 1.0
+  n: 1
+  max_tokens: 6000
+
+installer:
+  model: "nvidia/Llama-3.1-Nemotron-70B-Instruct"
+  temperature: 0.85
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+
+pentester:
+  model: "anthropic/claude-3-7-sonnet-latest"
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 4000

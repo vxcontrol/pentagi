@@ -11,6 +11,7 @@
 - [Quick Start](#-quick-start)
 - [Advanced Setup](#-advanced-setup)
 - [Development](#-development)
+- [Testing LLM Agents](#-testing-llm-agents)
 - [Building](#%EF%B8%8F-building)
 - [Credits](#-credits)
 - [License](#-license)
@@ -657,6 +658,147 @@ Run the command(s) in `frontend` folder:
 - Run `npm run build` to build the web app
 
 Open your browser and visit the web app URL.
+
+## 🧪 Testing LLM Agents
+
+PentAGI includes a powerful utility called `ctester` for testing and validating LLM agent capabilities. This tool helps ensure your LLM provider configurations work correctly with different agent types, allowing you to optimize model selection for each specific agent role.
+
+The utility features parallel testing of multiple agents, detailed reporting, and flexible configuration options.
+
+### Key Features
+
+- **Parallel Testing**: Tests multiple agents simultaneously for faster results
+- **Comprehensive Test Suite**: Evaluates basic completion, JSON responses, function calling, and more
+- **Detailed Reporting**: Generates markdown reports with success rates and performance metrics
+- **Flexible Configuration**: Test specific agents or test groups as needed
+
+### Usage Scenarios
+
+#### For Developers (with local Go environment)
+
+If you've cloned the repository and have Go installed:
+
+```bash
+# Default configuration with .env file
+cd backend
+go run cmd/ctester/*.go -verbose
+
+# Custom provider configuration
+go run cmd/ctester/*.go -config ../examples/configs/openrouter.provider.yml -verbose
+
+# Generate a report file
+go run cmd/ctester/*.go -config ../examples/configs/deepinfra.provider.yml -report ../test-report.md
+
+# Test specific agent types only 
+go run cmd/ctester/*.go -agents simple,simple_json,agent -verbose
+
+# Test specific test groups only
+go run cmd/ctester/*.go -tests "Simple Completion,System User Prompts" -verbose
+```
+
+#### For Users (using Docker image)
+
+If you prefer to use the pre-built Docker image without setting up a development environment:
+
+```bash
+# Using Docker to test with default environment
+docker run --rm -v $(pwd)/.env:/opt/pentagi/.env vxcontrol/pentagi /opt/pentagi/bin/ctester -verbose
+
+# Test with your custom provider configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  -v $(pwd)/my-config.yml:/opt/pentagi/config.yml \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/config.yml -verbose
+
+# Generate a detailed report
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  -v $(pwd):/opt/pentagi/output \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -report /opt/pentagi/output/report.md
+```
+
+#### Using Pre-configured Providers
+
+The Docker image comes with pre-configured provider files for OpenRouter or DeepInfra:
+
+```bash
+# Test with OpenRouter configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/openrouter.provider.yml
+
+# Test with DeepInfra configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepinfra.provider.yml
+```
+
+To use these configurations, your `.env` file only needs to contain:
+
+```
+LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai
+LLM_SERVER_KEY=your_api_key
+LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml
+```
+
+#### Running Tests in a Production Environment
+
+If you already have a running PentAGI container and want to test the current configuration:
+
+```bash
+# Run ctester in an existing container using current environment variables
+docker exec -it pentagi /opt/pentagi/bin/ctester -verbose
+
+# Generate a report file inside the container
+docker exec -it pentagi /opt/pentagi/bin/ctester -report /opt/pentagi/data/agent-test-report.md
+
+# Access the report from the host
+docker cp pentagi:/opt/pentagi/data/agent-test-report.md ./
+```
+
+### Command-line Options
+
+The utility accepts several options:
+
+- `-env <path>` - Path to environment file (default: `.env`)
+- `-config <path>` - Path to custom provider config (default: from `LLM_SERVER_CONFIG_PATH` env variable)
+- `-report <path>` - Path to write the report file (optional)
+- `-agents <list>` - Comma-separated list of agent types to test (default: `all`)
+- `-tests <list>` - Comma-separated list of test groups to run (default: `all`)
+- `-verbose` - Enable verbose output with detailed test results for each agent
+
+### Example Provider Configuration
+
+Provider configuration defines which models to use for different agent types:
+
+```yaml
+simple:
+  model: "provider/model-name"
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 4000
+
+simple_json:
+  model: "provider/model-name"
+  temperature: 0.7
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  json: true
+
+# ... other agent types ...
+```
+
+### Optimization Workflow
+
+1. **Create a baseline**: Run tests with default configuration
+2. **Experiment**: Try different models for each agent type
+3. **Compare results**: Look for the best success rate and performance
+4. **Deploy optimal configuration**: Use in production with your optimized setup
+
+This tool helps ensure your AI agents are using the most effective models for their specific tasks, improving reliability while optimizing costs.
 
 ## 🏗️ Building
 
