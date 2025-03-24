@@ -45,5 +45,23 @@
             "url": "http://localhost:8000",
             "webRoot": "${workspaceFolder}/frontend/src"
         },
+        {
+            "type": "go",
+            "request": "launch",
+            "name": "Launch Agents Tests",
+            "program": "${workspaceFolder}/backend/cmd/ctester/",
+            "envFile": "${workspaceFolder}/.env",
+            "cwd": "${workspaceFolder}",
+            "env": {},
+            "args": [
+                // "--config", "${workspaceFolder}/examples/configs/openrouter.provider.yml",
+                "--config", "${workspaceFolder}/examples/configs/deepinfra.provider.yml",
+                // "--report", "${workspaceFolder}/examples/tests/openrouter-report.md",
+                "--report", "${workspaceFolder}/examples/tests/deepinfra-report.md",
+                "--agents", "all",
+                "--tests", "all",
+                "--verbose"
+            ]
+        },
     ]
 }

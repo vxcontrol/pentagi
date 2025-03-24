@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
@@ -107,7 +108,12 @@ func WrapGenerateFromSinglePrompt(
 		langfuse.WithStartGenerationModelParameters(langfuse.GetLangchainModelParameters(options)),
 	)
 
-	resp, err := llms.GenerateFromSinglePrompt(ctx, llm, prompt, options...)
+	msg := llms.MessageContent{
+		Role:  llms.ChatMessageTypeHuman,
+		Parts: []llms.ContentPart{llms.TextContent{Text: prompt}},
+	}
+
+	resp, err := llm.GenerateContent(ctx, []llms.MessageContent{msg}, options...)
 	if err != nil {
 		generation.End(
 			langfuse.WithEndGenerationStatus(err.Error()),
@@ -116,16 +122,53 @@ func WrapGenerateFromSinglePrompt(
 		return "", err
 	}
 
+	choices := resp.Choices
+	if len(choices) < 1 {
+		err = fmt.Errorf("empty response from model")
+		generation.End(
+			langfuse.WithEndGenerationStatus(err.Error()),
+			langfuse.WithEndGenerationLevel(langfuse.ObservationLevelError),
+		)
+
+		return "", err
+	}
+
+	if len(resp.Choices) == 1 {
+		choice := resp.Choices[0]
+		input, output := provider.GetUsage(choice.GenerationInfo)
+
+		generation.End(
+			langfuse.WithEndGenerationOutput(choice),
+			langfuse.WithEndGenerationStatus("success"),
+			langfuse.WithEndGenerationUsage(&langfuse.GenerationUsage{
+				Input:  int(input),
+				Output: int(output),
+			}),
+		)
+
+		return choice.Content, nil
+	}
+
+	choicesOutput := make([]string, 0, len(resp.Choices))
+	totalInput, totalOutput := int64(0), int64(0)
+	for _, choice := range resp.Choices {
+		input, output := provider.GetUsage(choice.GenerationInfo)
+		totalInput += input
+		totalOutput += output
+		choicesOutput = append(choicesOutput, choice.Content)
+	}
+
+	respOutput := strings.Join(choicesOutput, "\n-----\n")
 	generation.End(
-		langfuse.WithEndGenerationOutput(resp),
+		langfuse.WithEndGenerationOutput(resp.Choices),
 		langfuse.WithEndGenerationStatus("success"),
 		langfuse.WithEndGenerationUsage(&langfuse.GenerationUsage{
-			Input:  int(llms.CountTokens(model, prompt)),
-			Output: int(llms.CountTokens(model, resp)),
+			Input:  int(totalInput),
+			Output: int(totalOutput),
 		}),
 	)
 
-	return resp, nil
+	return respOutput, nil
 }
 
 func WrapGenerateContent(
