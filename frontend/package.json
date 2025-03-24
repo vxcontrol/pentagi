@@ -75,11 +75,11 @@
         "@types/node": "^20.16.6",
         "@types/react": "^18.3.8",
         "@types/react-dom": "^18.3.0",
-        "@vitejs/plugin-react-swc": "^3.7.0",
-        "@vitest/coverage-v8": "^2.1.9",
+        "@vitejs/plugin-react-swc": "^3.8.0",
+        "@vitest/coverage-v8": "^3.0.7",
         "autoprefixer": "^10.4.20",
         "eslint": "^9.11.1",
-        "eslint-config-hyoban": "^3.1.6",
+        "eslint-config-hyoban": "^3.2.1",
         "lint-staged": "^15.2.10",
         "postcss": "^8.4.47",
         "prettier": "^3.3.3",
@@ -87,12 +87,12 @@
         "prettier-plugin-tailwindcss": "^0.6.8",
         "simple-git-hooks": "^2.11.1",
         "tailwindcss": "^3.4.13",
-        "tsx": "^4.7.1",
+        "tsx": "^4.19.3",
         "typescript": "^5.6.2",
-        "vite": "^5.4.14",
+        "vite": "^6.2.0",
         "vite-plugin-html": "^3.2.2",
         "vite-tsconfig-paths": "^5.0.1",
-        "vitest": "^2.1.9"
+        "vitest": "^3.0.7"
     },
     "eslintConfig": {
         "extends": [
