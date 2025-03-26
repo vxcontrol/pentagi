@@ -12,6 +12,7 @@
 - [Advanced Setup](#-advanced-setup)
 - [Development](#-development)
 - [Testing LLM Agents](#-testing-llm-agents)
+- [Function Testing with ftester](#-function-testing-with-ftester)
 - [Building](#%EF%B8%8F-building)
 - [Credits](#-credits)
 - [License](#-license)
@@ -807,6 +808,243 @@ simple_json:
 4. **Deploy optimal configuration**: Use in production with your optimized setup
 
 This tool helps ensure your AI agents are using the most effective models for their specific tasks, improving reliability while optimizing costs.
+
+## 🔍 Function Testing with ftester
+
+PentAGI includes a versatile utility called `ftester` for debugging, testing, and developing specific functions and AI agent behaviors. While `ctester` focuses on testing LLM model capabilities, `ftester` allows you to directly invoke individual system functions and AI agent components with precise control over execution context.
+
+### Key Features
+
+- **Direct Function Access**: Test individual functions without running the entire system
+- **Mock Mode**: Test functions without a live PentAGI deployment using built-in mocks
+- **Interactive Input**: Fill function arguments interactively for exploratory testing
+- **Detailed Output**: Color-coded terminal output with formatted responses and errors
+- **Context-Aware Testing**: Debug AI agents within the context of specific flows, tasks, and subtasks
+- **Observability Integration**: All function calls are logged to Langfuse and Observability stack
+
+### Usage Modes
+
+#### Command Line Arguments
+
+Run ftester with specific function and arguments directly from the command line:
+
+```bash
+# Basic usage with mock mode
+cd backend
+go run cmd/ftester/main.go [function_name] -[arg1] [value1] -[arg2] [value2]
+
+# Example: Test terminal command in mock mode
+go run cmd/ftester/main.go terminal -command "ls -la" -message "List files"
+
+# Using a real flow context
+go run cmd/ftester/main.go -flow 123 terminal -command "whoami" -message "Check user"
+
+# Testing AI agent in specific task/subtask context
+go run cmd/ftester/main.go -flow 123 -task 456 -subtask 789 pentester -message "Find vulnerabilities"
+```
+
+#### Interactive Mode
+
+Run ftester without arguments for a guided interactive experience:
+
+```bash
+# Start interactive mode
+go run cmd/ftester/main.go [function_name]
+
+# For example, to interactively fill browser tool arguments
+go run cmd/ftester/main.go browser
+```
+
+<details>
+<summary><b>Available Functions</b> (click to expand)</summary>
+
+### Environment Functions
+- **terminal**: Execute commands in a container and return the output
+- **file**: Perform file operations (read, write, list) in a container
+
+### Search Functions
+- **browser**: Access websites and capture screenshots
+- **google**: Search the web using Google Custom Search
+- **duckduckgo**: Search the web using DuckDuckGo
+- **tavily**: Search using Tavily AI search engine
+- **traversaal**: Search using Traversaal AI search engine
+- **perplexity**: Search using Perplexity AI
+
+### Vector Database Functions
+- **search_in_memory**: Search for information in vector database
+- **search_guide**: Find guidance documents in vector database
+- **search_answer**: Find answers to questions in vector database
+- **search_code**: Find code examples in vector database
+
+### AI Agent Functions
+- **advice**: Get expert advice from an AI agent
+- **coder**: Request code generation or modification
+- **maintenance**: Run system maintenance tasks
+- **memorist**: Store and organize information in vector database
+- **pentester**: Perform security tests and vulnerability analysis
+- **search**: Complex search across multiple sources
+
+### Utility Functions
+- **describe**: Show information about flows, tasks, and subtasks
+
+</details>
+
+<details>
+<summary><b>Debugging Flow Context</b> (click to expand)</summary>
+
+The `describe` function provides detailed information about tasks and subtasks within a flow. This is particularly useful for diagnosing issues when PentAGI encounters problems or gets stuck.
+
+```bash
+# List all flows in the system
+go run cmd/ftester/main.go describe
+
+# Show all tasks and subtasks for a specific flow
+go run cmd/ftester/main.go -flow 123 describe
+
+# Show detailed information for a specific task
+go run cmd/ftester/main.go -flow 123 -task 456 describe
+
+# Show detailed information for a specific subtask
+go run cmd/ftester/main.go -flow 123 -task 456 -subtask 789 describe
+
+# Show verbose output with full descriptions and results
+go run cmd/ftester/main.go -flow 123 describe -verbose
+```
+
+This function allows you to identify the exact point where a flow might be stuck and resume processing by directly invoking the appropriate agent function.
+
+</details>
+
+<details>
+<summary><b>Function Help and Discovery</b> (click to expand)</summary>
+
+Each function has a help mode that shows available parameters:
+
+```bash
+# Get help for a specific function
+go run cmd/ftester/main.go [function_name] -help
+
+# Examples:
+go run cmd/ftester/main.go terminal -help
+go run cmd/ftester/main.go browser -help
+go run cmd/ftester/main.go describe -help
+```
+
+You can also run ftester without arguments to see a list of all available functions:
+
+```bash
+go run cmd/ftester/main.go
+```
+
+</details>
+
+<details>
+<summary><b>Output Format</b> (click to expand)</summary>
+
+The `ftester` utility uses color-coded output to make interpretation easier:
+
+- **Blue headers**: Section titles and key names
+- **Cyan [INFO]**: General information messages
+- **Green [SUCCESS]**: Successful operations
+- **Red [ERROR]**: Error messages
+- **Yellow [WARNING]**: Warning messages
+- **Yellow [MOCK]**: Indicates mock mode operation
+- **Magenta values**: Function arguments and results
+
+JSON and Markdown responses are automatically formatted for readability.
+
+</details>
+
+<details>
+<summary><b>Advanced Usage Scenarios</b> (click to expand)</summary>
+
+### Debugging Stuck AI Flows
+
+When PentAGI gets stuck in a flow:
+
+1. Pause the flow through the UI
+2. Use `describe` to identify the current task and subtask
+3. Directly invoke the agent function with the same task/subtask IDs
+4. Examine the detailed output to identify the issue
+5. Resume the flow or manually intervene as needed
+
+### Testing Environment Variables
+
+Verify that API keys and external services are configured correctly:
+
+```bash
+# Test Google search API configuration
+go run cmd/ftester/main.go google -query "pentesting tools"
+
+# Test browser access to external websites
+go run cmd/ftester/main.go browser -url "https://example.com"
+```
+
+### Developing New AI Agent Behaviors
+
+When developing new prompt templates or agent behaviors:
+
+1. Create a test flow in the UI
+2. Use ftester to directly invoke the agent with different prompts
+3. Observe responses and adjust prompts accordingly
+4. Check Langfuse for detailed traces of all function calls
+
+### Verifying Docker Container Setup
+
+Ensure containers are properly configured:
+
+```bash
+go run cmd/ftester/main.go -flow 123 terminal -command "env | grep -i proxy" -message "Check proxy settings"
+```
+
+</details>
+
+<details>
+<summary><b>Docker Container Usage</b> (click to expand)</summary>
+
+If you have PentAGI running in Docker, you can use ftester from within the container:
+
+```bash
+# Run ftester inside the running PentAGI container
+docker exec -it pentagi /opt/pentagi/bin/ftester [arguments]
+
+# Examples:
+docker exec -it pentagi /opt/pentagi/bin/ftester -flow 123 describe
+docker exec -it pentagi /opt/pentagi/bin/ftester -flow 123 terminal -command "ps aux" -message "List processes"
+```
+
+This is particularly useful for production deployments where you don't have a local development environment.
+
+</details>
+
+<details>
+<summary><b>Integration with Observability Tools</b> (click to expand)</summary>
+
+All function calls made through ftester are logged to:
+
+1. **Langfuse**: Captures the entire AI agent interaction chain, including prompts, responses, and function calls
+2. **OpenTelemetry**: Records metrics, traces, and logs for system performance analysis
+3. **Terminal Output**: Provides immediate feedback on function execution
+
+To access detailed logs:
+
+- Check Langfuse UI for AI agent traces (typically at `http://localhost:4000`)
+- Use Grafana dashboards for system metrics (typically at `http://localhost:3000`)
+- Examine terminal output for immediate function results and errors
+
+</details>
+
+### Command-line Options
+
+The main utility accepts several options:
+
+- `-env <path>` - Path to environment file (optional, default: `.env`)
+- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `custom`)
+- `-flow <id>` - Flow ID for testing (0 means using mocks, default: `0`)
+- `-task <id>` - Task ID for agent context (optional)
+- `-subtask <id>` - Subtask ID for agent context (optional)
+
+Function-specific arguments are passed after the function name using `-name value` format.
 
 ## 🏗️ Building
 

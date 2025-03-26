@@ -67,5 +67,27 @@
             "cwd": "${workspaceFolder}",
             "output": "${workspaceFolder}/build/__debug_bin_ctester",
         },
+        {
+            "type": "go",
+            "request": "launch",
+            "name": "Launch Tools Tests",
+            "program": "${workspaceFolder}/backend/cmd/ftester/",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "LLM_SERVER_CONFIG_PATH": "${workspaceFolder}/examples/configs/openrouter.provider.yml",
+                "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
+                // Langfuse (optional) uncomment to enable
+                "LANGFUSE_BASE_URL": "http://localhost:4000",
+                // Observability (optional) uncomment to enable
+                "OTEL_HOST": "localhost:8148",
+            },
+            "args": [
+                "-flow", "0",
+                // "describe", "-verbose",
+                "search", "-question", "how I can install burp suite on Kali Linux?",
+            ],
+            "cwd": "${workspaceFolder}",
+            "output": "${workspaceFolder}/build/__debug_bin_ftester",
+        },
     ]
 }
