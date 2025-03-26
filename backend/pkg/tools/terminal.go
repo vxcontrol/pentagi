@@ -31,6 +31,18 @@ type terminal struct {
 	tlp          TermLogProvider
 }
 
+func NewTerminalTool(flowID int64, containerID int64, containerLID string,
+	dockerClient docker.DockerClient, tlp TermLogProvider,
+) Tool {
+	return &terminal{
+		flowID:       flowID,
+		containerID:  containerID,
+		containerLID: containerLID,
+		dockerClient: dockerClient,
+		tlp:          tlp,
+	}
+}
+
 func (t *terminal) wrapCommandResult(ctx context.Context, name, result string, err error) (string, error) {
 	if err != nil {
 		logrus.WithContext(ctx).WithError(err).WithFields(logrus.Fields{
@@ -326,4 +338,8 @@ func FormatTerminalSystemOutput(text string) string {
 	blue := "\033[34m" // ANSI escape code for blue color
 	reset := "\033[0m" // ANSI escape code to reset color
 	return fmt.Sprintf("%s%s%s\r\n", blue, text, reset)
+}
+
+func (t *terminal) IsAvailable() bool {
+	return t.dockerClient != nil
 }

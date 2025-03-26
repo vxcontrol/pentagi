@@ -27,7 +27,7 @@ func wrapErrorEndSpan(ctx context.Context, span langfuse.Span, msg string, err e
 	return err
 }
 
-func (fp *flowProvider) getAskAdviceHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
+func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
 	tasksInfo, err := fp.getTasksInfo(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tasks info: %w", err)
@@ -174,7 +174,7 @@ func (fp *flowProvider) getAskAdviceHandler(ctx context.Context, taskID, subtask
 	}, nil
 }
 
-func (fp *flowProvider) getCoderHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
+func (fp *flowProvider) GetCoderHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
 	task, err := fp.db.GetTask(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
@@ -272,7 +272,7 @@ func (fp *flowProvider) getCoderHandler(ctx context.Context, taskID, subtaskID i
 	}, nil
 }
 
-func (fp *flowProvider) getInstallerHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
+func (fp *flowProvider) GetInstallerHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
 	task, err := fp.db.GetTask(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
@@ -370,7 +370,7 @@ func (fp *flowProvider) getInstallerHandler(ctx context.Context, taskID, subtask
 	}, nil
 }
 
-func (fp *flowProvider) getMemoristHandler(ctx context.Context, taskID int64, subtaskID *int64) (tools.ExecutorHandler, error) {
+func (fp *flowProvider) GetMemoristHandler(ctx context.Context, taskID int64, subtaskID *int64) (tools.ExecutorHandler, error) {
 	tasksInfo, err := fp.getTasksInfo(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tasks info: %w", err)
@@ -481,7 +481,7 @@ func (fp *flowProvider) getMemoristHandler(ctx context.Context, taskID int64, su
 	}, nil
 }
 
-func (fp *flowProvider) getPentesterHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
+func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
 	task, err := fp.db.GetTask(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
@@ -579,7 +579,7 @@ func (fp *flowProvider) getPentesterHandler(ctx context.Context, taskID, subtask
 	}, nil
 }
 
-func (fp *flowProvider) getSubtaskSearcherHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
+func (fp *flowProvider) GetSubtaskSearcherHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
 	task, err := fp.db.GetTask(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
@@ -674,7 +674,7 @@ func (fp *flowProvider) getSubtaskSearcherHandler(ctx context.Context, taskID, s
 	}, nil
 }
 
-func (fp *flowProvider) getTaskSearcherHandler(ctx context.Context, taskID int64) (tools.ExecutorHandler, error) {
+func (fp *flowProvider) GetTaskSearcherHandler(ctx context.Context, taskID int64) (tools.ExecutorHandler, error) {
 	task, err := fp.db.GetTask(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
@@ -762,7 +762,7 @@ func (fp *flowProvider) getTaskSearcherHandler(ctx context.Context, taskID int64
 	}, nil
 }
 
-func (fp *flowProvider) getSummarizeResultHandler(taskID, subtaskID *int64) tools.SummarizeHandler {
+func (fp *flowProvider) GetSummarizeResultHandler(taskID, subtaskID *int64) tools.SummarizeHandler {
 	return func(ctx context.Context, result string) (string, error) {
 		ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.getSummarizeResultHandler")
 		defer span.End()

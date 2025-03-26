@@ -13,16 +13,17 @@
                 "STATIC_URL": "http://localhost:8000",
                 // Choose it instead of STATIC_URL to serve static files from a directory:
                 // "STATIC_DIR": "${workspaceFolder}/frontend/dist",
+                "LLM_SERVER_CONFIG_PATH": "${workspaceFolder}/examples/configs/deepseek.provider.yml",
                 "SERVER_PORT": "8080",
                 "SERVER_USE_SSL": "false",
                 "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
                 // Langfuse (optional) uncomment to enable
                 // "LANGFUSE_BASE_URL": "http://localhost:4000",
                 // Observability (optional) uncomment to enable
-                // "OTEL_HOST": "localhost:8148"
+                // "OTEL_HOST": "localhost:8148",
             },
             "cwd": "${workspaceFolder}",
-            "output": "${workspaceFolder}/build/__debug_bin",
+            "output": "${workspaceFolder}/build/__debug_bin_pentagi",
         },
         {
             "type": "node",
@@ -43,7 +44,7 @@
             "request": "launch",
             "name": "Launch Browser",
             "url": "http://localhost:8000",
-            "webRoot": "${workspaceFolder}/frontend/src"
+            "webRoot": "${workspaceFolder}/frontend/src",
         },
         {
             "type": "go",
@@ -51,17 +52,42 @@
             "name": "Launch Agents Tests",
             "program": "${workspaceFolder}/backend/cmd/ctester/",
             "envFile": "${workspaceFolder}/.env",
-            "cwd": "${workspaceFolder}",
             "env": {},
             "args": [
-                // "--config", "${workspaceFolder}/examples/configs/openrouter.provider.yml",
-                "--config", "${workspaceFolder}/examples/configs/deepinfra.provider.yml",
-                // "--report", "${workspaceFolder}/examples/tests/openrouter-report.md",
-                "--report", "${workspaceFolder}/examples/tests/deepinfra-report.md",
-                "--agents", "all",
-                "--tests", "all",
-                "--verbose"
-            ]
+                "-config", "${workspaceFolder}/examples/configs/deepseek.provider.yml",
+                // "-config", "${workspaceFolder}/examples/configs/openrouter.provider.yml",
+                // "-config", "${workspaceFolder}/examples/configs/deepinfra.provider.yml",
+                "-report", "${workspaceFolder}/examples/tests/deepseek-report.md",
+                // "-report", "${workspaceFolder}/examples/tests/openrouter-report.md",
+                // "-report", "${workspaceFolder}/examples/tests/deepinfra-report.md",
+                "-agents", "all",
+                "-tests", "all",
+                "-verbose",
+            ],
+            "cwd": "${workspaceFolder}",
+            "output": "${workspaceFolder}/build/__debug_bin_ctester",
+        },
+        {
+            "type": "go",
+            "request": "launch",
+            "name": "Launch Tools Tests",
+            "program": "${workspaceFolder}/backend/cmd/ftester/",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "LLM_SERVER_CONFIG_PATH": "${workspaceFolder}/examples/configs/openrouter.provider.yml",
+                "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
+                // Langfuse (optional) uncomment to enable
+                "LANGFUSE_BASE_URL": "http://localhost:4000",
+                // Observability (optional) uncomment to enable
+                "OTEL_HOST": "localhost:8148",
+            },
+            "args": [
+                "-flow", "0",
+                // "describe", "-verbose",
+                "search", "-question", "how I can install burp suite on Kali Linux?",
+            ],
+            "cwd": "${workspaceFolder}",
+            "output": "${workspaceFolder}/build/__debug_bin_ftester",
         },
     ]
 }

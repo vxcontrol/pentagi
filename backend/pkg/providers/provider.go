@@ -49,6 +49,19 @@ type FlowProvider interface {
 	PrepareAgentChain(ctx context.Context, taskID, subtaskID int64) (int64, error)
 	PerformAgentChain(ctx context.Context, taskID, subtaskID, msgChainID int64) (PerformResult, error)
 	PutInputToAgentChain(ctx context.Context, msgChainID int64, input string) error
+
+	FlowProviderHandlers
+}
+
+type FlowProviderHandlers interface {
+	GetAskAdviceHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
+	GetCoderHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
+	GetInstallerHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
+	GetMemoristHandler(ctx context.Context, taskID int64, subtaskID *int64) (tools.ExecutorHandler, error)
+	GetPentesterHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
+	GetSubtaskSearcherHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
+	GetTaskSearcherHandler(ctx context.Context, taskID int64) (tools.ExecutorHandler, error)
+	GetSummarizeResultHandler(taskID, subtaskID *int64) tools.SummarizeHandler
 }
 
 type tasksInfo struct {
@@ -420,37 +433,37 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 		return PerformResultError, fmt.Errorf("failed to unmarshal primary agent msg chain %d: %w", msgChainID, err)
 	}
 
-	adviser, err := fp.getAskAdviceHandler(ctx, taskID, subtaskID)
+	adviser, err := fp.GetAskAdviceHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get ask advice handler")
 		return PerformResultError, fmt.Errorf("failed to get ask advice handler: %w", err)
 	}
 
-	coder, err := fp.getCoderHandler(ctx, taskID, subtaskID)
+	coder, err := fp.GetCoderHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get coder handler")
 		return PerformResultError, fmt.Errorf("failed to get coder handler: %w", err)
 	}
 
-	installer, err := fp.getInstallerHandler(ctx, taskID, subtaskID)
+	installer, err := fp.GetInstallerHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get installer handler")
 		return PerformResultError, fmt.Errorf("failed to get installer handler: %w", err)
 	}
 
-	memorist, err := fp.getMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get memorist handler")
 		return PerformResultError, fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
-	pentester, err := fp.getPentesterHandler(ctx, taskID, subtaskID)
+	pentester, err := fp.GetPentesterHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get pentester handler")
 		return PerformResultError, fmt.Errorf("failed to get pentester handler: %w", err)
 	}
 
-	searcher, err := fp.getSubtaskSearcherHandler(ctx, taskID, subtaskID)
+	searcher, err := fp.GetSubtaskSearcherHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get searcher handler")
 		return PerformResultError, fmt.Errorf("failed to get searcher handler: %w", err)
@@ -557,7 +570,7 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 
 			return fmt.Sprintf("function %s successfully processed arguments", name), nil
 		},
-		Summarizer: fp.getSummarizeResultHandler(&taskID, &subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(&taskID, &subtaskID),
 	}
 
 	executor, err := fp.executor.GetPrimaryExecutor(cfg)

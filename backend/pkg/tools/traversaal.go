@@ -30,6 +30,17 @@ type traversaal struct {
 	slp       SearchLogProvider
 }
 
+func NewTraversaalTool(flowID int64, taskID, subtaskID *int64, apiKey, proxyURL string, slp SearchLogProvider) Tool {
+	return &traversaal{
+		flowID:    flowID,
+		taskID:    taskID,
+		subtaskID: subtaskID,
+		apiKey:    apiKey,
+		proxyURL:  proxyURL,
+		slp:       slp,
+	}
+}
+
 func (t *traversaal) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
@@ -129,6 +140,6 @@ func (t *traversaal) parseHTTPResponse(resp *http.Response) (string, error) {
 	return writer.String(), nil
 }
 
-func (t *traversaal) isAvailable() bool {
+func (t *traversaal) IsAvailable() bool {
 	return t.apiKey != ""
 }

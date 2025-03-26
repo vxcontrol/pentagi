@@ -130,7 +130,7 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		"docker_inside":  inside,
 		"docker_socket":  socket,
 		"public_ip":      publicIP,
-	}).Info("Docker client initialized")
+	}).Debug("Docker client initialized")
 
 	return &dockerClient{
 		db:       db,
@@ -213,6 +213,10 @@ func (dc *dockerClient) SpawnContainer(
 		})
 		if err != nil {
 			return fmt.Errorf("failed to update container image in database: %w", err)
+		}
+
+		if err := dc.pullImage(ctx, config.Image); err != nil {
+			return fmt.Errorf("failed to pull default image '%s': %w", config.Image, err)
 		}
 
 		return nil

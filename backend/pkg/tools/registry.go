@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"maps"
 	"pentagi/pkg/database"
 
 	"github.com/invopop/jsonschema"
@@ -21,8 +22,10 @@ const (
 	MemoristResultToolName    = "memorist_result"
 	BrowserToolName           = "browser"
 	GoogleToolName            = "google"
+	DuckDuckGoToolName        = "duckduckgo"
 	TavilyToolName            = "tavily"
 	TraversaalToolName        = "traversaal"
+	PerplexityToolName        = "perplexity"
 	SearchToolName            = "search"
 	SearchResultToolName      = "search_result"
 	EnricherResultToolName    = "enricher_result"
@@ -39,6 +42,53 @@ const (
 	FileToolName              = "file"
 )
 
+type ToolType int
+
+const (
+	NoneToolType ToolType = iota
+	EnvironmentToolType
+	SearchNetworkToolType
+	SearchVectorDbToolType
+	AgentToolType
+	StoreAgentResultToolType
+	StoreVectorDbToolType
+	BarrierToolType
+)
+
+var toolsTypeMapping = map[string]ToolType{
+	FinalyToolName:            BarrierToolType,
+	AskUserToolName:           BarrierToolType,
+	MaintenanceToolName:       AgentToolType,
+	MaintenanceResultToolName: StoreAgentResultToolType,
+	CoderToolName:             AgentToolType,
+	CodeResultToolName:        StoreAgentResultToolType,
+	PentesterToolName:         AgentToolType,
+	HackResultToolName:        StoreAgentResultToolType,
+	AdviceToolName:            AgentToolType,
+	MemoristToolName:          AgentToolType,
+	MemoristResultToolName:    StoreAgentResultToolType,
+	BrowserToolName:           SearchNetworkToolType,
+	GoogleToolName:            SearchNetworkToolType,
+	DuckDuckGoToolName:        SearchNetworkToolType,
+	TavilyToolName:            SearchNetworkToolType,
+	TraversaalToolName:        SearchNetworkToolType,
+	PerplexityToolName:        SearchNetworkToolType,
+	SearchToolName:            AgentToolType,
+	SearchResultToolName:      StoreAgentResultToolType,
+	EnricherResultToolName:    StoreAgentResultToolType,
+	SearchInMemoryToolName:    SearchVectorDbToolType,
+	SearchGuideToolName:       SearchVectorDbToolType,
+	StoreGuideToolName:        StoreVectorDbToolType,
+	SearchAnswerToolName:      SearchVectorDbToolType,
+	StoreAnswerToolName:       StoreVectorDbToolType,
+	SearchCodeToolName:        SearchVectorDbToolType,
+	StoreCodeToolName:         StoreVectorDbToolType,
+	ReportResultToolName:      StoreAgentResultToolType,
+	SubtaskListToolName:       StoreAgentResultToolType,
+	TerminalToolName:          EnvironmentToolType,
+	FileToolName:              EnvironmentToolType,
+}
+
 var reflector = &jsonschema.Reflector{
 	DoNotReference: true,
 	ExpandedStruct: true,
@@ -54,8 +104,10 @@ var allowedStoringInMemoryTools = []string{
 	FileToolName,
 	SearchToolName,
 	GoogleToolName,
+	DuckDuckGoToolName,
 	TavilyToolName,
 	TraversaalToolName,
+	PerplexityToolName,
 	MaintenanceToolName,
 	CoderToolName,
 	PentesterToolName,
@@ -108,6 +160,12 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"to check some information or collect public links by short query",
 		Parameters: reflector.Reflect(&SearchAction{}),
 	},
+	DuckDuckGoToolName: {
+		Name: DuckDuckGoToolName,
+		Description: "Search in the duckduckgo search engine, it's a anonymous query and returns a small content " +
+			"to check some information from different sources or collect public links by short query",
+		Parameters: reflector.Reflect(&SearchAction{}),
+	},
 	TavilyToolName: {
 		Name: TavilyToolName,
 		Description: "Search in the tavily search engine, it's a more complex query and more detailed content " +
@@ -118,6 +176,12 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Name: TraversaalToolName,
 		Description: "Search in the traversaal search engine, presents you answer and web-links " +
 			"by your query according to relevant information from the web sites",
+		Parameters: reflector.Reflect(&SearchAction{}),
+	},
+	PerplexityToolName: {
+		Name: PerplexityToolName,
+		Description: "Search in the perplexity search engine, it's a fully complex query and detailed research report " +
+			"with answer by query and detailed information from the web sites and other sources augmented by the LLM",
 		Parameters: reflector.Reflect(&SearchAction{}),
 	},
 	EnricherResultToolName: {
@@ -225,8 +289,8 @@ func getMessageType(name string) database.MsglogType {
 		return database.MsglogTypeFile
 	case BrowserToolName:
 		return database.MsglogTypeBrowser
-	case MemoristToolName, SearchToolName, GoogleToolName, TavilyToolName, TraversaalToolName,
-		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName:
+	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, TraversaalToolName,
+		PerplexityToolName, SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:
 		return database.MsglogTypeAdvice
@@ -248,4 +312,29 @@ func getMessageResultFormat(name string) database.MsglogResultFormat {
 	default:
 		return database.MsglogResultFormatMarkdown
 	}
+}
+
+// GetRegistryDefinitions returns tool definitions from the tools package
+func GetRegistryDefinitions() map[string]llms.FunctionDefinition {
+	registry := make(map[string]llms.FunctionDefinition, len(registryDefinitions))
+	maps.Copy(registry, registryDefinitions)
+	return registry
+}
+
+// GetToolTypeMapping returns a mapping from tool names to tool types
+func GetToolTypeMapping() map[string]ToolType {
+	mapping := make(map[string]ToolType, len(toolsTypeMapping))
+	maps.Copy(mapping, toolsTypeMapping)
+	return mapping
+}
+
+// GetToolsByType returns a mapping from tool types to a list of tool names
+func GetToolsByType() map[ToolType][]string {
+	result := make(map[ToolType][]string)
+
+	for toolName, toolType := range toolsTypeMapping {
+		result[toolType] = append(result[toolType], toolName)
+	}
+
+	return result
 }

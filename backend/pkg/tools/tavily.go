@@ -56,6 +56,20 @@ type tavily struct {
 	summarizer SummarizeHandler
 }
 
+func NewTavilyTool(flowID int64, taskID, subtaskID *int64, apiKey, proxyURL string,
+	slp SearchLogProvider, summarizer SummarizeHandler,
+) Tool {
+	return &tavily{
+		flowID:     flowID,
+		taskID:     taskID,
+		subtaskID:  subtaskID,
+		apiKey:     apiKey,
+		proxyURL:   proxyURL,
+		slp:        slp,
+		summarizer: summarizer,
+	}
+}
+
 func (t *tavily) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
@@ -182,13 +196,19 @@ func (t *tavily) buildTavilyResult(ctx context.Context, result *tavilySearchResu
 		writer.WriteString(fmt.Sprintf("* Match score %3.3f\n\n", result.Score))
 		writer.WriteString(fmt.Sprintf("### Short content\n\n%s\n\n", result.Content))
 		if result.RawContent != nil {
-			summarizedContent, err := t.summarizer(ctx, *result.RawContent)
-			if err != nil {
+			if t.summarizer != nil {
+				summarizedContent, err := t.summarizer(ctx, *result.RawContent)
+				if err != nil {
+					rawContent := *result.RawContent
+					rawContent = rawContent[:min(len(rawContent), maxRawContentLength)]
+					writer.WriteString(fmt.Sprintf("### Content\n\n%s\n\n", rawContent))
+				} else {
+					writer.WriteString(fmt.Sprintf("### Content\n\n%s\n\n", summarizedContent))
+				}
+			} else {
 				rawContent := *result.RawContent
 				rawContent = rawContent[:min(len(rawContent), maxRawContentLength)]
-				writer.WriteString(fmt.Sprintf("### Content\n\n%s\n\n", rawContent))
-			} else {
-				writer.WriteString(fmt.Sprintf("### Content\n\n%s\n\n", summarizedContent))
+				writer.WriteString(fmt.Sprintf("### Content (not summarized)\n\n%s\n\n", rawContent))
 			}
 		}
 	}
@@ -196,6 +216,6 @@ func (t *tavily) buildTavilyResult(ctx context.Context, result *tavilySearchResu
 	return writer.String()
 }
 
-func (t *tavily) isAvailable() bool {
+func (t *tavily) IsAvailable() bool {
 	return t.apiKey != ""
 }

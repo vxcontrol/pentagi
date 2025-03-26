@@ -10,8 +10,10 @@ type SearchEngineType string
 
 const (
 	SearchEngineTypeGoogle     SearchEngineType = "google"
+	SearchEngineTypeDuckduckgo SearchEngineType = "duckduckgo"
 	SearchEngineTypeTavily     SearchEngineType = "tavily"
 	SearchEngineTypeTraversaal SearchEngineType = "traversaal"
+	SearchEngineTypePerplexity SearchEngineType = "perplexity"
 	SearchEngineTypeBrowser    SearchEngineType = "browser"
 )
 
@@ -25,7 +27,7 @@ type Searchlog struct {
 	ID        uint64           `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
 	Initiator MsgchainType     `json:"initiator" validate:"valid,required" gorm:"type:MSGCHAIN_TYPE;NOT NULL"`
 	Executor  MsgchainType     `json:"executor" validate:"valid,required" gorm:"type:MSGCHAIN_TYPE;NOT NULL"`
-	Engine    SearchEngineType `json:"engine" validate:"oneof=google tavily traversaal browser,required" gorm:"type:SEARCHENGINE_TYPE;NOT NULL"`
+	Engine    SearchEngineType `json:"engine" validate:"oneof=google duckduckgo tavily traversaal perplexity browser,required" gorm:"type:SEARCHENGINE_TYPE;NOT NULL"`
 	Query     string           `json:"query" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	Result    string           `json:"result" validate:"omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
 	FlowID    uint64           `form:"flow_id" json:"flow_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`

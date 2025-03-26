@@ -12,7 +12,7 @@ const docTemplate = `{
         "title": "{{.Title}}",
         "termsOfService": "http://swagger.io/terms/",
         "contact": {
-            "name": "PentAGI Developer",
+            "name": "PentAGI Development Team",
             "url": "https://pentagi.com",
             "email": "team@pentagi.com"
         },
@@ -4301,15 +4301,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subtask_id": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 },
                 "task": {
                     "type": "string"
                 },
                 "task_id": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 }
             }
         },
@@ -4580,12 +4578,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subtask_id": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 },
                 "task_id": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 },
                 "type": {
                     "type": "string",
@@ -4822,8 +4818,10 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "google",
+                        "duckduckgo",
                         "tavily",
                         "traversaal",
+                        "perplexity",
                         "browser"
                     ]
                 },
@@ -4848,12 +4846,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subtask_id": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 },
                 "task_id": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 }
             }
         },
@@ -5297,12 +5293,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subtask_id": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 },
                 "task_id": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "integer"
                 }
             }
         },

@@ -17,6 +17,14 @@ INSERT INTO containers (
 VALUES (
   $1, $2, $3, $4, $5, $6, $7
 )
+ON CONFLICT ON CONSTRAINT containers_local_id_unique
+DO UPDATE SET
+  type = EXCLUDED.type,
+  name = EXCLUDED.name,
+  image = EXCLUDED.image,
+  status = EXCLUDED.status,
+  flow_id = EXCLUDED.flow_id,
+  local_dir = EXCLUDED.local_dir
 RETURNING id, type, name, image, status, local_id, local_dir, flow_id, created_at, updated_at
 `
 

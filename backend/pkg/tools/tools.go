@@ -39,6 +39,11 @@ type ExternalFunction struct {
 	Schema  schema.Schema `form:"schema" json:"schema" validate:"required" swaggertype:"object"`
 }
 
+type Tool interface {
+	Handle(ctx context.Context, name string, args json.RawMessage) (string, error)
+	IsAvailable() bool
+}
+
 type ScreenshotProvider interface {
 	PutScreenshot(ctx context.Context, name, url string) (int64, error)
 }
@@ -218,6 +223,7 @@ type FlowToolsExecutor interface {
 	SetFlowID(flowID int64)
 	SetImage(image string)
 	SetEmbedder(embedder *embeddings.EmbedderImpl)
+	SetFunctions(functions *Functions)
 	SetScreenshotProvider(sp ScreenshotProvider)
 	SetAgentLogProvider(alp AgentLogProvider)
 	SetMsgLogProvider(mlp MsgLogProvider)
@@ -280,6 +286,10 @@ func (fte *flowToolsExecutor) SetEmbedder(embedder *embeddings.EmbedderImpl) {
 	if err == nil {
 		fte.store = &store
 	}
+}
+
+func (fte *flowToolsExecutor) SetFunctions(functions *Functions) {
+	fte.functions = functions
 }
 
 func (fte *flowToolsExecutor) SetScreenshotProvider(scp ScreenshotProvider) {
@@ -536,7 +546,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		scPubURL: fte.cfg.ScraperPublicURL,
 		scp:      fte.scp,
 	}
-	if browser.isAvailable() {
+	if browser.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
@@ -548,7 +558,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		store:     fte.store,
 		vslp:      fte.vslp,
 	}
-	if guide.isAvailable() {
+	if guide.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreGuideToolName])
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchGuideToolName])
 		ce.handlers[StoreGuideToolName] = guide.Handle
@@ -614,7 +624,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		scPubURL: fte.cfg.ScraperPublicURL,
 		scp:      fte.scp,
 	}
-	if browser.isAvailable() {
+	if browser.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
@@ -626,7 +636,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		store:     fte.store,
 		vslp:      fte.vslp,
 	}
-	if code.isAvailable() {
+	if code.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchCodeToolName])
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreCodeToolName])
 		ce.handlers[SearchCodeToolName] = code.Handle
@@ -715,7 +725,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		scPubURL: fte.cfg.ScraperPublicURL,
 		scp:      fte.scp,
 	}
-	if browser.isAvailable() {
+	if browser.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
@@ -727,7 +737,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		store:     fte.store,
 		vslp:      fte.vslp,
 	}
-	if guide.isAvailable() {
+	if guide.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreGuideToolName])
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchGuideToolName])
 		ce.handlers[StoreGuideToolName] = guide.Handle
@@ -775,7 +785,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		scPubURL: fte.cfg.ScraperPublicURL,
 		scp:      fte.scp,
 	}
-	if browser.isAvailable() {
+	if browser.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
@@ -790,9 +800,21 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		proxyURL:  fte.cfg.ProxyURL,
 		slp:       fte.slp,
 	}
-	if google.isAvailable() {
+	if google.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[GoogleToolName])
 		ce.handlers[GoogleToolName] = google.Handle
+	}
+
+	duckduckgo := &duckduckgo{
+		flowID:    fte.flowID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
+		proxyURL:  fte.cfg.ProxyURL,
+		slp:       fte.slp,
+	}
+	if duckduckgo.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[DuckDuckGoToolName])
+		ce.handlers[DuckDuckGoToolName] = duckduckgo.Handle
 	}
 
 	tavily := &tavily{
@@ -804,7 +826,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		slp:        fte.slp,
 		summarizer: cfg.Summarizer,
 	}
-	if tavily.isAvailable() {
+	if tavily.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[TavilyToolName])
 		ce.handlers[TavilyToolName] = tavily.Handle
 	}
@@ -817,9 +839,29 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		proxyURL:  fte.cfg.ProxyURL,
 		slp:       fte.slp,
 	}
-	if traversaal.isAvailable() {
+	if traversaal.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[TraversaalToolName])
 		ce.handlers[TraversaalToolName] = traversaal.Handle
+	}
+
+	perplexity := &perplexity{
+		flowID:      fte.flowID,
+		taskID:      cfg.TaskID,
+		subtaskID:   cfg.SubtaskID,
+		apiKey:      fte.cfg.PerplexityAPIKey,
+		proxyURL:    fte.cfg.ProxyURL,
+		model:       fte.cfg.PerplexityModel,
+		contextSize: fte.cfg.PerplexityContextSize,
+		temperature: perplexityTemperature,
+		topP:        perplexityTopP,
+		maxTokens:   perplexityMaxTokens,
+		timeout:     perplexityTimeout,
+		slp:         fte.slp,
+		summarizer:  cfg.Summarizer,
+	}
+	if perplexity.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[PerplexityToolName])
+		ce.handlers[PerplexityToolName] = perplexity.Handle
 	}
 
 	search := &search{
@@ -833,7 +875,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	if cfg.SubtaskID != nil {
 		search.subtaskID = *cfg.SubtaskID
 	}
-	if search.isAvailable() {
+	if search.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchAnswerToolName])
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreAnswerToolName])
 		ce.handlers[SearchAnswerToolName] = search.Handle
@@ -920,7 +962,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		store:  fte.store,
 		vslp:   fte.vslp,
 	}
-	if memory.isAvailable() {
+	if memory.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchInMemoryToolName])
 		ce.handlers[SearchInMemoryToolName] = memory.Handle
 	}
