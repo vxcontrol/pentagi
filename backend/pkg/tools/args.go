@@ -81,7 +81,7 @@ type ComplexSearch struct {
 }
 
 type SearchAction struct {
-	Query      string `json:"query" jsonschema:"required,description=Query to search in the the specific search engine (e.g. google tavily traversaal serper etc.) Short and exact query is much better for better search result in English"`
+	Query      string `json:"query" jsonschema:"required,description=Query to search in the the specific search engine (e.g. google duckduckgo tavily traversaal perplexity serper etc.) Short and exact query is much better for better search result in English"`
 	MaxResults Int64  `json:"max_results" jsonschema:"required,description=Maximum number of results to return (minimum 1; maximum 10; default 5),type=integer"`
 	Message    string `json:"message" jsonschema:"required,title=Search query message,description=Not so long message with the expected result and path to reach goal to send to the user in user's language only"`
 }

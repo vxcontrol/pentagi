@@ -31,6 +31,16 @@ type search struct {
 	vslp      VectorStoreLogProvider
 }
 
+func NewSearchTool(flowID int64, taskID, subtaskID int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+	return &search{
+		flowID:    flowID,
+		taskID:    taskID,
+		subtaskID: subtaskID,
+		store:     store,
+		vslp:      vslp,
+	}
+}
+
 func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	ptrTaskID := &s.taskID
@@ -249,6 +259,6 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 	}
 }
 
-func (s *search) isAvailable() bool {
+func (s *search) IsAvailable() bool {
 	return s.store != nil
 }

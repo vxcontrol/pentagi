@@ -31,6 +31,16 @@ type code struct {
 	vslp      VectorStoreLogProvider
 }
 
+func NewCodeTool(flowID, taskID, subtaskID int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+	return &code{
+		flowID:    flowID,
+		taskID:    taskID,
+		subtaskID: subtaskID,
+		store:     store,
+		vslp:      vslp,
+	}
+}
+
 func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
@@ -249,6 +259,6 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 	}
 }
 
-func (c *code) isAvailable() bool {
+func (c *code) IsAvailable() bool {
 	return c.store != nil
 }

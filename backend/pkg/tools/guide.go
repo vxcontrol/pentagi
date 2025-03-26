@@ -31,6 +31,16 @@ type guide struct {
 	vslp      VectorStoreLogProvider
 }
 
+func NewGuideTool(flowID int64, taskID, subtaskID int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+	return &guide{
+		flowID:    flowID,
+		taskID:    taskID,
+		subtaskID: subtaskID,
+		store:     store,
+		vslp:      vslp,
+	}
+}
+
 func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
@@ -243,6 +253,6 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 	}
 }
 
-func (g *guide) isAvailable() bool {
+func (g *guide) IsAvailable() bool {
 	return g.store != nil
 }

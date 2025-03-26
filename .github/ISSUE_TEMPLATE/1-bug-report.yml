@@ -81,7 +81,7 @@ body:
         
         Active Integrations:
         - LLM Provider: [OpenAI/Anthropic/Custom]
-        - Search Systems: [Google/Tavily/Traversaal]
+        - Search Systems: [Google/DuckDuckGo/Tavily/Traversaal/Perplexity]
     validations:
       required: true
   - type: textarea

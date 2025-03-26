@@ -28,6 +28,14 @@ type memory struct {
 	vslp   VectorStoreLogProvider
 }
 
+func NewMemoryTool(flowID int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+	return &memory{
+		flowID: flowID,
+		store:  store,
+		vslp:   vslp,
+	}
+}
+
 func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
@@ -165,6 +173,6 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 	}
 }
 
-func (m *memory) isAvailable() bool {
+func (m *memory) IsAvailable() bool {
 	return m.store != nil
 }

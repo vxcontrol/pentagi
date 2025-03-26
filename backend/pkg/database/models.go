@@ -296,6 +296,8 @@ const (
 	SearchengineTypeTavily     SearchengineType = "tavily"
 	SearchengineTypeTraversaal SearchengineType = "traversaal"
 	SearchengineTypeBrowser    SearchengineType = "browser"
+	SearchengineTypeDuckduckgo SearchengineType = "duckduckgo"
+	SearchengineTypePerplexity SearchengineType = "perplexity"
 )
 
 func (e *SearchengineType) Scan(src interface{}) error {

@@ -28,6 +28,21 @@ type google struct {
 	slp       SearchLogProvider
 }
 
+func NewGoogleTool(flowID int64, taskID, subtaskID *int64,
+	apiKey, cxKey, lrKey, proxyURL string, slp SearchLogProvider,
+) Tool {
+	return &google{
+		flowID:    flowID,
+		taskID:    taskID,
+		subtaskID: subtaskID,
+		apiKey:    apiKey,
+		cxKey:     cxKey,
+		lrKey:     lrKey,
+		proxyURL:  proxyURL,
+		slp:       slp,
+	}
+}
+
 func (g *google) parseGoogleSearchResult(res *customsearch.Search) string {
 	var writer strings.Builder
 	for i, item := range res.Items {
@@ -52,7 +67,7 @@ func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) 
 	}
 
 	numResults := int64(action.MaxResults)
-	if numResults < 1 || numResults > 10 {
+	if numResults < 1 || numResults > googleMaxResults {
 		numResults = googleMaxResults
 	}
 
@@ -114,6 +129,6 @@ func (g *google) newSearchService(ctx context.Context) (*customsearch.Service, e
 	return svc, nil
 }
 
-func (g *google) isAvailable() bool {
+func (g *google) IsAvailable() bool {
 	return g.apiKey != "" && g.cxKey != ""
 }

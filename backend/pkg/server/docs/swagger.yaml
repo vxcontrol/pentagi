@@ -104,12 +104,10 @@ definitions:
       result:
         type: string
       subtask_id:
-        minimum: 0
         type: integer
       task:
         type: string
       task_id:
-        minimum: 0
         type: integer
     required:
     - executor
@@ -306,10 +304,8 @@ definitions:
       result_format:
         type: string
       subtask_id:
-        minimum: 0
         type: integer
       task_id:
-        minimum: 0
         type: integer
       type:
         enum:
@@ -477,8 +473,10 @@ definitions:
       engine:
         enum:
         - google
+        - duckduckgo
         - tavily
         - traversaal
+        - perplexity
         - browser
         type: string
       executor:
@@ -496,10 +494,8 @@ definitions:
       result:
         type: string
       subtask_id:
-        minimum: 0
         type: integer
       task_id:
-        minimum: 0
         type: integer
     required:
     - engine
@@ -818,10 +814,8 @@ definitions:
       result:
         type: string
       subtask_id:
-        minimum: 0
         type: integer
       task_id:
-        minimum: 0
         type: integer
     required:
     - action
@@ -1024,7 +1018,7 @@ definitions:
 info:
   contact:
     email: team@pentagi.com
-    name: PentAGI Developer
+    name: PentAGI Development Team
     url: https://pentagi.com
   description: Swagger API for Penetration Testing Advanced General Intelligence PentAGI.
   license:

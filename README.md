@@ -30,7 +30,7 @@ You can watch the video **PentAGI overview**:
 - 🔬 Professional Pentesting Tools. Built-in suite of 20+ professional security tools including nmap, metasploit, sqlmap, and more.
 - 🧠 Smart Memory System. Long-term storage of research results and successful approaches for future use.
 - 🔍 Web Intelligence. Built-in browser via [scraper](https://hub.docker.com/r/vxcontrol/scraper) for gathering latest information from web sources.
-- 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), and [Google Custom Search](https://programmablesearchengine.google.com/) for comprehensive information gathering.
+- 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/) and [Google Custom Search](https://programmablesearchengine.google.com/) for comprehensive information gathering.
 - 👥 Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks.
 - 📊 Comprehensive Monitoring. Detailed logging and integration with Grafana/Prometheus for real-time system observation.
 - 📝 Detailed Reporting. Generation of thorough vulnerability reports with exploitation guides.
@@ -64,7 +64,7 @@ flowchart TB
     llm["🧠 llm-provider
     (OpenAI/Anthropic/Custom)"]
     search["🔍 search-systems
-    (Google/Tavily/Traversaal)"]
+    (Google/DuckDuckGo/Tavily/Traversaal/Perplexity)"]
     langfuse["📊 langfuse-ui
     (LLM Observability Dashboard)"]
     grafana["📈 grafana
@@ -393,6 +393,9 @@ GOOGLE_API_KEY=your_google_key
 GOOGLE_CX_KEY=your_google_cx
 TAVILY_API_KEY=your_tavily_key
 TRAVERSAAL_API_KEY=your_traversaal_key
+PERPLEXITY_API_KEY=your_perplexity_key
+PERPLEXITY_MODEL=sonar-pro
+PERPLEXITY_CONTEXT_SIZE=medium
 ```
 
 4. Change all security related environment variables in `.env` file to improve security.

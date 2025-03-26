@@ -348,12 +348,12 @@ func (fp *flowProvider) performSubtasksGenerator(
 		llms.TextParts(llms.ChatMessageTypeHuman, generatorTmpl),
 	}
 
-	memorist, err := fp.getMemoristHandler(ctx, taskID, nil)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
-	searcher, err := fp.getTaskSearcherHandler(ctx, taskID)
+	searcher, err := fp.GetTaskSearcherHandler(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get searcher handler: %w", err)
 	}
@@ -444,12 +444,12 @@ func (fp *flowProvider) performSubtasksRefiner(
 		chain = append(chain, llms.TextParts(llms.ChatMessageTypeHuman, refinerTmpl))
 	}
 
-	memorist, err := fp.getMemoristHandler(ctx, taskID, nil)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
-	searcher, err := fp.getTaskSearcherHandler(ctx, taskID)
+	searcher, err := fp.GetTaskSearcherHandler(ctx, taskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get searcher handler: %w", err)
 	}
@@ -521,22 +521,22 @@ func (fp *flowProvider) performCoder(
 		llms.TextParts(llms.ChatMessageTypeHuman, question),
 	}
 
-	adviser, err := fp.getAskAdviceHandler(ctx, taskID, subtaskID)
+	adviser, err := fp.GetAskAdviceHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get adviser handler: %w", err)
 	}
 
-	installer, err := fp.getInstallerHandler(ctx, taskID, subtaskID)
+	installer, err := fp.GetInstallerHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get installer handler: %w", err)
 	}
 
-	memorist, err := fp.getMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
-	searcher, err := fp.getSubtaskSearcherHandler(ctx, taskID, subtaskID)
+	searcher, err := fp.GetSubtaskSearcherHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get searcher handler: %w", err)
 	}
@@ -555,7 +555,7 @@ func (fp *flowProvider) performCoder(
 			}
 			return "code result successfully processed", nil
 		},
-		Summarizer: fp.getSummarizeResultHandler(&taskID, &subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(&taskID, &subtaskID),
 	}
 	executor, err := fp.executor.GetCoderExecutor(cfg)
 	if err != nil {
@@ -613,17 +613,17 @@ func (fp *flowProvider) performInstaller(
 		llms.TextParts(llms.ChatMessageTypeHuman, question),
 	}
 
-	adviser, err := fp.getAskAdviceHandler(ctx, taskID, subtaskID)
+	adviser, err := fp.GetAskAdviceHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get adviser handler: %w", err)
 	}
 
-	memorist, err := fp.getMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
-	searcher, err := fp.getSubtaskSearcherHandler(ctx, taskID, subtaskID)
+	searcher, err := fp.GetSubtaskSearcherHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get searcher handler: %w", err)
 	}
@@ -641,7 +641,7 @@ func (fp *flowProvider) performInstaller(
 			}
 			return "maintenance result successfully processed", nil
 		},
-		Summarizer: fp.getSummarizeResultHandler(&taskID, &subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(&taskID, &subtaskID),
 	}
 	executor, err := fp.executor.GetInstallerExecutor(cfg)
 	if err != nil {
@@ -708,7 +708,7 @@ func (fp *flowProvider) performMemorist(
 			}
 			return "memorist result successfully processed", nil
 		},
-		Summarizer: fp.getSummarizeResultHandler(taskID, subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(taskID, subtaskID),
 	}
 	executor, err := fp.executor.GetMemoristExecutor(cfg)
 	if err != nil {
@@ -766,27 +766,27 @@ func (fp *flowProvider) performPentester(
 		llms.TextParts(llms.ChatMessageTypeHuman, question),
 	}
 
-	adviser, err := fp.getAskAdviceHandler(ctx, taskID, subtaskID)
+	adviser, err := fp.GetAskAdviceHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get adviser handler: %w", err)
 	}
 
-	coder, err := fp.getCoderHandler(ctx, taskID, subtaskID)
+	coder, err := fp.GetCoderHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get coder handler: %w", err)
 	}
 
-	installer, err := fp.getInstallerHandler(ctx, taskID, subtaskID)
+	installer, err := fp.GetInstallerHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get installer handler: %w", err)
 	}
 
-	memorist, err := fp.getMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
-	searcher, err := fp.getSubtaskSearcherHandler(ctx, taskID, subtaskID)
+	searcher, err := fp.GetSubtaskSearcherHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get searcher handler: %w", err)
 	}
@@ -806,7 +806,7 @@ func (fp *flowProvider) performPentester(
 			}
 			return "hack result successfully processed", nil
 		},
-		Summarizer: fp.getSummarizeResultHandler(&taskID, &subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(&taskID, &subtaskID),
 	}
 	executor, err := fp.executor.GetPentesterExecutor(cfg)
 	if err != nil {
@@ -868,7 +868,7 @@ func (fp *flowProvider) performSearcher(
 	if taskID != nil {
 		tID = *taskID
 	}
-	memorist, err := fp.getMemoristHandler(ctx, tID, subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, tID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
@@ -884,7 +884,7 @@ func (fp *flowProvider) performSearcher(
 			}
 			return "search result successfully processed", nil
 		},
-		Summarizer: fp.getSummarizeResultHandler(taskID, subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(taskID, subtaskID),
 	}
 	executor, err := fp.executor.GetSearcherExecutor(cfg)
 	if err != nil {
@@ -942,12 +942,12 @@ func (fp *flowProvider) performEnricher(
 		llms.TextParts(llms.ChatMessageTypeHuman, question),
 	}
 
-	memorist, err := fp.getMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
-	searcher, err := fp.getSubtaskSearcherHandler(ctx, taskID, subtaskID)
+	searcher, err := fp.GetSubtaskSearcherHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get searcher handler: %w", err)
 	}
