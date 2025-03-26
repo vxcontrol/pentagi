@@ -1,12 +1,12 @@
 simple:
-  model: "openai/gpt-4o"
+  model: "deepseek-chat"
   temperature: 0.6
   top_p: 0.95
   n: 1
   max_tokens: 4000
 
 simple_json:
-  model: "openai/gpt-4o-mini"
+  model: "deepseek-chat"
   temperature: 0.7
   top_p: 1.0
   n: 1
@@ -14,71 +14,71 @@ simple_json:
   json: true
 
 agent:
-  model: "openai/gpt-4o"
+  model: "deepseek-chat"
   temperature: 0.7
   top_p: 0.95
   n: 1
   max_tokens: 4000
 
 generator:
-  model: "anthropic/claude-3.7-sonnet:thinking"
-  temperature: 0.7
+  model: "deepseek-chat"
+  temperature: 1.1
   top_p: 0.95
   n: 1
   max_tokens: 8000
 
 refiner:
-  model: "anthropic/claude-3.7-sonnet:thinking"
-  temperature: 0.55
+  model: "deepseek-chat"
+  temperature: 0.8
   top_p: 0.95
   n: 1
   max_tokens: 8000
 
 adviser:
-  model: "anthropic/claude-3.7-sonnet:thinking"
-  temperature: 0.8
+  model: "deepseek-chat"
+  temperature: 1.2
   top_p: 0.95
   n: 1
   max_tokens: 4000
 
 reflector:
-  model: "mistralai/mistral-large-2411"
-  temperature: 0.8
+  model: "deepseek-reasoner"
+  temperature: 1.0
   top_p: 1.0
   n: 1
   max_tokens: 4000
 
 searcher:
-  model: "openai/gpt-4o-mini"
-  temperature: 0.7
+  model: "deepseek-chat"
+  temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 4000
 
 enricher:
-  model: "openai/gpt-4o"
+  model: "deepseek-chat"
   temperature: 0.95
   top_p: 1.0
   n: 1
   max_tokens: 6000
 
 coder:
-  model: "anthropic/claude-3.7-sonnet"
-  temperature: 0.9
+  model: "deepseek-coder"
+  temperature: 0.7
   top_p: 1.0
   n: 1
   max_tokens: 6000
 
 installer:
-  model: "openai/gpt-4o"
-  temperature: 0.8
+  model: "deepseek-coder"
+  temperature: 1.2
   top_p: 1.0
   n: 1
   max_tokens: 4000
 
 pentester:
-  model: "openai/gpt-4o"
-  temperature: 0.75
+  model: "deepseek-chat"
+  temperature: 0.8
   top_p: 0.9
   n: 1
   max_tokens: 4000
