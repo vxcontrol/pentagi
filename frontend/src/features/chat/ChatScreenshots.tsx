@@ -36,8 +36,10 @@ const ChatScreenshots = ({ screenshots }: ChatScreenshotsProps) => {
         return screenshot.url.toLowerCase().includes(search);
     });
 
+    const hasScreenshots = filteredScreenshots && filteredScreenshots.length > 0;
+
     return (
-        <div className="flex flex-col">
+        <div className="flex h-full flex-col">
             <div className="sticky top-0 z-10 bg-background pb-4">
                 <Form {...form}>
                     <FormField
@@ -71,8 +73,8 @@ const ChatScreenshots = ({ screenshots }: ChatScreenshotsProps) => {
                 </Form>
             </div>
 
-            {filteredScreenshots?.length ? (
-                <div className="space-y-4 pb-4">
+            {hasScreenshots ? (
+                <div className="flex-1 space-y-4 overflow-auto pb-4">
                     {filteredScreenshots.map((screenshot) => (
                         <ChatScreenshot
                             key={screenshot.id}
@@ -81,7 +83,12 @@ const ChatScreenshots = ({ screenshots }: ChatScreenshotsProps) => {
                     ))}
                 </div>
             ) : (
-                <p className="m-auto text-lg font-semibold text-muted-foreground">No screenshots available</p>
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <p>No screenshots available</p>
+                        <p className="text-xs">Screenshots will appear here once the agent captures them</p>
+                    </div>
+                </div>
             )}
         </div>
     );

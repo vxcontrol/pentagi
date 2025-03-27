@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
 import Markdown from '@/components/Markdown';
 import type { TaskFragmentFragment } from '@/graphql/types';
@@ -10,14 +10,15 @@ interface ChatTaskProps {
     task: TaskFragmentFragment;
 }
 
-export const ChatTask = ({ task }: ChatTaskProps) => {
+const ChatTask = ({ task }: ChatTaskProps) => {
     const { id, status, title, result, subtasks } = task;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
 
     const sortedSubtasks = [...(subtasks || [])].sort((a, b) => +a.id - +b.id);
+    const hasSubtasks = subtasks && subtasks.length > 0;
 
     return (
-        <div>
+        <div className="rounded-lg border p-4 shadow-sm">
             <div className="flex gap-2">
                 <ChatTaskStatusIcon
                     status={status}
@@ -42,14 +43,22 @@ export const ChatTask = ({ task }: ChatTaskProps) => {
                     )}
                 </div>
             )}
-            <div className="mt-2 space-y-2">
-                {sortedSubtasks.map((subtask) => (
-                    <ChatSubtask
-                        key={subtask.id}
-                        subtask={subtask}
-                    />
-                ))}
-            </div>
+            {hasSubtasks ? (
+                <div className="mt-2 space-y-2">
+                    {sortedSubtasks.map((subtask) => (
+                        <ChatSubtask
+                            key={subtask.id}
+                            subtask={subtask}
+                        />
+                    ))}
+                </div>
+            ) : (
+                <div className="ml-6 mt-2 text-xs text-muted-foreground">
+                    Waiting for subtasks to be created...
+                </div>
+            )}
         </div>
     );
 };
+
+export default memo(ChatTask);

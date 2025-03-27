@@ -48,12 +48,16 @@ const ChatTools = ({ logs }: ChatToolsProps) => {
         );
     });
 
+    const hasLogs = filteredLogs && filteredLogs.length > 0;
+
     useEffect(() => {
-        scrollSearches();
-    }, [logs]);
+        if (hasLogs) {
+            scrollSearches();
+        }
+    }, [logs, hasLogs]);
 
     return (
-        <div className="flex flex-col">
+        <div className="flex h-full flex-col">
             <div className="sticky top-0 z-10 bg-background pb-4">
                 <Form {...form}>
                     <FormField
@@ -86,15 +90,25 @@ const ChatTools = ({ logs }: ChatToolsProps) => {
                     />
                 </Form>
             </div>
-            <div className="space-y-4 pb-4">
-                {filteredLogs?.map((log) => (
-                    <ChatTool
-                        key={log.id}
-                        log={log}
-                    />
-                ))}
-                <div ref={searchesEndRef} />
-            </div>
+
+            {hasLogs ? (
+                <div className="flex-1 space-y-4 overflow-auto pb-4">
+                    {filteredLogs.map((log) => (
+                        <ChatTool
+                            key={log.id}
+                            log={log}
+                        />
+                    ))}
+                    <div ref={searchesEndRef} />
+                </div>
+            ) : (
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <p>No search logs available</p>
+                        <p className="text-xs">Search logs will appear here when the agent performs searches</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

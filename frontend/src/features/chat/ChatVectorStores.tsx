@@ -49,12 +49,16 @@ const ChatVectorStores = ({ logs }: ChatVectorStoresProps) => {
         );
     });
 
+    const hasLogs = filteredLogs && filteredLogs.length > 0;
+
     useEffect(() => {
-        scrollVectorStores();
-    }, [logs]);
+        if (hasLogs) {
+            scrollVectorStores();
+        }
+    }, [logs, hasLogs]);
 
     return (
-        <div className="flex flex-col">
+        <div className="flex h-full flex-col">
             <div className="sticky top-0 z-10 bg-background pb-4">
                 <Form {...form}>
                     <FormField
@@ -87,15 +91,24 @@ const ChatVectorStores = ({ logs }: ChatVectorStoresProps) => {
                     />
                 </Form>
             </div>
-            <div className="space-y-4 pb-4">
-                {filteredLogs?.map((log) => (
-                    <ChatVectorStore
-                        key={log.id}
-                        log={log}
-                    />
-                ))}
-                <div ref={vectorStoresEndRef} />
-            </div>
+            {hasLogs ? (
+                <div className="flex-1 space-y-4 overflow-auto pb-4">
+                    {filteredLogs.map((log) => (
+                        <ChatVectorStore
+                            key={log.id}
+                            log={log}
+                        />
+                    ))}
+                    <div ref={vectorStoresEndRef} />
+                </div>
+            ) : (
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <p>No vector store logs available</p>
+                        <p className="text-xs">Vector store logs will appear here when the agent uses knowledge database</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

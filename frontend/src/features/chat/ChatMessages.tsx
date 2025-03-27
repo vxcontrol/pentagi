@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Search, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -23,9 +23,13 @@ const searchFormSchema = z.object({
 
 const ChatMessages = ({ logs, className }: ChatMessagesProps) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const scrollMessages = () => {
-        messagesEndRef.current?.scrollIntoView();
-    };
+
+    // Memoize the scroll function to avoid recreating it on every render
+    const scrollMessages = useCallback(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, []);
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         resolver: zodResolver(searchFormSchema),
@@ -34,19 +38,30 @@ const ChatMessages = ({ logs, className }: ChatMessagesProps) => {
         },
     });
 
-    const filteredLogs = logs?.filter((log) => {
-        const search = form.watch('search').toLowerCase();
+    const searchValue = form.watch('search');
 
-        if (!search) {
-            return true;
+    // Memoize filtered logs to avoid recomputing on every render
+    const filteredLogs = useMemo(() => {
+        const search = searchValue.toLowerCase();
+
+        if (!search || !logs) {
+            return logs || [];
         }
 
-        return log.message.toLowerCase().includes(search) || log.result?.toLowerCase().includes(search);
-    });
+        return logs.filter(
+            (log) =>
+                log.message.toLowerCase().includes(search) || (log.result && log.result.toLowerCase().includes(search)),
+        );
+    }, [logs, searchValue]);
 
     useEffect(() => {
-        scrollMessages();
-    }, [logs]);
+        // Only scroll when new messages come in, not on every render
+        const timeout = setTimeout(() => {
+            scrollMessages();
+        }, 100);
+
+        return () => clearTimeout(timeout);
+    }, [filteredLogs.length, scrollMessages]);
 
     return (
         <div className={cn('flex flex-col', className)}>
@@ -83,7 +98,7 @@ const ChatMessages = ({ logs, className }: ChatMessagesProps) => {
                 </Form>
             </div>
             <div className="space-y-4 pb-4">
-                {filteredLogs?.map((log) => (
+                {filteredLogs.map((log) => (
                     <ChatMessage
                         key={log.id}
                         log={log}
@@ -95,4 +110,5 @@ const ChatMessages = ({ logs, className }: ChatMessagesProps) => {
     );
 };
 
-export default ChatMessages;
+// Using React.memo to prevent unnecessary rerenders
+export default memo(ChatMessages);

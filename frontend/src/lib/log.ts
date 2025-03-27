@@ -34,9 +34,10 @@ export const Log = {
             dump('[WARN] ', msg);
         }
     },
-    error(msg: any) {
+    error(msg: any, err?: unknown) {
         if (valid(Level.ERROR)) {
             dump('[ERROR] ', msg);
+            console.error(err);
         }
     },
 };
