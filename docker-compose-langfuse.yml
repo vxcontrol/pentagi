@@ -160,19 +160,19 @@ services:
       MINIO_ROOT_PASSWORD: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-miniosecret}
       MINIO_BUCKET_NAME: ${LANGFUSE_S3_BUCKET:-langfuse}
       MINIO_UPDATE: off
-    entrypoint: >
+    entrypoint: |
       /bin/sh -c '
         isAlive() { mc ready local >/dev/null 2>&1; }                      # check if Minio is alive
         minio $0 "$@" --quiet & echo $! > /tmp/minio.pid                   # start Minio in the background
         until isAlive; do sleep 1; done                                    # wait until Minio is alive
         echo "MinIO is ready. Proceeding with setup..."
-        mc alias set myminio http://localhost:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}
-        mc mb myminio/$${MINIO_BUCKET_NAME}/ --ignore-existing             # create test bucket
-        mc anonymous set public myminio/$${MINIO_BUCKET_NAME}              # make the test bucket public
-        mc admin update myminio/$${MINIO_BUCKET_NAME}                      # update test bucket
+        mc alias set myminio http://localhost:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
+        mc mb myminio/$$MINIO_BUCKET_NAME/ --ignore-existing               # create test bucket
+        mc anonymous set public myminio/$$MINIO_BUCKET_NAME                # make the test bucket public
+        mc admin update myminio/$$MINIO_BUCKET_NAME                        # update test bucket
         echo "MinIO is configured. Trying to restart Minio..."
-        kill -s INT $(cat /tmp/minio.pid)                                  # try to stop Minio
-        while [ -e "/proc/$(cat /tmp/minio.pid)" ]; do sleep 0.5; done     # wait until Minio is stopped
+        kill -s INT $$(cat /tmp/minio.pid)                                 # try to stop Minio
+        while [ -e "/proc/$$(cat /tmp/minio.pid)" ]; do sleep 0.5; done    # wait until Minio is stopped
         rm /tmp/minio.pid                                                  # remove the pid file
         echo "MinIO is configured and running..."
         exec minio $0 "$@"                                                 # start Minio in the foreground
