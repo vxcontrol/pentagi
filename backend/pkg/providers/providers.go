@@ -62,7 +62,7 @@ func NewProviderController(cfg *config.Config, docker docker.DockerClient) (Prov
 		providers[provider.Type()] = provider
 	}
 
-	if cfg.LLMServerURL != "" && cfg.LLMServerModel != "" {
+	if cfg.LLMServerURL != "" && (cfg.LLMServerModel != "" || cfg.LLMServerConfig != "") {
 		provider, err := custom.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create custom provider: %w", err)
