@@ -23,6 +23,8 @@ const TasksNumberLimit = 15
 
 const summarizeLimit = 16 * 1024 // 16 KB
 
+const contextHardLimit = 100 * 1024 // 100 KB
+
 type PerformResult int
 
 const (
@@ -189,6 +191,10 @@ func (fp *flowProvider) GenerateSubtasks(ctx context.Context, taskID int64) ([]t
 		return nil, wrapErrorEndSpan(ctx, generatorSpan, "failed to get task generator template", err)
 	}
 
+	if len(generatorTmpl) > contextHardLimit {
+		generatorTmpl = generatorTmpl[:contextHardLimit] + "\n\n[...truncated]"
+	}
+
 	systemGeneratorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeGenerator, generatorContext["system"])
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, generatorSpan, "failed to get task system generator template", err)
@@ -252,6 +258,10 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 	refinerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template", err)
+	}
+
+	if len(refinerTmpl) > contextHardLimit {
+		refinerTmpl = refinerTmpl[:contextHardLimit] + "\n\n[...truncated]"
 	}
 
 	systemRefinerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeRefiner, refinerContext["system"])
@@ -322,6 +332,10 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 	reporterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeTaskReporter, reporterContext["user"])
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template", err)
+	}
+
+	if len(reporterTmpl) > contextHardLimit {
+		reporterTmpl = reporterTmpl[:contextHardLimit] + "\n\n[...truncated]"
 	}
 
 	systemReporterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeReporter, reporterContext["system"])
