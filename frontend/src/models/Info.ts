@@ -8,10 +8,16 @@ export interface AuthInfo {
     providers?: string[];
 }
 
-export type AuthInfoResponseStatus = 'success' | 'error';
+export type AuthResponseStatus = 'success' | 'error';
 
 export interface AuthInfoResponse {
-    status: AuthInfoResponseStatus;
+    status: AuthResponseStatus;
     data?: AuthInfo;
+    error?: string;
+}
+
+export interface AuthLoginResponse {
+    status: AuthResponseStatus;
+    data?: unknown;
     error?: string;
 }

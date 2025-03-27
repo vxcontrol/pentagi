@@ -8,12 +8,14 @@ import { z } from 'zod';
 import Github from '@/components/icons/Github';
 import Google from '@/components/icons/Google';
 import { Button } from '@/components/ui/button';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { axios } from '@/lib/axios';
 import { baseUrl } from '@/models/Api';
-import type { AuthInfoResponse } from '@/models/Info';
+import type { AuthInfoResponse, AuthLoginResponse } from '@/models/Info';
+import type { User } from '@/models/User';
 
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../../components/ui/form';
+import { PasswordChangeForm } from './PasswordChangeForm';
 
 const formSchema = z.object({
     mail: z
@@ -71,6 +73,8 @@ const LoginForm = ({ providers }: LoginFormProps) => {
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
+    const [user, setUser] = useState<User | null>(null);
     const navigate = useNavigate();
 
     const providerLoginCheckInterval = 500;
@@ -81,7 +85,7 @@ const LoginForm = ({ providers }: LoginFormProps) => {
         setIsSubmitting(true);
 
         try {
-            const data: AuthInfoResponse = await axios.post('/auth/login', values);
+            const data: AuthLoginResponse = await axios.post('/auth/login', values);
 
             if (data?.status !== 'success') {
                 setError(errorMessage);
@@ -96,6 +100,13 @@ const LoginForm = ({ providers }: LoginFormProps) => {
             }
 
             localStorage.setItem('auth', JSON.stringify(info.data));
+
+            // Check if password change is required for local users
+            if (info.data && info.data?.user?.type === 'local' && info.data?.user?.password_change_required) {
+                setUser(info.data?.user as unknown as User);
+                setPasswordChangeRequired(true);
+                return;
+            }
 
             navigate('/');
         } catch {
@@ -210,6 +221,40 @@ const LoginForm = ({ providers }: LoginFormProps) => {
         }
     };
 
+    const handleSkipPasswordChange = () => {
+        navigate('/');
+    };
+
+    const handlePasswordChangeSuccess = () => {
+        if (user) {
+            // Update stored user info with password_change_required set to false
+            const updatedUser = {
+                ...user,
+                password_change_required: false,
+            };
+            localStorage.setItem('auth', JSON.stringify(updatedUser));
+            navigate('/');
+        }
+    };
+
+    // If password change is required, show password change form
+    if (passwordChangeRequired && user?.type === 'local') {
+        return (
+            <div className="mx-auto w-[350px] space-y-6">
+                <h1 className="text-center text-3xl font-bold">Update Password</h1>
+                <p className="text-center text-sm text-muted-foreground">
+                    You need to change your password before continuing.
+                </p>
+                <PasswordChangeForm
+                    onSuccess={handlePasswordChangeSuccess}
+                    showSkip={true}
+                    onSkip={handleSkipPasswordChange}
+                    isModal={false}
+                />
+            </div>
+        );
+    }
+
     return (
         <Form {...form}>
             <form
@@ -290,7 +335,7 @@ const LoginForm = ({ providers }: LoginFormProps) => {
                         disabled={isSubmitting || (!form.formState.isValid && form.formState.isSubmitted)}
                     >
                         {isSubmitting && <Loader2 className="animate-spin" />}
-                        Sign in
+                        <span>Sign in</span>
                     </Button>
 
                     {error && <FormMessage>{error}</FormMessage>}

@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback } from '@radix-ui/react-avatar';
 import {
     Check,
     ChevronsUpDown,
+    KeyRound,
     LogOut,
     Moon,
     MoreHorizontal,
@@ -17,6 +18,12 @@ import { useNavigate } from 'react-router-dom';
 
 import Logo from '@/components/icons/Logo';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -39,6 +46,7 @@ import {
     SidebarRail,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { PasswordChangeForm } from '@/features/authentication/PasswordChangeForm';
 import type { FlowOverviewFragmentFragment } from '@/graphql/types';
 import { StatusType } from '@/graphql/types';
 import { axios } from '@/lib/axios';
@@ -108,6 +116,7 @@ const ChatSidebar = ({
     onFinishFlow,
 }: ChatSidebarProps) => {
     const navigate = useNavigate();
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const theme = useThemeStore((store) => store.theme);
     const toggleTheme = useThemeStore((store) => store.setTheme);
@@ -119,6 +128,10 @@ const ChatSidebar = ({
             localStorage.removeItem('auth');
             navigate('/login');
         }
+    };
+
+    const handlePasswordChangeSuccess = () => {
+        setIsPasswordModalOpen(false);
     };
 
     return (
@@ -275,11 +288,20 @@ const ChatSidebar = ({
                                     ) : (
                                         <Sun className="mr-2 size-4" />
                                     )}
-                                    {theme === 'light' ? 'Dark mode' : 'Light mode'}
+                                    <span>{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>
                                 </DropdownMenuItem>
+                                {user?.type === 'local' && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => setIsPasswordModalOpen(true)}>
+                                            <KeyRound className="mr-2 size-4" />
+                                            Change Password
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={logout}>
-                                    <LogOut />
+                                    <LogOut className="mr-2 size-4" />
                                     Log out
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -288,6 +310,18 @@ const ChatSidebar = ({
                 </SidebarMenu>
             </SidebarFooter>
             <SidebarRail />
+
+            <Dialog open={isPasswordModalOpen} onOpenChange={(open) => setIsPasswordModalOpen(open)}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Change Password</DialogTitle>
+                    </DialogHeader>
+                    <PasswordChangeForm
+                        onSuccess={handlePasswordChangeSuccess}
+                        onCancel={() => setIsPasswordModalOpen(false)}
+                    />
+                </DialogContent>
+            </Dialog>
         </Sidebar>
     );
 };
