@@ -10,6 +10,7 @@ frontend/coverage
 frontend/dist
 frontend/node_modules
 frontend/ssl
+node_modules
 
 build/*
 data/*

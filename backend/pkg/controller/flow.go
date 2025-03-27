@@ -480,6 +480,9 @@ func (fw *flowWorker) Stop(ctx context.Context) error {
 
 func (fw *flowWorker) stop() error {
 	if err := fw.ctx.Err(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 		return fmt.Errorf("flow %d stop failed: %w", fw.flowCtx.FlowID, err)
 	}
 

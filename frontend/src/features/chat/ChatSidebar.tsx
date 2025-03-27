@@ -13,8 +13,8 @@ import {
     UserIcon,
     X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import Logo from '@/components/icons/Logo';
 import { Button } from '@/components/ui/button';
@@ -70,11 +70,12 @@ const ChatSidebarMenuItemText = ({ text }: { text: string }) => {
     const [isTruncated, setIsTruncated] = useState(false);
     const ref = useRef<HTMLSpanElement>(null);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const element = ref.current;
 
         if (element) {
-            setIsTruncated(element.scrollWidth > element.clientWidth);
+            const shouldTruncate = element.scrollWidth > element.clientWidth;
+            setIsTruncated((current) => shouldTruncate !== current ? shouldTruncate : current);
         }
     }, [text]);
 
@@ -116,10 +117,16 @@ const ChatSidebar = ({
     onFinishFlow,
 }: ChatSidebarProps) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const prevPathRef = useRef(location.pathname);
 
     const theme = useThemeStore((store) => store.theme);
     const toggleTheme = useThemeStore((store) => store.setTheme);
+
+    useEffect(() => {
+        prevPathRef.current = location.pathname;
+    }, [location.pathname]);
 
     const logout = async () => {
         try {
@@ -178,7 +185,10 @@ const ChatSidebar = ({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="size-8"
+                            className={cn(
+                                'relative size-8',
+                                (selectedFlowId === 'new' || window.location.pathname === '/chat/new') && 'text-primary after:absolute after:left-1/2 after:top-full after:size-1.5 after:-translate-x-1/2 after:rounded-full after:bg-primary dark:text-primary-foreground dark:after:bg-primary-foreground',
+                            )}
                             onClick={() => onChangeSelectedFlowId('new')}
                         >
                             <Plus className="size-4" />
@@ -191,10 +201,10 @@ const ChatSidebar = ({
                                 <SidebarMenuButton
                                     asChild
                                     className={cn(
-                                        'cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                        'relative cursor-pointer overflow-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                                         {
-                                            'bg-sidebar-accent text-sidebar-accent-foreground':
-                                                selectedFlowId === flow.id,
+                                            'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
+                                                selectedFlowId === flow.id || location.pathname === `/chat/${flow.id}`,
                                             'text-muted-foreground': [StatusType.Finished, StatusType.Failed].includes(
                                                 flow.status,
                                             ),
@@ -210,7 +220,10 @@ const ChatSidebar = ({
                                 </SidebarMenuButton>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <SidebarMenuAction showOnHover>
+                                        <SidebarMenuAction
+                                            showOnHover={selectedFlowId !== flow.id && location.pathname !== `/chat/${flow.id}`}
+                                            className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                                        >
                                             <MoreHorizontal />
                                         </SidebarMenuAction>
                                     </DropdownMenuTrigger>
