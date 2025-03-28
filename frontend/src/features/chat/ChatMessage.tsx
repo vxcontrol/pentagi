@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 
 import Markdown from '@/components/Markdown';
 import Terminal from '@/components/Terminal';
@@ -17,6 +17,32 @@ const ChatMessage = ({ log }: ChatMessageProps) => {
     const { type, createdAt, message, result, resultFormat = ResultFormat.Plain } = log;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
 
+    // Use useCallback to memoize the toggle function
+    const toggleDetails = useCallback(() => {
+        setIsDetailsVisible((prev) => !prev);
+    }, []);
+
+    // Only render details content when it's visible to reduce DOM nodes
+    const renderDetailsContent = () => {
+        if (!isDetailsVisible) return null;
+
+        return (
+            <>
+                <div className="my-2 border-t dark:border-gray-700" />
+                {resultFormat === ResultFormat.Plain && <div className="text-sm text-accent-foreground">{result}</div>}
+                {resultFormat === ResultFormat.Markdown && (
+                    <Markdown className="prose-xs prose-fixed break-words">{result}</Markdown>
+                )}
+                {resultFormat === ResultFormat.Terminal && (
+                    <Terminal
+                        logs={[result as string]}
+                        className="h-[240px] w-full bg-card py-1 pl-1"
+                    />
+                )}
+            </>
+        );
+    };
+
     return (
         <div className={`flex flex-col ${type === MessageLogType.Input ? 'items-end' : 'items-start'}`}>
             <div
@@ -29,28 +55,12 @@ const ChatMessage = ({ log }: ChatMessageProps) => {
                 {result && (
                     <div className="text-xs text-muted-foreground">
                         <div
-                            onClick={() => setIsDetailsVisible(!isDetailsVisible)}
+                            onClick={toggleDetails}
                             className="cursor-pointer"
                         >
                             {isDetailsVisible ? 'Hide details' : 'Show details'}
                         </div>
-                        {isDetailsVisible && (
-                            <>
-                                <div className="my-2 border-t dark:border-gray-700" />
-                                {resultFormat === ResultFormat.Plain && (
-                                    <div className="text-sm text-accent-foreground">{result}</div>
-                                )}
-                                {resultFormat === ResultFormat.Markdown && (
-                                    <Markdown className="prose-xs prose-fixed break-words">{result}</Markdown>
-                                )}
-                                {resultFormat === ResultFormat.Terminal && (
-                                    <Terminal
-                                        logs={[result]}
-                                        className="h-[240px] w-full bg-card py-1 pl-1"
-                                    />
-                                )}
-                            </>
-                        )}
+                        {renderDetailsContent()}
                     </div>
                 )}
             </div>
@@ -66,4 +76,5 @@ const ChatMessage = ({ log }: ChatMessageProps) => {
     );
 };
 
-export default ChatMessage;
+// Using React.memo to prevent unnecessary rerenders
+export default memo(ChatMessage);

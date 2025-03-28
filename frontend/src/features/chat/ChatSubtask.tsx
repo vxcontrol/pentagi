@@ -1,5 +1,5 @@
 import { ListCheck, ListTodo } from 'lucide-react';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
 import Markdown from '@/components/Markdown';
 import type { SubtaskFragmentFragment } from '@/graphql/types';
@@ -13,6 +13,7 @@ interface ChatSubtaskProps {
 const ChatSubtask = ({ subtask }: ChatSubtaskProps) => {
     const { id, status, title, description, result } = subtask;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+    const hasDetails = description || result;
 
     return (
         <div className="border-l pl-4">
@@ -24,11 +25,11 @@ const ChatSubtask = ({ subtask }: ChatSubtaskProps) => {
                 />
                 <p className="text-sm">{title}</p>
             </div>
-            {(description || result) && (
+            {hasDetails && (
                 <div className="ml-6 text-xs text-muted-foreground">
                     <div
                         onClick={() => setIsDetailsVisible(!isDetailsVisible)}
-                        className="cursor-pointer"
+                        className="cursor-pointer hover:underline"
                     >
                         {isDetailsVisible ? 'Hide details' : 'Show details'}
                     </div>
@@ -62,4 +63,5 @@ const ChatSubtask = ({ subtask }: ChatSubtaskProps) => {
     );
 };
 
-export default ChatSubtask;
+// Using React.memo to prevent unnecessary rerenders
+export default memo(ChatSubtask);

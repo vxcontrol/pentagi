@@ -47,12 +47,16 @@ const ChatAgents = ({ logs }: ChatAgentsProps) => {
         );
     });
 
+    const hasLogs = filteredLogs && filteredLogs.length > 0;
+
     useEffect(() => {
-        scrollAgents();
-    }, [logs]);
+        if (hasLogs) {
+            scrollAgents();
+        }
+    }, [logs, hasLogs]);
 
     return (
-        <div className="flex flex-col">
+        <div className="flex h-full flex-col">
             <div className="sticky top-0 z-10 bg-background pb-4">
                 <Form {...form}>
                     <FormField
@@ -85,15 +89,25 @@ const ChatAgents = ({ logs }: ChatAgentsProps) => {
                     />
                 </Form>
             </div>
-            <div className="space-y-4 pb-4">
-                {filteredLogs?.map((log) => (
-                    <ChatAgent
-                        key={log.id}
-                        log={log}
-                    />
-                ))}
-                <div ref={agentsEndRef} />
-            </div>
+
+            {hasLogs ? (
+                <div className="flex-1 space-y-4 overflow-auto pb-4">
+                    {filteredLogs.map((log) => (
+                        <ChatAgent
+                            key={log.id}
+                            log={log}
+                        />
+                    ))}
+                    <div ref={agentsEndRef} />
+                </div>
+            ) : (
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <p>No agent logs available</p>
+                        <p className="text-xs">Agent logs will appear here when agents are working</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

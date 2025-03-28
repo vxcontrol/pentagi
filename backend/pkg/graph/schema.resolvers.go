@@ -6,7 +6,9 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/converter"
 	"pentagi/pkg/graph/model"
@@ -143,16 +145,15 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		"flow": flowID,
 	}).Debug("finish flow")
 
-	fw, err := r.Controller.GetFlow(ctx, flowID)
-	if err != nil {
+	if fw, err := r.Controller.GetFlow(ctx, flowID); err == nil {
+		if err := fw.Finish(ctx); err != nil {
+			return model.ResultTypeError, err
+		}
+	} else if !errors.Is(err, controller.ErrFlowNotFound) {
 		return model.ResultTypeError, err
 	}
 
-	if err := fw.Finish(ctx); err != nil {
-		return model.ResultTypeError, err
-	}
-
-	flow, err := r.DB.GetFlow(ctx, fw.GetFlowID())
+	flow, err := r.DB.GetFlow(ctx, flowID)
 	if err != nil {
 		return model.ResultTypeError, err
 	}
@@ -162,6 +163,10 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		UserID: uid,
 	})
 	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	if _, err := r.DB.DeleteFlow(ctx, flowID); err != nil {
 		return model.ResultTypeError, err
 	}
 

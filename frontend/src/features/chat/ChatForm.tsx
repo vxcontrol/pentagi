@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, Send } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { StatusType } from '@/graphql/types';
+import { Log } from '@/lib/log';
 
 const formSchema = z.object({
     message: z.string().min(1, { message: 'Message cannot be empty' }),
@@ -29,9 +30,18 @@ const ChatForm = ({ selectedFlowId, flowStatus, onSubmit }: ChatFormProps) => {
         },
     });
 
+    // Reset form when flow ID changes
+    useEffect(() => {
+        form.reset();
+    }, [selectedFlowId, form]);
+
     const getPlaceholderText = () => {
         if (!selectedFlowId) {
             return 'Select a flow...';
+        }
+
+        if (selectedFlowId === 'new') {
+            return 'What would you like me to help you with?';
         }
 
         if (flowStatus === StatusType.Finished) {
@@ -46,6 +56,8 @@ const ChatForm = ({ selectedFlowId, flowStatus, onSubmit }: ChatFormProps) => {
             setIsSubmitting(true);
             await onSubmit(values.message);
             form.reset();
+        } catch (error) {
+            Log.error('Error submitting message:', error);
         } finally {
             setIsSubmitting(false);
         }
@@ -90,6 +102,7 @@ const ChatForm = ({ selectedFlowId, flowStatus, onSubmit }: ChatFormProps) => {
                                 placeholder={getPlaceholderText()}
                                 disabled={isDisabled}
                                 onKeyDown={handleKeyDown}
+                                className="resize-none"
                             />
                         </FormControl>
                     )}

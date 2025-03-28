@@ -1,5 +1,5 @@
 import { GripVertical, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
@@ -26,26 +26,48 @@ import {
     usePutUserInputMutation,
     useScreenshotAddedSubscription,
     useSearchLogAddedSubscription,
+    useTaskCreatedSubscription,
     useTaskUpdatedSubscription,
     useTerminalLogAddedSubscription,
     useVectorStoreLogAddedSubscription,
 } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { client } from '@/lib/apollo';
+import { Log } from '@/lib/log';
 import type { User } from '@/models/User';
+
+const SELECTED_PROVIDER_KEY = 'selectedProvider';
 
 const Chat = () => {
     const { flowId } = useParams();
     const navigate = useNavigate();
-    const { data: flowsData } = useFlowsQuery();
+    const { data: flowsData, refetch: refetchFlows } = useFlowsQuery();
     const [selectedFlowId, setSelectedFlowId] = useState<string | null>(flowId ?? null);
-    const { data: flowData, loading: isFlowLoading } = useFlowQuery({
+    const { data: flowData, loading: isFlowLoading, refetch: refetchFlow } = useFlowQuery({
         variables: { id: selectedFlowId ?? '' },
         skip: !selectedFlowId || selectedFlowId === 'new',
+        fetchPolicy: 'cache-and-network',
+        nextFetchPolicy: 'cache-first',
+        notifyOnNetworkStatusChange: false,
     });
     const { data: providersData } = useProvidersQuery();
-    const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+
+    // Create sorted providers list to ensure consistent order
+    const sortedProviders = useMemo(() => {
+        const providers = providersData?.providers || [];
+        return [...providers].sort();
+    }, [providersData?.providers]);
+
+    const [selectedProvider, setSelectedProvider] = useState<string | null>(() => {
+        const savedProvider = localStorage.getItem(SELECTED_PROVIDER_KEY);
+        return savedProvider || null;
+    });
     const [user, setUser] = useState<User | null>(null);
     const { isDesktop } = useBreakpoint();
+    const needsProviderUpdateRef = useRef(false);
+    const needsUserUpdateRef = useRef(false);
+    const userDataRef = useRef<User | null>(null);
+    const previousFlowIdRef = useRef(flowId);
 
     useEffect(() => {
         const auth = localStorage.getItem('auth');
@@ -62,67 +84,91 @@ const Chat = () => {
             return;
         }
 
-        setUser(user);
+        needsUserUpdateRef.current = true;
+        userDataRef.current = user;
     }, [navigate]);
 
-    useEffect(() => {
-        if (providersData?.providers?.[0]) {
-            setSelectedProvider(providersData.providers[0]);
+    useLayoutEffect(() => {
+        if (needsUserUpdateRef.current && userDataRef.current) {
+            needsUserUpdateRef.current = false;
+            setUser(userDataRef.current);
         }
-    }, [providersData]);
+    }, []);
+
+    // Handle provider selection changes
+    const handleProviderChange = (provider: string) => {
+        setSelectedProvider(provider);
+        localStorage.setItem(SELECTED_PROVIDER_KEY, provider);
+    };
+
+    // Initialize provider only if none is selected and providers are available
+    useEffect(() => {
+        if (sortedProviders.length > 0 && !selectedProvider) {
+            needsProviderUpdateRef.current = true;
+        }
+    }, [sortedProviders, selectedProvider]);
+
+    // Update provider in layout effect
+    useLayoutEffect(() => {
+        if (needsProviderUpdateRef.current && sortedProviders.length > 0) {
+            needsProviderUpdateRef.current = false;
+            const firstProvider = sortedProviders[0];
+            if (firstProvider) {
+                setSelectedProvider(firstProvider);
+                localStorage.setItem(SELECTED_PROVIDER_KEY, firstProvider);
+            }
+        }
+    }, [sortedProviders]);
 
     const [createFlow] = useCreateFlowMutation();
     const [deleteFlow] = useDeleteFlowMutation();
     const [finishFlow] = useFinishFlowMutation();
     const [putUserInput] = usePutUserInputMutation();
 
-    const variables = { flowId: selectedFlowId || '' };
-    const skip = !selectedFlowId || selectedFlowId === 'new';
+    // Sync flowId with selectedFlowId when URL changes
+    useLayoutEffect(() => {
+        if (flowId && flowId !== previousFlowIdRef.current) {
+            previousFlowIdRef.current = flowId;
+            if (flowId !== selectedFlowId) {
+                setSelectedFlowId(flowId);
+            }
+        }
+    }, [flowId, selectedFlowId]);
 
-    useFlowUpdatedSubscription({
-        variables,
-        skip,
-    });
+    // Keep this useEffect separate for data fetching
+    useEffect(() => {
+        // Only refetch if we have a valid flowId and it's not a new flow
+        if (selectedFlowId && selectedFlowId !== 'new' && !isFlowLoading) {
+            refetchFlow().catch((error) => {
+                Log.error('Failed to refetch flow data:', error);
+            });
+        }
+    }, [selectedFlowId, isFlowLoading, refetchFlow]);
 
-    useTaskUpdatedSubscription({
-        variables,
-        skip,
-    });
+    // Set up GraphQL subscriptions with proper dependency tracking
+    useEffect(() => {
+        // Don't set up subscriptions for 'new' flows or when we don't have a flow ID
+        if (!selectedFlowId || selectedFlowId === 'new') {
+            return;
+        }
+        // Log subscription setup for debugging
+        Log.debug(`Setting up subscriptions for flow ID: ${selectedFlowId}`);
+    }, [selectedFlowId]);
 
-    useScreenshotAddedSubscription({
-        variables,
-        skip,
-    });
+    const variables = useMemo(() => ({ flowId: selectedFlowId || '' }), [selectedFlowId]);
+    const skip = useMemo(() => !selectedFlowId || selectedFlowId === 'new', [selectedFlowId]);
 
-    useTerminalLogAddedSubscription({
-        variables,
-        skip,
-    });
-
-    useMessageLogUpdatedSubscription({
-        variables,
-        skip,
-    });
-
-    useMessageLogAddedSubscription({
-        variables,
-        skip,
-    });
-
-    useAgentLogAddedSubscription({
-        variables,
-        skip,
-    });
-
-    useSearchLogAddedSubscription({
-        variables,
-        skip,
-    });
-
-    useVectorStoreLogAddedSubscription({
-        variables,
-        skip,
-    });
+    // Use the memoized variables and skip value for all subscriptions
+    useFlowUpdatedSubscription({ variables, skip });
+    useTaskCreatedSubscription({ variables, skip });
+    useTaskUpdatedSubscription({ variables, skip });
+    useScreenshotAddedSubscription({ variables, skip });
+    useTerminalLogAddedSubscription({ variables, skip });
+    useMessageLogUpdatedSubscription({ variables, skip });
+    useMessageLogAddedSubscription({ variables, skip });
+    useAgentLogAddedSubscription({ variables, skip });
+    useSearchLogAddedSubscription({ variables, skip });
+    useVectorStoreLogAddedSubscription({ variables, skip });
 
     const handleSubmit = async (message: string) => {
         if (!selectedFlowId || flowData?.flow?.status === StatusType.Finished) {
@@ -148,10 +194,16 @@ const Chat = () => {
             });
 
             if (data?.createFlow) {
-                navigate(`/chat/${data.createFlow.id}`);
+                // Update flows data after creating a new flow
+                const newFlowId = data.createFlow.id.toString();
+                Log.debug(`Created new flow with ID: ${newFlowId}`);
+                // Force refresh cache for the new flow
+                client.cache.evict({ fieldName: 'tasks' });
+                // Navigate to the new flow page
+                navigate(`/chat/${newFlowId}`);
             }
-        } catch {
-            // ignore
+        } catch (error) {
+            Log.error('Error submitting message:', error);
         }
     };
 
@@ -160,21 +212,35 @@ const Chat = () => {
         navigate(`/chat/${id}`);
     };
 
-    useEffect(() => {
-        if (flowId && flowId !== selectedFlowId) {
-            setSelectedFlowId(flowId);
-        }
-    }, [flowId]);
-
     const handleDeleteFlow = async (id: string) => {
         try {
-            await deleteFlow({ variables: { flowId: id } });
-            if (selectedFlowId === id) {
-                setSelectedFlowId(null);
-                navigate('/chat');
+            // Store current state before deletion
+            const wasCurrentFlow = String(selectedFlowId) === String(id);
+
+            const result = await deleteFlow({
+                variables: { flowId: id },
+                refetchQueries: ['flows'],
+                update: (cache) => {
+                    // Remove the flow from Apollo cache
+                    cache.evict({ id: `Flow:${id}` });
+                    cache.gc();
+                },
+            });
+
+            if (result.data?.deleteFlow === 'success') {
+                // Force refresh the flows list
+                await refetchFlows().catch((error) => {
+                    Log.error('Failed to refetch flows:', error);
+                });
+
+                // If we deleted the currently selected flow, redirect to new flow page
+                if (wasCurrentFlow) {
+                    setSelectedFlowId('new');
+                    navigate('/chat/new');
+                }
             }
-        } catch {
-            // ignore
+        } catch (error) {
+            Log.error('Error deleting flow:', error);
         }
     };
 
@@ -203,11 +269,11 @@ const Chat = () => {
             <ChatSidebar
                 user={user}
                 flows={flowsData?.flows ?? []}
-                providers={providersData?.providers ?? []}
+                providers={sortedProviders}
                 selectedProvider={selectedProvider ?? ''}
                 selectedFlowId={selectedFlowId}
                 onChangeSelectedFlowId={handleChangeSelectedFlowId}
-                onChangeSelectedProvider={setSelectedProvider}
+                onChangeSelectedProvider={handleProviderChange}
                 onDeleteFlow={handleDeleteFlow}
                 onFinishFlow={handleFinishFlow}
             />
@@ -223,8 +289,7 @@ const Chat = () => {
                             <BreadcrumbList>
                                 <BreadcrumbItem>
                                     <BreadcrumbPage>
-                                        {flowData?.flow?.title ||
-                                            (selectedFlowId === 'new' ? 'New flow' : 'Select a flow')}
+                                        {flowData?.flow?.title || (selectedFlowId === 'new' ? 'New flow' : 'Select a flow')}
                                     </BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>

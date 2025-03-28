@@ -1,6 +1,6 @@
 import { ApolloProvider } from '@apollo/client';
 import { Suspense } from 'react';
-import type { NavigateFunction } from 'react-router-dom';
+import type { Location, NavigateFunction } from 'react-router-dom';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import AppLayout from '@/components/AppLayout';

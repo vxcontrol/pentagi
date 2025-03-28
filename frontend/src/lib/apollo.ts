@@ -4,6 +4,7 @@ import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { getMainDefinition } from '@apollo/client/utilities';
 import { createClient } from 'graphql-ws';
 
+import { Log } from '@/lib/log';
 import { baseUrl } from '@/models/Api';
 
 const httpLink = createHttpLink({
@@ -15,6 +16,22 @@ const wsLink = new GraphQLWsLink(
     createClient({
         url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${baseUrl}/graphql`,
         retryAttempts: 5,
+        connectionParams: () => {
+            return {}; // Cookies are handled automatically
+        },
+        on: {
+            connected: () => Log.debug('GraphQL WebSocket connected'),
+            error: (error) => Log.error('GraphQL WebSocket error:', error),
+            closed: () => Log.debug('GraphQL WebSocket closed'),
+            connecting: () => Log.debug('GraphQL WebSocket connecting...'),
+            ping: () => Log.debug('GraphQL WebSocket ping'),
+            pong: () => Log.debug('GraphQL WebSocket pong'),
+        },
+        shouldRetry: () => true,
+        retryWait: (retries) => new Promise((resolve) => {
+            const timeout = Math.min(1000 * 2 ** retries, 10000);
+            setTimeout(() => resolve(), timeout);
+        }),
     }),
 );
 
@@ -62,6 +79,16 @@ const deleteIncoming = (existing: any[], incoming: any, cache: any) => {
 
 const cache = new InMemoryCache({
     typePolicies: {
+        Query: {
+            fields: {
+                // Ensure tasks field is properly merged with incoming data
+                tasks: {
+                    merge(_existing = [], incoming) {
+                        return incoming; // Always use latest task data
+                    },
+                },
+            },
+        },
         Mutation: {
             fields: {
                 createFlow: {
@@ -117,9 +144,14 @@ const cache = new InMemoryCache({
                     merge(_, incoming, { cache }) {
                         cache.modify({
                             fields: {
-                                tasks: (existing = []) => addTopIncoming(existing, incoming, cache),
+                                tasks: (existing = []) => {
+                                    // Add the new task to the top of the list
+                                    return addTopIncoming(existing, incoming, cache);
+                                },
                             },
                         });
+                        // Force refresh any related queries
+                        cache.gc();
                     },
                 },
                 taskUpdated: {
