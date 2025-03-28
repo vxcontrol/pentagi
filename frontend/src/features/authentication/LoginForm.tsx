@@ -61,9 +61,10 @@ const providerActions: AuthProviderAction[] = [
 
 interface LoginFormProps {
     providers: string[];
+    returnUrl?: string;
 }
 
-const LoginForm = ({ providers }: LoginFormProps) => {
+const LoginForm = ({ providers, returnUrl = '/chat/new' }: LoginFormProps) => {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -108,7 +109,7 @@ const LoginForm = ({ providers }: LoginFormProps) => {
                 return;
             }
 
-            navigate('/');
+            navigate(returnUrl);
         } catch {
             setError(errorMessage);
         } finally {
@@ -213,7 +214,7 @@ const LoginForm = ({ providers }: LoginFormProps) => {
 
             localStorage.setItem('auth', JSON.stringify(info.data));
 
-            navigate('/');
+            navigate(returnUrl);
         } catch (error) {
             setError(error instanceof Error ? error.message : errorMessage);
         } finally {
@@ -222,7 +223,7 @@ const LoginForm = ({ providers }: LoginFormProps) => {
     };
 
     const handleSkipPasswordChange = () => {
-        navigate('/');
+        navigate(returnUrl);
     };
 
     const handlePasswordChangeSuccess = () => {
@@ -233,7 +234,7 @@ const LoginForm = ({ providers }: LoginFormProps) => {
                 password_change_required: false,
             };
             localStorage.setItem('auth', JSON.stringify(updatedUser));
-            navigate('/');
+            navigate(returnUrl);
         }
     };
 
@@ -304,6 +305,7 @@ const LoginForm = ({ providers }: LoginFormProps) => {
                                     <Input
                                         {...field}
                                         placeholder="Enter your email"
+                                        autoFocus
                                     />
                                 </FormControl>
                                 <FormMessage />

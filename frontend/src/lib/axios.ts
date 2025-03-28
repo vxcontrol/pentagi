@@ -49,6 +49,14 @@ axios.interceptors.response.use(
                 case 403: {
                     Log.warn('You do not have permission to execute the api.');
                     localStorage.removeItem('auth');
+
+                    // Redirect to login with current URL preserved
+                    const currentPath = window.location.pathname;
+                    // Only save if it's not the default route
+                    if (currentPath !== '/login') {
+                        const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                        window.location.href = `/login${returnParam}`;
+                    }
                     break;
                 }
                 default: {

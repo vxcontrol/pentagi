@@ -132,8 +132,13 @@ const ChatSidebar = ({
         try {
             await axios.get('/auth/logout');
         } finally {
+            // Save current location for redirect after login
+            const currentPath = location.pathname;
+            // Don't save if it's the default new chat page
+            const returnUrl = currentPath === '/chat/new' ? '' : `?returnUrl=${encodeURIComponent(currentPath)}`;
+
             localStorage.removeItem('auth');
-            navigate('/login');
+            navigate(`/login${returnUrl}`);
         }
     };
 

@@ -58,29 +58,74 @@ const Chat = () => {
         return [...providers].sort();
     }, [providersData?.providers]);
 
-    const [selectedProvider, setSelectedProvider] = useState<string | null>(() => {
-        const savedProvider = localStorage.getItem(SELECTED_PROVIDER_KEY);
-        return savedProvider || null;
-    });
+    const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const { isDesktop } = useBreakpoint();
-    const needsProviderUpdateRef = useRef(false);
     const needsUserUpdateRef = useRef(false);
+    const needsProviderUpdateRef = useRef(true);
     const userDataRef = useRef<User | null>(null);
     const previousFlowIdRef = useRef(flowId);
+
+    // Check if provider needs initialization or update when:
+    // 1. We have no selected provider yet (first login)
+    // 2. Selected provider is not in available providers list
+    useEffect(() => {
+        // On first load or when providers change
+        if (sortedProviders.length > 0) {
+            if (!selectedProvider) {
+                // Case 1: No provider selected yet (first login)
+                needsProviderUpdateRef.current = true;
+            } else {
+                // Case 2: Check if selected provider is still available
+                const isProviderStillAvailable = sortedProviders.includes(selectedProvider);
+                if (!isProviderStillAvailable) {
+                    needsProviderUpdateRef.current = true;
+                }
+            }
+        }
+    }, [sortedProviders, selectedProvider]);
+
+    // Update provider when needed - separate from detection for ESLint compliance
+    useLayoutEffect(() => {
+        if (needsProviderUpdateRef.current && sortedProviders.length > 0) {
+            needsProviderUpdateRef.current = false;
+
+            // Check if we have a previously saved provider
+            const savedProvider = localStorage.getItem(SELECTED_PROVIDER_KEY);
+
+            // Case 3: If saved provider exists and is valid, use it
+            if (savedProvider && sortedProviders.includes(savedProvider)) {
+                Log.debug(`Using saved provider: ${savedProvider}`);
+                setSelectedProvider(savedProvider);
+            } else if (sortedProviders[0]) {
+                const firstProvider = sortedProviders[0];
+                Log.debug(`Setting default provider to: ${firstProvider}`);
+                setSelectedProvider(firstProvider);
+                localStorage.setItem(SELECTED_PROVIDER_KEY, firstProvider);
+            }
+        }
+    }, [sortedProviders]);
 
     useEffect(() => {
         const auth = localStorage.getItem('auth');
 
         if (!auth) {
-            navigate('/login');
+            // Save current path for redirect after login
+            const currentPath = window.location.pathname;
+            // Only save if it's not the default route
+            const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+            navigate(`/login${returnParam}`);
             return;
         }
 
         const user = JSON.parse(auth)?.user;
 
         if (!user) {
-            navigate('/login');
+            // Save current path for redirect after login
+            const currentPath = window.location.pathname;
+            // Only save if it's not the default route
+            const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+            navigate(`/login${returnParam}`);
             return;
         }
 
@@ -101,24 +146,14 @@ const Chat = () => {
         localStorage.setItem(SELECTED_PROVIDER_KEY, provider);
     };
 
-    // Initialize provider only if none is selected and providers are available
+    // Check if selected provider is still valid whenever provider list changes
     useEffect(() => {
-        if (sortedProviders.length > 0 && !selectedProvider) {
+        // Skip initial render and only check when we have providers and a previously selected provider
+        if (sortedProviders.length > 0 && selectedProvider && !sortedProviders.includes(selectedProvider)) {
+            // If selected provider is no longer valid, mark for update
             needsProviderUpdateRef.current = true;
         }
     }, [sortedProviders, selectedProvider]);
-
-    // Update provider in layout effect
-    useLayoutEffect(() => {
-        if (needsProviderUpdateRef.current && sortedProviders.length > 0) {
-            needsProviderUpdateRef.current = false;
-            const firstProvider = sortedProviders[0];
-            if (firstProvider) {
-                setSelectedProvider(firstProvider);
-                localStorage.setItem(SELECTED_PROVIDER_KEY, firstProvider);
-            }
-        }
-    }, [sortedProviders]);
 
     const [createFlow] = useCreateFlowMutation();
     const [deleteFlow] = useDeleteFlowMutation();
@@ -186,9 +221,31 @@ const Chat = () => {
                 return;
             }
 
+            // Double check that we have a valid provider before creating a flow
+            let providerToUse = '';
+
+            // First try to use the selected provider if it's valid
+            if (selectedProvider && sortedProviders.includes(selectedProvider)) {
+                providerToUse = selectedProvider;
+            } else if (sortedProviders.length > 0) {
+                // If no provider is selected or it's invalid, try to use the first available
+                const firstAvailableProvider = sortedProviders[0];
+                if (typeof firstAvailableProvider === 'string') {
+                    providerToUse = firstAvailableProvider;
+                    // Mark for update rather than updating directly
+                    needsProviderUpdateRef.current = true;
+                }
+            }
+
+            // Fail early if we still don't have a provider
+            if (!providerToUse) {
+                Log.error('No valid provider available for creating a flow');
+                return;
+            }
+
             const { data } = await createFlow({
                 variables: {
-                    modelProvider: selectedProvider ?? '',
+                    modelProvider: providerToUse,
                     input: message,
                 },
             });
