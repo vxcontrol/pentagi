@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -30,6 +31,7 @@ type SubtaskWorker interface {
 	SetResult(ctx context.Context, result string) error
 	PutInput(ctx context.Context, input string) error
 	Run(ctx context.Context) error
+	Finish(ctx context.Context) error
 }
 
 type subtaskWorker struct {
@@ -289,6 +291,9 @@ func (stw *subtaskWorker) Run(ctx context.Context) error {
 
 	performResult, err := stw.subtaskCtx.Provider.PerformAgentChain(ctx, taskID, subtaskID, msgChainID)
 	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			_ = stw.SetStatus(ctx, database.SubtaskStatusWaiting)
+		}
 		return fmt.Errorf("failed to perform agent chain for subtask %d: %w", subtaskID, err)
 	}
 
@@ -307,6 +312,18 @@ func (stw *subtaskWorker) Run(ctx context.Context) error {
 		}
 	default:
 		return fmt.Errorf("unknown perform result: %d", performResult)
+	}
+
+	return nil
+}
+
+func (stw *subtaskWorker) Finish(ctx context.Context) error {
+	if stw.IsCompleted() {
+		return fmt.Errorf("subtask has already completed")
+	}
+
+	if err := stw.SetStatus(ctx, database.SubtaskStatusFinished); err != nil {
+		return err
 	}
 
 	return nil

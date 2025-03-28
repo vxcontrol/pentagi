@@ -463,6 +463,14 @@ func (fw *flowWorker) Finish(ctx context.Context) error {
 		return err
 	}
 
+	for _, task := range fw.tc.ListTasks(ctx) {
+		if !task.IsCompleted() {
+			if err := task.Finish(ctx); err != nil {
+				return fmt.Errorf("failed to finish task %d: %w", task.GetTaskID(), err)
+			}
+		}
+	}
+
 	if err := fw.SetStatus(ctx, database.FlowStatusFinished); err != nil {
 		return fmt.Errorf("failed to set flow %d status: %w", fw.flowCtx.FlowID, err)
 	}

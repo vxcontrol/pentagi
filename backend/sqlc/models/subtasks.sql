@@ -51,7 +51,7 @@ SELECT
 FROM subtasks s
 INNER JOIN tasks t ON s.task_id = t.id
 INNER JOIN flows f ON t.flow_id = f.id
-WHERE s.task_id = $1 AND s.status = 'created' AND f.deleted_at IS NULL
+WHERE s.task_id = $1 AND (s.status = 'created' OR s.status = 'waiting') AND f.deleted_at IS NULL
 ORDER BY s.id ASC;
 
 -- name: GetTaskCompletedSubtasks :many
@@ -60,7 +60,7 @@ SELECT
 FROM subtasks s
 INNER JOIN tasks t ON s.task_id = t.id
 INNER JOIN flows f ON t.flow_id = f.id
-WHERE s.task_id = $1 AND s.status != 'created' AND f.deleted_at IS NULL
+WHERE s.task_id = $1 AND (s.status != 'created' AND s.status != 'waiting') AND f.deleted_at IS NULL
 ORDER BY s.id ASC;
 
 -- name: GetSubtask :one

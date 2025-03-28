@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -92,6 +93,10 @@ func (tc *taskController) ListTasks(ctx context.Context) []TaskWorker {
 	for _, task := range tc.tasks {
 		tasks = append(tasks, task)
 	}
+
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].GetTaskID() < tasks[j].GetTaskID()
+	})
 
 	return tasks
 }

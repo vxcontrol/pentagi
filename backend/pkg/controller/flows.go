@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"pentagi/pkg/config"
@@ -162,6 +163,10 @@ func (fc *flowController) ListFlows(ctx context.Context) []FlowWorker {
 	for _, flow := range fc.flows {
 		flows = append(flows, flow)
 	}
+
+	sort.Slice(flows, func(i, j int) bool {
+		return flows[i].GetFlowID() < flows[j].GetFlowID()
+	})
 
 	return flows
 }

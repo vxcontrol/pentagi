@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"pentagi/pkg/database"
@@ -171,6 +172,10 @@ func (stc *subtaskController) ListSubtasks(ctx context.Context) []SubtaskWorker 
 	for _, subtask := range stc.subtasks {
 		subtasks = append(subtasks, subtask)
 	}
+
+	sort.Slice(subtasks, func(i, j int) bool {
+		return subtasks[i].GetSubtaskID() < subtasks[j].GetSubtaskID()
+	})
 
 	return subtasks
 }

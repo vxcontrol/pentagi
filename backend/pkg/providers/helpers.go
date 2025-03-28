@@ -139,6 +139,11 @@ func (fp *flowProvider) updateMsgChainResult(chain []llms.MessageContent, name, 
 		}
 	}
 
+	if lastIdx := len(chain) - 1; chain[lastIdx].Role == llms.ChatMessageTypeHuman {
+		chain[lastIdx].Parts = append(chain[lastIdx].Parts, llms.TextPart(result))
+		return nil
+	}
+
 	return fmt.Errorf("message part with tool call result is not found in msgchain")
 }
 
