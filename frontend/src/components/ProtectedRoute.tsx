@@ -1,11 +1,17 @@
 import * as React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 
 import { isAuthenticated } from '@/lib/auth';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    const location = useLocation();
+
     if (!isAuthenticated()) {
-        return <Navigate to="/login" />;
+        // Save current path for redirect after login
+        const currentPath = location.pathname;
+        // Only save if it's not the default route
+        const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+        return <Navigate to={`/login${returnParam}`} />;
     }
 
     return children;

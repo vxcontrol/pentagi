@@ -1,7 +1,19 @@
 import { ChevronRightIcon, DotsHorizontalIcon } from '@radix-ui/react-icons';
 import { Slot } from '@radix-ui/react-slot';
 import * as React from 'react';
+import {
+    Brain,
+    CircleCheck,
+    CircleDashed,
+    CircleOff,
+    CircleX,
+    Loader2
+} from 'lucide-react';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import Anthropic from '@/components/icons/Anthropic';
+import Custom from '@/components/icons/Custom';
+import OpenAi from '@/components/icons/OpenAi';
 import { cn } from '@/lib/utils';
 
 const Breadcrumb = React.forwardRef<
@@ -61,6 +73,97 @@ const BreadcrumbLink = React.forwardRef<
 });
 BreadcrumbLink.displayName = 'BreadcrumbLink';
 
+const BreadcrumbStatus = React.forwardRef<
+    HTMLSpanElement,
+    React.ComponentPropsWithoutRef<'span'> & {
+        status?: string | null;
+    }
+>(({ status, className, ...props }, ref) => {
+    const renderStatusIcon = () => {
+        if (!status) return null;
+        
+        switch (status) {
+            case 'failed':
+                return <CircleX className="h-4 w-4 text-red-500" aria-label="failed" />;
+            case 'finished':
+                return <CircleCheck className="h-4 w-4 text-green-500" aria-label="finished" />;
+            case 'running':
+                return <Loader2 className="h-4 w-4 text-purple-500 animate-spin" aria-label="running" />;
+            case 'starting':
+                return <CircleDashed className="h-4 w-4 text-blue-500" aria-label="starting" />;
+            case 'waiting':
+                return <CircleDashed className="h-4 w-4 text-yellow-500" aria-label="waiting" />;
+            default:
+                return <CircleOff className="h-4 w-4 text-muted-foreground" aria-label="unknown status" />;
+        }
+    };
+
+    const iconElement = (
+        <span
+            ref={ref}
+            className={cn('inline-flex items-center mr-2 cursor-pointer', className)}
+            {...props}
+        >
+            {renderStatusIcon()}
+        </span>
+    );
+
+    if (!status) {
+        return null;
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
+            <TooltipContent>{status?.toLowerCase()}</TooltipContent>
+        </Tooltip>
+    );
+});
+BreadcrumbStatus.displayName = 'BreadcrumbStatus';
+
+const BreadcrumbProvider = React.forwardRef<
+    HTMLSpanElement,
+    React.ComponentPropsWithoutRef<'span'> & {
+        provider?: string | null;
+    }
+>(({ provider, className, ...props }, ref) => {
+    const renderProviderIcon = () => {
+        if (!provider) return null;
+
+        const providerLower = provider.toLowerCase();
+        
+        if (providerLower.includes('openai')) {
+            return <OpenAi className="h-4 w-4 text-green-500" aria-label="OpenAI" />;
+        } else if (providerLower.includes('anthropic')) {
+            return <Anthropic className="h-4 w-4 text-purple-500" aria-label="Anthropic" />;
+        } else {
+            return <Custom className="h-4 w-4 text-blue-500" aria-label="Custom provider" />;
+        }
+    };
+
+    const iconElement = (
+        <span
+            ref={ref}
+            className={cn('inline-flex items-center mr-2 cursor-pointer', className)}
+            {...props}
+        >
+            {renderProviderIcon()}
+        </span>
+    );
+
+    if (!provider) {
+        return null;
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
+            <TooltipContent>{provider}</TooltipContent>
+        </Tooltip>
+    );
+});
+BreadcrumbProvider.displayName = 'BreadcrumbProvider';
+
 const BreadcrumbPage = React.forwardRef<HTMLSpanElement, React.ComponentPropsWithoutRef<'span'>>(
     ({ className, ...props }, ref) => (
         <span
@@ -107,5 +210,7 @@ export {
     BreadcrumbLink,
     BreadcrumbList,
     BreadcrumbPage,
+    BreadcrumbProvider,
     BreadcrumbSeparator,
+    BreadcrumbStatus,
 };

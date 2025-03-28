@@ -28,6 +28,7 @@ type TaskWorker interface {
 	SetResult(ctx context.Context, result string) error
 	PutInput(ctx context.Context, input string) error
 	Run(ctx context.Context) error
+	Finish(ctx context.Context) error
 }
 
 type taskWorker struct {
@@ -320,6 +321,26 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 	}
 
 	if err := tw.SetStatus(ctx, taskStatus); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (tw *taskWorker) Finish(ctx context.Context) error {
+	if tw.IsCompleted() {
+		return fmt.Errorf("task has already completed")
+	}
+
+	for _, st := range tw.stc.ListSubtasks(ctx) {
+		if !st.IsCompleted() {
+			if err := st.Finish(ctx); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := tw.SetStatus(ctx, database.TaskStatusFinished); err != nil {
 		return err
 	}
 

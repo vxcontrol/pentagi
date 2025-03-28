@@ -33,14 +33,22 @@ const App = () => {
 
             if (info?.status !== 'success') {
                 localStorage.removeItem('auth');
-                navigate('/login');
+                // Save current path for redirect after login
+                const currentPath = location.pathname;
+                // Only save if it's not the default route
+                const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                navigate(`/login${returnParam}`);
                 return;
             }
 
             localStorage.setItem('auth', JSON.stringify(info.data));
         } catch {
             localStorage.removeItem('auth');
-            navigate('/login');
+            // Save current path for redirect after login
+            const currentPath = location.pathname;
+            // Only save if it's not the default route
+            const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+            navigate(`/login${returnParam}`);
         }
     };
 
@@ -90,7 +98,11 @@ const App = () => {
                             {/* other routes */}
                             <Route
                                 path="*"
-                                element={<Navigate to="/chat" />}
+                                element={<Navigate to="/chat/new" />}
+                            />
+                            <Route
+                                path="/"
+                                element={<Navigate to="/chat/new" />}
                             />
                         </Routes>
                     </Suspense>
