@@ -42,6 +42,7 @@ import {
     SidebarMenu,
     SidebarMenuAction,
     SidebarMenuButton,
+    SidebarMenuIndicator,
     SidebarMenuItem,
     SidebarRail,
 } from '@/components/ui/sidebar';
@@ -120,6 +121,8 @@ const ChatSidebar = ({
     const location = useLocation();
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const prevPathRef = useRef(location.pathname);
+    const [openMenuFlowId, setOpenMenuFlowId] = useState<string | null>(null);
+    const [hoveredFlowId, setHoveredFlowId] = useState<string | null>(null);
 
     const theme = useThemeStore((store) => store.theme);
     const toggleTheme = useThemeStore((store) => store.setTheme);
@@ -127,6 +130,17 @@ const ChatSidebar = ({
     useEffect(() => {
         prevPathRef.current = location.pathname;
     }, [location.pathname]);
+
+    useEffect(() => {
+        const handleGlobalClick = () => {
+            setHoveredFlowId(null);
+        };
+
+        document.addEventListener('click', handleGlobalClick);
+        return () => {
+            document.removeEventListener('click', handleGlobalClick);
+        };
+    }, []);
 
     const logout = async () => {
         try {
@@ -160,7 +174,7 @@ const ChatSidebar = ({
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="ml-auto h-8 gap-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                                    className="ml-auto h-8 gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                 >
                                     <span>{selectedProvider}</span>
                                     <ChevronsUpDown className="size-4" />
@@ -169,11 +183,18 @@ const ChatSidebar = ({
                             <DropdownMenuContent
                                 align="end"
                                 className="w-[--radix-dropdown-menu-trigger-width]"
+                                onCloseAutoFocus={(e) => {
+                                    e.preventDefault();
+                                }}
                             >
                                 {providers.map((provider) => (
                                     <DropdownMenuItem
                                         key={provider}
-                                        onSelect={() => onChangeSelectedProvider(provider)}
+                                        onSelect={(e) => {
+                                            e.preventDefault();
+                                            onChangeSelectedProvider(provider);
+                                        }}
+                                        className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                     >
                                         {provider} {provider === selectedProvider && <Check className="ml-auto" />}
                                     </DropdownMenuItem>
@@ -201,61 +222,96 @@ const ChatSidebar = ({
                         </Button>
                     </div>
                     <SidebarMenu>
-                        {flows.map((flow) => (
-                            <SidebarMenuItem key={flow.id}>
-                                <SidebarMenuButton
-                                    asChild
-                                    className={cn(
-                                        'relative cursor-pointer overflow-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                                        {
-                                            'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
-                                                selectedFlowId === flow.id || location.pathname === `/chat/${flow.id}`,
-                                            'text-muted-foreground': [StatusType.Finished, StatusType.Failed].includes(
-                                                flow.status,
-                                            ),
-                                        },
-                                    )}
-                                    onClick={() => onChangeSelectedFlowId(flow.id)}
+                        {flows.map((flow) => {
+                            const isSelected = selectedFlowId === flow.id || location.pathname === `/chat/${flow.id}`;
+                            const isRunning = flow.status === StatusType.Running;
+                            const shouldShowIndicator = isRunning && !isSelected;
+                            const isMenuOpen = openMenuFlowId === flow.id;
+                            const shouldShowAction = isSelected || isMenuOpen || hoveredFlowId === flow.id;
+
+                            return (
+                                <SidebarMenuItem
+                                    key={flow.id}
+                                    data-has-action="true"
+                                    onMouseEnter={() => setHoveredFlowId(flow.id)}
+                                    onMouseLeave={() => {
+                                        if (!isMenuOpen) {
+                                            setHoveredFlowId(null);
+                                        }
+                                    }}
                                 >
-                                    <div className="flex w-full items-center gap-2">
-                                        <ChatSidebarMenuItemText text={flow.title} />
-                                        {flow.status === StatusType.Finished && <Check className="opacity-25" />}
-                                        {flow.status === StatusType.Failed && <X className="opacity-25" />}
-                                    </div>
-                                </SidebarMenuButton>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <SidebarMenuAction
-                                            showOnHover={selectedFlowId !== flow.id && location.pathname !== `/chat/${flow.id}`}
-                                            className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
-                                        >
-                                            <MoreHorizontal />
-                                        </SidebarMenuAction>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent
-                                        className="w-48 rounded-lg"
-                                        side="bottom"
-                                        align="end"
+                                    <SidebarMenuButton
+                                        asChild
+                                        className={cn(
+                                            'relative cursor-pointer overflow-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                            {
+                                                'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
+                                                    isSelected,
+                                                'text-muted-foreground': [StatusType.Finished, StatusType.Failed].includes(
+                                                    flow.status,
+                                                ),
+                                            },
+                                        )}
+                                        onClick={() => onChangeSelectedFlowId(flow.id)}
                                     >
-                                        <DropdownMenuItem
-                                            onClick={() => onFinishFlow(flow.id)}
-                                            className="cursor-pointer"
+                                        <div className="flex w-full items-center gap-2">
+                                            <ChatSidebarMenuItemText text={flow.title} />
+                                            {flow.status === StatusType.Finished && <Check className="opacity-25" />}
+                                            {flow.status === StatusType.Failed && <X className="opacity-25" />}
+                                        </div>
+                                    </SidebarMenuButton>
+
+                                    {shouldShowIndicator && !isMenuOpen && !shouldShowAction && (
+                                        <SidebarMenuIndicator />
+                                    )}
+
+                                    {shouldShowAction && (
+                                        <DropdownMenu
+                                            open={isMenuOpen}
+                                            onOpenChange={(open) => {
+                                                setOpenMenuFlowId(open ? flow.id : null);
+                                                if (!open) {
+                                                    setHoveredFlowId(null);
+
+                                                    if (document.activeElement instanceof HTMLElement) {
+                                                        document.activeElement.blur();
+                                                    }
+                                                }
+                                            }}
                                         >
-                                            <Pause className="mr-2 size-4" />
-                                            <span>Stop Flow</span>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                            onClick={() => onDeleteFlow(flow.id)}
-                                            className="cursor-pointer text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                                        >
-                                            <Trash2 className="mr-2 size-4" />
-                                            <span>Delete Flow</span>
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </SidebarMenuItem>
-                        ))}
+                                            <DropdownMenuTrigger asChild>
+                                                <SidebarMenuAction
+                                                    className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                                                >
+                                                    <MoreHorizontal />
+                                                </SidebarMenuAction>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                                className="w-48 rounded-lg"
+                                                side="bottom"
+                                                align="end"
+                                            >
+                                                <DropdownMenuItem
+                                                    onClick={() => onFinishFlow(flow.id)}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Pause className="mr-2 size-4" />
+                                                    <span>Stop Flow</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    onClick={() => onDeleteFlow(flow.id)}
+                                                    className="cursor-pointer text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                                >
+                                                    <Trash2 className="mr-2 size-4" />
+                                                    <span>Delete Flow</span>
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    )}
+                                </SidebarMenuItem>
+                            );
+                        })}
                     </SidebarMenu>
                 </SidebarGroup>
             </SidebarContent>

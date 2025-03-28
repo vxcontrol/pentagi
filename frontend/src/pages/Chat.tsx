@@ -2,7 +2,14 @@ import { GripVertical, Loader2 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    BreadcrumbList,
+    BreadcrumbPage,
+    BreadcrumbProvider,
+    BreadcrumbStatus,
+} from '@/components/ui/breadcrumb';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
@@ -345,6 +352,12 @@ const Chat = () => {
                         <Breadcrumb>
                             <BreadcrumbList>
                                 <BreadcrumbItem>
+                                    {flowData?.flow && (
+                                        <>
+                                            <BreadcrumbStatus status={flowData.flow.status} />
+                                            <BreadcrumbProvider provider={flowData.flow.provider} />
+                                        </>
+                                    )}
                                     <BreadcrumbPage>
                                         {flowData?.flow?.title || (selectedFlowId === 'new' ? 'New flow' : 'Select a flow')}
                                     </BreadcrumbPage>
