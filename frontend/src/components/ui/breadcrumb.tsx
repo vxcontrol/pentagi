@@ -1,14 +1,13 @@
 import { ChevronRightIcon, DotsHorizontalIcon } from '@radix-ui/react-icons';
 import { Slot } from '@radix-ui/react-slot';
 import * as React from 'react';
-import { 
-    Brain, 
-    CircleCheck, 
-    CircleDashed, 
-    CircleOff, 
-    CircleX, 
-    Loader2, 
-    Sparkles
+import {
+    Brain,
+    CircleCheck,
+    CircleDashed,
+    CircleOff,
+    CircleX,
+    Loader2
 } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -16,7 +15,6 @@ import Anthropic from '@/components/icons/Anthropic';
 import Custom from '@/components/icons/Custom';
 import OpenAi from '@/components/icons/OpenAi';
 import { cn } from '@/lib/utils';
-import { formatName } from '@/lib/utils/format';
 
 const Breadcrumb = React.forwardRef<
     HTMLElement,
@@ -117,7 +115,7 @@ const BreadcrumbStatus = React.forwardRef<
     return (
         <Tooltip>
             <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
-            <TooltipContent>{formatName(status)}</TooltipContent>
+            <TooltipContent>{status?.toLowerCase()}</TooltipContent>
         </Tooltip>
     );
 });
