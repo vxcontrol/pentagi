@@ -352,6 +352,9 @@ const ChatSidebar = ({
                                         <div className="grid flex-1 text-left text-sm leading-tight">
                                             <span className="truncate font-semibold">{user?.name}</span>
                                             <span className="truncate text-xs">{user?.mail}</span>
+                                            <span className="truncate text-xs text-muted-foreground">
+                                                {user?.type === 'local' ? 'local' : 'oauth'}
+                                            </span>
                                         </div>
                                     </div>
                                 </DropdownMenuLabel>

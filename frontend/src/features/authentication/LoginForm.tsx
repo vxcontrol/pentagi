@@ -233,7 +233,25 @@ const LoginForm = ({ providers, returnUrl = '/chat/new' }: LoginFormProps) => {
                 ...user,
                 password_change_required: false,
             };
-            localStorage.setItem('auth', JSON.stringify(updatedUser));
+
+            // Get current auth data
+            const currentAuth = localStorage.getItem('auth');
+            let authData;
+            try {
+                authData = currentAuth ? JSON.parse(currentAuth) : null;
+            } catch {
+                authData = null;
+            }
+
+            // Create a full authentication info structure
+            const updatedAuthData = {
+                type: 'user',
+                user: updatedUser,
+                providers: authData?.providers || [],
+            };
+
+            // Always store the complete auth structure
+            localStorage.setItem('auth', JSON.stringify(updatedAuthData));
             navigate(returnUrl);
         }
     };

@@ -68,10 +68,9 @@ const Chat = () => {
     const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const { isDesktop } = useBreakpoint();
-    const needsUserUpdateRef = useRef(false);
     const needsProviderUpdateRef = useRef(true);
-    const userDataRef = useRef<User | null>(null);
     const previousFlowIdRef = useRef(flowId);
+    const userInitialized = useRef(false);
 
     // Check if provider needs initialization or update when:
     // 1. We have no selected provider yet (first login)
@@ -125,27 +124,26 @@ const Chat = () => {
             return;
         }
 
-        const user = JSON.parse(auth)?.user;
+        try {
+            const authData = JSON.parse(auth);
+            const user = authData?.user;
 
-        if (!user) {
-            // Save current path for redirect after login
-            const currentPath = window.location.pathname;
-            // Only save if it's not the default route
-            const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
-            navigate(`/login${returnParam}`);
-            return;
+            if (!user) {
+                // Save current path for redirect after login
+                const currentPath = window.location.pathname;
+                // Only save if it's not the default route
+                const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                navigate(`/login${returnParam}`);
+                return;
+            } else {
+                userInitialized.current = true;
+                window.requestAnimationFrame(() => setUser(user));
+            }
+        } catch {
+            // If we have a parse error, redirect to login
+            navigate('/login');
         }
-
-        needsUserUpdateRef.current = true;
-        userDataRef.current = user;
     }, [navigate]);
-
-    useLayoutEffect(() => {
-        if (needsUserUpdateRef.current && userDataRef.current) {
-            needsUserUpdateRef.current = false;
-            setUser(userDataRef.current);
-        }
-    }, []);
 
     // Handle provider selection changes
     const handleProviderChange = (provider: string) => {
