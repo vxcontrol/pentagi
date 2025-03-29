@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"pentagi/cmd/ftester/mocks"
-	"pentagi/cmd/ftester/terminal"
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
@@ -15,6 +14,7 @@ import (
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/templates"
+	"pentagi/pkg/terminal"
 	"pentagi/pkg/tools"
 
 	"github.com/sirupsen/logrus"
@@ -83,7 +83,7 @@ func NewTester(
 	// Initialize tool executor
 	toolExecutor := newToolExecutor(
 		flowExecutor, cfg, db, dockerClient, nil, proxies,
-		flowID, taskID, subtaskID, provider.Embedder(),
+		flowID, taskID, subtaskID, providerController.Embedder(),
 	)
 
 	t := &tester{

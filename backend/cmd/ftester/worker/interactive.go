@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"pentagi/cmd/ftester/terminal"
+	"pentagi/pkg/terminal"
 )
 
 // InteractiveFillArgs interactively fills in missing function arguments

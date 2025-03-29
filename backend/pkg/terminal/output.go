@@ -40,6 +40,22 @@ var (
 	thickSeparator = "=============================================================="
 )
 
+func Info(format string, a ...interface{}) {
+	infoColor.Printf(format+"\n", a...)
+}
+
+func Success(format string, a ...interface{}) {
+	successColor.Printf(format+"\n", a...)
+}
+
+func Error(format string, a ...interface{}) {
+	errorColor.Printf(format+"\n", a...)
+}
+
+func Warning(format string, a ...interface{}) {
+	warningColor.Printf(format+"\n", a...)
+}
+
 // PrintInfo prints an informational message
 func PrintInfo(format string, a ...interface{}) {
 	infoColor.Printf(infoPrefix+format+"\n", a...)
