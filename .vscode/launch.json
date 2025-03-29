@@ -90,5 +90,20 @@
             "cwd": "${workspaceFolder}",
             "output": "${workspaceFolder}/build/__debug_bin_ftester",
         },
+        {
+            "type": "go",
+            "request": "launch",
+            "name": "Launch Embedding Tests",
+            "program": "${workspaceFolder}/backend/cmd/etester/",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
+            },
+            "args": [
+                "-cmd", "reindex",
+            ],
+            "cwd": "${workspaceFolder}",
+            "output": "${workspaceFolder}/build/__debug_bin_etester",
+        },
     ]
 }
