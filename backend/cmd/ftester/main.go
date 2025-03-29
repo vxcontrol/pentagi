@@ -12,7 +12,6 @@ import (
 	"strings"
 	"syscall"
 
-	"pentagi/cmd/ftester/terminal"
 	"pentagi/cmd/ftester/worker"
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
@@ -20,6 +19,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/terminal"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"

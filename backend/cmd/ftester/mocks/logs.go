@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"pentagi/cmd/ftester/terminal"
 	"pentagi/pkg/database"
+	"pentagi/pkg/terminal"
 	"pentagi/pkg/tools"
 )
 

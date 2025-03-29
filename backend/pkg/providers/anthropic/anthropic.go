@@ -2,17 +2,14 @@ package anthropic
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/provider"
 
-	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
-	"github.com/tmc/langchaingo/llms/openai"
 )
 
 const (
@@ -22,9 +19,8 @@ const (
 )
 
 type anthropicProvider struct {
-	llm      *anthropic.LLM
-	embedder *embeddings.EmbedderImpl
-	options  map[provider.ProviderOptionsType][]llms.CallOption
+	llm     *anthropic.LLM
+	options map[provider.ProviderOptionsType][]llms.CallOption
 }
 
 func New(cfg *config.Config) (provider.Provider, error) {
@@ -48,21 +44,6 @@ func New(cfg *config.Config) (provider.Provider, error) {
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	oclient, err := openai.New(
-		openai.WithToken(cfg.OpenAIKey),
-		openai.WithModel("gpt-4o"),
-		openai.WithBaseURL(cfg.OpenAIServerURL),
-		openai.WithHTTPClient(httpClient),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	embedder, err := embeddings.NewEmbedder(oclient, embeddings.WithStripNewLines(true))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create embedder: %w", err)
 	}
 
 	simple := []llms.CallOption{
@@ -94,8 +75,7 @@ func New(cfg *config.Config) (provider.Provider, error) {
 	}
 
 	return &anthropicProvider{
-		llm:      client,
-		embedder: embedder,
+		llm: client,
 		options: map[provider.ProviderOptionsType][]llms.CallOption{
 			provider.OptionsTypeSimple:     simple,
 			provider.OptionsTypeSimpleJSON: append(simple, llms.WithJSONMode()),
@@ -129,10 +109,6 @@ func (p *anthropicProvider) Model(opt provider.ProviderOptionsType) string {
 	}
 
 	return opts.Model
-}
-
-func (p *anthropicProvider) Embedder() *embeddings.EmbedderImpl {
-	return p.embedder
 }
 
 func (p *anthropicProvider) Call(

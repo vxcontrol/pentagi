@@ -50,6 +50,14 @@ type Config struct {
 	AnthropicAPIKey    string `env:"ANTHROPIC_API_KEY"`
 	AnthropicServerURL string `env:"ANTHROPIC_SERVER_URL" envDefault:"https://api.anthropic.com/v1"`
 
+	// Embedding provider
+	EmbeddingURL           string `env:"EMBEDDING_URL"`
+	EmbeddingKey           string `env:"EMBEDDING_KEY"`
+	EmbeddingModel         string `env:"EMBEDDING_MODEL"`
+	EmbeddingStripNewLines bool   `env:"EMBEDDING_STRIP_NEW_LINES" envDefault:"true"`
+	EmbeddingBatchSize     int    `env:"EMBEDDING_BATCH_SIZE" envDefault:"512"`
+	EmbeddingProvider      string `env:"EMBEDDING_PROVIDER" envDefault:"openai"`
+
 	// Custom LLM provider
 	LLMServerURL    string `env:"LLM_SERVER_URL"`
 	LLMServerKey    string `env:"LLM_SERVER_KEY"`

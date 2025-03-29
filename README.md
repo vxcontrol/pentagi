@@ -12,6 +12,7 @@
 - [Advanced Setup](#-advanced-setup)
 - [Development](#-development)
 - [Testing LLM Agents](#-testing-llm-agents)
+- [Embedding Configuration and Testing](#-embedding-configuration-and-testing)
 - [Function Testing with ftester](#-function-testing-with-ftester)
 - [Building](#%EF%B8%8F-building)
 - [Credits](#-credits)
@@ -808,6 +809,138 @@ simple_json:
 4. **Deploy optimal configuration**: Use in production with your optimized setup
 
 This tool helps ensure your AI agents are using the most effective models for their specific tasks, improving reliability while optimizing costs.
+
+## 🧮 Embedding Configuration and Testing
+
+PentAGI uses vector embeddings for semantic search, knowledge storage, and memory management. The system supports multiple embedding providers that can be configured according to your needs and preferences.
+
+### Supported Embedding Providers
+
+PentAGI supports the following embedding providers:
+
+- **OpenAI** (default): Uses OpenAI's text embedding models
+- **Ollama**: Local embedding model through Ollama
+- **Mistral**: Mistral AI's embedding models
+- **Jina**: Jina AI's embedding service
+- **HuggingFace**: Models from HuggingFace
+- **GoogleAI**: Google's embedding models
+- **VoyageAI**: VoyageAI's embedding models
+
+<details>
+<summary><b>Embedding Provider Configuration</b> (click to expand)</summary>
+
+### Environment Variables
+
+To configure the embedding provider, set the following environment variables in your `.env` file:
+
+```bash
+# Primary embedding configuration
+EMBEDDING_PROVIDER=openai       # Provider type (openai, ollama, mistral, jina, huggingface, googleai, voyageai)
+EMBEDDING_MODEL=text-embedding-3-small  # Model name to use
+EMBEDDING_URL=                  # Optional custom API endpoint
+EMBEDDING_KEY=                  # API key for the provider (if required)
+EMBEDDING_BATCH_SIZE=100        # Number of documents to process in a batch
+EMBEDDING_STRIP_NEW_LINES=true  # Whether to remove new lines from text before embedding
+
+# Advanced settings
+PROXY_URL=                      # Optional proxy for all API calls
+```
+
+### Provider-Specific Limitations
+
+Each provider has specific limitations and supported features:
+
+- **OpenAI**: Supports all configuration options
+- **Ollama**: Does not support `EMBEDDING_KEY` as it uses local models
+- **Mistral**: Does not support `EMBEDDING_MODEL` or custom HTTP client
+- **Jina**: Does not support custom HTTP client
+- **HuggingFace**: Requires `EMBEDDING_KEY` and supports all other options
+- **GoogleAI**: Does not support `EMBEDDING_URL`, requires `EMBEDDING_KEY`
+- **VoyageAI**: Supports all configuration options
+
+If `EMBEDDING_URL` and `EMBEDDING_KEY` are not specified, the system will attempt to use the corresponding LLM provider settings (e.g., `OPEN_AI_KEY` when `EMBEDDING_PROVIDER=openai`).
+
+### Why Consistent Embedding Providers Matter
+
+It's crucial to use the same embedding provider consistently because:
+
+1. **Vector Compatibility**: Different providers produce vectors with different dimensions and mathematical properties
+2. **Semantic Consistency**: Changing providers can break semantic similarity between previously embedded documents
+3. **Memory Corruption**: Mixed embeddings can lead to poor search results and broken knowledge base functionality
+
+If you change your embedding provider, you should flush and reindex your entire knowledge base (see `etester` utility below).
+
+</details>
+
+### Embedding Tester Utility (etester)
+
+PentAGI includes a specialized `etester` utility for testing, managing, and debugging embedding functionality. This tool is essential for diagnosing and resolving issues related to vector embeddings and knowledge storage.
+
+<details>
+<summary><b>Etester Commands</b> (click to expand)</summary>
+
+```bash
+# Test embedding provider and database connection
+cd backend
+go run cmd/etester/main.go test -verbose
+
+# Show statistics about the embedding database
+go run cmd/etester/main.go info
+
+# Delete all documents from the embedding database (use with caution!)
+go run cmd/etester/main.go flush
+
+# Recalculate embeddings for all documents (after changing provider)
+go run cmd/etester/main.go reindex
+
+# Search for documents in the embedding database
+go run cmd/etester/main.go search -query "How to install PostgreSQL" -limit 5
+```
+
+### Using Docker
+
+If you're running PentAGI in Docker, you can use etester from within the container:
+
+```bash
+# Test embedding provider
+docker exec -it pentagi /opt/pentagi/bin/etester test
+
+# Show detailed database information
+docker exec -it pentagi /opt/pentagi/bin/etester info -verbose
+```
+
+### Advanced Search Options
+
+The `search` command supports various filters to narrow down results:
+
+```bash
+# Filter by document type
+docker exec -it pentagi /opt/pentagi/bin/etester search -query "Security vulnerability" -doc_type guide -threshold 0.8
+
+# Filter by flow ID
+docker exec -it pentagi /opt/pentagi/bin/etester search -query "Code examples" -doc_type code -flow_id 42
+
+# All available search options
+docker exec -it pentagi /opt/pentagi/bin/etester search -help
+```
+
+Available search parameters:
+- `-query STRING`: Search query text (required)
+- `-doc_type STRING`: Filter by document type (answer, memory, guide, code)
+- `-flow_id NUMBER`: Filter by flow ID (positive number)
+- `-answer_type STRING`: Filter by answer type (guide, vulnerability, code, tool, other) 
+- `-guide_type STRING`: Filter by guide type (install, configure, use, pentest, development, other)
+- `-limit NUMBER`: Maximum number of results (default: 3)
+- `-threshold NUMBER`: Similarity threshold (0.0-1.0, default: 0.7)
+
+### Common Troubleshooting Scenarios
+
+1. **After changing embedding provider**: Always run `flush` or `reindex` to ensure consistency
+2. **Poor search results**: Try adjusting the similarity threshold or check if embeddings are correctly generated
+3. **Database connection issues**: Verify PostgreSQL is running with pgvector extension installed
+4. **Missing API keys**: Check environment variables for your chosen embedding provider
+
+</details>
 
 ## 🔍 Function Testing with ftester
 

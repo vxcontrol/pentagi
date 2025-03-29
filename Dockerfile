@@ -67,6 +67,9 @@ RUN go build -trimpath -o /ctester ./cmd/ctester
 # Build ftester utility
 RUN go build -trimpath -o /ftester ./cmd/ftester
 
+# Build etester utility
+RUN go build -trimpath -o /etester ./cmd/etester
+
 # STEP 3: Build the final image
 FROM alpine:3.21
 
@@ -95,6 +98,7 @@ RUN mkdir -p \
 COPY --from=be-build /pentagi /opt/pentagi/bin/pentagi
 COPY --from=be-build /ctester /opt/pentagi/bin/ctester
 COPY --from=be-build /ftester /opt/pentagi/bin/ftester
+COPY --from=be-build /etester /opt/pentagi/bin/etester
 COPY --from=fe-build /frontend/dist /opt/pentagi/fe
 
 # Copy provider configuration files

@@ -11,15 +11,19 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/custom"
+	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
+
+	"github.com/sirupsen/logrus"
 )
 
 type providerController struct {
 	docker   docker.DockerClient
 	publicIP string
+	embedder embeddings.Embedder
 	provider.Providers
 }
 
@@ -42,6 +46,7 @@ type ProviderController interface {
 		image, language, title string,
 	) (FlowProvider, error)
 	Get(ptype provider.ProviderType) (provider.Provider, error)
+	Embedder() embeddings.Embedder
 	List() provider.ProvidersList
 	ListStrings() []string
 }
@@ -49,6 +54,11 @@ type ProviderController interface {
 func NewProviderController(cfg *config.Config, docker docker.DockerClient) (ProviderController, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
+	}
+
+	embedder, err := embeddings.New(cfg)
+	if err != nil {
+		logrus.WithError(err).Errorf("failed to create embedder '%s'", cfg.EmbeddingProvider)
 	}
 
 	providers := make(provider.Providers)
@@ -83,6 +93,7 @@ func NewProviderController(cfg *config.Config, docker docker.DockerClient) (Prov
 	return &providerController{
 		docker:    docker,
 		publicIP:  cfg.DockerPublicIP,
+		embedder:  embedder,
 		Providers: providers,
 	}, nil
 }
@@ -148,6 +159,7 @@ func (pc *providerController) NewFlowProvider(
 
 	fp := &flowProvider{
 		db:       db,
+		embedder: pc.embedder,
 		flowID:   flowID,
 		publicIP: pc.publicIP,
 		image:    image,
@@ -176,6 +188,7 @@ func (pc *providerController) LoadFlowProvider(
 
 	fp := &flowProvider{
 		db:       db,
+		embedder: pc.embedder,
 		flowID:   flowID,
 		publicIP: pc.publicIP,
 		image:    image,
@@ -187,4 +200,8 @@ func (pc *providerController) LoadFlowProvider(
 	}
 
 	return fp, nil
+}
+
+func (pc *providerController) Embedder() embeddings.Embedder {
+	return pc.embedder
 }

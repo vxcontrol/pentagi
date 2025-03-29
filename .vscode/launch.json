@@ -32,6 +32,7 @@
             "runtimeExecutable": "npm",
             "runtimeArgs": ["run", "dev"],
             "env": {
+                "VITE_APP_LOG_LEVEL": "DEBUG",
                 "VITE_API_URL": "localhost:8080",
                 "VITE_USE_HTTPS": "false",
                 "VITE_PORT": "8000",
@@ -88,6 +89,21 @@
             ],
             "cwd": "${workspaceFolder}",
             "output": "${workspaceFolder}/build/__debug_bin_ftester",
+        },
+        {
+            "type": "go",
+            "request": "launch",
+            "name": "Launch Embedding Tests",
+            "program": "${workspaceFolder}/backend/cmd/etester/",
+            "envFile": "${workspaceFolder}/.env",
+            "env": {
+                "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
+            },
+            "args": [
+                "-cmd", "reindex",
+            ],
+            "cwd": "${workspaceFolder}",
+            "output": "${workspaceFolder}/build/__debug_bin_etester",
         },
     ]
 }

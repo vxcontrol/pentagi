@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"pentagi/cmd/ftester/terminal"
+	"pentagi/pkg/terminal"
 	"pentagi/pkg/tools"
 )
 

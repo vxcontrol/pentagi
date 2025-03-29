@@ -8,12 +8,12 @@ import (
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 )
 
@@ -39,7 +39,7 @@ type FlowProvider interface {
 	Image() string
 	Title() string
 	Language() string
-	Embedder() *embeddings.EmbedderImpl
+	Embedder() embeddings.Embedder
 
 	SetAgentLogProvider(agentLog tools.AgentLogProvider)
 
@@ -81,6 +81,8 @@ type subtasksInfo struct {
 type flowProvider struct {
 	db database.Querier
 
+	embedder embeddings.Embedder
+
 	flowID   int64
 	publicIP string
 
@@ -109,6 +111,10 @@ func (fp *flowProvider) Title() string {
 
 func (fp *flowProvider) Language() string {
 	return fp.language
+}
+
+func (fp *flowProvider) Embedder() embeddings.Embedder {
+	return fp.embedder
 }
 
 func (fp *flowProvider) GetTaskTitle(ctx context.Context, input string) (string, error) {

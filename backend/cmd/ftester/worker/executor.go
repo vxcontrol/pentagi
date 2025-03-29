@@ -6,14 +6,15 @@ import (
 	"fmt"
 
 	"pentagi/cmd/ftester/mocks"
-	"pentagi/cmd/ftester/terminal"
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/providers"
+	"pentagi/pkg/providers/embeddings"
+	"pentagi/pkg/terminal"
 	"pentagi/pkg/tools"
 
-	"github.com/tmc/langchaingo/embeddings"
+	"github.com/sirupsen/logrus"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
 )
 
@@ -39,7 +40,7 @@ type toolExecutor struct {
 	db           database.Querier
 	dockerClient docker.DockerClient
 	handlers     providers.FlowProviderHandlers
-	store        pgvector.Store
+	store        *pgvector.Store
 	proxies      mocks.ProxyProviders
 	flowID       int64
 	taskID       *int64
@@ -56,13 +57,22 @@ func newToolExecutor(
 	proxies mocks.ProxyProviders,
 	flowID int64,
 	taskID, subtaskID *int64,
-	embedder *embeddings.EmbedderImpl,
+	embedder embeddings.Embedder,
 ) *toolExecutor {
-	store, _ := pgvector.New(
-		context.Background(),
-		pgvector.WithConnectionURL(cfg.DatabaseURL),
-		pgvector.WithEmbedder(embedder),
-	)
+	var store *pgvector.Store
+	if embedder.IsAvailable() {
+		s, err := pgvector.New(
+			context.Background(),
+			pgvector.WithConnectionURL(cfg.DatabaseURL),
+			pgvector.WithEmbedder(embedder),
+		)
+		if err != nil {
+			logrus.WithError(err).Error("failed to create pgvector store")
+		} else {
+			store = &s
+		}
+	}
+
 	return &toolExecutor{
 		flowExecutor: flowExecutor,
 		cfg:          cfg,
@@ -182,7 +192,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 	case tools.SearchInMemoryToolName:
 		return tools.NewMemoryTool(
 			te.flowID,
-			&te.store,
+			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
 
@@ -199,7 +209,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.flowID,
 			taskID,
 			subtaskID,
-			&te.store,
+			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
 
@@ -216,7 +226,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.flowID,
 			taskID,
 			subtaskID,
-			&te.store,
+			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
 
@@ -233,7 +243,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.flowID,
 			taskID,
 			subtaskID,
-			&te.store,
+			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
 
