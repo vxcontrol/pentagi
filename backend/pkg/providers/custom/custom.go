@@ -9,16 +9,14 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/provider"
 
-	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
 type customProvider struct {
-	llm      *openai.LLM
-	model    string
-	embedder *embeddings.EmbedderImpl
-	options  map[provider.ProviderOptionsType][]llms.CallOption
+	llm     *openai.LLM
+	model   string
+	options map[provider.ProviderOptionsType][]llms.CallOption
 }
 
 func New(cfg *config.Config) (provider.Provider, error) {
@@ -44,21 +42,6 @@ func New(cfg *config.Config) (provider.Provider, error) {
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	oclient, err := openai.New(
-		openai.WithToken(cfg.OpenAIKey),
-		openai.WithModel("gpt-4o"),
-		openai.WithBaseURL(cfg.OpenAIServerURL),
-		openai.WithHTTPClient(httpClient),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	embedder, err := embeddings.NewEmbedder(oclient, embeddings.WithStripNewLines(true))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create embedder: %w", err)
 	}
 
 	simple := []llms.CallOption{
@@ -117,10 +100,9 @@ func New(cfg *config.Config) (provider.Provider, error) {
 	}
 
 	return &customProvider{
-		llm:      client,
-		model:    baseModel,
-		embedder: embedder,
-		options:  options,
+		llm:     client,
+		model:   baseModel,
+		options: options,
 	}, nil
 }
 
@@ -140,10 +122,6 @@ func (p *customProvider) Model(opt provider.ProviderOptionsType) string {
 	}
 
 	return opts.Model
-}
-
-func (p *customProvider) Embedder() *embeddings.EmbedderImpl {
-	return p.embedder
 }
 
 func (p *customProvider) Call(

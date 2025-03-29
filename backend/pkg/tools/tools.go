@@ -8,10 +8,10 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
 )
@@ -110,7 +110,6 @@ type flowToolsExecutor struct {
 	store      *pgvector.Store
 	image      string
 	docker     docker.DockerClient
-	embedder   *embeddings.EmbedderImpl
 	primaryID  int64
 	primaryLID string
 	functions  *Functions
@@ -222,7 +221,7 @@ type ReporterExecutorConfig struct {
 type FlowToolsExecutor interface {
 	SetFlowID(flowID int64)
 	SetImage(image string)
-	SetEmbedder(embedder *embeddings.EmbedderImpl)
+	SetEmbedder(embedder embeddings.Embedder)
 	SetFunctions(functions *Functions)
 	SetScreenshotProvider(sp ScreenshotProvider)
 	SetAgentLogProvider(alp AgentLogProvider)
@@ -271,8 +270,10 @@ func (fte *flowToolsExecutor) SetImage(image string) {
 	fte.image = image
 }
 
-func (fte *flowToolsExecutor) SetEmbedder(embedder *embeddings.EmbedderImpl) {
-	fte.embedder = embedder
+func (fte *flowToolsExecutor) SetEmbedder(embedder embeddings.Embedder) {
+	if !embedder.IsAvailable() {
+		return
+	}
 
 	if fte.store != nil {
 		fte.store.Close()
@@ -281,7 +282,7 @@ func (fte *flowToolsExecutor) SetEmbedder(embedder *embeddings.EmbedderImpl) {
 	store, err := pgvector.New(
 		context.Background(),
 		pgvector.WithConnectionURL(fte.cfg.DatabaseURL),
-		pgvector.WithEmbedder(fte.embedder),
+		pgvector.WithEmbedder(embedder),
 	)
 	if err == nil {
 		fte.store = &store

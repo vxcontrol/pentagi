@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 )
 
@@ -42,7 +41,6 @@ var ErrInvalidProviderOptionsType = fmt.Errorf("provider options type not found"
 type Provider interface {
 	Type() ProviderType
 	Model(opt ProviderOptionsType) string
-	Embedder() *embeddings.EmbedderImpl
 	GetUsage(info map[string]any) (int64, int64)
 
 	Call(ctx context.Context, opt ProviderOptionsType, prompt string) (string, error)
