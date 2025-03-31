@@ -787,10 +787,10 @@ func (fp *flowProvider) GetSummarizeResultHandler(taskID, subtaskID *int64) tool
 		}
 
 		// TODO: here need to summarize result by chunks in iterations
-		if len(summarizerTmpl) > 2*summarizeLimit {
-			summarizerTmpl = summarizerTmpl[:summarizeLimit] +
+		if len(summarizerTmpl) > 2*msgSummarizerLimit {
+			summarizerTmpl = summarizerTmpl[:msgSummarizerLimit] +
 				"\n\n{TRUNCATED}...\n\n" +
-				summarizerTmpl[len(summarizerTmpl)-summarizeLimit:]
+				summarizerTmpl[len(summarizerTmpl)-msgSummarizerLimit:]
 		}
 
 		opt := provider.OptionsTypeSimple
