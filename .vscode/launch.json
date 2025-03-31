@@ -100,7 +100,7 @@
                 "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
             },
             "args": [
-                "-cmd", "reindex",
+                "info", "-verbose",
             ],
             "cwd": "${workspaceFolder}",
             "output": "${workspaceFolder}/build/__debug_bin_etester",

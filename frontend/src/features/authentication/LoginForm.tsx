@@ -162,6 +162,7 @@ const LoginForm = ({ providers, returnUrl = '/chat/new' }: LoginFormProps) => {
                         }
                     } catch {
                         // In case of error, fall through to common handling below
+                        console.error('error during OAuth result handling:', error);
                     }
                 }
 

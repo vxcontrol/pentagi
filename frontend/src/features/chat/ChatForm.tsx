@@ -22,6 +22,7 @@ interface ChatFormProps {
 
 const ChatForm = ({ selectedFlowId, flowStatus, onSubmit }: ChatFormProps) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const textareaId = 'chat-textarea';
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -42,6 +43,10 @@ const ChatForm = ({ selectedFlowId, flowStatus, onSubmit }: ChatFormProps) => {
 
         if (selectedFlowId === 'new') {
             return 'What would you like me to help you with?';
+        }
+
+        if (flowStatus === StatusType.Waiting) {
+            return 'Continue the conversation...';
         }
 
         if (flowStatus === StatusType.Finished) {
@@ -86,6 +91,20 @@ const ChatForm = ({ selectedFlowId, flowStatus, onSubmit }: ChatFormProps) => {
         isSubmitting ||
         (selectedFlowId !== 'new' && (!flowStatus || ![StatusType.Waiting].includes(flowStatus)));
 
+    // Auto-focus on textarea when needed
+    useEffect(() => {
+        if (
+            !isDisabled &&
+            (selectedFlowId === 'new' || flowStatus === StatusType.Waiting)
+        ) {
+            const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
+            if (textarea) {
+                const timeoutId = setTimeout(() => textarea.focus(), 0);
+                return () => clearTimeout(timeoutId);
+            }
+        }
+    }, [selectedFlowId, flowStatus, isDisabled]);
+
     return (
         <Form {...form}>
             <form
@@ -99,6 +118,7 @@ const ChatForm = ({ selectedFlowId, flowStatus, onSubmit }: ChatFormProps) => {
                         <FormControl>
                             <Textarea
                                 {...field}
+                                id={textareaId}
                                 placeholder={getPlaceholderText()}
                                 disabled={isDisabled}
                                 onKeyDown={handleKeyDown}

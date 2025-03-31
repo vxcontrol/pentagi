@@ -381,7 +381,10 @@ const Chat = () => {
                             >
                                 <Card className="flex h-[calc(100dvh-3rem)] flex-col rounded-none border-0">
                                     <CardContent className="flex-1 overflow-y-auto pb-0">
-                                        <ChatMessages logs={flowData?.messageLogs ?? []} />
+                                        <ChatMessages
+                                            selectedFlowId={selectedFlowId}
+                                            logs={flowData?.messageLogs ?? []}
+                                        />
                                     </CardContent>
                                     <CardFooter className="sticky bottom-0 border-t bg-background pt-4">
                                         <ChatForm

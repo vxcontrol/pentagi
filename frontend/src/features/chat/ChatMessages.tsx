@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import ChatMessage from './ChatMessage';
 
 interface ChatMessagesProps {
+    selectedFlowId: string | null;
     logs?: MessageLogFragmentFragment[];
     className?: string;
 }
@@ -21,7 +22,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatMessages = ({ logs, className }: ChatMessagesProps) => {
+const ChatMessages = ({ selectedFlowId, logs, className }: ChatMessagesProps) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Memoize the scroll function to avoid recreating it on every render
@@ -64,7 +65,7 @@ const ChatMessages = ({ logs, className }: ChatMessagesProps) => {
     }, [filteredLogs.length, scrollMessages]);
 
     return (
-        <div className={cn('flex flex-col', className)}>
+        <div className={cn('flex h-full flex-col', className)}>
             <div className="sticky top-0 z-10 bg-background py-4">
                 <Form {...form}>
                     <FormField
@@ -97,15 +98,25 @@ const ChatMessages = ({ logs, className }: ChatMessagesProps) => {
                     />
                 </Form>
             </div>
-            <div className="space-y-4 pb-4">
-                {filteredLogs.map((log) => (
-                    <ChatMessage
-                        key={log.id}
-                        log={log}
-                    />
-                ))}
-                <div ref={messagesEndRef} />
-            </div>
+
+            {filteredLogs.length > 0 || selectedFlowId !== 'new' ? (
+                <div className="flex-1 space-y-4 overflow-y-auto pb-4">
+                    {filteredLogs.map((log) => (
+                        <ChatMessage
+                            key={log.id}
+                            log={log}
+                        />
+                    ))}
+                    <div ref={messagesEndRef} />
+                </div>
+            ) : (
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <p>No Active Tasks</p>
+                        <p className="text-xs">Starting a new task may take some time as the PentAGI agent downloads the required Docker image</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
