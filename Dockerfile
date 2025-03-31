@@ -104,6 +104,7 @@ COPY --from=fe-build /frontend/dist /opt/pentagi/fe
 # Copy provider configuration files
 COPY examples/configs/openrouter.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepinfra.provider.yml /opt/pentagi/conf/
+COPY examples/configs/deepseek.provider.yml /opt/pentagi/conf/
 
 COPY LICENSE /opt/pentagi/LICENSE
 COPY NOTICE /opt/pentagi/NOTICE
