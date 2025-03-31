@@ -6,4 +6,10 @@
       "WORKSPACE_DIR": "${workspaceFolder}/backend"
     },
     "go.testExplorer.enable": true,
+    "search.useIgnoreFiles": true,
+    "search.exclude": {
+      "**/frontend/coverage/**": true,
+      "**/frontend/dist/**": true,
+      "**/frontend/node_modules/**": true,
+    },
 }
