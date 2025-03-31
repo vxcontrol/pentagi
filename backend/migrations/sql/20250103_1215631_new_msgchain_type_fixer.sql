@@ -69,6 +69,8 @@ ALTER TABLE searchlogs
 
 -- +goose Down
 -- +goose StatementBegin
+DELETE FROM msgchains WHERE type = 'tool_call_fixer';
+
 ALTER TABLE msgchains ALTER COLUMN type DROP DEFAULT;
 ALTER TABLE agentlogs ALTER COLUMN initiator DROP DEFAULT;
 ALTER TABLE agentlogs ALTER COLUMN executor DROP DEFAULT;
