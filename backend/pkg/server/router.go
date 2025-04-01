@@ -6,8 +6,11 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"pentagi/pkg/config"
@@ -34,6 +37,14 @@ import (
 )
 
 const baseURL = "/api/v1"
+
+// frontendRoutes defines the list of URI prefixes that should be handled by the frontend SPA.
+// Add new frontend base routes here if they are added in the frontend router (e.g., in App.tsx).
+var frontendRoutes = []string{
+	"/chat",
+	"/oauth",
+	"/login",
+}
 
 // @title PentAGI Swagger API
 // @version 1.0
@@ -226,8 +237,29 @@ func NewRouter(
 	} else {
 		router.Use(static.Serve("/", static.LocalFile(cfg.StaticDir, true)))
 
+		indexExists := true
+		indexPath := filepath.Join(cfg.StaticDir, "index.html")
+		if _, err := os.Stat(indexPath); err != nil {
+			indexExists = false
+		}
+
 		router.NoRoute(func(c *gin.Context) {
-			c.Redirect(301, "/")
+			if c.Request.Method == "GET" && !strings.HasPrefix(c.Request.URL.Path, baseURL) {
+				isFrontendRoute := false
+				for _, prefix := range frontendRoutes {
+					if c.Request.URL.Path == prefix || strings.HasPrefix(c.Request.URL.Path, prefix+"/") {
+						isFrontendRoute = true
+						break
+					}
+				}
+
+				if isFrontendRoute && indexExists {
+					c.File(indexPath)
+					return
+				}
+			}
+
+			c.Redirect(http.StatusMovedPermanently, "/")
 		})
 	}
 
