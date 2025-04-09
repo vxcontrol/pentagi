@@ -533,7 +533,8 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 > ```bash
 > alias pentagi="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml"
 > alias pentagi-up="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d"
-> alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml down"```
+> alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml down"
+> ```
 
 ### GitHub and Google OAuth Integration
 
