@@ -11,13 +11,13 @@ import (
 	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tmc/langchaingo/documentloaders"
-	"github.com/tmc/langchaingo/vectorstores"
-	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"github.com/vxcontrol/langchaingo/documentloaders"
+	"github.com/vxcontrol/langchaingo/vectorstores"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 const (
-	guideVectorStoreThreshold   = 0.8
+	guideVectorStoreThreshold   = 0.2
 	guideVectorStoreResultLimit = 3
 	guideVectorStoreDefaultType = "guide"
 	guideNotFoundMessage        = "nothing found in guide store and you need to store it after figure out this case"
@@ -25,13 +25,13 @@ const (
 
 type guide struct {
 	flowID    int64
-	taskID    int64
-	subtaskID int64
+	taskID    *int64
+	subtaskID *int64
 	store     *pgvector.Store
 	vslp      VectorStoreLogProvider
 }
 
-func NewGuideTool(flowID int64, taskID, subtaskID int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+func NewGuideTool(flowID int64, taskID, subtaskID *int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
 	return &guide{
 		flowID:    flowID,
 		taskID:    taskID,
@@ -148,8 +148,8 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				action.Question,
 				database.VecstoreActionTypeRetrieve,
 				buffer.String(),
-				&g.taskID,
-				&g.subtaskID,
+				g.taskID,
+				g.subtaskID,
 			)
 		}
 
@@ -197,8 +197,12 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				doc.Metadata = map[string]any{}
 			}
 			doc.Metadata["flow_id"] = g.flowID
-			doc.Metadata["task_id"] = g.taskID
-			doc.Metadata["subtask_id"] = g.subtaskID
+			if g.taskID != nil {
+				doc.Metadata["task_id"] = *g.taskID
+			}
+			if g.subtaskID != nil {
+				doc.Metadata["subtask_id"] = *g.subtaskID
+			}
 			doc.Metadata["doc_type"] = guideVectorStoreDefaultType
 			doc.Metadata["guide_type"] = action.Type
 			doc.Metadata["question"] = action.Question
@@ -222,12 +226,17 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 		)...)
 
 		if agentCtx, ok := GetAgentContext(ctx); ok {
-			filtersData, err := json.Marshal(map[string]any{
+			data := map[string]any{
 				"doc_type":   guideVectorStoreDefaultType,
 				"guide_type": action.Type,
-				"task_id":    g.taskID,
-				"subtask_id": g.subtaskID,
-			})
+			}
+			if g.taskID != nil {
+				data["task_id"] = *g.taskID
+			}
+			if g.subtaskID != nil {
+				data["subtask_id"] = *g.subtaskID
+			}
+			filtersData, err := json.Marshal(data)
 			if err != nil {
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
@@ -240,8 +249,8 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				action.Question,
 				database.VecstoreActionTypeStore,
 				guide,
-				&g.taskID,
-				&g.subtaskID,
+				g.taskID,
+				g.subtaskID,
 			)
 		}
 

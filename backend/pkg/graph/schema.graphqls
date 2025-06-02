@@ -1,7 +1,7 @@
 scalar Time
 
 enum StatusType {
-  starting
+  created
   running
   waiting
   finished
@@ -22,6 +22,8 @@ enum AgentType {
   installer
   pentester
   summarizer
+  tool_call_fixer
+  assistant
 }
 
 enum TerminalLogType {
@@ -31,6 +33,8 @@ enum TerminalLogType {
 }
 
 enum MessageLogType {
+  answer
+  report
   thoughts
   browser
   terminal
@@ -63,6 +67,13 @@ enum VectorStoreAction {
   store
 }
 
+type Settings {
+  debug: Boolean!
+  askUser: Boolean!
+  dockerInside: Boolean!
+  assistantUseAgents: Boolean!
+}
+
 type Terminal {
   id: ID!
   type: TerminalType!
@@ -70,6 +81,22 @@ type Terminal {
   image: String!
   connected: Boolean!
   createdAt: Time!
+}
+
+type Assistant {
+  id: ID!
+  title: String!
+  status: StatusType!
+  provider: String!
+  flowId: ID!
+  useAgents: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type FlowAssistant {
+  flow: Flow!
+  assistant: Assistant!
 }
 
 type Flow {
@@ -105,6 +132,19 @@ type Subtask {
   updatedAt: Time!
 }
 
+type AssistantLog {
+  id: ID!
+  type: MessageLogType!
+  message: String!
+  thinking: String
+  result: String!
+  resultFormat: ResultFormat!
+  appendPart: Boolean!
+  flowId: ID!
+  assistantId: ID!
+  createdAt: Time!
+}
+
 type AgentLog {
   id: ID!
   initiator: AgentType!
@@ -121,6 +161,7 @@ type MessageLog {
   id: ID!
   type: MessageLogType!
   message: String!
+  thinking: String
   result: String!
   resultFormat: ResultFormat!
   flowId: ID!
@@ -186,18 +227,28 @@ type Query {
   flow(flowId: ID!): Flow!
   tasks(flowId: ID!): [Task!]
   screenshots(flowId: ID!): [Screenshot!]
+  assistants(flowId: ID!): [Assistant!]
   terminalLogs(flowId: ID!): [TerminalLog!]
   messageLogs(flowId: ID!): [MessageLog!]
   agentLogs(flowId: ID!): [AgentLog!]
   searchLogs(flowId: ID!): [SearchLog!]
   vectorStoreLogs(flowId: ID!): [VectorStoreLog!]
+  assistantLogs(flowId: ID!, assistantId: ID!): [AssistantLog!]
+  settings: Settings!
 }
 
 type Mutation {
   createFlow(modelProvider: String!, input: String!): Flow!
   putUserInput(flowId: ID!, input: String!): ResultType!
-  finishFlow(flowId: ID!): Flow!
+  stopFlow(flowId: ID!): ResultType!
+  finishFlow(flowId: ID!): ResultType!
   deleteFlow(flowId: ID!): ResultType!
+
+  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!): FlowAssistant!
+  callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!): ResultType!
+  stopAssistant(flowId: ID!, assistantId: ID!): Assistant!
+  deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!
+
   updatePrompt(promptType: String!, prompt: String!): ResultType!
   resetPrompt(promptType: String!): ResultType!
 }
@@ -205,9 +256,12 @@ type Mutation {
 type Subscription {
   flowCreated: Flow!
   flowDeleted: Flow!
-  flowUpdated(flowId: ID!): Flow!
+  flowUpdated: Flow!
   taskCreated(flowId: ID!): Task!
   taskUpdated(flowId: ID!): Task!
+  assistantCreated(flowId: ID!): Assistant!
+  assistantUpdated(flowId: ID!): Assistant!
+  assistantDeleted(flowId: ID!): Assistant!
 
   screenshotAdded(flowId: ID!): Screenshot!
   terminalLogAdded(flowId: ID!): TerminalLog!
@@ -216,4 +270,6 @@ type Subscription {
   agentLogAdded(flowId: ID!): AgentLog!
   searchLogAdded(flowId: ID!): SearchLog!
   vectorStoreLogAdded(flowId: ID!): VectorStoreLog!
+  assistantLogAdded(flowId: ID!): AssistantLog!
+  assistantLogUpdated(flowId: ID!): AssistantLog!
 }

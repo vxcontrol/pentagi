@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Search, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import debounce from 'lodash/debounce';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -13,14 +14,19 @@ import ChatTool from './ChatTool';
 
 interface ChatToolsProps {
     logs?: SearchLogFragmentFragment[];
+    selectedFlowId?: string | null;
 }
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatTools = ({ logs }: ChatToolsProps) => {
+const ChatTools = ({ logs, selectedFlowId }: ChatToolsProps) => {
     const searchesEndRef = useRef<HTMLDivElement>(null);
+    
+    // Separate state for immediate input value and debounced search value
+    const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
+
     const scrollSearches = () => {
         searchesEndRef.current?.scrollIntoView();
     };
@@ -32,21 +38,57 @@ const ChatTools = ({ logs }: ChatToolsProps) => {
         },
     });
 
-    const filteredLogs = logs?.filter((log) => {
-        const search = form.watch('search').toLowerCase();
+    const searchValue = form.watch('search');
 
-        if (!search) {
-            return true;
+    // Create debounced function to update search value
+    const debouncedUpdateSearch = useMemo(
+        () => debounce((value: string) => {
+            setDebouncedSearchValue(value);
+        }, 500),
+        []
+    );
+
+    // Update debounced search value when input value changes
+    useEffect(() => {
+        debouncedUpdateSearch(searchValue);
+        return () => {
+            debouncedUpdateSearch.cancel();
+        };
+    }, [searchValue, debouncedUpdateSearch]);
+
+    // Cleanup debounced function on unmount
+    useEffect(() => {
+        return () => {
+            debouncedUpdateSearch.cancel();
+        };
+    }, [debouncedUpdateSearch]);
+
+    // Clear search when flow changes to prevent stale search state
+    useEffect(() => {
+        form.reset({ search: '' });
+        setDebouncedSearchValue('');
+        debouncedUpdateSearch.cancel();
+    }, [selectedFlowId, form, debouncedUpdateSearch]);
+
+    // Memoize filtered logs to avoid recomputing on every render
+    // Use debouncedSearchValue for filtering to improve performance
+    const filteredLogs = useMemo(() => {
+        const search = debouncedSearchValue.toLowerCase().trim();
+
+        if (!search || !logs) {
+            return logs || [];
         }
 
-        return (
-            log.query.toLowerCase().includes(search) ||
-            log.result?.toLowerCase().includes(search) ||
-            log.engine.toLowerCase().includes(search) ||
-            log.executor.toLowerCase().includes(search) ||
-            log.initiator.toLowerCase().includes(search)
-        );
-    });
+        return logs.filter((log) => {
+            return (
+                log.query.toLowerCase().includes(search) ||
+                log.result?.toLowerCase().includes(search) ||
+                log.engine.toLowerCase().includes(search) ||
+                log.executor.toLowerCase().includes(search) ||
+                log.initiator.toLowerCase().includes(search)
+            );
+        });
+    }, [logs, debouncedSearchValue]);
 
     const hasLogs = filteredLogs && filteredLogs.length > 0;
 
@@ -72,6 +114,7 @@ const ChatTools = ({ logs }: ChatToolsProps) => {
                                         type="text"
                                         placeholder="Search tool logs..."
                                         className="px-9"
+                                        autoComplete="off"
                                     />
                                     {field.value && (
                                         <Button
@@ -79,7 +122,11 @@ const ChatTools = ({ logs }: ChatToolsProps) => {
                                             variant="ghost"
                                             size="icon"
                                             className="absolute right-0 top-1/2 -translate-y-1/2"
-                                            onClick={() => form.reset({ search: '' })}
+                                            onClick={() => {
+                                                form.reset({ search: '' });
+                                                setDebouncedSearchValue('');
+                                                debouncedUpdateSearch.cancel();
+                                            }}
                                         >
                                             <X />
                                         </Button>
@@ -97,6 +144,7 @@ const ChatTools = ({ logs }: ChatToolsProps) => {
                         <ChatTool
                             key={log.id}
                             log={log}
+                            searchValue={debouncedSearchValue}
                         />
                     ))}
                     <div ref={searchesEndRef} />

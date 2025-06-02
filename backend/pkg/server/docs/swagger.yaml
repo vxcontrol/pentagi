@@ -114,6 +114,108 @@ definitions:
     - initiator
     - task
     type: object
+  models.Assistant:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      functions:
+        $ref: '#/definitions/tools.Functions'
+      id:
+        minimum: 0
+        type: integer
+      language:
+        maxLength: 70
+        type: string
+      model:
+        maxLength: 70
+        type: string
+      model_provider:
+        maxLength: 70
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - language
+    - model
+    - model_provider
+    - status
+    - title
+    type: object
+  models.AssistantFlow:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      flow:
+        $ref: '#/definitions/models.Flow'
+      flow_id:
+        minimum: 0
+        type: integer
+      functions:
+        $ref: '#/definitions/tools.Functions'
+      id:
+        minimum: 0
+        type: integer
+      language:
+        maxLength: 70
+        type: string
+      model:
+        maxLength: 70
+        type: string
+      model_provider:
+        maxLength: 70
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    required:
+    - language
+    - model
+    - model_provider
+    - status
+    - title
+    type: object
+  models.Assistantlog:
+    properties:
+      assistant_id:
+        minimum: 0
+        type: integer
+      created_at:
+        type: string
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      message:
+        type: string
+      result:
+        type: string
+      result_format:
+        type: string
+      thinking:
+        type: string
+      type:
+        type: string
+    required:
+    - message
+    - result_format
+    - type
+    type: object
   models.AuthCallback:
     properties:
       code:
@@ -149,17 +251,8 @@ definitions:
       name:
         type: string
       status:
-        enum:
-        - starting
-        - running
-        - stopped
-        - deleted
-        - failed
         type: string
       type:
-        enum:
-        - primary
-        - secondary
         type: string
       updated_at:
         type: string
@@ -170,6 +263,23 @@ definitions:
     - name
     - status
     - type
+    type: object
+  models.CreateAssistant:
+    properties:
+      functions:
+        $ref: '#/definitions/tools.Functions'
+      input:
+        example: user input for running assistant
+        type: string
+      provider:
+        example: openai
+        type: string
+      use_agents:
+        example: true
+        type: boolean
+    required:
+    - input
+    - provider
     type: object
   models.CreateFlow:
     properties:
@@ -206,12 +316,6 @@ definitions:
         maxLength: 70
         type: string
       status:
-        enum:
-        - created
-        - running
-        - waiting
-        - finished
-        - failed
         type: string
       title:
         type: string
@@ -248,12 +352,6 @@ definitions:
         maxLength: 70
         type: string
       status:
-        enum:
-        - created
-        - running
-        - waiting
-        - finished
-        - failed
         type: string
       tasks:
         items:
@@ -307,17 +405,9 @@ definitions:
         type: integer
       task_id:
         type: integer
+      thinking:
+        type: string
       type:
-        enum:
-        - thoughts
-        - browser
-        - terminal
-        - file
-        - search
-        - advice
-        - ask
-        - input
-        - done
         type: string
     required:
     - message
@@ -339,12 +429,30 @@ definitions:
     - current_password
     - password
     type: object
+  models.PatchAssistant:
+    properties:
+      action:
+        default: stop
+        enum:
+        - stop
+        - input
+        type: string
+      input:
+        example: user input for waiting assistant
+        type: string
+      use_agents:
+        example: true
+        type: boolean
+    required:
+    - action
+    type: object
   models.PatchFlow:
     properties:
       action:
         default: stop
         enum:
         - stop
+        - finish
         - input
         type: string
       input:
@@ -471,13 +579,6 @@ definitions:
       created_at:
         type: string
       engine:
-        enum:
-        - google
-        - duckduckgo
-        - tavily
-        - traversaal
-        - perplexity
-        - browser
         type: string
       executor:
         type: string
@@ -505,6 +606,8 @@ definitions:
     type: object
   models.Subtask:
     properties:
+      context:
+        type: string
       created_at:
         type: string
       description:
@@ -515,12 +618,6 @@ definitions:
       result:
         type: string
       status:
-        enum:
-        - created
-        - running
-        - waiting
-        - finished
-        - failed
         type: string
       task_id:
         minimum: 0
@@ -549,12 +646,6 @@ definitions:
       result:
         type: string
       status:
-        enum:
-        - created
-        - running
-        - waiting
-        - finished
-        - failed
         type: string
       title:
         type: string
@@ -580,12 +671,6 @@ definitions:
       result:
         type: string
       status:
-        enum:
-        - created
-        - running
-        - waiting
-        - finished
-        - failed
         type: string
       subtasks:
         items:
@@ -614,10 +699,6 @@ definitions:
       text:
         type: string
       type:
-        enum:
-        - stdin
-        - stdout
-        - stderr
         type: string
     required:
     - container_id
@@ -647,15 +728,8 @@ definitions:
         minimum: 0
         type: integer
       status:
-        enum:
-        - created
-        - active
-        - blocked
         type: string
       type:
-        enum:
-        - local
-        - oauth
         type: string
     required:
     - created_at
@@ -689,15 +763,8 @@ definitions:
         minimum: 0
         type: integer
       status:
-        enum:
-        - created
-        - active
-        - blocked
         type: string
       type:
-        enum:
-        - local
-        - oauth
         type: string
     required:
     - created_at
@@ -731,15 +798,8 @@ definitions:
         minimum: 0
         type: integer
       status:
-        enum:
-        - created
-        - active
-        - blocked
         type: string
       type:
-        enum:
-        - local
-        - oauth
         type: string
     required:
     - created_at
@@ -772,15 +832,8 @@ definitions:
         minimum: 0
         type: integer
       status:
-        enum:
-        - created
-        - active
-        - blocked
         type: string
       type:
-        enum:
-        - local
-        - oauth
         type: string
     required:
     - created_at
@@ -791,9 +844,6 @@ definitions:
   models.Vecstorelog:
     properties:
       action:
-        enum:
-        - retrieve
-        - store
         type: string
       created_at:
         type: string
@@ -830,6 +880,24 @@ definitions:
       agentlogs:
         items:
           $ref: '#/definitions/models.Agentlog'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.assistantlogs:
+    properties:
+      assistantlogs:
+        items:
+          $ref: '#/definitions/models.Assistantlog'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.assistants:
+    properties:
+      assistants:
+        items:
+          $ref: '#/definitions/models.Assistant'
         type: array
       total:
         type: integer
@@ -1106,6 +1174,84 @@ paths:
       summary: Retrieve agentlogs list
       tags:
       - Agentlogs
+  /assistantlogs/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: assistantlogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.assistantlogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting assistantlogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting assistantlogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve assistantlogs list
+      tags:
+      - Assistantlogs
   /auth/authorize:
     get:
       parameters:
@@ -1660,6 +1806,347 @@ paths:
       summary: Retrieve agentlogs list by flow id
       tags:
       - Agentlogs
+  /flows/{flowID}/assistantlogs/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: assistantlogs list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.assistantlogs'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting assistantlogs not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting assistantlogs
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve assistantlogs list by flow id
+      tags:
+      - Assistantlogs
+  /flows/{flowID}/assistants/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"..."}
+            field value should be integer or string or array type
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        required: true
+        type: integer
+      - default: '{}'
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+        in: query
+        name: sort
+        required: true
+        type: string
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: assistants list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.assistants'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting assistants not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting assistants
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve assistants list
+      tags:
+      - Assistants
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: assistant model to create
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateAssistant'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: assistant created successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.AssistantFlow'
+              type: object
+        "400":
+          description: invalid assistant request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: creating assistant not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on creating assistant
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Create new assistant with custom functions
+      tags:
+      - Assistants
+  /flows/{flowID}/assistants/{assistantID}:
+    delete:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: assistant id
+        in: path
+        minimum: 0
+        name: assistantID
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: assistant deleted successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.AssistantFlow'
+              type: object
+        "403":
+          description: deleting assistant not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: assistant not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting assistant
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Delete assistant by id
+      tags:
+      - Assistants
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: assistant id
+        in: path
+        minimum: 0
+        name: assistantID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow assistant received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Assistant'
+              type: object
+        "403":
+          description: getting flow assistant not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow assistant not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow assistant
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve flow assistant by id
+      tags:
+      - Assistants
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: assistant id
+        in: path
+        minimum: 0
+        name: assistantID
+        required: true
+        type: integer
+      - description: assistant model to patch
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.PatchAssistant'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: assistant patched successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.AssistantFlow'
+              type: object
+        "400":
+          description: invalid assistant request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: patching assistant not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on patching assistant
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Patch assistant
+      tags:
+      - Assistants
   /flows/{flowID}/containers/:
     get:
       parameters:
@@ -2153,6 +2640,12 @@ paths:
   /flows/{flowID}/subtasks/:
     get:
       parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
       - collectionFormat: multi
         description: |-
           Filtering result on server e.g. {"value":[...],"field":"..."}
@@ -2231,6 +2724,12 @@ paths:
   /flows/{flowID}/tasks/:
     get:
       parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
       - collectionFormat: multi
         description: |-
           Filtering result on server e.g. {"value":[...],"field":"..."}
@@ -2393,6 +2892,18 @@ paths:
   /flows/{flowID}/tasks/{taskID}/subtasks/:
     get:
       parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: task id
+        in: path
+        minimum: 0
+        name: taskID
+        required: true
+        type: integer
       - collectionFormat: multi
         description: |-
           Filtering result on server e.g. {"value":[...],"field":"..."}
@@ -2950,17 +3461,17 @@ paths:
       consumes:
       - application/json
       parameters:
+      - description: prompt type
+        in: path
+        name: promptType
+        required: true
+        type: string
       - description: prompt model to update
         in: body
         name: json
         required: true
         schema:
           $ref: '#/definitions/models.PatchPrompt'
-      - description: prompt type
-        in: path
-        name: promptType
-        required: true
-        type: string
       produces:
       - application/json
       responses:
@@ -3694,12 +4205,6 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: user model to update
-        in: body
-        name: json
-        required: true
-        schema:
-          $ref: '#/definitions/models.UserPassword'
       - description: user hash in hex format (md5)
         in: path
         maxLength: 32
@@ -3707,6 +4212,12 @@ paths:
         name: hash
         required: true
         type: string
+      - description: user model to update
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.UserPassword'
       produces:
       - application/json
       responses:

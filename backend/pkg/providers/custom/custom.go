@@ -9,8 +9,9 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/provider"
 
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/openai"
+	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 type customProvider struct {
@@ -34,12 +35,19 @@ func New(cfg *config.Config) (provider.Provider, error) {
 	baseKey := cfg.LLMServerKey
 	baseURL := cfg.LLMServerURL
 	baseModel := cfg.LLMServerModel
-	client, err := openai.New(
+	opts := []openai.Option{
 		openai.WithToken(baseKey),
 		openai.WithModel(baseModel),
 		openai.WithBaseURL(baseURL),
 		openai.WithHTTPClient(httpClient),
-	)
+	}
+	if !cfg.LLMServerLegacyReasoning {
+		opts = append(opts,
+			openai.WithUsingReasoningMaxTokens(),
+			openai.WithModernReasoningFormat(),
+		)
+	}
+	client, err := openai.New(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +72,7 @@ func New(cfg *config.Config) (provider.Provider, error) {
 				provider.OptionsTypeSimple,
 				provider.OptionsTypeSimpleJSON,
 				provider.OptionsTypeAgent,
+				provider.OptionsTypeAssistant,
 				provider.OptionsTypeGenerator,
 				provider.OptionsTypeRefiner,
 				provider.OptionsTypeAdviser,
@@ -87,6 +96,7 @@ func New(cfg *config.Config) (provider.Provider, error) {
 			provider.OptionsTypeSimple:     simple,
 			provider.OptionsTypeSimpleJSON: simple,
 			provider.OptionsTypeAgent:      simple,
+			provider.OptionsTypeAssistant:  simple,
 			provider.OptionsTypeGenerator:  simple,
 			provider.OptionsTypeRefiner:    simple,
 			provider.OptionsTypeAdviser:    simple,
@@ -141,13 +151,19 @@ func (p *customProvider) CallEx(
 	ctx context.Context,
 	opt provider.ProviderOptionsType,
 	chain []llms.MessageContent,
+	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
 	options, ok := p.options[opt]
 	if !ok {
 		return nil, provider.ErrInvalidProviderOptionsType
 	}
 
-	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+	return provider.WrapGenerateContent(
+		ctx, p, opt, p.llm.GenerateContent, chain,
+		append([]llms.CallOption{
+			llms.WithStreamingFunc(streamCb),
+		}, options...)...,
+	)
 }
 
 func (p *customProvider) CallWithTools(
@@ -155,14 +171,20 @@ func (p *customProvider) CallWithTools(
 	opt provider.ProviderOptionsType,
 	chain []llms.MessageContent,
 	tools []llms.Tool,
+	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
 	options, ok := p.options[opt]
 	if !ok {
 		return nil, provider.ErrInvalidProviderOptionsType
 	}
 
-	options = append(options, llms.WithTools(tools))
-	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+	return provider.WrapGenerateContent(
+		ctx, p, opt, p.llm.GenerateContent, chain,
+		append([]llms.CallOption{
+			llms.WithTools(tools),
+			llms.WithStreamingFunc(streamCb),
+		}, options...)...,
+	)
 }
 
 func (p *customProvider) GetUsage(info map[string]any) (int64, int64) {

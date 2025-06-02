@@ -134,6 +134,115 @@ const docTemplate = `{
                 }
             }
         },
+        "/assistantlogs/": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistantlogs"
+                ],
+                "summary": "Retrieve assistantlogs list",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "{}",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
+                        "name": "sort",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "assistantlogs list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.assistantlogs"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting assistantlogs not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting assistantlogs",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/authorize": {
             "get": {
                 "produces": [
@@ -966,6 +1075,515 @@ const docTemplate = `{
                 }
             }
         },
+        "/flows/{flowID}/assistantlogs/": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistantlogs"
+                ],
+                "summary": "Retrieve assistantlogs list by flow id",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "{}",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
+                        "name": "sort",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "assistantlogs list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.assistantlogs"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting assistantlogs not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting assistantlogs",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/assistants/": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistants"
+                ],
+                "summary": "Retrieve assistants list",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "{}",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
+                        "name": "sort",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "assistants list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.assistants"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting assistants not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting assistants",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistants"
+                ],
+                "summary": "Create new assistant with custom functions",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "assistant model to create",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CreateAssistant"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "assistant created successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.AssistantFlow"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid assistant request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "creating assistant not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on creating assistant",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/assistants/{assistantID}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistants"
+                ],
+                "summary": "Retrieve flow assistant by id",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "assistant id",
+                        "name": "assistantID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "flow assistant received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Assistant"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting flow assistant not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow assistant not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting flow assistant",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Assistants"
+                ],
+                "summary": "Patch assistant",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "assistant id",
+                        "name": "assistantID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "assistant model to patch",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PatchAssistant"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "assistant patched successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.AssistantFlow"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid assistant request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "patching assistant not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on patching assistant",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Assistants"
+                ],
+                "summary": "Delete assistant by id",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "assistant id",
+                        "name": "assistantID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "assistant deleted successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.AssistantFlow"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "deleting assistant not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "assistant not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on deleting assistant",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/flows/{flowID}/containers/": {
             "get": {
                 "produces": [
@@ -1688,6 +2306,14 @@ const docTemplate = `{
                 "summary": "Retrieve flow subtasks list",
                 "parameters": [
                     {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
                         "type": "array",
                         "items": {
                             "type": "string"
@@ -1796,6 +2422,14 @@ const docTemplate = `{
                 ],
                 "summary": "Retrieve flow tasks list",
                 "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
                     {
                         "type": "array",
                         "items": {
@@ -2039,6 +2673,22 @@ const docTemplate = `{
                 ],
                 "summary": "Retrieve flow task subtasks list",
                 "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "task id",
+                        "name": "taskID",
+                        "in": "path",
+                        "required": true
+                    },
                     {
                         "type": "array",
                         "items": {
@@ -2849,6 +3499,13 @@ const docTemplate = `{
                 "summary": "Update prompt",
                 "parameters": [
                     {
+                        "type": "string",
+                        "description": "prompt type",
+                        "name": "promptType",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
                         "description": "prompt model to update",
                         "name": "json",
                         "in": "body",
@@ -2856,13 +3513,6 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/models.PatchPrompt"
                         }
-                    },
-                    {
-                        "type": "string",
-                        "description": "prompt type",
-                        "name": "promptType",
-                        "in": "path",
-                        "required": true
                     }
                 ],
                 "responses": {
@@ -3923,15 +4573,6 @@ const docTemplate = `{
                 "summary": "Update user",
                 "parameters": [
                     {
-                        "description": "user model to update",
-                        "name": "json",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.UserPassword"
-                        }
-                    },
-                    {
                         "maxLength": 32,
                         "minLength": 32,
                         "type": "string",
@@ -3939,6 +4580,15 @@ const docTemplate = `{
                         "name": "hash",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "user model to update",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.UserPassword"
+                        }
                     }
                 ],
                 "responses": {
@@ -4311,6 +4961,149 @@ const docTemplate = `{
                 }
             }
         },
+        "models.Assistant": {
+            "type": "object",
+            "required": [
+                "language",
+                "model",
+                "model_provider",
+                "status",
+                "title"
+            ],
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "functions": {
+                    "$ref": "#/definitions/tools.Functions"
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "language": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "model": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "model_provider": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.AssistantFlow": {
+            "type": "object",
+            "required": [
+                "language",
+                "model",
+                "model_provider",
+                "status",
+                "title"
+            ],
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "flow": {
+                    "$ref": "#/definitions/models.Flow"
+                },
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "functions": {
+                    "$ref": "#/definitions/tools.Functions"
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "language": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "model": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "model_provider": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.Assistantlog": {
+            "type": "object",
+            "required": [
+                "message",
+                "result_format",
+                "type"
+            ],
+            "properties": {
+                "assistant_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "message": {
+                    "type": "string"
+                },
+                "result": {
+                    "type": "string"
+                },
+                "result_format": {
+                    "type": "string"
+                },
+                "thinking": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
         "models.AuthCallback": {
             "type": "object",
             "required": [
@@ -4369,24 +5162,37 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "starting",
-                        "running",
-                        "stopped",
-                        "deleted",
-                        "failed"
-                    ]
+                    "type": "string"
                 },
                 "type": {
-                    "type": "string",
-                    "enum": [
-                        "primary",
-                        "secondary"
-                    ]
+                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "models.CreateAssistant": {
+            "type": "object",
+            "required": [
+                "input",
+                "provider"
+            ],
+            "properties": {
+                "functions": {
+                    "$ref": "#/definitions/tools.Functions"
+                },
+                "input": {
+                    "type": "string",
+                    "example": "user input for running assistant"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "openai"
+                },
+                "use_agents": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },
@@ -4446,14 +5252,7 @@ const docTemplate = `{
                     "maxLength": 70
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "running",
-                        "waiting",
-                        "finished",
-                        "failed"
-                    ]
+                    "type": "string"
                 },
                 "title": {
                     "type": "string"
@@ -4504,14 +5303,7 @@ const docTemplate = `{
                     "maxLength": 70
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "running",
-                        "waiting",
-                        "finished",
-                        "failed"
-                    ]
+                    "type": "string"
                 },
                 "tasks": {
                     "type": "array",
@@ -4583,19 +5375,11 @@ const docTemplate = `{
                 "task_id": {
                     "type": "integer"
                 },
+                "thinking": {
+                    "type": "string"
+                },
                 "type": {
-                    "type": "string",
-                    "enum": [
-                        "thoughts",
-                        "browser",
-                        "terminal",
-                        "file",
-                        "search",
-                        "advice",
-                        "ask",
-                        "input",
-                        "done"
-                    ]
+                    "type": "string"
                 }
             }
         },
@@ -4620,6 +5404,30 @@ const docTemplate = `{
                 }
             }
         },
+        "models.PatchAssistant": {
+            "type": "object",
+            "required": [
+                "action"
+            ],
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "default": "stop",
+                    "enum": [
+                        "stop",
+                        "input"
+                    ]
+                },
+                "input": {
+                    "type": "string",
+                    "example": "user input for waiting assistant"
+                },
+                "use_agents": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "models.PatchFlow": {
             "type": "object",
             "required": [
@@ -4631,6 +5439,7 @@ const docTemplate = `{
                     "default": "stop",
                     "enum": [
                         "stop",
+                        "finish",
                         "input"
                     ]
                 },
@@ -4815,15 +5624,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "engine": {
-                    "type": "string",
-                    "enum": [
-                        "google",
-                        "duckduckgo",
-                        "tavily",
-                        "traversaal",
-                        "perplexity",
-                        "browser"
-                    ]
+                    "type": "string"
                 },
                 "executor": {
                     "type": "string"
@@ -4861,6 +5662,9 @@ const docTemplate = `{
                 "title"
             ],
             "properties": {
+                "context": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -4875,14 +5679,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "running",
-                        "waiting",
-                        "finished",
-                        "failed"
-                    ]
+                    "type": "string"
                 },
                 "task_id": {
                     "type": "integer",
@@ -4922,14 +5719,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "running",
-                        "waiting",
-                        "finished",
-                        "failed"
-                    ]
+                    "type": "string"
                 },
                 "title": {
                     "type": "string"
@@ -4966,14 +5756,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "running",
-                        "waiting",
-                        "finished",
-                        "failed"
-                    ]
+                    "type": "string"
                 },
                 "subtasks": {
                     "type": "array",
@@ -5012,12 +5795,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
-                    "type": "string",
-                    "enum": [
-                        "stdin",
-                        "stdout",
-                        "stderr"
-                    ]
+                    "type": "string"
                 }
             }
         },
@@ -5059,19 +5837,10 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "active",
-                        "blocked"
-                    ]
+                    "type": "string"
                 },
                 "type": {
-                    "type": "string",
-                    "enum": [
-                        "local",
-                        "oauth"
-                    ]
+                    "type": "string"
                 }
             }
         },
@@ -5118,19 +5887,10 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "active",
-                        "blocked"
-                    ]
+                    "type": "string"
                 },
                 "type": {
-                    "type": "string",
-                    "enum": [
-                        "local",
-                        "oauth"
-                    ]
+                    "type": "string"
                 }
             }
         },
@@ -5175,19 +5935,10 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "active",
-                        "blocked"
-                    ]
+                    "type": "string"
                 },
                 "type": {
-                    "type": "string",
-                    "enum": [
-                        "local",
-                        "oauth"
-                    ]
+                    "type": "string"
                 }
             }
         },
@@ -5232,19 +5983,10 @@ const docTemplate = `{
                     "minimum": 0
                 },
                 "status": {
-                    "type": "string",
-                    "enum": [
-                        "created",
-                        "active",
-                        "blocked"
-                    ]
+                    "type": "string"
                 },
                 "type": {
-                    "type": "string",
-                    "enum": [
-                        "local",
-                        "oauth"
-                    ]
+                    "type": "string"
                 }
             }
         },
@@ -5260,11 +6002,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "action": {
-                    "type": "string",
-                    "enum": [
-                        "retrieve",
-                        "store"
-                    ]
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -5307,6 +6045,34 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/models.Agentlog"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.assistantlogs": {
+            "type": "object",
+            "properties": {
+                "assistantlogs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Assistantlog"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.assistants": {
+            "type": "object",
+            "properties": {
+                "assistants": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Assistant"
                     }
                 },
                 "total": {

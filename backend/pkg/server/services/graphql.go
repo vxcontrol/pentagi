@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph"
@@ -46,6 +47,7 @@ type originValidator struct {
 
 func NewGraphqlService(
 	db *database.Queries,
+	cfg *config.Config,
 	baseURL string,
 	origins []string,
 	providers providers.ProviderController,
@@ -54,6 +56,7 @@ func NewGraphqlService(
 ) *GraphqlService {
 	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		DB:              db,
+		Config:          cfg,
 		Logger:          logrus.StandardLogger().WithField("component", "pentagi-gql-bl"),
 		DefaultPrompter: templates.NewDefaultPrompter(),
 		ProvidersCtrl:   providers,

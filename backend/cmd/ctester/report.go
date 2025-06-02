@@ -19,7 +19,11 @@ func PrintAgentResults(result AgentTestResult) {
 			if !test.Success {
 				status = "✗"
 			}
-			fmt.Printf("[%s] %s (%.3fs)\n", status, test.Name, float64(test.LatencyMs)/1000)
+			name := test.Name
+			if test.Streaming {
+				name = fmt.Sprintf("Streaming %s", name)
+			}
+			fmt.Printf("[%s] %s (%.3fs)\n", status, name, float64(test.LatencyMs)/1000)
 			if !test.Success && test.Error != nil {
 				fmt.Printf("    Error: %v\n", test.Error)
 			}
@@ -34,7 +38,11 @@ func PrintAgentResults(result AgentTestResult) {
 			if !test.Success {
 				status = "✗"
 			}
-			fmt.Printf("[%s] %s (%.3fs)\n", status, test.Name, float64(test.LatencyMs)/1000)
+			name := test.Name
+			if test.Streaming {
+				name = fmt.Sprintf("Streaming %s", name)
+			}
+			fmt.Printf("[%s] %s (%.3fs)\n", status, name, float64(test.LatencyMs)/1000)
 			if !test.Success && test.Error != nil {
 				fmt.Printf("    Error: %v\n", test.Error)
 			}
@@ -58,8 +66,8 @@ func PrintSummaryReport(results []AgentTestResult) {
 
 	// Create a tabwriter for aligned columns
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "Agent\tModel\tSuccess Rate\tAvg Latency\t")
-	fmt.Fprintln(w, "-----\t-----\t-----------\t-----------\t")
+	fmt.Fprintln(w, "Agent\tModel\tReasoning\tSuccess Rate\tAvg Latency\t")
+	fmt.Fprintln(w, "-----\t-----\t----------\t-----------\t-----------\t")
 
 	var totalSuccess, totalTests int
 	var totalLatency time.Duration
@@ -68,9 +76,10 @@ func PrintSummaryReport(results []AgentTestResult) {
 		success := result.TotalSuccess
 		total := result.TotalTests
 		successRate := float64(success) / float64(total) * 100
-		fmt.Fprintf(w, "%s\t%s\t%d/%d (%.2f%%)\t%.3fs\t\n",
+		fmt.Fprintf(w, "%s\t%s\t%t\t%d/%d (%.2f%%)\t%.3fs\t\n",
 			result.AgentType,
 			result.ModelName,
+			result.Reasoning,
 			success,
 			total,
 			successRate,
@@ -105,8 +114,8 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 
 	// Create a table for overall results
 	file.WriteString("## Overall Results\n\n")
-	file.WriteString("| Agent | Model | Success Rate | Average Latency |\n")
-	file.WriteString("|-------|-------|-------------|----------------|\n")
+	file.WriteString("| Agent | Model | Reasoning | Success Rate | Average Latency |\n")
+	file.WriteString("|-------|-------|-----------|--------------|-----------------|\n")
 
 	var totalSuccess, totalTests int
 	var totalLatency time.Duration
@@ -115,9 +124,10 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 		success := result.TotalSuccess
 		total := result.TotalTests
 		successRate := float64(success) / float64(total) * 100
-		file.WriteString(fmt.Sprintf("| %s | %s | %d/%d (%.2f%%) | %.3fs |\n",
+		file.WriteString(fmt.Sprintf("| %s | %s | %t | %d/%d (%.2f%%) | %.3fs |\n",
 			result.AgentType,
 			result.ModelName,
+			result.Reasoning,
 			success,
 			total,
 			successRate,
@@ -158,9 +168,13 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 						errorMsg = EscapeMarkdown(test.Error.Error())
 					}
 				}
+				name := test.Name
+				if test.Streaming {
+					name = fmt.Sprintf("Streaming %s", name)
+				}
 
 				file.WriteString(fmt.Sprintf("| %s | %s | %.3fs | %s |\n",
-					test.Name,
+					name,
 					status,
 					float64(test.LatencyMs)/1000,
 					errorMsg))
@@ -183,9 +197,13 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 						errorMsg = EscapeMarkdown(test.Error.Error())
 					}
 				}
+				name := test.Name
+				if test.Streaming {
+					name = fmt.Sprintf("Streaming %s", name)
+				}
 
 				file.WriteString(fmt.Sprintf("| %s | %s | %.3fs | %s |\n",
-					test.Name,
+					name,
 					status,
 					float64(test.LatencyMs)/1000,
 					errorMsg))

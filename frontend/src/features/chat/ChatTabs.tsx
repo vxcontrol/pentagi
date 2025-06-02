@@ -1,14 +1,14 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { FlowQuery } from '@/graphql/types';
+import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { client } from '@/lib/apollo';
 
 import ChatAgents from './ChatAgents';
-import ChatForm from './ChatForm';
-import ChatMessages from './ChatMessages';
+import ChatAssistantMessages from './ChatAssistantMessages';
+import ChatAutomationMessages from './ChatAutomationMessages';
 import ChatScreenshots from './ChatScreenshots';
 import ChatTasks from './ChatTasks';
 import ChatTerminal from './ChatTerminal';
@@ -22,21 +22,51 @@ const MemoizedChatAgents = memo(ChatAgents);
 const MemoizedChatTools = memo(ChatTools);
 const MemoizedChatVectorStores = memo(ChatVectorStores);
 const MemoizedChatScreenshots = memo(ChatScreenshots);
-const MemoizedChatMessages = memo(ChatMessages);
+const MemoizedChatAutomationMessages = memo(ChatAutomationMessages);
+const MemoizedChatAssistantMessages = memo(ChatAssistantMessages);
 
 interface ChatTabsProps {
     flowData: FlowQuery | undefined;
     selectedFlowId: string | null;
-    onMessageSubmit: (message: string) => Promise<void>;
+    onSubmitAutomationMessage: (message: string) => Promise<void>;
+    onStopAutomationFlow?: (flowId: string) => Promise<void>;
+    assistants: AssistantFragmentFragment[];
+    assistantLogs?: AssistantLogFragmentFragment[];
+    selectedAssistantId?: string | null;
+    selectedProvider: string;
+    providers: string[];
+    onSelectAssistant?: (assistantId: string | null) => void;
+    onCreateAssistant?: () => void;
+    onDeleteAssistant?: (assistantId: string) => void;
+    onSubmitAssistantMessage?: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
+    onCreateNewAssistant?: (message: string, useAgents: boolean) => Promise<void>;
+    onStopAssistant?: (assistantId: string) => Promise<void>;
+    activeTab: string;
+    onTabChange: Dispatch<SetStateAction<string>>;
 }
 
-const ChatTabs = ({ flowData, selectedFlowId, onMessageSubmit }: ChatTabsProps) => {
+const ChatTabs = ({
+    flowData,
+    selectedFlowId,
+    onSubmitAutomationMessage,
+    onStopAutomationFlow,
+    assistants,
+    assistantLogs,
+    selectedAssistantId,
+    selectedProvider,
+    providers,
+    onSelectAssistant,
+    onCreateAssistant,
+    onDeleteAssistant,
+    onSubmitAssistantMessage,
+    onCreateNewAssistant,
+    onStopAssistant,
+    activeTab,
+    onTabChange,
+}: ChatTabsProps) => {
     const { isDesktop } = useBreakpoint();
-    const [activeTab, setActiveTab] = useState<string>(!isDesktop ? 'messages' : 'terminal');
     const previousActiveTabRef = useRef<string>(activeTab);
-    const dataRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Only refetch data when switching to tasks tab if we haven't done so recently
     useEffect(() => {
         // Only handle actual tab changes
         if (activeTab === previousActiveTabRef.current) {
@@ -44,42 +74,7 @@ const ChatTabs = ({ flowData, selectedFlowId, onMessageSubmit }: ChatTabsProps) 
         }
 
         previousActiveTabRef.current = activeTab;
-
-        // When switching to tasks tab, quietly refresh data in the background
-        if (activeTab === 'tasks' && selectedFlowId && selectedFlowId !== 'new') {
-            // Clear any pending refresh
-            if (dataRefreshTimeoutRef.current) {
-                clearTimeout(dataRefreshTimeoutRef.current);
-            }
-
-            // Delay the refresh slightly to avoid UI jank during tab transition
-            dataRefreshTimeoutRef.current = setTimeout(() => {
-                // Silently refetch without triggering loading states
-                client.refetchQueries({
-                    include: ['flow'],
-                });
-            }, 100);
-        }
-
-        return () => {
-            if (dataRefreshTimeoutRef.current) {
-                clearTimeout(dataRefreshTimeoutRef.current);
-            }
-        };
-    }, [activeTab, selectedFlowId]);
-
-    // Load tasks data once when a new flow ID is selected
-    useEffect(() => {
-        if (selectedFlowId && selectedFlowId !== 'new') {
-            // Silently clear the tasks cache when flow ID changes
-            client.cache.evict({ fieldName: 'tasks' });
-
-            // Refresh in the background
-            client.refetchQueries({
-                include: ['flow'],
-            });
-        }
-    }, [selectedFlowId]);
+    }, [activeTab]);
 
     // Cache data references to prevent unnecessary re-renders
     const terminalLogs = useMemo(() => flowData?.terminalLogs ?? [], [flowData?.terminalLogs]);
@@ -93,13 +88,14 @@ const ChatTabs = ({ flowData, selectedFlowId, onMessageSubmit }: ChatTabsProps) 
     return (
         <Tabs
             value={activeTab}
-            onValueChange={setActiveTab}
+            onValueChange={onTabChange}
             className="flex size-full flex-col"
         >
             <div className="max-w-full pr-4">
                 <ScrollArea className="w-full pb-2">
                     <TabsList className="flex w-fit">
-                        {!isDesktop && <TabsTrigger value="messages">Messages</TabsTrigger>}
+                        {!isDesktop && <TabsTrigger value="automation">Automation</TabsTrigger>}
+                        {!isDesktop && <TabsTrigger value="assistant">Assistant</TabsTrigger>}
                         <TabsTrigger value="terminal">Terminal</TabsTrigger>
                         <TabsTrigger value="tasks">Tasks</TabsTrigger>
                         <TabsTrigger value="agents">Agents</TabsTrigger>
@@ -111,73 +107,89 @@ const ChatTabs = ({ flowData, selectedFlowId, onMessageSubmit }: ChatTabsProps) 
                 </ScrollArea>
             </div>
 
+            {/* Mobile Tabs only */}
             {!isDesktop && (
                 <TabsContent
-                    value="messages"
-                    className="-mb-4 -ml-4 mt-2 flex-1 flex-col overflow-hidden data-[state=active]:flex"
+                    value="automation"
+                    className="mt-2 flex-1 overflow-auto"
                 >
-                    <div className="-mt-4 flex flex-1 flex-col overflow-y-auto">
-                        <div className="flex-1">
-                            <MemoizedChatMessages
-                                logs={messageLogs}
-                                className="px-4"
-                            />
-                        </div>
-                        <div className="sticky bottom-0 border-t bg-background p-4">
-                            <ChatForm
-                                selectedFlowId={selectedFlowId}
-                                flowStatus={flowData?.flow?.status}
-                                onSubmit={onMessageSubmit}
-                            />
-                        </div>
-                    </div>
+                    <MemoizedChatAutomationMessages
+                        logs={messageLogs}
+                        className="pr-4"
+                        flowData={flowData}
+                        selectedFlowId={selectedFlowId}
+                        onSubmitMessage={onSubmitAutomationMessage}
+                        onStopFlow={onStopAutomationFlow}
+                    />
+                </TabsContent>
+            )}
+            {!isDesktop && (
+                <TabsContent
+                    value="assistant"
+                    className="mt-2 flex-1 overflow-auto"
+                >
+                    <MemoizedChatAssistantMessages
+                        logs={assistantLogs}
+                        className="pr-4"
+                        selectedFlowId={selectedFlowId}
+                        assistants={assistants}
+                        selectedAssistantId={selectedAssistantId}
+                        selectedProvider={selectedProvider}
+                        providers={providers}
+                        onSelectAssistant={onSelectAssistant}
+                        onCreateAssistant={onCreateAssistant}
+                        onDeleteAssistant={onDeleteAssistant}
+                        onSubmitMessage={onSubmitAssistantMessage}
+                        onCreateNewAssistant={onCreateNewAssistant}
+                        onStopAssistant={onStopAssistant}
+                    />
                 </TabsContent>
             )}
 
+            {/* Desktop and Mobile Tabs */}
             <TabsContent
                 value="terminal"
                 className="mt-2 flex-1 overflow-auto"
             >
-                <MemoizedChatTerminal logs={terminalLogs} />
+                <MemoizedChatTerminal logs={terminalLogs} selectedFlowId={selectedFlowId} />
             </TabsContent>
 
             <TabsContent
                 value="tasks"
                 className="mt-2 flex-1 overflow-auto pr-4"
             >
-                <MemoizedChatTasks tasks={tasks} />
+                <MemoizedChatTasks tasks={tasks} selectedFlowId={selectedFlowId} flow={flowData?.flow} />
             </TabsContent>
 
             <TabsContent
                 value="agents"
                 className="mt-2 flex-1 overflow-auto pr-4"
             >
-                <MemoizedChatAgents logs={agentLogs} />
+                <MemoizedChatAgents logs={agentLogs} selectedFlowId={selectedFlowId} />
             </TabsContent>
 
             <TabsContent
                 value="tools"
                 className="mt-2 flex-1 overflow-auto pr-4"
             >
-                <MemoizedChatTools logs={searchLogs} />
+                <MemoizedChatTools logs={searchLogs} selectedFlowId={selectedFlowId} />
             </TabsContent>
 
             <TabsContent
                 value="vectorStores"
                 className="mt-2 flex-1 overflow-auto pr-4"
             >
-                <MemoizedChatVectorStores logs={vectorStoreLogs} />
+                <MemoizedChatVectorStores logs={vectorStoreLogs} selectedFlowId={selectedFlowId} />
             </TabsContent>
 
             <TabsContent
                 value="screenshots"
                 className="mt-2 flex-1 overflow-auto pr-4"
             >
-                <MemoizedChatScreenshots screenshots={screenshots} />
+                <MemoizedChatScreenshots screenshots={screenshots} selectedFlowId={selectedFlowId} />
             </TabsContent>
         </Tabs>
     );
 };
 
-// Using React.memo to prevent unnecessary rerenders
 export default memo(ChatTabs);

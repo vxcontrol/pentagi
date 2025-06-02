@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync/atomic"
 
+	"pentagi/pkg/cast"
+	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
@@ -14,7 +18,8 @@ import (
 	"pentagi/pkg/tools"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 const ToolPlaceholder = "Always use your function calling functionality, instead of returning a text result."
@@ -22,10 +27,9 @@ const ToolPlaceholder = "Always use your function calling functionality, instead
 const TasksNumberLimit = 15
 
 const (
-	msgGeneratorSizeLimit = 100 * 1024 // 100 KB
+	msgGeneratorSizeLimit = 150 * 1024 // 150 KB
 	msgRefinerSizeLimit   = 100 * 1024 // 100 KB
 	msgReporterSizeLimit  = 100 * 1024 // 100 KB
-	msgLogResultSizeLimit = 1 * 1024   // 1 KB
 	msgSummarizerLimit    = 16 * 1024  // 16 KB
 )
 
@@ -39,6 +43,28 @@ const (
 	PerformResultDone
 )
 
+type StreamMessageChunkType streaming.ChunkType
+
+const (
+	StreamMessageChunkTypeThinking StreamMessageChunkType = "thinking"
+	StreamMessageChunkTypeContent                         = "content"
+	StreamMessageChunkTypeResult                          = "result"
+	StreamMessageChunkTypeFlush                           = "flush"
+	StreamMessageChunkTypeUpdate                          = "update"
+)
+
+type StreamMessageChunk struct {
+	Type         StreamMessageChunkType
+	MsgType      database.MsglogType
+	Content      string
+	Thinking     string
+	Result       string
+	ResultFormat database.MsglogResultFormat
+	StreamID     int64
+}
+
+type StreamMessageHandler func(ctx context.Context, chunk *StreamMessageChunk) error
+
 type FlowProvider interface {
 	Type() provider.ProviderType
 	Model(opt provider.ProviderOptionsType) string
@@ -48,6 +74,7 @@ type FlowProvider interface {
 	Embedder() embeddings.Embedder
 
 	SetAgentLogProvider(agentLog tools.AgentLogProvider)
+	SetMsgLogProvider(msgLog tools.MsgLogProvider)
 
 	GetTaskTitle(ctx context.Context, input string) (string, error)
 	GenerateSubtasks(ctx context.Context, taskID int64) ([]tools.SubtaskInfo, error)
@@ -57,17 +84,18 @@ type FlowProvider interface {
 	PrepareAgentChain(ctx context.Context, taskID, subtaskID int64) (int64, error)
 	PerformAgentChain(ctx context.Context, taskID, subtaskID, msgChainID int64) (PerformResult, error)
 	PutInputToAgentChain(ctx context.Context, msgChainID int64, input string) error
+	EnsureChainConsistency(ctx context.Context, msgChainID int64) error
 
 	FlowProviderHandlers
 }
 
 type FlowProviderHandlers interface {
-	GetAskAdviceHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
-	GetCoderHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
-	GetInstallerHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
-	GetMemoristHandler(ctx context.Context, taskID int64, subtaskID *int64) (tools.ExecutorHandler, error)
-	GetPentesterHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
-	GetSubtaskSearcherHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error)
+	GetAskAdviceHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error)
+	GetCoderHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error)
+	GetInstallerHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error)
+	GetMemoristHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error)
+	GetPentesterHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error)
+	GetSubtaskSearcherHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error)
 	GetTaskSearcherHandler(ctx context.Context, taskID int64) (tools.ExecutorHandler, error)
 	GetSummarizeResultHandler(taskID, subtaskID *int64) tools.SummarizeHandler
 }
@@ -92,6 +120,8 @@ type flowProvider struct {
 	flowID   int64
 	publicIP string
 
+	callCounter *atomic.Int64
+
 	image    string
 	title    string
 	language string
@@ -99,12 +129,20 @@ type flowProvider struct {
 	prompter templates.Prompter
 	executor tools.FlowToolsExecutor
 	agentLog tools.AgentLogProvider
+	msgLog   tools.MsgLogProvider
+	streamCb StreamMessageHandler
+
+	summarizer csum.Summarizer
 
 	provider.Provider
 }
 
 func (fp *flowProvider) SetAgentLogProvider(agentLog tools.AgentLogProvider) {
 	fp.agentLog = agentLog
+}
+
+func (fp *flowProvider) SetMsgLogProvider(msgLog tools.MsgLogProvider) {
+	fp.msgLog = msgLog
 }
 
 func (fp *flowProvider) Image() string {
@@ -138,9 +176,10 @@ func (fp *flowProvider) GetTaskTitle(ctx context.Context, input string) (string,
 	ctx, _ = getterSpan.Observation(ctx)
 
 	titleTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeTaskDescriptor, map[string]any{
-		"Input": input,
-		"Lang":  fp.language,
-		"N":     150,
+		"Input":       input,
+		"Lang":        fp.language,
+		"CurrentTime": getCurrentTime(),
+		"N":           150,
 	})
 	if err != nil {
 		return "", wrapErrorEndSpan(ctx, getterSpan, "failed to get flow title template", err)
@@ -178,12 +217,18 @@ func (fp *flowProvider) GenerateSubtasks(ctx context.Context, taskID int64) ([]t
 			"Subtasks": tasksInfo.Subtasks,
 		},
 		"system": {
-			"SubtaskListToolName": tools.SubtaskListToolName,
-			"SearchToolName":      tools.SearchToolName,
-			"DockerImage":         fp.image,
-			"Lang":                fp.language,
-			"N":                   TasksNumberLimit,
-			"ToolPlaceholder":     ToolPlaceholder,
+			"SubtaskListToolName":     tools.SubtaskListToolName,
+			"SearchToolName":          tools.SearchToolName,
+			"TerminalToolName":        tools.TerminalToolName,
+			"FileToolName":            tools.FileToolName,
+			"BrowserToolName":         tools.BrowserToolName,
+			"SummarizationToolName":   cast.SummarizationToolName,
+			"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+			"DockerImage":             fp.image,
+			"Lang":                    fp.language,
+			"CurrentTime":             getCurrentTime(),
+			"N":                       TasksNumberLimit,
+			"ToolPlaceholder":         ToolPlaceholder,
 		},
 	}
 
@@ -203,8 +248,17 @@ func (fp *flowProvider) GenerateSubtasks(ctx context.Context, taskID int64) ([]t
 		return nil, wrapErrorEndSpan(ctx, generatorSpan, "failed to get task generator template", err)
 	}
 
-	if len(generatorTmpl) > msgGeneratorSizeLimit {
-		generatorTmpl = generatorTmpl[:msgGeneratorSizeLimit] + textTruncateMessage
+	subtasksLen := len(tasksInfo.Subtasks)
+	for l := subtasksLen; l > 2; l /= 2 {
+		if len(generatorTmpl) < msgGeneratorSizeLimit {
+			break
+		}
+
+		generatorContext["user"]["Subtasks"] = tasksInfo.Subtasks[(subtasksLen - l):]
+		generatorTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeSubtasksGenerator, generatorContext["user"])
+		if err != nil {
+			return nil, wrapErrorEndSpan(ctx, generatorSpan, "failed to get task generator template", err)
+		}
 	}
 
 	systemGeneratorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeGenerator, generatorContext["system"])
@@ -247,12 +301,18 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 			"CompletedSubtasks": subtasksInfo.Completed,
 		},
 		"system": {
-			"SubtaskListToolName": tools.SubtaskListToolName,
-			"SearchToolName":      tools.SearchToolName,
-			"DockerImage":         fp.image,
-			"Lang":                fp.language,
-			"N":                   max(TasksNumberLimit-len(subtasksInfo.Completed), 0),
-			"ToolPlaceholder":     ToolPlaceholder,
+			"SubtaskListToolName":     tools.SubtaskListToolName,
+			"SearchToolName":          tools.SearchToolName,
+			"TerminalToolName":        tools.TerminalToolName,
+			"FileToolName":            tools.FileToolName,
+			"BrowserToolName":         tools.BrowserToolName,
+			"SummarizationToolName":   cast.SummarizationToolName,
+			"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+			"DockerImage":             fp.image,
+			"Lang":                    fp.language,
+			"CurrentTime":             getCurrentTime(),
+			"N":                       max(TasksNumberLimit-len(subtasksInfo.Completed), 0),
+			"ToolPlaceholder":         ToolPlaceholder,
 		},
 	}
 
@@ -272,8 +332,32 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template", err)
 	}
 
-	if len(refinerTmpl) > msgRefinerSizeLimit {
-		refinerTmpl = refinerTmpl[:msgRefinerSizeLimit] + textTruncateMessage
+	// TODO: here need to store it in the database and use it as a cache for next runs
+	if len(refinerTmpl) < msgRefinerSizeLimit {
+		summarizerHandler := fp.GetSummarizeResultHandler(&taskID, nil)
+		executionState, err := fp.getTaskPrimaryAgentChainSummary(ctx, taskID, summarizerHandler)
+		if err != nil {
+			return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to prepare execution state", err)
+		}
+
+		refinerContext["user"]["ExecutionState"] = executionState
+		refinerTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
+		if err != nil {
+			return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template", err)
+		}
+
+		if len(refinerTmpl) < msgRefinerSizeLimit {
+			msgLogsSummary, err := fp.getTaskMsgLogsSummary(ctx, taskID, summarizerHandler)
+			if err != nil {
+				return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task msg logs summary", err)
+			}
+
+			refinerContext["user"]["ExecutionLogs"] = msgLogsSummary
+			refinerTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
+			if err != nil {
+				return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template", err)
+			}
+		}
 	}
 
 	systemRefinerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeRefiner, refinerContext["system"])
@@ -307,32 +391,20 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 	}
 
 	subtasksInfo := fp.getSubtasksInfo(taskID, tasksInfo.Subtasks)
-
-	msgLogs, err := fp.db.GetTaskMsgLogs(ctx, database.Int64ToNullInt64(&taskID))
-	if err != nil {
-		logger.WithError(err).Error("failed to get task msg logs")
-		return nil, fmt.Errorf("failed to get task %d msg logs: %w", taskID, err)
-	}
-
-	for _, msgLog := range msgLogs {
-		if len(msgLog.Result) > msgLogResultSizeLimit {
-			msgLog.Result = msgLog.Result[:msgLogResultSizeLimit] + textTruncateMessage
-		}
-	}
-
 	reporterContext := map[string]map[string]any{
 		"user": {
 			"Task":              tasksInfo.Task,
 			"Tasks":             tasksInfo.Tasks,
 			"CompletedSubtasks": subtasksInfo.Completed,
 			"PlannedSubtasks":   subtasksInfo.Planned,
-			"MsgLogs":           msgLogs,
 		},
 		"system": {
-			"ReportResultToolName": tools.ReportResultToolName,
-			"Lang":                 fp.language,
-			"N":                    2000,
-			"ToolPlaceholder":      ToolPlaceholder,
+			"ReportResultToolName":    tools.ReportResultToolName,
+			"SummarizationToolName":   cast.SummarizationToolName,
+			"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+			"Lang":                    fp.language,
+			"N":                       4000,
+			"ToolPlaceholder":         ToolPlaceholder,
 		},
 	}
 
@@ -352,8 +424,27 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 		return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template", err)
 	}
 
-	if len(reporterTmpl) > msgReporterSizeLimit {
-		reporterTmpl = reporterTmpl[:msgReporterSizeLimit] + textTruncateMessage
+	if len(reporterTmpl) < msgReporterSizeLimit {
+		summarizerHandler := fp.GetSummarizeResultHandler(&taskID, nil)
+		executionState, err := fp.getTaskPrimaryAgentChainSummary(ctx, taskID, summarizerHandler)
+		if err != nil {
+			return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to prepare execution state", err)
+		}
+
+		reporterContext["user"]["ExecutionState"] = executionState
+		reporterTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeTaskReporter, reporterContext["user"])
+		if err != nil {
+			return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template", err)
+		}
+
+		if len(reporterTmpl) < msgReporterSizeLimit {
+			msgLogsSummary, err := fp.getTaskMsgLogsSummary(ctx, taskID, summarizerHandler)
+			if err != nil {
+				return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task msg logs summary", err)
+			}
+
+			reporterContext["user"]["ExecutionLogs"] = msgLogsSummary
+		}
 	}
 
 	systemReporterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeReporter, reporterContext["system"])
@@ -379,68 +470,64 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"flow_id":    fp.flowID,
 		"task_id":    taskID,
 		"subtask_id": subtaskID,
 	})
 
-	tasksInfo, err := fp.getTasksInfo(ctx, taskID)
+	subtask, err := fp.db.GetSubtask(ctx, subtaskID)
 	if err != nil {
-		logger.WithError(err).Error("failed to get tasks info")
-		return 0, fmt.Errorf("failed to get tasks info: %w", err)
+		logger.WithError(err).Error("failed to get subtask")
+		return 0, fmt.Errorf("failed to get subtask: %w", err)
 	}
 
-	subtasksInfo := fp.getSubtasksInfo(taskID, tasksInfo.Subtasks)
-	if subtasksInfo.Subtask == nil {
-		for i, subtask := range subtasksInfo.Planned {
-			if subtask.ID == subtaskID {
-				subtasksInfo.Subtask = &subtask
-				subtasksInfo.Planned = append(subtasksInfo.Planned[:i], subtasksInfo.Planned[i+1:]...)
-				break
-			}
-		}
+	executionContext, err := fp.prepareExecutionContext(ctx, taskID, subtaskID)
+	if err != nil {
+		logger.WithError(err).Error("failed to prepare execution context")
+		return 0, fmt.Errorf("failed to prepare execution context: %w", err)
+	}
+
+	subtask, err = fp.db.UpdateSubtaskContext(ctx, database.UpdateSubtaskContextParams{
+		Context: executionContext,
+		ID:      subtaskID,
+	})
+	if err != nil {
+		logger.WithError(err).Error("failed to update subtask context")
+		return 0, fmt.Errorf("failed to update subtask context: %w", err)
 	}
 
 	systemAgentTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypePrimaryAgent, map[string]any{
-		"FinalyToolName":    tools.FinalyToolName,
-		"Task":              tasksInfo.Task,
-		"Tasks":             tasksInfo.Tasks,
-		"Subtask":           subtasksInfo.Subtask,
-		"PlannedSubtasks":   subtasksInfo.Planned,
-		"CompletedSubtasks": subtasksInfo.Completed,
-		"Lang":              fp.language,
-		"DockerImage":       fp.image,
-		"ToolPlaceholder":   ToolPlaceholder,
+		"FinalyToolName":          tools.FinalyToolName,
+		"SearchToolName":          tools.SearchToolName,
+		"PentesterToolName":       tools.PentesterToolName,
+		"CoderToolName":           tools.CoderToolName,
+		"AdviceToolName":          tools.AdviceToolName,
+		"MemoristToolName":        tools.MemoristToolName,
+		"MaintenanceToolName":     tools.MaintenanceToolName,
+		"SummarizationToolName":   cast.SummarizationToolName,
+		"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+		"ExecutionContext":        executionContext,
+		"Lang":                    fp.language,
+		"DockerImage":             fp.image,
+		"CurrentTime":             getCurrentTime(),
+		"ToolPlaceholder":         ToolPlaceholder,
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to get system prompt for primary agent template")
 		return 0, fmt.Errorf("failed to get system prompt for primary agent template: %w", err)
 	}
 
-	chain := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemAgentTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, subtasksInfo.Subtask.Description),
-	}
-	chainBlob, err := json.Marshal(chain)
+	optAgentType := provider.OptionsTypeAgent
+	msgChainType := database.MsgchainTypePrimaryAgent
+	msgChainID, _, err := fp.restoreChain(
+		ctx, &taskID, &subtaskID, optAgentType, msgChainType, systemAgentTmpl, subtask.Description,
+	)
 	if err != nil {
-		logger.WithError(err).Error("failed to marshal primary agent msg chain")
-		return 0, fmt.Errorf("failed to marshal primary agent msg chain: %w", err)
+		logger.WithError(err).Error("failed to restore primary agent msg chain")
+		return 0, fmt.Errorf("failed to restore primary agent msg chain: %w", err)
 	}
 
-	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypePrimaryAgent,
-		Model:         fp.Model(provider.OptionsTypeAgent),
-		ModelProvider: string(fp.Type()),
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(&taskID),
-		SubtaskID:     database.Int64ToNullInt64(&subtaskID),
-	})
-	if err != nil {
-		logger.WithError(err).Error("failed to create primary agent msg chain")
-		return 0, fmt.Errorf("failed to create primary agent msg chain: %w", err)
-	}
-
-	return msgChain.ID, nil
+	return msgChainID, nil
 }
 
 func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID, msgChainID int64) (PerformResult, error) {
@@ -448,6 +535,7 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"flow_id":      fp.flowID,
 		"task_id":      taskID,
 		"subtask_id":   subtaskID,
 		"msg_chain_id": msgChainID,
@@ -465,37 +553,37 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 		return PerformResultError, fmt.Errorf("failed to unmarshal primary agent msg chain %d: %w", msgChainID, err)
 	}
 
-	adviser, err := fp.GetAskAdviceHandler(ctx, taskID, subtaskID)
+	adviser, err := fp.GetAskAdviceHandler(ctx, &taskID, &subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get ask advice handler")
 		return PerformResultError, fmt.Errorf("failed to get ask advice handler: %w", err)
 	}
 
-	coder, err := fp.GetCoderHandler(ctx, taskID, subtaskID)
+	coder, err := fp.GetCoderHandler(ctx, &taskID, &subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get coder handler")
 		return PerformResultError, fmt.Errorf("failed to get coder handler: %w", err)
 	}
 
-	installer, err := fp.GetInstallerHandler(ctx, taskID, subtaskID)
+	installer, err := fp.GetInstallerHandler(ctx, &taskID, &subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get installer handler")
 		return PerformResultError, fmt.Errorf("failed to get installer handler: %w", err)
 	}
 
-	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, &taskID, &subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get memorist handler")
 		return PerformResultError, fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
-	pentester, err := fp.GetPentesterHandler(ctx, taskID, subtaskID)
+	pentester, err := fp.GetPentesterHandler(ctx, &taskID, &subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get pentester handler")
 		return PerformResultError, fmt.Errorf("failed to get pentester handler: %w", err)
 	}
 
-	searcher, err := fp.GetSubtaskSearcherHandler(ctx, taskID, subtaskID)
+	searcher, err := fp.GetSubtaskSearcherHandler(ctx, &taskID, &subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get searcher handler")
 		return PerformResultError, fmt.Errorf("failed to get searcher handler: %w", err)
@@ -572,7 +660,7 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 				}
 
 				// TODO: here need to call SetResult from SubtaskWorker interface
-				_, err = fp.db.UpdateSubtaskResult(ctx, database.UpdateSubtaskResultParams{
+				subtask, err = fp.db.UpdateSubtaskResult(ctx, database.UpdateSubtaskResultParams{
 					Result: done.Result,
 					ID:     subtaskID,
 				})
@@ -583,6 +671,38 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 					)
 					loggerFunc.WithError(err).Error("failed to update subtask result")
 					return "", fmt.Errorf("failed to update subtask %d result: %w", subtaskID, err)
+				}
+
+				// report result to msg log as a final message for the subtask execution
+				if fp.msgLog != nil {
+					reportMsgID, err := fp.msgLog.PutMsg(
+						ctx,
+						database.MsglogTypeReport,
+						&taskID, &subtaskID, 0,
+						"", subtask.Description,
+					)
+					if err != nil {
+						opts = append(opts,
+							langfuse.WithEndSpanStatus(err.Error()),
+							langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+						)
+						loggerFunc.WithError(err).Error("failed to put report msg")
+						return "", fmt.Errorf("failed to put report msg: %w", err)
+					}
+
+					err = fp.msgLog.UpdateMsgResult(
+						ctx,
+						reportMsgID, 0,
+						done.Result, database.MsglogResultFormatMarkdown,
+					)
+					if err != nil {
+						opts = append(opts,
+							langfuse.WithEndSpanStatus(err.Error()),
+							langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+						)
+						loggerFunc.WithError(err).Error("failed to update report msg result")
+						return "", fmt.Errorf("failed to update report msg result: %w", err)
+					}
 				}
 
 			case tools.AskUserToolName:
@@ -611,7 +731,9 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 	}
 
 	ctx = tools.PutAgentContext(ctx, database.MsgchainTypePrimaryAgent)
-	chain, err = fp.performAgentChain(ctx, provider.OptionsTypeAgent, msgChain.ID, &taskID, &subtaskID, chain, executor)
+	err = fp.performAgentChain(
+		ctx, provider.OptionsTypeAgent, msgChain.ID, &taskID, &subtaskID, chain, executor, fp.summarizer,
+	)
 	if err != nil {
 		return PerformResultError, wrapErrorEndSpan(ctx, executorSpan, "failed to perform primary agent chain", err)
 	}
@@ -626,42 +748,28 @@ func (fp *flowProvider) PutInputToAgentChain(ctx context.Context, msgChainID int
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"flow_id":      fp.flowID,
 		"msg_chain_id": msgChainID,
 		"input":        input[:min(len(input), 1000)],
 	})
 
-	msgChain, err := fp.db.GetMsgChain(ctx, msgChainID)
-	if err != nil {
-		logger.WithError(err).Error("failed to get primary agent msg chain")
-		return fmt.Errorf("failed to get primary agent msg chain %d: %w", msgChainID, err)
-	}
-
-	var chain []llms.MessageContent
-	if err := json.Unmarshal(msgChain.Chain, &chain); err != nil {
-		logger.WithError(err).Error("failed to unmarshal primary agent msg chain")
-		return fmt.Errorf("failed to unmarshal primary agent msg chain %d: %w", msgChainID, err)
-	}
-
-	// replace user's dummy input in the last function call response if it's possible
-	// otherwise just append it to the end of the chain as a new human message
-	if err = fp.updateMsgChainResult(chain, tools.AskUserToolName, input); err != nil {
-		chain = append(chain, llms.TextParts(llms.ChatMessageTypeHuman, input))
-	}
-
-	chainBlob, err := json.Marshal(chain)
-	if err != nil {
-		logger.WithError(err).Error("failed to marshal primary agent msg chain")
-		return fmt.Errorf("failed to marshal primary agent msg chain %d: %w", msgChainID, err)
-	}
-
-	_, err = fp.db.UpdateMsgChain(ctx, database.UpdateMsgChainParams{
-		Chain: chainBlob,
-		ID:    msgChainID,
+	return fp.processChain(ctx, msgChainID, logger, func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
+		return fp.updateMsgChainResult(chain, tools.AskUserToolName, input)
 	})
-	if err != nil {
-		logger.WithError(err).Error("failed to update primary agent msg chain")
-		return fmt.Errorf("failed to update primary agent msg chain %d: %w", msgChainID, err)
-	}
+}
 
-	return nil
+// EnsureChainConsistency ensures a message chain is in a consistent state by adding
+// default responses to any unresponded tool calls.
+func (fp *flowProvider) EnsureChainConsistency(ctx context.Context, msgChainID int64) error {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.EnsureChainConsistency")
+	defer span.End()
+
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"flow_id":      fp.flowID,
+		"msg_chain_id": msgChainID,
+	})
+
+	return fp.processChain(ctx, msgChainID, logger, func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
+		return fp.ensureChainConsistency(chain)
+	})
 }

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -20,6 +21,23 @@ func (s UserStatus) String() string {
 	return string(s)
 }
 
+// Valid is function to control input/output data
+func (s UserStatus) Valid() error {
+	switch s {
+	case UserStatusCreated, UserStatusActive, UserStatusBlocked:
+		return nil
+	default:
+		return fmt.Errorf("invalid UserStatus: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s UserStatus) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 type UserType string
 
 const (
@@ -31,15 +49,32 @@ func (s UserType) String() string {
 	return string(s)
 }
 
+// Valid is function to control input/output data
+func (s UserType) Valid() error {
+	switch s {
+	case UserTypeLocal, UserTypeOAuth:
+		return nil
+	default:
+		return fmt.Errorf("invalid UserType: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s UserType) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 // User is model to contain user information
 // nolint:lll
 type User struct {
 	ID                     uint64     `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
 	Hash                   string     `form:"hash" json:"hash" validate:"len=32,hexadecimal,lowercase,omitempty" gorm:"type:TEXT;NOT NULL;UNIQUE_INDEX;default:MD5(RANDOM()::text)"`
-	Type                   UserType   `form:"type" json:"type" validate:"oneof=local oauth,required" gorm:"type:USER_TYPE;NOT NULL;default:'local'"`
+	Type                   UserType   `form:"type" json:"type" validate:"valid,required" gorm:"type:USER_TYPE;NOT NULL;default:'local'"`
 	Mail                   string     `form:"mail" json:"mail" validate:"max=50,vmail,required" gorm:"type:TEXT;NOT NULL;UNIQUE_INDEX"`
 	Name                   string     `form:"name" json:"name" validate:"max=70,omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
-	Status                 UserStatus `form:"status" json:"status" validate:"oneof=created active blocked,required" gorm:"type:USER_STATUS;NOT NULL;default:'created'"`
+	Status                 UserStatus `form:"status" json:"status" validate:"valid,required" gorm:"type:USER_STATUS;NOT NULL;default:'created'"`
 	RoleID                 uint64     `form:"role_id" json:"role_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;default:2"`
 	PasswordChangeRequired bool       `form:"password_change_required" json:"password_change_required" gorm:"type:BOOL;NOT NULL;default:false"`
 	Provider               *string    `form:"provider,omitempty" json:"provider,omitempty" validate:"omitempty" gorm:"type:TEXT"`

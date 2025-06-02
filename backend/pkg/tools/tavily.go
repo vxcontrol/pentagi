@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"text/template"
 
 	"pentagi/pkg/database"
 
@@ -190,30 +191,102 @@ func (t *tavily) buildTavilyResult(ctx context.Context, result *tavilySearchResu
 	writer.WriteString(result.Answer)
 	writer.WriteString("\n\n# Links\n\n")
 
+	isRawContentExists := false
 	for i, result := range result.Results {
 		writer.WriteString(fmt.Sprintf("## %d. %s\n\n", i+1, result.Title))
 		writer.WriteString(fmt.Sprintf("* URL %s\n", result.URL))
 		writer.WriteString(fmt.Sprintf("* Match score %3.3f\n\n", result.Score))
 		writer.WriteString(fmt.Sprintf("### Short content\n\n%s\n\n", result.Content))
 		if result.RawContent != nil {
-			if t.summarizer != nil {
-				summarizedContent, err := t.summarizer(ctx, *result.RawContent)
-				if err != nil {
-					rawContent := *result.RawContent
-					rawContent = rawContent[:min(len(rawContent), maxRawContentLength)]
-					writer.WriteString(fmt.Sprintf("### Content\n\n%s\n\n", rawContent))
-				} else {
-					writer.WriteString(fmt.Sprintf("### Content\n\n%s\n\n", summarizedContent))
-				}
-			} else {
-				rawContent := *result.RawContent
-				rawContent = rawContent[:min(len(rawContent), maxRawContentLength)]
-				writer.WriteString(fmt.Sprintf("### Content (not summarized)\n\n%s\n\n", rawContent))
-			}
+			isRawContentExists = true
 		}
 	}
 
+	if isRawContentExists && t.summarizer != nil {
+		summarizePrompt, err := t.getSummarizePrompt(result.Query, result)
+		if err != nil {
+			writer.WriteString(t.getRawContentFromResults(result.Results))
+		} else {
+			summarizedContents, err := t.summarizer(ctx, summarizePrompt)
+			if err != nil {
+				writer.WriteString(t.getRawContentFromResults(result.Results))
+			} else {
+				writer.WriteString(fmt.Sprintf("### Summarized Content\n\n%s\n\n", summarizedContents))
+			}
+		}
+	} else {
+		writer.WriteString(t.getRawContentFromResults(result.Results))
+	}
+
 	return writer.String()
+}
+
+func (t *tavily) getRawContentFromResults(results []tavilyResult) string {
+	var writer strings.Builder
+	for i, result := range results {
+		if result.RawContent != nil {
+			rawContent := *result.RawContent
+			rawContent = rawContent[:min(len(rawContent), maxRawContentLength)]
+			writer.WriteString(fmt.Sprintf("### Raw content for %d. %s\n\n%s\n\n", i+1, result.Title, rawContent))
+		}
+	}
+	return writer.String()
+}
+
+func (t *tavily) getSummarizePrompt(query string, result *tavilySearchResult) (string, error) {
+	templateText := `<instructions>
+TASK: Summarize web search results for the following user query:
+
+USER QUERY: "{{.Query}}"
+
+DATA:
+- <raw_content> tags contain web page content with attributes: id, title, url
+- Content may include HTML, structured data, tables, or plain text
+
+REQUIREMENTS:
+1. Create concise summary (max {{.MaxLength}} chars) that DIRECTLY answers the user query
+2. Preserve ALL critical facts, statistics, technical details, and numerical data
+3. Maintain all actionable insights, procedures, or code examples exactly as presented
+4. Keep ALL query-relevant information even if reducing overall length
+5. Highlight authoritative information and note contradictions between sources
+6. Cite sources using [Source #] format when presenting specific claims
+7. Ensure the user query is fully addressed in the summary
+8. NEVER remove information that answers the user's original question
+
+FORMAT:
+- Begin with a direct answer to the user query
+- Organize thematically with clear structure using headings
+- Keep bullet points and numbered lists for clarity and steps
+- Include brief "Sources Overview" section identifying key references
+
+The summary MUST provide complete answers to the user's query, preserving all relevant information.
+</instructions>
+
+{{range $index, $result := .Results}}
+{{if $result.RawContent}}
+<raw_content id="{{$index}}" title="{{$result.Title}}" url="{{$result.URL}}">
+{{$result.RawContent}}
+</raw_content>
+{{end}}
+{{end}}`
+
+	templateContext := map[string]any{
+		"Query":     query,
+		"MaxLength": maxRawContentLength,
+		"Results":   result.Results,
+	}
+
+	tmpl, err := template.New("summarize").Parse(templateText)
+	if err != nil {
+		return "", fmt.Errorf("error creating template: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, templateContext); err != nil {
+		return "", fmt.Errorf("error executing template: %v", err)
+	}
+
+	return buf.String(), nil
 }
 
 func (t *tavily) IsAvailable() bool {

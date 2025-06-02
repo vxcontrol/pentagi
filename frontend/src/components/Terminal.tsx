@@ -1,13 +1,14 @@
 import '@xterm/xterm/css/xterm.css';
 
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import type { ITerminalOptions, ITheme } from '@xterm/xterm';
 import { Terminal as XTerminal } from '@xterm/xterm';
 import debounce from 'lodash/debounce';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,22 @@ const terminalOptions: ITerminalOptions = {
     fastScrollSensitivity: 10,
     fastScrollModifier: 'alt',
     smoothScrollDuration: 0, // Disable smooth scrolling
+} as const;
+
+// Search decoration styles for dark theme - using HEX format as required
+const darkSearchDecorations = {
+    matchBackground: '#666666',
+    matchOverviewRuler: '#000000',
+    activeMatchBackground: '#AAAAAA',
+    activeMatchColorOverviewRuler: '#000000',
+} as const;
+
+// Search decoration styles for light theme - using HEX format as required
+const lightSearchDecorations = {
+    matchBackground: '#000000',
+    matchOverviewRuler: '#000000',
+    activeMatchBackground: '#555555',
+    activeMatchColorOverviewRuler: '#000000',
 } as const;
 
 const darkTheme: ITheme = {
@@ -81,12 +98,19 @@ const lightTheme: ITheme = {
 interface TerminalProps {
     logs: string[];
     className?: string;
+    searchValue?: string;
 }
 
-const Terminal = ({ logs, className }: TerminalProps) => {
+interface TerminalRef {
+    findNext: () => void;
+    findPrevious: () => void;
+}
+
+const Terminal = forwardRef<TerminalRef, TerminalProps>(({ logs, className, searchValue }, ref) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<XTerminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const searchAddonRef = useRef<SearchAddon | null>(null);
     const lastLogIndexRef = useRef<number>(0);
     const webglAddonRef = useRef<WebglAddon | null>(null);
     const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -100,6 +124,43 @@ const Terminal = ({ logs, className }: TerminalProps) => {
     const isMountedRef = useRef(true);
     const initTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Get search decorations based on current theme
+    const getSearchDecorations = () => {
+        return theme === 'dark' ? darkSearchDecorations : lightSearchDecorations;
+    };
+
+    // Expose methods to parent component via ref
+    useImperativeHandle(ref, () => ({
+        findNext: () => {
+            if (searchAddonRef.current && searchValue?.trim()) {
+                try {
+                    searchAddonRef.current.findNext(searchValue.trim(), {
+                        caseSensitive: false,
+                        wholeWord: false,
+                        regex: false,
+                        decorations: getSearchDecorations()
+                    });
+                } catch (error: unknown) {
+                    Log.error('Terminal findNext failed:', error);
+                }
+            }
+        },
+        findPrevious: () => {
+            if (searchAddonRef.current && searchValue?.trim()) {
+                try {
+                    searchAddonRef.current.findPrevious(searchValue.trim(), {
+                        caseSensitive: false,
+                        wholeWord: false,
+                        regex: false,
+                        decorations: getSearchDecorations()
+                    });
+                } catch (error: unknown) {
+                    Log.error('Terminal findPrevious failed:', error);
+                }
+            }
+        }
+    }), [searchValue, theme]);
 
     // Safe terminal operations
     const safeTerminalOperation = (operation: () => void) => {
@@ -172,6 +233,10 @@ const Terminal = ({ logs, className }: TerminalProps) => {
             const fitAddon = new FitAddon();
             fitAddonRef.current = fitAddon;
             terminal.loadAddon(fitAddon);
+
+            const searchAddon = new SearchAddon();
+            searchAddonRef.current = searchAddon;
+            terminal.loadAddon(searchAddon);
 
             const unicodeAddon = new Unicode11Addon();
             terminal.loadAddon(unicodeAddon);
@@ -257,6 +322,15 @@ const Terminal = ({ logs, className }: TerminalProps) => {
                     debouncedFitRef.current = null;
                 }
 
+                if (searchAddonRef.current) {
+                    try {
+                        searchAddonRef.current.dispose();
+                    } catch {
+                        // Ignore errors during disposal
+                    }
+                    searchAddonRef.current = null;
+                }
+
                 if (webglAddonRef.current) {
                     try {
                         webglAddonRef.current.dispose();
@@ -297,6 +371,32 @@ const Terminal = ({ logs, className }: TerminalProps) => {
             return;
         }
     }, [theme]);
+
+    // Handle search functionality with decorations
+    useEffect(() => {
+        if (!searchAddonRef.current || !isTerminalReady || !isMountedRef.current) {
+            return;
+        }
+
+        const searchAddon = searchAddonRef.current;
+
+        try {
+            if (searchValue && searchValue.trim()) {
+                // Perform search with theme-appropriate decorations
+                searchAddon.findNext(searchValue.trim(), { 
+                    caseSensitive: false,
+                    wholeWord: false,
+                    regex: false,
+                    decorations: getSearchDecorations()
+                });
+            } else {
+                // Clear search highlighting when search value is empty
+                searchAddon.clearDecorations();
+            }
+        } catch (error: unknown) {
+            Log.error('Terminal search failed:', error);
+        }
+    }, [searchValue, isTerminalReady, theme]);
 
     // Update theme
     useEffect(() => {
@@ -377,6 +477,8 @@ const Terminal = ({ logs, className }: TerminalProps) => {
             className={cn('overflow-hidden', className)}
         />
     );
-};
+});
+
+Terminal.displayName = 'Terminal';
 
 export default Terminal;

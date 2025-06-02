@@ -21,6 +21,30 @@ type AgentLog struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type Assistant struct {
+	ID        int64      `json:"id"`
+	Title     string     `json:"title"`
+	Status    StatusType `json:"status"`
+	Provider  string     `json:"provider"`
+	FlowID    int64      `json:"flowId"`
+	UseAgents bool       `json:"useAgents"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+}
+
+type AssistantLog struct {
+	ID           int64          `json:"id"`
+	Type         MessageLogType `json:"type"`
+	Message      string         `json:"message"`
+	Thinking     *string        `json:"thinking,omitempty"`
+	Result       string         `json:"result"`
+	ResultFormat ResultFormat   `json:"resultFormat"`
+	AppendPart   bool           `json:"appendPart"`
+	FlowID       int64          `json:"flowId"`
+	AssistantID  int64          `json:"assistantId"`
+	CreatedAt    time.Time      `json:"createdAt"`
+}
+
 type Flow struct {
 	ID        int64       `json:"id"`
 	Title     string      `json:"title"`
@@ -31,10 +55,16 @@ type Flow struct {
 	UpdatedAt time.Time   `json:"updatedAt"`
 }
 
+type FlowAssistant struct {
+	Flow      *Flow      `json:"flow"`
+	Assistant *Assistant `json:"assistant"`
+}
+
 type MessageLog struct {
 	ID           int64          `json:"id"`
 	Type         MessageLogType `json:"type"`
 	Message      string         `json:"message"`
+	Thinking     *string        `json:"thinking,omitempty"`
 	Result       string         `json:"result"`
 	ResultFormat ResultFormat   `json:"resultFormat"`
 	FlowID       int64          `json:"flowId"`
@@ -73,6 +103,13 @@ type SearchLog struct {
 	TaskID    *int64    `json:"taskId,omitempty"`
 	SubtaskID *int64    `json:"subtaskId,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+type Settings struct {
+	Debug              bool `json:"debug"`
+	AskUser            bool `json:"askUser"`
+	DockerInside       bool `json:"dockerInside"`
+	AssistantUseAgents bool `json:"assistantUseAgents"`
 }
 
 type Subscription struct {
@@ -136,19 +173,21 @@ type VectorStoreLog struct {
 type AgentType string
 
 const (
-	AgentTypePrimaryAgent AgentType = "primary_agent"
-	AgentTypeReporter     AgentType = "reporter"
-	AgentTypeGenerator    AgentType = "generator"
-	AgentTypeRefiner      AgentType = "refiner"
-	AgentTypeReflector    AgentType = "reflector"
-	AgentTypeEnricher     AgentType = "enricher"
-	AgentTypeAdviser      AgentType = "adviser"
-	AgentTypeCoder        AgentType = "coder"
-	AgentTypeMemorist     AgentType = "memorist"
-	AgentTypeSearcher     AgentType = "searcher"
-	AgentTypeInstaller    AgentType = "installer"
-	AgentTypePentester    AgentType = "pentester"
-	AgentTypeSummarizer   AgentType = "summarizer"
+	AgentTypePrimaryAgent  AgentType = "primary_agent"
+	AgentTypeReporter      AgentType = "reporter"
+	AgentTypeGenerator     AgentType = "generator"
+	AgentTypeRefiner       AgentType = "refiner"
+	AgentTypeReflector     AgentType = "reflector"
+	AgentTypeEnricher      AgentType = "enricher"
+	AgentTypeAdviser       AgentType = "adviser"
+	AgentTypeCoder         AgentType = "coder"
+	AgentTypeMemorist      AgentType = "memorist"
+	AgentTypeSearcher      AgentType = "searcher"
+	AgentTypeInstaller     AgentType = "installer"
+	AgentTypePentester     AgentType = "pentester"
+	AgentTypeSummarizer    AgentType = "summarizer"
+	AgentTypeToolCallFixer AgentType = "tool_call_fixer"
+	AgentTypeAssistant     AgentType = "assistant"
 )
 
 var AllAgentType = []AgentType{
@@ -165,11 +204,13 @@ var AllAgentType = []AgentType{
 	AgentTypeInstaller,
 	AgentTypePentester,
 	AgentTypeSummarizer,
+	AgentTypeToolCallFixer,
+	AgentTypeAssistant,
 }
 
 func (e AgentType) IsValid() bool {
 	switch e {
-	case AgentTypePrimaryAgent, AgentTypeReporter, AgentTypeGenerator, AgentTypeRefiner, AgentTypeReflector, AgentTypeEnricher, AgentTypeAdviser, AgentTypeCoder, AgentTypeMemorist, AgentTypeSearcher, AgentTypeInstaller, AgentTypePentester, AgentTypeSummarizer:
+	case AgentTypePrimaryAgent, AgentTypeReporter, AgentTypeGenerator, AgentTypeRefiner, AgentTypeReflector, AgentTypeEnricher, AgentTypeAdviser, AgentTypeCoder, AgentTypeMemorist, AgentTypeSearcher, AgentTypeInstaller, AgentTypePentester, AgentTypeSummarizer, AgentTypeToolCallFixer, AgentTypeAssistant:
 		return true
 	}
 	return false
@@ -199,6 +240,8 @@ func (e AgentType) MarshalGQL(w io.Writer) {
 type MessageLogType string
 
 const (
+	MessageLogTypeAnswer   MessageLogType = "answer"
+	MessageLogTypeReport   MessageLogType = "report"
 	MessageLogTypeThoughts MessageLogType = "thoughts"
 	MessageLogTypeBrowser  MessageLogType = "browser"
 	MessageLogTypeTerminal MessageLogType = "terminal"
@@ -211,6 +254,8 @@ const (
 )
 
 var AllMessageLogType = []MessageLogType{
+	MessageLogTypeAnswer,
+	MessageLogTypeReport,
 	MessageLogTypeThoughts,
 	MessageLogTypeBrowser,
 	MessageLogTypeTerminal,
@@ -224,7 +269,7 @@ var AllMessageLogType = []MessageLogType{
 
 func (e MessageLogType) IsValid() bool {
 	switch e {
-	case MessageLogTypeThoughts, MessageLogTypeBrowser, MessageLogTypeTerminal, MessageLogTypeFile, MessageLogTypeSearch, MessageLogTypeAdvice, MessageLogTypeAsk, MessageLogTypeInput, MessageLogTypeDone:
+	case MessageLogTypeAnswer, MessageLogTypeReport, MessageLogTypeThoughts, MessageLogTypeBrowser, MessageLogTypeTerminal, MessageLogTypeFile, MessageLogTypeSearch, MessageLogTypeAdvice, MessageLogTypeAsk, MessageLogTypeInput, MessageLogTypeDone:
 		return true
 	}
 	return false
@@ -338,7 +383,7 @@ func (e ResultType) MarshalGQL(w io.Writer) {
 type StatusType string
 
 const (
-	StatusTypeStarting StatusType = "starting"
+	StatusTypeCreated  StatusType = "created"
 	StatusTypeRunning  StatusType = "running"
 	StatusTypeWaiting  StatusType = "waiting"
 	StatusTypeFinished StatusType = "finished"
@@ -346,7 +391,7 @@ const (
 )
 
 var AllStatusType = []StatusType{
-	StatusTypeStarting,
+	StatusTypeCreated,
 	StatusTypeRunning,
 	StatusTypeWaiting,
 	StatusTypeFinished,
@@ -355,7 +400,7 @@ var AllStatusType = []StatusType{
 
 func (e StatusType) IsValid() bool {
 	switch e {
-	case StatusTypeStarting, StatusTypeRunning, StatusTypeWaiting, StatusTypeFinished, StatusTypeFailed:
+	case StatusTypeCreated, StatusTypeRunning, StatusTypeWaiting, StatusTypeFinished, StatusTypeFailed:
 		return true
 	}
 	return false

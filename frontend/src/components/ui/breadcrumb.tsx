@@ -89,8 +89,8 @@ const BreadcrumbStatus = React.forwardRef<
                 return <CircleCheck className="h-4 w-4 text-green-500" aria-label="finished" />;
             case 'running':
                 return <Loader2 className="h-4 w-4 text-purple-500 animate-spin" aria-label="running" />;
-            case 'starting':
-                return <CircleDashed className="h-4 w-4 text-blue-500" aria-label="starting" />;
+            case 'created':
+                return <CircleDashed className="h-4 w-4 text-blue-500" aria-label="created" />;
             case 'waiting':
                 return <CircleDashed className="h-4 w-4 text-yellow-500" aria-label="waiting" />;
             default:

@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Search, X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import debounce from 'lodash/debounce';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -13,14 +14,19 @@ import ChatAgent from './ChatAgent';
 
 interface ChatAgentsProps {
     logs?: AgentLogFragmentFragment[];
+    selectedFlowId?: string | null;
 }
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatAgents = ({ logs }: ChatAgentsProps) => {
+const ChatAgents = ({ logs, selectedFlowId }: ChatAgentsProps) => {
     const agentsEndRef = useRef<HTMLDivElement>(null);
+    
+    // Separate state for immediate input value and debounced search value
+    const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
+
     const scrollAgents = () => {
         agentsEndRef.current?.scrollIntoView();
     };
@@ -32,20 +38,56 @@ const ChatAgents = ({ logs }: ChatAgentsProps) => {
         },
     });
 
-    const filteredLogs = logs?.filter((log) => {
-        const search = form.watch('search').toLowerCase();
+    const searchValue = form.watch('search');
 
-        if (!search) {
-            return true;
+    // Create debounced function to update search value
+    const debouncedUpdateSearch = useMemo(
+        () => debounce((value: string) => {
+            setDebouncedSearchValue(value);
+        }, 500),
+        []
+    );
+
+    // Update debounced search value when input value changes
+    useEffect(() => {
+        debouncedUpdateSearch(searchValue);
+        return () => {
+            debouncedUpdateSearch.cancel();
+        };
+    }, [searchValue, debouncedUpdateSearch]);
+
+    // Cleanup debounced function on unmount
+    useEffect(() => {
+        return () => {
+            debouncedUpdateSearch.cancel();
+        };
+    }, [debouncedUpdateSearch]);
+
+    // Clear search when flow changes to prevent stale search state
+    useEffect(() => {
+        form.reset({ search: '' });
+        setDebouncedSearchValue('');
+        debouncedUpdateSearch.cancel();
+    }, [selectedFlowId, form, debouncedUpdateSearch]);
+
+    // Memoize filtered logs to avoid recomputing on every render
+    // Use debouncedSearchValue for filtering to improve performance
+    const filteredLogs = useMemo(() => {
+        const search = debouncedSearchValue.toLowerCase().trim();
+
+        if (!search || !logs) {
+            return logs || [];
         }
 
-        return (
-            log.task.toLowerCase().includes(search) ||
-            log.result?.toLowerCase().includes(search) ||
-            log.executor.toLowerCase().includes(search) ||
-            log.initiator.toLowerCase().includes(search)
-        );
-    });
+        return logs.filter((log) => {
+            return (
+                log.task.toLowerCase().includes(search) ||
+                log.result?.toLowerCase().includes(search) ||
+                log.executor.toLowerCase().includes(search) ||
+                log.initiator.toLowerCase().includes(search)
+            );
+        });
+    }, [logs, debouncedSearchValue]);
 
     const hasLogs = filteredLogs && filteredLogs.length > 0;
 
@@ -71,6 +113,7 @@ const ChatAgents = ({ logs }: ChatAgentsProps) => {
                                         type="text"
                                         placeholder="Search agent logs..."
                                         className="px-9"
+                                        autoComplete="off"
                                     />
                                     {field.value && (
                                         <Button
@@ -78,7 +121,11 @@ const ChatAgents = ({ logs }: ChatAgentsProps) => {
                                             variant="ghost"
                                             size="icon"
                                             className="absolute right-0 top-1/2 -translate-y-1/2"
-                                            onClick={() => form.reset({ search: '' })}
+                                            onClick={() => {
+                                                form.reset({ search: '' });
+                                                setDebouncedSearchValue('');
+                                                debouncedUpdateSearch.cancel();
+                                            }}
                                         >
                                             <X />
                                         </Button>
@@ -96,6 +143,7 @@ const ChatAgents = ({ logs }: ChatAgentsProps) => {
                         <ChatAgent
                             key={log.id}
                             log={log}
+                            searchValue={debouncedSearchValue}
                         />
                     ))}
                     <div ref={agentsEndRef} />

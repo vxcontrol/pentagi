@@ -31,9 +31,13 @@ type FlowSubscriber interface {
 	FlowCreated(ctx context.Context) (<-chan *model.Flow, error)
 	FlowDeletedAdmin(ctx context.Context) (<-chan *model.Flow, error)
 	FlowDeleted(ctx context.Context) (<-chan *model.Flow, error)
+	FlowUpdatedAdmin(ctx context.Context) (<-chan *model.Flow, error)
 	FlowUpdated(ctx context.Context) (<-chan *model.Flow, error)
 	TaskCreated(ctx context.Context) (<-chan *model.Task, error)
 	TaskUpdated(ctx context.Context) (<-chan *model.Task, error)
+	AssistantCreated(ctx context.Context) (<-chan *model.Assistant, error)
+	AssistantUpdated(ctx context.Context) (<-chan *model.Assistant, error)
+	AssistantDeleted(ctx context.Context) (<-chan *model.Assistant, error)
 	ScreenshotAdded(ctx context.Context) (<-chan *model.Screenshot, error)
 	TerminalLogAdded(ctx context.Context) (<-chan *model.TerminalLog, error)
 	MessageLogAdded(ctx context.Context) (<-chan *model.MessageLog, error)
@@ -41,6 +45,8 @@ type FlowSubscriber interface {
 	AgentLogAdded(ctx context.Context) (<-chan *model.AgentLog, error)
 	SearchLogAdded(ctx context.Context) (<-chan *model.SearchLog, error)
 	VectorStoreLogAdded(ctx context.Context) (<-chan *model.VectorStoreLog, error)
+	AssistantLogAdded(ctx context.Context) (<-chan *model.AssistantLog, error)
+	AssistantLogUpdated(ctx context.Context) (<-chan *model.AssistantLog, error)
 	FlowContext
 }
 
@@ -50,6 +56,9 @@ type FlowPublisher interface {
 	FlowUpdated(ctx context.Context, flow database.Flow, terms []database.Container)
 	TaskCreated(ctx context.Context, task database.Task, subtasks []database.Subtask)
 	TaskUpdated(ctx context.Context, task database.Task, subtasks []database.Subtask)
+	AssistantCreated(ctx context.Context, assistant database.Assistant)
+	AssistantUpdated(ctx context.Context, assistant database.Assistant)
+	AssistantDeleted(ctx context.Context, assistant database.Assistant)
 	ScreenshotAdded(ctx context.Context, screenshot database.Screenshot)
 	TerminalLogAdded(ctx context.Context, terminalLog database.Termlog)
 	MessageLogAdded(ctx context.Context, messageLog database.Msglog)
@@ -57,42 +66,56 @@ type FlowPublisher interface {
 	AgentLogAdded(ctx context.Context, agentLog database.Agentlog)
 	SearchLogAdded(ctx context.Context, searchLog database.Searchlog)
 	VectorStoreLogAdded(ctx context.Context, vectorStoreLog database.Vecstorelog)
+	AssistantLogAdded(ctx context.Context, assistantLog database.Assistantlog)
+	AssistantLogUpdated(ctx context.Context, assistantLog database.Assistantlog, appendPart bool)
 	FlowContext
 }
 
 type controller struct {
-	flowCreatedAdmin  Channel[*model.Flow]
-	flowCreated       Channel[*model.Flow]
-	flowDeletedAdmin  Channel[*model.Flow]
-	flowDeleted       Channel[*model.Flow]
-	flowUpdated       Channel[*model.Flow]
-	taskCreated       Channel[*model.Task]
-	taskUpdated       Channel[*model.Task]
-	screenshotAdded   Channel[*model.Screenshot]
-	terminalLogAdded  Channel[*model.TerminalLog]
-	messageLogAdded   Channel[*model.MessageLog]
-	messageLogUpdated Channel[*model.MessageLog]
-	agentLogAdded     Channel[*model.AgentLog]
-	searchLogAdded    Channel[*model.SearchLog]
-	vecStoreLogAdded  Channel[*model.VectorStoreLog]
+	flowCreatedAdmin    Channel[*model.Flow]
+	flowCreated         Channel[*model.Flow]
+	flowDeletedAdmin    Channel[*model.Flow]
+	flowDeleted         Channel[*model.Flow]
+	flowUpdatedAdmin    Channel[*model.Flow]
+	flowUpdated         Channel[*model.Flow]
+	taskCreated         Channel[*model.Task]
+	taskUpdated         Channel[*model.Task]
+	assistantCreated    Channel[*model.Assistant]
+	assistantUpdated    Channel[*model.Assistant]
+	assistantDeleted    Channel[*model.Assistant]
+	screenshotAdded     Channel[*model.Screenshot]
+	terminalLogAdded    Channel[*model.TerminalLog]
+	messageLogAdded     Channel[*model.MessageLog]
+	messageLogUpdated   Channel[*model.MessageLog]
+	agentLogAdded       Channel[*model.AgentLog]
+	searchLogAdded      Channel[*model.SearchLog]
+	vecStoreLogAdded    Channel[*model.VectorStoreLog]
+	assistantLogAdded   Channel[*model.AssistantLog]
+	assistantLogUpdated Channel[*model.AssistantLog]
 }
 
 func NewSubscriptionsController() SubscriptionsController {
 	return &controller{
-		flowCreatedAdmin:  NewChannel[*model.Flow](),
-		flowCreated:       NewChannel[*model.Flow](),
-		flowDeletedAdmin:  NewChannel[*model.Flow](),
-		flowDeleted:       NewChannel[*model.Flow](),
-		flowUpdated:       NewChannel[*model.Flow](),
-		taskCreated:       NewChannel[*model.Task](),
-		taskUpdated:       NewChannel[*model.Task](),
-		screenshotAdded:   NewChannel[*model.Screenshot](),
-		terminalLogAdded:  NewChannel[*model.TerminalLog](),
-		messageLogAdded:   NewChannel[*model.MessageLog](),
-		messageLogUpdated: NewChannel[*model.MessageLog](),
-		agentLogAdded:     NewChannel[*model.AgentLog](),
-		searchLogAdded:    NewChannel[*model.SearchLog](),
-		vecStoreLogAdded:  NewChannel[*model.VectorStoreLog](),
+		flowCreatedAdmin:    NewChannel[*model.Flow](),
+		flowCreated:         NewChannel[*model.Flow](),
+		flowDeletedAdmin:    NewChannel[*model.Flow](),
+		flowDeleted:         NewChannel[*model.Flow](),
+		flowUpdatedAdmin:    NewChannel[*model.Flow](),
+		flowUpdated:         NewChannel[*model.Flow](),
+		taskCreated:         NewChannel[*model.Task](),
+		taskUpdated:         NewChannel[*model.Task](),
+		assistantCreated:    NewChannel[*model.Assistant](),
+		assistantUpdated:    NewChannel[*model.Assistant](),
+		assistantDeleted:    NewChannel[*model.Assistant](),
+		screenshotAdded:     NewChannel[*model.Screenshot](),
+		terminalLogAdded:    NewChannel[*model.TerminalLog](),
+		messageLogAdded:     NewChannel[*model.MessageLog](),
+		messageLogUpdated:   NewChannel[*model.MessageLog](),
+		agentLogAdded:       NewChannel[*model.AgentLog](),
+		searchLogAdded:      NewChannel[*model.SearchLog](),
+		vecStoreLogAdded:    NewChannel[*model.VectorStoreLog](),
+		assistantLogAdded:   NewChannel[*model.AssistantLog](),
+		assistantLogUpdated: NewChannel[*model.AssistantLog](),
 	}
 }
 

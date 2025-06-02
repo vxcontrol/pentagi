@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"pentagi/pkg/cast"
+	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
 	obs "pentagi/pkg/observability"
@@ -27,50 +30,73 @@ func wrapErrorEndSpan(ctx context.Context, span langfuse.Span, msg string, err e
 	return err
 }
 
-func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
-	tasksInfo, err := fp.getTasksInfo(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tasks info: %w", err)
+func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error) {
+	var (
+		err        error
+		ptrTask    *database.Task
+		ptrSubtask *database.Subtask
+	)
+
+	if taskID != nil {
+		task, err := fp.db.GetTask(ctx, *taskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task: %w", err)
+		}
+		ptrTask = &task
+	}
+	if subtaskID != nil {
+		subtask, err := fp.db.GetSubtask(ctx, *subtaskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subtask: %w", err)
+		}
+		ptrSubtask = &subtask
 	}
 
-	subtasksInfo := fp.getSubtasksInfo(taskID, tasksInfo.Subtasks)
-	if subtasksInfo.Subtask == nil {
-		for i, subtask := range subtasksInfo.Planned {
-			if subtask.ID == subtaskID {
-				subtasksInfo.Subtask = &subtask
-				subtasksInfo.Planned = append(subtasksInfo.Planned[:i], subtasksInfo.Planned[i+1:]...)
-				break
-			}
-		}
+	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get execution context: %w", err)
 	}
 
 	enricherHandler := func(ctx context.Context, ask tools.AskAdvice) (string, error) {
-		enricherContext := map[string]any{
-			"EnricherToolName":  tools.EnricherResultToolName,
-			"Question":          ask.Question,
-			"Code":              ask.Code,
-			"Output":            ask.Output,
-			"Task":              tasksInfo.Task,
-			"Subtask":           subtasksInfo.Subtask,
-			"CompletedSubtasks": subtasksInfo.Completed,
-			"Lang":              fp.language,
-			"ToolPlaceholder":   ToolPlaceholder,
+		enricherContext := map[string]map[string]any{
+			"user": {
+				"Question": ask.Question,
+				"Code":     ask.Code,
+				"Output":   ask.Output,
+			},
+			"system": {
+				"EnricherToolName":        tools.EnricherResultToolName,
+				"SummarizationToolName":   cast.SummarizationToolName,
+				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+				"ExecutionContext":        executionContext,
+				"Lang":                    fp.language,
+				"CurrentTime":             getCurrentTime(),
+				"ToolPlaceholder":         ToolPlaceholder,
+			},
 		}
 
 		enricherCtx, observation := obs.Observer.NewObservation(ctx)
 		enricherSpan := observation.Span(
 			langfuse.WithStartSpanName("enricher agent"),
 			langfuse.WithStartSpanInput(ask.Question),
-			langfuse.WithStartSpanMetadata(enricherContext),
+			langfuse.WithStartSpanMetadata(langfuse.Metadata{
+				"user_context":   enricherContext["user"],
+				"system_context": enricherContext["system"],
+			}),
 		)
 		enricherCtx, _ = enricherSpan.Observation(enricherCtx)
 
-		enricherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeEnricher, enricherContext)
+		userEnricherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionEnricher, enricherContext["user"])
 		if err != nil {
-			return "", wrapErrorEndSpan(enricherCtx, enricherSpan, "failed to get enricher template", err)
+			return "", wrapErrorEndSpan(enricherCtx, enricherSpan, "failed to get user enricher template", err)
 		}
 
-		enriches, err := fp.performEnricher(enricherCtx, taskID, subtaskID, enricherTmpl, ask.Question)
+		systemEnricherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeEnricher, enricherContext["system"])
+		if err != nil {
+			return "", wrapErrorEndSpan(enricherCtx, enricherSpan, "failed to get system enricher template", err)
+		}
+
+		enriches, err := fp.performEnricher(enricherCtx, taskID, subtaskID, systemEnricherTmpl, userEnricherTmpl, ask.Question)
 		if err != nil {
 			return "", wrapErrorEndSpan(enricherCtx, enricherSpan, "failed to get enriches for the question", err)
 		}
@@ -84,34 +110,43 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 	}
 
 	adviserHandler := func(ctx context.Context, ask tools.AskAdvice, enriches string) (string, error) {
-		adviserContext := map[string]any{
-			"Question":          ask.Question,
-			"Enriches":          enriches,
-			"Code":              ask.Code,
-			"Output":            ask.Output,
-			"Task":              tasksInfo.Task,
-			"Tasks":             tasksInfo.Tasks,
-			"Subtask":           subtasksInfo.Subtask,
-			"CompletedSubtasks": subtasksInfo.Completed,
-			"PlannedSubtasks":   subtasksInfo.Planned,
+		adviserContext := map[string]map[string]any{
+			"user": {
+				"Question": ask.Question,
+				"Code":     ask.Code,
+				"Output":   ask.Output,
+				"Enriches": enriches,
+			},
+			"system": {
+				"ExecutionContext": executionContext,
+				"CurrentTime":      getCurrentTime(),
+			},
 		}
 
 		adviserCtx, observation := obs.Observer.NewObservation(ctx)
 		adviserSpan := observation.Span(
 			langfuse.WithStartSpanName("adviser agent"),
 			langfuse.WithStartSpanInput(ask.Question),
-			langfuse.WithStartSpanMetadata(adviserContext),
+			langfuse.WithStartSpanMetadata(langfuse.Metadata{
+				"user_context":   adviserContext["user"],
+				"system_context": adviserContext["system"],
+			}),
 		)
 		adviserCtx, _ = adviserSpan.Observation(adviserCtx)
 
-		adviserTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeAdviser, adviserContext)
+		userAdviserTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionAdviser, adviserContext["user"])
 		if err != nil {
-			return "", wrapErrorEndSpan(adviserCtx, adviserSpan, "failed to get adviser template", err)
+			return "", wrapErrorEndSpan(adviserCtx, adviserSpan, "failed to get user adviser template", err)
+		}
+
+		systemAdviserTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeAdviser, adviserContext["system"])
+		if err != nil {
+			return "", wrapErrorEndSpan(adviserCtx, adviserSpan, "failed to get system adviser template", err)
 		}
 
 		opt := provider.OptionsTypeAdviser
 		msgChainType := database.MsgchainTypeAdviser
-		advice, err := fp.performSimpleChain(adviserCtx, &taskID, &subtaskID, opt, msgChainType, adviserTmpl)
+		advice, err := fp.performSimpleChain(adviserCtx, taskID, subtaskID, opt, msgChainType, systemAdviserTmpl, userAdviserTmpl)
 		if err != nil {
 			return "", wrapErrorEndSpan(adviserCtx, adviserSpan, "failed to get advice", err)
 		}
@@ -139,8 +174,9 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 			langfuse.WithStartSpanName("adviser handler"),
 			langfuse.WithStartSpanInput(ask),
 			langfuse.WithStartSpanMetadata(langfuse.Metadata{
-				"task":    tasksInfo.Task,
-				"subtask": subtasksInfo.Subtask,
+				"task":    ptrTask,
+				"subtask": ptrSubtask,
+				"context": executionContext,
 				"lang":    fp.language,
 				"tool":    name,
 			}),
@@ -174,51 +210,81 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 	}, nil
 }
 
-func (fp *flowProvider) GetCoderHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
-	task, err := fp.db.GetTask(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get task: %w", err)
+func (fp *flowProvider) GetCoderHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error) {
+	var (
+		err        error
+		ptrTask    *database.Task
+		ptrSubtask *database.Subtask
+	)
+
+	if taskID != nil {
+		task, err := fp.db.GetTask(ctx, *taskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task: %w", err)
+		}
+		ptrTask = &task
 	}
 
-	completed, err := fp.db.GetTaskCompletedSubtasks(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get completed subtasks: %w", err)
+	if subtaskID != nil {
+		subtask, err := fp.db.GetSubtask(ctx, *subtaskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subtask: %w", err)
+		}
+		ptrSubtask = &subtask
 	}
 
-	subtask, err := fp.db.GetSubtask(ctx, subtaskID)
+	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get subtask: %w", err)
+		return nil, fmt.Errorf("failed to get execution context: %w", err)
 	}
 
 	coderHandler := func(ctx context.Context, action tools.CoderAction) (string, error) {
-		coderContext := map[string]any{
-			"CodeResultToolName": tools.CodeResultToolName,
-			"SearchCodeToolName": tools.SearchCodeToolName,
-			"StoreCodeToolName":  tools.StoreCodeToolName,
-			"DockerImage":        fp.image,
-			"Cwd":                docker.WorkFolderPathInContainer,
-			"ContainerPorts":     fp.getContainerPortsDescription(),
-			"Task":               task,
-			"Subtask":            subtask,
-			"CompletedSubtasks":  completed,
-			"Lang":               fp.language,
-			"ToolPlaceholder":    ToolPlaceholder,
+		coderContext := map[string]map[string]any{
+			"user": {
+				"Question": action.Question,
+			},
+			"system": {
+				"CodeResultToolName":      tools.CodeResultToolName,
+				"SearchCodeToolName":      tools.SearchCodeToolName,
+				"StoreCodeToolName":       tools.StoreCodeToolName,
+				"SearchToolName":          tools.SearchToolName,
+				"AdviceToolName":          tools.AdviceToolName,
+				"MemoristToolName":        tools.MemoristToolName,
+				"MaintenanceToolName":     tools.MaintenanceToolName,
+				"SummarizationToolName":   cast.SummarizationToolName,
+				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+				"DockerImage":             fp.image,
+				"Cwd":                     docker.WorkFolderPathInContainer,
+				"ContainerPorts":          fp.getContainerPortsDescription(),
+				"ExecutionContext":        executionContext,
+				"Lang":                    fp.language,
+				"CurrentTime":             getCurrentTime(),
+				"ToolPlaceholder":         ToolPlaceholder,
+			},
 		}
 
 		ctx, observation := obs.Observer.NewObservation(ctx)
 		coderSpan := observation.Span(
 			langfuse.WithStartSpanName("coder agent"),
 			langfuse.WithStartSpanInput(action.Question),
-			langfuse.WithStartSpanMetadata(coderContext),
+			langfuse.WithStartSpanMetadata(langfuse.Metadata{
+				"user_context":   coderContext["user"],
+				"system_context": coderContext["system"],
+			}),
 		)
 		ctx, _ = coderSpan.Observation(ctx)
 
-		coderTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeCoder, coderContext)
+		userCoderTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionCoder, coderContext["user"])
 		if err != nil {
-			return "", wrapErrorEndSpan(ctx, coderSpan, "failed to get coder template", err)
+			return "", wrapErrorEndSpan(ctx, coderSpan, "failed to get user coder template", err)
 		}
 
-		code, err := fp.performCoder(ctx, taskID, subtaskID, coderTmpl, action.Question)
+		systemCoderTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeCoder, coderContext["system"])
+		if err != nil {
+			return "", wrapErrorEndSpan(ctx, coderSpan, "failed to get system coder template", err)
+		}
+
+		code, err := fp.performCoder(ctx, taskID, subtaskID, systemCoderTmpl, userCoderTmpl, action.Question)
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, coderSpan, "failed to get coder result", err)
 		}
@@ -246,8 +312,9 @@ func (fp *flowProvider) GetCoderHandler(ctx context.Context, taskID, subtaskID i
 			langfuse.WithStartSpanName("coder handler"),
 			langfuse.WithStartSpanInput(action),
 			langfuse.WithStartSpanMetadata(langfuse.Metadata{
-				"task":    task,
-				"subtask": subtask,
+				"task":    ptrTask,
+				"subtask": ptrSubtask,
+				"context": executionContext,
 				"lang":    fp.language,
 				"tool":    name,
 			}),
@@ -272,51 +339,80 @@ func (fp *flowProvider) GetCoderHandler(ctx context.Context, taskID, subtaskID i
 	}, nil
 }
 
-func (fp *flowProvider) GetInstallerHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
-	task, err := fp.db.GetTask(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get task: %w", err)
+func (fp *flowProvider) GetInstallerHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error) {
+	var (
+		err        error
+		ptrTask    *database.Task
+		ptrSubtask *database.Subtask
+	)
+
+	if taskID != nil {
+		task, err := fp.db.GetTask(ctx, *taskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task: %w", err)
+		}
+		ptrTask = &task
 	}
 
-	completed, err := fp.db.GetTaskCompletedSubtasks(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get completed subtasks: %w", err)
+	if subtaskID != nil {
+		subtask, err := fp.db.GetSubtask(ctx, *subtaskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subtask: %w", err)
+		}
+		ptrSubtask = &subtask
 	}
 
-	subtask, err := fp.db.GetSubtask(ctx, subtaskID)
+	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get subtask: %w", err)
+		return nil, fmt.Errorf("failed to get execution context: %w", err)
 	}
 
 	installerHandler := func(ctx context.Context, action tools.MaintenanceAction) (string, error) {
-		installerContext := map[string]any{
-			"MaintenanceResultToolName": tools.MaintenanceResultToolName,
-			"SearchGuideToolName":       tools.SearchGuideToolName,
-			"StoreGuideToolName":        tools.StoreGuideToolName,
-			"DockerImage":               fp.image,
-			"Cwd":                       docker.WorkFolderPathInContainer,
-			"ContainerPorts":            fp.getContainerPortsDescription(),
-			"Task":                      task,
-			"Subtask":                   subtask,
-			"CompletedSubtasks":         completed,
-			"Lang":                      fp.language,
-			"ToolPlaceholder":           ToolPlaceholder,
+		installerContext := map[string]map[string]any{
+			"user": {
+				"Question": action.Question,
+			},
+			"system": {
+				"MaintenanceResultToolName": tools.MaintenanceResultToolName,
+				"SearchGuideToolName":       tools.SearchGuideToolName,
+				"StoreGuideToolName":        tools.StoreGuideToolName,
+				"SearchToolName":            tools.SearchToolName,
+				"AdviceToolName":            tools.AdviceToolName,
+				"MemoristToolName":          tools.MemoristToolName,
+				"SummarizationToolName":     cast.SummarizationToolName,
+				"SummarizedContentPrefix":   strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+				"DockerImage":               fp.image,
+				"Cwd":                       docker.WorkFolderPathInContainer,
+				"ContainerPorts":            fp.getContainerPortsDescription(),
+				"ExecutionContext":          executionContext,
+				"Lang":                      fp.language,
+				"CurrentTime":               getCurrentTime(),
+				"ToolPlaceholder":           ToolPlaceholder,
+			},
 		}
 
 		ctx, observation := obs.Observer.NewObservation(ctx)
 		installerSpan := observation.Span(
 			langfuse.WithStartSpanName("installer agent"),
 			langfuse.WithStartSpanInput(action.Question),
-			langfuse.WithStartSpanMetadata(installerContext),
+			langfuse.WithStartSpanMetadata(langfuse.Metadata{
+				"user_context":   installerContext["user"],
+				"system_context": installerContext["system"],
+			}),
 		)
 		ctx, _ = installerSpan.Observation(ctx)
 
-		installerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeInstaller, installerContext)
+		userInstallerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionInstaller, installerContext["user"])
 		if err != nil {
-			return "", wrapErrorEndSpan(ctx, installerSpan, "failed to get installer template", err)
+			return "", wrapErrorEndSpan(ctx, installerSpan, "failed to get user installer template", err)
 		}
 
-		installerResult, err := fp.performInstaller(ctx, taskID, subtaskID, installerTmpl, action.Question)
+		systemInstallerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeInstaller, installerContext["system"])
+		if err != nil {
+			return "", wrapErrorEndSpan(ctx, installerSpan, "failed to get system installer template", err)
+		}
+
+		installerResult, err := fp.performInstaller(ctx, taskID, subtaskID, systemInstallerTmpl, userInstallerTmpl, action.Question)
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, installerSpan, "failed to get installer result", err)
 		}
@@ -344,8 +440,9 @@ func (fp *flowProvider) GetInstallerHandler(ctx context.Context, taskID, subtask
 			langfuse.WithStartSpanName("installer handler"),
 			langfuse.WithStartSpanInput(action),
 			langfuse.WithStartSpanMetadata(langfuse.Metadata{
-				"task":    task,
-				"subtask": subtask,
+				"task":    ptrTask,
+				"subtask": ptrSubtask,
+				"context": executionContext,
 				"lang":    fp.language,
 				"tool":    name,
 			}),
@@ -370,64 +467,121 @@ func (fp *flowProvider) GetInstallerHandler(ctx context.Context, taskID, subtask
 	}, nil
 }
 
-func (fp *flowProvider) GetMemoristHandler(ctx context.Context, taskID int64, subtaskID *int64) (tools.ExecutorHandler, error) {
-	tasksInfo, err := fp.getTasksInfo(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tasks info: %w", err)
-	}
+func (fp *flowProvider) GetMemoristHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error) {
+	var (
+		err        error
+		ptrTask    *database.Task
+		ptrSubtask *database.Subtask
+	)
 
-	subtasksInfo := fp.getSubtasksInfo(taskID, tasksInfo.Subtasks)
-	if subtasksInfo.Subtask == nil {
-		for i, subtask := range subtasksInfo.Planned {
-			if subtaskID != nil && subtask.ID == *subtaskID {
-				subtasksInfo.Subtask = &subtask
-				subtasksInfo.Planned = append(subtasksInfo.Planned[:i], subtasksInfo.Planned[i+1:]...)
-				break
-			}
+	if taskID != nil {
+		task, err := fp.db.GetTask(ctx, *taskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task: %w", err)
 		}
+		ptrTask = &task
 	}
 
-	memoristContext := map[string]any{
-		"MemoristResultToolName": tools.MemoristResultToolName,
-		"TerminalToolName":       tools.TerminalToolName,
-		"FileToolName":           tools.FileToolName,
-		"DockerImage":            fp.image,
-		"Cwd":                    docker.WorkFolderPathInContainer,
-		"ContainerPorts":         fp.getContainerPortsDescription(),
-		"Task":                   tasksInfo.Task,
-		"Tasks":                  tasksInfo.Tasks,
-		"CompletedSubtasks":      subtasksInfo.Completed,
-		"Lang":                   fp.language,
-		"ToolPlaceholder":        ToolPlaceholder,
+	if subtaskID != nil {
+		subtask, err := fp.db.GetSubtask(ctx, *subtaskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subtask: %w", err)
+		}
+		ptrSubtask = &subtask
 	}
 
-	if subtasksInfo.Subtask != nil {
-		memoristContext["Subtask"] = subtasksInfo.Subtask
+	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get execution context: %w", err)
 	}
 
 	memoristHandler := func(ctx context.Context, action tools.MemoristAction) (string, error) {
-		question := action.Question
-		if action.TaskID != nil {
-			question += fmt.Sprintf("\nQuestion related to Task ID: %d", *action.TaskID)
+		executionDetails := ""
+
+		var requestedTask *database.Task
+		if action.TaskID != nil && taskID != nil && action.TaskID.Int64() == *taskID {
+			executionDetails += fmt.Sprintf("user requested current task '%d'\n", *taskID)
+		} else if action.TaskID != nil {
+			taskID := action.TaskID.Int64()
+			t, err := fp.db.GetFlowTask(ctx, database.GetFlowTaskParams{
+				ID:     taskID,
+				FlowID: fp.flowID,
+			})
+			if err != nil {
+				executionDetails += fmt.Sprintf("failed to get requested task '%d': %s\n", taskID, err)
+			}
+			requestedTask = &t
+		} else {
+			executionDetails += fmt.Sprintf("user no specified task, using current task '%d'\n", taskID)
 		}
-		if action.SubtaskID != nil {
-			question += fmt.Sprintf("\nQuestion related to Subtask ID: %d", *action.SubtaskID)
+
+		var requestedSubtask *database.Subtask
+		if action.SubtaskID != nil && subtaskID != nil && action.SubtaskID.Int64() == *subtaskID {
+			executionDetails += fmt.Sprintf("user requested current subtask '%d'\n", *subtaskID)
+		} else if action.SubtaskID != nil {
+			subtaskID := action.SubtaskID.Int64()
+			st, err := fp.db.GetFlowSubtask(ctx, database.GetFlowSubtaskParams{
+				ID:     subtaskID,
+				FlowID: fp.flowID,
+			})
+			if err != nil {
+				executionDetails += fmt.Sprintf("failed to get requested subtask '%d': %s\n", subtaskID, err)
+			}
+			requestedSubtask = &st
+		} else if subtaskID != nil {
+			executionDetails += fmt.Sprintf("user no specified subtask, using current subtask '%d'\n", *subtaskID)
+		} else {
+			executionDetails += fmt.Sprintf("user no specified subtask, using all subtasks related to the task\n")
+		}
+
+		memoristContext := map[string]map[string]any{
+			"user": {
+				"Question":         action.Question,
+				"Task":             requestedTask,
+				"Subtask":          requestedSubtask,
+				"ExecutionDetails": executionDetails,
+			},
+			"system": {
+				"MemoristResultToolName":  tools.MemoristResultToolName,
+				"TerminalToolName":        tools.TerminalToolName,
+				"FileToolName":            tools.FileToolName,
+				"SummarizationToolName":   cast.SummarizationToolName,
+				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+				"DockerImage":             fp.image,
+				"Cwd":                     docker.WorkFolderPathInContainer,
+				"ContainerPorts":          fp.getContainerPortsDescription(),
+				"ExecutionContext":        executionContext,
+				"Lang":                    fp.language,
+				"CurrentTime":             getCurrentTime(),
+				"ToolPlaceholder":         ToolPlaceholder,
+			},
 		}
 
 		ctx, observation := obs.Observer.NewObservation(ctx)
 		memoristSpan := observation.Span(
 			langfuse.WithStartSpanName("memorist agent"),
-			langfuse.WithStartSpanInput(question),
-			langfuse.WithStartSpanMetadata(memoristContext),
+			langfuse.WithStartSpanInput(action.Question),
+			langfuse.WithStartSpanMetadata(langfuse.Metadata{
+				"user_context":      memoristContext["user"],
+				"system_context":    memoristContext["system"],
+				"requested_task":    requestedTask,
+				"requested_subtask": requestedSubtask,
+				"execution_details": executionDetails,
+			}),
 		)
 		ctx, _ = memoristSpan.Observation(ctx)
 
-		memoristTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeMemorist, memoristContext)
+		userMemoristTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionMemorist, memoristContext["user"])
 		if err != nil {
-			return "", wrapErrorEndSpan(ctx, memoristSpan, "failed to get memorist template", err)
+			return "", wrapErrorEndSpan(ctx, memoristSpan, "failed to get user memorist template", err)
 		}
 
-		memoristResult, err := fp.performMemorist(ctx, &taskID, subtaskID, memoristTmpl, question)
+		systemMemoristTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeMemorist, memoristContext["system"])
+		if err != nil {
+			return "", wrapErrorEndSpan(ctx, memoristSpan, "failed to get system memorist template", err)
+		}
+
+		memoristResult, err := fp.performMemorist(ctx, taskID, subtaskID, systemMemoristTmpl, userMemoristTmpl, action.Question)
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, memoristSpan, "failed to get memorist result", err)
 		}
@@ -455,8 +609,9 @@ func (fp *flowProvider) GetMemoristHandler(ctx context.Context, taskID int64, su
 			langfuse.WithStartSpanName("memorist handler"),
 			langfuse.WithStartSpanInput(action),
 			langfuse.WithStartSpanMetadata(langfuse.Metadata{
-				"task":    tasksInfo.Task,
-				"subtask": subtasksInfo.Subtask,
+				"task":    ptrTask,
+				"subtask": ptrSubtask,
+				"context": executionContext,
 				"lang":    fp.language,
 				"tool":    name,
 			}),
@@ -481,51 +636,82 @@ func (fp *flowProvider) GetMemoristHandler(ctx context.Context, taskID int64, su
 	}, nil
 }
 
-func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
-	task, err := fp.db.GetTask(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get task: %w", err)
+func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error) {
+	var (
+		err        error
+		ptrTask    *database.Task
+		ptrSubtask *database.Subtask
+	)
+
+	if taskID != nil {
+		task, err := fp.db.GetTask(ctx, *taskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task: %w", err)
+		}
+		ptrTask = &task
 	}
 
-	completed, err := fp.db.GetTaskCompletedSubtasks(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get completed subtasks: %w", err)
+	if subtaskID != nil {
+		subtask, err := fp.db.GetSubtask(ctx, *subtaskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subtask: %w", err)
+		}
+		ptrSubtask = &subtask
 	}
 
-	subtask, err := fp.db.GetSubtask(ctx, subtaskID)
+	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get subtask: %w", err)
+		return nil, fmt.Errorf("failed to get execution context: %w", err)
 	}
 
 	pentesterHandler := func(ctx context.Context, action tools.PentesterAction) (string, error) {
-		pentesterContext := map[string]any{
-			"HackResultToolName":  tools.HackResultToolName,
-			"SearchGuideToolName": tools.SearchGuideToolName,
-			"StoreGuideToolName":  tools.StoreGuideToolName,
-			"DockerImage":         fp.image,
-			"Cwd":                 docker.WorkFolderPathInContainer,
-			"ContainerPorts":      fp.getContainerPortsDescription(),
-			"Task":                task,
-			"Subtask":             subtask,
-			"CompletedSubtasks":   completed,
-			"Lang":                fp.language,
-			"ToolPlaceholder":     ToolPlaceholder,
+		pentesterContext := map[string]map[string]any{
+			"user": {
+				"Question": action.Question,
+			},
+			"system": {
+				"HackResultToolName":      tools.HackResultToolName,
+				"SearchGuideToolName":     tools.SearchGuideToolName,
+				"StoreGuideToolName":      tools.StoreGuideToolName,
+				"SearchToolName":          tools.SearchToolName,
+				"CoderToolName":           tools.CoderToolName,
+				"AdviceToolName":          tools.AdviceToolName,
+				"MemoristToolName":        tools.MemoristToolName,
+				"MaintenanceToolName":     tools.MaintenanceToolName,
+				"SummarizationToolName":   cast.SummarizationToolName,
+				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+				"DockerImage":             fp.image,
+				"Cwd":                     docker.WorkFolderPathInContainer,
+				"ContainerPorts":          fp.getContainerPortsDescription(),
+				"ExecutionContext":        executionContext,
+				"Lang":                    fp.language,
+				"CurrentTime":             getCurrentTime(),
+				"ToolPlaceholder":         ToolPlaceholder,
+			},
 		}
 
 		ctx, observation := obs.Observer.NewObservation(ctx)
 		pentesterSpan := observation.Span(
 			langfuse.WithStartSpanName("pentester agent"),
 			langfuse.WithStartSpanInput(action.Question),
-			langfuse.WithStartSpanMetadata(pentesterContext),
+			langfuse.WithStartSpanMetadata(langfuse.Metadata{
+				"user_context":   pentesterContext["user"],
+				"system_context": pentesterContext["system"],
+			}),
 		)
 		ctx, _ = pentesterSpan.Observation(ctx)
 
-		pentesterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypePentester, pentesterContext)
+		userPentesterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionPentester, pentesterContext["user"])
 		if err != nil {
-			return "", wrapErrorEndSpan(ctx, pentesterSpan, "failed to get pentester template", err)
+			return "", wrapErrorEndSpan(ctx, pentesterSpan, "failed to get user pentester template", err)
 		}
 
-		pentesterResult, err := fp.performPentester(ctx, taskID, subtaskID, pentesterTmpl, action.Question)
+		systemPentesterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypePentester, pentesterContext["system"])
+		if err != nil {
+			return "", wrapErrorEndSpan(ctx, pentesterSpan, "failed to get system pentester template", err)
+		}
+
+		pentesterResult, err := fp.performPentester(ctx, taskID, subtaskID, systemPentesterTmpl, userPentesterTmpl, action.Question)
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, pentesterSpan, "failed to get pentester result", err)
 		}
@@ -551,10 +737,11 @@ func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtask
 		ctx, observation := obs.Observer.NewObservation(ctx)
 		handlerSpan := observation.Span(
 			langfuse.WithStartSpanName("pentester handler"),
-			langfuse.WithStartSpanInput(action),
+			langfuse.WithStartSpanInput(action.Question),
 			langfuse.WithStartSpanMetadata(langfuse.Metadata{
-				"task":    task,
-				"subtask": subtask,
+				"task":    ptrTask,
+				"subtask": ptrSubtask,
+				"context": executionContext,
 				"lang":    fp.language,
 				"tool":    name,
 			}),
@@ -579,48 +766,76 @@ func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtask
 	}, nil
 }
 
-func (fp *flowProvider) GetSubtaskSearcherHandler(ctx context.Context, taskID, subtaskID int64) (tools.ExecutorHandler, error) {
-	task, err := fp.db.GetTask(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get task: %w", err)
+func (fp *flowProvider) GetSubtaskSearcherHandler(ctx context.Context, taskID, subtaskID *int64) (tools.ExecutorHandler, error) {
+	var (
+		err        error
+		ptrTask    *database.Task
+		ptrSubtask *database.Subtask
+	)
+
+	if taskID != nil {
+		task, err := fp.db.GetTask(ctx, *taskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get task: %w", err)
+		}
+		ptrTask = &task
 	}
 
-	completed, err := fp.db.GetTaskCompletedSubtasks(ctx, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get completed subtasks: %w", err)
+	if subtaskID != nil {
+		subtask, err := fp.db.GetSubtask(ctx, *subtaskID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get subtask: %w", err)
+		}
+		ptrSubtask = &subtask
 	}
 
-	subtask, err := fp.db.GetSubtask(ctx, subtaskID)
+	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get subtask: %w", err)
+		return nil, fmt.Errorf("failed to get execution context: %w", err)
 	}
 
 	searcherHandler := func(ctx context.Context, search tools.ComplexSearch) (string, error) {
-		searcherContext := map[string]any{
-			"SearchResultToolName": tools.SearchResultToolName,
-			"SearchAnswerToolName": tools.SearchAnswerToolName,
-			"StoreAnswerToolName":  tools.StoreAnswerToolName,
-			"Task":                 task,
-			"Subtask":              subtask,
-			"CompletedSubtasks":    completed,
-			"Lang":                 fp.language,
-			"ToolPlaceholder":      ToolPlaceholder,
+		searcherContext := map[string]map[string]any{
+			"user": {
+				"Question": search.Question,
+				"Task":     ptrTask,
+				"Subtask":  ptrSubtask,
+			},
+			"system": {
+				"SearchResultToolName":    tools.SearchResultToolName,
+				"SearchAnswerToolName":    tools.SearchAnswerToolName,
+				"StoreAnswerToolName":     tools.StoreAnswerToolName,
+				"SummarizationToolName":   cast.SummarizationToolName,
+				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+				"ExecutionContext":        executionContext,
+				"Lang":                    fp.language,
+				"CurrentTime":             getCurrentTime(),
+				"ToolPlaceholder":         ToolPlaceholder,
+			},
 		}
 
 		ctx, observation := obs.Observer.NewObservation(ctx)
 		searcherSpan := observation.Span(
 			langfuse.WithStartSpanName("searcher agent"),
 			langfuse.WithStartSpanInput(search.Question),
-			langfuse.WithStartSpanMetadata(searcherContext),
+			langfuse.WithStartSpanMetadata(langfuse.Metadata{
+				"user_context":   searcherContext["user"],
+				"system_context": searcherContext["system"],
+			}),
 		)
 		ctx, _ = searcherSpan.Observation(ctx)
 
-		searcherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSearcher, searcherContext)
+		userSearcherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionSearcher, searcherContext["user"])
 		if err != nil {
-			return "", wrapErrorEndSpan(ctx, searcherSpan, "failed to get searcher template", err)
+			return "", wrapErrorEndSpan(ctx, searcherSpan, "failed to get user searcher template", err)
 		}
 
-		searcherResult, err := fp.performSearcher(ctx, &taskID, &subtaskID, searcherTmpl, search.Question)
+		systemSearcherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSearcher, searcherContext["system"])
+		if err != nil {
+			return "", wrapErrorEndSpan(ctx, searcherSpan, "failed to get system searcher template", err)
+		}
+
+		searcherResult, err := fp.performSearcher(ctx, taskID, subtaskID, systemSearcherTmpl, userSearcherTmpl, search.Question)
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, searcherSpan, "failed to get searcher result", err)
 		}
@@ -648,8 +863,9 @@ func (fp *flowProvider) GetSubtaskSearcherHandler(ctx context.Context, taskID, s
 			langfuse.WithStartSpanName("searcher handler"),
 			langfuse.WithStartSpanInput(search),
 			langfuse.WithStartSpanMetadata(langfuse.Metadata{
-				"task":    task,
-				"subtask": subtask,
+				"task":    ptrTask,
+				"subtask": ptrSubtask,
+				"context": executionContext,
 				"lang":    fp.language,
 				"tool":    name,
 			}),
@@ -680,36 +896,52 @@ func (fp *flowProvider) GetTaskSearcherHandler(ctx context.Context, taskID int64
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
-	completed, err := fp.db.GetTaskCompletedSubtasks(ctx, taskID)
+	executionContext, err := fp.getExecutionContext(ctx, &taskID, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get completed subtasks: %w", err)
+		return nil, fmt.Errorf("failed to get execution context: %w", err)
 	}
 
 	searcherHandler := func(ctx context.Context, search tools.ComplexSearch) (string, error) {
-		searcherContext := map[string]any{
-			"SearchResultToolName": tools.SearchResultToolName,
-			"SearchAnswerToolName": tools.SearchAnswerToolName,
-			"StoreAnswerToolName":  tools.StoreAnswerToolName,
-			"Task":                 task,
-			"CompletedSubtasks":    completed,
-			"Lang":                 fp.language,
-			"ToolPlaceholder":      ToolPlaceholder,
+		searcherContext := map[string]map[string]any{
+			"user": {
+				"Question": search.Question,
+				"Task":     task,
+			},
+			"system": {
+				"SearchResultToolName":    tools.SearchResultToolName,
+				"SearchAnswerToolName":    tools.SearchAnswerToolName,
+				"StoreAnswerToolName":     tools.StoreAnswerToolName,
+				"SummarizationToolName":   cast.SummarizationToolName,
+				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+				"ExecutionContext":        executionContext,
+				"Lang":                    fp.language,
+				"CurrentTime":             getCurrentTime(),
+				"ToolPlaceholder":         ToolPlaceholder,
+			},
 		}
 
 		ctx, observation := obs.Observer.NewObservation(ctx)
 		searcherSpan := observation.Span(
 			langfuse.WithStartSpanName("searcher agent"),
 			langfuse.WithStartSpanInput(search.Question),
-			langfuse.WithStartSpanMetadata(searcherContext),
+			langfuse.WithStartSpanMetadata(langfuse.Metadata{
+				"user_context":   searcherContext["user"],
+				"system_context": searcherContext["system"],
+			}),
 		)
 		ctx, _ = searcherSpan.Observation(ctx)
 
-		searcherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSearcher, searcherContext)
+		userSearcherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionSearcher, searcherContext["user"])
 		if err != nil {
-			return "", wrapErrorEndSpan(ctx, searcherSpan, "failed to get searcher template", err)
+			return "", wrapErrorEndSpan(ctx, searcherSpan, "failed to get user searcher template", err)
 		}
 
-		searcherResult, err := fp.performSearcher(ctx, &taskID, nil, searcherTmpl, search.Question)
+		systemSearcherTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSearcher, searcherContext["system"])
+		if err != nil {
+			return "", wrapErrorEndSpan(ctx, searcherSpan, "failed to get system searcher template", err)
+		}
+
+		searcherResult, err := fp.performSearcher(ctx, &taskID, nil, systemSearcherTmpl, userSearcherTmpl, search.Question)
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, searcherSpan, "failed to get searcher result", err)
 		}
@@ -737,9 +969,10 @@ func (fp *flowProvider) GetTaskSearcherHandler(ctx context.Context, taskID int64
 			langfuse.WithStartSpanName("searcher handler"),
 			langfuse.WithStartSpanInput(search),
 			langfuse.WithStartSpanMetadata(langfuse.Metadata{
-				"task": task,
-				"lang": fp.language,
-				"tool": name,
+				"task":    task,
+				"context": executionContext,
+				"lang":    fp.language,
+				"tool":    name,
 			}),
 		)
 		ctx, _ = handlerSpan.Observation(ctx)
@@ -779,23 +1012,26 @@ func (fp *flowProvider) GetSummarizeResultHandler(taskID, subtaskID *int64) tool
 		)
 		ctx, _ = summarizerSpan.Observation(ctx)
 
-		summarizerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSummarizer, map[string]any{
-			"Result": result,
+		systemSummarizerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSummarizer, map[string]any{
+			"TaskID":                  taskID,
+			"SubtaskID":               subtaskID,
+			"CurrentTime":             getCurrentTime(),
+			"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 		})
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, summarizerSpan, "failed to get summarizer template", err)
 		}
 
 		// TODO: here need to summarize result by chunks in iterations
-		if len(summarizerTmpl) > 2*msgSummarizerLimit {
-			summarizerTmpl = summarizerTmpl[:msgSummarizerLimit] +
+		if len(result) > 2*msgSummarizerLimit {
+			result = result[:msgSummarizerLimit] +
 				"\n\n{TRUNCATED}...\n\n" +
-				summarizerTmpl[len(summarizerTmpl)-msgSummarizerLimit:]
+				result[len(result)-msgSummarizerLimit:]
 		}
 
 		opt := provider.OptionsTypeSimple
 		msgChainType := database.MsgchainTypeSummarizer
-		summary, err := fp.performSimpleChain(ctx, taskID, subtaskID, opt, msgChainType, summarizerTmpl)
+		summary, err := fp.performSimpleChain(ctx, taskID, subtaskID, opt, msgChainType, systemSummarizerTmpl, result)
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, summarizerSpan, "failed to get summary", err)
 		}
@@ -836,19 +1072,24 @@ func (fp *flowProvider) fixToolCallArgs(
 	)
 	ctx, _ = toolCallFixerSpan.Observation(ctx)
 
-	toolCallFixerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeToolCallFixer, map[string]any{
+	userToolCallFixerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeInputToolCallFixer, map[string]any{
 		"ToolCallName":   funcName,
 		"ToolCallArgs":   string(funcArgs),
 		"ToolCallSchema": string(funcJsonSchema),
 		"ToolCallError":  funcExecErr.Error(),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get tool call fixer template: %w", err)
+		return nil, fmt.Errorf("failed to get user tool call fixer template: %w", err)
+	}
+
+	systemToolCallFixerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeToolCallFixer, map[string]any{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system tool call fixer template: %w", err)
 	}
 
 	opt := provider.OptionsTypeSimpleJSON
 	msgChainType := database.MsgchainTypeToolCallFixer
-	toolCallFixerResult, err := fp.performSimpleChain(ctx, nil, nil, opt, msgChainType, toolCallFixerTmpl)
+	toolCallFixerResult, err := fp.performSimpleChain(ctx, nil, nil, opt, msgChainType, systemToolCallFixerTmpl, userToolCallFixerTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tool call fixer result: %w", err)
 	}

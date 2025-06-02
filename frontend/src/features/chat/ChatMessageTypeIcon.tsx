@@ -1,5 +1,17 @@
 import type { LucideIcon } from 'lucide-react';
-import { Bot, Brain, CheckSquare, FileText, Globe, HelpCircle, Search, Terminal, User as UserIcon } from 'lucide-react';
+import {
+    BotMessageSquare,
+    Brain,
+    CheckSquare,
+    FileText,
+    Globe,
+    HelpCircle,
+    MessageSquareReply,
+    NotepadText,
+    Search,
+    Terminal,
+    User as UserIcon,
+} from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MessageLogType } from '@/graphql/types';
@@ -21,7 +33,9 @@ const messageTypeIcons: Record<MessageLogType, LucideIcon> = {
     [MessageLogType.Ask]: HelpCircle,
     [MessageLogType.Done]: CheckSquare,
     [MessageLogType.Thoughts]: Brain,
-    [MessageLogType.Advice]: Bot,
+    [MessageLogType.Advice]: BotMessageSquare,
+    [MessageLogType.Answer]: MessageSquareReply,
+    [MessageLogType.Report]: NotepadText,
 };
 const defaultIcon = Brain;
 

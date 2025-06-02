@@ -385,8 +385,8 @@ func (s *UserService) CreateUser(c *gin.Context) {
 // @Tags Users
 // @Accept json
 // @Produce json
-// @Param json body models.UserPassword true "user model to update"
 // @Param hash path string true "user hash in hex format (md5)" minlength(32) maxlength(32)
+// @Param json body models.UserPassword true "user model to update"
 // @Success 200 {object} response.successResp{data=models.UserRole} "user updated successful"
 // @Failure 400 {object} response.errorResp "invalid user request data"
 // @Failure 403 {object} response.errorResp "updating user not permitted"

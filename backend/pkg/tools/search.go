@@ -11,13 +11,13 @@ import (
 	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tmc/langchaingo/documentloaders"
-	"github.com/tmc/langchaingo/vectorstores"
-	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"github.com/vxcontrol/langchaingo/documentloaders"
+	"github.com/vxcontrol/langchaingo/vectorstores"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 const (
-	searchVectorStoreThreshold   = 0.75
+	searchVectorStoreThreshold   = 0.2
 	searchVectorStoreResultLimit = 3
 	searchVectorStoreDefaultType = "answer"
 	searchNotFoundMessage        = "nothing found in answer store and you need to store it after figure out this case"
@@ -25,13 +25,13 @@ const (
 
 type search struct {
 	flowID    int64
-	taskID    int64
-	subtaskID int64
+	taskID    *int64
+	subtaskID *int64
 	store     *pgvector.Store
 	vslp      VectorStoreLogProvider
 }
 
-func NewSearchTool(flowID int64, taskID, subtaskID int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+func NewSearchTool(flowID int64, taskID, subtaskID *int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
 	return &search{
 		flowID:    flowID,
 		taskID:    taskID,
@@ -43,14 +43,6 @@ func NewSearchTool(flowID int64, taskID, subtaskID int64, store *pgvector.Store,
 
 func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	ptrTaskID := &s.taskID
-	if s.taskID == 0 {
-		ptrTaskID = nil
-	}
-	ptrSubtaskID := &s.subtaskID
-	if s.subtaskID == 0 {
-		ptrSubtaskID = nil
-	}
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"tool": name,
 		"args": string(args),
@@ -156,8 +148,8 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 				action.Question,
 				database.VecstoreActionTypeRetrieve,
 				buffer.String(),
-				ptrTaskID,
-				ptrSubtaskID,
+				s.taskID,
+				s.subtaskID,
 			)
 		}
 
@@ -246,8 +238,8 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 				action.Question,
 				database.VecstoreActionTypeStore,
 				action.Answer,
-				ptrTaskID,
-				ptrSubtaskID,
+				s.taskID,
+				s.subtaskID,
 			)
 		}
 

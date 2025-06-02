@@ -1,5 +1,5 @@
 import { format, isThisYear, isToday } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { enUS } from 'date-fns/locale';
 
 export const formatName = (name?: string): string =>
     (name || '')
@@ -13,8 +13,8 @@ export const formatDate = (date: Date) => {
     }
 
     if (isThisYear(date)) {
-        return format(date, 'HH:mm, d MMM', { locale: ru });
+        return format(date, 'HH:mm, d MMM', { locale: enUS });
     }
 
-    return format(date, 'HH:mm, d MMM yyyy', { locale: ru });
+    return format(date, 'HH:mm, d MMM yyyy', { locale: enUS });
 };

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,8 +10,15 @@ import (
 
 	"pentagi/pkg/providers/provider"
 
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
+
+const trimCharset = "\n\r\t "
+
+func trimString(s string) string {
+	return strings.Trim(s, trimCharset)
+}
 
 // Test definitions and execution functions
 
@@ -128,7 +136,7 @@ func GetBasicTestSuites() []TestSuite {
 	functionTests := []FunctionCallTest{
 		{
 			Name:         "Basic echo function",
-			Prompt:       "Echo this message: Hello from function test",
+			Prompt:       "JUST choose the echo function and call it with this message: Hello from function test",
 			Functions:    []llms.Tool{echoTool},
 			ExpectedTool: "echo",
 			ValidateFunc: func(args map[string]interface{}) bool {
@@ -190,7 +198,7 @@ func GetAdvancedTestSuites() []TestSuite {
 	jsonTests := []FunctionCallTest{
 		{
 			Name:         "JSON response function",
-			Prompt:       "Create a JSON with name=test and value=123",
+			Prompt:       "Call function respond_with_json to create a JSON with name=test and value=123",
 			Functions:    []llms.Tool{jsonTool},
 			ExpectedTool: "respond_with_json",
 			ValidateFunc: func(args map[string]interface{}) bool {
@@ -225,17 +233,21 @@ func GetAdvancedTestSuites() []TestSuite {
 	adviceTool := llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
-			Name:        "ask_advice",
-			Description: "Asks a question to get advice",
+			Name:        "send_advice",
+			Description: "Sends your advice to the user about the problem",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"question": map[string]interface{}{
+					"problem": map[string]interface{}{
 						"type":        "string",
-						"description": "Question to ask",
+						"description": "Problem to solve",
+					},
+					"solution": map[string]interface{}{
+						"type":        "string",
+						"description": "Solution to the problem",
 					},
 				},
-				"required": []string{"question"},
+				"required": []string{"problem", "solution"},
 			},
 		},
 	}
@@ -243,7 +255,7 @@ func GetAdvancedTestSuites() []TestSuite {
 	functionTests := []FunctionCallTest{
 		{
 			Name:         "Search query",
-			Prompt:       "Find information about Golang programming language",
+			Prompt:       "Find information about Golang programming language by calling the search function",
 			Functions:    []llms.Tool{searchTool},
 			ExpectedTool: "search",
 			ValidateFunc: func(args map[string]interface{}) bool {
@@ -252,13 +264,16 @@ func GetAdvancedTestSuites() []TestSuite {
 			},
 		},
 		{
-			Name:         "Ask advice",
-			Prompt:       "Help me understand the error: 'cannot find package' in Go development",
+			Name: "Ask advice",
+			Prompt: "Help me understand the error: 'cannot find package' in Go development " +
+				"by calling the send_advice function. Before calling the function, " +
+				"think about the problem and the solution.",
 			Functions:    []llms.Tool{adviceTool},
-			ExpectedTool: "ask_advice",
+			ExpectedTool: "send_advice",
 			ValidateFunc: func(args map[string]interface{}) bool {
-				question, ok := args["question"].(string)
-				return ok && question != ""
+				problem, isProblemExists := args["problem"].(string)
+				solution, isSolutionExists := args["solution"].(string)
+				return isProblemExists && isSolutionExists && problem != "" && solution != ""
 			},
 		},
 	}
@@ -278,9 +293,14 @@ func GetAdvancedTestSuites() []TestSuite {
 }
 
 // RunCompletionTest executes a simple completion test
-func RunCompletionTest(ctx context.Context, p provider.Provider, agentType provider.ProviderOptionsType, test SimpleCompletionTest) TestResult {
+func RunCompletionTest(
+	ctx context.Context,
+	p provider.Provider,
+	agentType provider.ProviderOptionsType,
+	test SimpleCompletionTest,
+) TestResult {
 	result := TestResult{
-		Name:     FormatTestName("Completion", test.Prompt, 30),
+		Name:     FormatTestName("Completion", test.Prompt, 30, false),
 		Type:     "completion",
 		Expected: test.Expected,
 	}
@@ -304,11 +324,29 @@ func RunCompletionTest(ctx context.Context, p provider.Provider, agentType provi
 }
 
 // RunSystemUserPromptTest executes a test with system and user prompts
-func RunSystemUserPromptTest(ctx context.Context, p provider.Provider, agentType provider.ProviderOptionsType, test SystemUserPromptTest) TestResult {
+func RunSystemUserPromptTest(
+	ctx context.Context,
+	p provider.Provider,
+	agentType provider.ProviderOptionsType,
+	test SystemUserPromptTest,
+	useStream bool,
+) TestResult {
 	result := TestResult{
-		Name:     FormatTestName("System-User", test.UserPrompt, 30),
-		Type:     "system_user",
-		Expected: test.Expected,
+		Name:      FormatTestName("System-User", test.UserPrompt, 30, false),
+		Type:      "system_user",
+		Expected:  test.Expected,
+		Streaming: useStream,
+	}
+
+	respBuf := bytes.NewBuffer(nil)
+	reasoningBuf := bytes.NewBuffer(nil)
+	var streamCb streaming.Callback
+	if useStream {
+		streamCb = func(ctx context.Context, chunk streaming.Chunk) error {
+			respBuf.WriteString(chunk.Content)
+			reasoningBuf.WriteString(chunk.ReasoningContent)
+			return nil
+		}
 	}
 
 	startTime := time.Now()
@@ -316,10 +354,12 @@ func RunSystemUserPromptTest(ctx context.Context, p provider.Provider, agentType
 	response, err := p.CallEx(ctx, agentType, []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, test.SystemPrompt),
 		llms.TextParts(llms.ChatMessageTypeHuman, test.UserPrompt),
-	})
+	}, streamCb)
 
 	elapsedTime := time.Since(startTime)
 	result.LatencyMs = elapsedTime.Milliseconds()
+	respContent := trimString(respBuf.String())
+	reasoningContent := trimString(reasoningBuf.String())
 
 	if err != nil {
 		result.Success = false
@@ -333,7 +373,30 @@ func RunSystemUserPromptTest(ctx context.Context, p provider.Provider, agentType
 		return result
 	}
 
-	responseText := response.Choices[0].Content
+	choice := response.Choices[0]
+	if len(reasoningContent) > 0 || len(choice.ReasoningContent) > 0 {
+		result.Reasoning = true
+	}
+	reasoningTokens, ok := choice.GenerationInfo["ReasoningTokens"]
+	if ok && reasoningTokens.(int) > 0 {
+		result.Reasoning = true
+	}
+
+	if useStream && respContent != trimString(choice.Content) {
+		result.Success = false
+		result.Error = fmt.Errorf("streaming response content mismatch: '%s' != '%s'",
+			respContent, choice.Content)
+		return result
+	}
+
+	if useStream && reasoningContent != trimString(choice.ReasoningContent) {
+		result.Success = false
+		result.Error = fmt.Errorf("streaming reasoning content mismatch: '%s' != '%s'",
+			reasoningContent, choice.ReasoningContent)
+		return result
+	}
+
+	responseText := choice.Content
 	result.Response = responseText
 
 	// Clean up response for better matching
@@ -382,9 +445,14 @@ func RunSystemUserPromptTest(ctx context.Context, p provider.Provider, agentType
 }
 
 // RunSimpleJSONTest executes a test for simple JSON response (no function calling)
-func RunSimpleJSONTest(ctx context.Context, p provider.Provider, agentType provider.ProviderOptionsType, test SimpleJSONCompletionTest) TestResult {
+func RunSimpleJSONTest(
+	ctx context.Context,
+	p provider.Provider,
+	agentType provider.ProviderOptionsType,
+	test SimpleJSONCompletionTest,
+) TestResult {
 	result := TestResult{
-		Name:     FormatTestName("SimpleJSON", test.Prompt, 30),
+		Name:     FormatTestName("SimpleJSON", test.Prompt, 30, false),
 		Type:     "simple_json",
 		Expected: strings.Join(test.RequiredFields, ", "),
 	}
@@ -510,123 +578,47 @@ func RunSimpleJSONTest(ctx context.Context, p provider.Provider, agentType provi
 	return result
 }
 
-// RunJSONTest executes a JSON structure test using function calling
-func RunJSONTest(ctx context.Context, p provider.Provider, agentType provider.ProviderOptionsType, test JSONCompletionTest) TestResult {
-	result := TestResult{
-		Name:     FormatTestName("JSON", test.Prompt, 30),
-		Type:     "json",
-		Expected: fmt.Sprintf("%v", test.Schema),
-	}
-
-	startTime := time.Now()
-
-	// Use JSONSchema for validation
-	tools := []llms.Tool{
-		{
-			Type: "function",
-			Function: &llms.FunctionDefinition{
-				Name:        "respond_with_json",
-				Description: "Response with JSON structure",
-				Parameters:  test.Schema,
-			},
-		},
-	}
-
-	response, err := p.CallWithTools(ctx, agentType, []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeHuman, test.Prompt),
-	}, tools)
-
-	elapsedTime := time.Since(startTime)
-	result.LatencyMs = elapsedTime.Milliseconds()
-
-	if err != nil {
-		result.Success = false
-		result.Error = err
-		return result
-	}
-
-	if len(response.Choices) == 0 {
-		result.Success = false
-		result.Error = fmt.Errorf("empty response from model")
-		return result
-	}
-
-	choice := response.Choices[0]
-	if choice.ToolCalls == nil || len(choice.ToolCalls) == 0 {
-		result.Response = choice.Content
-		result.Success = false
-		result.Error = fmt.Errorf("model did not return structured JSON")
-		return result
-	}
-
-	// Extract function arguments
-	arguments := ""
-	for _, toolCall := range choice.ToolCalls {
-		if functionCall := toolCall.FunctionCall; functionCall != nil {
-			arguments = functionCall.Arguments
-			break
-		}
-	}
-
-	if arguments == "" {
-		result.Success = false
-		result.Error = fmt.Errorf("function arguments not found")
-		return result
-	}
-
-	result.Response = arguments
-
-	// Check that JSON parses
-	var parsed map[string]interface{}
-	err = json.Unmarshal([]byte(arguments), &parsed)
-	if err != nil {
-		result.Success = false
-		result.Error = fmt.Errorf("JSON parsing error: %v", err)
-		return result
-	}
-
-	// Check that all required fields are present
-	requiredFields := test.RequiredFields
-	if len(requiredFields) == 0 {
-		// If no required fields specified, use all schema fields
-		for key := range test.Schema {
-			requiredFields = append(requiredFields, key)
-		}
-	}
-
-	for _, field := range requiredFields {
-		if _, ok := parsed[field]; !ok {
-			result.Success = false
-			result.Error = fmt.Errorf("missing required field: %s", field)
-			return result
-		}
-	}
-
-	result.Success = true
-	return result
-}
-
 // RunFunctionTest executes a function call test
-func RunFunctionTest(ctx context.Context, p provider.Provider, agentType provider.ProviderOptionsType, test FunctionCallTest) TestResult {
+func RunFunctionTest(
+	ctx context.Context,
+	p provider.Provider,
+	agentType provider.ProviderOptionsType,
+	test FunctionCallTest,
+	useStream bool,
+) TestResult {
 	testName := test.Name
 	if testName == "" {
-		testName = FormatTestName("Function", test.Prompt, 30)
+		testName = FormatTestName("Function", test.Prompt, 30, useStream)
 	}
 
 	result := TestResult{
-		Name:     testName,
-		Type:     "function",
-		Expected: test.ExpectedTool,
+		Name:      testName,
+		Type:      "function",
+		Expected:  test.ExpectedTool,
+		Streaming: useStream,
+	}
+
+	respBuf := bytes.NewBuffer(nil)
+	reasoningBuf := bytes.NewBuffer(nil)
+	var streamCb streaming.Callback
+	if useStream {
+		streamCb = func(ctx context.Context, chunk streaming.Chunk) error {
+			respBuf.WriteString(chunk.Content)
+			reasoningBuf.WriteString(chunk.ReasoningContent)
+			return nil
+		}
 	}
 
 	startTime := time.Now()
 
 	response, err := p.CallWithTools(ctx, agentType, []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeHuman, test.Prompt),
-	}, test.Functions)
+	}, test.Functions, streamCb)
 
 	elapsedTime := time.Since(startTime)
 	result.LatencyMs = elapsedTime.Milliseconds()
+	respContent := trimString(respBuf.String())
+	reasoningContent := trimString(reasoningBuf.String())
 
 	if err != nil {
 		result.Success = false
@@ -641,10 +633,40 @@ func RunFunctionTest(ctx context.Context, p provider.Provider, agentType provide
 	}
 
 	choice := response.Choices[0]
-	if choice.ToolCalls == nil || len(choice.ToolCalls) == 0 {
+	if len(reasoningContent) > 0 || len(choice.ReasoningContent) > 0 {
+		result.Reasoning = true
+	}
+	reasoningTokens, ok := choice.GenerationInfo["ReasoningTokens"]
+	if ok && reasoningTokens.(int) > 0 {
+		result.Reasoning = true
+	}
+
+	if useStream && respContent != trimString(choice.Content) {
+		result.Success = false
+		result.Error = fmt.Errorf("streaming response content mismatch: '%s' != '%s'",
+			respContent, choice.Content)
+		return result
+	}
+
+	if useStream && reasoningContent != trimString(choice.ReasoningContent) {
+		result.Success = false
+		result.Error = fmt.Errorf("streaming reasoning content mismatch: '%s' != '%s'",
+			reasoningContent, choice.ReasoningContent)
+		return result
+	}
+
+	var toolCalls []llms.ToolCall
+	for _, choice := range response.Choices {
+		if len(choice.ToolCalls) > 0 {
+			toolCalls = append(toolCalls, choice.ToolCalls...)
+		}
+	}
+
+	if len(toolCalls) == 0 {
 		result.Response = choice.Content
 		result.Success = false
-		result.Error = fmt.Errorf("model did not call a function, responded with text: %s", TruncateString(choice.Content, 50))
+		content := TruncateString(choice.Content, 50)
+		result.Error = fmt.Errorf("model did not call a function, responded with text: %s", content)
 		return result
 	}
 
@@ -652,7 +674,7 @@ func RunFunctionTest(ctx context.Context, p provider.Provider, agentType provide
 	var toolCallName string
 	var arguments string
 
-	for _, toolCall := range choice.ToolCalls {
+	for _, toolCall := range toolCalls {
 		if functionCall := toolCall.FunctionCall; functionCall != nil {
 			toolCallName = functionCall.Name
 			arguments = functionCall.Arguments
@@ -709,7 +731,9 @@ func RunTestSuite(ctx context.Context, p provider.Provider, agentType provider.P
 			}
 		case []SystemUserPromptTest:
 			for _, test := range tests {
-				result := RunSystemUserPromptTest(ctx, p, agentType, test)
+				result := RunSystemUserPromptTest(ctx, p, agentType, test, false)
+				results = append(results, result)
+				result = RunSystemUserPromptTest(ctx, p, agentType, test, true)
 				results = append(results, result)
 			}
 		case []SimpleJSONCompletionTest:
@@ -717,14 +741,11 @@ func RunTestSuite(ctx context.Context, p provider.Provider, agentType provider.P
 				result := RunSimpleJSONTest(ctx, p, agentType, test)
 				results = append(results, result)
 			}
-		case []JSONCompletionTest:
-			for _, test := range tests {
-				result := RunJSONTest(ctx, p, agentType, test)
-				results = append(results, result)
-			}
 		case []FunctionCallTest:
 			for _, test := range tests {
-				result := RunFunctionTest(ctx, p, agentType, test)
+				result := RunFunctionTest(ctx, p, agentType, test, false)
+				results = append(results, result)
+				result = RunFunctionTest(ctx, p, agentType, test, true)
 				results = append(results, result)
 			}
 		}
@@ -768,7 +789,7 @@ func TestAgent(ctx context.Context, p provider.Provider, agentType provider.Prov
 	}
 
 	// Run advanced tests only if basic tests passed (at least 50% success rate)
-	if basicSuccessRate >= 50.0 {
+	if basicSuccessRate >= 50.0 || len(basicSuites) == 0 {
 		for _, suite := range advancedSuites {
 			advancedResults := RunTestSuite(ctx, p, agentType, suite)
 			result.AdvancedTests = append(result.AdvancedTests, advancedResults...)

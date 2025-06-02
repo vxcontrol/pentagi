@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"pentagi/cmd/ftester/worker"
 	"pentagi/pkg/config"
@@ -79,6 +80,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to open database: %v", err)
 	}
+
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(time.Hour)
+
 	queries := database.New(db)
 
 	terminal.PrintHeader("Function Tester (ftester)")

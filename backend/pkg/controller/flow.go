@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -22,12 +23,19 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const stopTaskTimeout = 5 * time.Second
+
 type FlowWorker interface {
 	GetFlowID() int64
 	GetUserID() int64
 	GetTitle() string
+	GetContext() *FlowContext
 	GetStatus(ctx context.Context) (database.FlowStatus, error)
 	SetStatus(ctx context.Context, status database.FlowStatus) error
+	AddAssistant(ctx context.Context, aw AssistantWorker) error
+	GetAssistant(ctx context.Context, assistantID int64) (AssistantWorker, error)
+	DeleteAssistant(ctx context.Context, assistantID int64) error
+	ListAssistants(ctx context.Context) []AssistantWorker
 	ListTasks(ctx context.Context) []TaskWorker
 	PutInput(ctx context.Context, input string) error
 	Finish(ctx context.Context) error
@@ -37,8 +45,13 @@ type FlowWorker interface {
 type flowWorker struct {
 	tc      TaskController
 	wg      *sync.WaitGroup
+	aws     map[int64]AssistantWorker
+	awsMX   *sync.Mutex
 	ctx     context.Context
 	cancel  context.CancelFunc
+	taskMX  *sync.Mutex
+	taskST  context.CancelFunc
+	taskWG  *sync.WaitGroup
 	input   chan flowInput
 	flowCtx *FlowContext
 	logger  *logrus.Entry
@@ -47,6 +60,7 @@ type flowWorker struct {
 type newFlowWorkerCtx struct {
 	userID    int64
 	input     string
+	dryRun    bool
 	prvtype   provider.ProviderType
 	functions *tools.Functions
 
@@ -65,6 +79,7 @@ type flowWorkerCtx struct {
 
 type flowProviderControllers struct {
 	mlc  MsgLogController
+	aslc AssistantLogController
 	alc  AgentLogController
 	slc  SearchLogController
 	tlc  TermLogController
@@ -127,7 +142,7 @@ func NewFlowWorker(
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
 			langfuse.WithTraceUserId(user.Mail),
-			langfuse.WithTraceTags([]string{"controller"}),
+			langfuse.WithTraceTags([]string{"controller", "flow"}),
 			langfuse.WithTraceInput(fwc.input),
 			langfuse.WithTraceSessionId(fmt.Sprintf("flow-%d", flow.ID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
@@ -184,6 +199,7 @@ func NewFlowWorker(
 	}
 
 	flowProvider.SetAgentLogProvider(workers.alw)
+	flowProvider.SetMsgLogProvider(workers.mlw)
 
 	executor.SetImage(flowProvider.Image())
 	executor.SetEmbedder(flowProvider.Embedder())
@@ -211,8 +227,13 @@ func NewFlowWorker(
 	fw := &flowWorker{
 		tc:      NewTaskController(flowCtx),
 		wg:      &sync.WaitGroup{},
+		aws:     make(map[int64]AssistantWorker),
+		awsMX:   &sync.Mutex{},
 		ctx:     ctx,
 		cancel:  cancel,
+		taskMX:  &sync.Mutex{},
+		taskST:  func() {},
+		taskWG:  &sync.WaitGroup{},
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
 		logger: logrus.WithFields(logrus.Fields{
@@ -234,8 +255,13 @@ func NewFlowWorker(
 
 	fw.flowCtx.Publisher.FlowCreated(ctx, flow, containers)
 
-	if err := fw.runWorker(ctx, fwc.input); err != nil {
-		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to run flow worker", err)
+	fw.wg.Add(1)
+	go fw.worker()
+
+	if !fwc.dryRun {
+		if err := fw.PutInput(ctx, fwc.input); err != nil {
+			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to run flow worker", err)
+		}
 	}
 
 	flowSpan.End(langfuse.WithEndSpanStatus("flow worker started"))
@@ -278,7 +304,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
 			langfuse.WithTraceUserId(user.Mail),
-			langfuse.WithTraceTags([]string{"controller"}),
+			langfuse.WithTraceTags([]string{"controller", "flow"}),
 			langfuse.WithTraceSessionId(fmt.Sprintf("flow-%d", flow.ID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
 				"flow_id":    flow.ID,
@@ -317,6 +343,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	}
 
 	flowProvider.SetAgentLogProvider(workers.alw)
+	flowProvider.SetMsgLogProvider(workers.mlw)
 
 	executor.SetImage(flowProvider.Image())
 	executor.SetEmbedder(flowProvider.Embedder())
@@ -344,8 +371,13 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	fw := &flowWorker{
 		tc:      NewTaskController(flowCtx),
 		wg:      &sync.WaitGroup{},
+		aws:     make(map[int64]AssistantWorker),
+		awsMX:   &sync.Mutex{},
 		ctx:     ctx,
 		cancel:  cancel,
+		taskMX:  &sync.Mutex{},
+		taskST:  func() {},
+		taskWG:  &sync.WaitGroup{},
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
 		logger: logrus.WithFields(logrus.Fields{
@@ -365,8 +397,31 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow containers", err)
 	}
 
-	if err := fw.tc.LoadTasks(ctx, flow.ID, fw); err != nil {
+	if err := fw.tc.LoadTasks(ctx, flow.ID, fw); err != nil && !errors.Is(err, ErrNothingToLoad) {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to load tasks", err)
+	}
+
+	assistants, err := fwc.db.GetFlowAssistants(ctx, flow.ID)
+	if err != nil {
+		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow assistants", err)
+	}
+
+	awc := assistantWorkerCtx{
+		userID:        flow.UserID,
+		flowID:        flow.ID,
+		flowWorkerCtx: fwc,
+	}
+	for _, assistant := range assistants {
+		aw, err := LoadAssistantWorker(ctx, assistant, awc)
+		if err != nil {
+			if errors.Is(err, ErrNothingToLoad) {
+				continue
+			}
+			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to load assistant worker", err)
+		}
+		if err := fw.AddAssistant(ctx, aw); err != nil {
+			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to add assistant worker", err)
+		}
 	}
 
 	fw.flowCtx.Publisher.FlowUpdated(ctx, flow, containers)
@@ -389,6 +444,10 @@ func (fw *flowWorker) GetUserID() int64 {
 
 func (fw *flowWorker) GetTitle() string {
 	return fw.flowCtx.FlowTitle
+}
+
+func (fw *flowWorker) GetContext() *FlowContext {
+	return fw.flowCtx
 }
 
 func (fw *flowWorker) GetStatus(ctx context.Context) (database.FlowStatus, error) {
@@ -420,6 +479,74 @@ func (fw *flowWorker) SetStatus(ctx context.Context, status database.FlowStatus)
 	fw.flowCtx.Publisher.FlowUpdated(ctx, flow, containers)
 
 	return nil
+}
+
+func (fw *flowWorker) AddAssistant(ctx context.Context, aw AssistantWorker) error {
+	fw.awsMX.Lock()
+	defer fw.awsMX.Unlock()
+
+	if taw, ok := fw.aws[aw.GetAssistantID()]; ok {
+		if taw == aw {
+			return nil
+		}
+
+		if err := taw.Finish(ctx); err != nil {
+			return fmt.Errorf("failed to finish assistant %d: %w", aw.GetAssistantID(), err)
+		}
+	}
+
+	fw.aws[aw.GetAssistantID()] = aw
+
+	return nil
+}
+
+func (fw *flowWorker) GetAssistant(ctx context.Context, assistantID int64) (AssistantWorker, error) {
+	fw.awsMX.Lock()
+	defer fw.awsMX.Unlock()
+
+	if aw, ok := fw.aws[assistantID]; ok {
+		return aw, nil
+	}
+
+	return nil, fmt.Errorf("assistant %d not found", assistantID)
+}
+
+func (fw *flowWorker) DeleteAssistant(ctx context.Context, assistantID int64) error {
+	fw.awsMX.Lock()
+	defer fw.awsMX.Unlock()
+
+	aw, ok := fw.aws[assistantID]
+	if ok {
+		if err := aw.Finish(ctx); err != nil {
+			return fmt.Errorf("failed to finish assistant %d: %w", assistantID, err)
+		}
+
+		delete(fw.aws, assistantID)
+	}
+
+	if assistant, err := fw.flowCtx.DB.DeleteAssistant(ctx, assistantID); err != nil {
+		return fmt.Errorf("failed to delete assistant %d: %w", assistantID, err)
+	} else {
+		fw.flowCtx.Publisher.AssistantDeleted(ctx, assistant)
+	}
+
+	return nil
+}
+
+func (fw *flowWorker) ListAssistants(ctx context.Context) []AssistantWorker {
+	fw.awsMX.Lock()
+	defer fw.awsMX.Unlock()
+
+	assistants := make([]AssistantWorker, 0, len(fw.aws))
+	for _, aw := range fw.aws {
+		assistants = append(assistants, aw)
+	}
+
+	slices.SortFunc(assistants, func(a, b AssistantWorker) int {
+		return int(a.GetAssistantID() - b.GetAssistantID())
+	})
+
+	return assistants
 }
 
 func (fw *flowWorker) ListTasks(ctx context.Context) []TaskWorker {
@@ -459,7 +586,7 @@ func (fw *flowWorker) Finish(ctx context.Context) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.Finish")
 	defer span.End()
 
-	if err := fw.stop(); err != nil {
+	if err := fw.finish(); err != nil {
 		return err
 	}
 
@@ -471,22 +598,52 @@ func (fw *flowWorker) Finish(ctx context.Context) error {
 		}
 	}
 
-	if err := fw.SetStatus(ctx, database.FlowStatusFinished); err != nil {
-		return fmt.Errorf("failed to set flow %d status: %w", fw.flowCtx.FlowID, err)
+	fw.awsMX.Lock()
+	defer fw.awsMX.Unlock()
+
+	for _, aw := range fw.aws {
+		if err := aw.Finish(ctx); err != nil {
+			return fmt.Errorf("failed to finish assistant %d: %w", aw.GetAssistantID(), err)
+		}
 	}
 
 	if err := fw.flowCtx.Executor.Release(ctx); err != nil {
 		return fmt.Errorf("failed to release flow %d resources: %w", fw.flowCtx.FlowID, err)
 	}
 
+	if err := fw.SetStatus(ctx, database.FlowStatusFinished); err != nil {
+		return fmt.Errorf("failed to set flow %d status: %w", fw.flowCtx.FlowID, err)
+	}
+
 	return nil
 }
 
 func (fw *flowWorker) Stop(ctx context.Context) error {
-	return fw.stop()
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.Stop")
+	defer span.End()
+
+	fw.taskMX.Lock()
+	defer fw.taskMX.Unlock()
+
+	fw.taskST()
+	done := make(chan struct{})
+	timer := time.NewTimer(stopTaskTimeout)
+	defer timer.Stop()
+
+	go func() {
+		fw.taskWG.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-timer.C:
+		return fmt.Errorf("task stop timeout")
+	case <-done:
+		return nil
+	}
 }
 
-func (fw *flowWorker) stop() error {
+func (fw *flowWorker) finish() error {
 	if err := fw.ctx.Err(); err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil
@@ -499,13 +656,6 @@ func (fw *flowWorker) stop() error {
 	fw.wg.Wait()
 
 	return nil
-}
-
-func (fw *flowWorker) runWorker(ctx context.Context, input string) error {
-	fw.wg.Add(1)
-	go fw.worker()
-
-	return fw.PutInput(ctx, input)
 }
 
 func (fw *flowWorker) worker() {
@@ -580,6 +730,9 @@ func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
 		}
 	}
 
+	// anyway there need to set flow status to Running to disable user input
+	_ = fw.SetStatus(fw.ctx, database.FlowStatusRunning)
+
 	if task, err := fw.tc.CreateTask(fw.ctx, flin.input, fw); err != nil {
 		err = fmt.Errorf("failed to create task for flow %d: %w", fw.flowCtx.FlowID, err)
 		flin.done <- err
@@ -601,8 +754,27 @@ func (fw *flowWorker) runTask(spanName, input string, task TaskWorker) error {
 		}),
 	)
 
-	ctx, _ := span.Observation(fw.ctx)
+	fw.taskMX.Lock()
+	fw.taskST()
+	ctx, taskST := context.WithCancel(fw.ctx)
+	fw.taskST = taskST
+	fw.taskMX.Unlock()
+
+	ctx, _ = span.Observation(ctx)
+	defer taskST()
+
+	fw.taskWG.Add(1)
+	defer fw.taskWG.Done()
+
 	if err := task.Run(ctx); err != nil {
+		// if task is stopped by user and it's not finished yet
+		if errors.Is(err, context.Canceled) && fw.ctx.Err() == nil {
+			span.End(
+				langfuse.WithEndSpanStatus("stopped"),
+				langfuse.WithEndSpanLevel(langfuse.ObservationLevelWarning),
+			)
+			return nil
+		}
 		span.End(
 			langfuse.WithEndSpanStatus(err.Error()),
 			langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
@@ -662,6 +834,51 @@ func newFlowProviderWorkers(
 	sw, err := cnts.sc.NewFlowScreenshot(ctx, flowID, pub)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create flow screenshot: %w", err)
+	}
+
+	return &flowProviderWorkers{
+		mlw:  mlw,
+		alw:  alw,
+		slw:  slw,
+		tlw:  tlw,
+		vslw: vslw,
+		sw:   sw,
+	}, nil
+}
+
+func getFlowProviderWorkers(
+	ctx context.Context,
+	flowID int64,
+	cnts *flowProviderControllers,
+) (*flowProviderWorkers, error) {
+	alw, err := cnts.alc.GetFlowAgentLog(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow agent log: %w", err)
+	}
+
+	mlw, err := cnts.mlc.GetFlowMsgLog(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow msg log: %w", err)
+	}
+
+	slw, err := cnts.slc.GetFlowSearchLog(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow search log: %w", err)
+	}
+
+	tlw, err := cnts.tlc.GetFlowTermLog(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow term log: %w", err)
+	}
+
+	vslw, err := cnts.vslc.GetFlowVectorStoreLog(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow vector store log: %w", err)
+	}
+
+	sw, err := cnts.sc.GetFlowScreenshot(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow screenshot: %w", err)
 	}
 
 	return &flowProviderWorkers{

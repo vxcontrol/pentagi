@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"strconv"
 	"strings"
 
 	"pentagi/pkg/database"
@@ -11,13 +13,13 @@ import (
 	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tmc/langchaingo/vectorstores"
-	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"github.com/vxcontrol/langchaingo/vectorstores"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 const (
-	memoryVectorStoreThreshold   = 0.45
-	memoryVectorStoreResultLimit = 2
+	memoryVectorStoreThreshold   = 0.2
+	memoryVectorStoreResultLimit = 3
 	memoryVectorStoreDefaultType = "memory"
 	memoryNotFoundMessage        = "nothing found in memory store by this question"
 )
@@ -57,13 +59,14 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 		}
 
 		filters := map[string]any{
+			"flow_id":  strconv.FormatInt(m.flowID, 10),
 			"doc_type": memoryVectorStoreDefaultType,
 		}
 		if action.TaskID != nil && *action.TaskID != 0 {
-			filters["task_id"] = action.TaskID
+			filters["task_id"] = action.TaskID.String()
 		}
 		if action.SubtaskID != nil && *action.SubtaskID != 0 {
-			filters["subtask_id"] = action.SubtaskID
+			filters["subtask_id"] = action.SubtaskID.String()
 		}
 
 		opts := []langfuse.EventStartOption{
@@ -100,6 +103,25 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			)...)
 			logger.WithError(err).Error("failed to search for similar documents")
 			return "", fmt.Errorf("failed to search for similar documents: %w", err)
+		}
+
+		// fallback to search in the flow only if task or subtask id is provided
+		if isSpecificFilters, globalFilters := getGlobalFilters(filters); isSpecificFilters && len(docs) == 0 {
+			docs, err = m.store.SimilaritySearch(
+				ctx,
+				action.Question,
+				memoryVectorStoreResultLimit,
+				vectorstores.WithScoreThreshold(memoryVectorStoreThreshold),
+				vectorstores.WithFilters(globalFilters),
+			)
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithStartEventStatus(err.Error()),
+					langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to search for similar documents by global filters")
+				return "", fmt.Errorf("failed to search for similar documents by global filters: %w", err)
+			}
 		}
 
 		if len(docs) == 0 {
@@ -175,4 +197,11 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 
 func (m *memory) IsAvailable() bool {
 	return m.store != nil
+}
+
+func getGlobalFilters(filters map[string]any) (bool, map[string]any) {
+	globalFilters := maps.Clone(filters)
+	delete(globalFilters, "task_id")
+	delete(globalFilters, "subtask_id")
+	return len(globalFilters) != len(filters), globalFilters
 }

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -21,13 +22,35 @@ func (s SearchEngineType) String() string {
 	return string(s)
 }
 
+// Valid is function to control input/output data
+func (s SearchEngineType) Valid() error {
+	switch s {
+	case SearchEngineTypeGoogle,
+		SearchEngineTypeDuckduckgo,
+		SearchEngineTypeTavily,
+		SearchEngineTypeTraversaal,
+		SearchEngineTypePerplexity,
+		SearchEngineTypeBrowser:
+		return nil
+	default:
+		return fmt.Errorf("invalid SearchEngineType: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s SearchEngineType) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 // Searchlog is model to contain search action information in the internet or local network
 // nolint:lll
 type Searchlog struct {
 	ID        uint64           `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
 	Initiator MsgchainType     `json:"initiator" validate:"valid,required" gorm:"type:MSGCHAIN_TYPE;NOT NULL"`
 	Executor  MsgchainType     `json:"executor" validate:"valid,required" gorm:"type:MSGCHAIN_TYPE;NOT NULL"`
-	Engine    SearchEngineType `json:"engine" validate:"oneof=google duckduckgo tavily traversaal perplexity browser,required" gorm:"type:SEARCHENGINE_TYPE;NOT NULL"`
+	Engine    SearchEngineType `json:"engine" validate:"valid,required" gorm:"type:SEARCHENGINE_TYPE;NOT NULL"`
 	Query     string           `json:"query" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	Result    string           `json:"result" validate:"omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
 	FlowID    uint64           `form:"flow_id" json:"flow_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`

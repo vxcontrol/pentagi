@@ -9,18 +9,20 @@
             "envFile": "${workspaceFolder}/.env",
             "env": {
                 "CORS_ORIGINS": "http://localhost:*,https://localhost:*",
+                "SERVER_PORT": "8080",
+                "SERVER_USE_SSL": "false",
+                "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
                 "PUBLIC_URL": "http://localhost:8080",
                 "STATIC_URL": "http://localhost:8000",
                 // Choose it instead of STATIC_URL to serve static files from a directory:
                 // "STATIC_DIR": "${workspaceFolder}/frontend/dist",
-                "LLM_SERVER_CONFIG_PATH": "${workspaceFolder}/examples/configs/deepseek.provider.yml",
-                "SERVER_PORT": "8080",
-                "SERVER_USE_SSL": "false",
-                "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
                 // Langfuse (optional) uncomment to enable
                 // "LANGFUSE_BASE_URL": "http://localhost:4000",
                 // Observability (optional) uncomment to enable
                 // "OTEL_HOST": "localhost:8148",
+                // Scraper (optional) uncomment to enable
+                "SCRAPER_PRIVATE_URL": "https://someuser:somepass@localhost:9443/",
+                "LLM_SERVER_CONFIG_PATH": "${workspaceFolder}/examples/configs/openrouter.provider.yml",
             },
             "cwd": "${workspaceFolder}",
             "output": "${workspaceFolder}/build/__debug_bin_pentagi",
@@ -55,9 +57,13 @@
             "envFile": "${workspaceFolder}/.env",
             "env": {},
             "args": [
+                // "-type", "openai",
+                // "-type", "anthropic",
                 "-config", "${workspaceFolder}/examples/configs/deepseek.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/openrouter.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/deepinfra.provider.yml",
+                // "-report", "${workspaceFolder}/examples/tests/openai-report.md",
+                // "-report", "${workspaceFolder}/examples/tests/anthropic-report.md",
                 "-report", "${workspaceFolder}/examples/tests/deepseek-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/openrouter-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/deepinfra-report.md",

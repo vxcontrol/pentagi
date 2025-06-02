@@ -11,6 +11,51 @@ import (
 	"fmt"
 )
 
+type AssistantStatus string
+
+const (
+	AssistantStatusCreated  AssistantStatus = "created"
+	AssistantStatusRunning  AssistantStatus = "running"
+	AssistantStatusWaiting  AssistantStatus = "waiting"
+	AssistantStatusFinished AssistantStatus = "finished"
+	AssistantStatusFailed   AssistantStatus = "failed"
+)
+
+func (e *AssistantStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AssistantStatus(s)
+	case string:
+		*e = AssistantStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AssistantStatus: %T", src)
+	}
+	return nil
+}
+
+type NullAssistantStatus struct {
+	AssistantStatus AssistantStatus `json:"assistant_status"`
+	Valid           bool            `json:"valid"` // Valid is true if AssistantStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAssistantStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.AssistantStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AssistantStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAssistantStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AssistantStatus), nil
+}
+
 type ContainerStatus string
 
 const (
@@ -160,6 +205,7 @@ const (
 	MsgchainTypePentester     MsgchainType = "pentester"
 	MsgchainTypeSummarizer    MsgchainType = "summarizer"
 	MsgchainTypeToolCallFixer MsgchainType = "tool_call_fixer"
+	MsgchainTypeAssistant     MsgchainType = "assistant"
 )
 
 func (e *MsgchainType) Scan(src interface{}) error {
@@ -243,6 +289,8 @@ func (ns NullMsglogResultFormat) Value() (driver.Value, error) {
 type MsglogType string
 
 const (
+	MsglogTypeAnswer   MsglogType = "answer"
+	MsglogTypeReport   MsglogType = "report"
 	MsglogTypeThoughts MsglogType = "thoughts"
 	MsglogTypeBrowser  MsglogType = "browser"
 	MsglogTypeTerminal MsglogType = "terminal"
@@ -651,6 +699,36 @@ type Agentlog struct {
 	CreatedAt sql.NullTime  `json:"created_at"`
 }
 
+type Assistant struct {
+	ID            int64           `json:"id"`
+	Status        AssistantStatus `json:"status"`
+	Title         string          `json:"title"`
+	Model         string          `json:"model"`
+	ModelProvider string          `json:"model_provider"`
+	Language      string          `json:"language"`
+	Functions     json.RawMessage `json:"functions"`
+	Prompts       json.RawMessage `json:"prompts"`
+	TraceID       sql.NullString  `json:"trace_id"`
+	FlowID        int64           `json:"flow_id"`
+	UseAgents     bool            `json:"use_agents"`
+	MsgchainID    sql.NullInt64   `json:"msgchain_id"`
+	CreatedAt     sql.NullTime    `json:"created_at"`
+	UpdatedAt     sql.NullTime    `json:"updated_at"`
+	DeletedAt     sql.NullTime    `json:"deleted_at"`
+}
+
+type Assistantlog struct {
+	ID           int64              `json:"id"`
+	Type         MsglogType         `json:"type"`
+	Message      string             `json:"message"`
+	Result       string             `json:"result"`
+	ResultFormat MsglogResultFormat `json:"result_format"`
+	FlowID       int64              `json:"flow_id"`
+	AssistantID  int64              `json:"assistant_id"`
+	CreatedAt    sql.NullTime       `json:"created_at"`
+	Thinking     sql.NullString     `json:"thinking"`
+}
+
 type Container struct {
 	ID        int64           `json:"id"`
 	Type      ContainerType   `json:"type"`
@@ -705,6 +783,7 @@ type Msglog struct {
 	SubtaskID    sql.NullInt64      `json:"subtask_id"`
 	CreatedAt    sql.NullTime       `json:"created_at"`
 	ResultFormat MsglogResultFormat `json:"result_format"`
+	Thinking     sql.NullString     `json:"thinking"`
 }
 
 type Privilege struct {
@@ -755,6 +834,7 @@ type Subtask struct {
 	TaskID      int64         `json:"task_id"`
 	CreatedAt   sql.NullTime  `json:"created_at"`
 	UpdatedAt   sql.NullTime  `json:"updated_at"`
+	Context     string        `json:"context"`
 }
 
 type Task struct {

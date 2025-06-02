@@ -194,6 +194,7 @@ func (t *tester) initFlowProviderController() error {
 
 	// Setup log capturing for later inspection and debugging
 	flowProvider.SetAgentLogProvider(t.proxies.GetAgentLogProvider())
+	flowProvider.SetMsgLogProvider(t.proxies.GetMsgLogProvider())
 
 	// Store references to complete the initialization chain
 	t.flowProvider = flowProvider

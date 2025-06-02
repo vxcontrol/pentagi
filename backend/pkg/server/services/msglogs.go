@@ -25,14 +25,15 @@ type msglogsGrouped struct {
 }
 
 var msglogsSQLMappers = map[string]interface{}{
-	"id":         "{{table}}.id",
-	"type":       "{{table}}.type",
-	"message":    "{{table}}.message",
-	"result":     "{{table}}.result",
-	"flow_id":    "{{table}}.flow_id",
-	"task_id":    "{{table}}.task_id",
-	"subtask_id": "{{table}}.subtask_id",
-	"data":       "({{table}}.type || ' ' || {{table}}.message || ' ' || {{table}}.result)",
+	"id":            "{{table}}.id",
+	"type":          "{{table}}.type",
+	"message":       "{{table}}.message",
+	"result":        "{{table}}.result",
+	"result_format": "{{table}}.result_format",
+	"flow_id":       "{{table}}.flow_id",
+	"task_id":       "{{table}}.task_id",
+	"subtask_id":    "{{table}}.subtask_id",
+	"data":          "({{table}}.type || ' ' || {{table}}.message || ' ' || {{table}}.result)",
 }
 
 type MsglogService struct {

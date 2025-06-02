@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"pentagi/pkg/tools"
 	"time"
 
@@ -21,11 +22,32 @@ func (s FlowStatus) String() string {
 	return string(s)
 }
 
+// Valid is function to control input/output data
+func (s FlowStatus) Valid() error {
+	switch s {
+	case FlowStatusCreated,
+		FlowStatusRunning,
+		FlowStatusWaiting,
+		FlowStatusFinished,
+		FlowStatusFailed:
+		return nil
+	default:
+		return fmt.Errorf("invalid FlowStatus: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s FlowStatus) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 // Flow is model to contain flow information
 // nolint:lll
 type Flow struct {
 	ID            uint64           `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
-	Status        FlowStatus       `form:"status" json:"status" validate:"oneof=created running waiting finished failed,required" gorm:"type:FLOW_STATUS;NOT NULL;default:'created'"`
+	Status        FlowStatus       `form:"status" json:"status" validate:"valid,required" gorm:"type:FLOW_STATUS;NOT NULL;default:'created'"`
 	Title         string           `form:"title" json:"title" validate:"required" gorm:"type:TEXT;NOT NULL;default:'untitled'"`
 	Model         string           `form:"model" json:"model" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
 	ModelProvider string           `form:"model_provider" json:"model_provider" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
@@ -62,6 +84,7 @@ type CreateFlow struct {
 	Functions *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid"`
 }
 
+// Valid is function to control input/output data
 func (cf CreateFlow) Valid() error {
 	return validate.Struct(cf)
 }
@@ -69,10 +92,11 @@ func (cf CreateFlow) Valid() error {
 // PatchFlow is model to contain flow patching paylaod
 // nolint:lll
 type PatchFlow struct {
-	Action string  `form:"action" json:"action" validate:"required,oneof=stop,input" enums:"stop,input" default:"stop"`
+	Action string  `form:"action" json:"action" validate:"required,oneof=stop,finish,input" enums:"stop,finish,input" default:"stop"`
 	Input  *string `form:"input,omitempty" json:"input,omitempty" validate:"required_if=Action input" example:"user input for waiting flow"`
 }
 
+// Valid is function to control input/output data
 func (pf PatchFlow) Valid() error {
 	return validate.Struct(pf)
 }

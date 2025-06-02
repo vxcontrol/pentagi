@@ -148,8 +148,8 @@ func (s *PromptService) GetPrompt(c *gin.Context) {
 // @Tags Prompts
 // @Accept json
 // @Produce json
-// @Param json body models.PatchPrompt true "prompt model to update"
 // @Param promptType path string true "prompt type"
+// @Param json body models.PatchPrompt true "prompt model to update"
 // @Success 200 {object} response.successResp{data=models.Prompt} "prompt updated successful"
 // @Failure 400 {object} response.errorResp "invalid prompt request data"
 // @Failure 403 {object} response.errorResp "updating prompt not permitted"

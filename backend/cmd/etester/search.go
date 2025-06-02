@@ -8,8 +8,8 @@ import (
 
 	"pentagi/pkg/terminal"
 
-	"github.com/tmc/langchaingo/vectorstores"
-	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"github.com/vxcontrol/langchaingo/vectorstores"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 // SearchOptions represents the options for vector search

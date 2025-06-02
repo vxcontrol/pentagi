@@ -14,7 +14,14 @@ import (
 )
 
 func StringToNullString(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: true}
+	return sql.NullString{String: s, Valid: s != ""}
+}
+
+func NullStringToPtrString(s sql.NullString) *string {
+	if s.Valid {
+		return &s.String
+	}
+	return nil
 }
 
 func Int64ToNullInt64(i *int64) sql.NullInt64 {
@@ -29,6 +36,10 @@ func NullInt64ToInt64(i sql.NullInt64) *int64 {
 		return &i.Int64
 	}
 	return nil
+}
+
+func TimeToNullTime(t time.Time) sql.NullTime {
+	return sql.NullTime{Time: t, Valid: !t.IsZero()}
 }
 
 type GormLogger struct{}
@@ -66,8 +77,8 @@ func NewGorm(dsn, dbType string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.DB().SetMaxIdleConns(10)
-	db.DB().SetMaxOpenConns(50)
+	db.DB().SetMaxIdleConns(5)
+	db.DB().SetMaxOpenConns(20)
 	db.DB().SetConnMaxLifetime(time.Hour)
 	db.SetLogger(&GormLogger{})
 	db.LogMode(true)

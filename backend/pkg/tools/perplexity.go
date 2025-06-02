@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"text/template"
 	"time"
 
 	"pentagi/pkg/database"
@@ -152,7 +153,7 @@ func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessa
 		"max_results": action.MaxResults,
 	})
 
-	result, err := t.search(ctx, action.Query, action.MaxResults.Int())
+	result, err := t.search(ctx, action.Query)
 	if err != nil {
 		logger.WithError(err).Error("failed to search in perplexity")
 		return fmt.Sprintf("failed to search in perplexity: %v", err), nil
@@ -175,7 +176,7 @@ func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessa
 }
 
 // search performs a request to Perplexity API
-func (t *perplexity) search(ctx context.Context, query string, maxResults int) (string, error) {
+func (t *perplexity) search(ctx context.Context, query string) (string, error) {
 	// Setting up HTTP client with timeout
 	httpClient := &http.Client{
 		Timeout: t.timeout,
@@ -252,7 +253,7 @@ func (t *perplexity) search(ctx context.Context, query string, maxResults int) (
 	}
 
 	// Forming the result
-	result := t.formatResponse(ctx, &response, maxResults)
+	result := t.formatResponse(ctx, &response, query)
 	return result, nil
 }
 
@@ -285,7 +286,7 @@ func (t *perplexity) handleErrorResponse(statusCode int) error {
 }
 
 // formatResponse formats the API response into readable text
-func (t *perplexity) formatResponse(ctx context.Context, response *CompletionResponse, maxResults int) string {
+func (t *perplexity) formatResponse(ctx context.Context, response *CompletionResponse, query string) string {
 	var builder strings.Builder
 
 	// Checking for response choices
@@ -302,9 +303,6 @@ func (t *perplexity) formatResponse(ctx context.Context, response *CompletionRes
 	if response.Citations != nil && len(*response.Citations) > 0 {
 		builder.WriteString("\n\n# Citations\n\n")
 		for i, citation := range *response.Citations {
-			if i >= maxResults {
-				break
-			}
 			builder.WriteString(fmt.Sprintf("%d. %s\n", i+1, citation))
 		}
 	}
@@ -313,9 +311,11 @@ func (t *perplexity) formatResponse(ctx context.Context, response *CompletionRes
 	if len(rawContent) > maxRawContentLength {
 		// Check if summarizer is available
 		if t.summarizer != nil {
-			summarizedContent, err := t.summarizer(ctx, rawContent)
+			summarizePrompt, err := t.getSummarizePrompt(query, rawContent, response.Citations)
 			if err == nil {
-				return summarizedContent
+				if summarizedContent, err := t.summarizer(ctx, summarizePrompt); err == nil {
+					return summarizedContent
+				}
 			}
 		}
 		// If summarizer is nil or failed, truncate content
@@ -323,6 +323,76 @@ func (t *perplexity) formatResponse(ctx context.Context, response *CompletionRes
 	}
 
 	return rawContent
+}
+
+// getSummarizePrompt creates a prompt for summarizing Perplexity search results
+func (t *perplexity) getSummarizePrompt(query string, content string, citations *[]string) (string, error) {
+	templateText := `<instructions>
+TASK: Summarize Perplexity search results for the following user query:
+
+USER QUERY: "{{.Query}}"
+
+DATA:
+- <answer> contains the AI-generated response to the user's query
+- <citations> contains source references that support the response
+
+REQUIREMENTS:
+1. Create focused summary (max {{.MaxLength}} chars) that DIRECTLY answers the user query
+2. Preserve all critical facts, technical details, and numerical data from the answer
+3. Maintain all actionable insights, procedures, or recommendations
+4. Keep ALL query-relevant information even if reducing overall length
+5. Retain important source attributions when specific facts are kept
+6. Ensure the user query is fully addressed in the summary
+7. NEVER remove information that answers the user's original question
+
+FORMAT:
+- Begin with a direct answer to the user query
+- Maintain the original answer's structure and flow where possible
+- Preserve hierarchical organization with headings when present
+- Keep bullet points and numbered lists for clarity
+- Include the most important citations that support key claims
+
+The summary MUST provide complete answers to the user's query, preserving all relevant information.
+</instructions>
+
+<answer>
+{{.Content}}
+</answer>
+
+{{if .HasCitations}}
+<citations>
+{{range $index, $citation := .Citations}}{{$index | inc}}. {{$citation}}
+{{end}}</citations>
+{{end}}`
+
+	funcMap := template.FuncMap{
+		"inc": func(i int) int {
+			return i + 1
+		},
+	}
+
+	templateContext := map[string]any{
+		"Query":        query,
+		"MaxLength":    maxRawContentLength,
+		"Content":      content,
+		"HasCitations": citations != nil && len(*citations) > 0,
+	}
+
+	if citations != nil && len(*citations) > 0 {
+		templateContext["Citations"] = *citations
+	}
+
+	tmpl, err := template.New("summarize").Funcs(funcMap).Parse(templateText)
+	if err != nil {
+		return "", fmt.Errorf("error creating template: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, templateContext); err != nil {
+		return "", fmt.Errorf("error executing template: %v", err)
+	}
+
+	return buf.String(), nil
 }
 
 // isAvailable checks the availability of the API

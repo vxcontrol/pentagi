@@ -14,6 +14,7 @@ import { axios } from '@/lib/axios';
 import Chat from '@/pages/Chat';
 import Login from '@/pages/Login';
 import OAuthResult from '@/pages/OAuthResult';
+import Report from '@/pages/Report';
 import ThemeProvider from '@/providers/ThemeProvider';
 
 import type { AuthInfoResponse } from './models/Info';
@@ -83,6 +84,16 @@ const App = () => {
                                     element={<Chat />}
                                 />
                             </Route>
+
+                            {/* report routes */}
+                            <Route
+                                path="chat/:flowId/report"
+                                element={
+                                    <ProtectedRoute>
+                                        <Report />
+                                    </ProtectedRoute>
+                                }
+                            />
 
                             {/* public routes */}
                             <Route

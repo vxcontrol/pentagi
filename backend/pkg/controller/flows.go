@@ -31,11 +31,20 @@ type FlowController interface {
 		prvtype provider.ProviderType,
 		functions *tools.Functions,
 	) (FlowWorker, error)
+	CreateAssistant(
+		ctx context.Context,
+		userID int64,
+		flowID int64,
+		input string,
+		useAgents bool,
+		prvtype provider.ProviderType,
+		functions *tools.Functions,
+	) (AssistantWorker, error)
 	LoadFlows(ctx context.Context) error
 	ListFlows(ctx context.Context) []FlowWorker
 	GetFlow(ctx context.Context, flowID int64) (FlowWorker, error)
-	FinishFlow(ctx context.Context, flowID int64) error
 	StopFlow(ctx context.Context, flowID int64) error
+	FinishFlow(ctx context.Context, flowID int64) error
 }
 
 type flowController struct {
@@ -48,6 +57,7 @@ type flowController struct {
 	subs   subscriptions.SubscriptionsController
 	alc    AgentLogController
 	mlc    MsgLogController
+	aslc   AssistantLogController
 	slc    SearchLogController
 	tlc    TermLogController
 	vslc   VectorStoreLogController
@@ -71,6 +81,7 @@ func NewFlowController(
 		subs:   subs,
 		alc:    NewAgentLogController(db),
 		mlc:    NewMsgLogController(db),
+		aslc:   NewAssistantLogController(db),
 		slc:    NewSearchLogController(db),
 		tlc:    NewTermLogController(db),
 		vslc:   NewVectorStoreLogController(db),
@@ -93,6 +104,7 @@ func (fc *flowController) LoadFlows(ctx context.Context) error {
 			subs:   fc.subs,
 			flowProviderControllers: flowProviderControllers{
 				mlc:  fc.mlc,
+				aslc: fc.aslc,
 				alc:  fc.alc,
 				slc:  fc.slc,
 				tlc:  fc.tlc,
@@ -138,6 +150,7 @@ func (fc *flowController) CreateFlow(
 			subs:   fc.subs,
 			flowProviderControllers: flowProviderControllers{
 				mlc:  fc.mlc,
+				aslc: fc.aslc,
 				alc:  fc.alc,
 				slc:  fc.slc,
 				tlc:  fc.tlc,
@@ -153,6 +166,132 @@ func (fc *flowController) CreateFlow(
 	fc.flows[fw.GetFlowID()] = fw
 
 	return fw, nil
+}
+
+func (fc *flowController) CreateAssistant(
+	ctx context.Context,
+	userID int64,
+	flowID int64,
+	input string,
+	useAgents bool,
+	prvtype provider.ProviderType,
+	functions *tools.Functions,
+) (AssistantWorker, error) {
+	fc.mx.Lock()
+	defer fc.mx.Unlock()
+
+	var (
+		fw  FlowWorker
+		ok  bool
+		err error
+	)
+
+	flowWorkerCtx := flowWorkerCtx{
+		db:     fc.db,
+		cfg:    fc.cfg,
+		docker: fc.docker,
+		provs:  fc.provs,
+		subs:   fc.subs,
+		flowProviderControllers: flowProviderControllers{
+			mlc:  fc.mlc,
+			aslc: fc.aslc,
+			alc:  fc.alc,
+			slc:  fc.slc,
+			tlc:  fc.tlc,
+			vslc: fc.vslc,
+			sc:   fc.sc,
+		},
+	}
+
+	newFlow := func() error {
+		fw, err = NewFlowWorker(ctx, newFlowWorkerCtx{
+			userID:        userID,
+			input:         input,
+			dryRun:        true,
+			prvtype:       prvtype,
+			functions:     functions,
+			flowWorkerCtx: flowWorkerCtx,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create flow worker: %w", err)
+		}
+
+		fc.flows[fw.GetFlowID()] = fw
+		flowID = fw.GetFlowID()
+		fw.SetStatus(ctx, database.FlowStatusWaiting)
+
+		return nil
+	}
+
+	loadFlow := func() error {
+		flow, err := fc.db.UpdateFlowStatus(ctx, database.UpdateFlowStatusParams{
+			ID:     flowID,
+			Status: database.FlowStatusWaiting,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to renew flow %d status: %w", flowID, err)
+		}
+
+		fw, err = LoadFlowWorker(ctx, flow, flowWorkerCtx)
+		if err != nil {
+			return fmt.Errorf("failed to load flow %d: %w", flowID, err)
+		}
+
+		fc.flows[flowID] = fw
+
+		return nil
+	}
+
+	if flowID == 0 {
+		if err := newFlow(); err != nil {
+			return nil, err
+		}
+	} else if fw, ok = fc.flows[flowID]; ok {
+		status, err := fw.GetStatus(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get flow %d status: %w", flowID, err)
+		}
+
+		switch status {
+		case database.FlowStatusCreated:
+			return nil, fmt.Errorf("flow %d is not completed", flowID)
+		case database.FlowStatusFinished, database.FlowStatusFailed:
+			if err := loadFlow(); err != nil {
+				return nil, err
+			}
+		case database.FlowStatusRunning, database.FlowStatusWaiting:
+			break
+		default:
+			return nil, fmt.Errorf("flow %d is in unknown status: %s", flowID, status)
+		}
+	} else {
+		if err := loadFlow(); err != nil {
+			return nil, err
+		}
+	}
+
+	if fw == nil { // just double check, this should never happen
+		return nil, fmt.Errorf("unexpected error: flow %d not found", flowID)
+	}
+
+	aw, err := NewAssistantWorker(ctx, newAssistantWorkerCtx{
+		userID:        userID,
+		flowID:        flowID,
+		input:         input,
+		prvtype:       prvtype,
+		useAgents:     useAgents,
+		functions:     functions,
+		flowWorkerCtx: flowWorkerCtx,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create assistant: %w", err)
+	}
+
+	if err = fw.AddAssistant(ctx, aw); err != nil {
+		return nil, fmt.Errorf("failed to add assistant to flow: %w", err)
+	}
+
+	return aw, nil
 }
 
 func (fc *flowController) ListFlows(ctx context.Context) []FlowWorker {
@@ -183,25 +322,6 @@ func (fc *flowController) GetFlow(ctx context.Context, flowID int64) (FlowWorker
 	return flow, nil
 }
 
-func (fc *flowController) FinishFlow(ctx context.Context, flowID int64) error {
-	fc.mx.Lock()
-	defer fc.mx.Unlock()
-
-	flow, ok := fc.flows[flowID]
-	if !ok {
-		return ErrFlowNotFound
-	}
-
-	err := flow.Finish(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to finish flow %d: %w", flowID, err)
-	}
-
-	delete(fc.flows, flowID)
-
-	return nil
-}
-
 func (fc *flowController) StopFlow(ctx context.Context, flowID int64) error {
 	fc.mx.Lock()
 	defer fc.mx.Unlock()
@@ -214,6 +334,23 @@ func (fc *flowController) StopFlow(ctx context.Context, flowID int64) error {
 	err := flow.Stop(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to stop flow %d: %w", flowID, err)
+	}
+
+	return nil
+}
+
+func (fc *flowController) FinishFlow(ctx context.Context, flowID int64) error {
+	fc.mx.Lock()
+	defer fc.mx.Unlock()
+
+	flow, ok := fc.flows[flowID]
+	if !ok {
+		return ErrFlowNotFound
+	}
+
+	err := flow.Finish(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to finish flow %d: %w", flowID, err)
 	}
 
 	delete(fc.flows, flowID)

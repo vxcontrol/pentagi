@@ -4,6 +4,9 @@ simple:
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.1
 
 simple_json:
   model: "deepseek-chat"
@@ -12,6 +15,9 @@ simple_json:
   n: 1
   max_tokens: 4000
   json: true
+  price:
+    input: 0.27
+    output: 1.1
 
 agent:
   model: "deepseek-chat"
@@ -19,6 +25,19 @@ agent:
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.1
+
+assistant:
+  model: "deepseek-chat"
+  temperature: 0.6
+  top_p: 0.9
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.27
+    output: 1.1
 
 generator:
   model: "deepseek-chat"
@@ -26,6 +45,9 @@ generator:
   top_p: 0.95
   n: 1
   max_tokens: 8000
+  price:
+    input: 0.27
+    output: 1.1
 
 refiner:
   model: "deepseek-chat"
@@ -33,6 +55,9 @@ refiner:
   top_p: 0.95
   n: 1
   max_tokens: 8000
+  price:
+    input: 0.27
+    output: 1.1
 
 adviser:
   model: "deepseek-chat"
@@ -40,13 +65,19 @@ adviser:
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.1
 
 reflector:
-  model: "deepseek-reasoner"
-  temperature: 1.0
-  top_p: 1.0
+  model: "deepseek-chat"
+  temperature: 0.65
+  top_p: 0.9
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.1
 
 searcher:
   model: "deepseek-chat"
@@ -54,6 +85,9 @@ searcher:
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.1
 
 enricher:
   model: "deepseek-chat"
@@ -61,13 +95,19 @@ enricher:
   top_p: 1.0
   n: 1
   max_tokens: 6000
+  price:
+    input: 0.27
+    output: 1.1
 
 coder:
   model: "deepseek-coder"
   temperature: 0.7
   top_p: 1.0
   n: 1
-  max_tokens: 6000
+  max_tokens: 8000
+  price:
+    input: 0.27
+    output: 1.1
 
 installer:
   model: "deepseek-coder"
@@ -75,6 +115,9 @@ installer:
   top_p: 1.0
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.1
 
 pentester:
   model: "deepseek-chat"
@@ -82,3 +125,6 @@ pentester:
   top_p: 0.9
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.1

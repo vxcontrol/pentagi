@@ -69,6 +69,14 @@ SELECT
 FROM subtasks s
 WHERE s.id = $1;
 
+-- name: GetFlowSubtask :one
+SELECT
+  s.*
+FROM subtasks s
+INNER JOIN tasks t ON s.task_id = t.id
+INNER JOIN flows f ON t.flow_id = f.id
+WHERE s.id = $1 AND t.flow_id = $2 AND f.deleted_at IS NULL;
+
 -- name: CreateSubtask :one
 INSERT INTO subtasks (
   status,
@@ -101,6 +109,12 @@ RETURNING *;
 -- name: UpdateSubtaskFailedResult :one
 UPDATE subtasks
 SET status = 'failed', result = $1
+WHERE id = $2
+RETURNING *;
+
+-- name: UpdateSubtaskContext :one
+UPDATE subtasks
+SET context = $1
 WHERE id = $2
 RETURNING *;
 

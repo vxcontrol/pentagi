@@ -1,18 +1,20 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-    Airplay,
+    Bot,
     Brain,
     Code2,
-    FileCode,
     FileText,
     HardDrive,
     HardDriveDownload,
     HelpCircle,
+    LayoutList,
+    MessagesSquare,
     RefreshCw,
     Search,
     Settings,
     Sigma,
     Skull,
+    Wrench,
 } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -30,16 +32,18 @@ const icons: Record<AgentType, LucideIcon> = {
     [AgentType.Adviser]: HelpCircle,
     [AgentType.Coder]: Code2,
     [AgentType.Enricher]: HardDriveDownload,
-    [AgentType.Generator]: FileCode,
+    [AgentType.Generator]: LayoutList,
     [AgentType.Installer]: Settings,
     [AgentType.Memorist]: HardDrive,
     [AgentType.Pentester]: Skull,
     [AgentType.PrimaryAgent]: Brain,
     [AgentType.Refiner]: RefreshCw,
-    [AgentType.Reflector]: Airplay,
+    [AgentType.Reflector]: MessagesSquare,
     [AgentType.Reporter]: FileText,
     [AgentType.Searcher]: Search,
     [AgentType.Summarizer]: Sigma,
+    [AgentType.ToolCallFixer]: Wrench,
+    [AgentType.Assistant]: Bot,
 };
 const defaultIcon = HelpCircle;
 

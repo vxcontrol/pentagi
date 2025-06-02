@@ -1,84 +1,130 @@
 simple:
-  model: "openai/gpt-4o"
+  model: "openai/gpt-4.1-mini"
   temperature: 0.6
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.4
+    output: 1.6
 
 simple_json:
-  model: "openai/gpt-4o-mini"
+  model: "openai/gpt-4.1-mini"
   temperature: 0.7
   top_p: 1.0
   n: 1
   max_tokens: 4000
   json: true
+  price:
+    input: 0.4
+    output: 1.6
 
 agent:
-  model: "openai/gpt-4o"
-  temperature: 0.7
+  model: "openai/o4-mini" # x-ai/grok-3-mini-beta
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.1
+    output: 4.4
+
+assistant:
+  model: "x-ai/grok-3-beta" # x-ai/grok-3-mini-beta, google/gemini-2.5-flash-preview:thinking
+  temperature: 0.6
   top_p: 0.95
   n: 1
-  max_tokens: 4000
+  max_tokens: 6000
+  price:
+    input: 3
+    output: 15
 
 generator:
   model: "anthropic/claude-3.7-sonnet:thinking"
-  temperature: 0.7
-  top_p: 0.95
   n: 1
-  max_tokens: 8000
+  max_tokens: 12000
+  reasoning:
+    max_tokens: 4000
+  price:
+    input: 3
+    output: 15
 
 refiner:
-  model: "anthropic/claude-3.7-sonnet:thinking"
-  temperature: 0.55
-  top_p: 0.95
+  model: "google/gemini-2.5-flash-preview:thinking"
   n: 1
-  max_tokens: 8000
+  max_tokens: 10000
+  reasoning:
+    max_tokens: 2000
+  price:
+    input: 0.15
+    output: 3.5
 
 adviser:
-  model: "anthropic/claude-3.7-sonnet:thinking"
-  temperature: 0.8
-  top_p: 0.95
+  model: "google/gemini-2.5-pro-preview"
   n: 1
-  max_tokens: 4000
+  max_tokens: 6000
+  reasoning:
+    effort: high
+  price:
+    input: 1.25
+    output: 10
 
 reflector:
-  model: "mistralai/mistral-large-2411"
+  model: "openai/gpt-4.1-mini"
   temperature: 0.8
   top_p: 1.0
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.4
+    output: 1.6
 
 searcher:
-  model: "openai/gpt-4o-mini"
-  temperature: 0.7
-  top_p: 0.95
+  model: "x-ai/grok-3-mini-beta"
   n: 1
   max_tokens: 4000
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 0.3
+    output: 0.5
 
 enricher:
-  model: "openai/gpt-4o"
+  model: "openai/gpt-4.1-mini"
   temperature: 0.95
   top_p: 1.0
   n: 1
   max_tokens: 6000
+  price:
+    input: 0.4
+    output: 1.6
 
 coder:
-  model: "anthropic/claude-3.7-sonnet"
-  temperature: 0.9
-  top_p: 1.0
+  model: "anthropic/claude-3.7-sonnet:thinking"
   n: 1
-  max_tokens: 6000
+  max_tokens: 8000
+  reasoning:
+    max_tokens: 2000
+  price:
+    input: 3
+    output: 15
 
 installer:
-  model: "openai/gpt-4o"
-  temperature: 0.8
-  top_p: 1.0
+  model: "google/gemini-2.5-flash-preview:thinking"
   n: 1
   max_tokens: 4000
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 0.15
+    output: 3.5
 
 pentester:
-  model: "openai/gpt-4o"
-  temperature: 0.75
-  top_p: 0.9
+  model: "x-ai/grok-3-mini-beta"
   n: 1
-  max_tokens: 4000
+  max_tokens: 6000
+  reasoning:
+    max_tokens: 2048
+  price:
+    input: 0.3
+    output: 0.5

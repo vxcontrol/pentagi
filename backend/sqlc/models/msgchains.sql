@@ -69,6 +69,14 @@ LEFT JOIN tasks t ON s.task_id = t.id
 WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND mc.type = $2
 ORDER BY mc.created_at DESC;
 
+-- name: GetFlowTaskTypeLastMsgChain :one
+SELECT
+  mc.*
+FROM msgchains mc
+WHERE mc.flow_id = $1 AND (mc.task_id = $2 OR $2 IS NULL) AND mc.type = $3
+ORDER BY mc.created_at DESC
+LIMIT 1;
+
 -- name: GetMsgChain :one
 SELECT
   mc.*
@@ -93,6 +101,12 @@ RETURNING *;
 
 -- name: UpdateMsgChain :one
 UPDATE msgchains
-SET chain = $1, usage_in = usage_in + $2, usage_out = usage_out + $3
-WHERE id = $4
+SET chain = $1
+WHERE id = $2
+RETURNING *;
+
+-- name: UpdateMsgChainUsage :one
+UPDATE msgchains
+SET usage_in = usage_in + $1, usage_out = usage_out + $2
+WHERE id = $3
 RETURNING *;

@@ -35,7 +35,7 @@ RUN npm run build -- \
     --target es2020
 
 # STEP 2: Build the backend
-FROM golang:1.23-bookworm as be-build
+FROM golang:1.24-bookworm as be-build
 
 ENV CGO_ENABLED=0
 ENV GO111MODULE=on

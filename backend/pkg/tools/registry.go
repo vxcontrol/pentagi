@@ -5,7 +5,7 @@ import (
 	"pentagi/pkg/database"
 
 	"github.com/invopop/jsonschema"
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
 )
 
 const (
@@ -190,14 +190,21 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Parameters:  reflector.Reflect(&EnricherResult{}),
 	},
 	SearchInMemoryToolName: {
-		Name:        SearchInMemoryToolName,
-		Description: "Search in the vector database (long-term memory) some relevant information parts by the exact question or by the part of original information",
-		Parameters:  reflector.Reflect(&SearchInMemoryAction{}),
+		Name: SearchInMemoryToolName,
+		Description: "Search in the vector database (long-term memory) for relevant information by providing a semantically rich, " +
+			"context-aware natural language query. Formulate queries with sufficient context, intent, and detailed descriptions " +
+			"to enhance semantic matching and retrieval accuracy. This function is ideal when you need to retrieve specific information " +
+			"to assist in generating accurate and informative responses. If Task ID or Subtask ID are known, " +
+			"they can be used as strict filters to further refine the search results and improve relevancy.",
+		Parameters: reflector.Reflect(&SearchInMemoryAction{}),
 	},
 	SearchGuideToolName: {
-		Name:        SearchGuideToolName,
-		Description: "Search in the vector database some ready guides to use them as a base for your task or subtask or issue or question",
-		Parameters:  reflector.Reflect(&SearchGuideAction{}),
+		Name: SearchGuideToolName,
+		Description: "Search in the vector database for relevant guides by providing a semantically rich, context-aware natural language query. " +
+			"Formulate your query with sufficient context, intent, and detailed descriptions of the guide you need to enhance semantic matching and " +
+			"retrieval accuracy. Specify the type of guide required to further refine the search. This function is ideal " +
+			"when you need to retrieve specific guides to assist in accomplishing tasks or solving issues.",
+		Parameters: reflector.Reflect(&SearchGuideAction{}),
 	},
 	StoreGuideToolName: {
 		Name:        StoreGuideToolName,
@@ -205,9 +212,12 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Parameters:  reflector.Reflect(&StoreGuideAction{}),
 	},
 	SearchAnswerToolName: {
-		Name:        SearchAnswerToolName,
-		Description: "Search in the vector database some ready answers to use them as a base for your task or subtask or issue or question",
-		Parameters:  reflector.Reflect(&SearchAnswerAction{}),
+		Name: SearchAnswerToolName,
+		Description: "Search in the vector database for relevant answers by providing a semantically rich, context-aware natural language query. " +
+			"Formulate your query with sufficient context, intent, and detailed descriptions of what you want to find and why you need it " +
+			"to enhance semantic matching and retrieval accuracy. Specify the type of answer required to further refine the search. " +
+			"This function is ideal when you need to retrieve specific answers to assist in tasks, solve issues, or answer questions.",
+		Parameters: reflector.Reflect(&SearchAnswerAction{}),
 	},
 	StoreAnswerToolName: {
 		Name:        StoreAnswerToolName,
@@ -215,9 +225,12 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Parameters:  reflector.Reflect(&StoreAnswerAction{}),
 	},
 	SearchCodeToolName: {
-		Name:        SearchCodeToolName,
-		Description: "Search in the vector database some ready code samples to use them as a base for your task or subtask or issue or question",
-		Parameters:  reflector.Reflect(&SearchCodeAction{}),
+		Name: SearchCodeToolName,
+		Description: "Search in the vector database for relevant code samples by providing a semantically rich, context-aware natural language query. " +
+			"Formulate your query with sufficient context, intent, and detailed descriptions of what you want to achieve with the code and what should be included, " +
+			"to enhance semantic matching and retrieval accuracy. Specify the programming language to further refine the search. " +
+			"This function is ideal when you need to retrieve specific code examples to assist in development tasks or solve programming issues.",
+		Parameters: reflector.Reflect(&SearchCodeAction{}),
 	},
 	StoreCodeToolName: {
 		Name:        StoreCodeToolName,

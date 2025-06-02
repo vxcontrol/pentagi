@@ -18,27 +18,40 @@ var ErrTemplateNotFound = errors.New("template not found")
 type PromptType string
 
 const (
-	PromptTypePrimaryAgent      PromptType = "primary_agent"      // perform primary agent chain for subtask
-	PromptTypeFlowDescriptor    PromptType = "flow_descriptor"    // write the flow title by user input
-	PromptTypeTaskDescriptor    PromptType = "task_descriptor"    // write the task title by user input
-	PromptTypeImageChooser      PromptType = "image_chooser"      // choose the docker image for the flow
-	PromptTypeLanguageChooser   PromptType = "language_chooser"   // choose the language for the flow
-	PromptTypeTaskReporter      PromptType = "task_reporter"      // validate and write result of the task
-	PromptTypeToolCallFixer     PromptType = "toolcall_fixer"     // fix the tool call arguments
-	PromptTypeReporter          PromptType = "reporter"           // common system prompt for result writer
-	PromptTypeSubtasksGenerator PromptType = "subtasks_generator" // user prompt to generate subtasks for the task
-	PromptTypeGenerator         PromptType = "generator"          // common system prompt for subtask generator
-	PromptTypeSubtasksRefiner   PromptType = "subtasks_refiner"   // user prompt to refine subtasks for the task
-	PromptTypeRefiner           PromptType = "refiner"            // common system prompt for subtask refiner
-	PromptTypeEnricher          PromptType = "enricher"           // enrich the question with more details
-	PromptTypeReflector         PromptType = "reflector"          // self-reflection analog for completion result
-	PromptTypeAdviser           PromptType = "adviser"            // give advice to the question and context
-	PromptTypeCoder             PromptType = "coder"              // write a code to solve the subtask issue
-	PromptTypeInstaller         PromptType = "installer"          // install and configure the infrastructure
-	PromptTypePentester         PromptType = "pentester"          // perform penetration testing
-	PromptTypeMemorist          PromptType = "memorist"           // get information from long-term memory
-	PromptTypeSearcher          PromptType = "searcher"           // search the internet for more information
-	PromptTypeSummarizer        PromptType = "summarizer"         // summarize the result of the tool call
+	PromptTypeExecutionLogs         PromptType = "execution_logs"          // user prompt to get execution logs for the task
+	PromptTypeFullExecutionContext  PromptType = "full_execution_context"  // user prompt to get context to be summarized
+	PromptTypeShortExecutionContext PromptType = "short_execution_context" // user prompt to get context to be passed as is
+	PromptTypeQuestionEnricher      PromptType = "question_enricher"       // user prompt to enrich the question with more details
+	PromptTypeQuestionAdviser       PromptType = "question_adviser"        // user prompt to give advice to the question
+	PromptTypeQuestionCoder         PromptType = "question_coder"          // user prompt to write a code to solve the subtask issue
+	PromptTypeQuestionInstaller     PromptType = "question_installer"      // user prompt to install and configure the infrastructure
+	PromptTypeQuestionMemorist      PromptType = "question_memorist"       // user prompt to get information from long-term memory
+	PromptTypeQuestionPentester     PromptType = "question_pentester"      // user prompt to perform penetration testing
+	PromptTypeQuestionSearcher      PromptType = "question_searcher"       // user prompt to search the internet for more information
+	PromptTypeQuestionReflector     PromptType = "question_reflector"      // user prompt to reflect on the invalid tool call message
+	PromptTypeInputToolCallFixer    PromptType = "input_toolcall_fixer"    // user prompt to fix the tool call arguments
+	PromptTypeAssistant             PromptType = "assistant"               // perform assistant prompt as an agent for the flow
+	PromptTypePrimaryAgent          PromptType = "primary_agent"           // perform primary agent chain for subtask
+	PromptTypeFlowDescriptor        PromptType = "flow_descriptor"         // write the flow title by user input
+	PromptTypeTaskDescriptor        PromptType = "task_descriptor"         // write the task title by user input
+	PromptTypeImageChooser          PromptType = "image_chooser"           // choose the docker image for the flow
+	PromptTypeLanguageChooser       PromptType = "language_chooser"        // choose the language for the flow
+	PromptTypeTaskReporter          PromptType = "task_reporter"           // validate and write result of the task
+	PromptTypeToolCallFixer         PromptType = "toolcall_fixer"          // fix the tool call arguments
+	PromptTypeReporter              PromptType = "reporter"                // common system prompt for result writer
+	PromptTypeSubtasksGenerator     PromptType = "subtasks_generator"      // user prompt to generate subtasks for the task
+	PromptTypeGenerator             PromptType = "generator"               // common system prompt for subtask generator
+	PromptTypeSubtasksRefiner       PromptType = "subtasks_refiner"        // user prompt to refine subtasks for the task
+	PromptTypeRefiner               PromptType = "refiner"                 // common system prompt for subtask refiner
+	PromptTypeEnricher              PromptType = "enricher"                // enrich the question with more details
+	PromptTypeReflector             PromptType = "reflector"               // self-reflection analog for completion result
+	PromptTypeAdviser               PromptType = "adviser"                 // give advice to the question and context
+	PromptTypeCoder                 PromptType = "coder"                   // write a code to solve the subtask issue
+	PromptTypeInstaller             PromptType = "installer"               // install and configure the infrastructure
+	PromptTypePentester             PromptType = "pentester"               // perform penetration testing
+	PromptTypeMemorist              PromptType = "memorist"                // get information from long-term memory
+	PromptTypeSearcher              PromptType = "searcher"                // search the internet for more information
+	PromptTypeSummarizer            PromptType = "summarizer"              // summarize the result of the tool call
 )
 
 type PromptsMap map[PromptType]string

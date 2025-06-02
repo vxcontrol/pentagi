@@ -48,6 +48,7 @@ func NewTaskService(db *gorm.DB) *TaskService {
 // @Summary Retrieve flow tasks list
 // @Tags Tasks
 // @Produce json
+// @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=tasks} "flow tasks list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"

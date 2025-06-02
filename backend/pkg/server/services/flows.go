@@ -428,6 +428,12 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
+	case "finish":
+		if err := fw.Finish(c); err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error finishing flow")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
 	case "input":
 		if patchFlow.Input == nil || *patchFlow.Input == "" {
 			logger.FromContext(c).Errorf("error sending input to flow: input is empty")
@@ -489,7 +495,7 @@ func (s *FlowService) DeleteFlow(c *gin.Context) {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.Where("id = ?", flowID)
 		}
-	} else if slices.Contains(privs, "flows.edit") {
+	} else if slices.Contains(privs, "flows.delete") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.Where("id = ? AND user_id = ?", flowID, uid)
 		}

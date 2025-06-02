@@ -2,10 +2,15 @@ package providers
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math"
+	"math/big"
 	"strings"
+	"sync/atomic"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
 	obs "pentagi/pkg/observability"
@@ -20,12 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type providerController struct {
-	docker   docker.DockerClient
-	publicIP string
-	embedder embeddings.Embedder
-	provider.Providers
-}
+const deltaCallCounter = 10000
 
 type ProviderController interface {
 	NewFlowProvider(
@@ -45,10 +45,42 @@ type ProviderController interface {
 		flowID int64,
 		image, language, title string,
 	) (FlowProvider, error)
+	NewAssistantProvider(
+		ctx context.Context,
+		db database.Querier,
+		prvtype provider.ProviderType,
+		prompter templates.Prompter,
+		executor tools.FlowToolsExecutor,
+		assistantID, flowID int64,
+		image, input string,
+		streamCb StreamMessageHandler,
+	) (AssistantProvider, error)
+	LoadAssistantProvider(
+		db database.Querier,
+		prvtype provider.ProviderType,
+		prompter templates.Prompter,
+		executor tools.FlowToolsExecutor,
+		assistantID, flowID int64,
+		image, language, title string,
+		streamCb StreamMessageHandler,
+	) (AssistantProvider, error)
 	Get(ptype provider.ProviderType) (provider.Provider, error)
 	Embedder() embeddings.Embedder
 	List() provider.ProvidersList
 	ListStrings() []string
+}
+
+type providerController struct {
+	docker   docker.DockerClient
+	publicIP string
+	embedder embeddings.Embedder
+
+	startCallNumber *atomic.Int64
+
+	summarizerAgent     csum.Summarizer
+	summarizerAssistant csum.Summarizer
+
+	provider.Providers
 }
 
 func NewProviderController(cfg *config.Config, docker docker.DockerClient) (ProviderController, error) {
@@ -90,10 +122,38 @@ func NewProviderController(cfg *config.Config, docker docker.DockerClient) (Prov
 		providers[provider.Type()] = provider
 	}
 
+	summarizerAgent := csum.NewSummarizer(csum.SummarizerConfig{
+		PreserveLast:   cfg.SummarizerPreserveLast,
+		UseQA:          cfg.SummarizerUseQA,
+		SummHumanInQA:  cfg.SummarizerSumHumanInQA,
+		LastSecBytes:   cfg.SummarizerLastSecBytes,
+		MaxBPBytes:     cfg.SummarizerMaxBPBytes,
+		MaxQASections:  cfg.SummarizerMaxQASections,
+		MaxQABytes:     cfg.SummarizerMaxQABytes,
+		KeepQASections: cfg.SummarizerKeepQASections,
+	})
+
+	summarizerAssistant := csum.NewSummarizer(csum.SummarizerConfig{
+		PreserveLast:   cfg.AssistantSummarizerPreserveLast,
+		UseQA:          true,
+		SummHumanInQA:  false,
+		LastSecBytes:   cfg.AssistantSummarizerLastSecBytes,
+		MaxBPBytes:     cfg.AssistantSummarizerMaxBPBytes,
+		MaxQASections:  cfg.AssistantSummarizerMaxQASections,
+		MaxQABytes:     cfg.AssistantSummarizerMaxQABytes,
+		KeepQASections: cfg.AssistantSummarizerKeepQASections,
+	})
+
 	return &providerController{
-		docker:    docker,
-		publicIP:  cfg.DockerPublicIP,
-		embedder:  embedder,
+		docker:   docker,
+		publicIP: cfg.DockerPublicIP,
+		embedder: embedder,
+
+		startCallNumber: newAtomicInt64(0), // 0 means to make it random
+
+		summarizerAgent:     summarizerAgent,
+		summarizerAssistant: summarizerAssistant,
+
 		Providers: providers,
 	}, nil
 }
@@ -143,9 +203,10 @@ func (pc *providerController) NewFlowProvider(
 	language = strings.TrimSpace(language)
 
 	titleTmpl, err := prompter.RenderTemplate(templates.PromptTypeFlowDescriptor, map[string]any{
-		"Input": input,
-		"Lang":  language,
-		"N":     15,
+		"Input":       input,
+		"Lang":        language,
+		"CurrentTime": getCurrentTime(),
+		"N":           20,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow title template: %w", err)
@@ -158,16 +219,18 @@ func (pc *providerController) NewFlowProvider(
 	title = strings.TrimSpace(title)
 
 	fp := &flowProvider{
-		db:       db,
-		embedder: pc.embedder,
-		flowID:   flowID,
-		publicIP: pc.publicIP,
-		image:    image,
-		title:    title,
-		language: language,
-		prompter: prompter,
-		executor: executor,
-		Provider: prv,
+		db:          db,
+		embedder:    pc.embedder,
+		flowID:      flowID,
+		publicIP:    pc.publicIP,
+		callCounter: newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+		image:       image,
+		title:       title,
+		language:    language,
+		prompter:    prompter,
+		executor:    executor,
+		summarizer:  pc.summarizerAgent,
+		Provider:    prv,
 	}
 
 	return fp, nil
@@ -187,16 +250,18 @@ func (pc *providerController) LoadFlowProvider(
 	}
 
 	fp := &flowProvider{
-		db:       db,
-		embedder: pc.embedder,
-		flowID:   flowID,
-		publicIP: pc.publicIP,
-		image:    image,
-		title:    title,
-		language: language,
-		prompter: prompter,
-		executor: executor,
-		Provider: prv,
+		db:          db,
+		embedder:    pc.embedder,
+		flowID:      flowID,
+		publicIP:    pc.publicIP,
+		callCounter: newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+		image:       image,
+		title:       title,
+		language:    language,
+		prompter:    prompter,
+		executor:    executor,
+		summarizer:  pc.summarizerAgent,
+		Provider:    prv,
 	}
 
 	return fp, nil
@@ -204,4 +269,126 @@ func (pc *providerController) LoadFlowProvider(
 
 func (pc *providerController) Embedder() embeddings.Embedder {
 	return pc.embedder
+}
+
+func (pc *providerController) NewAssistantProvider(
+	ctx context.Context,
+	db database.Querier,
+	prvtype provider.ProviderType,
+	prompter templates.Prompter,
+	executor tools.FlowToolsExecutor,
+	assistantID, flowID int64,
+	image, input string,
+	streamCb StreamMessageHandler,
+) (AssistantProvider, error) {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.NewAssistantProvider")
+	defer span.End()
+
+	prv, err := pc.Get(prvtype)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get provider: %w", err)
+	}
+
+	languageTmpl, err := prompter.RenderTemplate(templates.PromptTypeLanguageChooser, map[string]any{
+		"Input": input,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get language template: %w", err)
+	}
+
+	language, err := prv.Call(ctx, provider.OptionsTypeSimple, languageTmpl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get language: %w", err)
+	}
+	language = strings.TrimSpace(language)
+
+	titleTmpl, err := prompter.RenderTemplate(templates.PromptTypeFlowDescriptor, map[string]any{
+		"Input":       input,
+		"Lang":        language,
+		"CurrentTime": getCurrentTime(),
+		"N":           20,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow title template: %w", err)
+	}
+
+	title, err := prv.Call(ctx, provider.OptionsTypeSimple, titleTmpl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow title: %w", err)
+	}
+	title = strings.TrimSpace(title)
+
+	ap := &assistantProvider{
+		id:         assistantID,
+		summarizer: pc.summarizerAssistant,
+		fp: flowProvider{
+			db:          db,
+			embedder:    pc.embedder,
+			flowID:      flowID,
+			publicIP:    pc.publicIP,
+			callCounter: newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+			image:       image,
+			title:       title,
+			language:    language,
+			prompter:    prompter,
+			executor:    executor,
+			streamCb:    streamCb,
+			summarizer:  pc.summarizerAgent,
+			Provider:    prv,
+		},
+	}
+
+	return ap, nil
+}
+
+func (pc *providerController) LoadAssistantProvider(
+	db database.Querier,
+	prvtype provider.ProviderType,
+	prompter templates.Prompter,
+	executor tools.FlowToolsExecutor,
+	assistantID, flowID int64,
+	image, language, title string,
+	streamCb StreamMessageHandler,
+) (AssistantProvider, error) {
+	prv, err := pc.Get(prvtype)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get provider: %w", err)
+	}
+
+	ap := &assistantProvider{
+		id:         assistantID,
+		summarizer: pc.summarizerAssistant,
+		fp: flowProvider{
+			db:          db,
+			embedder:    pc.embedder,
+			flowID:      flowID,
+			publicIP:    pc.publicIP,
+			callCounter: newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+			image:       image,
+			title:       title,
+			language:    language,
+			prompter:    prompter,
+			executor:    executor,
+			streamCb:    streamCb,
+			summarizer:  pc.summarizerAgent,
+			Provider:    prv,
+		},
+	}
+
+	return ap, nil
+}
+
+func newAtomicInt64(seed int64) *atomic.Int64 {
+	var number atomic.Int64
+
+	if seed == 0 {
+		bigID, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
+		if err != nil {
+			return &number
+		}
+		seed = bigID.Int64()
+	}
+
+	number.Store(seed)
+	return &number
 }

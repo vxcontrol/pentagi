@@ -14,28 +14,31 @@ const createMsgLog = `-- name: CreateMsgLog :one
 INSERT INTO msglogs (
   type,
   message,
+  thinking,
   flow_id,
   task_id,
   subtask_id
 )
 VALUES (
-  $1, $2, $3, $4, $5
+  $1, $2, $3, $4, $5, $6
 )
-RETURNING id, type, message, result, flow_id, task_id, subtask_id, created_at, result_format
+RETURNING id, type, message, result, flow_id, task_id, subtask_id, created_at, result_format, thinking
 `
 
 type CreateMsgLogParams struct {
-	Type      MsglogType    `json:"type"`
-	Message   string        `json:"message"`
-	FlowID    int64         `json:"flow_id"`
-	TaskID    sql.NullInt64 `json:"task_id"`
-	SubtaskID sql.NullInt64 `json:"subtask_id"`
+	Type      MsglogType     `json:"type"`
+	Message   string         `json:"message"`
+	Thinking  sql.NullString `json:"thinking"`
+	FlowID    int64          `json:"flow_id"`
+	TaskID    sql.NullInt64  `json:"task_id"`
+	SubtaskID sql.NullInt64  `json:"subtask_id"`
 }
 
 func (q *Queries) CreateMsgLog(ctx context.Context, arg CreateMsgLogParams) (Msglog, error) {
 	row := q.db.QueryRowContext(ctx, createMsgLog,
 		arg.Type,
 		arg.Message,
+		arg.Thinking,
 		arg.FlowID,
 		arg.TaskID,
 		arg.SubtaskID,
@@ -51,6 +54,7 @@ func (q *Queries) CreateMsgLog(ctx context.Context, arg CreateMsgLogParams) (Msg
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.ResultFormat,
+		&i.Thinking,
 	)
 	return i, err
 }
@@ -59,6 +63,7 @@ const createResultMsgLog = `-- name: CreateResultMsgLog :one
 INSERT INTO msglogs (
   type,
   message,
+  thinking,
   result,
   result_format,
   flow_id,
@@ -66,14 +71,15 @@ INSERT INTO msglogs (
   subtask_id
 )
 VALUES (
-  $1, $2, $3, $4, $5, $6, $7
+  $1, $2, $3, $4, $5, $6, $7, $8
 )
-RETURNING id, type, message, result, flow_id, task_id, subtask_id, created_at, result_format
+RETURNING id, type, message, result, flow_id, task_id, subtask_id, created_at, result_format, thinking
 `
 
 type CreateResultMsgLogParams struct {
 	Type         MsglogType         `json:"type"`
 	Message      string             `json:"message"`
+	Thinking     sql.NullString     `json:"thinking"`
 	Result       string             `json:"result"`
 	ResultFormat MsglogResultFormat `json:"result_format"`
 	FlowID       int64              `json:"flow_id"`
@@ -85,6 +91,7 @@ func (q *Queries) CreateResultMsgLog(ctx context.Context, arg CreateResultMsgLog
 	row := q.db.QueryRowContext(ctx, createResultMsgLog,
 		arg.Type,
 		arg.Message,
+		arg.Thinking,
 		arg.Result,
 		arg.ResultFormat,
 		arg.FlowID,
@@ -102,13 +109,14 @@ func (q *Queries) CreateResultMsgLog(ctx context.Context, arg CreateResultMsgLog
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.ResultFormat,
+		&i.Thinking,
 	)
 	return i, err
 }
 
 const getFlowMsgLogs = `-- name: GetFlowMsgLogs :many
 SELECT
-  ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format
+  ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format, ml.thinking
 FROM msglogs ml
 INNER JOIN flows f ON ml.flow_id = f.id
 WHERE ml.flow_id = $1 AND f.deleted_at IS NULL
@@ -134,6 +142,7 @@ func (q *Queries) GetFlowMsgLogs(ctx context.Context, flowID int64) ([]Msglog, e
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.ResultFormat,
+			&i.Thinking,
 		); err != nil {
 			return nil, err
 		}
@@ -150,7 +159,7 @@ func (q *Queries) GetFlowMsgLogs(ctx context.Context, flowID int64) ([]Msglog, e
 
 const getSubtaskMsgLogs = `-- name: GetSubtaskMsgLogs :many
 SELECT
-  ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format
+  ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format, ml.thinking
 FROM msglogs ml
 INNER JOIN subtasks s ON ml.subtask_id = s.id
 WHERE ml.subtask_id = $1
@@ -176,6 +185,7 @@ func (q *Queries) GetSubtaskMsgLogs(ctx context.Context, subtaskID sql.NullInt64
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.ResultFormat,
+			&i.Thinking,
 		); err != nil {
 			return nil, err
 		}
@@ -192,7 +202,7 @@ func (q *Queries) GetSubtaskMsgLogs(ctx context.Context, subtaskID sql.NullInt64
 
 const getTaskMsgLogs = `-- name: GetTaskMsgLogs :many
 SELECT
-  ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format
+  ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format, ml.thinking
 FROM msglogs ml
 INNER JOIN tasks t ON ml.task_id = t.id
 WHERE ml.task_id = $1
@@ -218,6 +228,7 @@ func (q *Queries) GetTaskMsgLogs(ctx context.Context, taskID sql.NullInt64) ([]M
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.ResultFormat,
+			&i.Thinking,
 		); err != nil {
 			return nil, err
 		}
@@ -234,7 +245,7 @@ func (q *Queries) GetTaskMsgLogs(ctx context.Context, taskID sql.NullInt64) ([]M
 
 const getUserFlowMsgLogs = `-- name: GetUserFlowMsgLogs :many
 SELECT
-  ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format
+  ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format, ml.thinking
 FROM msglogs ml
 INNER JOIN flows f ON ml.flow_id = f.id
 INNER JOIN users u ON f.user_id = u.id
@@ -266,6 +277,7 @@ func (q *Queries) GetUserFlowMsgLogs(ctx context.Context, arg GetUserFlowMsgLogs
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.ResultFormat,
+			&i.Thinking,
 		); err != nil {
 			return nil, err
 		}
@@ -284,7 +296,7 @@ const updateMsgLogResult = `-- name: UpdateMsgLogResult :one
 UPDATE msglogs
 SET result = $1, result_format = $2
 WHERE id = $3
-RETURNING id, type, message, result, flow_id, task_id, subtask_id, created_at, result_format
+RETURNING id, type, message, result, flow_id, task_id, subtask_id, created_at, result_format, thinking
 `
 
 type UpdateMsgLogResultParams struct {
@@ -306,6 +318,7 @@ func (q *Queries) UpdateMsgLogResult(ctx context.Context, arg UpdateMsgLogResult
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.ResultFormat,
+		&i.Thinking,
 	)
 	return i, err
 }

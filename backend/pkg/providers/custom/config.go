@@ -8,26 +8,32 @@ import (
 
 	"pentagi/pkg/providers/provider"
 
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
 	"gopkg.in/yaml.v3"
 )
 
+type ReasoningConfig struct {
+	Effort    llms.ReasoningEffort `json:"effort,omitempty" yaml:"effort,omitempty"`
+	MaxTokens int                  `json:"max_tokens,omitempty" yaml:"max_tokens,omitempty"`
+}
+
 // AgentConfig represents the configuration for a single agent
 type AgentConfig struct {
-	Model             string         `json:"model,omitempty" yaml:"model,omitempty"`
-	MaxTokens         int            `json:"max_tokens,omitempty" yaml:"max_tokens,omitempty"`
-	Temperature       float64        `json:"temperature,omitempty" yaml:"temperature,omitempty"`
-	TopK              int            `json:"top_k,omitempty" yaml:"top_k,omitempty"`
-	TopP              float64        `json:"top_p,omitempty" yaml:"top_p,omitempty"`
-	N                 int            `json:"n,omitempty" yaml:"n,omitempty"`
-	MinLength         int            `json:"min_length,omitempty" yaml:"min_length,omitempty"`
-	MaxLength         int            `json:"max_length,omitempty" yaml:"max_length,omitempty"`
-	RepetitionPenalty float64        `json:"repetition_penalty,omitempty" yaml:"repetition_penalty,omitempty"`
-	FrequencyPenalty  float64        `json:"frequency_penalty,omitempty" yaml:"frequency_penalty,omitempty"`
-	PresencePenalty   float64        `json:"presence_penalty,omitempty" yaml:"presence_penalty,omitempty"`
-	JSON              bool           `json:"json,omitempty" yaml:"json,omitempty"`
-	ResponseMIMEType  string         `json:"response_mime_type,omitempty" yaml:"response_mime_type,omitempty"`
-	raw               map[string]any `json:"-" yaml:"-"`
+	Model             string          `json:"model,omitempty" yaml:"model,omitempty"`
+	MaxTokens         int             `json:"max_tokens,omitempty" yaml:"max_tokens,omitempty"`
+	Temperature       float64         `json:"temperature,omitempty" yaml:"temperature,omitempty"`
+	TopK              int             `json:"top_k,omitempty" yaml:"top_k,omitempty"`
+	TopP              float64         `json:"top_p,omitempty" yaml:"top_p,omitempty"`
+	N                 int             `json:"n,omitempty" yaml:"n,omitempty"`
+	MinLength         int             `json:"min_length,omitempty" yaml:"min_length,omitempty"`
+	MaxLength         int             `json:"max_length,omitempty" yaml:"max_length,omitempty"`
+	RepetitionPenalty float64         `json:"repetition_penalty,omitempty" yaml:"repetition_penalty,omitempty"`
+	FrequencyPenalty  float64         `json:"frequency_penalty,omitempty" yaml:"frequency_penalty,omitempty"`
+	PresencePenalty   float64         `json:"presence_penalty,omitempty" yaml:"presence_penalty,omitempty"`
+	JSON              bool            `json:"json,omitempty" yaml:"json,omitempty"`
+	ResponseMIMEType  string          `json:"response_mime_type,omitempty" yaml:"response_mime_type,omitempty"`
+	Reasoning         ReasoningConfig `json:"reasoning,omitempty" yaml:"reasoning,omitempty"`
+	raw               map[string]any  `json:"-" yaml:"-"`
 }
 
 // ProvidersConfig represents the configuration for all agents
@@ -35,6 +41,7 @@ type ProvidersConfig struct {
 	Simple         *AgentConfig      `json:"simple,omitempty" yaml:"simple,omitempty"`
 	SimpleJSON     *AgentConfig      `json:"simple_json,omitempty" yaml:"simple_json,omitempty"`
 	Agent          *AgentConfig      `json:"agent,omitempty" yaml:"agent,omitempty"`
+	Assistant      *AgentConfig      `json:"assistant,omitempty" yaml:"assistant,omitempty"`
 	Generator      *AgentConfig      `json:"generator,omitempty" yaml:"generator,omitempty"`
 	Refiner        *AgentConfig      `json:"refiner,omitempty" yaml:"refiner,omitempty"`
 	Adviser        *AgentConfig      `json:"adviser,omitempty" yaml:"adviser,omitempty"`
@@ -70,6 +77,11 @@ func LoadConfig(configPath string, defaultOptions []llms.CallOption) (*Providers
 		}
 	default:
 		return nil, fmt.Errorf("unsupported config file format: %s", ext)
+	}
+
+	// use agent config for assistant if not set (for backward compatibility)
+	if config.Assistant == nil {
+		config.Assistant = config.Agent
 	}
 
 	config.defaultOptions = defaultOptions
@@ -155,6 +167,16 @@ func (ac *AgentConfig) BuildOptions() []llms.CallOption {
 	if _, ok := ac.raw["response_mime_type"]; ok && ac.ResponseMIMEType != "" {
 		options = append(options, llms.WithResponseMIMEType(ac.ResponseMIMEType))
 	}
+	if _, ok := ac.raw["reasoning"]; ok && (ac.Reasoning.Effort != llms.ReasoningNone || ac.Reasoning.MaxTokens != 0) {
+		switch ac.Reasoning.Effort {
+		case llms.ReasoningLow, llms.ReasoningMedium, llms.ReasoningHigh:
+			options = append(options, llms.WithReasoning(ac.Reasoning.Effort, 0))
+		default:
+			if ac.Reasoning.MaxTokens > 0 && ac.Reasoning.MaxTokens <= 32000 {
+				options = append(options, llms.WithReasoning(llms.ReasoningNone, ac.Reasoning.MaxTokens))
+			}
+		}
+	}
 
 	return options
 }
@@ -210,6 +232,9 @@ func (ac *AgentConfig) marshalMap() map[string]any {
 	if ac.ResponseMIMEType != "" {
 		output["response_mime_type"] = ac.ResponseMIMEType
 	}
+	if ac.Reasoning.Effort != llms.ReasoningNone || ac.Reasoning.MaxTokens != 0 {
+		output["reasoning"] = ac.Reasoning
+	}
 
 	return output
 }
@@ -241,6 +266,8 @@ func (pc *ProvidersConfig) GetOptionsForType(optType provider.ProviderOptionsTyp
 		agentConfig = pc.SimpleJSON
 	case provider.OptionsTypeAgent:
 		agentConfig = pc.Agent
+	case provider.OptionsTypeAssistant:
+		agentConfig = pc.Assistant
 	case provider.OptionsTypeGenerator:
 		agentConfig = pc.Generator
 	case provider.OptionsTypeRefiner:

@@ -12,8 +12,8 @@ import (
 	"pentagi/pkg/schema"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 type ExecutorHandler func(ctx context.Context, name string, args json.RawMessage) (string, error)
@@ -28,15 +28,20 @@ type Functions struct {
 
 type DisableFunction struct {
 	Name    string   `form:"name" json:"name" validate:"required"`
-	Context []string `form:"context,omitempty" json:"context,omitempty" validate:"omitempty,dive,oneof=agent adviser coder searcher generator memorist enricher retorter,required"`
+	Context []string `form:"context,omitempty" json:"context,omitempty" validate:"omitempty,dive,oneof=agent adviser coder searcher generator memorist enricher reporter assistant,required"`
 }
 
 type ExternalFunction struct {
 	Name    string        `form:"name" json:"name" validate:"required"`
 	URL     string        `form:"url" json:"url" validate:"required,url" example:"https://example.com/api/v1/function"`
 	Timeout *int64        `form:"timeout,omitempty" json:"timeout,omitempty" validate:"omitempty,min=1" example:"60"`
-	Context []string      `form:"context,omitempty" json:"context,omitempty" validate:"omitempty,dive,oneof=agent adviser coder searcher generator memorist enricher retorter,required"`
+	Context []string      `form:"context,omitempty" json:"context,omitempty" validate:"omitempty,dive,oneof=agent adviser coder searcher generator memorist enricher reporter assistant,required"`
 	Schema  schema.Schema `form:"schema" json:"schema" validate:"required" swaggertype:"object"`
+}
+
+type FunctionInfo struct {
+	Name   string
+	Schema string
 }
 
 type Tool interface {
@@ -61,8 +66,19 @@ type AgentLogProvider interface {
 }
 
 type MsgLogProvider interface {
-	PutMsg(ctx context.Context, msgType database.MsglogType, taskID, subtaskID *int64, msg string) (int64, error)
-	UpdateMsgResult(ctx context.Context, msgID int64, result string, resultFormat database.MsglogResultFormat) error
+	PutMsg(
+		ctx context.Context,
+		msgType database.MsglogType,
+		taskID, subtaskID *int64,
+		streamID int64,
+		thinking, msg string,
+	) (int64, error)
+	UpdateMsgResult(
+		ctx context.Context,
+		msgID, streamID int64,
+		result string,
+		resultFormat database.MsglogResultFormat,
+	) error
 }
 
 type SearchLogProvider interface {
@@ -120,9 +136,10 @@ type flowToolsExecutor struct {
 
 type ContextToolsExecutor interface {
 	Tools() []llms.Tool
-	Execute(ctx context.Context, id, name string, args json.RawMessage) (string, error)
+	Execute(ctx context.Context, streamID int64, id, name, thinking string, args json.RawMessage) (string, error)
 	IsBarrierFunction(name string) bool
 	GetBarrierToolNames() []string
+	GetBarrierTools() []FunctionInfo
 	GetToolSchema(name string) (*schema.Schema, error)
 }
 
@@ -134,6 +151,17 @@ type CustomExecutorConfig struct {
 	Handlers    map[string]ExecutorHandler
 	Barriers    []string
 	Summarizer  SummarizeHandler
+}
+
+type AssistantExecutorConfig struct {
+	UseAgents  bool
+	Adviser    ExecutorHandler
+	Coder      ExecutorHandler
+	Installer  ExecutorHandler
+	Memorist   ExecutorHandler
+	Pentester  ExecutorHandler
+	Searcher   ExecutorHandler
+	Summarizer SummarizeHandler
 }
 
 type PrimaryExecutorConfig struct {
@@ -150,8 +178,8 @@ type PrimaryExecutorConfig struct {
 }
 
 type InstallerExecutorConfig struct {
-	TaskID            int64
-	SubtaskID         int64
+	TaskID            *int64
+	SubtaskID         *int64
 	Adviser           ExecutorHandler
 	Memorist          ExecutorHandler
 	Searcher          ExecutorHandler
@@ -160,8 +188,8 @@ type InstallerExecutorConfig struct {
 }
 
 type CoderExecutorConfig struct {
-	TaskID     int64
-	SubtaskID  int64
+	TaskID     *int64
+	SubtaskID  *int64
 	Adviser    ExecutorHandler
 	Installer  ExecutorHandler
 	Memorist   ExecutorHandler
@@ -171,8 +199,8 @@ type CoderExecutorConfig struct {
 }
 
 type PentesterExecutorConfig struct {
-	TaskID     int64
-	SubtaskID  int64
+	TaskID     *int64
+	SubtaskID  *int64
 	Adviser    ExecutorHandler
 	Coder      ExecutorHandler
 	Installer  ExecutorHandler
@@ -205,8 +233,8 @@ type MemoristExecutorConfig struct {
 }
 
 type EnricherExecutorConfig struct {
-	TaskID         int64
-	SubtaskID      int64
+	TaskID         *int64
+	SubtaskID      *int64
 	Memorist       ExecutorHandler
 	Searcher       ExecutorHandler
 	EnricherResult ExecutorHandler
@@ -233,6 +261,7 @@ type FlowToolsExecutor interface {
 	Prepare(ctx context.Context) error
 	Release(ctx context.Context) error
 	GetCustomExecutor(cfg CustomExecutorConfig) (ContextToolsExecutor, error)
+	GetAssistantExecutor(cfg AssistantExecutorConfig) (ContextToolsExecutor, error)
 	GetPrimaryExecutor(cfg PrimaryExecutorConfig) (ContextToolsExecutor, error)
 	GetInstallerExecutor(cfg InstallerExecutorConfig) (ContextToolsExecutor, error)
 	GetCoderExecutor(cfg CoderExecutorConfig) (ContextToolsExecutor, error)
@@ -410,6 +439,201 @@ func (fte *flowToolsExecutor) GetCustomExecutor(cfg CustomExecutorConfig) (Conte
 	}, nil
 }
 
+func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) (ContextToolsExecutor, error) {
+	if cfg.Adviser == nil {
+		return nil, fmt.Errorf("adviser handler is required")
+	}
+
+	if cfg.Coder == nil {
+		return nil, fmt.Errorf("coder handler is required")
+	}
+
+	if cfg.Installer == nil {
+		return nil, fmt.Errorf("installer handler is required")
+	}
+
+	if cfg.Memorist == nil {
+		return nil, fmt.Errorf("memorist handler is required")
+	}
+
+	if cfg.Pentester == nil {
+		return nil, fmt.Errorf("pentester handler is required")
+	}
+
+	if cfg.Searcher == nil {
+		return nil, fmt.Errorf("searcher handler is required")
+	}
+
+	container, err := fte.db.GetFlowPrimaryContainer(context.Background(), fte.flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container %d: %w", fte.flowID, err)
+	}
+
+	term := &terminal{
+		flowID:       fte.flowID,
+		containerID:  container.ID,
+		containerLID: container.LocalID.String,
+		dockerClient: fte.docker,
+		tlp:          fte.tlp,
+	}
+
+	definitions := []llms.FunctionDefinition{
+		registryDefinitions[TerminalToolName],
+		registryDefinitions[FileToolName],
+	}
+	handlers := map[string]ExecutorHandler{
+		TerminalToolName: term.Handle,
+		FileToolName:     term.Handle,
+	}
+
+	browser := &browser{
+		flowID:   fte.flowID,
+		dataDir:  fte.cfg.DataDir,
+		scPrvURL: fte.cfg.ScraperPrivateURL,
+		scPubURL: fte.cfg.ScraperPublicURL,
+		scp:      fte.scp,
+	}
+	if browser.IsAvailable() {
+		definitions = append(definitions, registryDefinitions[BrowserToolName])
+		handlers[BrowserToolName] = browser.Handle
+	}
+
+	if cfg.UseAgents {
+		definitions = append(definitions,
+			registryDefinitions[AdviceToolName],
+			registryDefinitions[CoderToolName],
+			registryDefinitions[MaintenanceToolName],
+			registryDefinitions[MemoristToolName],
+			registryDefinitions[PentesterToolName],
+			registryDefinitions[SearchToolName],
+		)
+		handlers[AdviceToolName] = cfg.Adviser
+		handlers[CoderToolName] = cfg.Coder
+		handlers[MaintenanceToolName] = cfg.Installer
+		handlers[MemoristToolName] = cfg.Memorist
+		handlers[PentesterToolName] = cfg.Pentester
+		handlers[SearchToolName] = cfg.Searcher
+	} else {
+		memory := &memory{
+			flowID: fte.flowID,
+			store:  fte.store,
+			vslp:   fte.vslp,
+		}
+		if memory.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[SearchInMemoryToolName])
+			handlers[SearchInMemoryToolName] = memory.Handle
+		}
+
+		guide := &guide{
+			flowID: fte.flowID,
+			store:  fte.store,
+			vslp:   fte.vslp,
+		}
+		if guide.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[SearchGuideToolName])
+			handlers[SearchGuideToolName] = guide.Handle
+		}
+
+		search := &search{
+			flowID: fte.flowID,
+			store:  fte.store,
+			vslp:   fte.vslp,
+		}
+		if search.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[SearchAnswerToolName])
+			handlers[SearchAnswerToolName] = search.Handle
+		}
+
+		code := &code{
+			flowID: fte.flowID,
+			store:  fte.store,
+			vslp:   fte.vslp,
+		}
+		if code.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[SearchCodeToolName])
+			handlers[SearchCodeToolName] = code.Handle
+		}
+
+		google := &google{
+			flowID:   fte.flowID,
+			apiKey:   fte.cfg.GoogleAPIKey,
+			cxKey:    fte.cfg.GoogleCXKey,
+			lrKey:    fte.cfg.GoogleLRKey,
+			proxyURL: fte.cfg.ProxyURL,
+			slp:      fte.slp,
+		}
+		if google.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[GoogleToolName])
+			handlers[GoogleToolName] = google.Handle
+		}
+
+		duckduckgo := &duckduckgo{
+			flowID:   fte.flowID,
+			proxyURL: fte.cfg.ProxyURL,
+			slp:      fte.slp,
+		}
+		if duckduckgo.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[DuckDuckGoToolName])
+			handlers[DuckDuckGoToolName] = duckduckgo.Handle
+		}
+
+		tavily := &tavily{
+			flowID:     fte.flowID,
+			apiKey:     fte.cfg.TavilyAPIKey,
+			proxyURL:   fte.cfg.ProxyURL,
+			slp:        fte.slp,
+			summarizer: cfg.Summarizer,
+		}
+		if tavily.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[TavilyToolName])
+			handlers[TavilyToolName] = tavily.Handle
+		}
+
+		traversaal := &traversaal{
+			flowID:   fte.flowID,
+			apiKey:   fte.cfg.TraversaalAPIKey,
+			proxyURL: fte.cfg.ProxyURL,
+			slp:      fte.slp,
+		}
+		if traversaal.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[TraversaalToolName])
+			handlers[TraversaalToolName] = traversaal.Handle
+		}
+
+		perplexity := &perplexity{
+			flowID:      fte.flowID,
+			apiKey:      fte.cfg.PerplexityAPIKey,
+			proxyURL:    fte.cfg.ProxyURL,
+			model:       fte.cfg.PerplexityModel,
+			contextSize: fte.cfg.PerplexityContextSize,
+			temperature: perplexityTemperature,
+			topP:        perplexityTopP,
+			maxTokens:   perplexityMaxTokens,
+			timeout:     perplexityTimeout,
+			slp:         fte.slp,
+			summarizer:  cfg.Summarizer,
+		}
+		if perplexity.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[PerplexityToolName])
+			handlers[PerplexityToolName] = perplexity.Handle
+		}
+	}
+
+	ce := &customExecutor{
+		flowID:      fte.flowID,
+		mlp:         fte.mlp,
+		vslp:        fte.vslp,
+		db:          fte.db,
+		store:       fte.store,
+		definitions: definitions,
+		handlers:    handlers,
+		barriers:    map[string]struct{}{},
+		summarizer:  cfg.Summarizer,
+	}
+
+	return ce, nil
+}
+
 func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (ContextToolsExecutor, error) {
 	if cfg.Barrier == nil {
 		return nil, fmt.Errorf("barrier (done) handler is required")
@@ -512,8 +736,8 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 
 	ce := &customExecutor{
 		flowID:    fte.flowID,
-		taskID:    &cfg.TaskID,
-		subtaskID: &cfg.SubtaskID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		vslp:      fte.vslp,
 		db:        fte.db,
@@ -592,8 +816,8 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 
 	ce := &customExecutor{
 		flowID:    fte.flowID,
-		taskID:    &cfg.TaskID,
-		subtaskID: &cfg.SubtaskID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		vslp:      fte.vslp,
 		db:        fte.db,
@@ -687,8 +911,8 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 
 	ce := &customExecutor{
 		flowID:    fte.flowID,
-		taskID:    &cfg.TaskID,
-		subtaskID: &cfg.SubtaskID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		vslp:      fte.vslp,
 		db:        fte.db,
@@ -866,15 +1090,11 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	}
 
 	search := &search{
-		flowID: fte.flowID,
-		store:  fte.store,
-		vslp:   fte.vslp,
-	}
-	if cfg.TaskID != nil {
-		search.taskID = *cfg.TaskID
-	}
-	if cfg.SubtaskID != nil {
-		search.subtaskID = *cfg.SubtaskID
+		flowID:    fte.flowID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
+		store:     fte.store,
+		vslp:      fte.vslp,
 	}
 	if search.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchAnswerToolName])
@@ -895,7 +1115,20 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 		return nil, fmt.Errorf("memorist handler is required")
 	}
 
-	return &customExecutor{
+	container, err := fte.db.GetFlowPrimaryContainer(context.Background(), fte.flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container %d: %w", fte.flowID, err)
+	}
+
+	term := &terminal{
+		flowID:       fte.flowID,
+		containerID:  container.ID,
+		containerLID: container.LocalID.String,
+		dockerClient: fte.docker,
+		tlp:          fte.tlp,
+	}
+
+	ce := &customExecutor{
 		flowID: fte.flowID,
 		taskID: &cfg.TaskID,
 		mlp:    fte.mlp,
@@ -906,14 +1139,32 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
 			registryDefinitions[SubtaskListToolName],
+			registryDefinitions[TerminalToolName],
+			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
 			MemoristToolName:    cfg.Memorist,
 			SearchToolName:      cfg.Searcher,
 			SubtaskListToolName: cfg.SubtaskList,
+			TerminalToolName:    term.Handle,
+			FileToolName:        term.Handle,
 		},
 		barriers: map[string]struct{}{SubtaskListToolName: {}},
-	}, nil
+	}
+
+	browser := &browser{
+		flowID:   fte.flowID,
+		dataDir:  fte.cfg.DataDir,
+		scPrvURL: fte.cfg.ScraperPrivateURL,
+		scPubURL: fte.cfg.ScraperPublicURL,
+		scp:      fte.scp,
+	}
+	if browser.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
+		ce.handlers[BrowserToolName] = browser.Handle
+	}
+
+	return ce, nil
 }
 
 func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (ContextToolsExecutor, error) {
@@ -986,8 +1237,8 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 
 	return &customExecutor{
 		flowID:    fte.flowID,
-		taskID:    &cfg.TaskID,
-		subtaskID: &cfg.SubtaskID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		vslp:      fte.vslp,
 		db:        fte.db,

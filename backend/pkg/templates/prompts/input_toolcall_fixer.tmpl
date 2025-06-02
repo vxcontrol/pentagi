@@ -1,0 +1,26 @@
+<instruction>
+  Analyze the failed tool call provided below and fix the JSON arguments to conform to the required schema.
+  
+  Your task is to:
+  1. Review the error message carefully to understand what went wrong
+  2. Examine the JSON schema to identify the expected structure and requirements
+  3. Fix the tool call arguments with minimal changes while preserving the original intent
+  4. Ensure all required fields are present and properly formatted
+  5. Properly escape all JSON values according to standards
+  
+  Return ONLY the corrected JSON with no additional text or explanations.
+  Your output must be a single line of valid JSON that resolves the error while maintaining the original functionality.
+</instruction>
+
+<input_data>
+  <tool_call_name>{{.ToolCallName}}</tool_call_name>
+  <tool_call_args>
+  {{.ToolCallArgs}}
+  </tool_call_args>
+  <error_message>
+  {{.ToolCallError}}
+  </error_message>
+  <json_schema>
+  {{.ToolCallSchema}}
+  </json_schema>
+</input_data>

@@ -1,0 +1,91 @@
+<instructions>
+TASK: Create a concise summary of task execution context that provides clear understanding of current progress and remaining work
+
+DATA:
+- <global_task> contains the overall user objective
+- <current_subtask> (when present) describes the specific work currently in progress 
+- <previous_tasks> and <completed_subtasks> show what has been accomplished
+- <planned_subtasks> shows what work remains in the backlog
+
+REQUIREMENTS:
+1. Create a cohesive narrative focused on the relationship between <global_task> and <current_subtask>
+2. Describe completed work ONLY when directly relevant to current context
+3. Include planned work that builds upon or depends on the current subtask
+4. Preserve critical technical details, IDs, statuses, and outcomes from relevant tasks
+5. Prioritize information that helps understand the current state of the overall task
+6. Exclude irrelevant details that don't contribute to understanding current progress
+
+FORMAT:
+- Present as a descriptive summary of ongoing work, not as instructions or guidelines
+- Organize chronologically (completed → current → planned) for natural progression
+- Use concise, neutral language that describes status objectively
+- Structure information to clearly show relationships between tasks and subtasks
+
+The summary should help the reader quickly understand the current state of the task, what has been accomplished, what is currently being worked on, and what remains to be done.
+</instructions>
+
+<execution_context>
+<global_task>
+{{.Task.Input}}
+</global_task>
+
+<previous_tasks>
+{{if .Tasks}}
+{{range .Tasks}}
+<task>
+<id>{{.ID}}</id>
+<title>{{.Title}}</title>
+<input>{{.Input}}</input>
+<status>{{.Status}}</status>
+<result>{{.Result}}</result>
+</task>
+{{end}}
+{{else}}
+<status>none</status>
+<message>No previous tasks for the customer's input, Look at the global task above.</message>
+{{end}}
+</previous_tasks>
+
+<completed_subtasks>
+{{if .CompletedSubtasks}}
+{{range .CompletedSubtasks}}
+<subtask>
+<id>{{.ID}}</id>
+<title>{{.Title}}</title>
+<description>{{.Description}}</description>
+<status>{{.Status}}</status>
+<result>{{.Result}}</result>
+</subtask>
+{{end}}
+{{else}}
+<status>none</status>
+<message>No completed subtasks for the customer's task, it's the first subtask in the backlog.</message>
+{{end}}
+</completed_subtasks>
+
+{{if .Subtask}}
+<current_subtask>
+<id>{{.Subtask.ID}}</id>
+<title>{{.Subtask.Title}}</title>
+<description>{{.Subtask.Description}}</description>
+</current_subtask>
+{{else}}
+<status>none</status>
+<message>No current subtask for this task in progress. Look at the planned subtasks below and completed subtasks above.</message>
+{{end}}
+
+<planned_subtasks>
+{{if .PlannedSubtasks}}
+{{range .PlannedSubtasks}}
+<subtask>
+<id>{{.ID}}</id>
+<title>{{.Title}}</title>
+<description>{{.Description}}</description>
+</subtask>
+{{end}}
+{{else}}
+<status>none</status>
+<message>No planned subtasks for this task in the backlog. All subtasks are completed{{if .Subtask}} except the current one{{end}}.</message>
+{{end}}
+</planned_subtasks>
+</execution_context>

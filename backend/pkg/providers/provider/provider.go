@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 type ProviderType string
@@ -23,6 +24,7 @@ type ProviderOptionsType string
 
 const (
 	OptionsTypeAgent      ProviderOptionsType = "agent"
+	OptionsTypeAssistant  ProviderOptionsType = "assistant"
 	OptionsTypeSimple     ProviderOptionsType = "simple"
 	OptionsTypeSimpleJSON ProviderOptionsType = "simple_json"
 	OptionsTypeAdviser    ProviderOptionsType = "adviser"
@@ -48,12 +50,14 @@ type Provider interface {
 		ctx context.Context,
 		opt ProviderOptionsType,
 		chain []llms.MessageContent,
+		streamCb streaming.Callback,
 	) (*llms.ContentResponse, error)
 	CallWithTools(
 		ctx context.Context,
 		opt ProviderOptionsType,
 		chain []llms.MessageContent,
 		tools []llms.Tool,
+		streamCb streaming.Callback,
 	) (*llms.ContentResponse, error)
 }
 

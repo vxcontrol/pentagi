@@ -84,6 +84,11 @@ var ErrContainersInvalidData = NewHttpError(500, "Containers.InvalidData", "inva
 var ErrAgentlogsInvalidRequest = NewHttpError(400, "Agentlogs.InvalidRequest", "invalid agentlog request data")
 var ErrAgentlogsInvalidData = NewHttpError(500, "Agentlogs.InvalidData", "invalid agentlog data")
 
+// assistantlogs
+
+var ErrAssistantlogsInvalidRequest = NewHttpError(400, "Assistantlogs.InvalidRequest", "invalid assistantlog request data")
+var ErrAssistantlogsInvalidData = NewHttpError(500, "Assistantlogs.InvalidData", "invalid assistantlog data")
+
 // msglogs
 
 var ErrMsglogsInvalidRequest = NewHttpError(400, "Msglogs.InvalidRequest", "invalid msglog request data")
@@ -121,3 +126,9 @@ var ErrTasksInvalidData = NewHttpError(500, "Tasks.InvalidData", "invalid task d
 var ErrSubtasksInvalidRequest = NewHttpError(400, "Subtasks.InvalidRequest", "invalid subtask request data")
 var ErrSubtasksNotFound = NewHttpError(404, "Subtasks.NotFound", "subtask not found")
 var ErrSubtasksInvalidData = NewHttpError(500, "Subtasks.InvalidData", "invalid subtask data")
+
+// assistants
+
+var ErrAssistantsInvalidRequest = NewHttpError(400, "Assistants.InvalidRequest", "invalid assistant request data")
+var ErrAssistantsNotFound = NewHttpError(404, "Assistants.NotFound", "assistant not found")
+var ErrAssistantsInvalidData = NewHttpError(500, "Assistants.InvalidData", "invalid assistant data")
