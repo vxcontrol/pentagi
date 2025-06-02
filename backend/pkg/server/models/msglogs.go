@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -9,6 +10,8 @@ import (
 type MsglogType string
 
 const (
+	MsglogTypeAnswer   MsglogType = "answer"
+	MsglogTypeReport   MsglogType = "report"
 	MsglogTypeThoughts MsglogType = "thoughts"
 	MsglogTypeBrowser  MsglogType = "browser"
 	MsglogTypeTerminal MsglogType = "terminal"
@@ -24,6 +27,26 @@ func (s MsglogType) String() string {
 	return string(s)
 }
 
+// Valid is function to control input/output data
+func (s MsglogType) Valid() error {
+	switch s {
+	case MsglogTypeAnswer, MsglogTypeReport, MsglogTypeThoughts,
+		MsglogTypeBrowser, MsglogTypeTerminal, MsglogTypeFile,
+		MsglogTypeSearch, MsglogTypeAdvice, MsglogTypeAsk,
+		MsglogTypeInput, MsglogTypeDone:
+		return nil
+	default:
+		return fmt.Errorf("invalid MsglogType: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s MsglogType) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 type MsglogResultFormat string
 
 const (
@@ -36,14 +59,34 @@ func (s MsglogResultFormat) String() string {
 	return string(s)
 }
 
+// Valid is function to control input/output data
+func (s MsglogResultFormat) Valid() error {
+	switch s {
+	case MsglogResultFormatPlain,
+		MsglogResultFormatMarkdown,
+		MsglogResultFormatTerminal:
+		return nil
+	default:
+		return fmt.Errorf("invalid MsglogResultFormat: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s MsglogResultFormat) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 // Msglog is model to contain log record information from agents about their actions
 // nolint:lll
 type Msglog struct {
 	ID           uint64             `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
-	Type         MsglogType         `form:"type" json:"type" validate:"oneof=thoughts browser terminal file search advice ask input done,required" gorm:"type:MSGLOG_TYPE;NOT NULL"`
+	Type         MsglogType         `form:"type" json:"type" validate:"valid,required" gorm:"type:MSGLOG_TYPE;NOT NULL"`
 	Message      string             `form:"message" json:"message" validate:"required" gorm:"type:TEXT;NOT NULL"`
+	Thinking     string             `form:"thinking" json:"thinking" validate:"omitempty" gorm:"type:TEXT;NULL"`
 	Result       string             `form:"result" json:"result" validate:"omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
-	ResultFormat MsglogResultFormat `form:"result_format" json:"result_format" validate:"required" gorm:"type:MSGLOG_RESULT_FORMAT;NOT NULL;default:plain"`
+	ResultFormat MsglogResultFormat `form:"result_format" json:"result_format" validate:"valid,required" gorm:"type:MSGLOG_RESULT_FORMAT;NOT NULL;default:plain"`
 	FlowID       uint64             `form:"flow_id" json:"flow_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`
 	TaskID       *uint64            `form:"task_id,omitempty" json:"task_id,omitempty" validate:"numeric,omitempty" gorm:"type:BIGINT;NOT NULL"`
 	SubtaskID    *uint64            `form:"subtask_id,omitempty" json:"subtask_id,omitempty" validate:"numeric,omitempty" gorm:"type:BIGINT;NOT NULL"`

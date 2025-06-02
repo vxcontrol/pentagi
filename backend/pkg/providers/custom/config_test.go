@@ -10,9 +10,128 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
 	"gopkg.in/yaml.v3"
 )
+
+func TestReasoningConfig_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		want    ReasoningConfig
+		wantErr bool
+	}{
+		{
+			name: "empty object",
+			json: "{}",
+			want: ReasoningConfig{},
+		},
+		{
+			name: "with effort only",
+			json: `{"effort": "low"}`,
+			want: ReasoningConfig{
+				Effort: llms.ReasoningLow,
+			},
+		},
+		{
+			name: "with max_tokens only",
+			json: `{"max_tokens": 1000}`,
+			want: ReasoningConfig{
+				MaxTokens: 1000,
+			},
+		},
+		{
+			name: "with both fields",
+			json: `{"effort": "high", "max_tokens": 2000}`,
+			want: ReasoningConfig{
+				Effort:    llms.ReasoningHigh,
+				MaxTokens: 2000,
+			},
+		},
+		{
+			name:    "invalid json",
+			json:    "{invalid}",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got ReasoningConfig
+			err := json.Unmarshal([]byte(tt.json), &got)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.Effort, got.Effort)
+			assert.Equal(t, tt.want.MaxTokens, got.MaxTokens)
+		})
+	}
+}
+
+func TestReasoningConfig_UnmarshalYAML(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		want    ReasoningConfig
+		wantErr bool
+	}{
+		{
+			name: "empty object",
+			yaml: "{}",
+			want: ReasoningConfig{},
+		},
+		{
+			name: "with effort only",
+			yaml: `effort: low`,
+			want: ReasoningConfig{
+				Effort: llms.ReasoningLow,
+			},
+		},
+		{
+			name: "with max_tokens only",
+			yaml: `max_tokens: 1000`,
+			want: ReasoningConfig{
+				MaxTokens: 1000,
+			},
+		},
+		{
+			name: "with both fields",
+			yaml: `
+effort: high
+max_tokens: 2000
+`,
+			want: ReasoningConfig{
+				Effort:    llms.ReasoningHigh,
+				MaxTokens: 2000,
+			},
+		},
+		{
+			name:    "invalid yaml",
+			yaml:    "invalid: [yaml",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got ReasoningConfig
+			err := yaml.Unmarshal([]byte(tt.yaml), &got)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.Effort, got.Effort)
+			assert.Equal(t, tt.want.MaxTokens, got.MaxTokens)
+		})
+	}
+}
 
 func TestLoadConfig(t *testing.T) {
 	tests := []struct {
@@ -63,6 +182,87 @@ func TestLoadConfig(t *testing.T) {
 			},
 		},
 		{
+			name:       "valid json with reasoning config - both parameters",
+			configFile: "config.json",
+			content: `{
+				"simple": {
+					"model": "test-model",
+					"max_tokens": 100,
+					"temperature": 0.7,
+					"reasoning": {
+						"effort": "medium",
+						"max_tokens": 5000
+					}
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+				require.NotNil(t, cfg.Simple)
+				assert.Equal(t, "test-model", cfg.Simple.Model)
+				assert.Equal(t, 100, cfg.Simple.MaxTokens)
+				assert.Equal(t, 0.7, cfg.Simple.Temperature)
+				assert.Equal(t, llms.ReasoningMedium, cfg.Simple.Reasoning.Effort)
+				assert.Equal(t, 5000, cfg.Simple.Reasoning.MaxTokens)
+
+				// Verify options include reasoning
+				options := cfg.Simple.BuildOptions()
+				assert.Len(t, options, 4) // model, max_tokens, temperature, reasoning
+			},
+		},
+		{
+			name:       "valid json with reasoning config - effort only",
+			configFile: "config.json",
+			content: `{
+				"simple": {
+					"model": "test-model",
+					"max_tokens": 100,
+					"temperature": 0.7,
+					"reasoning": {
+						"effort": "high",
+						"max_tokens": 0
+					}
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+				require.NotNil(t, cfg.Simple)
+				assert.Equal(t, "test-model", cfg.Simple.Model)
+				assert.Equal(t, 100, cfg.Simple.MaxTokens)
+				assert.Equal(t, 0.7, cfg.Simple.Temperature)
+				assert.Equal(t, llms.ReasoningHigh, cfg.Simple.Reasoning.Effort)
+				assert.Equal(t, 0, cfg.Simple.Reasoning.MaxTokens)
+
+				// Verify options include reasoning
+				options := cfg.Simple.BuildOptions()
+				assert.Len(t, options, 4) // model, max_tokens, temperature, reasoning
+			},
+		},
+		{
+			name:       "valid json with reasoning config - max_tokens only",
+			configFile: "config.json",
+			content: `{
+				"simple": {
+					"model": "test-model",
+					"max_tokens": 100,
+					"temperature": 0.7,
+					"reasoning": {
+						"effort": "none",
+						"max_tokens": 3000
+					}
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+				require.NotNil(t, cfg.Simple)
+				assert.Equal(t, "test-model", cfg.Simple.Model)
+				assert.Equal(t, 100, cfg.Simple.MaxTokens)
+				assert.Equal(t, 0.7, cfg.Simple.Temperature)
+				assert.Equal(t, llms.ReasoningEffort("none"), cfg.Simple.Reasoning.Effort)
+				assert.Equal(t, 3000, cfg.Simple.Reasoning.MaxTokens)
+
+				// Verify options include reasoning
+				options := cfg.Simple.BuildOptions()
+				assert.Len(t, options, 4) // model, max_tokens, temperature, reasoning
+			},
+		},
+		{
 			name:       "valid yaml",
 			configFile: "config.yaml",
 			content: `
@@ -76,6 +276,81 @@ simple:
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
 				assert.Equal(t, 0.7, cfg.Simple.Temperature)
+			},
+		},
+		{
+			name:       "valid yaml with reasoning config - both parameters",
+			configFile: "config.yaml",
+			content: `
+simple:
+  model: test-model
+  max_tokens: 100
+  temperature: 0.7
+  reasoning:
+    effort: high
+    max_tokens: 8000
+`,
+			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+				require.NotNil(t, cfg.Simple)
+				assert.Equal(t, "test-model", cfg.Simple.Model)
+				assert.Equal(t, 100, cfg.Simple.MaxTokens)
+				assert.Equal(t, 0.7, cfg.Simple.Temperature)
+				assert.Equal(t, llms.ReasoningHigh, cfg.Simple.Reasoning.Effort)
+				assert.Equal(t, 8000, cfg.Simple.Reasoning.MaxTokens)
+
+				// Verify options include reasoning
+				options := cfg.Simple.BuildOptions()
+				assert.Len(t, options, 4) // model, max_tokens, temperature, reasoning
+			},
+		},
+		{
+			name:       "valid yaml with reasoning config - effort only",
+			configFile: "config.yaml",
+			content: `
+simple:
+  model: test-model
+  max_tokens: 100
+  temperature: 0.7
+  reasoning:
+    effort: low
+    max_tokens: 0
+`,
+			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+				require.NotNil(t, cfg.Simple)
+				assert.Equal(t, "test-model", cfg.Simple.Model)
+				assert.Equal(t, 100, cfg.Simple.MaxTokens)
+				assert.Equal(t, 0.7, cfg.Simple.Temperature)
+				assert.Equal(t, llms.ReasoningLow, cfg.Simple.Reasoning.Effort)
+				assert.Equal(t, 0, cfg.Simple.Reasoning.MaxTokens)
+
+				// Verify options include reasoning
+				options := cfg.Simple.BuildOptions()
+				assert.Len(t, options, 4) // model, max_tokens, temperature, reasoning
+			},
+		},
+		{
+			name:       "valid yaml with reasoning config - max_tokens only",
+			configFile: "config.yaml",
+			content: `
+simple:
+  model: test-model
+  max_tokens: 100
+  temperature: 0.7
+  reasoning:
+    effort: none
+    max_tokens: 2500
+`,
+			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+				require.NotNil(t, cfg.Simple)
+				assert.Equal(t, "test-model", cfg.Simple.Model)
+				assert.Equal(t, 100, cfg.Simple.MaxTokens)
+				assert.Equal(t, 0.7, cfg.Simple.Temperature)
+				assert.Equal(t, llms.ReasoningEffort("none"), cfg.Simple.Reasoning.Effort)
+				assert.Equal(t, 2500, cfg.Simple.Reasoning.MaxTokens)
+
+				// Verify options include reasoning
+				options := cfg.Simple.BuildOptions()
+				assert.Len(t, options, 4) // model, max_tokens, temperature, reasoning
 			},
 		},
 	}
@@ -151,6 +426,33 @@ func TestAgentConfig_UnmarshalJSON(t *testing.T) {
 				"model",
 				"max_tokens",
 				"temperature",
+			},
+		},
+		{
+			name: "with reasoning config",
+			json: `{
+				"model": "test-model",
+				"max_tokens": 100,
+				"temperature": 0.7,
+				"reasoning": {
+					"effort": "medium",
+					"max_tokens": 5000
+				}
+			}`,
+			want: &AgentConfig{
+				Model:       "test-model",
+				MaxTokens:   100,
+				Temperature: 0.7,
+				Reasoning: ReasoningConfig{
+					Effort:    llms.ReasoningMedium,
+					MaxTokens: 5000,
+				},
+			},
+			wantFields: []string{
+				"model",
+				"max_tokens",
+				"temperature",
+				"reasoning",
 			},
 		},
 		{
@@ -235,6 +537,32 @@ temperature: 0.7
 			},
 		},
 		{
+			name: "with reasoning config",
+			yaml: `
+model: test-model
+max_tokens: 100
+temperature: 0.7
+reasoning:
+  effort: medium
+  max_tokens: 5000
+`,
+			want: &AgentConfig{
+				Model:       "test-model",
+				MaxTokens:   100,
+				Temperature: 0.7,
+				Reasoning: ReasoningConfig{
+					Effort:    llms.ReasoningMedium,
+					MaxTokens: 5000,
+				},
+			},
+			wantFields: []string{
+				"model",
+				"max_tokens",
+				"temperature",
+				"reasoning",
+			},
+		},
+		{
 			name:    "invalid yaml",
 			yaml:    "invalid: [yaml",
 			want:    &AgentConfig{},
@@ -315,6 +643,103 @@ func TestAgentConfig_BuildOptions(t *testing.T) {
 				"response_mime_type": "application/json"
 			}`,
 			wantLen: 12,
+		},
+		{
+			name:   "with reasoning config - low effort",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"effort": "low",
+					"max_tokens": 1000
+				}
+			}`,
+			wantLen: 3, // model, temperature, reasoning
+			checkOptions: func(t *testing.T, options []llms.CallOption) {
+				// We can't directly check the reasoning parameter value
+				// because WithReasoning returns an opaque CallOption
+				// Instead, we'll verify the number of options is correct
+				assert.Len(t, options, 3)
+			},
+		},
+		{
+			name:   "with reasoning config - medium effort only",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"effort": "medium",
+					"max_tokens": 0
+				}
+			}`,
+			wantLen: 3, // model, temperature, reasoning (effort is medium)
+		},
+		{
+			name:   "with reasoning config - high effort only",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"effort": "high",
+					"max_tokens": 0
+				}
+			}`,
+			wantLen: 3, // model, temperature, reasoning (effort is high)
+		},
+		{
+			name:   "with reasoning config - custom tokens only",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"effort": "none",
+					"max_tokens": 5000
+				}
+			}`,
+			wantLen: 3, // model, temperature, reasoning (max_tokens is set)
+		},
+		{
+			name:   "with invalid reasoning tokens over limit",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"effort": "none",
+					"max_tokens": 50000
+				}
+			}`,
+			wantLen: 2, // shouldn't include reasoning option because tokens > 32000
+		},
+		{
+			name:   "with invalid reasoning tokens negative",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"effort": "none",
+					"max_tokens": -100
+				}
+			}`,
+			wantLen: 2, // shouldn't include reasoning option because tokens < 0
+		},
+		{
+			name:   "with reasoning config - none effort and zero tokens",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"effort": "none",
+					"max_tokens": 0
+				}
+			}`,
+			wantLen: 2, // shouldn't include reasoning because both parameters are default/zero values
 		},
 		{
 			name:   "full config yaml",
@@ -461,6 +886,28 @@ func TestAgentConfig_MarshalJSON(t *testing.T) {
 			want: `{"max_tokens":100,"model":"test-model","temperature":0.7}`,
 		},
 		{
+			name: "with reasoning config",
+			config: &AgentConfig{
+				Model:       "test-model",
+				MaxTokens:   100,
+				Temperature: 0.7,
+				Reasoning: ReasoningConfig{
+					Effort:    llms.ReasoningMedium,
+					MaxTokens: 5000,
+				},
+				raw: map[string]any{
+					"model":       "test-model",
+					"max_tokens":  100,
+					"temperature": 0.7,
+					"reasoning": map[string]any{
+						"effort":     "medium",
+						"max_tokens": 5000,
+					},
+				},
+			},
+			want: `{"max_tokens":100,"model":"test-model","reasoning":{"effort":"medium","max_tokens":5000},"temperature":0.7}`,
+		},
+		{
 			name: "with zero values",
 			config: &AgentConfig{
 				Model:       "",
@@ -529,6 +976,36 @@ func TestAgentConfig_MarshalYAML(t *testing.T) {
 				"model":       "test-model",
 				"max_tokens":  100,
 				"temperature": 0.7,
+			},
+		},
+		{
+			name: "with reasoning config",
+			config: &AgentConfig{
+				Model:       "test-model",
+				MaxTokens:   100,
+				Temperature: 0.7,
+				Reasoning: ReasoningConfig{
+					Effort:    llms.ReasoningMedium,
+					MaxTokens: 5000,
+				},
+				raw: map[string]any{
+					"model":       "test-model",
+					"max_tokens":  100,
+					"temperature": 0.7,
+					"reasoning": map[string]any{
+						"effort":     "medium",
+						"max_tokens": 5000,
+					},
+				},
+			},
+			want: map[string]any{
+				"model":       "test-model",
+				"max_tokens":  100,
+				"temperature": 0.7,
+				"reasoning": map[string]any{
+					"effort":     "medium",
+					"max_tokens": 5000,
+				},
 			},
 		},
 		{
@@ -639,6 +1116,40 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 				require.NotNil(t, cfg)
 				options := cfg.GetOptionsForType(provider.OptionsTypeSimple)
 				assert.Len(t, options, 1) // should use agent config, not defaults
+				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
+				assert.Len(t, options, 2) // should use defaults
+			},
+		},
+		{
+			name:       "assistant backward compatibility with agent",
+			configFile: "config.json",
+			content: `{
+				"agent": {
+					"temperature": 0.7
+				}
+			}`,
+			defaultOptions: defaultOptions,
+			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+				require.NotNil(t, cfg)
+				options := cfg.GetOptionsForType(provider.OptionsTypeAssistant)
+				assert.Len(t, options, 1) // should use agent config (backward compatibility)
+				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
+				assert.Len(t, options, 1)
+			},
+		},
+		{
+			name:       "config assistant without agent",
+			configFile: "config.json",
+			content: `{
+				"assistant": {
+					"temperature": 0.7
+				}
+			}`,
+			defaultOptions: defaultOptions,
+			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+				require.NotNil(t, cfg)
+				options := cfg.GetOptionsForType(provider.OptionsTypeAssistant)
+				assert.Len(t, options, 1) // should use assistant config
 				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
 				assert.Len(t, options, 2) // should use defaults
 			},

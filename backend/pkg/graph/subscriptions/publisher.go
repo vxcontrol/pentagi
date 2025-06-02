@@ -42,7 +42,9 @@ func (p *flowPublisher) FlowDeleted(ctx context.Context, flow database.Flow, ter
 }
 
 func (p *flowPublisher) FlowUpdated(ctx context.Context, flow database.Flow, terms []database.Container) {
-	p.ctrl.flowUpdated.Publish(ctx, p.flowID, converter.ConvertFlow(flow, terms))
+	flowModel := converter.ConvertFlow(flow, terms)
+	p.ctrl.flowUpdated.Publish(ctx, p.flowID, flowModel)
+	p.ctrl.flowUpdatedAdmin.Broadcast(ctx, flowModel)
 }
 
 func (p *flowPublisher) TaskCreated(ctx context.Context, task database.Task, subtasks []database.Subtask) {
@@ -51,6 +53,18 @@ func (p *flowPublisher) TaskCreated(ctx context.Context, task database.Task, sub
 
 func (p *flowPublisher) TaskUpdated(ctx context.Context, task database.Task, subtasks []database.Subtask) {
 	p.ctrl.taskUpdated.Publish(ctx, p.flowID, converter.ConvertTask(task, subtasks))
+}
+
+func (p *flowPublisher) AssistantCreated(ctx context.Context, assistant database.Assistant) {
+	p.ctrl.assistantCreated.Publish(ctx, p.flowID, converter.ConvertAssistant(assistant))
+}
+
+func (p *flowPublisher) AssistantUpdated(ctx context.Context, assistant database.Assistant) {
+	p.ctrl.assistantUpdated.Publish(ctx, p.flowID, converter.ConvertAssistant(assistant))
+}
+
+func (p *flowPublisher) AssistantDeleted(ctx context.Context, assistant database.Assistant) {
+	p.ctrl.assistantDeleted.Publish(ctx, p.flowID, converter.ConvertAssistant(assistant))
 }
 
 func (p *flowPublisher) ScreenshotAdded(ctx context.Context, screenshot database.Screenshot) {
@@ -79,4 +93,12 @@ func (p *flowPublisher) SearchLogAdded(ctx context.Context, searchLog database.S
 
 func (p *flowPublisher) VectorStoreLogAdded(ctx context.Context, vectorStoreLog database.Vecstorelog) {
 	p.ctrl.vecStoreLogAdded.Publish(ctx, p.flowID, converter.ConvertVectorStoreLog(vectorStoreLog))
+}
+
+func (p *flowPublisher) AssistantLogAdded(ctx context.Context, assistantLog database.Assistantlog) {
+	p.ctrl.assistantLogAdded.Publish(ctx, p.flowID, converter.ConvertAssistantLog(assistantLog, false))
+}
+
+func (p *flowPublisher) AssistantLogUpdated(ctx context.Context, assistantLog database.Assistantlog, appendPart bool) {
+	p.ctrl.assistantLogUpdated.Publish(ctx, p.flowID, converter.ConvertAssistantLog(assistantLog, appendPart))
 }

@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/subscriptions"
@@ -16,6 +17,7 @@ import (
 
 type Resolver struct {
 	DB              database.Querier
+	Config          *config.Config
 	Logger          *logrus.Entry
 	DefaultPrompter templates.Prompter
 	ProvidersCtrl   providers.ProviderController

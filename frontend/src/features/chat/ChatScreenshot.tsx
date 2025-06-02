@@ -1,5 +1,5 @@
 import { Image } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { buttonVariants } from '@/components/ui/button';
@@ -92,4 +92,4 @@ const ChatScreenshot = ({ screenshot }: ChatScreenshotProps) => {
     );
 };
 
-export default ChatScreenshot;
+export default memo(ChatScreenshot);

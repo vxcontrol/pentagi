@@ -33,6 +33,7 @@ type PatchPrompt struct {
 	Prompt string `form:"prompt" json:"prompt" validate:"required"`
 }
 
+// Valid is function to control input/output data
 func (pp PatchPrompt) Valid() error {
 	return validate.Struct(pp)
 }

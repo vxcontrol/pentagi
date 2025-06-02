@@ -5,7 +5,7 @@ import (
 
 	"pentagi/pkg/tools"
 
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
 )
 
 // SimpleCompletionTest represents a test for simple text completion
@@ -19,13 +19,6 @@ type SystemUserPromptTest struct {
 	SystemPrompt string
 	UserPrompt   string
 	Expected     string
-}
-
-// JSONCompletionTest represents a test for structured JSON response
-type JSONCompletionTest struct {
-	Prompt         string
-	Schema         map[string]interface{}
-	RequiredFields []string
 }
 
 // SimpleJSONCompletionTest represents a test for simple JSON response without function calling
@@ -74,6 +67,8 @@ type TestResult struct {
 	Type      string
 	Success   bool
 	Error     error
+	Streaming bool
+	Reasoning bool
 	LatencyMs int64
 	Response  string
 	Expected  string
@@ -83,6 +78,7 @@ type TestResult struct {
 type AgentTestResult struct {
 	AgentType       string
 	ModelName       string
+	Reasoning       bool
 	BasicTests      []TestResult
 	AdvancedTests   []TestResult
 	TotalSuccess    int

@@ -15,7 +15,7 @@ import (
 	"pentagi/pkg/tools"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 type agentTool struct {
@@ -197,52 +197,28 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 		), nil
 
 	case tools.SearchGuideToolName:
-		taskID := int64(0)
-		subtaskID := int64(0)
-		if te.taskID != nil {
-			taskID = *te.taskID
-		}
-		if te.subtaskID != nil {
-			subtaskID = *te.subtaskID
-		}
 		return tools.NewGuideTool(
 			te.flowID,
-			taskID,
-			subtaskID,
+			te.taskID,
+			te.subtaskID,
 			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
 
 	case tools.SearchAnswerToolName:
-		taskID := int64(0)
-		subtaskID := int64(0)
-		if te.taskID != nil {
-			taskID = *te.taskID
-		}
-		if te.subtaskID != nil {
-			subtaskID = *te.subtaskID
-		}
 		return tools.NewSearchTool(
 			te.flowID,
-			taskID,
-			subtaskID,
+			te.taskID,
+			te.subtaskID,
 			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
 
 	case tools.SearchCodeToolName:
-		taskID := int64(0)
-		subtaskID := int64(0)
-		if te.taskID != nil {
-			taskID = *te.taskID
-		}
-		if te.subtaskID != nil {
-			subtaskID = *te.subtaskID
-		}
 		return tools.NewCodeTool(
 			te.flowID,
-			taskID,
-			subtaskID,
+			te.taskID,
+			te.subtaskID,
 			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
@@ -253,7 +229,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 		if te.handlers != nil {
 			if te.taskID != nil && te.subtaskID != nil {
 				var err error
-				handler, err = te.handlers.GetAskAdviceHandler(ctx, *te.taskID, *te.subtaskID)
+				handler, err = te.handlers.GetAskAdviceHandler(ctx, te.taskID, te.subtaskID)
 				if err != nil {
 					terminal.PrintWarning("Failed to get advice handler: %v", err)
 				}
@@ -268,7 +244,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 		if te.handlers != nil {
 			if te.taskID != nil && te.subtaskID != nil {
 				var err error
-				handler, err = te.handlers.GetCoderHandler(ctx, *te.taskID, *te.subtaskID)
+				handler, err = te.handlers.GetCoderHandler(ctx, te.taskID, te.subtaskID)
 				if err != nil {
 					terminal.PrintWarning("Failed to get coder handler: %v", err)
 				}
@@ -283,7 +259,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 		if te.handlers != nil {
 			if te.taskID != nil && te.subtaskID != nil {
 				var err error
-				handler, err = te.handlers.GetInstallerHandler(ctx, *te.taskID, *te.subtaskID)
+				handler, err = te.handlers.GetInstallerHandler(ctx, te.taskID, te.subtaskID)
 				if err != nil {
 					terminal.PrintWarning("Failed to get installer handler: %v", err)
 				}
@@ -298,7 +274,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 		if te.handlers != nil {
 			if te.taskID != nil {
 				var err error
-				handler, err = te.handlers.GetMemoristHandler(ctx, *te.taskID, te.subtaskID)
+				handler, err = te.handlers.GetMemoristHandler(ctx, te.taskID, te.subtaskID)
 				if err != nil {
 					terminal.PrintWarning("Failed to get memorist handler: %v", err)
 				}
@@ -313,7 +289,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 		if te.handlers != nil {
 			if te.taskID != nil && te.subtaskID != nil {
 				var err error
-				handler, err = te.handlers.GetPentesterHandler(ctx, *te.taskID, *te.subtaskID)
+				handler, err = te.handlers.GetPentesterHandler(ctx, te.taskID, te.subtaskID)
 				if err != nil {
 					terminal.PrintWarning("Failed to get pentester handler: %v", err)
 				}
@@ -329,7 +305,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			var err error
 			if te.taskID != nil && te.subtaskID != nil {
 				// Use subtask specific searcher if both task and subtask IDs are available
-				handler, err = te.handlers.GetSubtaskSearcherHandler(ctx, *te.taskID, *te.subtaskID)
+				handler, err = te.handlers.GetSubtaskSearcherHandler(ctx, te.taskID, te.subtaskID)
 			} else if te.taskID != nil {
 				// Use task specific searcher if only task ID is available
 				handler, err = te.handlers.GetTaskSearcherHandler(ctx, *te.taskID)

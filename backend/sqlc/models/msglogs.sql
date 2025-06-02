@@ -35,12 +35,13 @@ ORDER BY ml.created_at ASC;
 INSERT INTO msglogs (
   type,
   message,
+  thinking,
   flow_id,
   task_id,
   subtask_id
 )
 VALUES (
-  $1, $2, $3, $4, $5
+  $1, $2, $3, $4, $5, $6
 )
 RETURNING *;
 
@@ -48,6 +49,7 @@ RETURNING *;
 INSERT INTO msglogs (
   type,
   message,
+  thinking,
   result,
   result_format,
   flow_id,
@@ -55,7 +57,7 @@ INSERT INTO msglogs (
   subtask_id
 )
 VALUES (
-  $1, $2, $3, $4, $5, $6, $7
+  $1, $2, $3, $4, $5, $6, $7, $8
 )
 RETURNING *;
 

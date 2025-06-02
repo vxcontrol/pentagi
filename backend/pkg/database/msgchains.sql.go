@@ -116,6 +116,41 @@ func (q *Queries) GetFlowMsgChains(ctx context.Context, flowID int64) ([]Msgchai
 	return items, nil
 }
 
+const getFlowTaskTypeLastMsgChain = `-- name: GetFlowTaskTypeLastMsgChain :one
+SELECT
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+FROM msgchains mc
+WHERE mc.flow_id = $1 AND (mc.task_id = $2 OR $2 IS NULL) AND mc.type = $3
+ORDER BY mc.created_at DESC
+LIMIT 1
+`
+
+type GetFlowTaskTypeLastMsgChainParams struct {
+	FlowID int64         `json:"flow_id"`
+	TaskID sql.NullInt64 `json:"task_id"`
+	Type   MsgchainType  `json:"type"`
+}
+
+func (q *Queries) GetFlowTaskTypeLastMsgChain(ctx context.Context, arg GetFlowTaskTypeLastMsgChainParams) (Msgchain, error) {
+	row := q.db.QueryRowContext(ctx, getFlowTaskTypeLastMsgChain, arg.FlowID, arg.TaskID, arg.Type)
+	var i Msgchain
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Model,
+		&i.ModelProvider,
+		&i.UsageIn,
+		&i.UsageOut,
+		&i.Chain,
+		&i.FlowID,
+		&i.TaskID,
+		&i.SubtaskID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getFlowTypeMsgChains = `-- name: GetFlowTypeMsgChains :many
 SELECT
   mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
@@ -510,25 +545,51 @@ func (q *Queries) GetTaskTypeMsgChains(ctx context.Context, arg GetTaskTypeMsgCh
 
 const updateMsgChain = `-- name: UpdateMsgChain :one
 UPDATE msgchains
-SET chain = $1, usage_in = usage_in + $2, usage_out = usage_out + $3
-WHERE id = $4
+SET chain = $1
+WHERE id = $2
 RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at
 `
 
 type UpdateMsgChainParams struct {
-	Chain    json.RawMessage `json:"chain"`
-	UsageIn  int64           `json:"usage_in"`
-	UsageOut int64           `json:"usage_out"`
-	ID       int64           `json:"id"`
+	Chain json.RawMessage `json:"chain"`
+	ID    int64           `json:"id"`
 }
 
 func (q *Queries) UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error) {
-	row := q.db.QueryRowContext(ctx, updateMsgChain,
-		arg.Chain,
-		arg.UsageIn,
-		arg.UsageOut,
-		arg.ID,
+	row := q.db.QueryRowContext(ctx, updateMsgChain, arg.Chain, arg.ID)
+	var i Msgchain
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Model,
+		&i.ModelProvider,
+		&i.UsageIn,
+		&i.UsageOut,
+		&i.Chain,
+		&i.FlowID,
+		&i.TaskID,
+		&i.SubtaskID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const updateMsgChainUsage = `-- name: UpdateMsgChainUsage :one
+UPDATE msgchains
+SET usage_in = usage_in + $1, usage_out = usage_out + $2
+WHERE id = $3
+RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at
+`
+
+type UpdateMsgChainUsageParams struct {
+	UsageIn  int64 `json:"usage_in"`
+	UsageOut int64 `json:"usage_out"`
+	ID       int64 `json:"id"`
+}
+
+func (q *Queries) UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsageParams) (Msgchain, error) {
+	row := q.db.QueryRowContext(ctx, updateMsgChainUsage, arg.UsageIn, arg.UsageOut, arg.ID)
 	var i Msgchain
 	err := row.Scan(
 		&i.ID,

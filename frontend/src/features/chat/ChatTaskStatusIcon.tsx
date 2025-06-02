@@ -16,7 +16,7 @@ const statusIcons: Record<StatusType, { icon: LucideIcon; className: string }> =
     [StatusType.Finished]: { icon: CheckCircle2, className: 'text-green-500' },
     [StatusType.Failed]: { icon: CircleX, className: 'text-red-500' },
     [StatusType.Running]: { icon: Loader2, className: 'animate-spin text-purple-500' },
-    [StatusType.Starting]: { icon: PlayCircle, className: 'text-blue-500' },
+    [StatusType.Created]: { icon: PlayCircle, className: 'text-blue-500' },
     [StatusType.Waiting]: { icon: Clock, className: 'text-yellow-500' },
 };
 const defaultIcon = { icon: CircleDashed, className: 'text-muted-foreground' };

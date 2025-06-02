@@ -33,7 +33,7 @@ func (s *flowSubscriber) FlowCreatedAdmin(ctx context.Context) (<-chan *model.Fl
 }
 
 func (s *flowSubscriber) FlowCreated(ctx context.Context) (<-chan *model.Flow, error) {
-	return s.ctrl.flowCreated.Subscribe(ctx, s.flowID), nil
+	return s.ctrl.flowCreated.Subscribe(ctx, s.userID), nil
 }
 
 func (s *flowSubscriber) FlowDeletedAdmin(ctx context.Context) (<-chan *model.Flow, error) {
@@ -41,7 +41,11 @@ func (s *flowSubscriber) FlowDeletedAdmin(ctx context.Context) (<-chan *model.Fl
 }
 
 func (s *flowSubscriber) FlowDeleted(ctx context.Context) (<-chan *model.Flow, error) {
-	return s.ctrl.flowDeleted.Subscribe(ctx, s.flowID), nil
+	return s.ctrl.flowDeleted.Subscribe(ctx, s.userID), nil
+}
+
+func (s *flowSubscriber) FlowUpdatedAdmin(ctx context.Context) (<-chan *model.Flow, error) {
+	return s.ctrl.flowUpdatedAdmin.Subscribe(ctx, s.userID), nil
 }
 
 func (s *flowSubscriber) FlowUpdated(ctx context.Context) (<-chan *model.Flow, error) {
@@ -54,6 +58,18 @@ func (s *flowSubscriber) TaskCreated(ctx context.Context) (<-chan *model.Task, e
 
 func (s *flowSubscriber) TaskUpdated(ctx context.Context) (<-chan *model.Task, error) {
 	return s.ctrl.taskUpdated.Subscribe(ctx, s.flowID), nil
+}
+
+func (s *flowSubscriber) AssistantCreated(ctx context.Context) (<-chan *model.Assistant, error) {
+	return s.ctrl.assistantCreated.Subscribe(ctx, s.flowID), nil
+}
+
+func (s *flowSubscriber) AssistantUpdated(ctx context.Context) (<-chan *model.Assistant, error) {
+	return s.ctrl.assistantUpdated.Subscribe(ctx, s.flowID), nil
+}
+
+func (s *flowSubscriber) AssistantDeleted(ctx context.Context) (<-chan *model.Assistant, error) {
+	return s.ctrl.assistantDeleted.Subscribe(ctx, s.flowID), nil
 }
 
 func (s *flowSubscriber) ScreenshotAdded(ctx context.Context) (<-chan *model.Screenshot, error) {
@@ -82,4 +98,12 @@ func (s *flowSubscriber) SearchLogAdded(ctx context.Context) (<-chan *model.Sear
 
 func (s *flowSubscriber) VectorStoreLogAdded(ctx context.Context) (<-chan *model.VectorStoreLog, error) {
 	return s.ctrl.vecStoreLogAdded.Subscribe(ctx, s.flowID), nil
+}
+
+func (s *flowSubscriber) AssistantLogAdded(ctx context.Context) (<-chan *model.AssistantLog, error) {
+	return s.ctrl.assistantLogAdded.Subscribe(ctx, s.flowID), nil
+}
+
+func (s *flowSubscriber) AssistantLogUpdated(ctx context.Context) (<-chan *model.AssistantLog, error) {
+	return s.ctrl.assistantLogUpdated.Subscribe(ctx, s.flowID), nil
 }

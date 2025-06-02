@@ -325,6 +325,88 @@ graph TB
 
 </details>
 
+<details>
+<summary><b>🔄 Chain Summarization</b> (click to expand)</summary>
+
+The chain summarization system manages conversation context growth by selectively summarizing older messages. This is critical for preventing token limits from being exceeded while maintaining conversation coherence.
+
+```mermaid
+flowchart TD
+    A[Input Chain] --> B{Needs Summarization?}
+    B -->|No| C[Return Original Chain]
+    B -->|Yes| D[Convert to ChainAST]
+    D --> E[Apply Section Summarization]
+    E --> F[Process Oversized Pairs]
+    F --> G[Manage Last Section Size]
+    G --> H[Apply QA Summarization]
+    H --> I[Rebuild Chain with Summaries]
+    I --> J{Is New Chain Smaller?}
+    J -->|Yes| K[Return Optimized Chain]
+    J -->|No| C
+    
+    classDef process fill:#bbf,stroke:#333,stroke-width:2px,color:#000
+    classDef decision fill:#bfb,stroke:#333,stroke-width:2px,color:#000
+    classDef output fill:#fbb,stroke:#333,stroke-width:2px,color:#000
+    
+    class A,D,E,F,G,H,I process
+    class B,J decision
+    class C,K output
+```
+
+The algorithm operates on a structured representation of conversation chains (ChainAST) that preserves message types including tool calls and their responses. All summarization operations maintain critical conversation flow while reducing context size.
+
+### Global Summarizer Configuration Options
+
+| Parameter | Environment Variable | Default | Description |
+|-----------|----------------------|---------|-------------|
+| Preserve Last | `SUMMARIZER_PRESERVE_LAST` | `true` | Whether to keep all messages in the last section intact |
+| Use QA Pairs | `SUMMARIZER_USE_QA` | `true` | Whether to use QA pair summarization strategy |
+| Summarize Human in QA | `SUMMARIZER_SUM_MSG_HUMAN_IN_QA` | `false` | Whether to summarize human messages in QA pairs |
+| Last Section Size | `SUMMARIZER_LAST_SEC_BYTES` | `51200` | Maximum byte size for last section (50KB) |
+| Max Body Pair Size | `SUMMARIZER_MAX_BP_BYTES` | `16384` | Maximum byte size for a single body pair (16KB) |
+| Max QA Sections | `SUMMARIZER_MAX_QA_SECTIONS` | `10` | Maximum QA pair sections to preserve |
+| Max QA Size | `SUMMARIZER_MAX_QA_BYTES` | `65536` | Maximum byte size for QA pair sections (64KB) |
+| Keep QA Sections | `SUMMARIZER_KEEP_QA_SECTIONS` | `1` | Number of recent QA sections to keep without summarization |
+
+### Assistant Summarizer Configuration Options
+
+Assistant instances can use customized summarization settings to fine-tune context management behavior:
+
+| Parameter | Environment Variable | Default | Description |
+|-----------|----------------------|---------|-------------|
+| Preserve Last | `ASSISTANT_SUMMARIZER_PRESERVE_LAST` | `true` | Whether to preserve all messages in the assistant's last section |
+| Last Section Size | `ASSISTANT_SUMMARIZER_LAST_SEC_BYTES` | `76800` | Maximum byte size for assistant's last section (75KB) |
+| Max Body Pair Size | `ASSISTANT_SUMMARIZER_MAX_BP_BYTES` | `16384` | Maximum byte size for a single body pair in assistant context (16KB) |
+| Max QA Sections | `ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS` | `7` | Maximum QA sections to preserve in assistant context |
+| Max QA Size | `ASSISTANT_SUMMARIZER_MAX_QA_BYTES` | `76800` | Maximum byte size for assistant's QA sections (75KB) |
+| Keep QA Sections | `ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS` | `3` | Number of recent QA sections to preserve without summarization |
+
+The assistant summarizer configuration provides more memory for context retention compared to the global settings, preserving more recent conversation history while still ensuring efficient token usage.
+
+### Summarizer Environment Configuration
+
+```bash
+# Default values for global summarizer logic
+SUMMARIZER_PRESERVE_LAST=true
+SUMMARIZER_USE_QA=true
+SUMMARIZER_SUM_MSG_HUMAN_IN_QA=false
+SUMMARIZER_LAST_SEC_BYTES=51200
+SUMMARIZER_MAX_BP_BYTES=16384
+SUMMARIZER_MAX_QA_SECTIONS=10
+SUMMARIZER_MAX_QA_BYTES=65536
+SUMMARIZER_KEEP_QA_SECTIONS=1
+
+# Default values for assistant summarizer logic
+ASSISTANT_SUMMARIZER_PRESERVE_LAST=true
+ASSISTANT_SUMMARIZER_LAST_SEC_BYTES=76800
+ASSISTANT_SUMMARIZER_MAX_BP_BYTES=16384
+ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS=7
+ASSISTANT_SUMMARIZER_MAX_QA_BYTES=76800
+ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS=3
+```
+
+</details>
+
 The architecture of PentAGI is designed to be modular, scalable, and secure. Here are the key components:
 
 1. **Core Services**
@@ -357,6 +439,7 @@ The architecture of PentAGI is designed to be modular, scalable, and secure. Her
    - Working Memory: Active context and goals for current operations
    - Episodic Memory: Historical actions and success patterns
    - Knowledge Base: Structured domain expertise and tool capabilities
+   - Context Management: Intelligently manages growing LLM context windows using chain summarization
 
 The system uses Docker containers for isolation and easy deployment, with separate networks for core services, monitoring, and analytics to ensure proper security boundaries. Each component is designed to scale horizontally and can be configured for high availability in production environments.
 
@@ -398,6 +481,9 @@ TRAVERSAAL_API_KEY=your_traversaal_key
 PERPLEXITY_API_KEY=your_perplexity_key
 PERPLEXITY_MODEL=sonar-pro
 PERPLEXITY_CONTEXT_SIZE=medium
+
+# Assistant configuration
+ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating new assistants
 ```
 
 4. Change all security related environment variables in `.env` file to improve security.
@@ -444,6 +530,38 @@ Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default
 > `PROXY_URL` is a global proxy URL for all LLM providers and external search systems. You can use it for isolation from external networks.
 >
 > The `docker-compose.yml` file runs the PentAGI service as root user because it needs access to docker.sock for container management. If you're using TCP/IP network connection to Docker instead of socket file, you can remove root privileges and use the default `pentagi` user for better security.
+
+### Assistant Configuration
+
+PentAGI allows you to configure default behavior for assistants:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ASSISTANT_USE_AGENTS` | `false` | Controls the default value for agent usage when creating new assistants |
+
+The `ASSISTANT_USE_AGENTS` setting affects the initial state of the "Use Agents" toggle when creating a new assistant in the UI:
+- `false` (default): New assistants are created with agent delegation disabled by default
+- `true`: New assistants are created with agent delegation enabled by default
+
+Note that users can always override this setting by toggling the "Use Agents" button in the UI when creating or editing an assistant. This environment variable only controls the initial default state.
+
+### Custom LLM Provider Configuration
+
+When using custom LLM providers with the `LLM_SERVER_*` variables, you can fine-tune the reasoning format used in requests:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_SERVER_URL` | | Base URL for the custom LLM API endpoint |
+| `LLM_SERVER_KEY` | | API key for the custom LLM provider |
+| `LLM_SERVER_MODEL` | | Default model to use (can be overridden in provider config) |
+| `LLM_SERVER_CONFIG_PATH` | | Path to the YAML configuration file for agent-specific models |
+| `LLM_SERVER_LEGACY_REASONING` | `false` | Controls reasoning format in API requests |
+
+The `LLM_SERVER_LEGACY_REASONING` setting affects how reasoning parameters are sent to the LLM:
+- `false` (default): Uses modern format where reasoning is sent as a structured object with `max_tokens` parameter
+- `true`: Uses legacy format with string-based `reasoning_effort` parameter
+
+This setting is important when working with different LLM providers as they may expect different reasoning formats in their API requests. If you encounter reasoning-related errors with custom providers, try changing this setting.
 
 For advanced configuration options and detailed setup instructions, please visit our [documentation](https://docs.pentagi.com).
 
@@ -751,6 +869,7 @@ LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/
 LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
 LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml
+LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format (default: false)
 ```
 
 #### Running Tests in a Production Environment

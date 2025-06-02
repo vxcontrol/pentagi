@@ -80,6 +80,7 @@ func NewTaskWorker(
 		ctx,
 		database.MsglogTypeInput,
 		taskCtx.TaskID,
+		"", // thinking is empty because this is input
 		input,
 	)
 	if err != nil {
@@ -322,6 +323,20 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 
 	if err := tw.SetStatus(ctx, taskStatus); err != nil {
 		return err
+	}
+
+	format := database.MsglogResultFormatMarkdown
+	_, err = tw.taskCtx.MsgLog.PutTaskMsgResult(
+		ctx,
+		database.MsglogTypeReport,
+		tw.taskCtx.TaskID,
+		"", // thinking is empty because agent can't return it
+		tw.taskCtx.TaskTitle,
+		jobResult.Result,
+		format,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to put report for task %d: %w", tw.taskCtx.TaskID, err)
 	}
 
 	return nil

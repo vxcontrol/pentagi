@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/custom"
+	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/queue"
 
@@ -39,6 +41,7 @@ func RunTests(ctx context.Context, p provider.Provider, config TestConfig) ([]Ag
 		provider.OptionsTypeSimple,
 		provider.OptionsTypeSimpleJSON,
 		provider.OptionsTypeAgent,
+		provider.OptionsTypeAssistant,
 		provider.OptionsTypeGenerator,
 		provider.OptionsTypeRefiner,
 		provider.OptionsTypeAdviser,
@@ -67,8 +70,17 @@ func RunTests(ctx context.Context, p provider.Provider, config TestConfig) ([]Ag
 
 	// Get test suites
 	basicSuites := GetBasicTestSuites()
+	if IsTestGroupsFiltered("basic", config.TestGroups) {
+		basicSuites = []TestSuite{}
+	}
 	advancedSuites := GetAdvancedTestSuites()
+	if IsTestGroupsFiltered("advanced", config.TestGroups) {
+		advancedSuites = []TestSuite{}
+	}
 	outputJSONSuites := GetOutputJSONTestSuites()
+	if IsTestGroupsFiltered("json", config.TestGroups) {
+		outputJSONSuites = []TestSuite{}
+	}
 
 	// Use queue for parallel execution
 	numWorkers := len(selectedOptions)
@@ -89,6 +101,14 @@ func RunTests(ctx context.Context, p provider.Provider, config TestConfig) ([]Ag
 			res, err = TestJSONAgent(ctx, req.provider, req.agentType, req.outputJSONSuites, req.verboseMode)
 		} else {
 			res, err = TestAgent(ctx, req.provider, req.agentType, req.basicSuites, req.advancedSuites, req.verboseMode)
+		}
+
+		// Is reasoning used while testing?
+		for _, test := range append(res.BasicTests, res.AdvancedTests...) {
+			if test.Reasoning {
+				res.Reasoning = true
+				break
+			}
 		}
 
 		return testResult{
@@ -165,6 +185,7 @@ func PrintTestingResults(result AgentTestResult) {
 	// Print detailed results for each agent
 	fmt.Printf("\nTesting agent: %s\n", result.AgentType)
 	fmt.Printf("Model: %s\n", result.ModelName)
+	fmt.Printf("Reasoning: %t\n", result.Reasoning)
 	fmt.Println("-------------------------------------------------")
 
 	PrintAgentResults(result)
@@ -173,6 +194,7 @@ func PrintTestingResults(result AgentTestResult) {
 func main() {
 	// Parse command-line arguments
 	envFile := flag.String("env", ".env", "Path to environment file")
+	configType := flag.String("type", "custom", "Type of provider [custom, openai, anthropic]")
 	configPath := flag.String("config", "", "Path to custom provider config")
 	reportPath := flag.String("report", "", "Path to write the report file")
 	agentTypes := flag.String("agents", "all", "Comma-separated list of agent types to test")
@@ -198,9 +220,31 @@ func main() {
 	}
 
 	// Initialize provider
-	customProvider, err := custom.New(cfg)
-	if err != nil {
-		log.Fatalf("Error initializing custom provider: %v", err)
+	var provider provider.Provider
+	switch *configType {
+	case "custom":
+		provider, err = custom.New(cfg)
+		if err != nil {
+			log.Fatalf("Error initializing custom provider: %v", err)
+		}
+	case "openai":
+		if cfg.OpenAIKey == "" {
+			log.Fatalf("OpenAI key is not set")
+		}
+		provider, err = openai.New(cfg)
+		if err != nil {
+			log.Fatalf("Error initializing openai provider: %v", err)
+		}
+	case "anthropic":
+		if cfg.AnthropicAPIKey == "" {
+			log.Fatalf("Anthropic API key is not set")
+		}
+		provider, err = anthropic.New(cfg)
+		if err != nil {
+			log.Fatalf("Error initializing anthropic provider: %v", err)
+		}
+	default:
+		log.Fatalf("Invalid provider type: %s", *configType)
 	}
 
 	fmt.Println("Testing Custom Provider with configuration:", *configPath)
@@ -229,7 +273,7 @@ func main() {
 
 	// Run tests for each agent
 	ctx := context.Background()
-	results, err := RunTests(ctx, customProvider, testConfig)
+	results, err := RunTests(ctx, provider, testConfig)
 	if err != nil {
 		log.Fatalf("Error running tests: %v", err)
 	}

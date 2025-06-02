@@ -14,7 +14,7 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
 )
 
@@ -104,7 +104,7 @@ func (t *terminal) ExecCommand(
 	detach bool,
 	timeout time.Duration,
 ) (string, error) {
-	container := PrimaryTerminalName(t.flowID)
+	containerName := PrimaryTerminalName(t.flowID)
 
 	// create options for starting the exec process
 	cmd := []string{
@@ -136,7 +136,7 @@ func (t *terminal) ExecCommand(
 		timeout = defaultExecCommandTimeout
 	}
 
-	createResp, err := t.dockerClient.ContainerExecCreate(ctx, container, types.ExecConfig{
+	createResp, err := t.dockerClient.ContainerExecCreate(ctx, containerName, container.ExecOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -162,7 +162,7 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 	defer cancel()
 
 	// attach to the exec process
-	resp, err := t.dockerClient.ContainerExecAttach(ctx, id, types.ExecStartCheck{
+	resp, err := t.dockerClient.ContainerExecAttach(ctx, id, container.ExecAttachOptions{
 		Tty: true,
 	})
 	if err != nil {
@@ -208,7 +208,7 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 }
 
 func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (string, error) {
-	container := PrimaryTerminalName(flowID)
+	containerName := PrimaryTerminalName(flowID)
 
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
@@ -225,7 +225,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 		return "", fmt.Errorf("failed to put terminal log (read file cmd): %w", err)
 	}
 
-	reader, stats, err := t.dockerClient.CopyFromContainer(ctx, container, path)
+	reader, stats, err := t.dockerClient.CopyFromContainer(ctx, containerName, path)
 	if err != nil {
 		return "", fmt.Errorf("failed to copy file: %w", err)
 	}
@@ -278,7 +278,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 }
 
 func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, path string) (string, error) {
-	container := PrimaryTerminalName(flowID)
+	containerName := PrimaryTerminalName(flowID)
 
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
@@ -308,7 +308,7 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	}
 
 	dir := filepath.Dir(path)
-	err = t.dockerClient.CopyToContainer(ctx, container, dir, archive, types.CopyToContainerOptions{
+	err = t.dockerClient.CopyToContainer(ctx, containerName, dir, archive, container.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
 	})
 	if err != nil {

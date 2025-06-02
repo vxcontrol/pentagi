@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"pentagi/migrations"
 	"pentagi/pkg/config"
@@ -61,6 +62,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to open database: %v\n", err)
 	}
+
+	db.SetMaxOpenConns(20)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(time.Hour)
 
 	queries := database.New(db)
 

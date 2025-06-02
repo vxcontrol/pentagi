@@ -1,26 +1,95 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useState, useEffect, useMemo } from 'react';
 
 import Markdown from '@/components/Markdown';
 import Terminal from '@/components/Terminal';
-import type { MessageLogFragmentFragment } from '@/graphql/types';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { AssistantLogFragmentFragment, MessageLogFragmentFragment } from '@/graphql/types';
 import { MessageLogType, ResultFormat } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/format';
+import { copyMessageToClipboard } from '@/lib/сlipboard';
+import { Copy } from 'lucide-react';
 
 import ChatMessageTypeIcon from './ChatMessageTypeIcon';
 
 interface ChatMessageProps {
-    log: MessageLogFragmentFragment;
+    log: MessageLogFragmentFragment | AssistantLogFragmentFragment;
+    searchValue?: string;
 }
 
-const ChatMessage = ({ log }: ChatMessageProps) => {
-    const { type, createdAt, message, result, resultFormat = ResultFormat.Plain } = log;
-    const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+// Helper function to check if text contains search value (case-insensitive)
+const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+    if (!text || !searchValue.trim()) {
+        return false;
+    }
+    return text.toLowerCase().includes(searchValue.toLowerCase().trim());
+};
 
-    // Use useCallback to memoize the toggle function
+const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
+    const { type, createdAt, message, thinking, result, resultFormat = ResultFormat.Plain } = log;
+    const isReportMessage = type === MessageLogType.Report;
+    
+    // Memoize search checks to avoid recalculating on every render
+    const searchChecks = useMemo(() => {
+        const trimmedSearch = searchValue.trim();
+        if (!trimmedSearch) {
+            return { hasThinkingMatch: false, hasResultMatch: false };
+        }
+        
+        return {
+            hasThinkingMatch: containsSearchValue(thinking, trimmedSearch),
+            hasResultMatch: containsSearchValue(result, trimmedSearch),
+        };
+    }, [searchValue, thinking, result]);
+
+    const [isDetailsVisible, setIsDetailsVisible] = useState(isReportMessage);
+    const [isThinkingVisible, setIsThinkingVisible] = useState(false);
+
+    // Auto-expand blocks if they contain search matches
+    useEffect(() => {
+        const trimmedSearch = searchValue.trim();
+        
+        if (trimmedSearch) {
+            // Expand thinking block only if it contains the search term
+            if (searchChecks.hasThinkingMatch) {
+                setIsThinkingVisible(true);
+            }
+            // Expand result block only if it contains the search term
+            if (searchChecks.hasResultMatch) {
+                setIsDetailsVisible(true);
+            }
+        } else {
+            // Reset to default state when search is cleared
+            setIsDetailsVisible(isReportMessage);
+            setIsThinkingVisible(false);
+        }
+    }, [searchValue, searchChecks.hasThinkingMatch, searchChecks.hasResultMatch, isReportMessage]);
+
+    // Use useCallback to memoize the toggle functions
     const toggleDetails = useCallback(() => {
         setIsDetailsVisible((prev) => !prev);
     }, []);
+
+    const toggleThinking = useCallback(() => {
+        setIsThinkingVisible((prev) => !prev);
+    }, []);
+
+    const handleCopy = useCallback(async () => {
+        await copyMessageToClipboard({
+            thinking,
+            message,
+            result,
+            resultFormat,
+        });
+    }, [thinking, message, result, resultFormat]);
+
+    // Determine if thinking should be shown
+    // Show thinking if: thinking exists AND (message is empty OR thinking is manually toggled visible)
+    const shouldShowThinking = thinking && (!message || isThinkingVisible);
+
+    // Determine if thinking toggle button should be shown
+    // Show button only if thinking exists AND message is not empty
+    const shouldShowThinkingToggle = thinking && message;
 
     // Only render details content when it's visible to reduce DOM nodes
     const renderDetailsContent = () => {
@@ -29,9 +98,15 @@ const ChatMessage = ({ log }: ChatMessageProps) => {
         return (
             <>
                 <div className="my-2 border-t dark:border-gray-700" />
-                {resultFormat === ResultFormat.Plain && <div className="text-sm text-accent-foreground">{result}</div>}
+                {resultFormat === ResultFormat.Plain && (
+                    <Markdown className="prose-xs prose-fixed break-words text-sm text-accent-foreground" searchValue={searchValue}>
+                        {result}
+                    </Markdown>
+                )}
                 {resultFormat === ResultFormat.Markdown && (
-                    <Markdown className="prose-xs prose-fixed break-words">{result}</Markdown>
+                    <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>
+                        {result}
+                    </Markdown>
                 )}
                 {resultFormat === ResultFormat.Terminal && (
                     <Terminal
@@ -39,6 +114,20 @@ const ChatMessage = ({ log }: ChatMessageProps) => {
                         className="h-[240px] w-full bg-card py-1 pl-1"
                     />
                 )}
+            </>
+        );
+    };
+
+    const renderThinkingContent = () => {
+        if (!shouldShowThinking) return null;
+
+        return (
+            <>
+                <div className="mb-3 border-l-2 border-muted pl-3">
+                    <Markdown className="prose-xs prose-fixed break-words text-muted-foreground/80" searchValue={searchValue}>
+                        {thinking}
+                    </Markdown>
+                </div>
             </>
         );
     };
@@ -51,9 +140,31 @@ const ChatMessage = ({ log }: ChatMessageProps) => {
                     resultFormat === ResultFormat.Terminal && isDetailsVisible ? 'w-full' : '',
                 )}
             >
-                <Markdown className="prose-xs prose-fixed break-words">{message}</Markdown>
+                {/* Thinking toggle button */}
+                {shouldShowThinkingToggle && (
+                    <div className="mb-2 text-xs text-muted-foreground">
+                        <div
+                            onClick={toggleThinking}
+                            className="cursor-pointer"
+                        >
+                            {isThinkingVisible ? 'Hide thinking' : 'Show thinking'}
+                        </div>
+                    </div>
+                )}
+
+                {/* Thinking content */}
+                {renderThinkingContent()}
+
+                {/* Main message content */}
+                {message && (
+                    <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>
+                        {message}
+                    </Markdown>
+                )}
+
+                {/* Result details */}
                 {result && (
-                    <div className="text-xs text-muted-foreground">
+                    <div className="mt-2 text-xs text-muted-foreground">
                         <div
                             onClick={toggleDetails}
                             className="cursor-pointer"
@@ -70,11 +181,19 @@ const ChatMessage = ({ log }: ChatMessageProps) => {
                 }`}
             >
                 <ChatMessageTypeIcon type={type} />
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Copy 
+                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors" 
+                            onClick={handleCopy}
+                        />
+                    </TooltipTrigger>
+                    <TooltipContent>Copy</TooltipContent>
+                </Tooltip>
                 <span className="text-muted-foreground/50">{formatDate(new Date(createdAt))}</span>
             </div>
         </div>
     );
 };
 
-// Using React.memo to prevent unnecessary rerenders
 export default memo(ChatMessage);

@@ -1,0 +1,44 @@
+<question_memorist_context>
+  <instruction>
+  Retrieve and synthesize historical information relevant to the user's question. Split complex queries into precise vector database searches using exact sentence matching for optimal retrieval.
+  
+  {{if .Task}}Incorporate relevant details from the mentioned task (ID {{.Task.ID}}) to enhance search context and accuracy.{{end}}
+  {{if .Subtask}}Utilize the mentioned subtask (ID {{.Subtask.ID}}) information to provide more specific historical context.{{end}}
+  
+  Combine multiple search results into a cohesive response that provides comprehensive historical context. Focus on extracting precise information from vector database storage that directly addresses the user's query.
+  </instruction>
+
+  <user_question>
+  {{.Question}}
+  </user_question>
+
+  {{if .Task}}
+  <mentioned_task>
+  <id>{{.Task.ID}}</id>
+  <status>{{.Task.Status}}</status>
+  <title>{{.Task.Title}}</title>
+  <input>{{.Task.Input}}</input>
+  {{if .Task.Result}}
+  <result>{{.Task.Result}}</result>
+  {{end}}
+  </mentioned_task>
+  {{end}}
+
+  {{if .Subtask}}
+  <mentioned_subtask>
+  <id>{{.Subtask.ID}}</id>
+  <status>{{.Subtask.Status}}</status>
+  <title>{{.Subtask.Title}}</title>
+  <description>{{.Subtask.Description}}</description>
+  {{if .Subtask.Result}}
+  <result>{{.Subtask.Result}}</result>
+  {{end}}
+  </mentioned_subtask>
+  {{end}}
+
+  {{if .ExecutionDetails}}
+  <execution_details>
+  {{.ExecutionDetails}}
+  </execution_details>
+  {{end}}
+</question_memorist_context>

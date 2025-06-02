@@ -14,6 +14,19 @@ query providers {
     providers
 }
 
+fragment settingsFragment on Settings {
+    debug
+    askUser
+    dockerInside
+    assistantUseAgents
+}
+
+query settings {
+    settings {
+        ...settingsFragment
+    }
+}
+
 fragment flowFragment on Flow {
     id
     title
@@ -73,6 +86,7 @@ fragment messageLogFragment on MessageLog {
     id
     type
     message
+    thinking
     result
     resultFormat
     flowId
@@ -128,6 +142,35 @@ fragment vectorStoreLogFragment on VectorStoreLog {
     createdAt
 }
 
+fragment assistantFragment on Assistant {
+    id
+    title
+    status
+    provider
+    flowId
+    useAgents
+    createdAt
+    updatedAt
+}
+
+fragment assistantLogFragment on AssistantLog {
+    id
+    type
+    message
+    thinking
+    result
+    resultFormat
+    appendPart
+    flowId
+    assistantId
+    createdAt
+}
+
+fragment promptFragment on Prompt {
+    type
+    prompt
+}
+
 query flow($id: ID!) {
     flow(flowId: $id) {
         ...flowFragment
@@ -161,6 +204,37 @@ query tasks($flowId: ID!) {
     }
 }
 
+query prompts {
+    prompts {
+        ...promptFragment
+    }
+}
+
+query prompt($promptType: String!) {
+    prompt(promptType: $promptType)
+}
+
+query assistants($flowId: ID!) {
+    assistants(flowId: $flowId) {
+        ...assistantFragment
+    }
+}
+
+query assistantLogs($flowId: ID!, $assistantId: ID!) {
+    assistantLogs(flowId: $flowId, assistantId: $assistantId) {
+        ...assistantLogFragment
+    }
+}
+
+query flowReport($id: ID!) {
+    flow(flowId: $id) {
+        ...flowFragment
+    }
+    tasks(flowId: $id) {
+        ...taskFragment
+    }
+}
+
 mutation createFlow($modelProvider: String!, $input: String!) {
     createFlow(modelProvider: $modelProvider, input: $input) {
         ...flowFragment
@@ -176,9 +250,44 @@ mutation putUserInput($flowId: ID!, $input: String!) {
 }
 
 mutation finishFlow($flowId: ID!) {
-    finishFlow(flowId: $flowId) {
-        ...flowFragment
+    finishFlow(flowId: $flowId)
+}
+
+mutation stopFlow($flowId: ID!) {
+    stopFlow(flowId: $flowId)
+}
+
+mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!) {
+    createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents) {
+        flow {
+            ...flowFragment
+        }
+        assistant {
+            ...assistantFragment
+        }
     }
+}
+
+mutation callAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean!) {
+    callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents)
+}
+
+mutation stopAssistant($flowId: ID!, $assistantId: ID!) {
+    stopAssistant(flowId: $flowId, assistantId: $assistantId) {
+        ...assistantFragment
+    }
+}
+
+mutation deleteAssistant($flowId: ID!, $assistantId: ID!) {
+    deleteAssistant(flowId: $flowId, assistantId: $assistantId)
+}
+
+mutation updatePrompt($promptType: String!, $prompt: String!) {
+    updatePrompt(promptType: $promptType, prompt: $prompt)
+}
+
+mutation resetPrompt($promptType: String!) {
+    resetPrompt(promptType: $promptType)
 }
 
 subscription terminalLogAdded($flowId: ID!) {
@@ -223,9 +332,62 @@ subscription vectorStoreLogAdded($flowId: ID!) {
     }
 }
 
-subscription flowUpdated($flowId: ID!) {
-    flowUpdated(flowId: $flowId) {
+subscription assistantCreated($flowId: ID!) {
+    assistantCreated(flowId: $flowId) {
+        ...assistantFragment
+    }
+}
+
+subscription assistantUpdated($flowId: ID!) {
+    assistantUpdated(flowId: $flowId) {
+        ...assistantFragment
+    }
+}
+
+subscription assistantDeleted($flowId: ID!) {
+    assistantDeleted(flowId: $flowId) {
+        ...assistantFragment
+    }
+}
+
+subscription assistantLogAdded($flowId: ID!) {
+    assistantLogAdded(flowId: $flowId) {
+        ...assistantLogFragment
+    }
+}
+
+subscription assistantLogUpdated($flowId: ID!) {
+    assistantLogUpdated(flowId: $flowId) {
+        ...assistantLogFragment
+    }
+}
+
+subscription flowCreated {
+    flowCreated {
         id
+        title
+        status
+        terminals {
+            ...terminalFragment
+        }
+        provider
+        createdAt
+        updatedAt
+    }
+}
+
+subscription flowDeleted {
+    flowDeleted {
+        id
+        status
+        updatedAt
+    }
+}
+
+subscription flowUpdated {
+    flowUpdated {
+        id
+        title
         status
         terminals {
             ...terminalFragment

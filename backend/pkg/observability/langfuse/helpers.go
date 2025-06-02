@@ -8,7 +8,7 @@ import (
 	"pentagi/pkg/observability/langfuse/api"
 
 	"github.com/google/uuid"
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
 )
 
 const (

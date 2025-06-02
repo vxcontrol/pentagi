@@ -8,14 +8,14 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/provider"
 
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/anthropic"
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/anthropic"
+	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 const (
-	AnthropicAgentModel  = "claude-3-5-sonnet-20241022"
+	AnthropicAgentModel  = "claude-sonnet-4-20250514"
 	AnthropicSimpleModel = "claude-3-5-haiku-20241022"
-	AnthropicAviserModel = "claude-3-opus-20240229"
 )
 
 type anthropicProvider struct {
@@ -51,13 +51,21 @@ func New(cfg *config.Config) (provider.Provider, error) {
 		llms.WithTemperature(0.5),
 		llms.WithTopP(0.5),
 		llms.WithN(1),
+		llms.WithMaxTokens(3000),
 	}
 
 	creative := []llms.CallOption{
 		llms.WithModel(AnthropicAgentModel),
-		llms.WithTemperature(0.7),
-		llms.WithTopP(0.9),
+		llms.WithTemperature(1.0),
 		llms.WithN(1),
+		llms.WithMaxTokens(4000),
+	}
+
+	assistant := []llms.CallOption{
+		llms.WithModel(AnthropicAgentModel),
+		llms.WithTemperature(1.0),
+		llms.WithN(1),
+		llms.WithMaxTokens(6000),
 	}
 
 	determine := []llms.CallOption{
@@ -65,13 +73,15 @@ func New(cfg *config.Config) (provider.Provider, error) {
 		llms.WithTemperature(0.2),
 		llms.WithTopP(0.2),
 		llms.WithN(1),
+		llms.WithMaxTokens(6000),
 	}
 
 	adviser := []llms.CallOption{
-		llms.WithModel(AnthropicAviserModel),
-		llms.WithTemperature(0.5),
+		llms.WithModel(AnthropicAgentModel),
+		llms.WithTemperature(1.0),
 		llms.WithTopP(0.8),
 		llms.WithN(1),
+		llms.WithMaxTokens(4000),
 	}
 
 	return &anthropicProvider{
@@ -80,8 +90,9 @@ func New(cfg *config.Config) (provider.Provider, error) {
 			provider.OptionsTypeSimple:     simple,
 			provider.OptionsTypeSimpleJSON: append(simple, llms.WithJSONMode()),
 			provider.OptionsTypeAgent:      creative,
-			provider.OptionsTypeGenerator:  creative,
-			provider.OptionsTypeRefiner:    creative,
+			provider.OptionsTypeAssistant:  assistant,
+			provider.OptionsTypeGenerator:  append(creative, llms.WithMaxTokens(8192)),
+			provider.OptionsTypeRefiner:    append(creative, llms.WithMaxTokens(8192)),
 			provider.OptionsTypeAdviser:    adviser,
 			provider.OptionsTypeReflector:  adviser,
 			provider.OptionsTypeSearcher:   creative,
@@ -128,13 +139,19 @@ func (p *anthropicProvider) CallEx(
 	ctx context.Context,
 	opt provider.ProviderOptionsType,
 	chain []llms.MessageContent,
+	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
 	options, ok := p.options[opt]
 	if !ok {
 		return nil, provider.ErrInvalidProviderOptionsType
 	}
 
-	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+	return provider.WrapGenerateContent(
+		ctx, p, opt, p.llm.GenerateContent, chain,
+		append([]llms.CallOption{
+			llms.WithStreamingFunc(streamCb),
+		}, options...)...,
+	)
 }
 
 func (p *anthropicProvider) CallWithTools(
@@ -142,14 +159,20 @@ func (p *anthropicProvider) CallWithTools(
 	opt provider.ProviderOptionsType,
 	chain []llms.MessageContent,
 	tools []llms.Tool,
+	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
 	options, ok := p.options[opt]
 	if !ok {
 		return nil, provider.ErrInvalidProviderOptionsType
 	}
 
-	options = append(options, llms.WithTools(tools))
-	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+	return provider.WrapGenerateContent(
+		ctx, p, opt, p.llm.GenerateContent, chain,
+		append([]llms.CallOption{
+			llms.WithTools(tools),
+			llms.WithStreamingFunc(streamCb),
+		}, options...)...,
+	)
 }
 
 func (p *anthropicProvider) GetUsage(info map[string]any) (int64, int64) {

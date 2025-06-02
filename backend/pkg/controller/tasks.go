@@ -60,10 +60,6 @@ func (tc *taskController) LoadTasks(
 		tc.tasks[task.ID] = tw
 	}
 
-	if len(tc.tasks) == 0 {
-		return fmt.Errorf("no tasks loaded for flow %d: %w", flowID, ErrNothingToLoad)
-	}
-
 	return nil
 }
 

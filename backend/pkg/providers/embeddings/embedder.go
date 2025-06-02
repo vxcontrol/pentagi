@@ -8,15 +8,15 @@ import (
 
 	"pentagi/pkg/config"
 
-	"github.com/tmc/langchaingo/embeddings"
-	"github.com/tmc/langchaingo/embeddings/huggingface"
-	"github.com/tmc/langchaingo/embeddings/jina"
-	"github.com/tmc/langchaingo/embeddings/voyageai"
-	"github.com/tmc/langchaingo/llms/googleai"
-	hgclient "github.com/tmc/langchaingo/llms/huggingface"
-	"github.com/tmc/langchaingo/llms/mistral"
-	"github.com/tmc/langchaingo/llms/ollama"
-	"github.com/tmc/langchaingo/llms/openai"
+	"github.com/vxcontrol/langchaingo/embeddings"
+	"github.com/vxcontrol/langchaingo/embeddings/huggingface"
+	"github.com/vxcontrol/langchaingo/embeddings/jina"
+	"github.com/vxcontrol/langchaingo/embeddings/voyageai"
+	"github.com/vxcontrol/langchaingo/llms/googleai"
+	hgclient "github.com/vxcontrol/langchaingo/llms/huggingface"
+	"github.com/vxcontrol/langchaingo/llms/mistral"
+	"github.com/vxcontrol/langchaingo/llms/ollama"
+	"github.com/vxcontrol/langchaingo/llms/openai"
 )
 
 type constructor func(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error)
@@ -116,9 +116,7 @@ func newOpenAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder
 
 func newOllama(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
 	// EmbeddingKey is not supported for ollama
-	opts := []ollama.Option{
-		ollama.WithRunnerEmbeddingOnly(true),
-	}
+	var opts []ollama.Option
 	if cfg.EmbeddingURL != "" {
 		opts = append(opts, ollama.WithServerURL(cfg.EmbeddingURL))
 	}

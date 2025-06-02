@@ -3,283 +3,31 @@ package providers
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
-	"time"
 
+	"pentagi/pkg/cast"
 	"pentagi/pkg/database"
-	obs "pentagi/pkg/observability"
-	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/provider"
-	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
-	"github.com/sirupsen/logrus"
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
 )
-
-const (
-	maxRetriesToCallSimpleChain = 3
-	maxRetriesToCallAgentChain  = 3
-	maxRetriesToCallFunction    = 3
-	toolCallsPrefix             = "[TOOL_CALLS] "
-	delayBetweenRetries         = 5 * time.Second
-)
-
-func (fp *flowProvider) performAgentChain(
-	ctx context.Context,
-	opt provider.ProviderOptionsType,
-	chainID int64,
-	taskID, subtaskID *int64,
-	chain []llms.MessageContent,
-	executor tools.ContextToolsExecutor,
-) ([]llms.MessageContent, error) {
-	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.performAgentChain")
-	defer span.End()
-
-	ticker := time.NewTicker(delayBetweenRetries)
-	defer ticker.Stop()
-
-	var (
-		wantToStop bool
-		detector   = &repeatingDetector{}
-		resp       *llms.ContentResponse
-		err        error
-	)
-
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"agent":        fp.Type(),
-		"flow_id":      fp.flowID,
-		"task_id":      taskID,
-		"subtask_id":   subtaskID,
-		"msg_chain_id": chainID,
-	})
-
-	for {
-		for idx := 0; idx <= maxRetriesToCallAgentChain; idx++ {
-			if idx == maxRetriesToCallAgentChain {
-				msg := fmt.Sprintf("failed to call agent chain: max retries reached, %d", idx)
-				logger.WithError(err).Error(msg)
-				return chain, fmt.Errorf(msg+": %w", err)
-			}
-
-			resp, err = fp.CallWithTools(ctx, opt, chain, executor.Tools())
-			if err == nil {
-				break
-			}
-
-			ticker.Reset(delayBetweenRetries)
-			select {
-			case <-ticker.C:
-			case <-ctx.Done():
-				logger.WithError(ctx.Err()).Error("context canceled while waiting for retry")
-				return chain, fmt.Errorf("context canceled: %w", ctx.Err())
-			}
-		}
-
-		if len(resp.Choices) == 0 {
-			logger.Error("no choices in response")
-			return chain, fmt.Errorf("no choices in response")
-		}
-
-		var (
-			content   string
-			funcCalls []llms.ToolCall
-			info      map[string]any
-		)
-		for _, choice := range resp.Choices {
-			choice.Content = strings.TrimSpace(choice.Content)
-			if choice.Content != "" {
-				content = choice.Content
-			}
-
-			if choice.GenerationInfo != nil {
-				info = choice.GenerationInfo
-			}
-
-			for _, toolCall := range choice.ToolCalls {
-				if toolCall.FunctionCall == nil {
-					continue
-				}
-				funcCalls = append(funcCalls, toolCall)
-			}
-		}
-
-		msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
-		for _, toolCall := range funcCalls {
-			msg.Parts = append(msg.Parts, llms.ToolCall{
-				ID:           toolCall.ID,
-				Type:         toolCall.Type,
-				FunctionCall: toolCall.FunctionCall,
-			})
-		}
-		if len(funcCalls) == 0 {
-			msg.Parts = append(msg.Parts, llms.TextContent{Text: content})
-		}
-
-		chain = append(chain, msg)
-		if len(funcCalls) == 0 {
-			reflectorContext := map[string]any{
-				"BarrierToolNames": executor.GetBarrierToolNames(),
-				"Message":          content,
-			}
-			logger.WithField("content", content[:min(1000, len(content))]).Warn("got message instead of tool call")
-			if len(chain) > 2 && chain[1].Role == llms.ChatMessageTypeHuman {
-				if part, ok := chain[1].Parts[0].(llms.TextContent); ok {
-					reflectorContext["Subtask"] = part.Text
-				}
-			}
-
-			rctx, observation := obs.Observer.NewObservation(ctx)
-			reflectorSpan := observation.Span(
-				langfuse.WithStartSpanName("reflector agent"),
-				langfuse.WithStartSpanInput(content),
-				langfuse.WithStartSpanMetadata(reflectorContext),
-			)
-			rctx, _ = reflectorSpan.Observation(rctx)
-
-			reflectorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeReflector, reflectorContext)
-			if err != nil {
-				return chain, wrapErrorEndSpan(rctx, reflectorSpan, "failed to render reflector template", err)
-			}
-
-			opt := provider.OptionsTypeReflector
-			msgChainType := database.MsgchainTypeReflector
-			advice, err := fp.performSimpleChain(rctx, taskID, subtaskID, opt, msgChainType, reflectorTmpl)
-			if err != nil {
-				advice = ToolPlaceholder
-			}
-
-			reflectorSpan.End(langfuse.WithEndSpanOutput(advice))
-
-			chain = append(chain, llms.TextParts(llms.ChatMessageTypeHuman, advice))
-		}
-
-		for _, toolCall := range funcCalls {
-			if toolCall.FunctionCall == nil {
-				continue
-			}
-
-			funcName := toolCall.FunctionCall.Name
-			funcArgs := json.RawMessage(toolCall.FunctionCall.Arguments)
-			if detector.detect(toolCall) {
-				response := fmt.Sprintf("tool call '%s' is repeating, please try another tool", funcName)
-				chain = append(chain, llms.MessageContent{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: toolCall.ID,
-							Name:       funcName,
-							Content:    response,
-						},
-					},
-				})
-				continue
-			}
-
-			ectx, observation := obs.Observer.NewObservation(ctx)
-			opts := []langfuse.EventStartOption{
-				langfuse.WithStartEventName(fmt.Sprintf("tool call %s", funcName)),
-				langfuse.WithStartEventInput(funcArgs),
-				langfuse.WithStartEventMetadata(map[string]any{
-					"tool_call_id": toolCall.ID,
-					"tool_name":    funcName,
-				}),
-			}
-
-			var response string
-			for idx := 0; idx <= maxRetriesToCallFunction; idx++ {
-				if idx == maxRetriesToCallFunction {
-					logger.WithError(err).WithField("args", string(funcArgs)).Error("failed to exec function")
-					return chain, fmt.Errorf("failed to exec function '%s': %w", funcName, err)
-				}
-
-				response, err = executor.Execute(ectx, toolCall.ID, funcName, funcArgs)
-				if err != nil {
-					if errors.Is(err, context.Canceled) {
-						return chain, err
-					}
-
-					observation.Event(append(opts,
-						langfuse.WithStartEventStatus(err.Error()),
-						langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-					)...)
-					logger.WithError(err).WithField("args", string(funcArgs)).Warn("failed to exec function")
-
-					funcExecErr := err
-					funcSchema, err := executor.GetToolSchema(funcName)
-					if err != nil {
-						logger.WithError(err).WithField("args", string(funcArgs)).Error("failed to get tool schema")
-						return chain, fmt.Errorf("failed to get tool schema: %w", err)
-					}
-
-					funcArgs, err = fp.fixToolCallArgs(ctx, funcName, funcArgs, funcSchema, funcExecErr)
-					if err != nil {
-						logger.WithError(err).WithField("args", string(funcArgs)).Error("failed to fix tool call args")
-						return chain, fmt.Errorf("failed to fix tool call args: %w", err)
-					}
-				} else {
-					break
-				}
-			}
-
-			observation.Event(append(opts,
-				langfuse.WithStartEventStatus("success"),
-				langfuse.WithStartEventOutput(response),
-			)...)
-
-			chain = append(chain, llms.MessageContent{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{
-						ToolCallID: toolCall.ID,
-						Name:       funcName,
-						Content:    response,
-					},
-				},
-			})
-
-			if executor.IsBarrierFunction(funcName) {
-				wantToStop = true
-			}
-		}
-
-		// TODO: here need to check chain length and summarize if it's too long
-
-		chainBlob, err := json.Marshal(chain)
-		if err != nil {
-			logger.WithError(err).Error("failed to marshal msg chain")
-			return chain, fmt.Errorf("failed to marshal msg chain: %w", err)
-		}
-
-		inputTokens, outputTokens := fp.GetUsage(info)
-		_, err = fp.db.UpdateMsgChain(ctx, database.UpdateMsgChainParams{
-			UsageIn:  inputTokens,
-			UsageOut: outputTokens,
-			Chain:    chainBlob,
-			ID:       chainID,
-		})
-		if err != nil {
-			logger.WithError(err).Error("failed to update msg chain")
-			return chain, fmt.Errorf("failed to update msg chain: %w", err)
-		}
-
-		if wantToStop {
-			return chain, nil
-		}
-	}
-}
 
 func (fp *flowProvider) performTaskResultReporter(
 	ctx context.Context,
 	taskID, subtaskID *int64,
-	systemReporterTmpl, reporterTmpl, input string,
+	systemReporterTmpl, userReporterTmpl, input string,
 ) (*tools.TaskResult, error) {
-	var taskResult tools.TaskResult
+	var (
+		taskResult   tools.TaskResult
+		optAgentType = provider.OptionsTypeSimple
+		msgChainType = database.MsgchainTypeReporter
+	)
+
 	chain := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemReporterTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, reporterTmpl),
+		llms.TextParts(llms.ChatMessageTypeHuman, userReporterTmpl),
 	}
 	cfg := tools.ReporterExecutorConfig{
 		TaskID:    taskID,
@@ -302,10 +50,9 @@ func (fp *flowProvider) performTaskResultReporter(
 		return nil, fmt.Errorf("failed to marshal msg chain: %w", err)
 	}
 
-	opt := provider.OptionsTypeSimple
 	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypeReporter,
-		Model:         fp.Model(opt),
+		Type:          msgChainType,
+		Model:         fp.Model(optAgentType),
 		ModelProvider: string(fp.Type()),
 		Chain:         chainBlob,
 		FlowID:        fp.flowID,
@@ -316,8 +63,8 @@ func (fp *flowProvider) performTaskResultReporter(
 		return nil, fmt.Errorf("failed to create msg chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeReporter)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, taskID, subtaskID, chain, executor)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChain.ID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task reporter result: %w", err)
 	}
@@ -327,7 +74,7 @@ func (fp *flowProvider) performTaskResultReporter(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
-			fmt.Sprintf("Report task result for user's task:\n\n%s", input),
+			input,
 			taskResult.Result,
 			taskID,
 			subtaskID,
@@ -340,15 +87,20 @@ func (fp *flowProvider) performTaskResultReporter(
 func (fp *flowProvider) performSubtasksGenerator(
 	ctx context.Context,
 	taskID int64,
-	systemGeneratorTmpl, generatorTmpl, input string,
+	systemGeneratorTmpl, userGeneratorTmpl, input string,
 ) ([]tools.SubtaskInfo, error) {
-	var subtaskList tools.SubtaskList
+	var (
+		subtaskList  tools.SubtaskList
+		optAgentType = provider.OptionsTypeGenerator
+		msgChainType = database.MsgchainTypeGenerator
+	)
+
 	chain := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemGeneratorTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, generatorTmpl),
+		llms.TextParts(llms.ChatMessageTypeHuman, userGeneratorTmpl),
 	}
 
-	memorist, err := fp.GetMemoristHandler(ctx, taskID, nil)
+	memorist, err := fp.GetMemoristHandler(ctx, &taskID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get memorist handler: %w", err)
 	}
@@ -380,10 +132,9 @@ func (fp *flowProvider) performSubtasksGenerator(
 		return nil, fmt.Errorf("failed to marshal msg chain: %w", err)
 	}
 
-	opt := provider.OptionsTypeGenerator
 	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypeGenerator,
-		Model:         fp.Model(opt),
+		Type:          msgChainType,
+		Model:         fp.Model(optAgentType),
 		ModelProvider: string(fp.Type()),
 		Chain:         chainBlob,
 		FlowID:        fp.flowID,
@@ -393,8 +144,8 @@ func (fp *flowProvider) performSubtasksGenerator(
 		return nil, fmt.Errorf("failed to create msg chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeGenerator)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, &taskID, nil, chain, executor)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChain.ID, &taskID, nil, chain, executor, fp.summarizer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subtasks generator result: %w", err)
 	}
@@ -404,7 +155,7 @@ func (fp *flowProvider) performSubtasksGenerator(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
-			fmt.Sprintf("Generate new subtasks for user's task:\n\n%s", input),
+			input,
 			fp.subtasksToMarkdown(subtaskList.Subtasks),
 			&taskID,
 			nil,
@@ -417,34 +168,85 @@ func (fp *flowProvider) performSubtasksGenerator(
 func (fp *flowProvider) performSubtasksRefiner(
 	ctx context.Context,
 	taskID int64,
-	systemRefinerTmpl, refinerTmpl, input string,
+	systemRefinerTmpl, userRefinerTmpl, input string,
 ) ([]tools.SubtaskInfo, error) {
 	var (
-		subtaskList tools.SubtaskList
-		chain       []llms.MessageContent
+		subtaskList  tools.SubtaskList
+		chain        []llms.MessageContent
+		optAgentType = provider.OptionsTypeRefiner
+		msgChainType = database.MsgchainTypeRefiner
 	)
 
-	msgChainType := database.MsgchainTypeRefiner
-	msgChains, err := fp.db.GetTaskTypeMsgChains(ctx, database.GetTaskTypeMsgChainsParams{
-		TaskID: database.Int64ToNullInt64(&taskID),
-		Type:   msgChainType,
-	})
-	if err != nil || len(msgChains) == 0 {
-		chain = []llms.MessageContent{
-			llms.TextParts(llms.ChatMessageTypeSystem, systemRefinerTmpl),
-			llms.TextParts(llms.ChatMessageTypeHuman, refinerTmpl),
-		}
-	} else {
-		err = json.Unmarshal(msgChains[0].Chain, &chain)
+	restoreChain := func(msgChain json.RawMessage) ([]llms.MessageContent, error) {
+		var msgList []llms.MessageContent
+		err := json.Unmarshal(msgChain, &msgList)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal msg chain: %w", err)
 		}
 
-		chain[0] = llms.TextParts(llms.ChatMessageTypeSystem, systemRefinerTmpl)
-		chain = append(chain, llms.TextParts(llms.ChatMessageTypeHuman, refinerTmpl))
+		ast, err := cast.NewChainAST(msgList, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create refiner chain ast: %w", err)
+		}
+
+		if len(ast.Sections) == 0 {
+			return nil, fmt.Errorf("failed to get sections from refiner chain ast")
+		}
+
+		systemSection := ast.Sections[0] // there may be multiple sections due to reflector agent
+		systemMessage := llms.TextParts(llms.ChatMessageTypeSystem, systemRefinerTmpl)
+		systemSection.Header.SystemMessage = &systemMessage
+		humanMessage := llms.TextParts(llms.ChatMessageTypeHuman, userRefinerTmpl)
+		systemSection.Header.HumanMessage = &humanMessage
+		// remove the last report with subtasks list
+		for idx := len(systemSection.Body) - 1; idx >= 0; idx-- {
+			if systemSection.Body[idx].Type == cast.RequestResponse {
+				systemSection.Body = systemSection.Body[:idx]
+				break
+			}
+		}
+		// remove all past completions
+		for idx := len(systemSection.Body) - 1; idx >= 0; idx-- {
+			if systemSection.Body[idx].Type != cast.Completion {
+				systemSection.Body = systemSection.Body[:idx+1]
+				break
+			}
+		}
+
+		// restore the chain
+		return systemSection.Messages(), nil
 	}
 
-	memorist, err := fp.GetMemoristHandler(ctx, taskID, nil)
+	msgChain, err := fp.db.GetFlowTaskTypeLastMsgChain(ctx, database.GetFlowTaskTypeLastMsgChainParams{
+		FlowID: fp.flowID,
+		TaskID: database.Int64ToNullInt64(&taskID),
+		Type:   msgChainType,
+	})
+	if err != nil || isEmptyChain(msgChain.Chain) {
+		// fallback to generator chain if refiner chain is not found or empty
+		msgChain, err = fp.db.GetFlowTaskTypeLastMsgChain(ctx, database.GetFlowTaskTypeLastMsgChainParams{
+			FlowID: fp.flowID,
+			TaskID: database.Int64ToNullInt64(&taskID),
+			Type:   database.MsgchainTypeGenerator,
+		})
+		if err != nil || isEmptyChain(msgChain.Chain) {
+			// is unexpected, but we should fallback to empty chain
+			chain = []llms.MessageContent{
+				llms.TextParts(llms.ChatMessageTypeSystem, systemRefinerTmpl),
+				llms.TextParts(llms.ChatMessageTypeHuman, userRefinerTmpl),
+			}
+		} else {
+			if chain, err = restoreChain(msgChain.Chain); err != nil {
+				return nil, fmt.Errorf("failed to restore chain from generator state: %w", err)
+			}
+		}
+	} else {
+		if chain, err = restoreChain(msgChain.Chain); err != nil {
+			return nil, fmt.Errorf("failed to restore chain from refiner state: %w", err)
+		}
+	}
+
+	memorist, err := fp.GetMemoristHandler(ctx, &taskID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get memorist handler: %w", err)
 	}
@@ -476,10 +278,9 @@ func (fp *flowProvider) performSubtasksRefiner(
 		return nil, fmt.Errorf("failed to marshal msg chain: %w", err)
 	}
 
-	opt := provider.OptionsTypeRefiner
-	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
+	msgChain, err = fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
 		Type:          msgChainType,
-		Model:         fp.Model(opt),
+		Model:         fp.Model(optAgentType),
 		ModelProvider: string(fp.Type()),
 		Chain:         chainBlob,
 		FlowID:        fp.flowID,
@@ -489,8 +290,8 @@ func (fp *flowProvider) performSubtasksRefiner(
 		return nil, fmt.Errorf("failed to create msg chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeRefiner)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, &taskID, nil, chain, executor)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChain.ID, &taskID, nil, chain, executor, fp.summarizer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subtasks refiner result: %w", err)
 	}
@@ -500,7 +301,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
-			fmt.Sprintf("Refine subtasks list for user's task:\n\n%s", input),
+			input,
 			fp.subtasksToMarkdown(subtaskList.Subtasks),
 			&taskID,
 			nil,
@@ -512,14 +313,14 @@ func (fp *flowProvider) performSubtasksRefiner(
 
 func (fp *flowProvider) performCoder(
 	ctx context.Context,
-	taskID, subtaskID int64,
-	systemCoderTmpl, question string,
+	taskID, subtaskID *int64,
+	systemCoderTmpl, userCoderTmpl, question string,
 ) (string, error) {
-	var codeResult tools.CodeResult
-	chain := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemCoderTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, question),
-	}
+	var (
+		codeResult   tools.CodeResult
+		optAgentType = provider.OptionsTypeCoder
+		msgChainType = database.MsgchainTypeCoder
+	)
 
 	adviser, err := fp.GetAskAdviceHandler(ctx, taskID, subtaskID)
 	if err != nil {
@@ -531,7 +332,7 @@ func (fp *flowProvider) performCoder(
 		return "", fmt.Errorf("failed to get installer handler: %w", err)
 	}
 
-	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
@@ -555,34 +356,22 @@ func (fp *flowProvider) performCoder(
 			}
 			return "code result successfully processed", nil
 		},
-		Summarizer: fp.GetSummarizeResultHandler(&taskID, &subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(taskID, subtaskID),
 	}
 	executor, err := fp.executor.GetCoderExecutor(cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to get coder executor: %w", err)
 	}
 
-	chainBlob, err := json.Marshal(chain)
+	msgChainID, chain, err := fp.restoreChain(
+		ctx, taskID, subtaskID, optAgentType, msgChainType, systemCoderTmpl, userCoderTmpl,
+	)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal msg chain: %w", err)
+		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	opt := provider.OptionsTypeCoder
-	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypeCoder,
-		Model:         fp.Model(opt),
-		ModelProvider: string(fp.Type()),
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(&taskID),
-		SubtaskID:     database.Int64ToNullInt64(&subtaskID),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to create msg chain: %w", err)
-	}
-
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeCoder)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, &taskID, &subtaskID, chain, executor)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task coder result: %w", err)
 	}
@@ -594,8 +383,8 @@ func (fp *flowProvider) performCoder(
 			agentCtx.CurrentAgentType,
 			question,
 			codeResult.Result,
-			&taskID,
-			&subtaskID,
+			taskID,
+			subtaskID,
 		)
 	}
 
@@ -604,21 +393,21 @@ func (fp *flowProvider) performCoder(
 
 func (fp *flowProvider) performInstaller(
 	ctx context.Context,
-	taskID, subtaskID int64,
-	systemInstallerTmpl, question string,
+	taskID, subtaskID *int64,
+	systemInstallerTmpl, userInstallerTmpl, question string,
 ) (string, error) {
-	var maintenanceResult tools.MaintenanceResult
-	chain := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemInstallerTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, question),
-	}
+	var (
+		maintenanceResult tools.MaintenanceResult
+		optAgentType      = provider.OptionsTypeInstaller
+		msgChainType      = database.MsgchainTypeInstaller
+	)
 
 	adviser, err := fp.GetAskAdviceHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get adviser handler: %w", err)
 	}
 
-	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
@@ -641,34 +430,22 @@ func (fp *flowProvider) performInstaller(
 			}
 			return "maintenance result successfully processed", nil
 		},
-		Summarizer: fp.GetSummarizeResultHandler(&taskID, &subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(taskID, subtaskID),
 	}
 	executor, err := fp.executor.GetInstallerExecutor(cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to get installer executor: %w", err)
 	}
 
-	chainBlob, err := json.Marshal(chain)
+	msgChainID, chain, err := fp.restoreChain(
+		ctx, taskID, subtaskID, optAgentType, msgChainType, systemInstallerTmpl, userInstallerTmpl,
+	)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal msg chain: %w", err)
+		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	opt := provider.OptionsTypeInstaller
-	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypeInstaller,
-		Model:         fp.Model(opt),
-		ModelProvider: string(fp.Type()),
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(&taskID),
-		SubtaskID:     database.Int64ToNullInt64(&subtaskID),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to create msg chain: %w", err)
-	}
-
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeInstaller)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, &taskID, &subtaskID, chain, executor)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task installer result: %w", err)
 	}
@@ -680,8 +457,8 @@ func (fp *flowProvider) performInstaller(
 			agentCtx.CurrentAgentType,
 			question,
 			maintenanceResult.Result,
-			&taskID,
-			&subtaskID,
+			taskID,
+			subtaskID,
 		)
 	}
 
@@ -691,13 +468,14 @@ func (fp *flowProvider) performInstaller(
 func (fp *flowProvider) performMemorist(
 	ctx context.Context,
 	taskID, subtaskID *int64,
-	systemMemoristTmpl, question string,
+	systemMemoristTmpl, userMemoristTmpl, question string,
 ) (string, error) {
-	var memoristResult tools.MemoristResult
-	chain := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemMemoristTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, question),
-	}
+	var (
+		memoristResult tools.MemoristResult
+		optAgentType   = provider.OptionsTypeSearcher
+		msgChainType   = database.MsgchainTypeMemorist
+	)
+
 	cfg := tools.MemoristExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
@@ -715,27 +493,15 @@ func (fp *flowProvider) performMemorist(
 		return "", fmt.Errorf("failed to get memorist executor: %w", err)
 	}
 
-	chainBlob, err := json.Marshal(chain)
+	msgChainID, chain, err := fp.restoreChain(
+		ctx, taskID, subtaskID, optAgentType, msgChainType, systemMemoristTmpl, userMemoristTmpl,
+	)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal msg chain: %w", err)
+		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	opt := provider.OptionsTypeSearcher
-	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypeMemorist,
-		Model:         fp.Model(opt),
-		ModelProvider: string(fp.Type()),
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(taskID),
-		SubtaskID:     database.Int64ToNullInt64(subtaskID),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to create msg chain: %w", err)
-	}
-
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeMemorist)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, taskID, subtaskID, chain, executor)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task memorist result: %w", err)
 	}
@@ -757,14 +523,14 @@ func (fp *flowProvider) performMemorist(
 
 func (fp *flowProvider) performPentester(
 	ctx context.Context,
-	taskID, subtaskID int64,
-	systemPentesterTmpl, question string,
+	taskID, subtaskID *int64,
+	systemPentesterTmpl, userPentesterTmpl, question string,
 ) (string, error) {
-	var hackResult tools.HackResult
-	chain := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemPentesterTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, question),
-	}
+	var (
+		hackResult   tools.HackResult
+		optAgentType = provider.OptionsTypePentester
+		msgChainType = database.MsgchainTypePentester
+	)
 
 	adviser, err := fp.GetAskAdviceHandler(ctx, taskID, subtaskID)
 	if err != nil {
@@ -781,7 +547,7 @@ func (fp *flowProvider) performPentester(
 		return "", fmt.Errorf("failed to get installer handler: %w", err)
 	}
 
-	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
@@ -806,34 +572,22 @@ func (fp *flowProvider) performPentester(
 			}
 			return "hack result successfully processed", nil
 		},
-		Summarizer: fp.GetSummarizeResultHandler(&taskID, &subtaskID),
+		Summarizer: fp.GetSummarizeResultHandler(taskID, subtaskID),
 	}
 	executor, err := fp.executor.GetPentesterExecutor(cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pentester executor: %w", err)
 	}
 
-	chainBlob, err := json.Marshal(chain)
+	msgChainID, chain, err := fp.restoreChain(
+		ctx, taskID, subtaskID, optAgentType, msgChainType, systemPentesterTmpl, userPentesterTmpl,
+	)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal msg chain: %w", err)
+		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	opt := provider.OptionsTypePentester
-	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypePentester,
-		Model:         fp.Model(opt),
-		ModelProvider: string(fp.Type()),
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(&taskID),
-		SubtaskID:     database.Int64ToNullInt64(&subtaskID),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to create msg chain: %w", err)
-	}
-
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypePentester)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, &taskID, &subtaskID, chain, executor)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task pentester result: %w", err)
 	}
@@ -845,8 +599,8 @@ func (fp *flowProvider) performPentester(
 			agentCtx.CurrentAgentType,
 			question,
 			hackResult.Result,
-			&taskID,
-			&subtaskID,
+			taskID,
+			subtaskID,
 		)
 	}
 
@@ -856,19 +610,15 @@ func (fp *flowProvider) performPentester(
 func (fp *flowProvider) performSearcher(
 	ctx context.Context,
 	taskID, subtaskID *int64,
-	systemSearcherTmpl, question string,
+	systemSearcherTmpl, userSearcherTmpl, question string,
 ) (string, error) {
-	var searchResult tools.SearchResult
-	chain := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemSearcherTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, question),
-	}
+	var (
+		searchResult tools.SearchResult
+		optAgentType = provider.OptionsTypeSearcher
+		msgChainType = database.MsgchainTypeSearcher
+	)
 
-	tID := int64(0)
-	if taskID != nil {
-		tID = *taskID
-	}
-	memorist, err := fp.GetMemoristHandler(ctx, tID, subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
@@ -891,27 +641,15 @@ func (fp *flowProvider) performSearcher(
 		return "", fmt.Errorf("failed to get searcher executor: %w", err)
 	}
 
-	chainBlob, err := json.Marshal(chain)
+	msgChainID, chain, err := fp.restoreChain(
+		ctx, taskID, subtaskID, optAgentType, msgChainType, systemSearcherTmpl, userSearcherTmpl,
+	)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal msg chain: %w", err)
+		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	opt := provider.OptionsTypeSearcher
-	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypeSearcher,
-		Model:         fp.Model(opt),
-		ModelProvider: string(fp.Type()),
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(taskID),
-		SubtaskID:     database.Int64ToNullInt64(subtaskID),
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to create msg chain: %w", err)
-	}
-
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeSearcher)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, taskID, subtaskID, chain, executor)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task searcher result: %w", err)
 	}
@@ -933,16 +671,16 @@ func (fp *flowProvider) performSearcher(
 
 func (fp *flowProvider) performEnricher(
 	ctx context.Context,
-	taskID, subtaskID int64,
-	systemEnricherTmpl, question string,
+	taskID, subtaskID *int64,
+	systemEnricherTmpl, userEnricherTmpl, question string,
 ) (string, error) {
-	var enricherResult tools.EnricherResult
-	chain := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemEnricherTmpl),
-		llms.TextParts(llms.ChatMessageTypeHuman, question),
-	}
+	var (
+		enricherResult tools.EnricherResult
+		optAgentType   = provider.OptionsTypeEnricher
+		msgChainType   = database.MsgchainTypeEnricher
+	)
 
-	memorist, err := fp.GetMemoristHandler(ctx, taskID, &subtaskID)
+	memorist, err := fp.GetMemoristHandler(ctx, taskID, subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
@@ -970,29 +708,17 @@ func (fp *flowProvider) performEnricher(
 		return "", fmt.Errorf("failed to get enricher executor: %w", err)
 	}
 
-	chainBlob, err := json.Marshal(chain)
+	msgChainID, chain, err := fp.restoreChain(
+		ctx, taskID, subtaskID, optAgentType, msgChainType, systemEnricherTmpl, userEnricherTmpl,
+	)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal msg chain: %w", err)
+		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	opt := provider.OptionsTypeEnricher
-	msgChain, err := fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          database.MsgchainTypeEnricher,
-		Model:         fp.Model(opt),
-		ModelProvider: string(fp.Type()),
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(&taskID),
-		SubtaskID:     database.Int64ToNullInt64(&subtaskID),
-	})
+	ctx = tools.PutAgentContext(ctx, msgChainType)
+	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
-		return "", fmt.Errorf("failed to create msg chain: %w", err)
-	}
-
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeEnricher)
-	chain, err = fp.performAgentChain(ctx, opt, msgChain.ID, &taskID, &subtaskID, chain, executor)
-	if err != nil {
-		return "", fmt.Errorf("failed to get task searcher result: %w", err)
+		return "", fmt.Errorf("failed to get task enricher result: %w", err)
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
@@ -1002,8 +728,8 @@ func (fp *flowProvider) performEnricher(
 			agentCtx.CurrentAgentType,
 			question,
 			enricherResult.Result,
-			&taskID,
-			&subtaskID,
+			taskID,
+			subtaskID,
 		)
 	}
 
@@ -1015,14 +741,16 @@ func (fp *flowProvider) performSimpleChain(
 	taskID, subtaskID *int64,
 	opt provider.ProviderOptionsType,
 	msgChainType database.MsgchainType,
-	prompt string,
+	systemTmpl, userTmpl string,
 ) (string, error) {
 	var (
 		resp *llms.ContentResponse
 		err  error
 	)
+
 	chain := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeHuman, prompt),
+		llms.TextParts(llms.ChatMessageTypeSystem, systemTmpl),
+		llms.TextParts(llms.ChatMessageTypeHuman, userTmpl),
 	}
 
 	for idx := 0; idx <= maxRetriesToCallSimpleChain; idx++ {
@@ -1030,7 +758,7 @@ func (fp *flowProvider) performSimpleChain(
 			return "", fmt.Errorf("failed to call simple chain: %w", err)
 		}
 
-		resp, err = fp.CallEx(ctx, opt, chain)
+		resp, err = fp.CallEx(ctx, opt, chain, nil)
 		if err == nil {
 			break
 		}
@@ -1040,15 +768,19 @@ func (fp *flowProvider) performSimpleChain(
 		return "", fmt.Errorf("no choices in response")
 	}
 
-	choice := resp.Choices[0]
-	chain = append(chain, llms.TextParts(llms.ChatMessageTypeAI, choice.Content))
+	var parts []string
+	var inputTokens, outputTokens int64
+	for _, choice := range resp.Choices {
+		parts = append(parts, choice.Content)
+		inputTokens, outputTokens = fp.GetUsage(choice.GenerationInfo)
+	}
+	chain = append(chain, llms.TextParts(llms.ChatMessageTypeAI, parts...))
 
 	chainBlob, err := json.Marshal(chain)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal summarizer msg chain: %w", err)
 	}
 
-	inputTokens, outputTokens := fp.GetUsage(choice.GenerationInfo)
 	_, err = fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
 		Type:          msgChainType,
 		Model:         fp.Model(opt),
@@ -1061,5 +793,5 @@ func (fp *flowProvider) performSimpleChain(
 		SubtaskID:     database.Int64ToNullInt64(subtaskID),
 	})
 
-	return choice.Content, nil
+	return strings.Join(parts, "\n\n"), nil
 }

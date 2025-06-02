@@ -9,19 +9,21 @@ import (
 type MsgchainType string
 
 const (
-	MsgchainTypePrimaryAgent MsgchainType = "primary_agent"
-	MsgchainTypeReporter     MsgchainType = "reporter"
-	MsgchainTypeGenerator    MsgchainType = "generator"
-	MsgchainTypeRefiner      MsgchainType = "refiner"
-	MsgchainTypeReflector    MsgchainType = "reflector"
-	MsgchainTypeEnricher     MsgchainType = "enricher"
-	MsgchainTypeAdviser      MsgchainType = "adviser"
-	MsgchainTypeCoder        MsgchainType = "coder"
-	MsgchainTypeMemorist     MsgchainType = "memorist"
-	MsgchainTypeSearcher     MsgchainType = "searcher"
-	MsgchainTypeInstaller    MsgchainType = "installer"
-	MsgchainTypePentester    MsgchainType = "pentester"
-	MsgchainTypeSummarizer   MsgchainType = "summarizer"
+	MsgchainTypePrimaryAgent  MsgchainType = "primary_agent"
+	MsgchainTypeReporter      MsgchainType = "reporter"
+	MsgchainTypeGenerator     MsgchainType = "generator"
+	MsgchainTypeRefiner       MsgchainType = "refiner"
+	MsgchainTypeReflector     MsgchainType = "reflector"
+	MsgchainTypeEnricher      MsgchainType = "enricher"
+	MsgchainTypeAdviser       MsgchainType = "adviser"
+	MsgchainTypeCoder         MsgchainType = "coder"
+	MsgchainTypeMemorist      MsgchainType = "memorist"
+	MsgchainTypeSearcher      MsgchainType = "searcher"
+	MsgchainTypeInstaller     MsgchainType = "installer"
+	MsgchainTypePentester     MsgchainType = "pentester"
+	MsgchainTypeSummarizer    MsgchainType = "summarizer"
+	MsgchainTypeToolCallFixer MsgchainType = "tool_call_fixer"
+	MsgchainTypeAssistant     MsgchainType = "assistant"
 )
 
 func (e *MsgchainType) Scan(src interface{}) error {
@@ -49,7 +51,8 @@ func (ml MsgchainType) Valid() error {
 		MsgchainTypeAdviser, MsgchainTypeCoder,
 		MsgchainTypeMemorist, MsgchainTypeSearcher,
 		MsgchainTypeInstaller, MsgchainTypePentester,
-		MsgchainTypeSummarizer:
+		MsgchainTypeSummarizer, MsgchainTypeToolCallFixer,
+		MsgchainTypeAssistant:
 		return nil
 	default:
 		return fmt.Errorf("invalid MsgchainType: %s", ml)

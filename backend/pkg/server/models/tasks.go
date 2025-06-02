@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -20,11 +21,32 @@ func (s TaskStatus) String() string {
 	return string(s)
 }
 
+// Valid is function to control input/output data
+func (s TaskStatus) Valid() error {
+	switch s {
+	case TaskStatusCreated,
+		TaskStatusRunning,
+		TaskStatusWaiting,
+		TaskStatusFinished,
+		TaskStatusFailed:
+		return nil
+	default:
+		return fmt.Errorf("invalid TaskStatus: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s TaskStatus) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 // Task is model to contain task information
 // nolint:lll
 type Task struct {
 	ID        uint64     `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
-	Status    TaskStatus `form:"status" json:"status" validate:"oneof=created running waiting finished failed,required" gorm:"type:TASK_STATUS;NOT NULL;default:'created'"`
+	Status    TaskStatus `form:"status" json:"status" validate:"valid,required" gorm:"type:TASK_STATUS;NOT NULL;default:'created'"`
 	Title     string     `form:"title" json:"title" validate:"required" gorm:"type:TEXT;NOT NULL;default:'untitled'"`
 	Input     string     `form:"input" json:"input" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	Result    string     `form:"result" json:"result" validate:"omitempty" gorm:"type:TEXT;NOT NULL;default:''"`

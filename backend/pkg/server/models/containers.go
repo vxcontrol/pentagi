@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -20,6 +21,27 @@ func (s ContainerStatus) String() string {
 	return string(s)
 }
 
+// Valid is function to control input/output data
+func (s ContainerStatus) Valid() error {
+	switch s {
+	case ContainerStatusStarting,
+		ContainerStatusRunning,
+		ContainerStatusStopped,
+		ContainerStatusDeleted,
+		ContainerStatusFailed:
+		return nil
+	default:
+		return fmt.Errorf("invalid ContainerStatus: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s ContainerStatus) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 type ContainerType string
 
 const (
@@ -31,14 +53,31 @@ func (t ContainerType) String() string {
 	return string(t)
 }
 
+// Valid is function to control input/output data
+func (t ContainerType) Valid() error {
+	switch t {
+	case ContainerTypePrimary, ContainerTypeSecondary:
+		return nil
+	default:
+		return fmt.Errorf("invalid ContainerType: %s", t)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (t ContainerType) Validate(db *gorm.DB) {
+	if err := t.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
 // Container is model to contain container information
 // nolint:lll
 type Container struct {
 	ID        uint64          `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
-	Type      ContainerType   `form:"type" json:"type" validate:"oneof=primary secondary,required" gorm:"type:CONTAINER_TYPE;NOT NULL;default:'primary'"`
+	Type      ContainerType   `form:"type" json:"type" validate:"valid,required" gorm:"type:CONTAINER_TYPE;NOT NULL;default:'primary'"`
 	Name      string          `form:"name" json:"name" validate:"required" gorm:"type:TEXT;NOT NULL;default:MD5(RANDOM()::text)"`
 	Image     string          `form:"image" json:"image" validate:"required" gorm:"type:TEXT;NOT NULL"`
-	Status    ContainerStatus `form:"status" json:"status" validate:"oneof=starting running stopped deleted failed,required" gorm:"type:CONTAINER_STATUS;NOT NULL;default:'starting'"`
+	Status    ContainerStatus `form:"status" json:"status" validate:"valid,required" gorm:"type:CONTAINER_STATUS;NOT NULL;default:'starting'"`
 	LocalID   string          `form:"local_id" json:"local_id" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	LocalDir  string          `form:"local_dir" json:"local_dir" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	FlowID    uint64          `form:"flow_id" json:"flow_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`

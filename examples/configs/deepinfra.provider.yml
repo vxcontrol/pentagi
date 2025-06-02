@@ -4,6 +4,9 @@ simple:
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.12
+    output: 0.3
 
 simple_json:
   model: "google/gemma-3-27b-it"
@@ -12,41 +15,69 @@ simple_json:
   n: 1
   max_tokens: 4000
   json: true
+  price:
+    input: 0.1
+    output: 0.2
 
 agent:
-  model: "anthropic/claude-3-7-sonnet-latest"
-  temperature: 0.95
-  top_p: 1.0
+  model: "deepseek-ai/DeepSeek-R1"
+  temperature: 0.7
+  top_p: 0.9
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.5
+    output: 2.18
+
+assistant:
+  model: "deepseek-ai/DeepSeek-R1"
+  temperature: 0.6
+  top_p: 0.9
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.5
+    output: 2.18
 
 generator:
-  model: "anthropic/claude-3-7-sonnet-latest"
-  temperature: 0.7
+  model: "deepseek-ai/DeepSeek-R1"
+  temperature: 0.6
   top_p: 0.95
   n: 1
-  max_tokens: 8000
+  max_tokens: 12000
+  price:
+    input: 0.5
+    output: 2.18
 
 refiner:
-  model: "anthropic/claude-3-7-sonnet-latest"
+  model: "deepseek-ai/DeepSeek-R1"
   temperature: 0.55
-  top_p: 0.95
+  top_p: 0.90
   n: 1
   max_tokens: 8000
+  price:
+    input: 0.5
+    output: 2.18
 
 adviser:
-  model: "anthropic/claude-3-7-sonnet-latest"
+  model: "deepseek-ai/DeepSeek-R1"
   temperature: 0.9
   top_p: 1.0
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.5
+    output: 2.18
 
 reflector:
-  model: "google/gemma-3-27b-it"
+  model: "Qwen/Qwen3-30B-A3B"
   temperature: 0.85
   top_p: 1.0
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.1
+    output: 0.3
 
 searcher:
   model: "nvidia/Llama-3.1-Nemotron-70B-Instruct"
@@ -54,6 +85,9 @@ searcher:
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.12
+    output: 0.3
 
 enricher:
   model: "nvidia/Llama-3.1-Nemotron-70B-Instruct"
@@ -61,24 +95,36 @@ enricher:
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.12
+    output: 0.3
 
 coder:
-  model: "anthropic/claude-3-7-sonnet-latest"
-  temperature: 0.9
-  top_p: 1.0
+  model: "deepseek-ai/DeepSeek-R1"
+  temperature: 0.3
+  top_p: 0.9
   n: 1
-  max_tokens: 6000
+  max_tokens: 8000
+  price:
+    input: 0.5
+    output: 2.18
 
 installer:
   model: "nvidia/Llama-3.1-Nemotron-70B-Instruct"
-  temperature: 0.85
-  top_p: 1.0
-  n: 1
-  max_tokens: 4000
-
-pentester:
-  model: "anthropic/claude-3-7-sonnet-latest"
   temperature: 0.7
   top_p: 0.95
   n: 1
   max_tokens: 4000
+  price:
+    input: 0.12
+    output: 0.3
+
+pentester:
+  model: "deepseek-ai/DeepSeek-R1"
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.5
+    output: 2.18

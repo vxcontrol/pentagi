@@ -48,6 +48,7 @@ func NewSubtaskService(db *gorm.DB) *SubtaskService {
 // @Summary Retrieve flow subtasks list
 // @Tags Subtasks
 // @Produce json
+// @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=subtasks} "flow subtasks list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -132,6 +133,8 @@ func (s *SubtaskService) GetFlowSubtasks(c *gin.Context) {
 // @Summary Retrieve flow task subtasks list
 // @Tags Subtasks
 // @Produce json
+// @Param flowID path int true "flow id" minimum(0)
+// @Param taskID path int true "task id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=subtasks} "flow task subtasks list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"

@@ -101,6 +101,35 @@ func ConvertSubtask(subtask database.Subtask) *model.Subtask {
 	}
 }
 
+func ConvertFlowAssistant(flow database.Flow, containers []database.Container, assistant database.Assistant) *model.FlowAssistant {
+	return &model.FlowAssistant{
+		Flow:      ConvertFlow(flow, containers),
+		Assistant: ConvertAssistant(assistant),
+	}
+}
+
+func ConvertAssistants(assistants []database.Assistant) []*model.Assistant {
+	gassistants := make([]*model.Assistant, 0, len(assistants))
+	for _, assistant := range assistants {
+		gassistants = append(gassistants, ConvertAssistant(assistant))
+	}
+
+	return gassistants
+}
+
+func ConvertAssistant(assistant database.Assistant) *model.Assistant {
+	return &model.Assistant{
+		ID:        assistant.ID,
+		Title:     assistant.Title,
+		Status:    model.StatusType(assistant.Status),
+		Provider:  assistant.ModelProvider,
+		FlowID:    assistant.FlowID,
+		UseAgents: assistant.UseAgents,
+		CreatedAt: assistant.CreatedAt.Time,
+		UpdatedAt: assistant.UpdatedAt.Time,
+	}
+}
+
 func ConvertScreenshots(screenshots []database.Screenshot) []*model.Screenshot {
 	gscreenshots := make([]*model.Screenshot, 0, len(screenshots))
 	for _, screenshot := range screenshots {
@@ -154,6 +183,7 @@ func ConvertMessageLog(log database.Msglog) *model.MessageLog {
 		ID:           log.ID,
 		Type:         model.MessageLogType(log.Type),
 		Message:      log.Message,
+		Thinking:     database.NullStringToPtrString(log.Thinking),
 		Result:       log.Result,
 		ResultFormat: model.ResultFormat(log.ResultFormat),
 		FlowID:       log.FlowID,
@@ -244,5 +274,29 @@ func ConvertVectorStoreLog(log database.Vecstorelog) *model.VectorStoreLog {
 		TaskID:    database.NullInt64ToInt64(log.TaskID),
 		SubtaskID: database.NullInt64ToInt64(log.SubtaskID),
 		CreatedAt: log.CreatedAt.Time,
+	}
+}
+
+func ConvertAssistantLogs(logs []database.Assistantlog) []*model.AssistantLog {
+	glogs := make([]*model.AssistantLog, 0, len(logs))
+	for _, log := range logs {
+		glogs = append(glogs, ConvertAssistantLog(log, false))
+	}
+
+	return glogs
+}
+
+func ConvertAssistantLog(log database.Assistantlog, appendPart bool) *model.AssistantLog {
+	return &model.AssistantLog{
+		ID:           log.ID,
+		Type:         model.MessageLogType(log.Type),
+		Message:      log.Message,
+		Thinking:     database.NullStringToPtrString(log.Thinking),
+		Result:       log.Result,
+		ResultFormat: model.ResultFormat(log.ResultFormat),
+		AppendPart:   appendPart,
+		FlowID:       log.FlowID,
+		AssistantID:  log.AssistantID,
+		CreatedAt:    log.CreatedAt.Time,
 	}
 }

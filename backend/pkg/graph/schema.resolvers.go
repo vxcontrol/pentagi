@@ -26,9 +26,9 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 	}
 
 	r.Logger.WithFields(logrus.Fields{
-		"uid":   uid,
-		"model": modelProvider,
-		"input": input,
+		"uid":      uid,
+		"provider": modelProvider,
+		"input":    input,
 	}).Debug("create flow")
 
 	if modelProvider == "" {
@@ -49,23 +49,18 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 		return nil, err
 	}
 
-	flow, err := r.DB.GetUserFlow(ctx, database.GetUserFlowParams{
-		ID:     fw.GetFlowID(),
-		UserID: uid,
-	})
+	flow, err := r.DB.GetFlow(ctx, fw.GetFlowID())
 	if err != nil {
 		return nil, err
 	}
 
-	containers, err := r.DB.GetUserFlowContainers(ctx, database.GetUserFlowContainersParams{
-		FlowID: flow.ID,
-		UserID: uid,
-	})
-	if err != nil {
-		return nil, err
+	var containers []database.Container
+	if _, _, err = validatePermission(ctx, "containers.view"); err == nil {
+		containers, err = r.DB.GetFlowContainers(ctx, fw.GetFlowID())
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	r.Subscriptions.NewFlowPublisher(flow.UserID, flow.ID).FlowCreated(ctx, flow, containers)
 
 	return converter.ConvertFlow(flow, containers), nil
 }
@@ -94,47 +89,27 @@ func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input
 	return model.ResultTypeSuccess, nil
 }
 
-// FinishFlow is the resolver for the finishFlow field.
-func (r *mutationResolver) FinishFlow(ctx context.Context, flowID int64) (*model.Flow, error) {
+// StopFlow is the resolver for the stopFlow field.
+func (r *mutationResolver) StopFlow(ctx context.Context, flowID int64) (model.ResultType, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "flows.edit", flowID, r.DB)
 	if err != nil {
-		return nil, err
+		return model.ResultTypeError, err
 	}
 
 	r.Logger.WithFields(logrus.Fields{
 		"uid":  uid,
 		"flow": flowID,
-	}).Debug("finish flow")
+	}).Debug("stop flow")
 
-	fw, err := r.Controller.GetFlow(ctx, flowID)
-	if err != nil {
-		return nil, err
+	if err := r.Controller.StopFlow(ctx, flowID); err != nil {
+		return model.ResultTypeError, err
 	}
 
-	if err := fw.Finish(ctx); err != nil {
-		return nil, err
-	}
-
-	flow, err := r.DB.GetFlow(ctx, fw.GetFlowID())
-	if err != nil {
-		return nil, err
-	}
-
-	containers, err := r.DB.GetUserFlowContainers(ctx, database.GetUserFlowContainersParams{
-		FlowID: flow.ID,
-		UserID: uid,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	r.Subscriptions.NewFlowPublisher(flow.UserID, flow.ID).FlowUpdated(ctx, flow, containers)
-
-	return converter.ConvertFlow(flow, containers), nil
+	return model.ResultTypeSuccess, nil
 }
 
-// DeleteFlow is the resolver for the deleteFlow field.
-func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.ResultType, error) {
+// FinishFlow is the resolver for the finishFlow field.
+func (r *mutationResolver) FinishFlow(ctx context.Context, flowID int64) (model.ResultType, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "flows.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -144,6 +119,26 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		"uid":  uid,
 		"flow": flowID,
 	}).Debug("finish flow")
+
+	err = r.Controller.FinishFlow(ctx, flowID)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	return model.ResultTypeSuccess, nil
+}
+
+// DeleteFlow is the resolver for the deleteFlow field.
+func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.ResultType, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flows.delete", flowID, r.DB)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("delete flow")
 
 	if fw, err := r.Controller.GetFlow(ctx, flowID); err == nil {
 		if err := fw.Finish(ctx); err != nil {
@@ -158,10 +153,7 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		return model.ResultTypeError, err
 	}
 
-	containers, err := r.DB.GetUserFlowContainers(ctx, database.GetUserFlowContainersParams{
-		FlowID: flow.ID,
-		UserID: uid,
-	})
+	containers, err := r.DB.GetFlowContainers(ctx, flow.ID)
 	if err != nil {
 		return model.ResultTypeError, err
 	}
@@ -173,6 +165,177 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 	publisher := r.Subscriptions.NewFlowPublisher(flow.UserID, flow.ID)
 	publisher.FlowUpdated(ctx, flow, containers)
 	publisher.FlowDeleted(ctx, flow, containers)
+
+	return model.ResultTypeSuccess, nil
+}
+
+// CreateAssistant is the resolver for the createAssistant field.
+func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool) (*model.FlowAssistant, error) {
+	var (
+		err error
+		uid int64
+	)
+
+	if flowID == 0 {
+		uid, _, err = validatePermission(ctx, "assistants.create")
+		if err != nil {
+			return nil, err
+		}
+		uid, _, err = validatePermission(ctx, "flows.create")
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		uid, err = validatePermissionWithFlowID(ctx, "assistants.create", flowID, r.DB)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":      uid,
+		"flow":     flowID,
+		"provider": modelProvider,
+		"input":    input,
+	}).Debug("create assistant")
+
+	if modelProvider == "" {
+		return nil, fmt.Errorf("model provider is required")
+	}
+
+	if input == "" {
+		return nil, fmt.Errorf("user input is required")
+	}
+
+	prvtype := provider.ProviderType(modelProvider)
+	if _, err := r.ProvidersCtrl.Get(prvtype); err != nil {
+		return nil, err
+	}
+
+	aw, err := r.Controller.CreateAssistant(ctx, uid, flowID, input, useAgents, prvtype, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	assistant, err := r.DB.GetAssistant(ctx, aw.GetAssistantID())
+	if err != nil {
+		return nil, err
+	}
+
+	flow, err := r.DB.GetFlow(ctx, assistant.FlowID)
+	if err != nil {
+		return nil, err
+	}
+
+	containers, err := r.DB.GetFlowContainers(ctx, assistant.FlowID)
+	if err != nil {
+		return nil, err
+	}
+
+	return converter.ConvertFlowAssistant(flow, containers, assistant), nil
+}
+
+// CallAssistant is the resolver for the callAssistant field.
+func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool) (model.ResultType, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistants.edit", flowID, r.DB)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":       uid,
+		"flow":      flowID,
+		"assistant": assistantID,
+	}).Debug("call assistant")
+
+	fw, err := r.Controller.GetFlow(ctx, flowID)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	aw, err := fw.GetAssistant(ctx, assistantID)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	if err := aw.PutInput(ctx, input, useAgents); err != nil {
+		return model.ResultTypeError, err
+	}
+
+	return model.ResultTypeSuccess, nil
+}
+
+// StopAssistant is the resolver for the stopAssistant field.
+func (r *mutationResolver) StopAssistant(ctx context.Context, flowID int64, assistantID int64) (*model.Assistant, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistants.edit", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":       uid,
+		"flow":      flowID,
+		"assistant": assistantID,
+	}).Debug("stop assistant")
+
+	fw, err := r.Controller.GetFlow(ctx, flowID)
+	if err != nil {
+		return nil, err
+	}
+
+	aw, err := fw.GetAssistant(ctx, assistantID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := aw.Stop(ctx); err != nil {
+		return nil, err
+	}
+
+	assistant, err := r.DB.GetFlowAssistant(ctx, database.GetFlowAssistantParams{
+		ID:     assistantID,
+		FlowID: flowID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	r.Subscriptions.NewFlowPublisher(fw.GetUserID(), flowID).AssistantUpdated(ctx, assistant)
+
+	return converter.ConvertAssistant(assistant), nil
+}
+
+// DeleteAssistant is the resolver for the deleteAssistant field.
+func (r *mutationResolver) DeleteAssistant(ctx context.Context, flowID int64, assistantID int64) (model.ResultType, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistants.delete", flowID, r.DB)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":       uid,
+		"flow":      flowID,
+		"assistant": assistantID,
+	}).Debug("delete assistant")
+
+	fw, err := r.Controller.GetFlow(ctx, flowID)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	assistant, err := r.DB.GetFlowAssistant(ctx, database.GetFlowAssistantParams{
+		ID:     assistantID,
+		FlowID: flowID,
+	})
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	if err := fw.DeleteAssistant(ctx, assistantID); err != nil {
+		return model.ResultTypeError, err
+	}
+
+	r.Subscriptions.NewFlowPublisher(fw.GetUserID(), flowID).AssistantDeleted(ctx, assistant)
 
 	return model.ResultTypeSuccess, nil
 }
@@ -291,7 +454,7 @@ func (r *queryResolver) Flows(ctx context.Context) ([]*model.Flow, error) {
 
 	r.Logger.WithFields(logrus.Fields{
 		"uid": uid,
-	}).Debug("get term logs")
+	}).Debug("get flows")
 
 	var (
 		flows      []database.Flow
@@ -307,12 +470,14 @@ func (r *queryResolver) Flows(ctx context.Context) ([]*model.Flow, error) {
 		return nil, err
 	}
 
-	_, admin, err = validatePermission(ctx, "containers.view")
-	if err == nil {
+	if _, admin, err = validatePermission(ctx, "containers.view"); err == nil {
 		if admin {
 			containers, err = r.DB.GetContainers(ctx)
 		} else {
 			containers, err = r.DB.GetUserContainers(ctx, uid)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -321,13 +486,14 @@ func (r *queryResolver) Flows(ctx context.Context) ([]*model.Flow, error) {
 
 // Flow is the resolver for the flow field.
 func (r *queryResolver) Flow(ctx context.Context, flowID int64) (*model.Flow, error) {
-	uid, admin, err := validatePermission(ctx, "flows.view")
+	uid, err := validatePermissionWithFlowID(ctx, "flows.view", flowID, r.DB)
 	if err != nil {
 		return nil, err
 	}
 
 	r.Logger.WithFields(logrus.Fields{
-		"uid": uid,
+		"uid":  uid,
+		"flow": flowID,
 	}).Debug("get flow")
 
 	var (
@@ -335,27 +501,15 @@ func (r *queryResolver) Flow(ctx context.Context, flowID int64) (*model.Flow, er
 		containers []database.Container
 	)
 
-	if admin {
-		flow, err = r.DB.GetFlow(ctx, flowID)
-	} else {
-		flow, err = r.DB.GetUserFlow(ctx, database.GetUserFlowParams{
-			ID:     flowID,
-			UserID: uid,
-		})
-	}
+	flow, err = r.DB.GetFlow(ctx, flowID)
 	if err != nil {
 		return nil, err
 	}
 
-	_, admin, err = validatePermission(ctx, "containers.view")
-	if err == nil {
-		if admin {
-			containers, err = r.DB.GetFlowContainers(ctx, flowID)
-		} else {
-			containers, err = r.DB.GetUserFlowContainers(ctx, database.GetUserFlowContainersParams{
-				FlowID: flow.ID,
-				UserID: uid,
-			})
+	if _, _, err = validatePermission(ctx, "containers.view"); err == nil {
+		containers, err = r.DB.GetFlowContainers(ctx, flowID)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -380,15 +534,10 @@ func (r *queryResolver) Tasks(ctx context.Context, flowID int64) ([]*model.Task,
 	}
 
 	var subtasks []database.Subtask
-	_, admin, err := validatePermission(ctx, "subtasks.view")
-	if err == nil {
-		if admin {
-			subtasks, err = r.DB.GetFlowSubtasks(ctx, flowID)
-		} else {
-			subtasks, err = r.DB.GetUserFlowSubtasks(ctx, database.GetUserFlowSubtasksParams{
-				FlowID: flowID,
-				UserID: uid,
-			})
+	if _, _, err = validatePermission(ctx, "subtasks.view"); err == nil {
+		subtasks, err = r.DB.GetFlowSubtasks(ctx, flowID)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -413,6 +562,26 @@ func (r *queryResolver) Screenshots(ctx context.Context, flowID int64) ([]*model
 	}
 
 	return converter.ConvertScreenshots(screenshots), nil
+}
+
+// Assistants is the resolver for the assistants field.
+func (r *queryResolver) Assistants(ctx context.Context, flowID int64) ([]*model.Assistant, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistants.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("get assistants")
+
+	assistants, err := r.DB.GetFlowAssistants(ctx, flowID)
+	if err != nil {
+		return nil, err
+	}
+
+	return converter.ConvertAssistants(assistants), nil
 }
 
 // TerminalLogs is the resolver for the terminalLogs field.
@@ -515,6 +684,47 @@ func (r *queryResolver) VectorStoreLogs(ctx context.Context, flowID int64) ([]*m
 	return converter.ConvertVectorStoreLogs(logs), nil
 }
 
+// AssistantLogs is the resolver for the assistantLogs field.
+func (r *queryResolver) AssistantLogs(ctx context.Context, flowID int64, assistantID int64) ([]*model.AssistantLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistantlogs.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":       uid,
+		"flow":      flowID,
+		"assistant": assistantID,
+	}).Debug("get assistant logs")
+
+	logs, err := r.DB.GetFlowAssistantLogs(ctx, database.GetFlowAssistantLogsParams{
+		FlowID:      flowID,
+		AssistantID: assistantID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return converter.ConvertAssistantLogs(logs), nil
+}
+
+// Settings is the resolver for the settings field.
+func (r *queryResolver) Settings(ctx context.Context) (*model.Settings, error) {
+	_, _, err := validatePermission(ctx, "settings.view")
+	if err != nil {
+		return nil, err
+	}
+
+	settings := &model.Settings{
+		Debug:              r.Config.Debug,
+		AskUser:            r.Config.AskUser,
+		DockerInside:       r.Config.DockerInside,
+		AssistantUseAgents: r.Config.AssistantUseAgents,
+	}
+
+	return settings, nil
+}
+
 // FlowCreated is the resolver for the flowCreated field.
 func (r *subscriptionResolver) FlowCreated(ctx context.Context) (<-chan *model.Flow, error) {
 	uid, admin, err := validatePermission(ctx, "flows.subscribe")
@@ -546,13 +756,18 @@ func (r *subscriptionResolver) FlowDeleted(ctx context.Context) (<-chan *model.F
 }
 
 // FlowUpdated is the resolver for the flowUpdated field.
-func (r *subscriptionResolver) FlowUpdated(ctx context.Context, flowID int64) (<-chan *model.Flow, error) {
-	uid, err := validatePermissionWithFlowID(ctx, "flows.subscribe", flowID, r.DB)
+func (r *subscriptionResolver) FlowUpdated(ctx context.Context) (<-chan *model.Flow, error) {
+	uid, admin, err := validatePermission(ctx, "flows.subscribe")
 	if err != nil {
 		return nil, err
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, flowID).FlowUpdated(ctx)
+	subscriber := r.Subscriptions.NewFlowSubscriber(uid, 0)
+	if admin {
+		return subscriber.FlowUpdatedAdmin(ctx)
+	}
+
+	return subscriber.FlowUpdated(ctx)
 }
 
 // TaskCreated is the resolver for the taskCreated field.
@@ -573,6 +788,36 @@ func (r *subscriptionResolver) TaskUpdated(ctx context.Context, flowID int64) (<
 	}
 
 	return r.Subscriptions.NewFlowSubscriber(uid, flowID).TaskUpdated(ctx)
+}
+
+// AssistantCreated is the resolver for the assistantCreated field.
+func (r *subscriptionResolver) AssistantCreated(ctx context.Context, flowID int64) (<-chan *model.Assistant, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistants.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).AssistantCreated(ctx)
+}
+
+// AssistantUpdated is the resolver for the assistantUpdated field.
+func (r *subscriptionResolver) AssistantUpdated(ctx context.Context, flowID int64) (<-chan *model.Assistant, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistants.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).AssistantUpdated(ctx)
+}
+
+// AssistantDeleted is the resolver for the assistantDeleted field.
+func (r *subscriptionResolver) AssistantDeleted(ctx context.Context, flowID int64) (<-chan *model.Assistant, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistants.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).AssistantDeleted(ctx)
 }
 
 // ScreenshotAdded is the resolver for the screenshotAdded field.
@@ -643,6 +888,26 @@ func (r *subscriptionResolver) VectorStoreLogAdded(ctx context.Context, flowID i
 	}
 
 	return r.Subscriptions.NewFlowSubscriber(uid, flowID).VectorStoreLogAdded(ctx)
+}
+
+// AssistantLogAdded is the resolver for the assistantLogAdded field.
+func (r *subscriptionResolver) AssistantLogAdded(ctx context.Context, flowID int64) (<-chan *model.AssistantLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistantlogs.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).AssistantLogAdded(ctx)
+}
+
+// AssistantLogUpdated is the resolver for the assistantLogUpdated field.
+func (r *subscriptionResolver) AssistantLogUpdated(ctx context.Context, flowID int64) (<-chan *model.AssistantLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistantlogs.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).AssistantLogUpdated(ctx)
 }
 
 // Mutation returns MutationResolver implementation.

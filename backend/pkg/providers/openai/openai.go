@@ -8,21 +8,23 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/provider"
 
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/openai"
+	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 const (
-	OpenAIAgentModel     = "gpt-4o"
-	OpenAISimpleModel    = "gpt-4o-mini"
-	OpenAIAviserModel    = "o1-preview"
-	OpenAIGeneratorModel = "gpt-4"
-	OpenAIRefinerModel   = "gpt-4o"
-	OpenAISearcherModel  = "gpt-4o"
-	OpenAIEnricherModel  = "gpt-4"
-	OpenAICoderModel     = "gpt-4o"
-	OpenAIInstallerModel = "gpt-4o"
-	OpenAIPentesterModel = "gpt-4o"
+	OpenAIAgentModel     = "o4-mini"
+	OpenAIAssistantModel = "o4-mini"
+	OpenAISimpleModel    = "gpt-4.1-mini"
+	OpenAIAviserModel    = "o4-mini"
+	OpenAIGeneratorModel = "o3"
+	OpenAIRefinerModel   = "gpt-4.1"
+	OpenAISearcherModel  = "gpt-4.1-mini"
+	OpenAIEnricherModel  = "gpt-4.1-mini"
+	OpenAICoderModel     = "gpt-4.1"
+	OpenAIInstallerModel = "gpt-4.1"
+	OpenAIPentesterModel = "o4-mini"
 )
 
 type openaiProvider struct {
@@ -58,26 +60,49 @@ func New(cfg *config.Config) (provider.Provider, error) {
 		llms.WithTemperature(0.5),
 		llms.WithTopP(0.5),
 		llms.WithN(1),
+		llms.WithMaxTokens(3000),
+	}
+
+	agent := []llms.CallOption{
+		llms.WithModel(OpenAIAgentModel),
+		llms.WithN(1),
+		llms.WithMaxTokens(4000),
+		llms.WithReasoning(llms.ReasoningLow, 0),
+	}
+
+	assistant := []llms.CallOption{
+		llms.WithModel(OpenAIAssistantModel),
+		llms.WithN(1),
+		llms.WithMaxTokens(6000),
+		llms.WithReasoning(llms.ReasoningMedium, 0),
 	}
 
 	creative := []llms.CallOption{
-		llms.WithModel(OpenAIAgentModel),
 		llms.WithTemperature(0.7),
 		llms.WithTopP(0.8),
 		llms.WithN(1),
+		llms.WithMaxTokens(4000),
 	}
 
 	determine := []llms.CallOption{
-		llms.WithModel(OpenAIAviserModel),
 		llms.WithTemperature(0.2),
 		llms.WithTopP(0.1),
 		llms.WithN(1),
+		llms.WithMaxTokens(6000),
 	}
 
 	adviser := []llms.CallOption{
 		llms.WithModel(OpenAIAviserModel),
-		llms.WithTemperature(1.0),
 		llms.WithN(1),
+		llms.WithMaxTokens(8192),
+		llms.WithReasoning(llms.ReasoningMedium, 0),
+	}
+
+	pentester := []llms.CallOption{
+		llms.WithModel(OpenAIPentesterModel),
+		llms.WithN(1),
+		llms.WithMaxTokens(4000),
+		llms.WithReasoning(llms.ReasoningLow, 0),
 	}
 
 	return &openaiProvider{
@@ -85,16 +110,17 @@ func New(cfg *config.Config) (provider.Provider, error) {
 		options: map[provider.ProviderOptionsType][]llms.CallOption{
 			provider.OptionsTypeSimple:     simple,
 			provider.OptionsTypeSimpleJSON: append(simple, llms.WithJSONMode()),
-			provider.OptionsTypeAgent:      append(creative, llms.WithModel(OpenAIAgentModel)),
-			provider.OptionsTypeGenerator:  append(creative, llms.WithModel(OpenAIGeneratorModel)),
+			provider.OptionsTypeAgent:      agent,
+			provider.OptionsTypeAssistant:  assistant,
+			provider.OptionsTypeGenerator:  append(adviser, llms.WithModel(OpenAIGeneratorModel)),
 			provider.OptionsTypeRefiner:    append(creative, llms.WithModel(OpenAIRefinerModel)),
-			provider.OptionsTypeAdviser:    adviser,
-			provider.OptionsTypeReflector:  adviser,
+			provider.OptionsTypeAdviser:    append(adviser, llms.WithMaxTokens(4000)),
+			provider.OptionsTypeReflector:  append(adviser, llms.WithMaxTokens(3000)),
 			provider.OptionsTypeSearcher:   append(creative, llms.WithModel(OpenAISearcherModel)),
 			provider.OptionsTypeEnricher:   append(creative, llms.WithModel(OpenAIEnricherModel)),
 			provider.OptionsTypeCoder:      append(determine, llms.WithModel(OpenAICoderModel)),
 			provider.OptionsTypeInstaller:  append(determine, llms.WithModel(OpenAIInstallerModel)),
-			provider.OptionsTypePentester:  append(creative, llms.WithModel(OpenAIPentesterModel)),
+			provider.OptionsTypePentester:  append(pentester),
 		},
 	}, nil
 }
@@ -134,13 +160,19 @@ func (p *openaiProvider) CallEx(
 	ctx context.Context,
 	opt provider.ProviderOptionsType,
 	chain []llms.MessageContent,
+	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
 	options, ok := p.options[opt]
 	if !ok {
 		return nil, provider.ErrInvalidProviderOptionsType
 	}
 
-	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+	return provider.WrapGenerateContent(
+		ctx, p, opt, p.llm.GenerateContent, chain,
+		append([]llms.CallOption{
+			llms.WithStreamingFunc(streamCb),
+		}, options...)...,
+	)
 }
 
 func (p *openaiProvider) CallWithTools(
@@ -148,14 +180,20 @@ func (p *openaiProvider) CallWithTools(
 	opt provider.ProviderOptionsType,
 	chain []llms.MessageContent,
 	tools []llms.Tool,
+	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
 	options, ok := p.options[opt]
 	if !ok {
 		return nil, provider.ErrInvalidProviderOptionsType
 	}
 
-	options = append(options, llms.WithTools(tools))
-	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+	return provider.WrapGenerateContent(
+		ctx, p, opt, p.llm.GenerateContent, chain,
+		append([]llms.CallOption{
+			llms.WithTools(tools),
+			llms.WithStreamingFunc(streamCb),
+		}, options...)...,
+	)
 }
 
 func (p *openaiProvider) GetUsage(info map[string]any) (int64, int64) {

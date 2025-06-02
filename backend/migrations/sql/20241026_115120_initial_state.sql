@@ -126,6 +126,7 @@ CREATE TABLE flows (
 CREATE INDEX flows_status_idx ON flows(status);
 CREATE INDEX flows_title_idx ON flows(title);
 CREATE INDEX flows_language_idx ON flows(language);
+CREATE INDEX flows_model_provider_idx ON flows(model_provider);
 CREATE INDEX flows_user_id_idx ON flows(user_id);
 
 CREATE TYPE CONTAINER_TYPE AS ENUM ('primary','secondary');
@@ -277,7 +278,6 @@ CREATE TABLE msglogs (
 
 CREATE INDEX msglogs_type_idx ON msglogs(type);
 CREATE INDEX msglogs_message_idx ON msglogs(message);
--- CREATE INDEX msglogs_result_idx ON msglogs(result);
 CREATE INDEX msglogs_flow_id_idx ON msglogs(flow_id);
 CREATE INDEX msglogs_task_id_idx ON msglogs(task_id);
 CREATE INDEX msglogs_subtask_id_idx ON msglogs(subtask_id);

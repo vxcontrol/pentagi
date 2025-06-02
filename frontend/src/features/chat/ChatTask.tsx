@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useState, useEffect, useMemo } from 'react';
 
 import Markdown from '@/components/Markdown';
 import type { TaskFragmentFragment } from '@/graphql/types';
@@ -8,11 +8,47 @@ import ChatTaskStatusIcon from './ChatTaskStatusIcon';
 
 interface ChatTaskProps {
     task: TaskFragmentFragment;
+    searchValue?: string;
 }
 
-const ChatTask = ({ task }: ChatTaskProps) => {
+// Helper function to check if text contains search value (case-insensitive)
+const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+    if (!text || !searchValue.trim()) {
+        return false;
+    }
+    return text.toLowerCase().includes(searchValue.toLowerCase().trim());
+};
+
+const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
     const { id, status, title, result, subtasks } = task;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+
+    // Memoize search checks to avoid recalculating on every render
+    const searchChecks = useMemo(() => {
+        const trimmedSearch = searchValue.trim();
+        if (!trimmedSearch) {
+            return { hasResultMatch: false };
+        }
+        
+        return {
+            hasResultMatch: containsSearchValue(result, trimmedSearch),
+        };
+    }, [searchValue, result]);
+
+    // Auto-expand details if they contain search matches
+    useEffect(() => {
+        const trimmedSearch = searchValue.trim();
+        
+        if (trimmedSearch) {
+            // Expand result block only if it contains the search term
+            if (searchChecks.hasResultMatch) {
+                setIsDetailsVisible(true);
+            }
+        } else {
+            // Reset to default state when search is cleared
+            setIsDetailsVisible(false);
+        }
+    }, [searchValue, searchChecks.hasResultMatch]);
 
     const sortedSubtasks = [...(subtasks || [])].sort((a, b) => +a.id - +b.id);
     const hasSubtasks = subtasks && subtasks.length > 0;
@@ -25,7 +61,11 @@ const ChatTask = ({ task }: ChatTaskProps) => {
                     tooltip={`Task ID: ${id}`}
                     className="mt-1"
                 />
-                <h3 className="font-semibold">{title}</h3>
+                <div className="font-semibold">
+                    <Markdown className="prose-sm prose-fixed break-words [&>*]:m-0 [&>p]:leading-tight" searchValue={searchValue}>
+                        {title}
+                    </Markdown>
+                </div>
             </div>
             {result && (
                 <div className="ml-6 text-xs text-muted-foreground">
@@ -38,7 +78,7 @@ const ChatTask = ({ task }: ChatTaskProps) => {
                     {isDetailsVisible && (
                         <>
                             <div className="my-2 border-t border-border" />
-                            <Markdown className="prose-xs prose-fixed break-words">{result}</Markdown>
+                            <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>{result}</Markdown>
                         </>
                     )}
                 </div>
@@ -49,6 +89,7 @@ const ChatTask = ({ task }: ChatTaskProps) => {
                         <ChatSubtask
                             key={subtask.id}
                             subtask={subtask}
+                            searchValue={searchValue}
                         />
                     ))}
                 </div>

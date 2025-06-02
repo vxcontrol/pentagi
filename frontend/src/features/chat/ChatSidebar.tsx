@@ -92,7 +92,7 @@ const ChatSidebarMenuItemText = ({ text }: { text: string }) => {
     }
 
     return (
-        <Tooltip>
+        <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
                 <span
                     ref={ref}
@@ -101,7 +101,7 @@ const ChatSidebarMenuItemText = ({ text }: { text: string }) => {
                     {text}
                 </span>
             </TooltipTrigger>
-            <TooltipContent>{text}</TooltipContent>
+            <TooltipContent side="right">{text}</TooltipContent>
         </Tooltip>
     );
 };
@@ -296,7 +296,7 @@ const ChatSidebar = ({
                                                     className="cursor-pointer"
                                                 >
                                                     <Pause className="mr-2 size-4" />
-                                                    <span>Stop Flow</span>
+                                                    <span>Finish Flow</span>
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem

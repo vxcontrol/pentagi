@@ -1,26 +1,35 @@
-You need to generate subtasks for decomposing the user's task.
-
-{{if .Tasks}}
-All tasks which executed before this one:
-{{range .Tasks}}
-- Task ID: {{.ID}}
-- Task user's input: {{.Input}}
-- Status: {{.Status}}
-- Result: {{.Result}}
-{{end}}
-{{end}}
-
-{{if .Subtasks}}
-All subtasks which generated before for previous tasks:
-{{range .Subtasks}}
-- Task ID: {{.TaskID}}
-- Subtask ID: {{.ID}}
-- Title: {{.Title}}
-- Description: {{.Description}}
-- Status: {{.Status}}
-- Result: {{.Result}}
-{{end}}
-{{end}}
-
-User's task to decompose:
-{{.Task.Input}}
+<task_context>
+  <instruction>Generate optimized subtasks to solve the user's task efficiently</instruction>
+  
+  <user_task>
+    <input>{{.Task.Input}}</input>
+  </user_task>
+  
+  {{if .Tasks}}
+  <previous_tasks>
+    {{range .Tasks}}
+    <task>
+      <id>{{.ID}}</id>
+      <input>{{.Input}}</input>
+      <status>{{.Status}}</status>
+      <result>{{.Result}}</result>
+    </task>
+    {{end}}
+  </previous_tasks>
+  {{end}}
+  
+  {{if .Subtasks}}
+  <previous_subtasks>
+    {{range .Subtasks}}
+    <subtask>
+      <task_id>{{.TaskID}}</task_id>
+      <id>{{.ID}}</id>
+      <title>{{.Title}}</title>
+      <description>{{.Description}}</description>
+      <status>{{.Status}}</status>
+      <result>{{.Result}}</result>
+    </subtask>
+    {{end}}
+  </previous_subtasks>
+  {{end}}
+</task_context>

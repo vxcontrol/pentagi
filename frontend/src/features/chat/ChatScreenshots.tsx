@@ -1,5 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Search, X } from 'lucide-react';
+import debounce from 'lodash/debounce';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -12,13 +14,17 @@ import ChatScreenshot from './ChatScreenshot';
 
 interface ChatScreenshotsProps {
     screenshots: ScreenshotFragmentFragment[];
+    selectedFlowId?: string | null;
 }
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatScreenshots = ({ screenshots }: ChatScreenshotsProps) => {
+const ChatScreenshots = ({ screenshots, selectedFlowId }: ChatScreenshotsProps) => {
+    // Separate state for immediate input value and debounced search value
+    const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
+
     const form = useForm<z.infer<typeof searchFormSchema>>({
         resolver: zodResolver(searchFormSchema),
         defaultValues: {
@@ -26,15 +32,51 @@ const ChatScreenshots = ({ screenshots }: ChatScreenshotsProps) => {
         },
     });
 
-    const filteredScreenshots = screenshots?.filter((screenshot) => {
-        const search = form.watch('search').toLowerCase();
+    const searchValue = form.watch('search');
 
-        if (!search) {
-            return true;
+    // Create debounced function to update search value
+    const debouncedUpdateSearch = useMemo(
+        () => debounce((value: string) => {
+            setDebouncedSearchValue(value);
+        }, 500),
+        []
+    );
+
+    // Update debounced search value when input value changes
+    useEffect(() => {
+        debouncedUpdateSearch(searchValue);
+        return () => {
+            debouncedUpdateSearch.cancel();
+        };
+    }, [searchValue, debouncedUpdateSearch]);
+
+    // Cleanup debounced function on unmount
+    useEffect(() => {
+        return () => {
+            debouncedUpdateSearch.cancel();
+        };
+    }, [debouncedUpdateSearch]);
+
+    // Clear search when flow changes to prevent stale search state
+    useEffect(() => {
+        form.reset({ search: '' });
+        setDebouncedSearchValue('');
+        debouncedUpdateSearch.cancel();
+    }, [selectedFlowId, form, debouncedUpdateSearch]);
+
+    // Memoize filtered screenshots to avoid recomputing on every render
+    // Use debouncedSearchValue for filtering to improve performance
+    const filteredScreenshots = useMemo(() => {
+        const search = debouncedSearchValue.toLowerCase().trim();
+
+        if (!search || !screenshots) {
+            return screenshots || [];
         }
 
-        return screenshot.url.toLowerCase().includes(search);
-    });
+        return screenshots.filter((screenshot) => {
+            return screenshot.url.toLowerCase().includes(search);
+        });
+    }, [screenshots, debouncedSearchValue]);
 
     const hasScreenshots = filteredScreenshots && filteredScreenshots.length > 0;
 
@@ -54,6 +96,7 @@ const ChatScreenshots = ({ screenshots }: ChatScreenshotsProps) => {
                                         type="text"
                                         placeholder="Search screenshots..."
                                         className="px-9"
+                                        autoComplete="off"
                                     />
                                     {field.value && (
                                         <Button
@@ -61,7 +104,11 @@ const ChatScreenshots = ({ screenshots }: ChatScreenshotsProps) => {
                                             variant="ghost"
                                             size="icon"
                                             className="absolute right-0 top-1/2 -translate-y-1/2"
-                                            onClick={() => form.reset({ search: '' })}
+                                            onClick={() => {
+                                                form.reset({ search: '' });
+                                                setDebouncedSearchValue('');
+                                                debouncedUpdateSearch.cancel();
+                                            }}
                                         >
                                             <X />
                                         </Button>

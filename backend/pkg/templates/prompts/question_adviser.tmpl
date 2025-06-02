@@ -1,0 +1,25 @@
+<question_adviser_context>
+  <instruction>Generate comprehensive and detailed advice for the user's question, utilizing the provided context and tools effectively.</instruction>
+
+  {{if .Enriches}}
+  <enrichment_data>
+  {{.Enriches}}
+  </enrichment_data>
+  {{end}}
+
+  <user_question>
+  {{.Question}}
+  </user_question>
+
+  {{if .Code}}
+  <code_snippet>
+  {{.Code}}
+  </code_snippet>
+  {{end}}
+
+  {{if .Output}}
+  <command_output>
+  {{.Output}}
+  </command_output>
+  {{end}}
+</question_adviser_context>

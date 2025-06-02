@@ -11,13 +11,13 @@ import (
 	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tmc/langchaingo/documentloaders"
-	"github.com/tmc/langchaingo/vectorstores"
-	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"github.com/vxcontrol/langchaingo/documentloaders"
+	"github.com/vxcontrol/langchaingo/vectorstores"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 const (
-	codeVectorStoreThreshold   = 0.7
+	codeVectorStoreThreshold   = 0.2
 	codeVectorStoreResultLimit = 3
 	codeVectorStoreDefaultType = "code"
 	codeNotFoundMessage        = "nothing found in code samples store and you need to store it after figure out this case"
@@ -25,13 +25,13 @@ const (
 
 type code struct {
 	flowID    int64
-	taskID    int64
-	subtaskID int64
+	taskID    *int64
+	subtaskID *int64
 	store     *pgvector.Store
 	vslp      VectorStoreLogProvider
 }
 
-func NewCodeTool(flowID, taskID, subtaskID int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+func NewCodeTool(flowID int64, taskID, subtaskID *int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
 	return &code{
 		flowID:    flowID,
 		taskID:    taskID,
@@ -149,8 +149,8 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				action.Question,
 				database.VecstoreActionTypeRetrieve,
 				buffer.String(),
-				&c.taskID,
-				&c.subtaskID,
+				c.taskID,
+				c.subtaskID,
 			)
 		}
 
@@ -202,8 +202,12 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				doc.Metadata = map[string]any{}
 			}
 			doc.Metadata["flow_id"] = c.flowID
-			doc.Metadata["task_id"] = c.taskID
-			doc.Metadata["subtask_id"] = c.subtaskID
+			if c.taskID != nil {
+				doc.Metadata["task_id"] = *c.taskID
+			}
+			if c.subtaskID != nil {
+				doc.Metadata["subtask_id"] = *c.subtaskID
+			}
 			doc.Metadata["doc_type"] = codeVectorStoreDefaultType
 			doc.Metadata["code_lang"] = action.Lang
 			doc.Metadata["question"] = action.Question
@@ -228,12 +232,17 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 		)...)
 
 		if agentCtx, ok := GetAgentContext(ctx); ok {
-			filtersData, err := json.Marshal(map[string]any{
-				"doc_type":   codeVectorStoreDefaultType,
-				"code_lang":  action.Lang,
-				"task_id":    c.taskID,
-				"subtask_id": c.subtaskID,
-			})
+			data := map[string]any{
+				"doc_type":  codeVectorStoreDefaultType,
+				"code_lang": action.Lang,
+			}
+			if c.taskID != nil {
+				data["task_id"] = *c.taskID
+			}
+			if c.subtaskID != nil {
+				data["subtask_id"] = *c.subtaskID
+			}
+			filtersData, err := json.Marshal(data)
 			if err != nil {
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
@@ -246,8 +255,8 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				action.Question,
 				database.VecstoreActionTypeStore,
 				buffer.String(),
-				&c.taskID,
-				&c.subtaskID,
+				c.taskID,
+				c.subtaskID,
 			)
 		}
 

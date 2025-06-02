@@ -8,7 +8,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 
-	"github.com/tmc/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms"
 )
 
 type GenerateContentFunc func(
@@ -153,8 +153,12 @@ func WrapGenerateFromSinglePrompt(
 	totalInput, totalOutput := int64(0), int64(0)
 	for _, choice := range resp.Choices {
 		input, output := provider.GetUsage(choice.GenerationInfo)
-		totalInput += input
-		totalOutput += output
+		if input > 0 {
+			totalInput = input
+		}
+		if output > 0 {
+			totalOutput = output
+		}
 		choicesOutput = append(choicesOutput, choice.Content)
 	}
 
@@ -216,8 +220,12 @@ func WrapGenerateContent(
 	totalInput, totalOutput := int64(0), int64(0)
 	for _, choice := range resp.Choices {
 		input, output := provider.GetUsage(choice.GenerationInfo)
-		totalInput += input
-		totalOutput += output
+		if input > 0 {
+			totalInput = input
+		}
+		if output > 0 {
+			totalOutput = output
+		}
 	}
 
 	generation.End(

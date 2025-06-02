@@ -256,6 +256,7 @@ func (stw *subtaskWorker) PutInput(ctx context.Context, input string) error {
 		database.MsglogTypeInput,
 		stw.subtaskCtx.TaskID,
 		stw.subtaskCtx.SubtaskID,
+		"", // thinking is empty because this is input
 		input,
 	)
 	if err != nil {
@@ -291,9 +292,14 @@ func (stw *subtaskWorker) Run(ctx context.Context) error {
 
 	performResult, err := stw.subtaskCtx.Provider.PerformAgentChain(ctx, taskID, subtaskID, msgChainID)
 	if err != nil {
-		if !errors.Is(err, context.Canceled) {
-			_ = stw.SetStatus(ctx, database.SubtaskStatusWaiting)
+		if errors.Is(err, context.Canceled) {
+			ctx = context.Background()
 		}
+		errChainConsistency := stw.subtaskCtx.Provider.EnsureChainConsistency(ctx, msgChainID)
+		if errChainConsistency != nil {
+			err = errors.Join(err, errChainConsistency)
+		}
+		_ = stw.SetStatus(ctx, database.SubtaskStatusWaiting)
 		return fmt.Errorf("failed to perform agent chain for subtask %d: %w", subtaskID, err)
 	}
 

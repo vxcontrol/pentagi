@@ -1,8 +1,10 @@
 import '@xterm/xterm/css/xterm.css';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Search, X } from 'lucide-react';
-import { useForm, useWatch } from 'react-hook-form';
+import { Search, X, ChevronUp, ChevronDown } from 'lucide-react';
+import debounce from 'lodash/debounce';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import Terminal from '@/components/Terminal';
@@ -17,9 +19,14 @@ const searchFormSchema = z.object({
 
 interface ChatTerminalProps {
     logs: TerminalLogFragmentFragment[];
+    selectedFlowId?: string | null;
 }
 
-const ChatTerminal = ({ logs: terminalLog }: ChatTerminalProps) => {
+const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) => {
+    // Separate state for immediate input value and debounced search value
+    const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
+    const terminalRef = useRef<{ findNext: () => void; findPrevious: () => void } | null>(null);
+
     const form = useForm<z.infer<typeof searchFormSchema>>({
         resolver: zodResolver(searchFormSchema),
         defaultValues: {
@@ -27,17 +34,73 @@ const ChatTerminal = ({ logs: terminalLog }: ChatTerminalProps) => {
         },
     });
 
-    const search = useWatch({
-        control: form.control,
-        name: 'search',
-    });
+    const searchValue = form.watch('search');
 
-    const logs = terminalLog.map((log) => log.text);
-    const filteredLogs = search ? logs?.filter((log) => log.toLowerCase().includes(search.toLowerCase())) : logs;
+    // Create debounced function to update search value
+    const debouncedUpdateSearch = useMemo(
+        () => debounce((value: string) => {
+            setDebouncedSearchValue(value);
+        }, 500),
+        []
+    );
+
+    // Update debounced search value when input value changes
+    useEffect(() => {
+        debouncedUpdateSearch(searchValue);
+        return () => {
+            debouncedUpdateSearch.cancel();
+        };
+    }, [searchValue, debouncedUpdateSearch]);
+
+    // Cleanup debounced function on unmount
+    useEffect(() => {
+        return () => {
+            debouncedUpdateSearch.cancel();
+        };
+    }, [debouncedUpdateSearch]);
+
+    // Clear search when flow changes to prevent stale search state
+    useEffect(() => {
+        form.reset({ search: '' });
+        setDebouncedSearchValue('');
+        debouncedUpdateSearch.cancel();
+    }, [selectedFlowId, form, debouncedUpdateSearch]);
+
+    // Filter logs based on debounced search value for better performance
+    const filteredLogs = useMemo(() => {
+        const search = debouncedSearchValue.toLowerCase().trim();
+        const logs = terminalLog.map((log) => log.text);
+
+        if (!search) {
+            return logs;
+        }
+
+        return logs.filter((log) => log.toLowerCase().includes(search));
+    }, [terminalLog, debouncedSearchValue]);
+
+    const handleFindNext = () => {
+        if (terminalRef.current && debouncedSearchValue.trim()) {
+            terminalRef.current.findNext();
+        }
+    };
+
+    const handleFindPrevious = () => {
+        if (terminalRef.current && debouncedSearchValue.trim()) {
+            terminalRef.current.findPrevious();
+        }
+    };
+
+    const handleClearSearch = () => {
+        form.reset({ search: '' });
+        setDebouncedSearchValue('');
+        debouncedUpdateSearch.cancel();
+    };
+
+    const hasSearchValue = !!debouncedSearchValue.trim();
 
     return (
         <div className="flex size-full flex-col gap-4">
-            <div className="sticky top-0 z-10 bg-background pr-6">
+            <div className="sticky top-0 z-10 bg-background pr-4">
                 <Form {...form}>
                     <FormField
                         control={form.control}
@@ -50,19 +113,47 @@ const ChatTerminal = ({ logs: terminalLog }: ChatTerminalProps) => {
                                         {...field}
                                         type="text"
                                         placeholder="Search terminal logs..."
-                                        className="px-9"
+                                        className="px-9 pr-24"
+                                        autoComplete="off"
                                     />
-                                    {field.value && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="absolute right-px top-1/2 -translate-y-1/2"
-                                            onClick={() => form.reset({ search: '' })}
-                                        >
-                                            <X />
-                                        </Button>
-                                    )}
+                                    <div className="absolute right-px top-1/2 -translate-y-1/2 flex">
+                                        {hasSearchValue && (
+                                            <>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={handleFindPrevious}
+                                                    title="Previous match"
+                                                >
+                                                    <ChevronUp className="size-4" />
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={handleFindNext}
+                                                    title="Next match"
+                                                >
+                                                    <ChevronDown className="size-4" />
+                                                </Button>
+                                            </>
+                                        )}
+                                        {field.value && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={handleClearSearch}
+                                                title="Clear search"
+                                            >
+                                                <X className="size-4" />
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             </FormControl>
                         )}
@@ -70,7 +161,9 @@ const ChatTerminal = ({ logs: terminalLog }: ChatTerminalProps) => {
                 </Form>
             </div>
             <Terminal
+                ref={terminalRef}
                 logs={filteredLogs}
+                searchValue={debouncedSearchValue}
                 className="w-full grow"
             />
         </div>

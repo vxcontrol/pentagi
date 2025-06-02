@@ -80,8 +80,19 @@ func FilterAgentTypes(allTypes []string, requested []string) []string {
 	return result
 }
 
+func IsTestGroupsFiltered(group string, requested []string) bool {
+	if len(requested) == 0 || (len(requested) == 1 && requested[0] == "all") {
+		return false
+	}
+
+	return !StringInSlice(group, requested)
+}
+
 // FormatTestName creates a standardized test name
-func FormatTestName(testType, prompt string, length int) string {
+func FormatTestName(testType, prompt string, length int, useStream bool) string {
+	if useStream {
+		return fmt.Sprintf("%s (streaming): %s", testType, TruncateString(prompt, length))
+	}
 	return fmt.Sprintf("%s: %s", testType, TruncateString(prompt, length))
 }
 

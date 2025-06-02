@@ -120,14 +120,18 @@ func NewRouter(
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
+	assistantService := services.NewAssistantService(orm, providers, controller)
 	agentlogService := services.NewAgentlogService(orm)
+	assistantlogService := services.NewAssistantlogService(orm)
 	msglogService := services.NewMsglogService(orm)
 	searchlogService := services.NewSearchlogService(orm)
 	vecstorelogService := services.NewVecstorelogService(orm)
 	termlogService := services.NewTermlogService(orm)
 	screenshotService := services.NewScreenshotService(orm, cfg.DataDir)
 	promptService := services.NewPromptService(orm)
-	graphqlService := services.NewGraphqlService(db, baseURL, cfg.CorsOrigins, providers, controller, subscriptions)
+	graphqlService := services.NewGraphqlService(
+		db, cfg, baseURL, cfg.CorsOrigins, providers, controller, subscriptions,
+	)
 
 	router := gin.Default()
 
@@ -197,7 +201,9 @@ func NewRouter(
 		setTasksGroup(privateGroup, taskService)
 		setSubtasksGroup(privateGroup, subtaskService)
 		setContainersGroup(privateGroup, containerService)
+		setAssistantsGroup(privateGroup, assistantService)
 		setAgentlogsGroup(privateGroup, agentlogService)
+		setAssistantlogsGroup(privateGroup, assistantlogService)
 		setMsglogsGroup(privateGroup, msglogService)
 		setTermlogsGroup(privateGroup, termlogService)
 		setSearchlogsGroup(privateGroup, searchlogService)
@@ -339,6 +345,29 @@ func setContainersGroup(parent *gin.RouterGroup, svc *services.ContainerService)
 	}
 }
 
+func setAssistantsGroup(parent *gin.RouterGroup, svc *services.AssistantService) {
+	flowCreateGroup := parent.Group("/flows/:flowID/assistants")
+	{
+		flowCreateGroup.POST("/", svc.CreateFlowAssistant)
+	}
+
+	flowDeleteGroup := parent.Group("/flows/:flowID/assistants")
+	{
+		flowDeleteGroup.DELETE("/:assistantID", svc.DeleteAssistant)
+	}
+
+	flowEditGroup := parent.Group("/flows/:flowID/assistants")
+	{
+		flowEditGroup.PUT("/:assistantID", svc.PatchAssistant)
+	}
+
+	flowsViewGroup := parent.Group("/flows/:flowID/assistants")
+	{
+		flowsViewGroup.GET("/", svc.GetFlowAssistants)
+		flowsViewGroup.GET("/:assistantID", svc.GetFlowAssistant)
+	}
+}
+
 func setAgentlogsGroup(parent *gin.RouterGroup, svc *services.AgentlogService) {
 	agentlogsViewGroup := parent.Group("/agentlogs")
 	{
@@ -348,6 +377,18 @@ func setAgentlogsGroup(parent *gin.RouterGroup, svc *services.AgentlogService) {
 	flowAgentlogsViewGroup := parent.Group("/flows/:flowID/agentlogs")
 	{
 		flowAgentlogsViewGroup.GET("/", svc.GetFlowAgentlogs)
+	}
+}
+
+func setAssistantlogsGroup(parent *gin.RouterGroup, svc *services.AssistantlogService) {
+	assistantlogsViewGroup := parent.Group("/assistantlogs")
+	{
+		assistantlogsViewGroup.GET("/", svc.GetAssistantlogs)
+	}
+
+	flowAssistantlogsViewGroup := parent.Group("/flows/:flowID/assistantlogs")
+	{
+		flowAssistantlogsViewGroup.GET("/", svc.GetFlowAssistantlogs)
 	}
 }
 

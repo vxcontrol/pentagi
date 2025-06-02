@@ -115,7 +115,8 @@ func (p *proxyMsgLogProvider) PutMsg(
 	ctx context.Context,
 	msgType database.MsglogType,
 	taskID, subtaskID *int64,
-	msg string,
+	streamID int64, // unsupported for now
+	thinking, msg string,
 ) (int64, error) {
 	terminal.PrintInfo("Message logged:")
 	terminal.PrintKeyValue("Type", string(msgType))
@@ -138,6 +139,7 @@ func (p *proxyMsgLogProvider) PutMsg(
 func (p *proxyMsgLogProvider) UpdateMsgResult(
 	ctx context.Context,
 	msgID int64,
+	streamID int64, // unsupported for now
 	result string,
 	resultFormat database.MsglogResultFormat,
 ) error {
