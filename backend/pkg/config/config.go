@@ -17,6 +17,7 @@ type Config struct {
 
 	// Docker (terminal) settings
 	DockerInside       bool   `env:"DOCKER_INSIDE" envDefault:"false"`
+	DockerNetAdmin     bool   `env:"DOCKER_NET_ADMIN" envDefault:"false"`
 	DockerSocket       string `env:"DOCKER_SOCKET"`
 	DockerNetwork      string `env:"DOCKER_NETWORK"`
 	DockerPublicIP     string `env:"DOCKER_PUBLIC_IP" envDefault:"0.0.0.0"`

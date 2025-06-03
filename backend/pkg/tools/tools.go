@@ -358,6 +358,11 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		}
 	}
 
+	capAdd := []string{"NET_RAW"}
+	if fte.cfg.DockerNetAdmin {
+		capAdd = append(capAdd, "NET_ADMIN")
+	}
+
 	containerName := PrimaryTerminalName(fte.flowID)
 	cnt, err := fte.docker.SpawnContainer(
 		ctx,
@@ -369,7 +374,7 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 			Entrypoint: []string{"tail", "-f", "/dev/null"},
 		},
 		&container.HostConfig{
-			CapAdd: []string{"NET_RAW"},
+			CapAdd: capAdd,
 		},
 	)
 	if err != nil {
