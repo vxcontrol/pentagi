@@ -13,7 +13,7 @@ If the user specifies a particular Docker image in their task, you must use that
 <guidelines>
 - Choose images based on required technology stack (programming language, tools, libraries)
 - Always use latest versions (e.g., `python:latest` not `python-3.8`)
-- For security/penetration testing tasks, default to `booyaabes/kali-linux-full:latest`
+- For security/penetration testing tasks, default to `{{.DefaultImageForPentest}}`
 - Output only the image name with no explanations or additional text
 - For ambiguous or uncertain cases, use `{{.DefaultImage}}`
 - Ensure image name is lowercase and includes necessary tags

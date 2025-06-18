@@ -27,6 +27,8 @@ import (
 
 const deltaCallCounter = 10000
 
+const pentestDockerImage = "vxcontrol/kali-linux"
+
 type ProviderController interface {
 	NewFlowProvider(
 		ctx context.Context,
@@ -176,8 +178,9 @@ func (pc *providerController) NewFlowProvider(
 	}
 
 	imageTmpl, err := prompter.RenderTemplate(templates.PromptTypeImageChooser, map[string]any{
-		"DefaultImage": pc.docker.GetDefaultImage(),
-		"Input":        input,
+		"DefaultImage":           pc.docker.GetDefaultImage(),
+		"DefaultImageForPentest": pentestDockerImage,
+		"Input":                  input,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get primary docker image template: %w", err)
