@@ -1,27 +1,27 @@
 # LLM Agent Testing Report
 
-Generated: Tue, 13 May 2025 22:09:02 UTC
+Generated: Wed, 25 Jun 2025 18:44:18 UTC
 
 ## Overall Results
 
 | Agent | Model | Reasoning | Success Rate | Average Latency |
-|-------|-------|-----------|--------------|----------------|
-| simple | deepseek-chat | false | 15/15 (100.00%) | 8.492s |
-| simple_json | deepseek-chat | false | 5/5 (100.00%) | 7.679s |
-| agent | deepseek-chat | false | 15/15 (100.00%) | 7.776s |
-| assistant | deepseek-chat | false | 15/15 (100.00%) | 7.701s |
-| generator | deepseek-chat | false | 15/15 (100.00%) | 9.046s |
-| refiner | deepseek-chat | false | 15/15 (100.00%) | 8.232s |
-| adviser | deepseek-chat | false | 15/15 (100.00%) | 7.268s |
-| reflector | deepseek-chat | false | 15/15 (100.00%) | 7.412s |
-| searcher | deepseek-chat | false | 15/15 (100.00%) | 6.842s |
-| enricher | deepseek-chat | false | 15/15 (100.00%) | 7.158s |
-| coder | deepseek-coder | false | 15/15 (100.00%) | 7.057s |
-| installer | deepseek-coder | false | 15/15 (100.00%) | 7.237s |
-| pentester | deepseek-chat | false | 15/15 (100.00%) | 6.858s |
+|-------|-------|-----------|--------------|-----------------|
+| simple | deepseek-chat | false | 15/15 (100.00%) | 7.121s |
+| simple_json | deepseek-chat | false | 5/5 (100.00%) | 5.988s |
+| agent | deepseek-chat | false | 15/15 (100.00%) | 6.544s |
+| assistant | deepseek-chat | false | 15/15 (100.00%) | 7.621s |
+| generator | deepseek-chat | false | 15/15 (100.00%) | 6.856s |
+| refiner | deepseek-chat | false | 15/15 (100.00%) | 8.249s |
+| adviser | deepseek-chat | false | 15/15 (100.00%) | 6.978s |
+| reflector | deepseek-chat | false | 15/15 (100.00%) | 6.784s |
+| searcher | deepseek-chat | false | 15/15 (100.00%) | 6.995s |
+| enricher | deepseek-chat | false | 15/15 (100.00%) | 7.240s |
+| coder | deepseek-coder | false | 15/15 (100.00%) | 8.083s |
+| installer | deepseek-coder | false | 15/15 (100.00%) | 6.007s |
+| pentester | deepseek-chat | false | 15/15 (100.00%) | 6.756s |
 
 **Total**: 185/185 (100.00%) successful tests
-**Overall average latency**: 7.592s
+**Overall average latency**: 7.073s
 
 ## Detailed Results
 
@@ -31,30 +31,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 5.357s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 8.614s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.678s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 10.025s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 5.339s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.331s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 8.825s |  |
-| Basic echo function | ✅ Pass | 4.560s |  |
-| Streaming Basic echo function | ✅ Pass | 5.117s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.857s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.133s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.797s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.376s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.403s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.541s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.647s |  |
+| Basic echo function | ✅ Pass | 4.817s |  |
+| Streaming Basic echo function | ✅ Pass | 4.871s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 4.356s |  |
-| Streaming JSON response function | ✅ Pass | 5.869s |  |
-| Search query | ✅ Pass | 6.178s |  |
-| Streaming Search query | ✅ Pass | 5.113s |  |
-| Ask advice | ✅ Pass | 24.290s |  |
-| Streaming Ask advice | ✅ Pass | 23.732s |  |
+| JSON response function | ✅ Pass | 4.807s |  |
+| Streaming JSON response function | ✅ Pass | 5.578s |  |
+| Search query | ✅ Pass | 4.941s |  |
+| Streaming Search query | ✅ Pass | 4.981s |  |
+| Ask advice | ✅ Pass | 19.863s |  |
+| Streaming Ask advice | ✅ Pass | 23.196s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 8.492s
+**Average latency**: 7.121s
 
 ---
 
@@ -64,20 +64,20 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 6.023s |  |
-| SimpleJSON: Create a JSON object with f... | ✅ Pass | 12.408s |  |
-| SimpleJSON: Generate a JSON response fo... | ✅ Pass | 5.795s |  |
-| SimpleJSON: Create a JSON array of 3 co... | ✅ Pass | 8.478s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 6.125s |  |
+| SimpleJSON: Create a JSON object with f... | ✅ Pass | 4.867s |  |
+| SimpleJSON: Generate a JSON response fo... | ✅ Pass | 4.557s |  |
+| SimpleJSON: Create a JSON array of 3 co... | ✅ Pass | 7.543s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| SimpleJSON: What is 2+2? Explain your a... | ✅ Pass | 5.692s |  |
+| SimpleJSON: What is 2+2? Explain your a... | ✅ Pass | 6.849s |  |
 
 **Summary**: 5/5 (100.00%) successful tests
 
-**Average latency**: 7.679s
+**Average latency**: 5.988s
 
 ---
 
@@ -87,30 +87,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 5.880s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 7.228s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.212s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.238s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 6.395s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.209s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 7.348s |  |
-| Basic echo function | ✅ Pass | 6.422s |  |
-| Streaming Basic echo function | ✅ Pass | 6.752s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.586s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 3.694s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.106s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.113s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.972s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.795s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.374s |  |
+| Basic echo function | ✅ Pass | 4.504s |  |
+| Streaming Basic echo function | ✅ Pass | 4.805s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 4.589s |  |
-| Streaming JSON response function | ✅ Pass | 4.798s |  |
-| Search query | ✅ Pass | 5.759s |  |
-| Streaming Search query | ✅ Pass | 5.463s |  |
-| Ask advice | ✅ Pass | 21.087s |  |
-| Streaming Ask advice | ✅ Pass | 20.266s |  |
+| JSON response function | ✅ Pass | 5.035s |  |
+| Streaming JSON response function | ✅ Pass | 4.364s |  |
+| Search query | ✅ Pass | 4.885s |  |
+| Streaming Search query | ✅ Pass | 5.360s |  |
+| Ask advice | ✅ Pass | 17.217s |  |
+| Streaming Ask advice | ✅ Pass | 20.346s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 7.776s
+**Average latency**: 6.544s
 
 ---
 
@@ -120,30 +120,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 9.402s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 5.880s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.812s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.339s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.820s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.945s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.818s |  |
-| Basic echo function | ✅ Pass | 4.575s |  |
-| Streaming Basic echo function | ✅ Pass | 4.971s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.694s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.748s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.145s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.509s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 18.962s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.112s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.496s |  |
+| Basic echo function | ✅ Pass | 4.424s |  |
+| Streaming Basic echo function | ✅ Pass | 4.455s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 7.793s |  |
-| Streaming JSON response function | ✅ Pass | 5.294s |  |
-| Search query | ✅ Pass | 6.497s |  |
-| Streaming Search query | ✅ Pass | 5.331s |  |
-| Ask advice | ✅ Pass | 20.006s |  |
-| Streaming Ask advice | ✅ Pass | 21.034s |  |
+| JSON response function | ✅ Pass | 4.729s |  |
+| Streaming JSON response function | ✅ Pass | 5.114s |  |
+| Search query | ✅ Pass | 4.224s |  |
+| Streaming Search query | ✅ Pass | 4.710s |  |
+| Ask advice | ✅ Pass | 18.864s |  |
+| Streaming Ask advice | ✅ Pass | 20.131s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 7.701s
+**Average latency**: 7.621s
 
 ---
 
@@ -153,30 +153,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 5.931s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.136s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 8.960s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 8.736s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 20.097s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 9.871s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.964s |  |
-| Basic echo function | ✅ Pass | 5.398s |  |
-| Streaming Basic echo function | ✅ Pass | 5.347s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.882s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 3.740s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.289s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 3.913s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.825s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 5.131s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.554s |  |
+| Basic echo function | ✅ Pass | 4.857s |  |
+| Streaming Basic echo function | ✅ Pass | 4.563s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 5.416s |  |
-| Streaming JSON response function | ✅ Pass | 4.498s |  |
-| Search query | ✅ Pass | 5.168s |  |
-| Streaming Search query | ✅ Pass | 4.293s |  |
-| Ask advice | ✅ Pass | 23.295s |  |
-| Streaming Ask advice | ✅ Pass | 19.577s |  |
+| JSON response function | ✅ Pass | 5.085s |  |
+| Streaming JSON response function | ✅ Pass | 4.902s |  |
+| Search query | ✅ Pass | 5.616s |  |
+| Streaming Search query | ✅ Pass | 4.530s |  |
+| Ask advice | ✅ Pass | 24.792s |  |
+| Streaming Ask advice | ✅ Pass | 17.160s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 9.046s
+**Average latency**: 6.856s
 
 ---
 
@@ -186,30 +186,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 10.692s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 7.111s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 6.493s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.377s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 5.600s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.419s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.855s |  |
-| Basic echo function | ✅ Pass | 4.525s |  |
-| Streaming Basic echo function | ✅ Pass | 6.239s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 5.190s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.258s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.150s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.286s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 21.175s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.139s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.804s |  |
+| Basic echo function | ✅ Pass | 4.835s |  |
+| Streaming Basic echo function | ✅ Pass | 5.526s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 6.237s |  |
-| Streaming JSON response function | ✅ Pass | 5.047s |  |
-| Search query | ✅ Pass | 5.023s |  |
-| Streaming Search query | ✅ Pass | 6.765s |  |
-| Ask advice | ✅ Pass | 21.618s |  |
-| Streaming Ask advice | ✅ Pass | 24.481s |  |
+| JSON response function | ✅ Pass | 4.517s |  |
+| Streaming JSON response function | ✅ Pass | 5.579s |  |
+| Search query | ✅ Pass | 5.080s |  |
+| Streaming Search query | ✅ Pass | 4.866s |  |
+| Ask advice | ✅ Pass | 23.834s |  |
+| Streaming Ask advice | ✅ Pass | 19.503s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 8.232s
+**Average latency**: 8.249s
 
 ---
 
@@ -219,30 +219,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 4.201s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 5.703s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 3.969s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.169s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.593s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.094s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.819s |  |
-| Basic echo function | ✅ Pass | 7.061s |  |
-| Streaming Basic echo function | ✅ Pass | 4.648s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.906s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.394s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.012s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.496s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.496s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.592s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.985s |  |
+| Basic echo function | ✅ Pass | 5.791s |  |
+| Streaming Basic echo function | ✅ Pass | 5.101s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 4.611s |  |
-| Streaming JSON response function | ✅ Pass | 6.368s |  |
-| Search query | ✅ Pass | 3.829s |  |
-| Streaming Search query | ✅ Pass | 4.613s |  |
-| Ask advice | ✅ Pass | 23.527s |  |
-| Streaming Ask advice | ✅ Pass | 23.817s |  |
+| JSON response function | ✅ Pass | 4.952s |  |
+| Streaming JSON response function | ✅ Pass | 4.447s |  |
+| Search query | ✅ Pass | 6.985s |  |
+| Streaming Search query | ✅ Pass | 4.975s |  |
+| Ask advice | ✅ Pass | 20.933s |  |
+| Streaming Ask advice | ✅ Pass | 19.612s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 7.268s
+**Average latency**: 6.978s
 
 ---
 
@@ -252,30 +252,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 9.212s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 5.124s |  |
 | Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.175s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 6.001s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.266s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.905s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.784s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.638s |  |
-| Basic echo function | ✅ Pass | 3.946s |  |
-| Streaming Basic echo function | ✅ Pass | 5.202s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.306s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.851s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.683s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.742s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.948s |  |
+| Basic echo function | ✅ Pass | 4.425s |  |
+| Streaming Basic echo function | ✅ Pass | 4.772s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 4.479s |  |
-| Streaming JSON response function | ✅ Pass | 4.549s |  |
-| Search query | ✅ Pass | 4.538s |  |
-| Streaming Search query | ✅ Pass | 6.594s |  |
-| Ask advice | ✅ Pass | 22.585s |  |
-| Streaming Ask advice | ✅ Pass | 22.308s |  |
+| JSON response function | ✅ Pass | 5.017s |  |
+| Streaming JSON response function | ✅ Pass | 4.587s |  |
+| Search query | ✅ Pass | 4.425s |  |
+| Streaming Search query | ✅ Pass | 5.572s |  |
+| Ask advice | ✅ Pass | 20.255s |  |
+| Streaming Ask advice | ✅ Pass | 18.876s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 7.412s
+**Average latency**: 6.784s
 
 ---
 
@@ -285,30 +285,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 4.672s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 3.743s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 3.852s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.893s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.177s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.376s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.628s |  |
-| Basic echo function | ✅ Pass | 4.099s |  |
-| Streaming Basic echo function | ✅ Pass | 4.520s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.602s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.198s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.046s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.195s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.499s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.181s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.719s |  |
+| Basic echo function | ✅ Pass | 4.593s |  |
+| Streaming Basic echo function | ✅ Pass | 5.097s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 4.838s |  |
-| Streaming JSON response function | ✅ Pass | 4.512s |  |
-| Search query | ✅ Pass | 4.464s |  |
-| Streaming Search query | ✅ Pass | 6.105s |  |
-| Ask advice | ✅ Pass | 22.923s |  |
-| Streaming Ask advice | ✅ Pass | 20.828s |  |
+| JSON response function | ✅ Pass | 4.936s |  |
+| Streaming JSON response function | ✅ Pass | 5.204s |  |
+| Search query | ✅ Pass | 5.100s |  |
+| Streaming Search query | ✅ Pass | 4.907s |  |
+| Ask advice | ✅ Pass | 20.505s |  |
+| Streaming Ask advice | ✅ Pass | 23.139s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 6.842s
+**Average latency**: 6.995s
 
 ---
 
@@ -318,30 +318,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 6.575s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 5.599s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 6.032s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 3.821s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.742s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.761s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.896s |  |
-| Basic echo function | ✅ Pass | 4.455s |  |
-| Streaming Basic echo function | ✅ Pass | 4.894s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.576s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.349s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.432s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.807s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 7.246s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 5.331s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.065s |  |
+| Basic echo function | ✅ Pass | 4.445s |  |
+| Streaming Basic echo function | ✅ Pass | 4.834s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 5.072s |  |
-| Streaming JSON response function | ✅ Pass | 6.049s |  |
-| Search query | ✅ Pass | 4.653s |  |
-| Streaming Search query | ✅ Pass | 4.432s |  |
-| Ask advice | ✅ Pass | 20.657s |  |
-| Streaming Ask advice | ✅ Pass | 21.728s |  |
+| JSON response function | ✅ Pass | 4.691s |  |
+| Streaming JSON response function | ✅ Pass | 5.008s |  |
+| Search query | ✅ Pass | 4.529s |  |
+| Streaming Search query | ✅ Pass | 4.964s |  |
+| Ask advice | ✅ Pass | 21.274s |  |
+| Streaming Ask advice | ✅ Pass | 23.045s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 7.158s
+**Average latency**: 7.240s
 
 ---
 
@@ -351,30 +351,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 5.544s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.537s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 3.938s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.441s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.057s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.113s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.038s |  |
-| Basic echo function | ✅ Pass | 4.679s |  |
-| Streaming Basic echo function | ✅ Pass | 4.412s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.994s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.413s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.209s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.175s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.633s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.040s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 20.881s |  |
+| Basic echo function | ✅ Pass | 6.351s |  |
+| Streaming Basic echo function | ✅ Pass | 4.521s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 4.504s |  |
-| Streaming JSON response function | ✅ Pass | 4.951s |  |
-| Search query | ✅ Pass | 5.662s |  |
-| Streaming Search query | ✅ Pass | 4.953s |  |
-| Ask advice | ✅ Pass | 21.208s |  |
-| Streaming Ask advice | ✅ Pass | 23.823s |  |
+| JSON response function | ✅ Pass | 4.808s |  |
+| Streaming JSON response function | ✅ Pass | 4.876s |  |
+| Search query | ✅ Pass | 5.230s |  |
+| Streaming Search query | ✅ Pass | 6.334s |  |
+| Ask advice | ✅ Pass | 20.241s |  |
+| Streaming Ask advice | ✅ Pass | 20.544s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 7.057s
+**Average latency**: 8.083s
 
 ---
 
@@ -384,30 +384,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 3.529s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.046s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 6.532s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.803s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.622s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.109s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.801s |  |
-| Basic echo function | ✅ Pass | 4.170s |  |
-| Streaming Basic echo function | ✅ Pass | 4.442s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 5.234s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.204s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.397s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 3.531s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.184s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.625s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.718s |  |
+| Basic echo function | ✅ Pass | 5.048s |  |
+| Streaming Basic echo function | ✅ Pass | 4.879s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 5.127s |  |
-| Streaming JSON response function | ✅ Pass | 6.177s |  |
-| Search query | ✅ Pass | 4.462s |  |
-| Streaming Search query | ✅ Pass | 4.369s |  |
-| Ask advice | ✅ Pass | 26.696s |  |
-| Streaming Ask advice | ✅ Pass | 20.669s |  |
+| JSON response function | ✅ Pass | 5.761s |  |
+| Streaming JSON response function | ✅ Pass | 4.667s |  |
+| Search query | ✅ Pass | 4.477s |  |
+| Streaming Search query | ✅ Pass | 4.976s |  |
+| Ask advice | ✅ Pass | 18.771s |  |
+| Streaming Ask advice | ✅ Pass | 9.640s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 7.237s
+**Average latency**: 6.007s
 
 ---
 
@@ -417,30 +417,30 @@ Generated: Tue, 13 May 2025 22:09:02 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 4.076s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 3.367s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.276s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.097s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 5.005s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.726s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.338s |  |
-| Basic echo function | ✅ Pass | 4.961s |  |
-| Streaming Basic echo function | ✅ Pass | 4.311s |  |
+| Completion: What is 2+2? Write only the... | ✅ Pass | 4.607s |  |
+| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.118s |  |
+| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.842s |  |
+| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.454s |  |
+| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 5.320s |  |
+| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.419s |  |
+| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.936s |  |
+| Basic echo function | ✅ Pass | 5.000s |  |
+| Streaming Basic echo function | ✅ Pass | 6.064s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 5.260s |  |
-| Streaming JSON response function | ✅ Pass | 4.467s |  |
-| Search query | ✅ Pass | 5.253s |  |
-| Streaming Search query | ✅ Pass | 4.274s |  |
-| Ask advice | ✅ Pass | 22.227s |  |
-| Streaming Ask advice | ✅ Pass | 21.233s |  |
+| JSON response function | ✅ Pass | 4.942s |  |
+| Streaming JSON response function | ✅ Pass | 4.720s |  |
+| Search query | ✅ Pass | 4.801s |  |
+| Streaming Search query | ✅ Pass | 4.670s |  |
+| Ask advice | ✅ Pass | 22.337s |  |
+| Streaming Ask advice | ✅ Pass | 15.103s |  |
 
 **Summary**: 15/15 (100.00%) successful tests
 
-**Average latency**: 6.858s
+**Average latency**: 6.756s
 
 ---
 

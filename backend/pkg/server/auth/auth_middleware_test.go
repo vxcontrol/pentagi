@@ -237,7 +237,7 @@ func (s *testServer) TestCall(t *testing.T, token ...string) (string, bool) {
 
 	request, err := http.NewRequest(http.MethodGet, s.URL+s.testEndpoint+"?id="+id, nil)
 	require.NoError(t, err)
-	if token != nil && len(token) == 1 {
+	if len(token) == 1 {
 		request.Header.Add("Authorization", token[0])
 	}
 

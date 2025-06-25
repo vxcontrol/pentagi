@@ -531,7 +531,7 @@ func (fp *flowProvider) GetMemoristHandler(ctx context.Context, taskID, subtaskI
 		} else if subtaskID != nil {
 			executionDetails += fmt.Sprintf("user no specified subtask, using current subtask '%d'\n", *subtaskID)
 		} else {
-			executionDetails += fmt.Sprintf("user no specified subtask, using all subtasks related to the task\n")
+			executionDetails += "user no specified subtask, using all subtasks related to the task\n"
 		}
 
 		memoristContext := map[string]map[string]any{

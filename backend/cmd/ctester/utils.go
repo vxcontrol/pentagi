@@ -10,6 +10,10 @@ import (
 
 // TruncateString truncates a string to a specified maximum length and adds ellipsis
 func TruncateString(s string, maxLength int) string {
+	s = strings.Trim(s, "\n\r\t ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\t", " ")
 	if len(s) <= maxLength {
 		return s
 	}

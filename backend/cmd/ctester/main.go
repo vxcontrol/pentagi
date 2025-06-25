@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -140,12 +141,12 @@ func RunTests(ctx context.Context, p provider.Provider, config TestConfig) ([]Ag
 	// Collect results
 	results := make([]AgentTestResult, 0, len(selectedOptions))
 	resultMap := make(map[provider.ProviderOptionsType]AgentTestResult)
-	var errors []error
+	var errs []error
 
 	for range selectedOptions {
 		result := <-output
 		if result.err != nil {
-			errors = append(errors, fmt.Errorf("error testing agent %s: %w", result.agentType, result.err))
+			errs = append(errs, fmt.Errorf("error testing agent %s: %w", result.agentType, result.err))
 		} else {
 			resultMap[result.agentType] = result.result
 
@@ -157,12 +158,12 @@ func RunTests(ctx context.Context, p provider.Provider, config TestConfig) ([]Ag
 	}
 
 	// Check for errors
-	if len(errors) > 0 {
+	if len(errs) > 0 {
 		errMsg := "Errors occurred during testing:"
-		for _, err := range errors {
+		for _, err := range errs {
 			errMsg += "\n  - " + err.Error()
 		}
-		return nil, fmt.Errorf(errMsg)
+		return nil, errors.New(errMsg)
 	}
 
 	// Reorder results to maintain consistent order

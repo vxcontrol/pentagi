@@ -20,6 +20,12 @@ func trimString(s string) string {
 	return strings.Trim(s, trimCharset)
 }
 
+const toolCallingAgentSystemPrompt = `
+You are a helpful assistant that follows instructions precisely.
+You must use tools instead of generating text.
+You must use only provided tools to figure out a question.
+`
+
 // Test definitions and execution functions
 
 // GetOutputJSONTestSuites returns the set of test suites specifically for simple_json agent
@@ -233,8 +239,8 @@ func GetAdvancedTestSuites() []TestSuite {
 	adviceTool := llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
-			Name:        "send_advice",
-			Description: "Sends your advice to the user about the problem",
+			Name:        "provide_advice",
+			Description: "Provides advice to the user about the problem",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -265,11 +271,11 @@ func GetAdvancedTestSuites() []TestSuite {
 		},
 		{
 			Name: "Ask advice",
-			Prompt: "Help me understand the error: 'cannot find package' in Go development " +
-				"by calling the send_advice function. Before calling the function, " +
+			Prompt: "Please give me advice on how to understand the error: 'cannot find package' " +
+				"in Go development by calling the provide_advice function. Before calling the function, " +
 				"think about the problem and the solution.",
 			Functions:    []llms.Tool{adviceTool},
-			ExpectedTool: "send_advice",
+			ExpectedTool: "provide_advice",
 			ValidateFunc: func(args map[string]interface{}) bool {
 				problem, isProblemExists := args["problem"].(string)
 				solution, isSolutionExists := args["solution"].(string)
@@ -612,6 +618,7 @@ func RunFunctionTest(
 	startTime := time.Now()
 
 	response, err := p.CallWithTools(ctx, agentType, []llms.MessageContent{
+		llms.TextParts(llms.ChatMessageTypeSystem, toolCallingAgentSystemPrompt),
 		llms.TextParts(llms.ChatMessageTypeHuman, test.Prompt),
 	}, test.Functions, streamCb)
 
@@ -644,28 +651,34 @@ func RunFunctionTest(
 	if useStream && respContent != trimString(choice.Content) {
 		result.Success = false
 		result.Error = fmt.Errorf("streaming response content mismatch: '%s' != '%s'",
-			respContent, choice.Content)
+			TruncateString(respContent, 20), TruncateString(choice.Content, 20))
 		return result
 	}
 
 	if useStream && reasoningContent != trimString(choice.ReasoningContent) {
 		result.Success = false
 		result.Error = fmt.Errorf("streaming reasoning content mismatch: '%s' != '%s'",
-			reasoningContent, choice.ReasoningContent)
+			TruncateString(reasoningContent, 20), TruncateString(choice.ReasoningContent, 20))
 		return result
 	}
 
-	var toolCalls []llms.ToolCall
+	var (
+		chunks    []string
+		toolCalls []llms.ToolCall
+	)
 	for _, choice := range response.Choices {
 		if len(choice.ToolCalls) > 0 {
 			toolCalls = append(toolCalls, choice.ToolCalls...)
+		}
+		if len(choice.Content) > 0 {
+			chunks = append(chunks, choice.Content)
 		}
 	}
 
 	if len(toolCalls) == 0 {
 		result.Response = choice.Content
 		result.Success = false
-		content := TruncateString(choice.Content, 50)
+		content := TruncateString(strings.Join(chunks, " | "), 50)
 		result.Error = fmt.Errorf("model did not call a function, responded with text: %s", content)
 		return result
 	}

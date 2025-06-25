@@ -420,7 +420,7 @@ func (fp *flowProvider) performReflector(
 			langfuse.WithStartEventOutput(msg),
 		)
 		logger.WithField("content", content[:min(1000, len(content))]).Warn(msg)
-		return nil, fmt.Errorf(msg)
+		return nil, errors.New(msg)
 	}
 
 	logger.WithField("content", content[:min(1000, len(content))]).Warn("got message instead of tool call")

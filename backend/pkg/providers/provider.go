@@ -47,10 +47,10 @@ type StreamMessageChunkType streaming.ChunkType
 
 const (
 	StreamMessageChunkTypeThinking StreamMessageChunkType = "thinking"
-	StreamMessageChunkTypeContent                         = "content"
-	StreamMessageChunkTypeResult                          = "result"
-	StreamMessageChunkTypeFlush                           = "flush"
-	StreamMessageChunkTypeUpdate                          = "update"
+	StreamMessageChunkTypeContent  StreamMessageChunkType = "content"
+	StreamMessageChunkTypeResult   StreamMessageChunkType = "result"
+	StreamMessageChunkTypeFlush    StreamMessageChunkType = "flush"
+	StreamMessageChunkTypeUpdate   StreamMessageChunkType = "update"
 )
 
 type StreamMessageChunk struct {

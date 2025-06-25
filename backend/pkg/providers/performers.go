@@ -3,8 +3,10 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"pentagi/pkg/cast"
 	"pentagi/pkg/database"
@@ -761,6 +763,17 @@ func (fp *flowProvider) performSimpleChain(
 		resp, err = fp.CallEx(ctx, opt, chain, nil)
 		if err == nil {
 			break
+		} else {
+			if errors.Is(err, context.Canceled) {
+				return "", err
+			}
+
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Second * 5):
+			default:
+			}
 		}
 	}
 
