@@ -144,6 +144,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
+			te.cfg.DuckDuckGoEnabled,
 			te.cfg.ProxyURL,
 			"", // region (default)
 			"", // safeSearch (default)

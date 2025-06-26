@@ -76,6 +76,9 @@ type Config struct {
 	LLMServerConfig          string `env:"LLM_SERVER_CONFIG_PATH"`
 	LLMServerLegacyReasoning bool   `env:"LLM_SERVER_LEGACY_REASONING" envDefault:"false"`
 
+	// DuckDuckGo search engine
+	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
+
 	// Google search engine
 	GoogleAPIKey string `env:"GOOGLE_API_KEY"`
 	GoogleCXKey  string `env:"GOOGLE_CX_KEY"`

@@ -3,7 +3,7 @@
 <div align="center" style="font-size: 1.5em; margin: 20px 0;">
     <strong>P</strong>enetration testing <strong>A</strong>rtificial <strong>G</strong>eneral <strong>I</strong>ntelligence
 </div>
-
+<br>
 <div align="center">
 
 > 🚀 **Join the Community!** Connect with security researchers, AI enthusiasts, and fellow ethical hackers. Get support, share insights, and stay updated with the latest PentAGI developments.
@@ -482,6 +482,7 @@ OPEN_AI_KEY=your_openai_key
 ANTHROPIC_API_KEY=your_anthropic_key
 
 # Optional: Additional search capabilities
+DUCKDUCKGO_ENABLED=true
 GOOGLE_API_KEY=your_google_key
 GOOGLE_CX_KEY=your_google_cx
 TAVILY_API_KEY=your_tavily_key
