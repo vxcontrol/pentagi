@@ -37,8 +37,8 @@ func (sw *flowScreenshotWorker) PutScreenshot(ctx context.Context, name, url str
 	defer sw.mx.Unlock()
 
 	screenshot, err := sw.db.CreateScreenshot(ctx, database.CreateScreenshotParams{
-		Name:   sanitizeUTF8(name),
-		Url:    sanitizeUTF8(url),
+		Name:   database.SanitizeUTF8(name),
+		Url:    database.SanitizeUTF8(url),
 		FlowID: sw.flowID,
 	})
 	if err != nil {

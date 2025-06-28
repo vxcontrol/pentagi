@@ -1025,9 +1025,11 @@ func (fp *flowProvider) GetSummarizeResultHandler(taskID, subtaskID *int64) tool
 
 		// TODO: here need to summarize result by chunks in iterations
 		if len(result) > 2*msgSummarizerLimit {
-			result = result[:msgSummarizerLimit] +
-				"\n\n{TRUNCATED}...\n\n" +
-				result[len(result)-msgSummarizerLimit:]
+			result = database.SanitizeUTF8(
+				result[:msgSummarizerLimit] +
+					"\n\n{TRUNCATED}...\n\n" +
+					result[len(result)-msgSummarizerLimit:],
+			)
 		}
 
 		opt := provider.OptionsTypeSimple
@@ -1037,6 +1039,7 @@ func (fp *flowProvider) GetSummarizeResultHandler(taskID, subtaskID *int64) tool
 			return "", wrapErrorEndSpan(ctx, summarizerSpan, "failed to get summary", err)
 		}
 
+		summary = database.SanitizeUTF8(summary)
 		summarizerSpan.End(
 			langfuse.WithEndSpanStatus("success"),
 			langfuse.WithEndSpanOutput(summary),

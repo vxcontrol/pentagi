@@ -176,7 +176,7 @@ func (mlw *flowMsgLogWorker) UpdateMsgResult(
 	defer mlw.mx.Unlock()
 
 	msgLog, err := mlw.db.UpdateMsgLogResult(ctx, database.UpdateMsgLogResultParams{
-		Result:       sanitizeUTF8(result),
+		Result:       database.SanitizeUTF8(result),
 		ResultFormat: resultFormat,
 		ID:           msgID,
 	})
@@ -201,8 +201,8 @@ func (mlw *flowMsgLogWorker) putMsg(
 
 	msgLog, err := mlw.db.CreateMsgLog(ctx, database.CreateMsgLogParams{
 		Type:      msgType,
-		Message:   sanitizeUTF8(msg),
-		Thinking:  database.StringToNullString(sanitizeUTF8(thinking)),
+		Message:   database.SanitizeUTF8(msg),
+		Thinking:  database.StringToNullString(database.SanitizeUTF8(thinking)),
 		FlowID:    mlw.flowID,
 		TaskID:    database.Int64ToNullInt64(taskID),
 		SubtaskID: database.Int64ToNullInt64(subtaskID),
@@ -229,9 +229,9 @@ func (mlw *flowMsgLogWorker) putMsgResult(
 
 	msgLog, err := mlw.db.CreateResultMsgLog(ctx, database.CreateResultMsgLogParams{
 		Type:         msgType,
-		Message:      sanitizeUTF8(msg),
-		Thinking:     database.StringToNullString(sanitizeUTF8(thinking)),
-		Result:       sanitizeUTF8(result),
+		Message:      database.SanitizeUTF8(msg),
+		Thinking:     database.StringToNullString(database.SanitizeUTF8(thinking)),
+		Result:       database.SanitizeUTF8(result),
 		ResultFormat: resultFormat,
 		FlowID:       mlw.flowID,
 		TaskID:       database.Int64ToNullInt64(taskID),
