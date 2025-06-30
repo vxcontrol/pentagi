@@ -79,6 +79,8 @@ type providerController struct {
 
 	startCallNumber *atomic.Int64
 
+	defaultDockerImageForPentest string
+
 	summarizerAgent     csum.Summarizer
 	summarizerAssistant csum.Summarizer
 
@@ -153,6 +155,8 @@ func NewProviderController(cfg *config.Config, docker docker.DockerClient) (Prov
 
 		startCallNumber: newAtomicInt64(0), // 0 means to make it random
 
+		defaultDockerImageForPentest: cfg.DockerDefaultImageForPentest,
+
 		summarizerAgent:     summarizerAgent,
 		summarizerAssistant: summarizerAssistant,
 
@@ -179,7 +183,7 @@ func (pc *providerController) NewFlowProvider(
 
 	imageTmpl, err := prompter.RenderTemplate(templates.PromptTypeImageChooser, map[string]any{
 		"DefaultImage":           pc.docker.GetDefaultImage(),
-		"DefaultImageForPentest": pentestDockerImage,
+		"DefaultImageForPentest": pc.defaultDockerImageForPentest,
 		"Input":                  input,
 	})
 	if err != nil {

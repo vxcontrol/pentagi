@@ -676,6 +676,34 @@ For using GitHub OAuth you need to create a new OAuth application in your GitHub
 
 For using Google OAuth you need to create a new OAuth application in your Google account and set the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` file.
 
+### Docker Image Configuration
+
+PentAGI allows you to configure Docker image selection for executing various tasks. The system automatically chooses the most appropriate image based on the task type, but you can constrain this selection by specifying your preferred images:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DOCKER_DEFAULT_IMAGE` | `debian:latest` | Default Docker image for general tasks and ambiguous cases |
+| `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for security/penetration testing tasks |
+
+When these environment variables are set, AI agents will be limited to the image choices you specify. This is particularly useful for:
+
+- **Security Enforcement**: Restricting usage to only verified and trusted images
+- **Environment Standardization**: Using corporate or customized images across all operations
+- **Performance Optimization**: Utilizing pre-built images with necessary tools already installed
+
+Configuration examples:
+
+```bash
+# Using a custom image for general tasks
+DOCKER_DEFAULT_IMAGE=mycompany/custom-debian:latest
+
+# Using a specialized image for penetration testing
+DOCKER_DEFAULT_IMAGE_FOR_PENTEST=mycompany/pentest-tools:v2.0
+```
+
+> [!NOTE]
+> If a user explicitly specifies a particular Docker image in their task, the system will try to use that exact image, ignoring these settings. These variables only affect the system's automatic image selection process.
+
 ## 💻 Development
 
 ### Development Requirements
