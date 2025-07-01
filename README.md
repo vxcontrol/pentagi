@@ -897,17 +897,50 @@ docker run --rm \
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepseek.provider.yml
+
+# Test with Custom OpenAI configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
 ```
 
 To use these configurations, your `.env` file only needs to contain:
 
 ```
-LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.deepseek.com
+LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.deepseek.com or https://api.openai.com/v1
 LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
-LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml
-LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format (default: false)
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml
+LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
 ```
+
+#### Using OpenAI with Unverified Organizations
+
+For OpenAI accounts with unverified organizations that don't have access to the latest reasoning models (o1, o3, o4-mini), you need to use a custom configuration.
+
+To use OpenAI with unverified organization accounts, configure your `.env` file as follows:
+
+```bash
+LLM_SERVER_URL=https://api.openai.com/v1
+LLM_SERVER_KEY=your_openai_api_key
+LLM_SERVER_MODEL=                                # Leave empty, models are specified in config
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/custom-openai.provider.yml
+LLM_SERVER_LEGACY_REASONING=true                 # Required for OpenAI reasoning format
+```
+
+This configuration uses the pre-built `custom-openai.provider.yml` file that maps all agent types to models available for unverified organizations, using `o3-mini` instead of models like `o1`, `o3`, and `o4-mini`.
+
+You can test this configuration using:
+
+```bash
+# Test with custom OpenAI configuration for unverified accounts
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
+```
+
+> [!NOTE]
+> The `LLM_SERVER_LEGACY_REASONING=true` setting is crucial for OpenAI compatibility as it ensures reasoning parameters are sent in the format expected by OpenAI's API.
 
 #### Running Tests in a Production Environment
 

@@ -120,7 +120,7 @@ func New(cfg *config.Config) (provider.Provider, error) {
 			provider.OptionsTypeEnricher:   append(creative, llms.WithModel(OpenAIEnricherModel)),
 			provider.OptionsTypeCoder:      append(determine, llms.WithModel(OpenAICoderModel)),
 			provider.OptionsTypeInstaller:  append(determine, llms.WithModel(OpenAIInstallerModel)),
-			provider.OptionsTypePentester:  append(pentester),
+			provider.OptionsTypePentester:  pentester,
 		},
 	}, nil
 }
