@@ -70,7 +70,7 @@
                 // "-report", "${workspaceFolder}/examples/tests/openrouter-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/deepinfra-report.md",
                 "-agents", "all",
-                "-tests", "all",
+                "-groups", "all",
                 "-verbose",
             ],
             "cwd": "${workspaceFolder}",

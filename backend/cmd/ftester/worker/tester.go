@@ -31,7 +31,9 @@ type tester struct {
 	ctx          context.Context
 	docker       docker.DockerClient
 	providers    providers.ProviderController
+	providerName provider.ProviderName
 	providerType provider.ProviderType
+	userID       int64
 	flowID       int64
 	taskID       *int64
 	subtaskID    *int64
@@ -50,12 +52,12 @@ func NewTester(
 	ctx context.Context,
 	dockerClient docker.DockerClient,
 	providerController providers.ProviderController,
-	flowID int64,
+	flowID, userID int64,
 	taskID, subtaskID *int64,
-	providerType provider.ProviderType,
+	prvname provider.ProviderName,
 ) (Tester, error) {
-	// Get provider
-	provider, err := providerController.Get(providerType)
+	// New provider by user
+	prv, err := providerController.GetProvider(ctx, prvname, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get provider: %w", err)
 	}
@@ -92,11 +94,13 @@ func NewTester(
 		ctx:          ctx,
 		docker:       dockerClient,
 		providers:    providerController,
-		providerType: providerType,
+		providerName: prvname,
+		providerType: prv.Type(),
+		userID:       userID,
 		flowID:       flowID,
 		taskID:       taskID,
 		subtaskID:    subtaskID,
-		provider:     provider,
+		provider:     prv,
 		toolExecutor: toolExecutor,
 		flowExecutor: flowExecutor,
 		proxies:      proxies,
@@ -143,13 +147,14 @@ func (t *tester) initFlowProviderController() error {
 			langfuse.WithTraceTags([]string{"controller"}),
 			langfuse.WithTraceSessionId(fmt.Sprintf("flow-%d", flow.ID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
-				"flow_id":    flow.ID,
-				"user_id":    flow.UserID,
-				"user_email": user.Mail,
-				"user_name":  user.Name,
-				"user_hash":  user.Hash,
-				"user_role":  user.RoleName,
-				"provider":   flow.ModelProvider,
+				"flow_id":       flow.ID,
+				"user_id":       flow.UserID,
+				"user_email":    user.Mail,
+				"user_name":     user.Name,
+				"user_hash":     user.Hash,
+				"user_role":     user.RoleName,
+				"provider_name": flow.ModelProviderName,
+				"provider_type": flow.ModelProviderType,
 			}),
 		),
 	)
@@ -174,14 +179,15 @@ func (t *tester) initFlowProviderController() error {
 	// It determines which AI service (OpenAI, Claude, etc) will be used and how
 	// the instructions are formatted and interpreted
 	flowProvider, err := t.providers.LoadFlowProvider(
-		t.db,
-		t.providerType,
+		t.ctx,
+		t.providerName,
 		prompter,
 		t.flowExecutor,
 		t.flowID,
+		t.userID,
 		container.Image,
+		flow.Language,
 		flow.Title,
-		flow.Model,
 	)
 	if err != nil {
 		return wrapErrorEndSpan(t.ctx, flowSpan, "failed to load flow provider", err)
@@ -317,7 +323,8 @@ func (t *tester) executeDescribeFlows(ctx context.Context, params *DescribeParam
 		// Display additional info if verbose mode is enabled
 		if params.Verbose {
 			terminal.PrintKeyValue("Model", flow.Model)
-			terminal.PrintKeyValue("Provider", flow.ModelProvider)
+			terminal.PrintKeyValue("ProviderName", flow.ModelProviderName)
+			terminal.PrintKeyValue("ProviderType", string(flow.ModelProviderType))
 			terminal.PrintKeyValue("Language", flow.Language)
 
 			// Get user info who created this flow
@@ -476,7 +483,7 @@ func (t *tester) executeDescribeFlowTasks(ctx context.Context, params *DescribeP
 	terminal.PrintKeyValue("Title", flow.Title)
 	terminal.PrintKeyValue("Status", string(flow.Status))
 	terminal.PrintKeyValue("Language", flow.Language)
-	terminal.PrintKeyValue("Model", fmt.Sprintf("%s (%s)", flow.Model, flow.ModelProvider))
+	terminal.PrintKeyValue("Model", fmt.Sprintf("%s (%s)", flow.Model, flow.ModelProviderName))
 	if flow.CreatedAt.Valid {
 		terminal.PrintKeyValue("Created At", flow.CreatedAt.Time.Format("2006-01-02 15:04:05"))
 	}

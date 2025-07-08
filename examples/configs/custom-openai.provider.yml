@@ -19,7 +19,7 @@ simple_json:
     input: 0.4
     output: 1.6
 
-agent:
+primary_agent:
   model: "o3-mini" # o4-mini
   n: 1
   max_tokens: 4000

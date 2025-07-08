@@ -12,7 +12,7 @@ import (
 	"pentagi/pkg/docker"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
-	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/schema"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -144,7 +144,7 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 			return "", wrapErrorEndSpan(adviserCtx, adviserSpan, "failed to get system adviser template", err)
 		}
 
-		opt := provider.OptionsTypeAdviser
+		opt := pconfig.OptionsTypeAdviser
 		msgChainType := database.MsgchainTypeAdviser
 		advice, err := fp.performSimpleChain(adviserCtx, taskID, subtaskID, opt, msgChainType, systemAdviserTmpl, userAdviserTmpl)
 		if err != nil {
@@ -1032,7 +1032,7 @@ func (fp *flowProvider) GetSummarizeResultHandler(taskID, subtaskID *int64) tool
 			)
 		}
 
-		opt := provider.OptionsTypeSimple
+		opt := pconfig.OptionsTypeSimple
 		msgChainType := database.MsgchainTypeSummarizer
 		summary, err := fp.performSimpleChain(ctx, taskID, subtaskID, opt, msgChainType, systemSummarizerTmpl, result)
 		if err != nil {
@@ -1091,7 +1091,7 @@ func (fp *flowProvider) fixToolCallArgs(
 		return nil, fmt.Errorf("failed to get system tool call fixer template: %w", err)
 	}
 
-	opt := provider.OptionsTypeSimpleJSON
+	opt := pconfig.OptionsTypeSimpleJSON
 	msgChainType := database.MsgchainTypeToolCallFixer
 	toolCallFixerResult, err := fp.performSimpleChain(ctx, nil, nil, opt, msgChainType, systemToolCallFixerTmpl, userToolCallFixerTmpl)
 	if err != nil {

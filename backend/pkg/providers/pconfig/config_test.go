@@ -1,12 +1,10 @@
-package custom
+package pconfig
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"pentagi/pkg/providers/provider"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -139,7 +137,7 @@ func TestLoadConfig(t *testing.T) {
 		configFile  string
 		content     string
 		wantErr     bool
-		checkConfig func(*testing.T, *ProvidersConfig)
+		checkConfig func(*testing.T, *ProviderConfig)
 	}{
 		{
 			name:       "empty path",
@@ -174,7 +172,7 @@ func TestLoadConfig(t *testing.T) {
 					"temperature": 0.7
 				}
 			}`,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -195,7 +193,7 @@ func TestLoadConfig(t *testing.T) {
 					}
 				}
 			}`,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -222,7 +220,7 @@ func TestLoadConfig(t *testing.T) {
 					}
 				}
 			}`,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -249,7 +247,7 @@ func TestLoadConfig(t *testing.T) {
 					}
 				}
 			}`,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -271,7 +269,7 @@ simple:
   max_tokens: 100
   temperature: 0.7
 `,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -290,7 +288,7 @@ simple:
     effort: high
     max_tokens: 8000
 `,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -315,7 +313,7 @@ simple:
     effort: low
     max_tokens: 0
 `,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -340,7 +338,7 @@ simple:
     effort: none
     max_tokens: 2500
 `,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -372,6 +370,228 @@ simple:
 			}
 
 			assert.NoError(t, err)
+			if tt.checkConfig != nil {
+				tt.checkConfig(t, cfg)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_BackwardCompatibility(t *testing.T) {
+	tests := []struct {
+		name        string
+		configFile  string
+		content     string
+		format      string
+		wantErr     bool
+		checkConfig func(*testing.T, *ProviderConfig)
+	}{
+		{
+			name:       "legacy agent config JSON",
+			configFile: "legacy.json",
+			format:     "json",
+			content: `{
+				"agent": {
+					"model": "legacy-model",
+					"max_tokens": 200,
+					"temperature": 0.8
+				},
+				"simple": {
+					"model": "simple-model",
+					"max_tokens": 100
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent' field")
+				assert.Equal(t, "legacy-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 200, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.8, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Simple, "Simple config should be preserved")
+				assert.Equal(t, "simple-model", cfg.Simple.Model)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent for backward compatibility")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+		{
+			name:       "legacy agent config YAML",
+			configFile: "legacy.yaml",
+			format:     "yaml",
+			content: `
+agent:
+  model: legacy-yaml-model
+  max_tokens: 300
+  temperature: 0.9
+simple:
+  model: simple-yaml-model
+  max_tokens: 150
+`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent' field")
+				assert.Equal(t, "legacy-yaml-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 300, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.9, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Simple, "Simple config should be preserved")
+				assert.Equal(t, "simple-yaml-model", cfg.Simple.Model)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent for backward compatibility")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+		{
+			name:       "new primary_agent config takes precedence JSON",
+			configFile: "new_format.json",
+			format:     "json",
+			content: `{
+				"primary_agent": {
+					"model": "new-model",
+					"max_tokens": 400,
+					"temperature": 0.6
+				},
+				"agent": {
+					"model": "old-model",
+					"max_tokens": 200,
+					"temperature": 0.8
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set")
+				// Should use primary_agent, not legacy agent
+				assert.Equal(t, "new-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 400, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.6, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+		{
+			name:       "explicit assistant config overrides default YAML",
+			configFile: "explicit_assistant.yaml",
+			format:     "yaml",
+			content: `
+agent:
+  model: agent-model
+  max_tokens: 200
+assistant:
+  model: assistant-model
+  max_tokens: 500
+  temperature: 0.5
+`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent'")
+				assert.Equal(t, "agent-model", cfg.PrimaryAgent.Model)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set")
+				// Should use explicit assistant config, not agent
+				assert.Equal(t, "assistant-model", cfg.Assistant.Model)
+				assert.Equal(t, 500, cfg.Assistant.MaxTokens)
+				assert.Equal(t, 0.5, cfg.Assistant.Temperature)
+				assert.NotEqual(t, cfg.PrimaryAgent, cfg.Assistant, "Assistant should not be the same as PrimaryAgent")
+			},
+		},
+		{
+			name:       "no agent configs at all",
+			configFile: "no_agents.json",
+			format:     "json",
+			content: `{
+				"simple": {
+					"model": "simple-only",
+					"max_tokens": 100
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				assert.Nil(t, cfg.PrimaryAgent, "PrimaryAgent should be nil")
+				assert.Nil(t, cfg.Assistant, "Assistant should be nil")
+				require.NotNil(t, cfg.Simple, "Simple should be set")
+				assert.Equal(t, "simple-only", cfg.Simple.Model)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, tt.configFile)
+			err := os.WriteFile(configPath, []byte(tt.content), 0644)
+			require.NoError(t, err)
+
+			cfg, err := LoadConfig(configPath, nil)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			if tt.checkConfig != nil {
+				tt.checkConfig(t, cfg)
+			}
+		})
+	}
+}
+
+func TestLoadConfigData_BackwardCompatibility(t *testing.T) {
+	tests := []struct {
+		name        string
+		configData  string
+		format      string
+		wantErr     bool
+		checkConfig func(*testing.T, *ProviderConfig)
+	}{
+		{
+			name:   "legacy agent config JSON data",
+			format: "json",
+			configData: `{
+				"agent": {
+					"model": "legacy-data-model",
+					"max_tokens": 250,
+					"temperature": 0.7
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent' field")
+				assert.Equal(t, "legacy-data-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 250, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.7, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+		{
+			name:   "legacy agent config YAML data",
+			format: "yaml",
+			configData: `
+agent:
+  model: legacy-yaml-data-model
+  max_tokens: 350
+  temperature: 0.85
+`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent' field")
+				assert.Equal(t, "legacy-yaml-data-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 350, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.85, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := LoadConfigData([]byte(tt.configData), nil)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
 			if tt.checkConfig != nil {
 				tt.checkConfig(t, cfg)
 			}
@@ -806,7 +1026,7 @@ response_mime_type: application/json
 }
 
 func TestProvidersConfig_GetOptionsForType(t *testing.T) {
-	config := &ProvidersConfig{
+	config := &ProviderConfig{
 		Simple: &AgentConfig{},
 	}
 
@@ -821,26 +1041,26 @@ func TestProvidersConfig_GetOptionsForType(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		config  *ProvidersConfig
-		optType provider.ProviderOptionsType
+		config  *ProviderConfig
+		optType ProviderOptionsType
 		wantLen int
 	}{
 		{
 			name:    "nil config",
 			config:  nil,
-			optType: provider.OptionsTypeSimple,
+			optType: OptionsTypeSimple,
 			wantLen: 0,
 		},
 		{
 			name:    "existing config",
 			config:  config,
-			optType: provider.OptionsTypeSimple,
+			optType: OptionsTypeSimple,
 			wantLen: 3,
 		},
 		{
 			name:    "non-existing config",
 			config:  config,
-			optType: provider.OptionsTypeAgent,
+			optType: OptionsTypePrimaryAgent,
 			wantLen: 0,
 		},
 		{
@@ -1077,15 +1297,15 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 		configFile     string
 		content        string
 		defaultOptions []llms.CallOption
-		checkConfig    func(*testing.T, *ProvidersConfig)
+		checkConfig    func(*testing.T, *ProviderConfig)
 	}{
 		{
 			name:           "empty path with defaults",
 			configFile:     "",
 			defaultOptions: defaultOptions,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				// when configPath is empty, we should create a new config with defaults
-				cfg = &ProvidersConfig{defaultOptions: defaultOptions}
+				cfg = &ProviderConfig{defaultOptions: defaultOptions}
 				require.NotNil(t, cfg)
 				assert.Equal(t, defaultOptions, cfg.defaultOptions)
 			},
@@ -1097,9 +1317,9 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 			defaultOptions: []llms.CallOption{
 				llms.WithTemperature(0.5),
 			},
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg)
-				options := cfg.GetOptionsForType(provider.OptionsTypeSimple)
+				options := cfg.GetOptionsForType(OptionsTypeSimple)
 				assert.Len(t, options, 1)
 			},
 		},
@@ -1112,11 +1332,11 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 				}
 			}`,
 			defaultOptions: defaultOptions,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg)
-				options := cfg.GetOptionsForType(provider.OptionsTypeSimple)
+				options := cfg.GetOptionsForType(OptionsTypeSimple)
 				assert.Len(t, options, 1) // should use agent config, not defaults
-				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
+				options = cfg.GetOptionsForType(OptionsTypePrimaryAgent)
 				assert.Len(t, options, 2) // should use defaults
 			},
 		},
@@ -1129,11 +1349,11 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 				}
 			}`,
 			defaultOptions: defaultOptions,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg)
-				options := cfg.GetOptionsForType(provider.OptionsTypeAssistant)
+				options := cfg.GetOptionsForType(OptionsTypeAssistant)
 				assert.Len(t, options, 1) // should use agent config (backward compatibility)
-				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
+				options = cfg.GetOptionsForType(OptionsTypePrimaryAgent)
 				assert.Len(t, options, 1)
 			},
 		},
@@ -1146,11 +1366,11 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 				}
 			}`,
 			defaultOptions: defaultOptions,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg)
-				options := cfg.GetOptionsForType(provider.OptionsTypeAssistant)
+				options := cfg.GetOptionsForType(OptionsTypeAssistant)
 				assert.Len(t, options, 1) // should use assistant config
-				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
+				options = cfg.GetOptionsForType(OptionsTypePrimaryAgent)
 				assert.Len(t, options, 2) // should use defaults
 			},
 		},
@@ -1168,7 +1388,7 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 
 			cfg, err := LoadConfig(configPath, tt.defaultOptions)
 			if configPath == "" {
-				cfg = &ProvidersConfig{defaultOptions: tt.defaultOptions}
+				cfg = &ProviderConfig{defaultOptions: tt.defaultOptions}
 			}
 			require.NoError(t, err)
 			if tt.checkConfig != nil {
@@ -1184,7 +1404,7 @@ func TestProvidersConfig_GetOptionsForType_WithDefaults(t *testing.T) {
 		llms.WithMaxTokens(1000),
 	}
 
-	config := &ProvidersConfig{
+	config := &ProviderConfig{
 		Simple:         &AgentConfig{},
 		defaultOptions: defaultOptions,
 	}
@@ -1200,29 +1420,29 @@ func TestProvidersConfig_GetOptionsForType_WithDefaults(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		config      *ProvidersConfig
-		optType     provider.ProviderOptionsType
+		config      *ProviderConfig
+		optType     ProviderOptionsType
 		wantLen     int
 		useDefaults bool
 	}{
 		{
 			name:        "nil config",
 			config:      nil,
-			optType:     provider.OptionsTypeSimple,
+			optType:     OptionsTypeSimple,
 			wantLen:     0,
 			useDefaults: false,
 		},
 		{
 			name:        "existing config",
 			config:      config,
-			optType:     provider.OptionsTypeSimple,
+			optType:     OptionsTypeSimple,
 			wantLen:     3,
 			useDefaults: false,
 		},
 		{
 			name:        "non-existing config with defaults",
 			config:      config,
-			optType:     provider.OptionsTypeAgent,
+			optType:     OptionsTypePrimaryAgent,
 			wantLen:     2,
 			useDefaults: true,
 		},
@@ -1241,6 +1461,149 @@ func TestProvidersConfig_GetOptionsForType_WithDefaults(t *testing.T) {
 			assert.Len(t, options, tt.wantLen)
 			if tt.useDefaults {
 				assert.Equal(t, defaultOptions, options)
+			}
+		})
+	}
+}
+
+func TestProviderConfig_BuildOptionsMap(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      *ProviderConfig
+		wantNil     bool
+		checkResult func(*testing.T, map[ProviderOptionsType][]llms.CallOption)
+	}{
+		{
+			name:    "nil config",
+			config:  nil,
+			wantNil: true,
+		},
+		{
+			name: "empty config with defaults",
+			config: &ProviderConfig{
+				defaultOptions: []llms.CallOption{
+					llms.WithTemperature(0.5),
+					llms.WithMaxTokens(1000),
+				},
+			},
+			checkResult: func(t *testing.T, options map[ProviderOptionsType][]llms.CallOption) {
+				// All provider types should be present
+				expectedTypes := []ProviderOptionsType{
+					OptionsTypeSimple,
+					OptionsTypeSimpleJSON,
+					OptionsTypePrimaryAgent,
+					OptionsTypeAssistant,
+					OptionsTypeGenerator,
+					OptionsTypeRefiner,
+					OptionsTypeAdviser,
+					OptionsTypeReflector,
+					OptionsTypeSearcher,
+					OptionsTypeEnricher,
+					OptionsTypeCoder,
+					OptionsTypeInstaller,
+					OptionsTypePentester,
+				}
+
+				assert.Len(t, options, len(expectedTypes), "All provider types should be present")
+
+				for _, optType := range expectedTypes {
+					opt, exists := options[optType]
+					assert.True(t, exists, "Option type %s should exist", optType)
+					assert.NotNil(t, opt, "Option for type %s should not be nil", optType)
+				}
+			},
+		},
+		{
+			name: "config with some agent configurations",
+			config: func() *ProviderConfig {
+				cfg := &ProviderConfig{
+					defaultOptions: []llms.CallOption{
+						llms.WithTemperature(0.5),
+						llms.WithMaxTokens(1000),
+					},
+				}
+
+				// Configure simple agent
+				simpleJSON := `{
+					"model": "simple-model",
+					"max_tokens": 100,
+					"temperature": 0.7
+				}`
+				cfg.Simple = &AgentConfig{}
+				err := json.Unmarshal([]byte(simpleJSON), cfg.Simple)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				// Configure agent
+				agentJSON := `{
+					"model": "agent-model",
+					"max_tokens": 200,
+					"temperature": 0.8
+				}`
+				cfg.PrimaryAgent = &AgentConfig{}
+				err = json.Unmarshal([]byte(agentJSON), cfg.PrimaryAgent)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				return cfg
+			}(),
+			checkResult: func(t *testing.T, options map[ProviderOptionsType][]llms.CallOption) {
+				// All provider types should be present
+				expectedTypes := []ProviderOptionsType{
+					OptionsTypeSimple,
+					OptionsTypeSimpleJSON,
+					OptionsTypePrimaryAgent,
+					OptionsTypeAssistant,
+					OptionsTypeGenerator,
+					OptionsTypeRefiner,
+					OptionsTypeAdviser,
+					OptionsTypeReflector,
+					OptionsTypeSearcher,
+					OptionsTypeEnricher,
+					OptionsTypeCoder,
+					OptionsTypeInstaller,
+					OptionsTypePentester,
+				}
+
+				assert.Len(t, options, len(expectedTypes), "All provider types should be present")
+
+				// Simple should have 3 options (model, max_tokens, temperature)
+				simpleOpts := options[OptionsTypeSimple]
+				assert.Len(t, simpleOpts, 3, "Simple options should have 3 elements")
+
+				// SimpleJSON should have simple options + JSON mode
+				simpleJSONOpts := options[OptionsTypeSimpleJSON]
+				assert.Len(t, simpleJSONOpts, 4, "SimpleJSON options should have 4 elements (simple + JSON)")
+
+				// Agent should have 3 options (model, max_tokens, temperature)
+				agentOpts := options[OptionsTypePrimaryAgent]
+				assert.Len(t, agentOpts, 3, "Agent options should have 3 elements")
+
+				// Assistant should have agent options (backward compatibility)
+				assistantOpts := options[OptionsTypeAssistant]
+				assert.Len(t, assistantOpts, 3, "Assistant options should have 3 elements (using agent config)")
+
+				// Other types should use defaults
+				generatorOpts := options[OptionsTypeGenerator]
+				assert.Len(t, generatorOpts, 2, "Generator options should use defaults")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.config.BuildOptionsMap()
+
+			if tt.wantNil {
+				assert.Nil(t, result)
+				return
+			}
+
+			assert.NotNil(t, result)
+			if tt.checkResult != nil {
+				tt.checkResult(t, result)
 			}
 		})
 	}

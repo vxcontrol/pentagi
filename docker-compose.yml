@@ -154,9 +154,7 @@ services:
     ports:
       - 127.0.0.1:9187:9187
     environment:
-      - DATA_SOURCE_NAME=pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
-      - DATA_SOURCE_USER=${PENTAGI_POSTGRES_USER:-postgres}
-      - DATA_SOURCE_PASS=${PENTAGI_POSTGRES_PASSWORD:-postgres}
+      - DATA_SOURCE_NAME=postgresql://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
     logging:
       options:
         max-size: 50m

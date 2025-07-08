@@ -7,6 +7,7 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/providers/pconfig"
 )
 
 const (
@@ -47,6 +48,9 @@ type FlowSubscriber interface {
 	VectorStoreLogAdded(ctx context.Context) (<-chan *model.VectorStoreLog, error)
 	AssistantLogAdded(ctx context.Context) (<-chan *model.AssistantLog, error)
 	AssistantLogUpdated(ctx context.Context) (<-chan *model.AssistantLog, error)
+	ProviderCreated(ctx context.Context) (<-chan *model.ProviderConfig, error)
+	ProviderUpdated(ctx context.Context) (<-chan *model.ProviderConfig, error)
+	ProviderDeleted(ctx context.Context) (<-chan *model.ProviderConfig, error)
 	FlowContext
 }
 
@@ -68,6 +72,9 @@ type FlowPublisher interface {
 	VectorStoreLogAdded(ctx context.Context, vectorStoreLog database.Vecstorelog)
 	AssistantLogAdded(ctx context.Context, assistantLog database.Assistantlog)
 	AssistantLogUpdated(ctx context.Context, assistantLog database.Assistantlog, appendPart bool)
+	ProviderCreated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
+	ProviderUpdated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
+	ProviderDeleted(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
 	FlowContext
 }
 
@@ -92,6 +99,9 @@ type controller struct {
 	vecStoreLogAdded    Channel[*model.VectorStoreLog]
 	assistantLogAdded   Channel[*model.AssistantLog]
 	assistantLogUpdated Channel[*model.AssistantLog]
+	providerCreated     Channel[*model.ProviderConfig]
+	providerUpdated     Channel[*model.ProviderConfig]
+	providerDeleted     Channel[*model.ProviderConfig]
 }
 
 func NewSubscriptionsController() SubscriptionsController {
@@ -116,6 +126,9 @@ func NewSubscriptionsController() SubscriptionsController {
 		vecStoreLogAdded:    NewChannel[*model.VectorStoreLog](),
 		assistantLogAdded:   NewChannel[*model.AssistantLog](),
 		assistantLogUpdated: NewChannel[*model.AssistantLog](),
+		providerCreated:     NewChannel[*model.ProviderConfig](),
+		providerUpdated:     NewChannel[*model.ProviderConfig](),
+		providerDeleted:     NewChannel[*model.ProviderConfig](),
 	}
 }
 

@@ -829,9 +829,10 @@ The utility features parallel testing of multiple agents, detailed reporting, an
 ### Key Features
 
 - **Parallel Testing**: Tests multiple agents simultaneously for faster results
-- **Comprehensive Test Suite**: Evaluates basic completion, JSON responses, function calling, and more
+- **Comprehensive Test Suite**: Evaluates basic completion, JSON responses, function calling, and penetration testing knowledge
 - **Detailed Reporting**: Generates markdown reports with success rates and performance metrics
 - **Flexible Configuration**: Test specific agents or test groups as needed
+- **Specialized Test Groups**: Includes domain-specific tests for cybersecurity and penetration testing scenarios
 
 ### Usage Scenarios
 
@@ -851,10 +852,10 @@ go run cmd/ctester/*.go -config ../examples/configs/openrouter.provider.yml -ver
 go run cmd/ctester/*.go -config ../examples/configs/deepinfra.provider.yml -report ../test-report.md
 
 # Test specific agent types only 
-go run cmd/ctester/*.go -agents simple,simple_json,agent -verbose
+go run cmd/ctester/*.go -agents simple,simple_json,primary_agent -verbose
 
 # Test specific test groups only
-go run cmd/ctester/*.go -tests "Simple Completion,System User Prompts" -verbose
+go run cmd/ctester/*.go -groups basic,advanced -verbose
 ```
 
 #### For Users (using Docker image)
@@ -869,7 +870,7 @@ docker run --rm -v $(pwd)/.env:/opt/pentagi/.env vxcontrol/pentagi /opt/pentagi/
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   -v $(pwd)/my-config.yml:/opt/pentagi/config.yml \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/config.yml -verbose
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/config.yml -agents simple,primary_agent,coder -verbose
 
 # Generate a detailed report
 docker run --rm \
@@ -950,6 +951,9 @@ If you already have a running PentAGI container and want to test the current con
 # Run ctester in an existing container using current environment variables
 docker exec -it pentagi /opt/pentagi/bin/ctester -verbose
 
+# Test specific agent types with deterministic ordering
+docker exec -it pentagi /opt/pentagi/bin/ctester -agents simple,primary_agent,pentester -groups basic,knowledge -verbose
+
 # Generate a report file inside the container
 docker exec -it pentagi /opt/pentagi/bin/ctester -report /opt/pentagi/data/agent-test-report.md
 
@@ -962,11 +966,40 @@ docker cp pentagi:/opt/pentagi/data/agent-test-report.md ./
 The utility accepts several options:
 
 - `-env <path>` - Path to environment file (default: `.env`)
+- `-type <provider>` - Provider type: `custom`, `openai`, `anthropic`, `bedrock`, `ollama`, `gemini` (default: `custom`)
 - `-config <path>` - Path to custom provider config (default: from `LLM_SERVER_CONFIG_PATH` env variable)
+- `-tests <path>` - Path to custom tests YAML file (optional)
 - `-report <path>` - Path to write the report file (optional)
 - `-agents <list>` - Comma-separated list of agent types to test (default: `all`)
-- `-tests <list>` - Comma-separated list of test groups to run (default: `all`)
+- `-groups <list>` - Comma-separated list of test groups to run (default: `all`)
 - `-verbose` - Enable verbose output with detailed test results for each agent
+
+### Available Agent Types
+
+Agents are tested in the following deterministic order:
+
+1. **simple** - Basic completion tasks
+2. **simple_json** - JSON-structured responses
+3. **primary_agent** - Main reasoning agent
+4. **assistant** - Interactive assistant mode
+5. **generator** - Content generation
+6. **refiner** - Content refinement and improvement
+7. **adviser** - Expert advice and consultation
+8. **reflector** - Self-reflection and analysis
+9. **searcher** - Information gathering and search
+10. **enricher** - Data enrichment and expansion
+11. **coder** - Code generation and analysis
+12. **installer** - Installation and setup tasks
+13. **pentester** - Penetration testing and security assessment
+
+### Available Test Groups
+
+- **basic** - Fundamental completion and prompt response tests
+- **advanced** - Complex reasoning and function calling tests  
+- **json** - JSON format validation and structure tests (specifically designed for `simple_json` agent)
+- **knowledge** - Domain-specific cybersecurity and penetration testing knowledge tests
+
+> **Note**: The `json` test group is specifically designed for the `simple_json` agent type, while all other agents are tested with `basic`, `advanced`, and `knowledge` groups. This specialization ensures optimal testing coverage for each agent's intended purpose.
 
 ### Example Provider Configuration
 
@@ -993,10 +1026,13 @@ simple_json:
 
 ### Optimization Workflow
 
-1. **Create a baseline**: Run tests with default configuration
-2. **Experiment**: Try different models for each agent type
-3. **Compare results**: Look for the best success rate and performance
-4. **Deploy optimal configuration**: Use in production with your optimized setup
+1. **Create a baseline**: Run tests with default configuration to establish benchmark performance
+2. **Analyze agent-specific performance**: Review the deterministic agent ordering to identify underperforming agents
+3. **Test specialized configurations**: Experiment with different models for each agent type using provider-specific configs
+4. **Focus on domain knowledge**: Pay special attention to knowledge group tests for cybersecurity expertise
+5. **Validate function calling**: Ensure tool-based tests pass consistently for critical agent types
+6. **Compare results**: Look for the best success rate and performance across all test groups
+7. **Deploy optimal configuration**: Use in production with your optimized setup
 
 This tool helps ensure your AI agents are using the most effective models for their specific tasks, improving reliability while optimizing costs.
 

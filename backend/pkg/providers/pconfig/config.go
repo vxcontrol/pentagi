@@ -1,4 +1,4 @@
-package custom
+package pconfig
 
 import (
 	"encoding/json"
@@ -6,11 +6,48 @@ import (
 	"os"
 	"path/filepath"
 
-	"pentagi/pkg/providers/provider"
-
 	"github.com/vxcontrol/langchaingo/llms"
 	"gopkg.in/yaml.v3"
 )
+
+type ProviderOptionsType string
+
+const (
+	OptionsTypePrimaryAgent ProviderOptionsType = "primary_agent"
+	OptionsTypeAssistant    ProviderOptionsType = "assistant"
+	OptionsTypeSimple       ProviderOptionsType = "simple"
+	OptionsTypeSimpleJSON   ProviderOptionsType = "simple_json"
+	OptionsTypeAdviser      ProviderOptionsType = "adviser"
+	OptionsTypeGenerator    ProviderOptionsType = "generator"
+	OptionsTypeRefiner      ProviderOptionsType = "refiner"
+	OptionsTypeSearcher     ProviderOptionsType = "searcher"
+	OptionsTypeEnricher     ProviderOptionsType = "enricher"
+	OptionsTypeCoder        ProviderOptionsType = "coder"
+	OptionsTypeInstaller    ProviderOptionsType = "installer"
+	OptionsTypePentester    ProviderOptionsType = "pentester"
+	OptionsTypeReflector    ProviderOptionsType = "reflector"
+)
+
+var AllAgentTypes = []ProviderOptionsType{
+	OptionsTypeSimple,
+	OptionsTypeSimpleJSON,
+	OptionsTypePrimaryAgent,
+	OptionsTypeAssistant,
+	OptionsTypeGenerator,
+	OptionsTypeRefiner,
+	OptionsTypeAdviser,
+	OptionsTypeReflector,
+	OptionsTypeSearcher,
+	OptionsTypeEnricher,
+	OptionsTypeCoder,
+	OptionsTypeInstaller,
+	OptionsTypePentester,
+}
+
+type PriceInfo struct {
+	Input  float64 `json:"input,omitempty" yaml:"input,omitempty"`
+	Output float64 `json:"output,omitempty" yaml:"output,omitempty"`
+}
 
 type ReasoningConfig struct {
 	Effort    llms.ReasoningEffort `json:"effort,omitempty" yaml:"effort,omitempty"`
@@ -33,14 +70,15 @@ type AgentConfig struct {
 	JSON              bool            `json:"json,omitempty" yaml:"json,omitempty"`
 	ResponseMIMEType  string          `json:"response_mime_type,omitempty" yaml:"response_mime_type,omitempty"`
 	Reasoning         ReasoningConfig `json:"reasoning,omitempty" yaml:"reasoning,omitempty"`
+	Price             *PriceInfo      `json:"price,omitempty" yaml:"price,omitempty"`
 	raw               map[string]any  `json:"-" yaml:"-"`
 }
 
-// ProvidersConfig represents the configuration for all agents
-type ProvidersConfig struct {
+// ProviderConfig represents the configuration for all agents
+type ProviderConfig struct {
 	Simple         *AgentConfig      `json:"simple,omitempty" yaml:"simple,omitempty"`
 	SimpleJSON     *AgentConfig      `json:"simple_json,omitempty" yaml:"simple_json,omitempty"`
-	Agent          *AgentConfig      `json:"agent,omitempty" yaml:"agent,omitempty"`
+	PrimaryAgent   *AgentConfig      `json:"primary_agent,omitempty" yaml:"primary_agent,omitempty"`
 	Assistant      *AgentConfig      `json:"assistant,omitempty" yaml:"assistant,omitempty"`
 	Generator      *AgentConfig      `json:"generator,omitempty" yaml:"generator,omitempty"`
 	Refiner        *AgentConfig      `json:"refiner,omitempty" yaml:"refiner,omitempty"`
@@ -52,9 +90,10 @@ type ProvidersConfig struct {
 	Installer      *AgentConfig      `json:"installer,omitempty" yaml:"installer,omitempty"`
 	Pentester      *AgentConfig      `json:"pentester,omitempty" yaml:"pentester,omitempty"`
 	defaultOptions []llms.CallOption `json:"-" yaml:"-"`
+	rawConfig      []byte            `json:"-" yaml:"-"`
 }
 
-func LoadConfig(configPath string, defaultOptions []llms.CallOption) (*ProvidersConfig, error) {
+func LoadConfig(configPath string, defaultOptions []llms.CallOption) (*ProviderConfig, error) {
 	if configPath == "" {
 		return nil, nil
 	}
@@ -64,7 +103,7 @@ func LoadConfig(configPath string, defaultOptions []llms.CallOption) (*Providers
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config ProvidersConfig
+	var config ProviderConfig
 	ext := filepath.Ext(configPath)
 	switch ext {
 	case ".json":
@@ -76,17 +115,68 @@ func LoadConfig(configPath string, defaultOptions []llms.CallOption) (*Providers
 			return nil, fmt.Errorf("failed to parse YAML config: %w", err)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported config file format: %s", ext)
+		return nil, fmt.Errorf("unsupported config file extension: %s", ext)
 	}
 
-	// use agent config for assistant if not set (for backward compatibility)
-	if config.Assistant == nil {
-		config.Assistant = config.Agent
-	}
+	// handle backward compatibility with legacy config format
+	handleLegacyConfig(&config, data)
 
 	config.defaultOptions = defaultOptions
+	config.rawConfig = data
 
 	return &config, nil
+}
+
+func LoadConfigData(configData []byte, defaultOptions []llms.CallOption) (*ProviderConfig, error) {
+	var config ProviderConfig
+
+	if err := yaml.Unmarshal(configData, &config); err != nil {
+		if err := json.Unmarshal(configData, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse config: %w", err)
+		}
+	}
+
+	// handle backward compatibility with legacy config format
+	handleLegacyConfig(&config, configData)
+
+	config.defaultOptions = defaultOptions
+	config.rawConfig = configData
+
+	return &config, nil
+}
+
+// handleLegacyConfig provides backward compatibility for old config format
+// where "agent" was used instead of "primary_agent"
+func handleLegacyConfig(config *ProviderConfig, data []byte) {
+	// only process if PrimaryAgent is not set
+	if config.PrimaryAgent != nil {
+		// still handle assistant backward compatibility
+		if config.Assistant == nil {
+			config.Assistant = config.PrimaryAgent
+		}
+		return
+	}
+
+	// define legacy config structure with old "agent" field
+	type LegacyProviderConfig struct {
+		Agent *AgentConfig `json:"agent,omitempty" yaml:"agent,omitempty"`
+	}
+
+	var legacyConfig LegacyProviderConfig
+
+	if err := yaml.Unmarshal(data, &legacyConfig); err != nil {
+		if err := json.Unmarshal(data, &legacyConfig); err != nil {
+			return
+		}
+	}
+
+	if legacyConfig.Agent != nil {
+		config.PrimaryAgent = legacyConfig.Agent
+	}
+
+	if config.Assistant == nil {
+		config.Assistant = config.PrimaryAgent
+	}
 }
 
 func (ac *AgentConfig) UnmarshalJSON(data []byte) error {
@@ -235,6 +325,9 @@ func (ac *AgentConfig) marshalMap() map[string]any {
 	if ac.Reasoning.Effort != llms.ReasoningNone || ac.Reasoning.MaxTokens != 0 {
 		output["reasoning"] = ac.Reasoning
 	}
+	if ac.Price != nil {
+		output["price"] = ac.Price
+	}
 
 	return output
 }
@@ -246,45 +339,73 @@ func (ac *AgentConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(ac.marshalMap())
 }
 
-func (ac *AgentConfig) MarshalYAML() (interface{}, error) {
+func (ac *AgentConfig) MarshalYAML() (any, error) {
 	if ac == nil {
 		return nil, nil
 	}
 	return ac.marshalMap(), nil
 }
 
-func (pc *ProvidersConfig) GetOptionsForType(optType provider.ProviderOptionsType) []llms.CallOption {
+func (pc *ProviderConfig) SetDefaultOptions(defaultOptions []llms.CallOption) {
+	if pc == nil {
+		return
+	}
+	pc.defaultOptions = defaultOptions
+}
+
+func (pc *ProviderConfig) GetDefaultOptions() []llms.CallOption {
+	if pc == nil {
+		return nil
+	}
+	return pc.defaultOptions
+}
+
+func (pc *ProviderConfig) SetRawConfig(rawConfig []byte) {
+	if pc == nil {
+		return
+	}
+	pc.rawConfig = rawConfig
+}
+
+func (pc *ProviderConfig) GetRawConfig() []byte {
+	if pc == nil {
+		return nil
+	}
+	return pc.rawConfig
+}
+
+func (pc *ProviderConfig) GetOptionsForType(optType ProviderOptionsType) []llms.CallOption {
 	if pc == nil {
 		return nil
 	}
 
 	var agentConfig *AgentConfig
 	switch optType {
-	case provider.OptionsTypeSimple:
+	case OptionsTypeSimple:
 		agentConfig = pc.Simple
-	case provider.OptionsTypeSimpleJSON:
-		agentConfig = pc.SimpleJSON
-	case provider.OptionsTypeAgent:
-		agentConfig = pc.Agent
-	case provider.OptionsTypeAssistant:
-		agentConfig = pc.Assistant
-	case provider.OptionsTypeGenerator:
+	case OptionsTypeSimpleJSON:
+		return pc.buildSimpleJSONOptions()
+	case OptionsTypePrimaryAgent:
+		agentConfig = pc.PrimaryAgent
+	case OptionsTypeAssistant:
+		return pc.buildAssistantOptions()
+	case OptionsTypeGenerator:
 		agentConfig = pc.Generator
-	case provider.OptionsTypeRefiner:
+	case OptionsTypeRefiner:
 		agentConfig = pc.Refiner
-	case provider.OptionsTypeAdviser:
+	case OptionsTypeAdviser:
 		agentConfig = pc.Adviser
-	case provider.OptionsTypeReflector:
+	case OptionsTypeReflector:
 		agentConfig = pc.Reflector
-	case provider.OptionsTypeSearcher:
+	case OptionsTypeSearcher:
 		agentConfig = pc.Searcher
-	case provider.OptionsTypeEnricher:
+	case OptionsTypeEnricher:
 		agentConfig = pc.Enricher
-	case provider.OptionsTypeCoder:
+	case OptionsTypeCoder:
 		agentConfig = pc.Coder
-	case provider.OptionsTypeInstaller:
+	case OptionsTypeInstaller:
 		agentConfig = pc.Installer
-	case provider.OptionsTypePentester:
+	case OptionsTypePentester:
 		agentConfig = pc.Pentester
 	default:
 		return nil
@@ -292,6 +413,130 @@ func (pc *ProvidersConfig) GetOptionsForType(optType provider.ProviderOptionsTyp
 
 	if agentConfig != nil {
 		if options := agentConfig.BuildOptions(); options != nil {
+			return options
+		}
+	}
+
+	return pc.defaultOptions
+}
+
+func (pc *ProviderConfig) GetPriceInfoForType(optType ProviderOptionsType) *PriceInfo {
+	if pc == nil {
+		return nil
+	}
+
+	var agentConfig *AgentConfig
+	switch optType {
+	case OptionsTypeSimple:
+		agentConfig = pc.Simple
+	case OptionsTypeSimpleJSON:
+		if pc.SimpleJSON != nil {
+			agentConfig = pc.SimpleJSON
+		} else {
+			agentConfig = pc.Simple
+		}
+	case OptionsTypePrimaryAgent:
+		agentConfig = pc.PrimaryAgent
+	case OptionsTypeAssistant:
+		if pc.Assistant != nil {
+			agentConfig = pc.Assistant
+		} else {
+			agentConfig = pc.PrimaryAgent
+		}
+	case OptionsTypeGenerator:
+		agentConfig = pc.Generator
+	case OptionsTypeRefiner:
+		agentConfig = pc.Refiner
+	case OptionsTypeAdviser:
+		agentConfig = pc.Adviser
+	case OptionsTypeReflector:
+		agentConfig = pc.Reflector
+	case OptionsTypeSearcher:
+		agentConfig = pc.Searcher
+	case OptionsTypeEnricher:
+		agentConfig = pc.Enricher
+	case OptionsTypeCoder:
+		agentConfig = pc.Coder
+	case OptionsTypeInstaller:
+		agentConfig = pc.Installer
+	case OptionsTypePentester:
+		agentConfig = pc.Pentester
+	default:
+		return nil
+	}
+
+	if agentConfig != nil && agentConfig.Price != nil {
+		return agentConfig.Price
+	}
+
+	return nil
+}
+
+func (pc *ProviderConfig) BuildOptionsMap() map[ProviderOptionsType][]llms.CallOption {
+	if pc == nil {
+		return nil
+	}
+
+	options := map[ProviderOptionsType][]llms.CallOption{
+		OptionsTypeSimple:       pc.GetOptionsForType(OptionsTypeSimple),
+		OptionsTypeSimpleJSON:   pc.GetOptionsForType(OptionsTypeSimpleJSON),
+		OptionsTypePrimaryAgent: pc.GetOptionsForType(OptionsTypePrimaryAgent),
+		OptionsTypeAssistant:    pc.GetOptionsForType(OptionsTypeAssistant),
+		OptionsTypeGenerator:    pc.GetOptionsForType(OptionsTypeGenerator),
+		OptionsTypeRefiner:      pc.GetOptionsForType(OptionsTypeRefiner),
+		OptionsTypeAdviser:      pc.GetOptionsForType(OptionsTypeAdviser),
+		OptionsTypeReflector:    pc.GetOptionsForType(OptionsTypeReflector),
+		OptionsTypeSearcher:     pc.GetOptionsForType(OptionsTypeSearcher),
+		OptionsTypeEnricher:     pc.GetOptionsForType(OptionsTypeEnricher),
+		OptionsTypeCoder:        pc.GetOptionsForType(OptionsTypeCoder),
+		OptionsTypeInstaller:    pc.GetOptionsForType(OptionsTypeInstaller),
+		OptionsTypePentester:    pc.GetOptionsForType(OptionsTypePentester),
+	}
+
+	return options
+}
+
+func (pc *ProviderConfig) buildSimpleJSONOptions() []llms.CallOption {
+	if pc == nil {
+		return nil
+	}
+
+	if pc.SimpleJSON != nil {
+		options := pc.SimpleJSON.BuildOptions()
+		if options != nil {
+			return options
+		}
+	}
+
+	if pc.Simple != nil {
+		options := pc.Simple.BuildOptions()
+		if options != nil {
+			return append(options, llms.WithJSONMode())
+		}
+	}
+
+	if pc.defaultOptions != nil {
+		return append(pc.defaultOptions, llms.WithJSONMode())
+	}
+
+	return nil
+}
+
+func (pc *ProviderConfig) buildAssistantOptions() []llms.CallOption {
+	if pc == nil {
+		return nil
+	}
+
+	if pc.Assistant != nil {
+		options := pc.Assistant.BuildOptions()
+		if options != nil {
+			return options
+		}
+	}
+
+	if pc.PrimaryAgent != nil {
+		options := pc.PrimaryAgent.BuildOptions()
+		if options != nil {
 			return options
 		}
 	}

@@ -14,6 +14,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/embeddings"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -24,7 +25,7 @@ import (
 
 type AssistantProvider interface {
 	Type() provider.ProviderType
-	Model(opt provider.ProviderOptionsType) string
+	Model(opt pconfig.ProviderOptionsType) string
 	Title() string
 	Language() string
 	Embedder() embeddings.Embedder
@@ -50,7 +51,7 @@ func (ap *assistantProvider) Type() provider.ProviderType {
 	return ap.fp.Type()
 }
 
-func (ap *assistantProvider) Model(opt provider.ProviderOptionsType) string {
+func (ap *assistantProvider) Model(opt pconfig.ProviderOptionsType) string {
 	return ap.fp.Model(opt)
 }
 
@@ -93,7 +94,7 @@ func (ap *assistantProvider) PrepareAgentChain(ctx context.Context) (int64, erro
 		return 0, fmt.Errorf("failed to get assistant system prompt: %w", err)
 	}
 
-	optAgentType := provider.OptionsTypeAgent
+	optAgentType := pconfig.OptionsTypeAssistant
 	msgChainType := database.MsgchainTypeAssistant
 	ap.msgChainID, _, err = ap.fp.restoreChain(
 		ctx, nil, nil, optAgentType, msgChainType, systemPrompt, "",
@@ -203,7 +204,7 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 
 	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeAssistant)
 	err = ap.fp.performAgentChain(
-		ctx, provider.OptionsTypeAssistant, msgChain.ID, nil, nil, chain, executor, ap.summarizer,
+		ctx, pconfig.OptionsTypeAssistant, msgChain.ID, nil, nil, chain, executor, ap.summarizer,
 	)
 	if err != nil {
 		return wrapErrorEndSpan(ctx, executorSpan, "failed to perform assistant agent chain", err)

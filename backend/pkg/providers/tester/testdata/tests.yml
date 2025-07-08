@@ -1,0 +1,363 @@
+# Basic completion tests
+- id: "math_simple"
+  name: "Simple Math"
+  type: "completion"
+  group: "basic"
+  prompt: "What is 2+2? Write only the number without any other text."
+  expected: "4"
+  streaming: false
+
+- id: "text_uppercase"
+  name: "Text Transform Uppercase" 
+  type: "completion"
+  group: "basic"
+  prompt: "Write 'Hello World' in uppercase without any other text."
+  expected: "HELLO WORLD"
+  streaming: false
+
+# System-user prompt tests  
+- id: "count_sequence"
+  name: "Count from 1 to 5"
+  type: "completion"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely. Always keep your responses concise and exact."
+    - role: "user"
+      content: "Count from 1 to 5, separated by commas, without any additional text and spaces."
+  expected: "1,2,3,4,5"
+  streaming: false
+
+- id: "math_multiplication"
+  name: "Math Calculation"
+  type: "completion"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: "You are a math assistant that provides concise answers."
+    - role: "user"
+      content: "Calculate 5 * 10 and provide only the result."
+  expected: "50"
+  streaming: false
+
+# JSON response tests
+- id: "person_info_json"
+  name: "Person Information JSON"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Return a JSON with a person's information: name='John Doe', age=30, city='New York'"
+  expected:
+    name: "John Doe"
+    age: 30
+    city: "New York"
+  streaming: false
+
+- id: "project_info_json"
+  name: "Project Information JSON"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Create a JSON object with fields: title='Test Project', completed=false, priority=1"
+  expected:
+    title: "Test Project"
+    completed: false
+    priority: 1
+  streaming: false
+
+- id: "user_profile_json"
+  name: "User Profile JSON"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Generate a JSON response for a user profile with username='user123', email='user@example.com', active=true"
+  expected:
+    username: "user123"
+    email: "user@example.com"
+    active: true
+  streaming: false
+
+# Basic function calling tests
+- id: "echo_function_basic"
+  name: "Basic Echo Function"
+  type: "tool"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely. You must use tools instead of generating text. You must use only provided tools to figure out a question."
+    - role: "user"
+      content: "JUST choose the echo function and call it with this message: Hello from function test"
+  tools:
+    - name: "echo"
+      description: "Echoes back the input message"
+      parameters:
+        type: "object"
+        properties:
+          message:
+            type: "string"
+            description: "Message to echo back"
+        required: ["message"]
+  expected:
+    - function_name: "echo"
+      arguments:
+        message: "Hello from function test"
+  streaming: false
+
+# Advanced function calling tests
+- id: "json_response_function"
+  name: "JSON Response Function"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely. You must use tools instead of generating text. You must use only provided tools to figure out a question."
+    - role: "user"
+      content: "Call function respond_with_json to create a JSON with name=test and value=123"
+  tools:
+    - name: "respond_with_json"
+      description: "Response with JSON structure"
+      parameters:
+        type: "object"
+        properties:
+          name:
+            type: "string"
+            description: "Name value"
+          value:
+            type: "integer"
+            description: "Numeric value"
+        required: ["name", "value"]
+  expected:
+    - function_name: "respond_with_json"
+      arguments:
+        name: "test"
+        value: 123
+  streaming: false
+
+- id: "search_function"
+  name: "Search Query Function"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely. You must use tools instead of generating text. You must use only provided tools to figure out a question."
+    - role: "user"
+      content: "Find information about Golang programming language by calling the search function"
+  tools:
+    - name: "search"
+      description: "Performs search for a given query"
+      parameters:
+        type: "object"
+        properties:
+          query:
+            type: "string"
+            description: "Search query"
+        required: ["query"]
+  expected:
+    - function_name: "search"
+      arguments:
+        query: "Golang programming language"
+  streaming: false
+
+- id: "advice_function"
+  name: "Ask Advice Function"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a tool-only assistant. You cannot speak or write text. You can only use functions. Every user message requires a function call response."
+    - role: "user"
+      content: "Call provide_advice with problem='cannot find package' and solution='Check import paths and module dependencies'"
+  tools:
+    - name: "provide_advice"
+      description: "Provides advice to the user about the problem"
+      parameters:
+        type: "object"
+        properties:
+          problem:
+            type: "string"
+            description: "Problem to solve"
+          solution:
+            type: "string"
+            description: "Solution to the problem"
+        required: ["problem", "solution"]
+  expected:
+    - function_name: "provide_advice"
+      arguments:
+        problem: "cannot find package"
+        solution: "Check import paths and module dependencies"
+  streaming: false
+
+# Knowledge tests - penetration testing and cybersecurity domain
+- id: "pentesting_methodology"
+  name: "Penetration Testing Methodology"
+  type: "completion"
+  group: "knowledge"
+  prompt: "The first phase in penetration testing involves gathering information about the target. This phase is called: recon________"
+  expected: "reconnaissance"
+  streaming: false
+
+- id: "vulnerability_scanning"
+  name: "Vulnerability Assessment Tools"
+  type: "completion"
+  group: "knowledge"
+  prompt: "What does 'nmap' tool primarily do in penetration testing? Answer: network"
+  expected: "network"
+  streaming: false
+
+- id: "sql_injection_basics"
+  name: "SQL Injection Attack Type"
+  type: "completion"
+  group: "knowledge"
+  prompt: "Complete this: SQL _____ is a code injection technique. One word."
+  expected: "injection"
+  streaming: false
+
+- id: "penetration_testing_framework"
+  name: "Penetration Testing Framework"
+  type: "completion"
+  group: "knowledge"
+  prompt: "Metasploit is primarily used for what activity in pentesting? Answer: exploitation"
+  expected: "exploitation"
+  streaming: false
+
+- id: "web_vulnerability_scanner"
+  name: "Web Application Security Scanner"
+  type: "completion"
+  group: "knowledge"
+  prompt: "What type of testing does Burp Suite primarily perform? Answer: web"
+  expected: "web"
+  streaming: false
+
+- id: "pentest_tool_selection"
+  name: "Penetration Testing Tool Selection"
+  type: "tool"
+  group: "knowledge"
+  messages:
+    - role: "system"
+      content: "You are a cybersecurity tool selector. CRITICAL: You MUST NEVER generate text responses. You can ONLY communicate by calling the provided functions. When asked about a tool, immediately call the appropriate function."
+    - role: "user"
+      content: "I need network scanning capabilities. Use nmap for scanning target 192.168.1.1 with TCP scan."
+  tools:
+    - name: "nmap"
+      description: "Network discovery and security auditing tool for port scanning"
+      parameters:
+        type: "object"
+        properties:
+          target:
+            type: "string"
+            description: "Target IP address or network range"
+          scan_type:
+            type: "string"
+            enum: ["TCP", "UDP"]
+            description: "Type of scan to perform"
+        required: ["target", "scan_type"]
+    - name: "burp_suite"
+      description: "Web application security testing platform"
+      parameters:
+        type: "object"
+        properties:
+          url:
+            type: "string"
+            description: "Target web application URL"
+        required: ["url"]
+  expected:
+    - function_name: "nmap"
+      arguments:
+        target: "192.168.1.1"
+        scan_type: "TCP"
+  streaming: false
+
+# Streaming tests for all types
+- id: "math_simple_streaming"
+  name: "Simple Math Streaming"
+  type: "completion"
+  group: "basic"
+  prompt: "What is 3+3? Write only the number without any other text."
+  expected: "6"
+  streaming: true
+
+- id: "count_sequence_streaming"
+  name: "Count from 1 to 3 Streaming"
+  type: "completion"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely. Always keep your responses concise and exact."
+    - role: "user"
+      content: "Count from 1 to 3, separated by commas, without any additional text and spaces."
+  expected: "1,2,3"
+  streaming: true
+
+- id: "person_info_json_streaming"
+  name: "Person Information JSON Streaming"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Return a JSON with a person's information: name='Jane Doe', age=25, city='Boston'"
+  expected:
+    name: "Jane Doe"
+    age: 25
+    city: "Boston"
+  streaming: true
+
+- id: "echo_function_streaming"
+  name: "Basic Echo Function Streaming"
+  type: "tool"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely. You must use tools instead of generating text. You must use only provided tools to figure out a question."
+    - role: "user"
+      content: "JUST choose the echo function and call it with this message: Hello from streaming test"
+  tools:
+    - name: "echo"
+      description: "Echoes back the input message"
+      parameters:
+        type: "object"
+        properties:
+          message:
+            type: "string"
+            description: "Message to echo back"
+        required: ["message"]
+  expected:
+    - function_name: "echo"
+      arguments:
+        message: "Hello from streaming test"
+  streaming: true
+
+- id: "search_function_streaming"
+  name: "Search Query Function Streaming"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely. You must use tools instead of generating text. You must use only provided tools to figure out a question."
+    - role: "user"
+      content: "Find information about Python programming language by calling the search function"
+  tools:
+    - name: "search"
+      description: "Performs search for a given query"
+      parameters:
+        type: "object"
+        properties:
+          query:
+            type: "string"
+            description: "Search query"
+        required: ["query"]
+  expected:
+    - function_name: "search"
+      arguments:
+        query: "Python programming language"
+  streaming: true

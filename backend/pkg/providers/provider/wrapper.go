@@ -7,6 +7,7 @@ import (
 
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/providers/pconfig"
 
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -19,7 +20,7 @@ type GenerateContentFunc func(
 
 func buildMetadata(
 	provider Provider,
-	opt ProviderOptionsType,
+	opt pconfig.ProviderOptionsType,
 	messages []llms.MessageContent,
 	options ...llms.CallOption,
 ) langfuse.Metadata {
@@ -90,7 +91,7 @@ func buildMetadata(
 func WrapGenerateFromSinglePrompt(
 	ctx context.Context,
 	provider Provider,
-	opt ProviderOptionsType,
+	opt pconfig.ProviderOptionsType,
 	llm llms.Model,
 	prompt string,
 	options ...llms.CallOption,
@@ -178,7 +179,7 @@ func WrapGenerateFromSinglePrompt(
 func WrapGenerateContent(
 	ctx context.Context,
 	provider Provider,
-	opt ProviderOptionsType,
+	opt pconfig.ProviderOptionsType,
 	fn GenerateContentFunc,
 	messages []llms.MessageContent,
 	options ...llms.CallOption,

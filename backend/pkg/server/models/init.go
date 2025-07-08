@@ -224,4 +224,8 @@ func init() {
 	_, _ = reflect.ValueOf(Password{}).Interface().(IValid)
 
 	_, _ = reflect.ValueOf(Role{}).Interface().(IValid)
+	_, _ = reflect.ValueOf(Prompt{}).Interface().(IValid)
+	_, _ = reflect.ValueOf(Assistant{}).Interface().(IValid)
+	_, _ = reflect.ValueOf(Flow{}).Interface().(IValid)
+	_, _ = reflect.ValueOf(Provider{}).Interface().(IValid)
 }

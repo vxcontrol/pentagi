@@ -4,6 +4,7 @@ import { memo, useMemo } from 'react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery, MessageLogFragmentFragment } from '@/graphql/types';
+import type { Provider } from '@/models/Provider';
 
 import ChatAssistantMessages from './ChatAssistantMessages';
 import ChatAutomationMessages from './ChatAutomationMessages';
@@ -17,8 +18,8 @@ interface ChatCentralTabsProps {
     assistants: AssistantFragmentFragment[];
     assistantLogs?: AssistantLogFragmentFragment[];
     selectedAssistantId?: string | null;
-    selectedProvider: string;
-    providers: string[];
+    selectedProvider: Provider | null;
+    providers: Provider[];
     onSelectAssistant?: (assistantId: string | null) => void;
     onCreateAssistant?: () => void;
     onDeleteAssistant?: (assistantId: string) => void;

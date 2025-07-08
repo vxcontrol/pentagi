@@ -165,7 +165,7 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 				if !test.Success {
 					status = "❌ Fail"
 					if test.Error != nil {
-						errorMsg = EscapeMarkdown(test.Error.Error())
+						errorMsg = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
 					}
 				}
 				name := test.Name
@@ -194,7 +194,7 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 				if !test.Success {
 					status = "❌ Fail"
 					if test.Error != nil {
-						errorMsg = EscapeMarkdown(test.Error.Error())
+						errorMsg = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
 					}
 				}
 				name := test.Name

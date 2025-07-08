@@ -2,11 +2,12 @@ package custom
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 
 	"github.com/vxcontrol/langchaingo/llms"
@@ -14,13 +15,46 @@ import (
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
-type customProvider struct {
-	llm     *openai.LLM
-	model   string
-	options map[provider.ProviderOptionsType][]llms.CallOption
+func BuildProviderConfig(cfg *config.Config, configData []byte) (*pconfig.ProviderConfig, error) {
+	defaultOptions := []llms.CallOption{
+		llms.WithTemperature(0.7),
+		llms.WithTopP(1.0),
+		llms.WithN(1),
+		llms.WithMaxTokens(4000),
+	}
+
+	if cfg.LLMServerModel != "" {
+		defaultOptions = append(defaultOptions, llms.WithModel(cfg.LLMServerModel))
+	}
+
+	providerConfig, err := pconfig.LoadConfigData(configData, defaultOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	return providerConfig, nil
 }
 
-func New(cfg *config.Config) (provider.Provider, error) {
+func DefaultProviderConfig(cfg *config.Config) (*pconfig.ProviderConfig, error) {
+	if cfg.LLMServerConfig == "" {
+		return BuildProviderConfig(cfg, []byte("{}"))
+	}
+
+	configData, err := os.ReadFile(cfg.LLMServerConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return BuildProviderConfig(cfg, configData)
+}
+
+type customProvider struct {
+	llm            *openai.LLM
+	model          string
+	providerConfig *pconfig.ProviderConfig
+}
+
+func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
 	httpClient := http.DefaultClient
 	if cfg.ProxyURL != "" {
 		httpClient = &http.Client{
@@ -52,67 +86,10 @@ func New(cfg *config.Config) (provider.Provider, error) {
 		return nil, err
 	}
 
-	simple := []llms.CallOption{
-		llms.WithTemperature(0.7),
-		llms.WithTopP(1.0),
-		llms.WithN(1),
-		llms.WithMaxTokens(4000),
-	}
-
-	// load provider options from config file if specified
-	var options map[provider.ProviderOptionsType][]llms.CallOption
-	if cfg.LLMServerConfig != "" {
-		providerConfig, err := LoadConfig(cfg.LLMServerConfig, simple)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load provider config: %w", err)
-		}
-		if providerConfig != nil {
-			options = make(map[provider.ProviderOptionsType][]llms.CallOption)
-			for _, optType := range []provider.ProviderOptionsType{
-				provider.OptionsTypeSimple,
-				provider.OptionsTypeSimpleJSON,
-				provider.OptionsTypeAgent,
-				provider.OptionsTypeAssistant,
-				provider.OptionsTypeGenerator,
-				provider.OptionsTypeRefiner,
-				provider.OptionsTypeAdviser,
-				provider.OptionsTypeReflector,
-				provider.OptionsTypeSearcher,
-				provider.OptionsTypeEnricher,
-				provider.OptionsTypeCoder,
-				provider.OptionsTypeInstaller,
-				provider.OptionsTypePentester,
-			} {
-				if opts := providerConfig.GetOptionsForType(optType); opts != nil {
-					options[optType] = opts
-				}
-			}
-		}
-	}
-
-	// if no config file or empty config, use default options
-	if options == nil {
-		options = map[provider.ProviderOptionsType][]llms.CallOption{
-			provider.OptionsTypeSimple:     simple,
-			provider.OptionsTypeSimpleJSON: simple,
-			provider.OptionsTypeAgent:      simple,
-			provider.OptionsTypeAssistant:  simple,
-			provider.OptionsTypeGenerator:  simple,
-			provider.OptionsTypeRefiner:    simple,
-			provider.OptionsTypeAdviser:    simple,
-			provider.OptionsTypeReflector:  simple,
-			provider.OptionsTypeSearcher:   simple,
-			provider.OptionsTypeEnricher:   simple,
-			provider.OptionsTypeCoder:      simple,
-			provider.OptionsTypeInstaller:  simple,
-			provider.OptionsTypePentester:  simple,
-		}
-	}
-
 	return &customProvider{
-		llm:     client,
-		model:   baseModel,
-		options: options,
+		llm:            client,
+		model:          baseModel,
+		providerConfig: providerConfig,
 	}, nil
 }
 
@@ -120,14 +97,21 @@ func (p *customProvider) Type() provider.ProviderType {
 	return provider.ProviderCustom
 }
 
-func (p *customProvider) Model(opt provider.ProviderOptionsType) string {
-	options, ok := p.options[opt]
-	if !ok {
-		return p.model
-	}
+func (p *customProvider) GetRawConfig() []byte {
+	return p.providerConfig.GetRawConfig()
+}
 
+func (p *customProvider) GetProviderConfig() *pconfig.ProviderConfig {
+	return p.providerConfig
+}
+
+func (p *customProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
+	return p.providerConfig.GetPriceInfoForType(opt)
+}
+
+func (p *customProvider) Model(opt pconfig.ProviderOptionsType) string {
 	opts := llms.CallOptions{Model: p.model}
-	for _, option := range options {
+	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
@@ -136,54 +120,42 @@ func (p *customProvider) Model(opt provider.ProviderOptionsType) string {
 
 func (p *customProvider) Call(
 	ctx context.Context,
-	opt provider.ProviderOptionsType,
+	opt pconfig.ProviderOptionsType,
 	prompt string,
 ) (string, error) {
-	options, ok := p.options[opt]
-	if !ok {
-		return "", provider.ErrInvalidProviderOptionsType
-	}
-
-	return provider.WrapGenerateFromSinglePrompt(ctx, p, opt, p.llm, prompt, options...)
+	return provider.WrapGenerateFromSinglePrompt(
+		ctx, p, opt, p.llm, prompt,
+		p.providerConfig.GetOptionsForType(opt)...,
+	)
 }
 
 func (p *customProvider) CallEx(
 	ctx context.Context,
-	opt provider.ProviderOptionsType,
+	opt pconfig.ProviderOptionsType,
 	chain []llms.MessageContent,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
-	options, ok := p.options[opt]
-	if !ok {
-		return nil, provider.ErrInvalidProviderOptionsType
-	}
-
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
 		append([]llms.CallOption{
 			llms.WithStreamingFunc(streamCb),
-		}, options...)...,
+		}, p.providerConfig.GetOptionsForType(opt)...)...,
 	)
 }
 
 func (p *customProvider) CallWithTools(
 	ctx context.Context,
-	opt provider.ProviderOptionsType,
+	opt pconfig.ProviderOptionsType,
 	chain []llms.MessageContent,
 	tools []llms.Tool,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
-	options, ok := p.options[opt]
-	if !ok {
-		return nil, provider.ErrInvalidProviderOptionsType
-	}
-
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
 		append([]llms.CallOption{
 			llms.WithTools(tools),
 			llms.WithStreamingFunc(streamCb),
-		}, options...)...,
+		}, p.providerConfig.GetOptionsForType(opt)...)...,
 	)
 }
 
