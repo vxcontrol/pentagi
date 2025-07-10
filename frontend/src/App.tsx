@@ -15,6 +15,7 @@ import Chat from '@/pages/Chat';
 import Login from '@/pages/Login';
 import OAuthResult from '@/pages/OAuthResult';
 import Report from '@/pages/Report';
+import Settings from '@/pages/Settings';
 import ThemeProvider from '@/providers/ThemeProvider';
 
 import type { AuthInfoResponse } from './models/Info';
@@ -82,6 +83,28 @@ const App = () => {
                                 <Route
                                     path="chat/:flowId"
                                     element={<Chat />}
+                                />
+
+                                <Route
+                                    path="settings"
+                                    element={<Settings />}
+                                />
+
+                                {/* Model settings routes */}
+                                <Route
+                                    path="settings/models/:providerId"
+                                    element={<Settings />}
+                                />
+
+                                {/* Prompt settings routes */}
+                                <Route
+                                    path="settings/prompts/agents/:agentId"
+                                    element={<Settings />}
+                                />
+
+                                <Route
+                                    path="settings/prompts/tools/:toolId"
+                                    element={<Settings />}
                                 />
                             </Route>
 

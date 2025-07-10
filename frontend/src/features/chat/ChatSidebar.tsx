@@ -8,6 +8,7 @@ import {
     MoreHorizontal,
     Pause,
     Plus,
+    Settings,
     Sun,
     Trash2,
     UserIcon,
@@ -18,12 +19,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import Logo from '@/components/icons/Logo';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -76,7 +72,7 @@ const ChatSidebarMenuItemText = ({ text }: { text: string }) => {
 
         if (element) {
             const shouldTruncate = element.scrollWidth > element.clientWidth;
-            setIsTruncated((current) => shouldTruncate !== current ? shouldTruncate : current);
+            setIsTruncated((current) => (shouldTruncate !== current ? shouldTruncate : current));
         }
     }, [text]);
 
@@ -213,7 +209,8 @@ const ChatSidebar = ({
                             size="icon"
                             className={cn(
                                 'relative size-8',
-                                (selectedFlowId === 'new' || window.location.pathname === '/chat/new') && 'text-primary after:absolute after:left-1/2 after:top-full after:size-1.5 after:-translate-x-1/2 after:rounded-full after:bg-primary dark:text-primary-foreground dark:after:bg-primary-foreground',
+                                (selectedFlowId === 'new' || window.location.pathname === '/chat/new') &&
+                                    'text-primary after:absolute after:left-1/2 after:top-full after:size-1.5 after:-translate-x-1/2 after:rounded-full after:bg-primary dark:text-primary-foreground dark:after:bg-primary-foreground',
                             )}
                             onClick={() => onChangeSelectedFlowId('new')}
                         >
@@ -247,9 +244,10 @@ const ChatSidebar = ({
                                             {
                                                 'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
                                                     isSelected,
-                                                'text-muted-foreground': [StatusType.Finished, StatusType.Failed].includes(
-                                                    flow.status,
-                                                ),
+                                                'text-muted-foreground': [
+                                                    StatusType.Finished,
+                                                    StatusType.Failed,
+                                                ].includes(flow.status),
                                             },
                                         )}
                                         onClick={() => onChangeSelectedFlowId(flow.id)}
@@ -280,9 +278,7 @@ const ChatSidebar = ({
                                             }}
                                         >
                                             <DropdownMenuTrigger asChild>
-                                                <SidebarMenuAction
-                                                    className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
-                                                >
+                                                <SidebarMenuAction className="focus:outline-none focus-visible:outline-none focus-visible:ring-0">
                                                     <MoreHorizontal />
                                                 </SidebarMenuAction>
                                             </DropdownMenuTrigger>
@@ -317,6 +313,24 @@ const ChatSidebar = ({
             </SidebarContent>
             <SidebarFooter>
                 <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            asChild
+                            className={cn(
+                                'relative cursor-pointer overflow-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                {
+                                    'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
+                                        location.pathname === '/settings',
+                                },
+                            )}
+                            onClick={() => navigate('/settings')}
+                        >
+                            <div className="flex w-full items-center gap-2">
+                                <Settings className="size-4" />
+                                <span>Settings</span>
+                            </div>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
                     <SidebarMenuItem>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -388,7 +402,10 @@ const ChatSidebar = ({
             </SidebarFooter>
             <SidebarRail />
 
-            <Dialog open={isPasswordModalOpen} onOpenChange={(open) => setIsPasswordModalOpen(open)}>
+            <Dialog
+                open={isPasswordModalOpen}
+                onOpenChange={(open) => setIsPasswordModalOpen(open)}
+            >
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Change Password</DialogTitle>
