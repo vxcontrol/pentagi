@@ -197,8 +197,11 @@ type ComplexityRoot struct {
 	}
 
 	ModelConfig struct {
-		Name  func(childComplexity int) int
-		Price func(childComplexity int) int
+		Description func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Price       func(childComplexity int) int
+		ReleaseDate func(childComplexity int) int
+		Thinking    func(childComplexity int) int
 	}
 
 	ModelPrice struct {
@@ -1239,6 +1242,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.MessageLog.Type(childComplexity), true
 
+	case "ModelConfig.description":
+		if e.complexity.ModelConfig.Description == nil {
+			break
+		}
+
+		return e.complexity.ModelConfig.Description(childComplexity), true
+
 	case "ModelConfig.name":
 		if e.complexity.ModelConfig.Name == nil {
 			break
@@ -1252,6 +1262,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ModelConfig.Price(childComplexity), true
+
+	case "ModelConfig.releaseDate":
+		if e.complexity.ModelConfig.ReleaseDate == nil {
+			break
+		}
+
+		return e.complexity.ModelConfig.ReleaseDate(childComplexity), true
+
+	case "ModelConfig.thinking":
+		if e.complexity.ModelConfig.Thinking == nil {
+			break
+		}
+
+		return e.complexity.ModelConfig.Thinking(childComplexity), true
 
 	case "ModelPrice.input":
 		if e.complexity.ModelPrice.Input == nil {
@@ -9964,6 +9988,129 @@ func (ec *executionContext) fieldContext_ModelConfig_name(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _ModelConfig_description(ctx context.Context, field graphql.CollectedField, obj *model.ModelConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelConfig_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelConfig_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelConfig_releaseDate(ctx context.Context, field graphql.CollectedField, obj *model.ModelConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ReleaseDate, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*time.Time)
+	fc.Result = res
+	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelConfig_releaseDate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelConfig_thinking(ctx context.Context, field graphql.CollectedField, obj *model.ModelConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelConfig_thinking(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Thinking, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelConfig_thinking(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModelConfig_price(ctx context.Context, field graphql.CollectedField, obj *model.ModelConfig) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ModelConfig_price(ctx, field)
 	if err != nil {
@@ -12810,6 +12957,12 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_openai(_ context.Co
 			switch field.Name {
 			case "name":
 				return ec.fieldContext_ModelConfig_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ModelConfig_description(ctx, field)
+			case "releaseDate":
+				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+			case "thinking":
+				return ec.fieldContext_ModelConfig_thinking(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -12860,6 +13013,12 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_anthropic(_ context
 			switch field.Name {
 			case "name":
 				return ec.fieldContext_ModelConfig_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ModelConfig_description(ctx, field)
+			case "releaseDate":
+				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+			case "thinking":
+				return ec.fieldContext_ModelConfig_thinking(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -12910,6 +13069,12 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_gemini(_ context.Co
 			switch field.Name {
 			case "name":
 				return ec.fieldContext_ModelConfig_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ModelConfig_description(ctx, field)
+			case "releaseDate":
+				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+			case "thinking":
+				return ec.fieldContext_ModelConfig_thinking(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -12957,6 +13122,12 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_bedrock(_ context.C
 			switch field.Name {
 			case "name":
 				return ec.fieldContext_ModelConfig_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ModelConfig_description(ctx, field)
+			case "releaseDate":
+				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+			case "thinking":
+				return ec.fieldContext_ModelConfig_thinking(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -13004,6 +13175,12 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_ollama(_ context.Co
 			switch field.Name {
 			case "name":
 				return ec.fieldContext_ModelConfig_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ModelConfig_description(ctx, field)
+			case "releaseDate":
+				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+			case "thinking":
+				return ec.fieldContext_ModelConfig_thinking(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -13051,6 +13228,12 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_custom(_ context.Co
 			switch field.Name {
 			case "name":
 				return ec.fieldContext_ModelConfig_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ModelConfig_description(ctx, field)
+			case "releaseDate":
+				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+			case "thinking":
+				return ec.fieldContext_ModelConfig_thinking(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -22705,6 +22888,12 @@ func (ec *executionContext) _ModelConfig(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "description":
+			out.Values[i] = ec._ModelConfig_description(ctx, field, obj)
+		case "releaseDate":
+			out.Values[i] = ec._ModelConfig_releaseDate(ctx, field, obj)
+		case "thinking":
+			out.Values[i] = ec._ModelConfig_thinking(ctx, field, obj)
 		case "price":
 			out.Values[i] = ec._ModelConfig_price(ctx, field, obj)
 		default:
@@ -26723,6 +26912,22 @@ func (ec *executionContext) marshalOTerminalLog2ᚕᚖpentagiᚋpkgᚋgraphᚋmo
 	}
 
 	return ret
+}
+
+func (ec *executionContext) unmarshalOTime2ᚖtimeᚐTime(ctx context.Context, v interface{}) (*time.Time, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalTime(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOTime2ᚖtimeᚐTime(ctx context.Context, sel ast.SelectionSet, v *time.Time) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	res := graphql.MarshalTime(*v)
+	return res
 }
 
 func (ec *executionContext) marshalOUserPrompt2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserPromptᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UserPrompt) graphql.Marshaler {

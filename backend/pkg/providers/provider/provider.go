@@ -68,6 +68,9 @@ type Provider interface {
 
 	// Pricing information methods
 	GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo
+
+	// Models information methods
+	GetModels() pconfig.ModelsConfig
 }
 
 type (

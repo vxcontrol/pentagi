@@ -393,6 +393,36 @@ func ConvertPrompt(prompt database.Prompt) *model.UserPrompt {
 	}
 }
 
+func ConvertModels(models pconfig.ModelsConfig) []*model.ModelConfig {
+	gmodels := make([]*model.ModelConfig, 0, len(models))
+	for _, m := range models {
+		modelConfig := &model.ModelConfig{
+			Name: m.Name,
+		}
+
+		if m.Price != nil {
+			modelConfig.Price = &model.ModelPrice{
+				Input:  m.Price.Input,
+				Output: m.Price.Output,
+			}
+		}
+
+		if m.Description != nil {
+			modelConfig.Description = m.Description
+		}
+		if m.ReleaseDate != nil {
+			modelConfig.ReleaseDate = m.ReleaseDate
+		}
+		if m.Thinking != nil {
+			modelConfig.Thinking = m.Thinking
+		}
+
+		gmodels = append(gmodels, modelConfig)
+	}
+
+	return gmodels
+}
+
 func ConvertProvider(prv database.Provider, cfg *pconfig.ProviderConfig) *model.ProviderConfig {
 	return &model.ProviderConfig{
 		ID:        prv.ID,

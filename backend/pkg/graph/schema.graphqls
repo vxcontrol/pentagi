@@ -412,6 +412,9 @@ type Provider {
 # Provider model manifest
 type ModelConfig {
   name: String!
+  description: String
+  releaseDate: Time
+  thinking: Boolean
   price: ModelPrice
 }
 

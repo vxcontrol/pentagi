@@ -12,6 +12,8 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/custom"
+	"pentagi/pkg/providers/gemini"
+	"pentagi/pkg/providers/ollama"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
@@ -43,6 +45,7 @@ func main() {
 
 	if *configPath != "" {
 		cfg.LLMServerConfig = *configPath
+		cfg.OllamaServerConfig = *configPath
 	}
 
 	prv, err := createProvider(*providerType, cfg)
@@ -129,6 +132,26 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 			return nil, fmt.Errorf("error creating anthropic provider config: %w", err)
 		}
 		return anthropic.New(cfg, providerConfig)
+
+	case "gemini":
+		if cfg.GoogleAPIKey == "" {
+			return nil, fmt.Errorf("Gemini API key is not set")
+		}
+		providerConfig, err := gemini.DefaultProviderConfig()
+		if err != nil {
+			return nil, fmt.Errorf("error creating gemini provider config: %w", err)
+		}
+		return gemini.New(cfg, providerConfig)
+
+	case "ollama":
+		if cfg.OllamaServerURL == "" {
+			return nil, fmt.Errorf("Ollama server URL is not set")
+		}
+		providerConfig, err := ollama.DefaultProviderConfig(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("error creating ollama provider config: %w", err)
+		}
+		return ollama.New(cfg, providerConfig)
 
 	//TODO: Add gemini, bedrock, ollama providers
 

@@ -50,7 +50,7 @@ You can watch the video **PentAGI overview**:
 - 💾 Persistent Storage. All commands and outputs are stored in PostgreSQL with [pgvector](https://hub.docker.com/r/vxcontrol/pgvector) extension.
 - 🎯 Scalable Architecture. Microservices-based design supporting horizontal scaling.
 - 🏠 Self-Hosted Solution. Complete control over your deployment and data.
-- 🔑 Flexible Authentication. Support for various LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Deep Infra](https://deepinfra.com/), [OpenRouter](https://openrouter.ai/), [DeepSeek](https://www.deepseek.com/)) and custom configurations.
+- 🔑 Flexible Authentication. Support for various LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Ollama](https://ollama.com/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Google AI/Gemini](https://ai.google.dev/), [Deep Infra](https://deepinfra.com/), [OpenRouter](https://openrouter.ai/), [DeepSeek](https://www.deepseek.com/en)) and custom configurations.
 - ⚡ Quick Deployment. Easy setup through [Docker Compose](https://docs.docker.com/compose/) with comprehensive environment configuration.
 
 ## 🏗️ Architecture
@@ -72,7 +72,7 @@ flowchart TB
     target["🎯 target-system
     (System under test)"]
     llm["🧠 llm-provider
-    (OpenAI/Anthropic/Custom)"]
+    (OpenAI/Anthropic/Ollama/Bedrock/Gemini/Custom)"]
     search["🔍 search-systems
     (Google/DuckDuckGo/Tavily/Traversaal/Perplexity)"]
     langfuse["📊 langfuse-ui
@@ -480,6 +480,10 @@ curl -o .env https://raw.githubusercontent.com/vxcontrol/pentagi/master/.env.exa
 # Required: At least one of these LLM providers
 OPEN_AI_KEY=your_openai_key
 ANTHROPIC_API_KEY=your_anthropic_key
+GEMINI_API_KEY=your_gemini_key
+
+# Optional: Local LLM provider (zero-cost inference)
+OLLAMA_SERVER_URL=http://localhost:11434
 
 # Optional: Additional search capabilities
 DUCKDUCKGO_ENABLED=true
@@ -532,7 +536,7 @@ Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default
 > [!NOTE]
 > If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml` and `docker-compose-observability.yml` to use Langfuse and Observability services.
 > 
-> You have to set at least one Language Model provider (OpenAI or Anthropic) to use PentAGI. Additional API keys for search engines are optional but recommended for better results.
+> You have to set at least one Language Model provider (OpenAI, Anthropic, Gemini, or Ollama) to use PentAGI. Ollama provides zero-cost local inference if you have sufficient computational resources. Additional API keys for search engines are optional but recommended for better results.
 > 
 > `LLM_SERVER_*` environment variables are experimental feature and will be changed in the future. Right now you can use them to specify custom LLM server URL and one model for all agent types.
 > 
@@ -571,6 +575,126 @@ The `LLM_SERVER_LEGACY_REASONING` setting affects how reasoning parameters are s
 - `true`: Uses legacy format with string-based `reasoning_effort` parameter
 
 This setting is important when working with different LLM providers as they may expect different reasoning formats in their API requests. If you encounter reasoning-related errors with custom providers, try changing this setting.
+
+### Local LLM Provider Configuration
+
+PentAGI supports Ollama for local LLM inference, providing zero-cost operation and enhanced privacy:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_SERVER_URL` | | URL of your Ollama server |
+| `OLLAMA_SERVER_CONFIG_PATH` | | Path to custom agent configuration file |
+
+Configuration examples:
+
+```bash
+# Basic Ollama setup
+OLLAMA_SERVER_URL=http://localhost:11434
+
+# Remote Ollama server
+OLLAMA_SERVER_URL=http://ollama-server:11434
+
+# Custom configuration with agent-specific models
+OLLAMA_SERVER_CONFIG_PATH=/path/to/ollama-config.yml
+
+# Default configuration file inside the docker container (just for example)
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama.provider.yml
+```
+
+The system automatically discovers available models from your Ollama server and provides zero-cost inference for penetration testing workflows.
+
+### OpenAI Provider Configuration
+
+PentAGI supports OpenAI's advanced language models, including the latest reasoning-capable o-series models designed for complex analytical tasks:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPEN_AI_KEY` | | API key for OpenAI services |
+| `OPEN_AI_SERVER_URL` | `https://api.openai.com/v1` | OpenAI API endpoint |
+
+Configuration examples:
+
+```bash
+# Basic OpenAI setup
+OPEN_AI_KEY=your_openai_api_key
+OPEN_AI_SERVER_URL=https://api.openai.com/v1
+
+# Using with proxy for enhanced security
+OPEN_AI_KEY=your_openai_api_key
+PROXY_URL=http://your-proxy:8080
+```
+
+The OpenAI provider offers cutting-edge capabilities including:
+
+- **Reasoning Models**: Advanced o-series models (o1, o3, o4-mini) with step-by-step analytical thinking
+- **Latest GPT-4.1 Series**: Flagship models optimized for complex security research and exploit development
+- **Cost-Effective Options**: From nano models for high-volume scanning to powerful reasoning models for deep analysis
+- **Versatile Performance**: Fast, intelligent models perfect for multi-step security analysis and penetration testing
+- **Proven Reliability**: Industry-leading models with consistent performance across diverse security scenarios
+
+The system automatically selects appropriate OpenAI models based on task complexity, optimizing for both performance and cost-effectiveness.
+
+### Anthropic Provider Configuration
+
+PentAGI integrates with Anthropic's Claude models, known for their exceptional safety, reasoning capabilities, and sophisticated understanding of complex security contexts:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | | API key for Anthropic services |
+| `ANTHROPIC_SERVER_URL` | `https://api.anthropic.com/v1` | Anthropic API endpoint |
+
+Configuration examples:
+
+```bash
+# Basic Anthropic setup
+ANTHROPIC_API_KEY=your_anthropic_api_key
+ANTHROPIC_SERVER_URL=https://api.anthropic.com/v1
+
+# Using with proxy for secure environments
+ANTHROPIC_API_KEY=your_anthropic_api_key
+PROXY_URL=http://your-proxy:8080
+```
+
+The Anthropic provider delivers superior capabilities including:
+
+- **Advanced Reasoning**: Claude 4 series with exceptional reasoning for sophisticated penetration testing
+- **Extended Thinking**: Claude 3.7 with step-by-step thinking capabilities for methodical security research
+- **High-Speed Performance**: Claude 3.5 Haiku for blazing-fast vulnerability scans and real-time monitoring
+- **Comprehensive Analysis**: Claude Sonnet models for complex security analysis and threat hunting
+- **Safety-First Design**: Built-in safety mechanisms ensuring responsible security testing practices
+
+The system leverages Claude's advanced understanding of security contexts to provide thorough and responsible penetration testing guidance.
+
+### Google AI (Gemini) Provider Configuration
+
+PentAGI supports Google's Gemini models through the Google AI API, offering state-of-the-art reasoning capabilities and multimodal features:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GEMINI_API_KEY` | | API key for Google AI services |
+| `GEMINI_SERVER_URL` | `https://generativelanguage.googleapis.com` | Google AI API endpoint |
+
+Configuration examples:
+
+```bash
+# Basic Gemini setup
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_SERVER_URL=https://generativelanguage.googleapis.com
+
+# Using with proxy
+GEMINI_API_KEY=your_gemini_api_key
+PROXY_URL=http://your-proxy:8080
+```
+
+The Gemini provider offers advanced features including:
+
+- **Thinking Capabilities**: Advanced reasoning models (Gemini 2.5 series) with step-by-step analysis
+- **Multimodal Support**: Text and image processing for comprehensive security assessments
+- **Large Context Windows**: Up to 2M tokens for analyzing extensive codebases and documentation
+- **Cost-Effective Options**: From high-performance pro models to economical flash variants
+- **Security-Focused Models**: Specialized configurations optimized for penetration testing workflows
+
+The system automatically selects appropriate Gemini models based on agent requirements, balancing performance, capabilities, and cost-effectiveness.
 
 For advanced configuration options and detailed setup instructions, please visit our [documentation](https://docs.pentagi.com).
 
@@ -881,7 +1005,7 @@ docker run --rm \
 
 #### Using Pre-configured Providers
 
-The Docker image comes with pre-configured provider files for OpenRouter or DeepInfra or DeepSeek:
+The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, DeepInfra, DeepSeek):
 
 ```bash
 # Test with OpenRouter configuration
@@ -899,10 +1023,30 @@ docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepseek.provider.yml
 
+# Test with OpenAI configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -type openai
+
+# Test with Anthropic configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -type anthropic
+
+# Test with Gemini configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -type gemini
+
 # Test with Custom OpenAI configuration
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
+
+# Test with Ollama configuration (local inference)
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama.provider.yml
 ```
 
 To use these configurations, your `.env` file only needs to contain:
@@ -913,6 +1057,22 @@ LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
 LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml
 LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
+
+# For OpenAI (official API)
+OPEN_AI_KEY=your_openai_api_key                  # Your OpenAI API key
+OPEN_AI_SERVER_URL=https://api.openai.com/v1     # OpenAI API endpoint
+
+# For Anthropic (Claude models)
+ANTHROPIC_API_KEY=your_anthropic_api_key         # Your Anthropic API key
+ANTHROPIC_SERVER_URL=https://api.anthropic.com/v1  # Anthropic API endpoint
+
+# For Gemini (Google AI)
+GEMINI_API_KEY=your_gemini_api_key               # Your Google AI API key
+GEMINI_SERVER_URL=https://generativelanguage.googleapis.com  # Google AI API endpoint
+
+# For Ollama (local inference)
+OLLAMA_SERVER_URL=http://localhost:11434         # Your Ollama server URL
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama.provider.yml
 ```
 
 #### Using OpenAI with Unverified Organizations
@@ -966,7 +1126,7 @@ docker cp pentagi:/opt/pentagi/data/agent-test-report.md ./
 The utility accepts several options:
 
 - `-env <path>` - Path to environment file (default: `.env`)
-- `-type <provider>` - Provider type: `custom`, `openai`, `anthropic`, `bedrock`, `ollama`, `gemini` (default: `custom`)
+- `-type <provider>` - Provider type: `custom`, `openai`, `anthropic`, `ollama`, `bedrock`, `gemini` (default: `custom`)
 - `-config <path>` - Path to custom provider config (default: from `LLM_SERVER_CONFIG_PATH` env variable)
 - `-tests <path>` - Path to custom tests YAML file (optional)
 - `-report <path>` - Path to write the report file (optional)
@@ -1398,7 +1558,7 @@ To access detailed logs:
 The main utility accepts several options:
 
 - `-env <path>` - Path to environment file (optional, default: `.env`)
-- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `custom`)
+- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `ollama`, `bedrock`, `gemini`, `custom`)
 - `-flow <id>` - Flow ID for testing (0 means using mocks, default: `0`)
 - `-task <id>` - Task ID for agent context (optional)
 - `-subtask <id>` - Subtask ID for agent context (optional)

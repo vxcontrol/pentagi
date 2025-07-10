@@ -1,0 +1,74 @@
+# Flagship chat models - Versatile, high-intelligence models for complex tasks
+- name: gpt-4o
+  description: Fast, intelligent, flexible GPT model ideal for complex penetration testing scenarios and multi-step security analysis
+  thinking: false
+  release_date: 2024-05-13
+  price:
+    input: 2.5
+    output: 10.0
+
+- name: gpt-4o-mini
+  description: Fast, affordable small model perfect for focused pentesting tasks like vulnerability scanning and quick security assessments
+  thinking: false
+  release_date: 2024-07-18
+  price:
+    input: 0.15
+    output: 0.6
+
+# Latest GPT-4.1 series - Flagship models for complex tasks
+- name: gpt-4.1
+  description: Flagship GPT model optimized for complex security research, advanced exploit development, and comprehensive penetration testing
+  thinking: false
+  release_date: 2025-04-14
+  price:
+    input: 2.0
+    output: 8.0
+
+- name: gpt-4.1-mini
+  description: Balanced model for intelligence, speed, and cost - excellent for routine security assessments and code analysis
+  thinking: false
+  release_date: 2025-04-14
+  price:
+    input: 0.4
+    output: 1.6
+
+- name: gpt-4.1-nano
+  description: Fastest, most cost-effective model perfect for high-volume security scanning and basic vulnerability detection
+  thinking: false
+  release_date: 2025-04-14
+  price:
+    input: 0.1
+    output: 0.4
+
+# Reasoning models - o-series models that excel at complex, multi-step security tasks
+- name: o3-mini
+  description: Small but powerful reasoning model excellent for step-by-step security analysis and logical penetration testing workflows
+  thinking: true
+  release_date: 2025-01-31
+  price:
+    input: 1.1
+    output: 4.4
+
+- name: o4-mini
+  description: Faster, more affordable reasoning model ideal for methodical security assessments and systematic vulnerability analysis
+  thinking: true
+  release_date: 2025-04-16
+  price:
+    input: 1.1
+    output: 4.4
+
+- name: o3
+  description: Advanced reasoning model perfect for complex security research, sophisticated attack chain development, and deep threat analysis
+  thinking: true
+  release_date: 2025-04-16
+  price:
+    input: 2.0
+    output: 8.0
+
+- name: o1
+  description: Powerful reasoning model specialized in complex multi-step security analysis and advanced penetration testing methodologies
+  thinking: true
+  release_date: 2024-12-17
+  price:
+    input: 15.0
+    output: 60.0

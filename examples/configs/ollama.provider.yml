@@ -1,0 +1,90 @@
+simple:
+  model: "llama3.1:8b"
+  temperature: 0.2
+  top_p: 0.3
+  n: 1
+  max_tokens: 4000
+
+simple_json:
+  model: "llama3.1:8b"
+  temperature: 0.1
+  top_p: 0.2
+  n: 1
+  max_tokens: 4000
+
+primary_agent:
+  model: "llama3.1:8b"
+  temperature: 0.2
+  top_p: 0.3
+  n: 1
+  max_tokens: 4000
+
+assistant:
+  model: "llama3.1:8b"
+  temperature: 0.2
+  top_p: 0.3
+  n: 1
+  max_tokens: 4000
+
+generator:
+  model: "llama3.1:8b"
+  temperature: 0.4
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+
+refiner:
+  model: "llama3.1:8b"
+  temperature: 0.3
+  top_p: 0.4
+  n: 1
+  max_tokens: 4000
+
+adviser:
+  model: "llama3.1:8b"
+  temperature: 0.3
+  top_p: 0.4
+  n: 1
+  max_tokens: 4000
+
+reflector:
+  model: "llama3.1:8b"
+  temperature: 0.3
+  top_p: 0.4
+  n: 1
+  max_tokens: 4000
+
+searcher:
+  model: "llama3.1:8b"
+  temperature: 0.2
+  top_p: 0.3
+  n: 1
+  max_tokens: 3000
+
+enricher:
+  model: "llama3.1:8b"
+  temperature: 0.2
+  top_p: 0.3
+  n: 1
+  max_tokens: 4000
+
+coder:
+  model: "llama3.1:8b"
+  temperature: 0.1
+  top_p: 0.2
+  n: 1
+  max_tokens: 6000
+
+installer:
+  model: "llama3.1:8b"
+  temperature: 0.1
+  top_p: 0.2
+  n: 1
+  max_tokens: 4000
+
+pentester:
+  model: "llama3.1:8b"
+  temperature: 0.3
+  top_p: 0.4
+  n: 1
+  max_tokens: 8000

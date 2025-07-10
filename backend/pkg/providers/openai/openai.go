@@ -15,7 +15,7 @@ import (
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
-//go:embed config.yml
+//go:embed config.yml models.yml
 var configFS embed.FS
 
 const OpenAIAgentModel = "o4-mini"
@@ -44,8 +44,18 @@ func DefaultProviderConfig() (*pconfig.ProviderConfig, error) {
 	return BuildProviderConfig(configData)
 }
 
+func DefaultModels() (pconfig.ModelsConfig, error) {
+	configData, err := configFS.ReadFile("models.yml")
+	if err != nil {
+		return nil, err
+	}
+
+	return pconfig.LoadModelsConfigData(configData)
+}
+
 type openaiProvider struct {
 	llm            *openai.LLM
+	models         pconfig.ModelsConfig
 	providerConfig *pconfig.ProviderConfig
 }
 
@@ -62,6 +72,11 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		}
 	}
 
+	models, err := DefaultModels()
+	if err != nil {
+		return nil, err
+	}
+
 	client, err := openai.New(
 		openai.WithToken(cfg.OpenAIKey),
 		openai.WithModel(OpenAIAgentModel),
@@ -74,6 +89,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 
 	return &openaiProvider{
 		llm:            client,
+		models:         models,
 		providerConfig: providerConfig,
 	}, nil
 }
@@ -92,6 +108,10 @@ func (p *openaiProvider) GetProviderConfig() *pconfig.ProviderConfig {
 
 func (p *openaiProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
 	return p.providerConfig.GetPriceInfoForType(opt)
+}
+
+func (p *openaiProvider) GetModels() pconfig.ModelsConfig {
+	return p.models
 }
 
 func (p *openaiProvider) Model(opt pconfig.ProviderOptionsType) string {

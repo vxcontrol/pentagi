@@ -1,0 +1,140 @@
+simple:
+  model: gemini-2.0-flash-lite
+  temperature: 0.5
+  top_p: 0.8
+  n: 1
+  max_tokens: 3000
+  price:
+    input: 0.075
+    output: 0.3
+
+simple_json:
+  model: gemini-2.0-flash-lite
+  temperature: 0.5
+  top_p: 0.8
+  n: 1
+  max_tokens: 3000
+  json: true
+  price:
+    input: 0.075
+    output: 0.3
+
+primary_agent:
+  model: gemini-2.5-flash-lite-preview-06-17
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.1
+    output: 0.4
+
+assistant:
+  model: gemini-2.5-flash
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.3
+    output: 2.5
+
+generator:
+  model: gemini-2.5-pro
+  temperature: 0.6
+  top_p: 0.6
+  n: 1
+  max_tokens: 8000
+  reasoning:
+    effort: high
+  price:
+    input: 1.25
+    output: 10.0
+
+refiner:
+  model: gemini-2.0-flash
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.1
+    output: 0.4
+
+adviser:
+  model: gemini-2.5-flash
+  n: 1
+  max_tokens: 4000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.3
+    output: 2.5
+
+reflector:
+  model: gemini-2.5-flash
+  n: 1
+  max_tokens: 3000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.3
+    output: 2.5
+
+searcher:
+  model: gemini-2.0-flash
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.1
+    output: 0.4
+
+enricher:
+  model: gemini-2.0-flash
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.1
+    output: 0.4
+
+coder:
+  model: gemini-2.5-pro
+  temperature: 0.2
+  top_p: 0.1
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: low
+  price:
+    input: 1.25
+    output: 10.0
+
+installer:
+  model: gemini-2.5-flash-lite-preview-06-17
+  temperature: 0.2
+  top_p: 0.1
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: low
+  price:
+    input: 0.1
+    output: 0.4
+
+pentester:
+  model: gemini-2.5-flash-lite-preview-06-17
+  temperature: 0.5
+  top_p: 0.6
+  n: 1
+  max_tokens: 4000
+  reasoning:
+    effort: high
+  price:
+    input: 0.1
+    output: 0.4

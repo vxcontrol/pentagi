@@ -1,4 +1,4 @@
-package openai
+package gemini
 
 import (
 	"testing"
@@ -10,8 +10,8 @@ import (
 
 func TestConfigLoading(t *testing.T) {
 	cfg := &config.Config{
-		OpenAIKey:       "test-key",
-		OpenAIServerURL: "https://api.openai.com/v1",
+		GeminiAPIKey:    "test-key",
+		GeminiServerURL: "https://generativelanguage.googleapis.com",
 	}
 
 	providerConfig, err := DefaultProviderConfig()
@@ -56,8 +56,8 @@ func TestConfigLoading(t *testing.T) {
 
 func TestProviderType(t *testing.T) {
 	cfg := &config.Config{
-		OpenAIKey:       "test-key",
-		OpenAIServerURL: "https://api.openai.com/v1",
+		GeminiAPIKey:    "test-key",
+		GeminiServerURL: "https://generativelanguage.googleapis.com",
 	}
 
 	providerConfig, err := DefaultProviderConfig()
@@ -70,8 +70,8 @@ func TestProviderType(t *testing.T) {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
 
-	if prov.Type() != provider.ProviderOpenAI {
-		t.Errorf("Expected provider type %v, got %v", provider.ProviderOpenAI, prov.Type())
+	if prov.Type() != provider.ProviderGemini {
+		t.Errorf("Expected provider type %v, got %v", provider.ProviderGemini, prov.Type())
 	}
 }
 
@@ -102,5 +102,70 @@ func TestModelsLoading(t *testing.T) {
 		if model.Price.Output <= 0 {
 			t.Errorf("Model %s should have positive output price", model.Name)
 		}
+	}
+}
+
+func TestGeminiSpecificFeatures(t *testing.T) {
+	models, err := DefaultModels()
+	if err != nil {
+		t.Fatalf("Failed to load models: %v", err)
+	}
+
+	// Test that we have current Gemini models
+	expectedModels := []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"}
+	for _, expectedModel := range expectedModels {
+		found := false
+		for _, model := range models {
+			if model.Name == expectedModel {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected model %s not found in models list", expectedModel)
+		}
+	}
+
+	// Test default agent model
+	if GeminiAgentModel != "gemini-2.5-flash" {
+		t.Errorf("Expected default agent model to be gemini-2.5-flash, got %s", GeminiAgentModel)
+	}
+}
+
+func TestGetUsage(t *testing.T) {
+	cfg := &config.Config{
+		GeminiAPIKey:    "test-key",
+		GeminiServerURL: "https://generativelanguage.googleapis.com",
+	}
+
+	providerConfig, err := DefaultProviderConfig()
+	if err != nil {
+		t.Fatalf("Failed to create provider config: %v", err)
+	}
+
+	prov, err := New(cfg, providerConfig)
+	if err != nil {
+		t.Fatalf("Failed to create provider: %v", err)
+	}
+
+	// Test usage parsing with Google AI format
+	usageInfo := map[string]any{
+		"input_tokens":  100,
+		"output_tokens": 50,
+	}
+
+	inputTokens, outputTokens := prov.GetUsage(usageInfo)
+	if inputTokens != 100 {
+		t.Errorf("Expected input tokens 100, got %d", inputTokens)
+	}
+	if outputTokens != 50 {
+		t.Errorf("Expected output tokens 50, got %d", outputTokens)
+	}
+
+	// Test with missing usage info
+	emptyInfo := map[string]any{}
+	inputTokens, outputTokens = prov.GetUsage(emptyInfo)
+	if inputTokens != 0 || outputTokens != 0 {
+		t.Errorf("Expected zero tokens with empty usage info, got input: %d, output: %d", inputTokens, outputTokens)
 	}
 }

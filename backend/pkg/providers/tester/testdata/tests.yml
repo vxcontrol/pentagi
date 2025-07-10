@@ -49,7 +49,7 @@
     - role: "system"
       content: "You must respond only with valid JSON. No explanations or additional text."
     - role: "user"
-      content: "Return a JSON with a person's information: name='John Doe', age=30, city='New York'"
+      content: "Return a JSON with a person's information with correct types: name='John Doe', age=30, city='New York'; age must be a number, name and city must be a string"
   expected:
     name: "John Doe"
     age: 30

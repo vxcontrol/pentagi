@@ -74,3 +74,33 @@ func TestProviderType(t *testing.T) {
 		t.Errorf("Expected provider type %v, got %v", provider.ProviderAnthropic, prov.Type())
 	}
 }
+
+func TestModelsLoading(t *testing.T) {
+	models, err := DefaultModels()
+	if err != nil {
+		t.Fatalf("Failed to load models: %v", err)
+	}
+
+	if len(models) == 0 {
+		t.Fatal("Models list should not be empty")
+	}
+
+	for _, model := range models {
+		if model.Name == "" {
+			t.Error("Model name should not be empty")
+		}
+
+		if model.Price == nil {
+			t.Errorf("Model %s should have price information", model.Name)
+			continue
+		}
+
+		if model.Price.Input <= 0 {
+			t.Errorf("Model %s should have positive input price", model.Name)
+		}
+
+		if model.Price.Output <= 0 {
+			t.Errorf("Model %s should have positive output price", model.Name)
+		}
+	}
+}

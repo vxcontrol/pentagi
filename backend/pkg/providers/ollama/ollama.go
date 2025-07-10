@@ -1,31 +1,33 @@
-package anthropic
+package ollama
 
 import (
 	"context"
 	"embed"
 	"net/http"
 	"net/url"
+	"os"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 
+	"github.com/ollama/ollama/api"
 	"github.com/vxcontrol/langchaingo/llms"
-	"github.com/vxcontrol/langchaingo/llms/anthropic"
+	"github.com/vxcontrol/langchaingo/llms/ollama"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
-//go:embed config.yml models.yml
+//go:embed config.yml
 var configFS embed.FS
 
-const AnthropicAgentModel = "claude-sonnet-4-20250514"
+const OllamaAgentModel = "llama3.1:8b"
 
-func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
+func BuildProviderConfig(cfg *config.Config, configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
-		llms.WithModel(AnthropicAgentModel),
-		llms.WithTemperature(1.0),
 		llms.WithN(1),
 		llms.WithMaxTokens(4000),
+		llms.WithModel(OllamaAgentModel),
 	}
 
 	providerConfig, err := pconfig.LoadConfigData(configData, defaultOptions)
@@ -36,32 +38,60 @@ func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	return providerConfig, nil
 }
 
-func DefaultProviderConfig() (*pconfig.ProviderConfig, error) {
-	configData, err := configFS.ReadFile("config.yml")
+func DefaultProviderConfig(cfg *config.Config) (*pconfig.ProviderConfig, error) {
+	var (
+		configData []byte
+		err        error
+	)
+
+	if cfg.OllamaServerConfig == "" {
+		configData, err = configFS.ReadFile("config.yml")
+	} else {
+		configData, err = os.ReadFile(cfg.OllamaServerConfig)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	return BuildProviderConfig(configData)
+	return BuildProviderConfig(cfg, configData)
 }
 
-func DefaultModels() (pconfig.ModelsConfig, error) {
-	configData, err := configFS.ReadFile("models.yml")
+func loadModelsFromServer(serverURL string, httpClient *http.Client) pconfig.ModelsConfig {
+	parsedURL, err := url.Parse(serverURL)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
-	return pconfig.LoadModelsConfigData(configData)
+	client := api.NewClient(parsedURL, httpClient)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	response, err := client.List(ctx)
+	if err != nil {
+		return nil
+	}
+
+	var models pconfig.ModelsConfig
+	for _, model := range response.Models {
+		modelConfig := pconfig.ModelConfig{
+			Name:  model.Name,
+			Price: nil, // ollama is free local inference, no pricing
+		}
+		models = append(models, modelConfig)
+	}
+
+	return models
 }
 
-type anthropicProvider struct {
-	llm            *anthropic.LLM
+type ollamaProvider struct {
+	llm            *ollama.LLM
+	model          string
 	models         pconfig.ModelsConfig
 	providerConfig *pconfig.ProviderConfig
 }
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
-	baseURL := cfg.AnthropicServerURL
 	httpClient := http.DefaultClient
 	if cfg.ProxyURL != "" {
 		httpClient = &http.Client{
@@ -73,50 +103,51 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		}
 	}
 
-	models, err := DefaultModels()
-	if err != nil {
-		return nil, err
-	}
+	model := OllamaAgentModel
+	serverURL := cfg.OllamaServerURL
 
-	client, err := anthropic.New(
-		anthropic.WithToken(cfg.AnthropicAPIKey),
-		anthropic.WithModel(AnthropicAgentModel),
-		anthropic.WithBaseURL(baseURL),
-		anthropic.WithHTTPClient(httpClient),
+	client, err := ollama.New(
+		ollama.WithServerURL(serverURL),
+		ollama.WithHTTPClient(httpClient),
+		ollama.WithModel(model),
+		ollama.WithPullModel(),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &anthropicProvider{
+	models := loadModelsFromServer(serverURL, httpClient)
+
+	return &ollamaProvider{
 		llm:            client,
+		model:          model,
 		models:         models,
 		providerConfig: providerConfig,
 	}, nil
 }
 
-func (p *anthropicProvider) Type() provider.ProviderType {
-	return provider.ProviderAnthropic
+func (p *ollamaProvider) Type() provider.ProviderType {
+	return provider.ProviderOllama
 }
 
-func (p *anthropicProvider) GetRawConfig() []byte {
+func (p *ollamaProvider) GetRawConfig() []byte {
 	return p.providerConfig.GetRawConfig()
 }
 
-func (p *anthropicProvider) GetProviderConfig() *pconfig.ProviderConfig {
+func (p *ollamaProvider) GetProviderConfig() *pconfig.ProviderConfig {
 	return p.providerConfig
 }
 
-func (p *anthropicProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
+func (p *ollamaProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
 	return p.providerConfig.GetPriceInfoForType(opt)
 }
 
-func (p *anthropicProvider) GetModels() pconfig.ModelsConfig {
+func (p *ollamaProvider) GetModels() pconfig.ModelsConfig {
 	return p.models
 }
 
-func (p *anthropicProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: AnthropicAgentModel}
+func (p *ollamaProvider) Model(opt pconfig.ProviderOptionsType) string {
+	opts := llms.CallOptions{Model: p.model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
@@ -124,7 +155,7 @@ func (p *anthropicProvider) Model(opt pconfig.ProviderOptionsType) string {
 	return opts.Model
 }
 
-func (p *anthropicProvider) Call(
+func (p *ollamaProvider) Call(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
 	prompt string,
@@ -135,7 +166,7 @@ func (p *anthropicProvider) Call(
 	)
 }
 
-func (p *anthropicProvider) CallEx(
+func (p *ollamaProvider) CallEx(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
 	chain []llms.MessageContent,
@@ -149,7 +180,7 @@ func (p *anthropicProvider) CallEx(
 	)
 }
 
-func (p *anthropicProvider) CallWithTools(
+func (p *ollamaProvider) CallWithTools(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
 	chain []llms.MessageContent,
@@ -165,13 +196,13 @@ func (p *anthropicProvider) CallWithTools(
 	)
 }
 
-func (p *anthropicProvider) GetUsage(info map[string]any) (int64, int64) {
+func (p *ollamaProvider) GetUsage(info map[string]any) (int64, int64) {
 	var inputTokens, outputTokens int64
-	if value, ok := info["InputTokens"]; ok {
+	if value, ok := info["PromptTokens"]; ok {
 		inputTokens = int64(value.(int))
 	}
 
-	if value, ok := info["OutputTokens"]; ok {
+	if value, ok := info["CompletionTokens"]; ok {
 		outputTokens = int64(value.(int))
 	}
 
