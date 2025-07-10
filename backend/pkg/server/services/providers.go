@@ -5,8 +5,8 @@ import (
 	"slices"
 
 	"pentagi/pkg/providers"
-	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/server/logger"
+	"pentagi/pkg/server/models"
 	"pentagi/pkg/server/response"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +26,7 @@ func NewProviderService(providers providers.ProviderController) *ProviderService
 // @Summary Retrieve providers list
 // @Tags Providers
 // @Produce json
-// @Success 200 {object} response.successResp{data=provider.ProvidersList} "providers list received successful"
+// @Success 200 {object} response.successResp{data=models.ProviderInfo} "providers list received successful"
 // @Failure 403 {object} response.errorResp "getting providers not permitted"
 // @Router /providers/ [get]
 func (s *ProviderService) GetProviders(c *gin.Context) {
@@ -37,8 +37,20 @@ func (s *ProviderService) GetProviders(c *gin.Context) {
 		return
 	}
 
-	var list provider.ProvidersList
-	list = s.providers.List()
+	providers, err := s.providers.GetProviders(c, int64(c.GetUint64("uid")))
+	if err != nil {
+		logger.FromContext(c).Errorf("error getting providers: %v", err)
+		response.Error(c, response.ErrInternal, nil)
+		return
+	}
 
-	response.Success(c, http.StatusOK, list)
+	providerInfos := make([]models.ProviderInfo, len(providers))
+	for i, name := range providers.ListNames() {
+		providerInfos[i] = models.ProviderInfo{
+			Name: name.String(),
+			Type: models.ProviderType(providers[name].Type()),
+		}
+	}
+
+	response.Success(c, http.StatusOK, providerInfos)
 }

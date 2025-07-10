@@ -3,12 +3,14 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"pentagi/pkg/cast"
 	"pentagi/pkg/database"
-	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/tools"
 
 	"github.com/vxcontrol/langchaingo/llms"
@@ -21,7 +23,7 @@ func (fp *flowProvider) performTaskResultReporter(
 ) (*tools.TaskResult, error) {
 	var (
 		taskResult   tools.TaskResult
-		optAgentType = provider.OptionsTypeSimple
+		optAgentType = pconfig.OptionsTypeSimple
 		msgChainType = database.MsgchainTypeReporter
 	)
 
@@ -91,7 +93,7 @@ func (fp *flowProvider) performSubtasksGenerator(
 ) ([]tools.SubtaskInfo, error) {
 	var (
 		subtaskList  tools.SubtaskList
-		optAgentType = provider.OptionsTypeGenerator
+		optAgentType = pconfig.OptionsTypeGenerator
 		msgChainType = database.MsgchainTypeGenerator
 	)
 
@@ -173,7 +175,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 	var (
 		subtaskList  tools.SubtaskList
 		chain        []llms.MessageContent
-		optAgentType = provider.OptionsTypeRefiner
+		optAgentType = pconfig.OptionsTypeRefiner
 		msgChainType = database.MsgchainTypeRefiner
 	)
 
@@ -318,7 +320,7 @@ func (fp *flowProvider) performCoder(
 ) (string, error) {
 	var (
 		codeResult   tools.CodeResult
-		optAgentType = provider.OptionsTypeCoder
+		optAgentType = pconfig.OptionsTypeCoder
 		msgChainType = database.MsgchainTypeCoder
 	)
 
@@ -398,7 +400,7 @@ func (fp *flowProvider) performInstaller(
 ) (string, error) {
 	var (
 		maintenanceResult tools.MaintenanceResult
-		optAgentType      = provider.OptionsTypeInstaller
+		optAgentType      = pconfig.OptionsTypeInstaller
 		msgChainType      = database.MsgchainTypeInstaller
 	)
 
@@ -472,7 +474,7 @@ func (fp *flowProvider) performMemorist(
 ) (string, error) {
 	var (
 		memoristResult tools.MemoristResult
-		optAgentType   = provider.OptionsTypeSearcher
+		optAgentType   = pconfig.OptionsTypeSearcher
 		msgChainType   = database.MsgchainTypeMemorist
 	)
 
@@ -528,7 +530,7 @@ func (fp *flowProvider) performPentester(
 ) (string, error) {
 	var (
 		hackResult   tools.HackResult
-		optAgentType = provider.OptionsTypePentester
+		optAgentType = pconfig.OptionsTypePentester
 		msgChainType = database.MsgchainTypePentester
 	)
 
@@ -614,7 +616,7 @@ func (fp *flowProvider) performSearcher(
 ) (string, error) {
 	var (
 		searchResult tools.SearchResult
-		optAgentType = provider.OptionsTypeSearcher
+		optAgentType = pconfig.OptionsTypeSearcher
 		msgChainType = database.MsgchainTypeSearcher
 	)
 
@@ -676,7 +678,7 @@ func (fp *flowProvider) performEnricher(
 ) (string, error) {
 	var (
 		enricherResult tools.EnricherResult
-		optAgentType   = provider.OptionsTypeEnricher
+		optAgentType   = pconfig.OptionsTypeEnricher
 		msgChainType   = database.MsgchainTypeEnricher
 	)
 
@@ -739,7 +741,7 @@ func (fp *flowProvider) performEnricher(
 func (fp *flowProvider) performSimpleChain(
 	ctx context.Context,
 	taskID, subtaskID *int64,
-	opt provider.ProviderOptionsType,
+	opt pconfig.ProviderOptionsType,
 	msgChainType database.MsgchainType,
 	systemTmpl, userTmpl string,
 ) (string, error) {
@@ -761,6 +763,17 @@ func (fp *flowProvider) performSimpleChain(
 		resp, err = fp.CallEx(ctx, opt, chain, nil)
 		if err == nil {
 			break
+		} else {
+			if errors.Is(err, context.Canceled) {
+				return "", err
+			}
+
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Second * 5):
+			default:
+			}
 		}
 	}
 

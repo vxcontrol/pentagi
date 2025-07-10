@@ -105,6 +105,7 @@ func (ce *customExecutor) Execute(
 			return "", resultFormat, fmt.Errorf("failed to execute handler: %w", err)
 		}
 
+		result = database.SanitizeUTF8(result)
 		allowSummarize := slices.Contains(allowedSummarizingToolsResult, name)
 		if ce.summarizer != nil && allowSummarize && len(result) > DefaultResultSizeLimit {
 			summarizePrompt, err := ce.getSummarizePrompt(name, string(args), result)

@@ -49,14 +49,15 @@ import { StatusType } from '@/graphql/types';
 import { axios } from '@/lib/axios';
 import { cn } from '@/lib/utils';
 import type { User } from '@/models/User';
+import { getProviderDisplayName, type Provider } from '@/models/Provider';
 import { useThemeStore } from '@/store/theme-store';
 
 interface ChatSidebarProps {
     user: User | null;
     flows: FlowOverviewFragmentFragment[];
-    providers: string[];
-    selectedProvider: string;
-    onChangeSelectedProvider: (provider: string) => void;
+    providers: Provider[];
+    selectedProvider: Provider | null;
+    onChangeSelectedProvider: (provider: Provider) => void;
     selectedFlowId: string | null;
     onChangeSelectedFlowId: (id: string) => void;
     onDeleteFlow: (id: string) => Promise<void>;
@@ -172,7 +173,7 @@ const ChatSidebar = ({
                                     size="sm"
                                     className="ml-auto h-8 gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                 >
-                                    <span>{selectedProvider}</span>
+                                    <span>{selectedProvider ? getProviderDisplayName(selectedProvider) : 'Select Provider'}</span>
                                     <ChevronsUpDown className="size-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -185,14 +186,14 @@ const ChatSidebar = ({
                             >
                                 {providers.map((provider) => (
                                     <DropdownMenuItem
-                                        key={provider}
+                                        key={provider.name}
                                         onSelect={(e) => {
                                             e.preventDefault();
                                             onChangeSelectedProvider(provider);
                                         }}
                                         className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                     >
-                                        {provider} {provider === selectedProvider && <Check className="ml-auto" />}
+                                        {getProviderDisplayName(provider)} {selectedProvider?.name === provider.name && <Check className="ml-auto" />}
                                     </DropdownMenuItem>
                                 ))}
                             </DropdownMenuContent>

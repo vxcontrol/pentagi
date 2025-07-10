@@ -144,7 +144,7 @@ func (aslw *flowAssistantLogWorker) UpdateMsgResult(
 	}
 
 	msgLog, err = aslw.db.UpdateAssistantLogResult(ctx, database.UpdateAssistantLogResultParams{
-		Result:       sanitizeUTF8(result),
+		Result:       database.SanitizeUTF8(result),
 		ResultFormat: resultFormat,
 		ID:           msgID,
 	})
@@ -183,8 +183,8 @@ func (aslw *flowAssistantLogWorker) putMsg(
 	} else if msgFound {
 		msgLog, err := aslw.db.UpdateAssistantLogContent(ctx, database.UpdateAssistantLogContentParams{
 			Type:     msgType,
-			Message:  sanitizeUTF8(msg),
-			Thinking: database.StringToNullString(sanitizeUTF8(thinking)),
+			Message:  database.SanitizeUTF8(msg),
+			Thinking: database.StringToNullString(database.SanitizeUTF8(thinking)),
 			ID:       msgID,
 		})
 		if err == nil {
@@ -194,8 +194,8 @@ func (aslw *flowAssistantLogWorker) putMsg(
 	} else {
 		msgLog, err := aslw.db.CreateAssistantLog(ctx, database.CreateAssistantLogParams{
 			Type:        msgType,
-			Message:     sanitizeUTF8(msg),
-			Thinking:    database.StringToNullString(sanitizeUTF8(thinking)),
+			Message:     database.SanitizeUTF8(msg),
+			Thinking:    database.StringToNullString(database.SanitizeUTF8(thinking)),
 			FlowID:      aslw.flowID,
 			AssistantID: aslw.assistantID,
 		})
@@ -223,9 +223,9 @@ func (aslw *flowAssistantLogWorker) putMsgResult(
 
 	msgLog, err := aslw.db.CreateResultAssistantLog(ctx, database.CreateResultAssistantLogParams{
 		Type:         msgType,
-		Message:      sanitizeUTF8(msg),
-		Thinking:     database.StringToNullString(sanitizeUTF8(thinking)),
-		Result:       sanitizeUTF8(result),
+		Message:      database.SanitizeUTF8(msg),
+		Thinking:     database.StringToNullString(database.SanitizeUTF8(thinking)),
+		Result:       database.SanitizeUTF8(result),
 		ResultFormat: resultFormat,
 		FlowID:       aslw.flowID,
 		AssistantID:  aslw.assistantID,
@@ -330,8 +330,8 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 			content, thinking := contentBuf.String(), thinkingBuf.String()
 			msgLog, err = aslw.db.UpdateAssistantLogContent(ctx, database.UpdateAssistantLogContentParams{
 				Type:     chunk.MsgType,
-				Message:  sanitizeUTF8(content),
-				Thinking: database.StringToNullString(sanitizeUTF8(thinking)),
+				Message:  database.SanitizeUTF8(content),
+				Thinking: database.StringToNullString(database.SanitizeUTF8(thinking)),
 				ID:       msgID,
 			})
 			if err == nil {
@@ -352,9 +352,9 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 			content, thinking := contentBuf.String(), thinkingBuf.String()
 			msgLog, err = aslw.db.UpdateAssistantLog(ctx, database.UpdateAssistantLogParams{
 				Type:         chunk.MsgType,
-				Message:      sanitizeUTF8(content),
-				Thinking:     database.StringToNullString(sanitizeUTF8(thinking)),
-				Result:       sanitizeUTF8(result),
+				Message:      database.SanitizeUTF8(content),
+				Thinking:     database.StringToNullString(database.SanitizeUTF8(thinking)),
+				Result:       database.SanitizeUTF8(result),
 				ResultFormat: resultFormat,
 				ID:           msgID,
 			})
@@ -378,8 +378,8 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 				content, thinking := contentBuf.String(), thinkingBuf.String()
 				_, _ = aslw.db.UpdateAssistantLog(ctx, database.UpdateAssistantLogParams{
 					Type:         msgLog.Type,
-					Message:      sanitizeUTF8(content),
-					Thinking:     database.StringToNullString(sanitizeUTF8(thinking)),
+					Message:      database.SanitizeUTF8(content),
+					Thinking:     database.StringToNullString(database.SanitizeUTF8(thinking)),
 					Result:       msgLog.Result,
 					ResultFormat: msgLog.ResultFormat,
 					ID:           msgID,

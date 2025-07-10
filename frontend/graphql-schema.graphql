@@ -1,17 +1,9 @@
+# ==================== Fragments ====================
+
 fragment flowOverviewFragment on Flow {
     id
     title
     status
-}
-
-query flows {
-    flows {
-        ...flowOverviewFragment
-    }
-}
-
-query providers {
-    providers
 }
 
 fragment settingsFragment on Settings {
@@ -21,12 +13,6 @@ fragment settingsFragment on Settings {
     assistantUseAgents
 }
 
-query settings {
-    settings {
-        ...settingsFragment
-    }
-}
-
 fragment flowFragment on Flow {
     id
     title
@@ -34,7 +20,9 @@ fragment flowFragment on Flow {
     terminals {
         ...terminalFragment
     }
-    provider
+    provider {
+        ...providerFragment
+    }
     createdAt
     updatedAt
 }
@@ -146,7 +134,9 @@ fragment assistantFragment on Assistant {
     id
     title
     status
-    provider
+    provider {
+        ...providerFragment
+    }
     flowId
     useAgents
     createdAt
@@ -166,9 +156,393 @@ fragment assistantLogFragment on AssistantLog {
     createdAt
 }
 
-fragment promptFragment on Prompt {
+fragment testResultFragment on TestResult {
+    name
     type
-    prompt
+    result
+    reasoning
+    streaming
+    latency
+    error
+}
+
+fragment agentTestResultFragment on AgentTestResult {
+    tests {
+        ...testResultFragment
+    }
+}
+
+fragment providerTestResultFragment on ProviderTestResult {
+    simple {
+        ...agentTestResultFragment
+    }
+    simpleJson {
+        ...agentTestResultFragment
+    }
+    agent {
+        ...agentTestResultFragment
+    }
+    assistant {
+        ...agentTestResultFragment
+    }
+    generator {
+        ...agentTestResultFragment
+    }
+    refiner {
+        ...agentTestResultFragment
+    }
+    adviser {
+        ...agentTestResultFragment
+    }
+    reflector {
+        ...agentTestResultFragment
+    }
+    searcher {
+        ...agentTestResultFragment
+    }
+    enricher {
+        ...agentTestResultFragment
+    }
+    coder {
+        ...agentTestResultFragment
+    }
+    installer {
+        ...agentTestResultFragment
+    }
+    pentester {
+        ...agentTestResultFragment
+    }
+}
+
+fragment modelConfigFragment on ModelConfig {
+    name
+    price {
+        input
+        output
+    }
+}
+
+fragment providerFragment on Provider {
+    name
+    type
+}
+
+fragment providerConfigFragment on ProviderConfig {
+    id
+    name
+    type
+    agents {
+        ...agentsConfigFragment
+    }
+    createdAt
+    updatedAt
+}
+
+fragment agentsConfigFragment on AgentsConfig {
+    simple {
+        ...agentConfigFragment
+    }
+    simpleJson {
+        ...agentConfigFragment
+    }
+    agent {
+        ...agentConfigFragment
+    }
+    assistant {
+        ...agentConfigFragment
+    }
+    generator {
+        ...agentConfigFragment
+    }
+    refiner {
+        ...agentConfigFragment
+    }
+    adviser {
+        ...agentConfigFragment
+    }
+    reflector {
+        ...agentConfigFragment
+    }
+    searcher {
+        ...agentConfigFragment
+    }
+    enricher {
+        ...agentConfigFragment
+    }
+    coder {
+        ...agentConfigFragment
+    }
+    installer {
+        ...agentConfigFragment
+    }
+    pentester {
+        ...agentConfigFragment
+    }
+}
+
+fragment agentConfigFragment on AgentConfig {
+    model
+    maxTokens
+    temperature
+    topK
+    topP
+    minLength
+    maxLength
+    repetitionPenalty
+    frequencyPenalty
+    presencePenalty
+    reasoning {
+        effort
+        maxTokens
+    }
+    price {
+        input
+        output
+    }
+}
+
+fragment userPromptFragment on UserPrompt {
+    id
+    type
+    template
+    createdAt
+    updatedAt
+}
+
+fragment defaultPromptFragment on DefaultPrompt {
+    type
+    template
+    variables
+}
+
+fragment promptValidationResultFragment on PromptValidationResult {
+    result
+    errorType
+    message
+    line
+    details
+}
+
+# ==================== Queries ====================
+
+query flows {
+    flows {
+        ...flowOverviewFragment
+    }
+}
+
+query providers {
+    providers {
+        ...providerFragment
+    }
+}
+
+query settings {
+    settings {
+        ...settingsFragment
+    }
+}
+
+query settingsProviders {
+    settingsProviders {
+        enabled {
+            openai
+            anthropic
+            gemini
+            bedrock
+            ollama
+            custom
+        }
+        default {
+            openai {
+                ...providerConfigFragment
+            }
+            anthropic {
+                ...providerConfigFragment
+            }
+            gemini {
+                ...providerConfigFragment
+            }
+            bedrock {
+                ...providerConfigFragment
+            }
+            ollama {
+                ...providerConfigFragment
+            }
+            custom {
+                ...providerConfigFragment
+            }
+        }
+        userDefined {
+            ...providerConfigFragment
+        }
+        models {
+            openai {
+                ...modelConfigFragment
+            }
+            anthropic {
+                ...modelConfigFragment
+            }
+            gemini {
+                ...modelConfigFragment
+            }
+            bedrock {
+                ...modelConfigFragment
+            }
+            ollama {
+                ...modelConfigFragment
+            }
+            custom {
+                ...modelConfigFragment
+            }
+        }
+    }
+}
+
+query settingsPrompts {
+    settingsPrompts {
+        default {
+            agents {
+                primaryAgent {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                }
+                assistant {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                }
+                pentester {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                coder {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                installer {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                searcher {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                memorist {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                adviser {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                generator {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                refiner {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                reporter {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                reflector {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                enricher {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                toolCallFixer {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                summarizer {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                }
+            }
+            tools {
+                getFlowDescription {
+                    ...defaultPromptFragment
+                }
+                getTaskDescription {
+                    ...defaultPromptFragment
+                }
+                getExecutionLogs {
+                    ...defaultPromptFragment
+                }
+                getFullExecutionContext {
+                    ...defaultPromptFragment
+                }
+                getShortExecutionContext {
+                    ...defaultPromptFragment
+                }
+                chooseDockerImage {
+                    ...defaultPromptFragment
+                }
+                chooseUserLanguage {
+                    ...defaultPromptFragment
+                }
+            }
+        }
+        userDefined {
+            ...userPromptFragment
+        }
+    }
 }
 
 query flow($id: ID!) {
@@ -204,16 +578,6 @@ query tasks($flowId: ID!) {
     }
 }
 
-query prompts {
-    prompts {
-        ...promptFragment
-    }
-}
-
-query prompt($promptType: String!) {
-    prompt(promptType: $promptType)
-}
-
 query assistants($flowId: ID!) {
     assistants(flowId: $flowId) {
         ...assistantFragment
@@ -234,6 +598,8 @@ query flowReport($id: ID!) {
         ...taskFragment
     }
 }
+
+# ==================== Mutations ====================
 
 mutation createFlow($modelProvider: String!, $input: String!) {
     createFlow(modelProvider: $modelProvider, input: $input) {
@@ -282,13 +648,57 @@ mutation deleteAssistant($flowId: ID!, $assistantId: ID!) {
     deleteAssistant(flowId: $flowId, assistantId: $assistantId)
 }
 
-mutation updatePrompt($promptType: String!, $prompt: String!) {
-    updatePrompt(promptType: $promptType, prompt: $prompt)
+mutation testAgent($type: ProviderType!, $agentType: AgentType!, $agent: AgentConfigInput!) {
+    testAgent(type: $type, agentType: $agentType, agent: $agent) {
+        ...agentTestResultFragment
+    }
 }
 
-mutation resetPrompt($promptType: String!) {
-    resetPrompt(promptType: $promptType)
+mutation testProvider($type: ProviderType!, $agents: AgentsConfigInput!) {
+    testProvider(type: $type, agents: $agents) {
+        ...providerTestResultFragment
+    }
 }
+
+mutation createProvider($name: String!, $type: ProviderType!, $agents: AgentsConfigInput!) {
+    createProvider(name: $name, type: $type, agents: $agents) {
+        ...providerConfigFragment
+    }
+}
+
+mutation updateProvider($providerId: ID!, $name: String!, $agents: AgentsConfigInput!) {
+    updateProvider(providerId: $providerId, name: $name, agents: $agents) {
+        ...providerConfigFragment
+    }
+}
+
+mutation deleteProvider($providerId: ID!) {
+    deleteProvider(providerId: $providerId)
+}
+
+mutation validatePrompt($type: PromptType!, $template: String!) {
+    validatePrompt(type: $type, template: $template) {
+        ...promptValidationResultFragment
+    }
+}
+
+mutation createPrompt($type: PromptType!, $template: String!) {
+    createPrompt(type: $type, template: $template) {
+        ...userPromptFragment
+    }
+}
+
+mutation updatePrompt($promptId: ID!, $template: String!) {
+    updatePrompt(promptId: $promptId, template: $template) {
+        ...userPromptFragment
+    }
+}
+
+mutation deletePrompt($promptId: ID!) {
+    deletePrompt(promptId: $promptId)
+}
+
+# ==================== Subscriptions ====================
 
 subscription terminalLogAdded($flowId: ID!) {
     terminalLogAdded(flowId: $flowId) {
@@ -370,7 +780,9 @@ subscription flowCreated {
         terminals {
             ...terminalFragment
         }
-        provider
+        provider {
+            ...providerFragment
+        }
         createdAt
         updatedAt
     }
@@ -411,5 +823,23 @@ subscription taskUpdated($flowId: ID!) {
             ...subtaskFragment
         }
         updatedAt
+    }
+}
+
+subscription providerCreated {
+    providerCreated {
+        ...providerConfigFragment
+    }
+}
+
+subscription providerUpdated {
+    providerUpdated {
+        ...providerConfigFragment
+    }
+}
+
+subscription providerDeleted {
+    providerDeleted {
+        ...providerConfigFragment
     }
 }

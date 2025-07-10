@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	obs "pentagi/pkg/observability"
 
@@ -40,6 +41,35 @@ func NullInt64ToInt64(i sql.NullInt64) *int64 {
 
 func TimeToNullTime(t time.Time) sql.NullTime {
 	return sql.NullTime{Time: t, Valid: !t.IsZero()}
+}
+
+func SanitizeUTF8(msg string) string {
+	if msg == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(msg)) // Pre-allocate for efficiency
+
+	for i := 0; i < len(msg); {
+		// Explicitly skip null bytes
+		if msg[i] == '\x00' {
+			i++
+			continue
+		}
+		// Decode rune and check for errors
+		r, size := utf8.DecodeRuneInString(msg[i:])
+		if r == utf8.RuneError && size == 1 {
+			// Invalid UTF-8 byte, replace with Unicode replacement character
+			builder.WriteRune(utf8.RuneError)
+			i += size
+		} else {
+			builder.WriteRune(r)
+			i += size
+		}
+	}
+
+	return builder.String()
 }
 
 type GormLogger struct{}

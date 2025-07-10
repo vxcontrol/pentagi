@@ -21,6 +21,7 @@ import type { AssistantFragmentFragment, AssistantLogFragmentFragment } from '@/
 import { useSettingsQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
+import { isProviderValid, type Provider } from '@/models/Provider';
 
 import ChatMessage from './ChatMessage';
 
@@ -30,8 +31,8 @@ interface ChatAssistantMessagesProps {
     className?: string;
     assistants: AssistantFragmentFragment[];
     selectedAssistantId?: string | null;
-    selectedProvider: string;
-    providers: string[];
+    selectedProvider: Provider | null;
+    providers: Provider[];
     onSelectAssistant?: (assistantId: string | null) => void;
     onCreateAssistant?: () => void;
     onDeleteAssistant?: (assistantId: string) => void;
@@ -210,13 +211,14 @@ const ChatAssistantMessages = ({
 
     // Check if selected provider is available
     const isProviderAvailable = useMemo(() => {
-        return providers.includes(selectedProvider);
+        if (!selectedProvider) return false;
+        return isProviderValid(selectedProvider, providers);
     }, [providers, selectedProvider]);
 
     // Check if the assistant's provider is available
     const isAssistantProviderAvailable = useMemo(() => {
         if (!selectedAssistant) return true; // If no assistant is selected, consider provider available
-        return providers.includes(selectedAssistant.provider);
+        return isProviderValid(selectedAssistant.provider, providers);
     }, [providers, selectedAssistant]);
 
     // Calculate default useAgents value
@@ -402,7 +404,7 @@ const ChatAssistantMessages = ({
                                         className={cn(
                                             'flex items-center justify-between gap-2',
                                             selectedAssistantId === assistant.id && 'bg-accent font-medium',
-                                            !providers.includes(assistant.provider) && 'opacity-50',
+                                            !isProviderValid(assistant.provider, providers) && 'opacity-50',
                                         )}
                                         tabIndex={-1}
                                     >
@@ -419,7 +421,7 @@ const ChatAssistantMessages = ({
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm">{assistant.title}</span>
-                                                    {!providers.includes(assistant.provider) && (
+                                                    {!isProviderValid(assistant.provider, providers) && (
                                                         <span className="text-xs text-destructive">(unavailable)</span>
                                                     )}
                                                 </div>

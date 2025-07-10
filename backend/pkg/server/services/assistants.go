@@ -247,20 +247,24 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 		return
 	}
 
-	prvtype := provider.ProviderType(createAssistant.Provider)
-	if _, err := s.pc.Get(prvtype); err != nil {
+	uid := c.GetUint64("uid")
+	prvname := provider.ProviderName(createAssistant.Provider)
+
+	prv, err := s.pc.GetProvider(c, prvname, int64(uid))
+	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting provider: not found")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
+	prvtype := prv.Type()
 
-	uid := c.GetUint64("uid")
 	aw, err := s.fc.CreateAssistant(
 		c,
 		int64(uid),
 		int64(flowID),
 		createAssistant.Input,
 		createAssistant.UseAgents,
+		prvname,
 		prvtype,
 		createAssistant.Functions,
 	)

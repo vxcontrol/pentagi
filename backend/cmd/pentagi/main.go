@@ -91,7 +91,7 @@ func main() {
 		log.Fatalf("failed to initialize Docker client: %v", err)
 	}
 
-	providers, err := providers.NewProviderController(cfg, client)
+	providers, err := providers.NewProviderController(cfg, queries, client)
 	if err != nil {
 		log.Fatalf("failed to initialize providers: %v", err)
 	}

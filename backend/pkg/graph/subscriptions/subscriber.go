@@ -107,3 +107,15 @@ func (s *flowSubscriber) AssistantLogAdded(ctx context.Context) (<-chan *model.A
 func (s *flowSubscriber) AssistantLogUpdated(ctx context.Context) (<-chan *model.AssistantLog, error) {
 	return s.ctrl.assistantLogUpdated.Subscribe(ctx, s.flowID), nil
 }
+
+func (s *flowSubscriber) ProviderCreated(ctx context.Context) (<-chan *model.ProviderConfig, error) {
+	return s.ctrl.providerCreated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *flowSubscriber) ProviderUpdated(ctx context.Context) (<-chan *model.ProviderConfig, error) {
+	return s.ctrl.providerUpdated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *flowSubscriber) ProviderDeleted(ctx context.Context) (<-chan *model.ProviderConfig, error) {
+	return s.ctrl.providerDeleted.Subscribe(ctx, s.userID), nil
+}

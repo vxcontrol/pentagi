@@ -18,6 +18,36 @@ export type Scalars = {
   Time: { input: any; output: any; }
 };
 
+export type AgentConfig = {
+  frequencyPenalty?: Maybe<Scalars['Float']['output']>;
+  maxLength?: Maybe<Scalars['Int']['output']>;
+  maxTokens?: Maybe<Scalars['Int']['output']>;
+  minLength?: Maybe<Scalars['Int']['output']>;
+  model: Scalars['String']['output'];
+  presencePenalty?: Maybe<Scalars['Float']['output']>;
+  price?: Maybe<ModelPrice>;
+  reasoning?: Maybe<ReasoningConfig>;
+  repetitionPenalty?: Maybe<Scalars['Float']['output']>;
+  temperature?: Maybe<Scalars['Float']['output']>;
+  topK?: Maybe<Scalars['Int']['output']>;
+  topP?: Maybe<Scalars['Float']['output']>;
+};
+
+export type AgentConfigInput = {
+  frequencyPenalty?: InputMaybe<Scalars['Float']['input']>;
+  maxLength?: InputMaybe<Scalars['Int']['input']>;
+  maxTokens?: InputMaybe<Scalars['Int']['input']>;
+  minLength?: InputMaybe<Scalars['Int']['input']>;
+  model: Scalars['String']['input'];
+  presencePenalty?: InputMaybe<Scalars['Float']['input']>;
+  price?: InputMaybe<ModelPriceInput>;
+  reasoning?: InputMaybe<ReasoningConfigInput>;
+  repetitionPenalty?: InputMaybe<Scalars['Float']['input']>;
+  temperature?: InputMaybe<Scalars['Float']['input']>;
+  topK?: InputMaybe<Scalars['Int']['input']>;
+  topP?: InputMaybe<Scalars['Float']['input']>;
+};
+
 export type AgentLog = {
   createdAt: Scalars['Time']['output'];
   executor: AgentType;
@@ -28,6 +58,19 @@ export type AgentLog = {
   subtaskId?: Maybe<Scalars['ID']['output']>;
   task: Scalars['String']['output'];
   taskId?: Maybe<Scalars['ID']['output']>;
+};
+
+export type AgentPrompt = {
+  system: DefaultPrompt;
+};
+
+export type AgentPrompts = {
+  human: DefaultPrompt;
+  system: DefaultPrompt;
+};
+
+export type AgentTestResult = {
+  tests: Array<TestResult>;
 };
 
 export enum AgentType {
@@ -48,11 +91,61 @@ export enum AgentType {
   ToolCallFixer = 'tool_call_fixer'
 }
 
+export type AgentsConfig = {
+  adviser: AgentConfig;
+  agent: AgentConfig;
+  assistant: AgentConfig;
+  coder: AgentConfig;
+  enricher: AgentConfig;
+  generator: AgentConfig;
+  installer: AgentConfig;
+  pentester: AgentConfig;
+  refiner: AgentConfig;
+  reflector: AgentConfig;
+  searcher: AgentConfig;
+  simple: AgentConfig;
+  simpleJson: AgentConfig;
+};
+
+export type AgentsConfigInput = {
+  adviser: AgentConfigInput;
+  agent: AgentConfigInput;
+  assistant: AgentConfigInput;
+  coder: AgentConfigInput;
+  enricher: AgentConfigInput;
+  generator: AgentConfigInput;
+  installer: AgentConfigInput;
+  pentester: AgentConfigInput;
+  refiner: AgentConfigInput;
+  reflector: AgentConfigInput;
+  searcher: AgentConfigInput;
+  simple: AgentConfigInput;
+  simpleJson: AgentConfigInput;
+};
+
+export type AgentsPrompts = {
+  adviser: AgentPrompts;
+  assistant: AgentPrompt;
+  coder: AgentPrompts;
+  enricher: AgentPrompts;
+  generator: AgentPrompts;
+  installer: AgentPrompts;
+  memorist: AgentPrompts;
+  pentester: AgentPrompts;
+  primaryAgent: AgentPrompt;
+  refiner: AgentPrompts;
+  reflector: AgentPrompts;
+  reporter: AgentPrompts;
+  searcher: AgentPrompts;
+  summarizer: AgentPrompt;
+  toolCallFixer: AgentPrompts;
+};
+
 export type Assistant = {
   createdAt: Scalars['Time']['output'];
   flowId: Scalars['ID']['output'];
   id: Scalars['ID']['output'];
-  provider: Scalars['String']['output'];
+  provider: Provider;
   status: StatusType;
   title: Scalars['String']['output'];
   updatedAt: Scalars['Time']['output'];
@@ -72,10 +165,30 @@ export type AssistantLog = {
   type: MessageLogType;
 };
 
+export type DefaultPrompt = {
+  template: Scalars['String']['output'];
+  type: PromptType;
+  variables: Array<Scalars['String']['output']>;
+};
+
+export type DefaultPrompts = {
+  agents: AgentsPrompts;
+  tools: ToolsPrompts;
+};
+
+export type DefaultProvidersConfig = {
+  anthropic: ProviderConfig;
+  bedrock?: Maybe<ProviderConfig>;
+  custom?: Maybe<ProviderConfig>;
+  gemini?: Maybe<ProviderConfig>;
+  ollama?: Maybe<ProviderConfig>;
+  openai: ProviderConfig;
+};
+
 export type Flow = {
   createdAt: Scalars['Time']['output'];
   id: Scalars['ID']['output'];
-  provider: Scalars['String']['output'];
+  provider: Provider;
   status: StatusType;
   terminals?: Maybe<Array<Terminal>>;
   title: Scalars['String']['output'];
@@ -114,18 +227,40 @@ export enum MessageLogType {
   Thoughts = 'thoughts'
 }
 
+export type ModelConfig = {
+  name: Scalars['String']['output'];
+  price?: Maybe<ModelPrice>;
+};
+
+export type ModelPrice = {
+  input: Scalars['Float']['output'];
+  output: Scalars['Float']['output'];
+};
+
+export type ModelPriceInput = {
+  input: Scalars['Float']['input'];
+  output: Scalars['Float']['input'];
+};
+
 export type Mutation = {
   callAssistant: ResultType;
   createAssistant: FlowAssistant;
   createFlow: Flow;
+  createPrompt: UserPrompt;
+  createProvider: ProviderConfig;
   deleteAssistant: ResultType;
   deleteFlow: ResultType;
+  deletePrompt: ResultType;
+  deleteProvider: ResultType;
   finishFlow: ResultType;
   putUserInput: ResultType;
-  resetPrompt: ResultType;
   stopAssistant: Assistant;
   stopFlow: ResultType;
-  updatePrompt: ResultType;
+  testAgent: AgentTestResult;
+  testProvider: ProviderTestResult;
+  updatePrompt: UserPrompt;
+  updateProvider: ProviderConfig;
+  validatePrompt: PromptValidationResult;
 };
 
 
@@ -151,6 +286,19 @@ export type MutationCreateFlowArgs = {
 };
 
 
+export type MutationCreatePromptArgs = {
+  template: Scalars['String']['input'];
+  type: PromptType;
+};
+
+
+export type MutationCreateProviderArgs = {
+  agents: AgentsConfigInput;
+  name: Scalars['String']['input'];
+  type: ProviderType;
+};
+
+
 export type MutationDeleteAssistantArgs = {
   assistantId: Scalars['ID']['input'];
   flowId: Scalars['ID']['input'];
@@ -159,6 +307,16 @@ export type MutationDeleteAssistantArgs = {
 
 export type MutationDeleteFlowArgs = {
   flowId: Scalars['ID']['input'];
+};
+
+
+export type MutationDeletePromptArgs = {
+  promptId: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteProviderArgs = {
+  providerId: Scalars['ID']['input'];
 };
 
 
@@ -173,11 +331,6 @@ export type MutationPutUserInputArgs = {
 };
 
 
-export type MutationResetPromptArgs = {
-  promptType: Scalars['String']['input'];
-};
-
-
 export type MutationStopAssistantArgs = {
   assistantId: Scalars['ID']['input'];
   flowId: Scalars['ID']['input'];
@@ -189,14 +342,158 @@ export type MutationStopFlowArgs = {
 };
 
 
-export type MutationUpdatePromptArgs = {
-  prompt: Scalars['String']['input'];
-  promptType: Scalars['String']['input'];
+export type MutationTestAgentArgs = {
+  agent: AgentConfigInput;
+  agentType: AgentType;
+  type: ProviderType;
 };
 
-export type Prompt = {
-  prompt: Scalars['String']['output'];
-  type: Scalars['String']['output'];
+
+export type MutationTestProviderArgs = {
+  agents: AgentsConfigInput;
+  type: ProviderType;
+};
+
+
+export type MutationUpdatePromptArgs = {
+  promptId: Scalars['ID']['input'];
+  template: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateProviderArgs = {
+  agents: AgentsConfigInput;
+  name: Scalars['String']['input'];
+  providerId: Scalars['ID']['input'];
+};
+
+
+export type MutationValidatePromptArgs = {
+  template: Scalars['String']['input'];
+  type: PromptType;
+};
+
+export enum PromptType {
+  Adviser = 'adviser',
+  Assistant = 'assistant',
+  Coder = 'coder',
+  Enricher = 'enricher',
+  ExecutionLogs = 'execution_logs',
+  FlowDescriptor = 'flow_descriptor',
+  FullExecutionContext = 'full_execution_context',
+  Generator = 'generator',
+  ImageChooser = 'image_chooser',
+  InputToolcallFixer = 'input_toolcall_fixer',
+  Installer = 'installer',
+  LanguageChooser = 'language_chooser',
+  Memorist = 'memorist',
+  Pentester = 'pentester',
+  PrimaryAgent = 'primary_agent',
+  QuestionAdviser = 'question_adviser',
+  QuestionCoder = 'question_coder',
+  QuestionEnricher = 'question_enricher',
+  QuestionInstaller = 'question_installer',
+  QuestionMemorist = 'question_memorist',
+  QuestionPentester = 'question_pentester',
+  QuestionReflector = 'question_reflector',
+  QuestionSearcher = 'question_searcher',
+  Refiner = 'refiner',
+  Reflector = 'reflector',
+  Reporter = 'reporter',
+  Searcher = 'searcher',
+  ShortExecutionContext = 'short_execution_context',
+  SubtasksGenerator = 'subtasks_generator',
+  SubtasksRefiner = 'subtasks_refiner',
+  Summarizer = 'summarizer',
+  TaskDescriptor = 'task_descriptor',
+  TaskReporter = 'task_reporter',
+  ToolcallFixer = 'toolcall_fixer'
+}
+
+export enum PromptValidationErrorType {
+  EmptyTemplate = 'empty_template',
+  RenderingFailed = 'rendering_failed',
+  SyntaxError = 'syntax_error',
+  UnauthorizedVariable = 'unauthorized_variable',
+  UnknownType = 'unknown_type',
+  VariableTypeMismatch = 'variable_type_mismatch'
+}
+
+export type PromptValidationResult = {
+  details?: Maybe<Scalars['String']['output']>;
+  errorType?: Maybe<PromptValidationErrorType>;
+  line?: Maybe<Scalars['Int']['output']>;
+  message?: Maybe<Scalars['String']['output']>;
+  result: ResultType;
+};
+
+export type PromptsConfig = {
+  default: DefaultPrompts;
+  userDefined?: Maybe<Array<UserPrompt>>;
+};
+
+export type Provider = {
+  name: Scalars['String']['output'];
+  type: ProviderType;
+};
+
+export type ProviderConfig = {
+  agents: AgentsConfig;
+  createdAt: Scalars['Time']['output'];
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  type: ProviderType;
+  updatedAt: Scalars['Time']['output'];
+};
+
+export type ProviderTestResult = {
+  adviser: AgentTestResult;
+  agent: AgentTestResult;
+  assistant: AgentTestResult;
+  coder: AgentTestResult;
+  enricher: AgentTestResult;
+  generator: AgentTestResult;
+  installer: AgentTestResult;
+  pentester: AgentTestResult;
+  refiner: AgentTestResult;
+  reflector: AgentTestResult;
+  searcher: AgentTestResult;
+  simple: AgentTestResult;
+  simpleJson: AgentTestResult;
+};
+
+export enum ProviderType {
+  Anthropic = 'anthropic',
+  Bedrock = 'bedrock',
+  Custom = 'custom',
+  Gemini = 'gemini',
+  Ollama = 'ollama',
+  Openai = 'openai'
+}
+
+export type ProvidersConfig = {
+  default: DefaultProvidersConfig;
+  enabled: ProvidersReadinessStatus;
+  models: ProvidersModelsList;
+  userDefined?: Maybe<Array<ProviderConfig>>;
+};
+
+export type ProvidersModelsList = {
+  anthropic: Array<ModelConfig>;
+  bedrock?: Maybe<Array<ModelConfig>>;
+  custom?: Maybe<Array<ModelConfig>>;
+  gemini: Array<ModelConfig>;
+  ollama?: Maybe<Array<ModelConfig>>;
+  openai: Array<ModelConfig>;
+};
+
+export type ProvidersReadinessStatus = {
+  anthropic: Scalars['Boolean']['output'];
+  bedrock: Scalars['Boolean']['output'];
+  custom: Scalars['Boolean']['output'];
+  gemini: Scalars['Boolean']['output'];
+  ollama: Scalars['Boolean']['output'];
+  openai: Scalars['Boolean']['output'];
 };
 
 export type Query = {
@@ -206,12 +503,12 @@ export type Query = {
   flow: Flow;
   flows?: Maybe<Array<Flow>>;
   messageLogs?: Maybe<Array<MessageLog>>;
-  prompt: Scalars['String']['output'];
-  prompts: Array<Prompt>;
-  providers: Array<Scalars['String']['output']>;
+  providers: Array<Provider>;
   screenshots?: Maybe<Array<Screenshot>>;
   searchLogs?: Maybe<Array<SearchLog>>;
   settings: Settings;
+  settingsPrompts: PromptsConfig;
+  settingsProviders: ProvidersConfig;
   tasks?: Maybe<Array<Task>>;
   terminalLogs?: Maybe<Array<TerminalLog>>;
   vectorStoreLogs?: Maybe<Array<VectorStoreLog>>;
@@ -244,11 +541,6 @@ export type QueryMessageLogsArgs = {
 };
 
 
-export type QueryPromptArgs = {
-  promptType: Scalars['String']['input'];
-};
-
-
 export type QueryScreenshotsArgs = {
   flowId: Scalars['ID']['input'];
 };
@@ -272,6 +564,22 @@ export type QueryTerminalLogsArgs = {
 export type QueryVectorStoreLogsArgs = {
   flowId: Scalars['ID']['input'];
 };
+
+export type ReasoningConfig = {
+  effort?: Maybe<ReasoningEffort>;
+  maxTokens?: Maybe<Scalars['Int']['output']>;
+};
+
+export type ReasoningConfigInput = {
+  effort?: InputMaybe<ReasoningEffort>;
+  maxTokens?: InputMaybe<Scalars['Int']['input']>;
+};
+
+export enum ReasoningEffort {
+  High = 'high',
+  Low = 'low',
+  Medium = 'medium'
+}
 
 export enum ResultFormat {
   Markdown = 'markdown',
@@ -332,6 +640,9 @@ export type Subscription = {
   flowUpdated: Flow;
   messageLogAdded: MessageLog;
   messageLogUpdated: MessageLog;
+  providerCreated: ProviderConfig;
+  providerDeleted: ProviderConfig;
+  providerUpdated: ProviderConfig;
   screenshotAdded: Screenshot;
   searchLogAdded: SearchLog;
   taskCreated: Task;
@@ -462,6 +773,34 @@ export enum TerminalType {
   Secondary = 'secondary'
 }
 
+export type TestResult = {
+  error?: Maybe<Scalars['String']['output']>;
+  latency?: Maybe<Scalars['Int']['output']>;
+  name: Scalars['String']['output'];
+  reasoning: Scalars['Boolean']['output'];
+  result: Scalars['Boolean']['output'];
+  streaming: Scalars['Boolean']['output'];
+  type: Scalars['String']['output'];
+};
+
+export type ToolsPrompts = {
+  chooseDockerImage: DefaultPrompt;
+  chooseUserLanguage: DefaultPrompt;
+  getExecutionLogs: DefaultPrompt;
+  getFlowDescription: DefaultPrompt;
+  getFullExecutionContext: DefaultPrompt;
+  getShortExecutionContext: DefaultPrompt;
+  getTaskDescription: DefaultPrompt;
+};
+
+export type UserPrompt = {
+  createdAt: Scalars['Time']['output'];
+  id: Scalars['ID']['output'];
+  template: Scalars['String']['output'];
+  type: PromptType;
+  updatedAt: Scalars['Time']['output'];
+};
+
 export enum VectorStoreAction {
   Retrieve = 'retrieve',
   Store = 'store'
@@ -483,24 +822,9 @@ export type VectorStoreLog = {
 
 export type FlowOverviewFragmentFragment = { id: string, title: string, status: StatusType };
 
-export type FlowsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type FlowsQuery = { flows?: Array<FlowOverviewFragmentFragment> | null };
-
-export type ProvidersQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type ProvidersQuery = { providers: Array<string> };
-
 export type SettingsFragmentFragment = { debug: boolean, askUser: boolean, dockerInside: boolean, assistantUseAgents: boolean };
 
-export type SettingsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type SettingsQuery = { settings: SettingsFragmentFragment };
-
-export type FlowFragmentFragment = { id: string, title: string, status: StatusType, provider: string, createdAt: any, updatedAt: any, terminals?: Array<TerminalFragmentFragment> | null };
+export type FlowFragmentFragment = { id: string, title: string, status: StatusType, createdAt: any, updatedAt: any, terminals?: Array<TerminalFragmentFragment> | null, provider: ProviderFragmentFragment };
 
 export type TerminalFragmentFragment = { id: string, type: TerminalType, name: string, image: string, connected: boolean, createdAt: any };
 
@@ -520,11 +844,56 @@ export type SearchLogFragmentFragment = { id: string, flowId: string, initiator:
 
 export type VectorStoreLogFragmentFragment = { id: string, flowId: string, initiator: AgentType, executor: AgentType, filter: string, query: string, action: VectorStoreAction, result: string, taskId?: string | null, subtaskId?: string | null, createdAt: any };
 
-export type AssistantFragmentFragment = { id: string, title: string, status: StatusType, provider: string, flowId: string, useAgents: boolean, createdAt: any, updatedAt: any };
+export type AssistantFragmentFragment = { id: string, title: string, status: StatusType, flowId: string, useAgents: boolean, createdAt: any, updatedAt: any, provider: ProviderFragmentFragment };
 
 export type AssistantLogFragmentFragment = { id: string, type: MessageLogType, message: string, thinking?: string | null, result: string, resultFormat: ResultFormat, appendPart: boolean, flowId: string, assistantId: string, createdAt: any };
 
-export type PromptFragmentFragment = { type: string, prompt: string };
+export type TestResultFragmentFragment = { name: string, type: string, result: boolean, reasoning: boolean, streaming: boolean, latency?: number | null, error?: string | null };
+
+export type AgentTestResultFragmentFragment = { tests: Array<TestResultFragmentFragment> };
+
+export type ProviderTestResultFragmentFragment = { simple: AgentTestResultFragmentFragment, simpleJson: AgentTestResultFragmentFragment, agent: AgentTestResultFragmentFragment, assistant: AgentTestResultFragmentFragment, generator: AgentTestResultFragmentFragment, refiner: AgentTestResultFragmentFragment, adviser: AgentTestResultFragmentFragment, reflector: AgentTestResultFragmentFragment, searcher: AgentTestResultFragmentFragment, enricher: AgentTestResultFragmentFragment, coder: AgentTestResultFragmentFragment, installer: AgentTestResultFragmentFragment, pentester: AgentTestResultFragmentFragment };
+
+export type ModelConfigFragmentFragment = { name: string, price?: { input: number, output: number } | null };
+
+export type ProviderFragmentFragment = { name: string, type: ProviderType };
+
+export type ProviderConfigFragmentFragment = { id: string, name: string, type: ProviderType, createdAt: any, updatedAt: any, agents: AgentsConfigFragmentFragment };
+
+export type AgentsConfigFragmentFragment = { simple: AgentConfigFragmentFragment, simpleJson: AgentConfigFragmentFragment, agent: AgentConfigFragmentFragment, assistant: AgentConfigFragmentFragment, generator: AgentConfigFragmentFragment, refiner: AgentConfigFragmentFragment, adviser: AgentConfigFragmentFragment, reflector: AgentConfigFragmentFragment, searcher: AgentConfigFragmentFragment, enricher: AgentConfigFragmentFragment, coder: AgentConfigFragmentFragment, installer: AgentConfigFragmentFragment, pentester: AgentConfigFragmentFragment };
+
+export type AgentConfigFragmentFragment = { model: string, maxTokens?: number | null, temperature?: number | null, topK?: number | null, topP?: number | null, minLength?: number | null, maxLength?: number | null, repetitionPenalty?: number | null, frequencyPenalty?: number | null, presencePenalty?: number | null, reasoning?: { effort?: ReasoningEffort | null, maxTokens?: number | null } | null, price?: { input: number, output: number } | null };
+
+export type UserPromptFragmentFragment = { id: string, type: PromptType, template: string, createdAt: any, updatedAt: any };
+
+export type DefaultPromptFragmentFragment = { type: PromptType, template: string, variables: Array<string> };
+
+export type PromptValidationResultFragmentFragment = { result: ResultType, errorType?: PromptValidationErrorType | null, message?: string | null, line?: number | null, details?: string | null };
+
+export type FlowsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type FlowsQuery = { flows?: Array<FlowOverviewFragmentFragment> | null };
+
+export type ProvidersQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type ProvidersQuery = { providers: Array<ProviderFragmentFragment> };
+
+export type SettingsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type SettingsQuery = { settings: SettingsFragmentFragment };
+
+export type SettingsProvidersQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type SettingsProvidersQuery = { settingsProviders: { enabled: { openai: boolean, anthropic: boolean, gemini: boolean, bedrock: boolean, ollama: boolean, custom: boolean }, default: { openai: ProviderConfigFragmentFragment, anthropic: ProviderConfigFragmentFragment, gemini?: ProviderConfigFragmentFragment | null, bedrock?: ProviderConfigFragmentFragment | null, ollama?: ProviderConfigFragmentFragment | null, custom?: ProviderConfigFragmentFragment | null }, userDefined?: Array<ProviderConfigFragmentFragment> | null, models: { openai: Array<ModelConfigFragmentFragment>, anthropic: Array<ModelConfigFragmentFragment>, gemini: Array<ModelConfigFragmentFragment>, bedrock?: Array<ModelConfigFragmentFragment> | null, ollama?: Array<ModelConfigFragmentFragment> | null, custom?: Array<ModelConfigFragmentFragment> | null } } };
+
+export type SettingsPromptsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type SettingsPromptsQuery = { settingsPrompts: { default: { agents: { primaryAgent: { system: DefaultPromptFragmentFragment }, assistant: { system: DefaultPromptFragmentFragment }, pentester: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, coder: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, installer: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, searcher: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, memorist: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, adviser: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, generator: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, refiner: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, reporter: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, reflector: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, enricher: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, toolCallFixer: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, summarizer: { system: DefaultPromptFragmentFragment } }, tools: { getFlowDescription: DefaultPromptFragmentFragment, getTaskDescription: DefaultPromptFragmentFragment, getExecutionLogs: DefaultPromptFragmentFragment, getFullExecutionContext: DefaultPromptFragmentFragment, getShortExecutionContext: DefaultPromptFragmentFragment, chooseDockerImage: DefaultPromptFragmentFragment, chooseUserLanguage: DefaultPromptFragmentFragment } }, userDefined?: Array<UserPromptFragmentFragment> | null } };
 
 export type FlowQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -540,18 +909,6 @@ export type TasksQueryVariables = Exact<{
 
 export type TasksQuery = { tasks?: Array<TaskFragmentFragment> | null };
 
-export type PromptsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type PromptsQuery = { prompts: Array<PromptFragmentFragment> };
-
-export type PromptQueryVariables = Exact<{
-  promptType: Scalars['String']['input'];
-}>;
-
-
-export type PromptQuery = { prompt: string };
-
 export type AssistantsQueryVariables = Exact<{
   flowId: Scalars['ID']['input'];
 }>;
@@ -566,6 +923,13 @@ export type AssistantLogsQueryVariables = Exact<{
 
 
 export type AssistantLogsQuery = { assistantLogs?: Array<AssistantLogFragmentFragment> | null };
+
+export type FlowReportQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type FlowReportQuery = { flow: FlowFragmentFragment, tasks?: Array<TaskFragmentFragment> | null };
 
 export type CreateFlowMutationVariables = Exact<{
   modelProvider: Scalars['String']['input'];
@@ -640,20 +1004,78 @@ export type DeleteAssistantMutationVariables = Exact<{
 
 export type DeleteAssistantMutation = { deleteAssistant: ResultType };
 
+export type TestAgentMutationVariables = Exact<{
+  type: ProviderType;
+  agentType: AgentType;
+  agent: AgentConfigInput;
+}>;
+
+
+export type TestAgentMutation = { testAgent: AgentTestResultFragmentFragment };
+
+export type TestProviderMutationVariables = Exact<{
+  type: ProviderType;
+  agents: AgentsConfigInput;
+}>;
+
+
+export type TestProviderMutation = { testProvider: ProviderTestResultFragmentFragment };
+
+export type CreateProviderMutationVariables = Exact<{
+  name: Scalars['String']['input'];
+  type: ProviderType;
+  agents: AgentsConfigInput;
+}>;
+
+
+export type CreateProviderMutation = { createProvider: ProviderConfigFragmentFragment };
+
+export type UpdateProviderMutationVariables = Exact<{
+  providerId: Scalars['ID']['input'];
+  name: Scalars['String']['input'];
+  agents: AgentsConfigInput;
+}>;
+
+
+export type UpdateProviderMutation = { updateProvider: ProviderConfigFragmentFragment };
+
+export type DeleteProviderMutationVariables = Exact<{
+  providerId: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteProviderMutation = { deleteProvider: ResultType };
+
+export type ValidatePromptMutationVariables = Exact<{
+  type: PromptType;
+  template: Scalars['String']['input'];
+}>;
+
+
+export type ValidatePromptMutation = { validatePrompt: PromptValidationResultFragmentFragment };
+
+export type CreatePromptMutationVariables = Exact<{
+  type: PromptType;
+  template: Scalars['String']['input'];
+}>;
+
+
+export type CreatePromptMutation = { createPrompt: UserPromptFragmentFragment };
+
 export type UpdatePromptMutationVariables = Exact<{
-  promptType: Scalars['String']['input'];
-  prompt: Scalars['String']['input'];
+  promptId: Scalars['ID']['input'];
+  template: Scalars['String']['input'];
 }>;
 
 
-export type UpdatePromptMutation = { updatePrompt: ResultType };
+export type UpdatePromptMutation = { updatePrompt: UserPromptFragmentFragment };
 
-export type ResetPromptMutationVariables = Exact<{
-  promptType: Scalars['String']['input'];
+export type DeletePromptMutationVariables = Exact<{
+  promptId: Scalars['ID']['input'];
 }>;
 
 
-export type ResetPromptMutation = { resetPrompt: ResultType };
+export type DeletePromptMutation = { deletePrompt: ResultType };
 
 export type TerminalLogAddedSubscriptionVariables = Exact<{
   flowId: Scalars['ID']['input'];
@@ -742,7 +1164,7 @@ export type AssistantLogUpdatedSubscription = { assistantLogUpdated: AssistantLo
 export type FlowCreatedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 
-export type FlowCreatedSubscription = { flowCreated: { id: string, title: string, status: StatusType, provider: string, createdAt: any, updatedAt: any, terminals?: Array<TerminalFragmentFragment> | null } };
+export type FlowCreatedSubscription = { flowCreated: { id: string, title: string, status: StatusType, createdAt: any, updatedAt: any, terminals?: Array<TerminalFragmentFragment> | null, provider: ProviderFragmentFragment } };
 
 export type FlowDeletedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
@@ -768,12 +1190,20 @@ export type TaskUpdatedSubscriptionVariables = Exact<{
 
 export type TaskUpdatedSubscription = { taskUpdated: { id: string, status: StatusType, result: string, updatedAt: any, subtasks?: Array<SubtaskFragmentFragment> | null } };
 
-export type FlowReportQueryVariables = Exact<{
-  id: Scalars['ID']['input'];
-}>;
+export type ProviderCreatedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 
-export type FlowReportQuery = { flow: FlowFragmentFragment, tasks?: Array<TaskFragmentFragment> | null };
+export type ProviderCreatedSubscription = { providerCreated: ProviderConfigFragmentFragment };
+
+export type ProviderUpdatedSubscriptionVariables = Exact<{ [key: string]: never; }>;
+
+
+export type ProviderUpdatedSubscription = { providerUpdated: ProviderConfigFragmentFragment };
+
+export type ProviderDeletedSubscriptionVariables = Exact<{ [key: string]: never; }>;
+
+
+export type ProviderDeletedSubscription = { providerDeleted: ProviderConfigFragmentFragment };
 
 export const FlowOverviewFragmentFragmentDoc = gql`
     fragment flowOverviewFragment on Flow {
@@ -800,6 +1230,12 @@ export const TerminalFragmentFragmentDoc = gql`
   createdAt
 }
     `;
+export const ProviderFragmentFragmentDoc = gql`
+    fragment providerFragment on Provider {
+  name
+  type
+}
+    `;
 export const FlowFragmentFragmentDoc = gql`
     fragment flowFragment on Flow {
   id
@@ -808,7 +1244,9 @@ export const FlowFragmentFragmentDoc = gql`
   terminals {
     ...terminalFragment
   }
-  provider
+  provider {
+    ...providerFragment
+  }
   createdAt
   updatedAt
 }
@@ -920,7 +1358,9 @@ export const AssistantFragmentFragmentDoc = gql`
   id
   title
   status
-  provider
+  provider {
+    ...providerFragment
+  }
   flowId
   useAgents
   createdAt
@@ -941,10 +1381,176 @@ export const AssistantLogFragmentFragmentDoc = gql`
   createdAt
 }
     `;
-export const PromptFragmentFragmentDoc = gql`
-    fragment promptFragment on Prompt {
+export const TestResultFragmentFragmentDoc = gql`
+    fragment testResultFragment on TestResult {
+  name
   type
-  prompt
+  result
+  reasoning
+  streaming
+  latency
+  error
+}
+    `;
+export const AgentTestResultFragmentFragmentDoc = gql`
+    fragment agentTestResultFragment on AgentTestResult {
+  tests {
+    ...testResultFragment
+  }
+}
+    `;
+export const ProviderTestResultFragmentFragmentDoc = gql`
+    fragment providerTestResultFragment on ProviderTestResult {
+  simple {
+    ...agentTestResultFragment
+  }
+  simpleJson {
+    ...agentTestResultFragment
+  }
+  agent {
+    ...agentTestResultFragment
+  }
+  assistant {
+    ...agentTestResultFragment
+  }
+  generator {
+    ...agentTestResultFragment
+  }
+  refiner {
+    ...agentTestResultFragment
+  }
+  adviser {
+    ...agentTestResultFragment
+  }
+  reflector {
+    ...agentTestResultFragment
+  }
+  searcher {
+    ...agentTestResultFragment
+  }
+  enricher {
+    ...agentTestResultFragment
+  }
+  coder {
+    ...agentTestResultFragment
+  }
+  installer {
+    ...agentTestResultFragment
+  }
+  pentester {
+    ...agentTestResultFragment
+  }
+}
+    `;
+export const ModelConfigFragmentFragmentDoc = gql`
+    fragment modelConfigFragment on ModelConfig {
+  name
+  price {
+    input
+    output
+  }
+}
+    `;
+export const AgentConfigFragmentFragmentDoc = gql`
+    fragment agentConfigFragment on AgentConfig {
+  model
+  maxTokens
+  temperature
+  topK
+  topP
+  minLength
+  maxLength
+  repetitionPenalty
+  frequencyPenalty
+  presencePenalty
+  reasoning {
+    effort
+    maxTokens
+  }
+  price {
+    input
+    output
+  }
+}
+    `;
+export const AgentsConfigFragmentFragmentDoc = gql`
+    fragment agentsConfigFragment on AgentsConfig {
+  simple {
+    ...agentConfigFragment
+  }
+  simpleJson {
+    ...agentConfigFragment
+  }
+  agent {
+    ...agentConfigFragment
+  }
+  assistant {
+    ...agentConfigFragment
+  }
+  generator {
+    ...agentConfigFragment
+  }
+  refiner {
+    ...agentConfigFragment
+  }
+  adviser {
+    ...agentConfigFragment
+  }
+  reflector {
+    ...agentConfigFragment
+  }
+  searcher {
+    ...agentConfigFragment
+  }
+  enricher {
+    ...agentConfigFragment
+  }
+  coder {
+    ...agentConfigFragment
+  }
+  installer {
+    ...agentConfigFragment
+  }
+  pentester {
+    ...agentConfigFragment
+  }
+}
+    `;
+export const ProviderConfigFragmentFragmentDoc = gql`
+    fragment providerConfigFragment on ProviderConfig {
+  id
+  name
+  type
+  agents {
+    ...agentsConfigFragment
+  }
+  createdAt
+  updatedAt
+}
+    `;
+export const UserPromptFragmentFragmentDoc = gql`
+    fragment userPromptFragment on UserPrompt {
+  id
+  type
+  template
+  createdAt
+  updatedAt
+}
+    `;
+export const DefaultPromptFragmentFragmentDoc = gql`
+    fragment defaultPromptFragment on DefaultPrompt {
+  type
+  template
+  variables
+}
+    `;
+export const PromptValidationResultFragmentFragmentDoc = gql`
+    fragment promptValidationResultFragment on PromptValidationResult {
+  result
+  errorType
+  message
+  line
+  details
 }
     `;
 export const FlowsDocument = gql`
@@ -988,9 +1594,11 @@ export type FlowsSuspenseQueryHookResult = ReturnType<typeof useFlowsSuspenseQue
 export type FlowsQueryResult = Apollo.QueryResult<FlowsQuery, FlowsQueryVariables>;
 export const ProvidersDocument = gql`
     query providers {
-  providers
+  providers {
+    ...providerFragment
+  }
 }
-    `;
+    ${ProviderFragmentFragmentDoc}`;
 
 /**
  * __useProvidersQuery__
@@ -1062,6 +1670,278 @@ export type SettingsQueryHookResult = ReturnType<typeof useSettingsQuery>;
 export type SettingsLazyQueryHookResult = ReturnType<typeof useSettingsLazyQuery>;
 export type SettingsSuspenseQueryHookResult = ReturnType<typeof useSettingsSuspenseQuery>;
 export type SettingsQueryResult = Apollo.QueryResult<SettingsQuery, SettingsQueryVariables>;
+export const SettingsProvidersDocument = gql`
+    query settingsProviders {
+  settingsProviders {
+    enabled {
+      openai
+      anthropic
+      gemini
+      bedrock
+      ollama
+      custom
+    }
+    default {
+      openai {
+        ...providerConfigFragment
+      }
+      anthropic {
+        ...providerConfigFragment
+      }
+      gemini {
+        ...providerConfigFragment
+      }
+      bedrock {
+        ...providerConfigFragment
+      }
+      ollama {
+        ...providerConfigFragment
+      }
+      custom {
+        ...providerConfigFragment
+      }
+    }
+    userDefined {
+      ...providerConfigFragment
+    }
+    models {
+      openai {
+        ...modelConfigFragment
+      }
+      anthropic {
+        ...modelConfigFragment
+      }
+      gemini {
+        ...modelConfigFragment
+      }
+      bedrock {
+        ...modelConfigFragment
+      }
+      ollama {
+        ...modelConfigFragment
+      }
+      custom {
+        ...modelConfigFragment
+      }
+    }
+  }
+}
+    ${ProviderConfigFragmentFragmentDoc}
+${AgentsConfigFragmentFragmentDoc}
+${AgentConfigFragmentFragmentDoc}
+${ModelConfigFragmentFragmentDoc}`;
+
+/**
+ * __useSettingsProvidersQuery__
+ *
+ * To run a query within a React component, call `useSettingsProvidersQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSettingsProvidersQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSettingsProvidersQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useSettingsProvidersQuery(baseOptions?: Apollo.QueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(SettingsProvidersDocument, options);
+      }
+export function useSettingsProvidersLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(SettingsProvidersDocument, options);
+        }
+export function useSettingsProvidersSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(SettingsProvidersDocument, options);
+        }
+export type SettingsProvidersQueryHookResult = ReturnType<typeof useSettingsProvidersQuery>;
+export type SettingsProvidersLazyQueryHookResult = ReturnType<typeof useSettingsProvidersLazyQuery>;
+export type SettingsProvidersSuspenseQueryHookResult = ReturnType<typeof useSettingsProvidersSuspenseQuery>;
+export type SettingsProvidersQueryResult = Apollo.QueryResult<SettingsProvidersQuery, SettingsProvidersQueryVariables>;
+export const SettingsPromptsDocument = gql`
+    query settingsPrompts {
+  settingsPrompts {
+    default {
+      agents {
+        primaryAgent {
+          system {
+            ...defaultPromptFragment
+          }
+        }
+        assistant {
+          system {
+            ...defaultPromptFragment
+          }
+        }
+        pentester {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        coder {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        installer {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        searcher {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        memorist {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        adviser {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        generator {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        refiner {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        reporter {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        reflector {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        enricher {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        toolCallFixer {
+          system {
+            ...defaultPromptFragment
+          }
+          human {
+            ...defaultPromptFragment
+          }
+        }
+        summarizer {
+          system {
+            ...defaultPromptFragment
+          }
+        }
+      }
+      tools {
+        getFlowDescription {
+          ...defaultPromptFragment
+        }
+        getTaskDescription {
+          ...defaultPromptFragment
+        }
+        getExecutionLogs {
+          ...defaultPromptFragment
+        }
+        getFullExecutionContext {
+          ...defaultPromptFragment
+        }
+        getShortExecutionContext {
+          ...defaultPromptFragment
+        }
+        chooseDockerImage {
+          ...defaultPromptFragment
+        }
+        chooseUserLanguage {
+          ...defaultPromptFragment
+        }
+      }
+    }
+    userDefined {
+      ...userPromptFragment
+    }
+  }
+}
+    ${DefaultPromptFragmentFragmentDoc}
+${UserPromptFragmentFragmentDoc}`;
+
+/**
+ * __useSettingsPromptsQuery__
+ *
+ * To run a query within a React component, call `useSettingsPromptsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSettingsPromptsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSettingsPromptsQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useSettingsPromptsQuery(baseOptions?: Apollo.QueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(SettingsPromptsDocument, options);
+      }
+export function useSettingsPromptsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(SettingsPromptsDocument, options);
+        }
+export function useSettingsPromptsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(SettingsPromptsDocument, options);
+        }
+export type SettingsPromptsQueryHookResult = ReturnType<typeof useSettingsPromptsQuery>;
+export type SettingsPromptsLazyQueryHookResult = ReturnType<typeof useSettingsPromptsLazyQuery>;
+export type SettingsPromptsSuspenseQueryHookResult = ReturnType<typeof useSettingsPromptsSuspenseQuery>;
+export type SettingsPromptsQueryResult = Apollo.QueryResult<SettingsPromptsQuery, SettingsPromptsQueryVariables>;
 export const FlowDocument = gql`
     query flow($id: ID!) {
   flow(flowId: $id) {
@@ -1091,6 +1971,7 @@ export const FlowDocument = gql`
 }
     ${FlowFragmentFragmentDoc}
 ${TerminalFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}
 ${TaskFragmentFragmentDoc}
 ${SubtaskFragmentFragmentDoc}
 ${ScreenshotFragmentFragmentDoc}
@@ -1173,90 +2054,14 @@ export type TasksQueryHookResult = ReturnType<typeof useTasksQuery>;
 export type TasksLazyQueryHookResult = ReturnType<typeof useTasksLazyQuery>;
 export type TasksSuspenseQueryHookResult = ReturnType<typeof useTasksSuspenseQuery>;
 export type TasksQueryResult = Apollo.QueryResult<TasksQuery, TasksQueryVariables>;
-export const PromptsDocument = gql`
-    query prompts {
-  prompts {
-    ...promptFragment
-  }
-}
-    ${PromptFragmentFragmentDoc}`;
-
-/**
- * __usePromptsQuery__
- *
- * To run a query within a React component, call `usePromptsQuery` and pass it any options that fit your needs.
- * When your component renders, `usePromptsQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = usePromptsQuery({
- *   variables: {
- *   },
- * });
- */
-export function usePromptsQuery(baseOptions?: Apollo.QueryHookOptions<PromptsQuery, PromptsQueryVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<PromptsQuery, PromptsQueryVariables>(PromptsDocument, options);
-      }
-export function usePromptsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<PromptsQuery, PromptsQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<PromptsQuery, PromptsQueryVariables>(PromptsDocument, options);
-        }
-export function usePromptsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<PromptsQuery, PromptsQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<PromptsQuery, PromptsQueryVariables>(PromptsDocument, options);
-        }
-export type PromptsQueryHookResult = ReturnType<typeof usePromptsQuery>;
-export type PromptsLazyQueryHookResult = ReturnType<typeof usePromptsLazyQuery>;
-export type PromptsSuspenseQueryHookResult = ReturnType<typeof usePromptsSuspenseQuery>;
-export type PromptsQueryResult = Apollo.QueryResult<PromptsQuery, PromptsQueryVariables>;
-export const PromptDocument = gql`
-    query prompt($promptType: String!) {
-  prompt(promptType: $promptType)
-}
-    `;
-
-/**
- * __usePromptQuery__
- *
- * To run a query within a React component, call `usePromptQuery` and pass it any options that fit your needs.
- * When your component renders, `usePromptQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = usePromptQuery({
- *   variables: {
- *      promptType: // value for 'promptType'
- *   },
- * });
- */
-export function usePromptQuery(baseOptions: Apollo.QueryHookOptions<PromptQuery, PromptQueryVariables> & ({ variables: PromptQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<PromptQuery, PromptQueryVariables>(PromptDocument, options);
-      }
-export function usePromptLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<PromptQuery, PromptQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<PromptQuery, PromptQueryVariables>(PromptDocument, options);
-        }
-export function usePromptSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<PromptQuery, PromptQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<PromptQuery, PromptQueryVariables>(PromptDocument, options);
-        }
-export type PromptQueryHookResult = ReturnType<typeof usePromptQuery>;
-export type PromptLazyQueryHookResult = ReturnType<typeof usePromptLazyQuery>;
-export type PromptSuspenseQueryHookResult = ReturnType<typeof usePromptSuspenseQuery>;
-export type PromptQueryResult = Apollo.QueryResult<PromptQuery, PromptQueryVariables>;
 export const AssistantsDocument = gql`
     query assistants($flowId: ID!) {
   assistants(flowId: $flowId) {
     ...assistantFragment
   }
 }
-    ${AssistantFragmentFragmentDoc}`;
+    ${AssistantFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}`;
 
 /**
  * __useAssistantsQuery__
@@ -1331,6 +2136,53 @@ export type AssistantLogsQueryHookResult = ReturnType<typeof useAssistantLogsQue
 export type AssistantLogsLazyQueryHookResult = ReturnType<typeof useAssistantLogsLazyQuery>;
 export type AssistantLogsSuspenseQueryHookResult = ReturnType<typeof useAssistantLogsSuspenseQuery>;
 export type AssistantLogsQueryResult = Apollo.QueryResult<AssistantLogsQuery, AssistantLogsQueryVariables>;
+export const FlowReportDocument = gql`
+    query flowReport($id: ID!) {
+  flow(flowId: $id) {
+    ...flowFragment
+  }
+  tasks(flowId: $id) {
+    ...taskFragment
+  }
+}
+    ${FlowFragmentFragmentDoc}
+${TerminalFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}
+${TaskFragmentFragmentDoc}
+${SubtaskFragmentFragmentDoc}`;
+
+/**
+ * __useFlowReportQuery__
+ *
+ * To run a query within a React component, call `useFlowReportQuery` and pass it any options that fit your needs.
+ * When your component renders, `useFlowReportQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowReportQuery({
+ *   variables: {
+ *      id: // value for 'id'
+ *   },
+ * });
+ */
+export function useFlowReportQuery(baseOptions: Apollo.QueryHookOptions<FlowReportQuery, FlowReportQueryVariables> & ({ variables: FlowReportQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
+      }
+export function useFlowReportLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
+        }
+export function useFlowReportSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
+        }
+export type FlowReportQueryHookResult = ReturnType<typeof useFlowReportQuery>;
+export type FlowReportLazyQueryHookResult = ReturnType<typeof useFlowReportLazyQuery>;
+export type FlowReportSuspenseQueryHookResult = ReturnType<typeof useFlowReportSuspenseQuery>;
+export type FlowReportQueryResult = Apollo.QueryResult<FlowReportQuery, FlowReportQueryVariables>;
 export const CreateFlowDocument = gql`
     mutation createFlow($modelProvider: String!, $input: String!) {
   createFlow(modelProvider: $modelProvider, input: $input) {
@@ -1338,7 +2190,8 @@ export const CreateFlowDocument = gql`
   }
 }
     ${FlowFragmentFragmentDoc}
-${TerminalFragmentFragmentDoc}`;
+${TerminalFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}`;
 export type CreateFlowMutationFn = Apollo.MutationFunction<CreateFlowMutation, CreateFlowMutationVariables>;
 
 /**
@@ -1509,6 +2362,7 @@ export const CreateAssistantDocument = gql`
 }
     ${FlowFragmentFragmentDoc}
 ${TerminalFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}
 ${AssistantFragmentFragmentDoc}`;
 export type CreateAssistantMutationFn = Apollo.MutationFunction<CreateAssistantMutation, CreateAssistantMutationVariables>;
 
@@ -1584,7 +2438,8 @@ export const StopAssistantDocument = gql`
     ...assistantFragment
   }
 }
-    ${AssistantFragmentFragmentDoc}`;
+    ${AssistantFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}`;
 export type StopAssistantMutationFn = Apollo.MutationFunction<StopAssistantMutation, StopAssistantMutationVariables>;
 
 /**
@@ -1644,11 +2499,258 @@ export function useDeleteAssistantMutation(baseOptions?: Apollo.MutationHookOpti
 export type DeleteAssistantMutationHookResult = ReturnType<typeof useDeleteAssistantMutation>;
 export type DeleteAssistantMutationResult = Apollo.MutationResult<DeleteAssistantMutation>;
 export type DeleteAssistantMutationOptions = Apollo.BaseMutationOptions<DeleteAssistantMutation, DeleteAssistantMutationVariables>;
-export const UpdatePromptDocument = gql`
-    mutation updatePrompt($promptType: String!, $prompt: String!) {
-  updatePrompt(promptType: $promptType, prompt: $prompt)
+export const TestAgentDocument = gql`
+    mutation testAgent($type: ProviderType!, $agentType: AgentType!, $agent: AgentConfigInput!) {
+  testAgent(type: $type, agentType: $agentType, agent: $agent) {
+    ...agentTestResultFragment
+  }
+}
+    ${AgentTestResultFragmentFragmentDoc}
+${TestResultFragmentFragmentDoc}`;
+export type TestAgentMutationFn = Apollo.MutationFunction<TestAgentMutation, TestAgentMutationVariables>;
+
+/**
+ * __useTestAgentMutation__
+ *
+ * To run a mutation, you first call `useTestAgentMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useTestAgentMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [testAgentMutation, { data, loading, error }] = useTestAgentMutation({
+ *   variables: {
+ *      type: // value for 'type'
+ *      agentType: // value for 'agentType'
+ *      agent: // value for 'agent'
+ *   },
+ * });
+ */
+export function useTestAgentMutation(baseOptions?: Apollo.MutationHookOptions<TestAgentMutation, TestAgentMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<TestAgentMutation, TestAgentMutationVariables>(TestAgentDocument, options);
+      }
+export type TestAgentMutationHookResult = ReturnType<typeof useTestAgentMutation>;
+export type TestAgentMutationResult = Apollo.MutationResult<TestAgentMutation>;
+export type TestAgentMutationOptions = Apollo.BaseMutationOptions<TestAgentMutation, TestAgentMutationVariables>;
+export const TestProviderDocument = gql`
+    mutation testProvider($type: ProviderType!, $agents: AgentsConfigInput!) {
+  testProvider(type: $type, agents: $agents) {
+    ...providerTestResultFragment
+  }
+}
+    ${ProviderTestResultFragmentFragmentDoc}
+${AgentTestResultFragmentFragmentDoc}
+${TestResultFragmentFragmentDoc}`;
+export type TestProviderMutationFn = Apollo.MutationFunction<TestProviderMutation, TestProviderMutationVariables>;
+
+/**
+ * __useTestProviderMutation__
+ *
+ * To run a mutation, you first call `useTestProviderMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useTestProviderMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [testProviderMutation, { data, loading, error }] = useTestProviderMutation({
+ *   variables: {
+ *      type: // value for 'type'
+ *      agents: // value for 'agents'
+ *   },
+ * });
+ */
+export function useTestProviderMutation(baseOptions?: Apollo.MutationHookOptions<TestProviderMutation, TestProviderMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<TestProviderMutation, TestProviderMutationVariables>(TestProviderDocument, options);
+      }
+export type TestProviderMutationHookResult = ReturnType<typeof useTestProviderMutation>;
+export type TestProviderMutationResult = Apollo.MutationResult<TestProviderMutation>;
+export type TestProviderMutationOptions = Apollo.BaseMutationOptions<TestProviderMutation, TestProviderMutationVariables>;
+export const CreateProviderDocument = gql`
+    mutation createProvider($name: String!, $type: ProviderType!, $agents: AgentsConfigInput!) {
+  createProvider(name: $name, type: $type, agents: $agents) {
+    ...providerConfigFragment
+  }
+}
+    ${ProviderConfigFragmentFragmentDoc}
+${AgentsConfigFragmentFragmentDoc}
+${AgentConfigFragmentFragmentDoc}`;
+export type CreateProviderMutationFn = Apollo.MutationFunction<CreateProviderMutation, CreateProviderMutationVariables>;
+
+/**
+ * __useCreateProviderMutation__
+ *
+ * To run a mutation, you first call `useCreateProviderMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateProviderMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createProviderMutation, { data, loading, error }] = useCreateProviderMutation({
+ *   variables: {
+ *      name: // value for 'name'
+ *      type: // value for 'type'
+ *      agents: // value for 'agents'
+ *   },
+ * });
+ */
+export function useCreateProviderMutation(baseOptions?: Apollo.MutationHookOptions<CreateProviderMutation, CreateProviderMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<CreateProviderMutation, CreateProviderMutationVariables>(CreateProviderDocument, options);
+      }
+export type CreateProviderMutationHookResult = ReturnType<typeof useCreateProviderMutation>;
+export type CreateProviderMutationResult = Apollo.MutationResult<CreateProviderMutation>;
+export type CreateProviderMutationOptions = Apollo.BaseMutationOptions<CreateProviderMutation, CreateProviderMutationVariables>;
+export const UpdateProviderDocument = gql`
+    mutation updateProvider($providerId: ID!, $name: String!, $agents: AgentsConfigInput!) {
+  updateProvider(providerId: $providerId, name: $name, agents: $agents) {
+    ...providerConfigFragment
+  }
+}
+    ${ProviderConfigFragmentFragmentDoc}
+${AgentsConfigFragmentFragmentDoc}
+${AgentConfigFragmentFragmentDoc}`;
+export type UpdateProviderMutationFn = Apollo.MutationFunction<UpdateProviderMutation, UpdateProviderMutationVariables>;
+
+/**
+ * __useUpdateProviderMutation__
+ *
+ * To run a mutation, you first call `useUpdateProviderMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateProviderMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateProviderMutation, { data, loading, error }] = useUpdateProviderMutation({
+ *   variables: {
+ *      providerId: // value for 'providerId'
+ *      name: // value for 'name'
+ *      agents: // value for 'agents'
+ *   },
+ * });
+ */
+export function useUpdateProviderMutation(baseOptions?: Apollo.MutationHookOptions<UpdateProviderMutation, UpdateProviderMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UpdateProviderMutation, UpdateProviderMutationVariables>(UpdateProviderDocument, options);
+      }
+export type UpdateProviderMutationHookResult = ReturnType<typeof useUpdateProviderMutation>;
+export type UpdateProviderMutationResult = Apollo.MutationResult<UpdateProviderMutation>;
+export type UpdateProviderMutationOptions = Apollo.BaseMutationOptions<UpdateProviderMutation, UpdateProviderMutationVariables>;
+export const DeleteProviderDocument = gql`
+    mutation deleteProvider($providerId: ID!) {
+  deleteProvider(providerId: $providerId)
 }
     `;
+export type DeleteProviderMutationFn = Apollo.MutationFunction<DeleteProviderMutation, DeleteProviderMutationVariables>;
+
+/**
+ * __useDeleteProviderMutation__
+ *
+ * To run a mutation, you first call `useDeleteProviderMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useDeleteProviderMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [deleteProviderMutation, { data, loading, error }] = useDeleteProviderMutation({
+ *   variables: {
+ *      providerId: // value for 'providerId'
+ *   },
+ * });
+ */
+export function useDeleteProviderMutation(baseOptions?: Apollo.MutationHookOptions<DeleteProviderMutation, DeleteProviderMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<DeleteProviderMutation, DeleteProviderMutationVariables>(DeleteProviderDocument, options);
+      }
+export type DeleteProviderMutationHookResult = ReturnType<typeof useDeleteProviderMutation>;
+export type DeleteProviderMutationResult = Apollo.MutationResult<DeleteProviderMutation>;
+export type DeleteProviderMutationOptions = Apollo.BaseMutationOptions<DeleteProviderMutation, DeleteProviderMutationVariables>;
+export const ValidatePromptDocument = gql`
+    mutation validatePrompt($type: PromptType!, $template: String!) {
+  validatePrompt(type: $type, template: $template) {
+    ...promptValidationResultFragment
+  }
+}
+    ${PromptValidationResultFragmentFragmentDoc}`;
+export type ValidatePromptMutationFn = Apollo.MutationFunction<ValidatePromptMutation, ValidatePromptMutationVariables>;
+
+/**
+ * __useValidatePromptMutation__
+ *
+ * To run a mutation, you first call `useValidatePromptMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useValidatePromptMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [validatePromptMutation, { data, loading, error }] = useValidatePromptMutation({
+ *   variables: {
+ *      type: // value for 'type'
+ *      template: // value for 'template'
+ *   },
+ * });
+ */
+export function useValidatePromptMutation(baseOptions?: Apollo.MutationHookOptions<ValidatePromptMutation, ValidatePromptMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<ValidatePromptMutation, ValidatePromptMutationVariables>(ValidatePromptDocument, options);
+      }
+export type ValidatePromptMutationHookResult = ReturnType<typeof useValidatePromptMutation>;
+export type ValidatePromptMutationResult = Apollo.MutationResult<ValidatePromptMutation>;
+export type ValidatePromptMutationOptions = Apollo.BaseMutationOptions<ValidatePromptMutation, ValidatePromptMutationVariables>;
+export const CreatePromptDocument = gql`
+    mutation createPrompt($type: PromptType!, $template: String!) {
+  createPrompt(type: $type, template: $template) {
+    ...userPromptFragment
+  }
+}
+    ${UserPromptFragmentFragmentDoc}`;
+export type CreatePromptMutationFn = Apollo.MutationFunction<CreatePromptMutation, CreatePromptMutationVariables>;
+
+/**
+ * __useCreatePromptMutation__
+ *
+ * To run a mutation, you first call `useCreatePromptMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreatePromptMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createPromptMutation, { data, loading, error }] = useCreatePromptMutation({
+ *   variables: {
+ *      type: // value for 'type'
+ *      template: // value for 'template'
+ *   },
+ * });
+ */
+export function useCreatePromptMutation(baseOptions?: Apollo.MutationHookOptions<CreatePromptMutation, CreatePromptMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<CreatePromptMutation, CreatePromptMutationVariables>(CreatePromptDocument, options);
+      }
+export type CreatePromptMutationHookResult = ReturnType<typeof useCreatePromptMutation>;
+export type CreatePromptMutationResult = Apollo.MutationResult<CreatePromptMutation>;
+export type CreatePromptMutationOptions = Apollo.BaseMutationOptions<CreatePromptMutation, CreatePromptMutationVariables>;
+export const UpdatePromptDocument = gql`
+    mutation updatePrompt($promptId: ID!, $template: String!) {
+  updatePrompt(promptId: $promptId, template: $template) {
+    ...userPromptFragment
+  }
+}
+    ${UserPromptFragmentFragmentDoc}`;
 export type UpdatePromptMutationFn = Apollo.MutationFunction<UpdatePromptMutation, UpdatePromptMutationVariables>;
 
 /**
@@ -1664,8 +2766,8 @@ export type UpdatePromptMutationFn = Apollo.MutationFunction<UpdatePromptMutatio
  * @example
  * const [updatePromptMutation, { data, loading, error }] = useUpdatePromptMutation({
  *   variables: {
- *      promptType: // value for 'promptType'
- *      prompt: // value for 'prompt'
+ *      promptId: // value for 'promptId'
+ *      template: // value for 'template'
  *   },
  * });
  */
@@ -1676,37 +2778,37 @@ export function useUpdatePromptMutation(baseOptions?: Apollo.MutationHookOptions
 export type UpdatePromptMutationHookResult = ReturnType<typeof useUpdatePromptMutation>;
 export type UpdatePromptMutationResult = Apollo.MutationResult<UpdatePromptMutation>;
 export type UpdatePromptMutationOptions = Apollo.BaseMutationOptions<UpdatePromptMutation, UpdatePromptMutationVariables>;
-export const ResetPromptDocument = gql`
-    mutation resetPrompt($promptType: String!) {
-  resetPrompt(promptType: $promptType)
+export const DeletePromptDocument = gql`
+    mutation deletePrompt($promptId: ID!) {
+  deletePrompt(promptId: $promptId)
 }
     `;
-export type ResetPromptMutationFn = Apollo.MutationFunction<ResetPromptMutation, ResetPromptMutationVariables>;
+export type DeletePromptMutationFn = Apollo.MutationFunction<DeletePromptMutation, DeletePromptMutationVariables>;
 
 /**
- * __useResetPromptMutation__
+ * __useDeletePromptMutation__
  *
- * To run a mutation, you first call `useResetPromptMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useResetPromptMutation` returns a tuple that includes:
+ * To run a mutation, you first call `useDeletePromptMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useDeletePromptMutation` returns a tuple that includes:
  * - A mutate function that you can call at any time to execute the mutation
  * - An object with fields that represent the current status of the mutation's execution
  *
  * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
  *
  * @example
- * const [resetPromptMutation, { data, loading, error }] = useResetPromptMutation({
+ * const [deletePromptMutation, { data, loading, error }] = useDeletePromptMutation({
  *   variables: {
- *      promptType: // value for 'promptType'
+ *      promptId: // value for 'promptId'
  *   },
  * });
  */
-export function useResetPromptMutation(baseOptions?: Apollo.MutationHookOptions<ResetPromptMutation, ResetPromptMutationVariables>) {
+export function useDeletePromptMutation(baseOptions?: Apollo.MutationHookOptions<DeletePromptMutation, DeletePromptMutationVariables>) {
         const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<ResetPromptMutation, ResetPromptMutationVariables>(ResetPromptDocument, options);
+        return Apollo.useMutation<DeletePromptMutation, DeletePromptMutationVariables>(DeletePromptDocument, options);
       }
-export type ResetPromptMutationHookResult = ReturnType<typeof useResetPromptMutation>;
-export type ResetPromptMutationResult = Apollo.MutationResult<ResetPromptMutation>;
-export type ResetPromptMutationOptions = Apollo.BaseMutationOptions<ResetPromptMutation, ResetPromptMutationVariables>;
+export type DeletePromptMutationHookResult = ReturnType<typeof useDeletePromptMutation>;
+export type DeletePromptMutationResult = Apollo.MutationResult<DeletePromptMutation>;
+export type DeletePromptMutationOptions = Apollo.BaseMutationOptions<DeletePromptMutation, DeletePromptMutationVariables>;
 export const TerminalLogAddedDocument = gql`
     subscription terminalLogAdded($flowId: ID!) {
   terminalLogAdded(flowId: $flowId) {
@@ -1923,7 +3025,8 @@ export const AssistantCreatedDocument = gql`
     ...assistantFragment
   }
 }
-    ${AssistantFragmentFragmentDoc}`;
+    ${AssistantFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}`;
 
 /**
  * __useAssistantCreatedSubscription__
@@ -1953,7 +3056,8 @@ export const AssistantUpdatedDocument = gql`
     ...assistantFragment
   }
 }
-    ${AssistantFragmentFragmentDoc}`;
+    ${AssistantFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}`;
 
 /**
  * __useAssistantUpdatedSubscription__
@@ -1983,7 +3087,8 @@ export const AssistantDeletedDocument = gql`
     ...assistantFragment
   }
 }
-    ${AssistantFragmentFragmentDoc}`;
+    ${AssistantFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}`;
 
 /**
  * __useAssistantDeletedSubscription__
@@ -2076,12 +3181,15 @@ export const FlowCreatedDocument = gql`
     terminals {
       ...terminalFragment
     }
-    provider
+    provider {
+      ...providerFragment
+    }
     createdAt
     updatedAt
   }
 }
-    ${TerminalFragmentFragmentDoc}`;
+    ${TerminalFragmentFragmentDoc}
+${ProviderFragmentFragmentDoc}`;
 
 /**
  * __useFlowCreatedSubscription__
@@ -2237,49 +3345,96 @@ export function useTaskUpdatedSubscription(baseOptions: Apollo.SubscriptionHookO
       }
 export type TaskUpdatedSubscriptionHookResult = ReturnType<typeof useTaskUpdatedSubscription>;
 export type TaskUpdatedSubscriptionResult = Apollo.SubscriptionResult<TaskUpdatedSubscription>;
-export const FlowReportDocument = gql`
-    query flowReport($id: ID!) {
-  flow(flowId: $id) {
-    ...flowFragment
-  }
-  tasks(flowId: $id) {
-    ...taskFragment
+export const ProviderCreatedDocument = gql`
+    subscription providerCreated {
+  providerCreated {
+    ...providerConfigFragment
   }
 }
-    ${FlowFragmentFragmentDoc}
-${TerminalFragmentFragmentDoc}
-${TaskFragmentFragmentDoc}
-${SubtaskFragmentFragmentDoc}`;
+    ${ProviderConfigFragmentFragmentDoc}
+${AgentsConfigFragmentFragmentDoc}
+${AgentConfigFragmentFragmentDoc}`;
 
 /**
- * __useFlowReportQuery__
+ * __useProviderCreatedSubscription__
  *
- * To run a query within a React component, call `useFlowReportQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowReportQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * To run a query within a React component, call `useProviderCreatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useProviderCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
  * you can use to render your UI.
  *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
  *
  * @example
- * const { data, loading, error } = useFlowReportQuery({
+ * const { data, loading, error } = useProviderCreatedSubscription({
  *   variables: {
- *      id: // value for 'id'
  *   },
  * });
  */
-export function useFlowReportQuery(baseOptions: Apollo.QueryHookOptions<FlowReportQuery, FlowReportQueryVariables> & ({ variables: FlowReportQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
+export function useProviderCreatedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<ProviderCreatedSubscription, ProviderCreatedSubscriptionVariables>) {
         const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
+        return Apollo.useSubscription<ProviderCreatedSubscription, ProviderCreatedSubscriptionVariables>(ProviderCreatedDocument, options);
       }
-export function useFlowReportLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
-        }
-export function useFlowReportSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
-        }
-export type FlowReportQueryHookResult = ReturnType<typeof useFlowReportQuery>;
-export type FlowReportLazyQueryHookResult = ReturnType<typeof useFlowReportLazyQuery>;
-export type FlowReportSuspenseQueryHookResult = ReturnType<typeof useFlowReportSuspenseQuery>;
-export type FlowReportQueryResult = Apollo.QueryResult<FlowReportQuery, FlowReportQueryVariables>;
+export type ProviderCreatedSubscriptionHookResult = ReturnType<typeof useProviderCreatedSubscription>;
+export type ProviderCreatedSubscriptionResult = Apollo.SubscriptionResult<ProviderCreatedSubscription>;
+export const ProviderUpdatedDocument = gql`
+    subscription providerUpdated {
+  providerUpdated {
+    ...providerConfigFragment
+  }
+}
+    ${ProviderConfigFragmentFragmentDoc}
+${AgentsConfigFragmentFragmentDoc}
+${AgentConfigFragmentFragmentDoc}`;
+
+/**
+ * __useProviderUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useProviderUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useProviderUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useProviderUpdatedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useProviderUpdatedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<ProviderUpdatedSubscription, ProviderUpdatedSubscriptionVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<ProviderUpdatedSubscription, ProviderUpdatedSubscriptionVariables>(ProviderUpdatedDocument, options);
+      }
+export type ProviderUpdatedSubscriptionHookResult = ReturnType<typeof useProviderUpdatedSubscription>;
+export type ProviderUpdatedSubscriptionResult = Apollo.SubscriptionResult<ProviderUpdatedSubscription>;
+export const ProviderDeletedDocument = gql`
+    subscription providerDeleted {
+  providerDeleted {
+    ...providerConfigFragment
+  }
+}
+    ${ProviderConfigFragmentFragmentDoc}
+${AgentsConfigFragmentFragmentDoc}
+${AgentConfigFragmentFragmentDoc}`;
+
+/**
+ * __useProviderDeletedSubscription__
+ *
+ * To run a query within a React component, call `useProviderDeletedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useProviderDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useProviderDeletedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useProviderDeletedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<ProviderDeletedSubscription, ProviderDeletedSubscriptionVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useSubscription<ProviderDeletedSubscription, ProviderDeletedSubscriptionVariables>(ProviderDeletedDocument, options);
+      }
+export type ProviderDeletedSubscriptionHookResult = ReturnType<typeof useProviderDeletedSubscription>;
+export type ProviderDeletedSubscriptionResult = Apollo.SubscriptionResult<ProviderDeletedSubscription>;

@@ -13,7 +13,7 @@ import (
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
-	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
@@ -28,7 +28,7 @@ const (
 	lastSecBytesAfterRestore     = 16 * 1024 // 16 KB
 	maxBPBytesAfterRestore       = 8 * 1024  // 8 KB
 	maxQABytesAfterRestore       = 20 * 1024 // 20 KB
-	msgLogResultSummarySizeLimit = 50 * 1024 // 50 KB
+	msgLogResultSummarySizeLimit = 70 * 1024 // 70 KB
 	msgLogResultEntrySizeLimit   = 1024      // 1 KB
 )
 
@@ -299,7 +299,7 @@ func (fp *flowProvider) getTaskMsgLogsSummary(
 func (fp *flowProvider) restoreChain(
 	ctx context.Context,
 	taskID, subtaskID *int64,
-	optAgentType provider.ProviderOptionsType,
+	optAgentType pconfig.ProviderOptionsType,
 	msgChainType database.MsgchainType,
 	systemPrompt, humanPrompt string,
 ) (int64, []llms.MessageContent, error) {

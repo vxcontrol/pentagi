@@ -14,7 +14,7 @@ import (
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
-	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
@@ -41,7 +41,7 @@ type callResult struct {
 
 func (fp *flowProvider) performAgentChain(
 	ctx context.Context,
-	optAgentType provider.ProviderOptionsType,
+	optAgentType pconfig.ProviderOptionsType,
 	chainID int64,
 	taskID, subtaskID *int64,
 	chain []llms.MessageContent,
@@ -84,7 +84,7 @@ func (fp *flowProvider) performAgentChain(
 		}
 
 		if len(result.funcCalls) == 0 {
-			if optAgentType == provider.OptionsTypeAssistant {
+			if optAgentType == pconfig.OptionsTypeAssistant {
 				return fp.processAssistantResult(ctx, logger, chainID, chain, result, summarizer, summarizerHandler)
 			} else {
 				result, err = fp.performReflector(
@@ -274,7 +274,7 @@ func (fp *flowProvider) execToolCall(
 func (fp *flowProvider) callWithRetries(
 	ctx context.Context,
 	chain []llms.MessageContent,
-	optAgentType provider.ProviderOptionsType,
+	optAgentType pconfig.ProviderOptionsType,
 	executor tools.ContextToolsExecutor,
 ) (*callResult, error) {
 	var (
@@ -385,7 +385,7 @@ func (fp *flowProvider) callWithRetries(
 
 func (fp *flowProvider) performReflector(
 	ctx context.Context,
-	optOriginType provider.ProviderOptionsType,
+	optOriginType pconfig.ProviderOptionsType,
 	chainID int64,
 	taskID, subtaskID *int64,
 	chain []llms.MessageContent,
@@ -397,7 +397,7 @@ func (fp *flowProvider) performReflector(
 	defer span.End()
 
 	var (
-		optAgentType = provider.OptionsTypeReflector
+		optAgentType = pconfig.OptionsTypeReflector
 		msgChainType = database.MsgchainTypeReflector
 	)
 
@@ -420,17 +420,17 @@ func (fp *flowProvider) performReflector(
 			langfuse.WithStartEventOutput(msg),
 		)
 		logger.WithField("content", content[:min(1000, len(content))]).Warn(msg)
-		return nil, fmt.Errorf(msg)
+		return nil, errors.New(msg)
 	}
 
 	logger.WithField("content", content[:min(1000, len(content))]).Warn("got message instead of tool call")
 
-	reflectorContext := map[string]any{
-		"user": map[string]any{
+	reflectorContext := map[string]map[string]any{
+		"user": {
 			"Message":          content,
 			"BarrierToolNames": executor.GetBarrierToolNames(),
 		},
-		"system": map[string]any{
+		"system": {
 			"BarrierTools":     executor.GetBarrierTools(),
 			"CurrentTime":      getCurrentTime(),
 			"ExecutionContext": executionContext,
@@ -438,7 +438,7 @@ func (fp *flowProvider) performReflector(
 	}
 
 	if humanMessage != "" {
-		reflectorContext["Request"] = humanMessage
+		reflectorContext["system"]["Request"] = humanMessage
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)

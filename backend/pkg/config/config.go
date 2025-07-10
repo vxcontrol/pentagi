@@ -16,13 +16,14 @@ type Config struct {
 	AskUser     bool   `env:"ASK_USER" envDefault:"false"`
 
 	// Docker (terminal) settings
-	DockerInside       bool   `env:"DOCKER_INSIDE" envDefault:"false"`
-	DockerNetAdmin     bool   `env:"DOCKER_NET_ADMIN" envDefault:"false"`
-	DockerSocket       string `env:"DOCKER_SOCKET"`
-	DockerNetwork      string `env:"DOCKER_NETWORK"`
-	DockerPublicIP     string `env:"DOCKER_PUBLIC_IP" envDefault:"0.0.0.0"`
-	DockerWorkDir      string `env:"DOCKER_WORK_DIR"`
-	DockerDefaultImage string `env:"DOCKER_DEFAULT_IMAGE" envDefault:"debian:latest"`
+	DockerInside                 bool   `env:"DOCKER_INSIDE" envDefault:"false"`
+	DockerNetAdmin               bool   `env:"DOCKER_NET_ADMIN" envDefault:"false"`
+	DockerSocket                 string `env:"DOCKER_SOCKET"`
+	DockerNetwork                string `env:"DOCKER_NETWORK"`
+	DockerPublicIP               string `env:"DOCKER_PUBLIC_IP" envDefault:"0.0.0.0"`
+	DockerWorkDir                string `env:"DOCKER_WORK_DIR"`
+	DockerDefaultImage           string `env:"DOCKER_DEFAULT_IMAGE" envDefault:"debian:latest"`
+	DockerDefaultImageForPentest string `env:"DOCKER_DEFAULT_IMAGE_FOR_PENTEST" envDefault:"vxcontrol/kali-linux"`
 
 	// HTTP and GraphQL server settings
 	ServerPort   int    `env:"SERVER_PORT" envDefault:"8080"`
@@ -75,6 +76,9 @@ type Config struct {
 	LLMServerModel           string `env:"LLM_SERVER_MODEL"`
 	LLMServerConfig          string `env:"LLM_SERVER_CONFIG_PATH"`
 	LLMServerLegacyReasoning bool   `env:"LLM_SERVER_LEGACY_REASONING" envDefault:"false"`
+
+	// DuckDuckGo search engine
+	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
 
 	// Google search engine
 	GoogleAPIKey string `env:"GOOGLE_API_KEY"`

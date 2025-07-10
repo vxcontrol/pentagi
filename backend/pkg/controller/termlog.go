@@ -59,7 +59,7 @@ func (tlw *flowTermLogWorker) PutMsg(
 
 	termLog, err := tlw.db.CreateTermLog(ctx, database.CreateTermLogParams{
 		Type:        msgType,
-		Text:        sanitizeUTF8(msg),
+		Text:        database.SanitizeUTF8(msg),
 		ContainerID: containerID,
 	})
 	if err != nil {

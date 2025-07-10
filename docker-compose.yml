@@ -82,6 +82,7 @@ services:
       - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID:-}
       - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET:-}
       - DATABASE_URL=postgres://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
+      - DUCKDUCKGO_ENABLED=${DUCKDUCKGO_ENABLED:-true}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GOOGLE_CX_KEY=${GOOGLE_CX_KEY:-}
       - TRAVERSAAL_API_KEY=${TRAVERSAAL_API_KEY:-}
@@ -104,6 +105,7 @@ services:
       - DOCKER_PUBLIC_IP=${DOCKER_PUBLIC_IP:-}
       - DOCKER_WORK_DIR=${DOCKER_WORK_DIR:-}
       - DOCKER_DEFAULT_IMAGE=${DOCKER_DEFAULT_IMAGE:-}
+      - DOCKER_DEFAULT_IMAGE_FOR_PENTEST=${DOCKER_DEFAULT_IMAGE_FOR_PENTEST:-}
     logging:
       options:
         max-size: 50m
@@ -152,9 +154,7 @@ services:
     ports:
       - 127.0.0.1:9187:9187
     environment:
-      - DATA_SOURCE_NAME=pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
-      - DATA_SOURCE_USER=${PENTAGI_POSTGRES_USER:-postgres}
-      - DATA_SOURCE_PASS=${PENTAGI_POSTGRES_PASSWORD:-postgres}
+      - DATA_SOURCE_NAME=postgresql://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
     logging:
       options:
         max-size: 50m

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -301,7 +302,11 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 		} // otherwise subtask is done
 
 		if err := tw.stc.RefineSubtasks(ctx); err != nil {
-			return err
+			if errors.Is(err, context.Canceled) {
+				ctx = context.Background()
+			}
+			_ = tw.SetStatus(ctx, database.TaskStatusWaiting)
+			return fmt.Errorf("failed to refine subtasks list for the task %d: %w", tw.taskCtx.TaskID, err)
 		}
 	}
 

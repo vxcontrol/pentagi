@@ -80,6 +80,31 @@ const addTopIncoming = (existing: any[], incoming: any, cache: any) => {
     return [incoming, ...existing];
 };
 
+// Add provider to sorted list in lexicographic order by name
+const addProviderSorted = (existing: any[], incoming: any, cache: any) => {
+    const incomingName = incoming.name;
+    const incomingType = incoming.type;
+
+    // Check if provider already exists
+    if (existing.some((item) => item.name === incomingName && item.type === incomingType)) {
+        return existing;
+    }
+
+    // Find the correct position to insert (sorted by name in lexicographic order)
+    const insertIndex = existing.findIndex((item) => item.name > incomingName);
+    
+    if (insertIndex === -1) {
+        return [...existing, incoming];
+    } else {
+        // Insert at the correct position
+        return [
+            ...existing.slice(0, insertIndex),
+            incoming,
+            ...existing.slice(insertIndex)
+        ];
+    }
+};
+
 const updateIncoming = (existing: any[], incoming: any, cache: any) => {
     const incomingId = cache.identify(incoming);
 
@@ -104,6 +129,15 @@ const concatStrings = (existing: string | null | undefined, incoming: string | n
     return null;
 };
 
+// Helper to convert ProviderConfig to Provider
+const providerConfigToProvider = (providerConfig: any) => {
+    return {
+        __typename: 'Provider',
+        name: providerConfig.name,
+        type: providerConfig.type,
+    };
+};
+
 const cache = new InMemoryCache({
     typePolicies: {
         Query: {
@@ -122,6 +156,16 @@ const cache = new InMemoryCache({
                 assistantLogs: {
                     merge(_existing = [], incoming) {
                         return incoming; // Always use latest assistantLogs data
+                    },
+                },
+                settingsProviders: {
+                    merge(_existing, incoming) {
+                        return incoming; // Always use latest providers settings
+                    },
+                },
+                settingsPrompts: {
+                    merge(_existing, incoming) {
+                        return incoming; // Always use latest prompts settings
                     },
                 },
             },
@@ -163,6 +207,108 @@ const cache = new InMemoryCache({
                         cache.modify({
                             fields: {
                                 assistants: (existing = []) => updateIncoming(existing, incoming, cache),
+                            },
+                        });
+                    },
+                },
+                createProvider: {
+                    merge(_, incoming, { cache }) {
+                        // Add to providers list (short format, sorted by name)
+                        const provider = providerConfigToProvider(incoming);
+                        cache.modify({
+                            fields: {
+                                providers: (existing = []) => addProviderSorted(existing, provider, cache),
+                            },
+                        });
+
+                        // Update settingsProviders userDefined list (add to end, sorted by ID)
+                        cache.modify({
+                            fields: {
+                                settingsProviders: (existing) => {
+                                    if (existing && existing.userDefined) {
+                                        return {
+                                            ...existing,
+                                            userDefined: addIncoming(existing.userDefined, incoming, cache),
+                                        };
+                                    }
+                                    return existing;
+                                },
+                            },
+                        });
+                    },
+                },
+                updateProvider: {
+                    merge(_, incoming, { cache }) {
+                        const provider = providerConfigToProvider(incoming);
+                        cache.modify({
+                            fields: {
+                                providers: (existing = []) => {
+                                    // Check if provider exists in the list
+                                    const existingProvider = existing.find((item: any) => 
+                                        item.name === provider.name && item.type === provider.type
+                                    );
+                                    
+                                    if (!existingProvider) {
+                                        // Provider not found, invalidate cache to refetch
+                                        cache.evict({ fieldName: 'providers' });
+                                        return existing;
+                                    }
+                                    
+                                    // Update existing provider (only name can change, type cannot)
+                                    return existing.map((item: any) => 
+                                        item.name === provider.name && item.type === provider.type 
+                                            ? provider 
+                                            : item
+                                    );
+                                },
+                            },
+                        });
+
+                        cache.modify({
+                            fields: {
+                                settingsProviders: (existing) => {
+                                    if (existing && existing.userDefined) {
+                                        return {
+                                            ...existing,
+                                            userDefined: updateIncoming(existing.userDefined, incoming, cache),
+                                        };
+                                    }
+                                    return existing;
+                                },
+                            },
+                        });
+                    },
+                },
+                createPrompt: {
+                    merge(_, incoming, { cache }) {
+                        cache.modify({
+                            fields: {
+                                settingsPrompts: (existing) => {
+                                    if (existing && existing.userDefined) {
+                                        return {
+                                            ...existing,
+                                            userDefined: addTopIncoming(existing.userDefined, incoming, cache),
+                                        };
+                                    }
+                                    return existing;
+                                },
+                            },
+                        });
+                    },
+                },
+                updatePrompt: {
+                    merge(_, incoming, { cache }) {
+                        cache.modify({
+                            fields: {
+                                settingsPrompts: (existing) => {
+                                    if (existing && existing.userDefined) {
+                                        return {
+                                            ...existing,
+                                            userDefined: updateIncoming(existing.userDefined, incoming, cache),
+                                        };
+                                    }
+                                    return existing;
+                                },
                             },
                         });
                     },
@@ -371,6 +517,107 @@ const cache = new InMemoryCache({
                         cache.modify({
                             fields: {
                                 assistants: (existing = []) => deleteIncoming(existing, incoming, cache),
+                            },
+                        });
+                    },
+                },
+                providerCreated: {
+                    merge(_, incoming, { cache }) {
+                        // Add to providers list (short format, sorted by name)
+                        const provider = providerConfigToProvider(incoming);
+                        cache.modify({
+                            fields: {
+                                providers: (existing = []) => addProviderSorted(existing, provider, cache),
+                            },
+                        });
+
+                        // Update settingsProviders userDefined list (add to end, sorted by ID)
+                        cache.modify({
+                            fields: {
+                                settingsProviders: (existing) => {
+                                    if (existing && existing.userDefined) {
+                                        return {
+                                            ...existing,
+                                            userDefined: addIncoming(existing.userDefined, incoming, cache),
+                                        };
+                                    }
+                                    return existing;
+                                },
+                            },
+                        });
+                    },
+                },
+                providerUpdated: {
+                    merge(_, incoming, { cache }) {
+                        // Update providers list (short format)
+                        const provider = providerConfigToProvider(incoming);
+                        cache.modify({
+                            fields: {
+                                providers: (existing = []) => {
+                                    // Check if provider exists in the list
+                                    const existingProvider = existing.find((item: any) => 
+                                        item.name === provider.name && item.type === provider.type
+                                    );
+                                    
+                                    if (!existingProvider) {
+                                        // Provider not found, invalidate cache to refetch
+                                        cache.evict({ fieldName: 'providers' });
+                                        return existing;
+                                    }
+                                    
+                                    // Update existing provider (only name can change, type cannot)
+                                    return existing.map((item: any) => 
+                                        item.name === provider.name && item.type === provider.type 
+                                            ? provider 
+                                            : item
+                                    );
+                                },
+                            },
+                        });
+
+                        // Update settingsProviders userDefined list
+                        cache.modify({
+                            fields: {
+                                settingsProviders: (existing) => {
+                                    if (existing && existing.userDefined) {
+                                        return {
+                                            ...existing,
+                                            userDefined: updateIncoming(existing.userDefined, incoming, cache),
+                                        };
+                                    }
+                                    return existing;
+                                },
+                            },
+                        });
+                    },
+                },
+                providerDeleted: {
+                    merge(_, incoming, { cache }) {
+                        // Remove from providers list (short format)
+                        const provider = providerConfigToProvider(incoming);
+                        cache.modify({
+                            fields: {
+                                providers: (existing = []) => {
+                                    // Filter out by name+type since Provider doesn't have id
+                                    return existing.filter((item: any) => 
+                                        !(item.name === provider.name && item.type === provider.type)
+                                    );
+                                },
+                            },
+                        });
+
+                        // Remove from settingsProviders userDefined list
+                        cache.modify({
+                            fields: {
+                                settingsProviders: (existing) => {
+                                    if (existing && existing.userDefined) {
+                                        return {
+                                            ...existing,
+                                            userDefined: deleteIncoming(existing.userDefined, incoming, cache),
+                                        };
+                                    }
+                                    return existing;
+                                },
                             },
                         });
                     },

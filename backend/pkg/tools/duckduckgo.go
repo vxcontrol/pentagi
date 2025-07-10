@@ -68,6 +68,7 @@ type duckduckgo struct {
 	flowID     int64
 	taskID     *int64
 	subtaskID  *int64
+	enabled    bool
 	proxyURL   string
 	region     string
 	safeSearch string
@@ -75,13 +76,14 @@ type duckduckgo struct {
 	slp        SearchLogProvider
 }
 
-func NewDuckDuckGoTool(flowID int64, taskID, subtaskID *int64,
+func NewDuckDuckGoTool(flowID int64, taskID, subtaskID *int64, enabled bool,
 	proxyURL, region, safeSearch, timeRange string, slp SearchLogProvider,
 ) Tool {
 	return &duckduckgo{
 		flowID:     flowID,
 		taskID:     taskID,
 		subtaskID:  subtaskID,
+		enabled:    enabled,
 		proxyURL:   proxyURL,
 		region:     region,
 		safeSearch: safeSearch,
@@ -368,5 +370,7 @@ func (d *duckduckgo) createHTTPClient() *http.Client {
 
 // isAvailable checks if the DuckDuckGo search client is properly configured
 func (d *duckduckgo) IsAvailable() bool {
-	return true // DuckDuckGo doesn't require API keys
+	// DuckDuckGo is a free search engine that doesn't require API keys or additional configuration.
+	// We only need to check if it's enabled in the settings according to the user config.
+	return d.enabled
 }

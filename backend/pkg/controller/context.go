@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"unicode/utf8"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/subscriptions"
@@ -59,33 +57,4 @@ func wrapErrorEndSpan(ctx context.Context, span langfuse.Span, msg string, err e
 		langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
 	)
 	return err
-}
-
-func sanitizeUTF8(msg string) string {
-	if msg == "" {
-		return ""
-	}
-
-	var builder strings.Builder
-	builder.Grow(len(msg)) // Pre-allocate for efficiency
-
-	for i := 0; i < len(msg); {
-		// Explicitly skip null bytes
-		if msg[i] == '\x00' {
-			i++
-			continue
-		}
-		// Decode rune and check for errors
-		r, size := utf8.DecodeRuneInString(msg[i:])
-		if r == utf8.RuneError && size == 1 {
-			// Invalid UTF-8 byte, replace with Unicode replacement character
-			builder.WriteRune(utf8.RuneError)
-			i += size
-		} else {
-			builder.WriteRune(r)
-			i += size
-		}
-	}
-
-	return builder.String()
 }

@@ -574,6 +574,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 
 		duckduckgo := &duckduckgo{
 			flowID:   fte.flowID,
+			enabled:  fte.cfg.DuckDuckGoEnabled,
 			proxyURL: fte.cfg.ProxyURL,
 			slp:      fte.slp,
 		}
@@ -1039,6 +1040,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
+		enabled:   fte.cfg.DuckDuckGoEnabled,
 		proxyURL:  fte.cfg.ProxyURL,
 		slp:       fte.slp,
 	}

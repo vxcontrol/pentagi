@@ -1,27 +1,27 @@
 # LLM Agent Testing Report
 
-Generated: Tue, 13 May 2025 21:54:21 UTC
+Generated: Tue, 08 Jul 2025 21:46:13 UTC
 
 ## Overall Results
 
 | Agent | Model | Reasoning | Success Rate | Average Latency |
-|-------|-------|-----------|--------------|----------------|
-| simple | meta-llama/Llama-3.3-70B-Instruct | false | 15/15 (100.00%) | 4.696s |
-| simple_json | google/gemma-3-27b-it | false | 5/5 (100.00%) | 1.763s |
-| agent | deepseek-ai/DeepSeek-R1 | true | 15/15 (100.00%) | 4.901s |
-| assistant | deepseek-ai/DeepSeek-R1 | true | 15/15 (100.00%) | 4.868s |
-| generator | deepseek-ai/DeepSeek-R1 | true | 15/15 (100.00%) | 4.872s |
-| refiner | deepseek-ai/DeepSeek-R1 | true | 15/15 (100.00%) | 4.977s |
-| adviser | deepseek-ai/DeepSeek-R1 | true | 15/15 (100.00%) | 4.744s |
-| reflector | Qwen/Qwen3-30B-A3B | true | 15/15 (100.00%) | 3.675s |
-| searcher | nvidia/Llama-3.1-Nemotron-70B-Instruct | false | 15/15 (100.00%) | 2.511s |
-| enricher | nvidia/Llama-3.1-Nemotron-70B-Instruct | false | 15/15 (100.00%) | 2.233s |
-| coder | deepseek-ai/DeepSeek-R1 | true | 15/15 (100.00%) | 4.178s |
-| installer | nvidia/Llama-3.1-Nemotron-70B-Instruct | false | 15/15 (100.00%) | 1.811s |
-| pentester | deepseek-ai/DeepSeek-R1 | true | 15/15 (100.00%) | 4.078s |
+|-------|-------|-----------|--------------|-----------------|
+| simple | meta-llama/Llama-3.3-70B-Instruct | false | 17/18 (94.44%) | 1.984s |
+| simple_json | google/gemma-3-27b-it | false | 4/4 (100.00%) | 1.838s |
+| primary_agent | deepseek-ai/DeepSeek-R1 | true | 16/18 (88.89%) | 3.506s |
+| assistant | deepseek-ai/DeepSeek-R1 | true | 17/18 (94.44%) | 3.015s |
+| generator | deepseek-ai/DeepSeek-R1 | true | 17/18 (94.44%) | 3.372s |
+| refiner | deepseek-ai/DeepSeek-R1 | true | 18/18 (100.00%) | 4.303s |
+| adviser | deepseek-ai/DeepSeek-R1 | true | 16/18 (88.89%) | 3.191s |
+| reflector | Qwen/Qwen3-30B-A3B | true | 18/18 (100.00%) | 3.080s |
+| searcher | nvidia/Llama-3.1-Nemotron-70B-Instruct | true | 18/18 (100.00%) | 2.613s |
+| enricher | nvidia/Llama-3.1-Nemotron-70B-Instruct | true | 18/18 (100.00%) | 2.619s |
+| coder | deepseek-ai/DeepSeek-R1 | true | 18/18 (100.00%) | 3.716s |
+| installer | nvidia/Llama-3.1-Nemotron-70B-Instruct | true | 18/18 (100.00%) | 2.624s |
+| pentester | deepseek-ai/DeepSeek-R1 | true | 17/18 (94.44%) | 3.345s |
 
-**Total**: 185/185 (100.00%) successful tests
-**Overall average latency**: 3.903s
+**Total**: 212/220 (96.36%) successful tests
+**Overall average latency**: 3.091s
 
 ## Detailed Results
 
@@ -31,86 +31,86 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 2.207s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 5.013s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 3.575s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.537s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 2.434s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.597s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 6.750s |  |
-| Basic echo function | ✅ Pass | 3.060s |  |
-| Streaming Basic echo function | ✅ Pass | 1.836s |  |
+| Simple Math | ✅ Pass | 1.537s |  |
+| Text Transform Uppercase | ✅ Pass | 1.095s |  |
+| Count from 1 to 5 | ✅ Pass | 0.566s |  |
+| Math Calculation | ✅ Pass | 0.509s |  |
+| Basic Echo Function | ✅ Pass | 1.260s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.399s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.553s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 1.812s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 1.377s |  |
-| Streaming JSON response function | ✅ Pass | 1.108s |  |
-| Search query | ✅ Pass | 5.002s |  |
-| Streaming Search query | ✅ Pass | 2.077s |  |
-| Ask advice | ✅ Pass | 7.682s |  |
-| Streaming Ask advice | ✅ Pass | 18.191s |  |
+| JSON Response Function | ✅ Pass | 1.731s |  |
+| Search Query Function | ❌ Fail | 0.802s | expected 1 tool calls, got 0 |
+| Ask Advice Function | ✅ Pass | 0.987s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 0.751s |  |
+| Penetration Testing Methodology | ✅ Pass | 2.949s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 5.987s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.356s |  |
+| Penetration Testing Framework | ✅ Pass | 7.939s |  |
+| Web Application Security Scanner | ✅ Pass | 5.569s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 0.907s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 17/18 (94.44%) successful tests
 
-**Average latency**: 4.696s
+**Average latency**: 1.984s
 
 ---
 
 ### simple_json (google/gemma-3-27b-it)
 
-#### Basic Tests
-
-| Test | Result | Latency | Error |
-|------|--------|---------|-------|
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 1.839s |  |
-| SimpleJSON: Create a JSON object with f... | ✅ Pass | 0.984s |  |
-| SimpleJSON: Generate a JSON response fo... | ✅ Pass | 1.126s |  |
-| SimpleJSON: Create a JSON array of 3 co... | ✅ Pass | 3.517s |  |
-
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| SimpleJSON: What is 2+2? Explain your a... | ✅ Pass | 1.350s |  |
+| Person Information JSON | ✅ Pass | 1.913s |  |
+| Project Information JSON | ✅ Pass | 1.887s |  |
+| Streaming Person Information JSON Streaming | ✅ Pass | 1.344s |  |
+| User Profile JSON | ✅ Pass | 2.204s |  |
 
-**Summary**: 5/5 (100.00%) successful tests
+**Summary**: 4/4 (100.00%) successful tests
 
-**Average latency**: 1.763s
+**Average latency**: 1.838s
 
 ---
 
-### agent (deepseek-ai/DeepSeek-R1)
+### primary_agent (deepseek-ai/DeepSeek-R1)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 3.883s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.278s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.285s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.711s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.149s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.573s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 6.691s |  |
-| Basic echo function | ✅ Pass | 3.564s |  |
-| Streaming Basic echo function | ✅ Pass | 5.810s |  |
+| Simple Math | ✅ Pass | 3.576s |  |
+| Text Transform Uppercase | ✅ Pass | 4.421s |  |
+| Count from 1 to 5 | ✅ Pass | 2.009s |  |
+| Math Calculation | ✅ Pass | 2.028s |  |
+| Basic Echo Function | ✅ Pass | 2.377s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 3.646s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 2.857s |  |
+| Streaming Basic Echo Function Streaming | ❌ Fail | 2.840s | expected 1 tool calls, got 0 |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 3.886s |  |
-| Streaming JSON response function | ✅ Pass | 4.291s |  |
-| Search query | ✅ Pass | 2.969s |  |
-| Streaming Search query | ✅ Pass | 3.069s |  |
-| Ask advice | ✅ Pass | 10.211s |  |
-| Streaming Ask advice | ✅ Pass | 8.149s |  |
+| JSON Response Function | ✅ Pass | 2.971s |  |
+| Search Query Function | ✅ Pass | 1.726s |  |
+| Ask Advice Function | ✅ Pass | 2.033s |  |
+| Streaming Search Query Function Streaming | ❌ Fail | 1.582s | expected 1 tool calls, got 0 |
+| Penetration Testing Methodology | ✅ Pass | 6.335s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 3.759s |  |
+| SQL Injection Attack Type | ✅ Pass | 3.200s |  |
+| Penetration Testing Framework | ✅ Pass | 8.376s |  |
+| Web Application Security Scanner | ✅ Pass | 7.544s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.809s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 16/18 (88.89%) successful tests
 
-**Average latency**: 4.901s
+**Average latency**: 3.506s
 
 ---
 
@@ -120,30 +120,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 6.733s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.284s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 6.380s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 3.986s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.801s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.331s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 7.797s |  |
-| Basic echo function | ✅ Pass | 3.554s |  |
-| Streaming Basic echo function | ✅ Pass | 2.941s |  |
+| Simple Math | ✅ Pass | 2.902s |  |
+| Text Transform Uppercase | ✅ Pass | 2.764s |  |
+| Count from 1 to 5 | ✅ Pass | 1.921s |  |
+| Math Calculation | ✅ Pass | 2.872s |  |
+| Basic Echo Function | ✅ Pass | 1.809s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 2.893s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.752s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 2.430s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 3.572s |  |
-| Streaming JSON response function | ✅ Pass | 3.306s |  |
-| Search query | ✅ Pass | 5.595s |  |
-| Streaming Search query | ✅ Pass | 2.817s |  |
-| Ask advice | ✅ Pass | 8.059s |  |
-| Streaming Ask advice | ✅ Pass | 5.858s |  |
+| JSON Response Function | ✅ Pass | 2.031s |  |
+| Search Query Function | ✅ Pass | 2.032s |  |
+| Ask Advice Function | ✅ Pass | 2.786s |  |
+| Streaming Search Query Function Streaming | ❌ Fail | 1.386s | expected 1 tool calls, got 0 |
+| Penetration Testing Methodology | ✅ Pass | 3.237s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 5.549s |  |
+| SQL Injection Attack Type | ✅ Pass | 2.777s |  |
+| Penetration Testing Framework | ✅ Pass | 6.083s |  |
+| Web Application Security Scanner | ✅ Pass | 6.856s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 2.182s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 17/18 (94.44%) successful tests
 
-**Average latency**: 4.868s
+**Average latency**: 3.015s
 
 ---
 
@@ -153,30 +156,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 7.603s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.531s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 6.492s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.127s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.103s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.210s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 6.567s |  |
-| Basic echo function | ✅ Pass | 3.267s |  |
-| Streaming Basic echo function | ✅ Pass | 3.036s |  |
+| Simple Math | ✅ Pass | 2.655s |  |
+| Text Transform Uppercase | ✅ Pass | 3.238s |  |
+| Count from 1 to 5 | ✅ Pass | 1.859s |  |
+| Math Calculation | ✅ Pass | 1.436s |  |
+| Basic Echo Function | ✅ Pass | 2.039s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 5.765s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 3.196s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 2.493s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 3.321s |  |
-| Streaming JSON response function | ✅ Pass | 3.334s |  |
-| Search query | ✅ Pass | 4.450s |  |
-| Streaming Search query | ✅ Pass | 2.882s |  |
-| Ask advice | ✅ Pass | 7.805s |  |
-| Streaming Ask advice | ✅ Pass | 8.349s |  |
+| JSON Response Function | ✅ Pass | 2.574s |  |
+| Search Query Function | ✅ Pass | 1.847s |  |
+| Ask Advice Function | ✅ Pass | 3.135s |  |
+| Streaming Search Query Function Streaming | ❌ Fail | 2.009s | expected 1 tool calls, got 0 |
+| Penetration Testing Methodology | ✅ Pass | 5.507s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 2.552s |  |
+| SQL Injection Attack Type | ✅ Pass | 2.672s |  |
+| Penetration Testing Framework | ✅ Pass | 6.392s |  |
+| Web Application Security Scanner | ✅ Pass | 9.372s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.943s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 17/18 (94.44%) successful tests
 
-**Average latency**: 4.872s
+**Average latency**: 3.372s
 
 ---
 
@@ -186,30 +192,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 7.581s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 3.761s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 5.617s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 4.287s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 5.103s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.742s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 7.255s |  |
-| Basic echo function | ✅ Pass | 2.937s |  |
-| Streaming Basic echo function | ✅ Pass | 3.324s |  |
+| Simple Math | ✅ Pass | 3.096s |  |
+| Text Transform Uppercase | ✅ Pass | 3.034s |  |
+| Count from 1 to 5 | ✅ Pass | 1.584s |  |
+| Math Calculation | ✅ Pass | 1.627s |  |
+| Basic Echo Function | ✅ Pass | 2.291s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 5.252s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.637s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 2.637s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 2.972s |  |
-| Streaming JSON response function | ✅ Pass | 3.933s |  |
-| Search query | ✅ Pass | 5.614s |  |
-| Streaming Search query | ✅ Pass | 3.374s |  |
-| Ask advice | ✅ Pass | 6.770s |  |
-| Streaming Ask advice | ✅ Pass | 8.382s |  |
+| JSON Response Function | ✅ Pass | 2.460s |  |
+| Search Query Function | ✅ Pass | 1.384s |  |
+| Ask Advice Function | ✅ Pass | 1.922s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 2.158s |  |
+| Penetration Testing Methodology | ✅ Pass | 5.764s |  |
+| SQL Injection Attack Type | ✅ Pass | 2.280s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 23.794s |  |
+| Penetration Testing Framework | ✅ Pass | 7.377s |  |
+| Web Application Security Scanner | ✅ Pass | 6.562s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 2.591s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 18/18 (100.00%) successful tests
 
-**Average latency**: 4.977s
+**Average latency**: 4.303s
 
 ---
 
@@ -219,30 +228,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 5.734s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 4.725s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.260s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 5.191s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.869s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.379s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 6.916s |  |
-| Basic echo function | ✅ Pass | 2.861s |  |
-| Streaming Basic echo function | ✅ Pass | 3.083s |  |
+| Simple Math | ✅ Pass | 3.797s |  |
+| Text Transform Uppercase | ✅ Pass | 2.702s |  |
+| Count from 1 to 5 | ✅ Pass | 3.163s |  |
+| Math Calculation | ✅ Pass | 1.739s |  |
+| Basic Echo Function | ✅ Pass | 3.568s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 1.843s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.637s |  |
+| Streaming Basic Echo Function Streaming | ❌ Fail | 2.580s | expected 1 tool calls, got 0 |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 3.709s |  |
-| Streaming JSON response function | ✅ Pass | 3.079s |  |
-| Search query | ✅ Pass | 3.190s |  |
-| Streaming Search query | ✅ Pass | 3.992s |  |
-| Ask advice | ✅ Pass | 10.170s |  |
-| Streaming Ask advice | ✅ Pass | 7.000s |  |
+| JSON Response Function | ✅ Pass | 1.616s |  |
+| Search Query Function | ✅ Pass | 1.346s |  |
+| Ask Advice Function | ✅ Pass | 2.110s |  |
+| Streaming Search Query Function Streaming | ❌ Fail | 1.395s | expected 1 tool calls, got 0 |
+| Penetration Testing Methodology | ✅ Pass | 6.210s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 4.656s |  |
+| SQL Injection Attack Type | ✅ Pass | 2.503s |  |
+| Penetration Testing Framework | ✅ Pass | 8.110s |  |
+| Web Application Security Scanner | ✅ Pass | 5.684s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 2.766s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 16/18 (88.89%) successful tests
 
-**Average latency**: 4.744s
+**Average latency**: 3.191s
 
 ---
 
@@ -252,30 +264,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 3.270s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 3.078s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 4.575s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 2.610s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.475s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 2.482s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.734s |  |
-| Basic echo function | ✅ Pass | 2.405s |  |
-| Streaming Basic echo function | ✅ Pass | 2.338s |  |
+| Simple Math | ✅ Pass | 1.833s |  |
+| Text Transform Uppercase | ✅ Pass | 2.917s |  |
+| Count from 1 to 5 | ✅ Pass | 1.889s |  |
+| Math Calculation | ✅ Pass | 3.159s |  |
+| Basic Echo Function | ✅ Pass | 1.932s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 3.749s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 2.059s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 2.516s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 3.804s |  |
-| Streaming JSON response function | ✅ Pass | 2.940s |  |
-| Search query | ✅ Pass | 3.291s |  |
-| Streaming Search query | ✅ Pass | 1.801s |  |
-| Ask advice | ✅ Pass | 9.303s |  |
-| Streaming Ask advice | ✅ Pass | 5.021s |  |
+| JSON Response Function | ✅ Pass | 2.239s |  |
+| Search Query Function | ✅ Pass | 1.487s |  |
+| Ask Advice Function | ✅ Pass | 2.403s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 2.301s |  |
+| Penetration Testing Methodology | ✅ Pass | 4.432s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 5.417s |  |
+| SQL Injection Attack Type | ✅ Pass | 4.523s |  |
+| Penetration Testing Framework | ✅ Pass | 6.187s |  |
+| Web Application Security Scanner | ✅ Pass | 4.314s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 2.069s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 18/18 (100.00%) successful tests
 
-**Average latency**: 3.675s
+**Average latency**: 3.080s
 
 ---
 
@@ -285,30 +300,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 0.978s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 0.351s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 0.570s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 0.569s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 0.957s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 0.308s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 1.699s |  |
-| Basic echo function | ✅ Pass | 0.892s |  |
-| Streaming Basic echo function | ✅ Pass | 0.648s |  |
+| Simple Math | ✅ Pass | 0.360s |  |
+| Text Transform Uppercase | ✅ Pass | 0.418s |  |
+| Count from 1 to 5 | ✅ Pass | 0.578s |  |
+| Math Calculation | ✅ Pass | 0.782s |  |
+| Basic Echo Function | ✅ Pass | 0.826s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.381s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.709s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 1.576s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 1.481s |  |
-| Streaming JSON response function | ✅ Pass | 0.708s |  |
-| Search query | ✅ Pass | 1.284s |  |
-| Streaming Search query | ✅ Pass | 0.627s |  |
-| Ask advice | ✅ Pass | 12.329s |  |
-| Streaming Ask advice | ✅ Pass | 14.270s |  |
+| JSON Response Function | ✅ Pass | 0.848s |  |
+| Search Query Function | ✅ Pass | 1.086s |  |
+| Ask Advice Function | ✅ Pass | 1.055s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 1.509s |  |
+| Penetration Testing Methodology | ✅ Pass | 4.621s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 9.218s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.873s |  |
+| Penetration Testing Framework | ✅ Pass | 13.449s |  |
+| Web Application Security Scanner | ✅ Pass | 6.639s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.093s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 18/18 (100.00%) successful tests
 
-**Average latency**: 2.511s
+**Average latency**: 2.613s
 
 ---
 
@@ -318,30 +336,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 1.061s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 0.341s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 0.540s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 0.534s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 1.048s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 0.309s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 1.605s |  |
-| Basic echo function | ✅ Pass | 0.803s |  |
-| Streaming Basic echo function | ✅ Pass | 2.939s |  |
+| Simple Math | ✅ Pass | 0.470s |  |
+| Text Transform Uppercase | ✅ Pass | 0.473s |  |
+| Count from 1 to 5 | ✅ Pass | 0.574s |  |
+| Math Calculation | ✅ Pass | 0.568s |  |
+| Basic Echo Function | ✅ Pass | 0.983s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.364s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.337s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 1.556s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 0.923s |  |
-| Streaming JSON response function | ✅ Pass | 0.780s |  |
-| Search query | ✅ Pass | 0.637s |  |
-| Streaming Search query | ✅ Pass | 0.631s |  |
-| Ask advice | ✅ Pass | 14.236s |  |
-| Streaming Ask advice | ✅ Pass | 7.110s |  |
+| JSON Response Function | ✅ Pass | 0.855s |  |
+| Search Query Function | ✅ Pass | 0.738s |  |
+| Ask Advice Function | ✅ Pass | 1.027s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 1.509s |  |
+| Penetration Testing Methodology | ✅ Pass | 4.041s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 9.011s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.842s |  |
+| Penetration Testing Framework | ✅ Pass | 11.730s |  |
+| Web Application Security Scanner | ✅ Pass | 10.032s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.031s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 18/18 (100.00%) successful tests
 
-**Average latency**: 2.233s
+**Average latency**: 2.619s
 
 ---
 
@@ -351,30 +372,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 3.221s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 3.597s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 2.668s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 3.561s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 4.838s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.446s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 5.576s |  |
-| Basic echo function | ✅ Pass | 4.222s |  |
-| Streaming Basic echo function | ✅ Pass | 3.081s |  |
+| Simple Math | ✅ Pass | 2.289s |  |
+| Text Transform Uppercase | ✅ Pass | 1.708s |  |
+| Count from 1 to 5 | ✅ Pass | 1.788s |  |
+| Math Calculation | ✅ Pass | 2.868s |  |
+| Basic Echo Function | ✅ Pass | 2.020s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 1.605s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 2.512s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 2.629s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 3.393s |  |
-| Streaming JSON response function | ✅ Pass | 2.919s |  |
-| Search query | ✅ Pass | 3.856s |  |
-| Streaming Search query | ✅ Pass | 2.591s |  |
-| Ask advice | ✅ Pass | 6.366s |  |
-| Streaming Ask advice | ✅ Pass | 9.330s |  |
+| JSON Response Function | ✅ Pass | 1.660s |  |
+| Search Query Function | ✅ Pass | 1.372s |  |
+| Ask Advice Function | ✅ Pass | 1.601s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 2.093s |  |
+| Penetration Testing Methodology | ✅ Pass | 12.039s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 5.128s |  |
+| SQL Injection Attack Type | ✅ Pass | 3.023s |  |
+| Penetration Testing Framework | ✅ Pass | 11.055s |  |
+| Web Application Security Scanner | ✅ Pass | 9.859s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.627s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 18/18 (100.00%) successful tests
 
-**Average latency**: 4.178s
+**Average latency**: 3.716s
 
 ---
 
@@ -384,30 +408,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 1.051s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 0.336s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 0.570s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 0.531s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 0.966s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 0.314s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 1.580s |  |
-| Basic echo function | ✅ Pass | 0.662s |  |
-| Streaming Basic echo function | ✅ Pass | 1.289s |  |
+| Simple Math | ✅ Pass | 0.361s |  |
+| Text Transform Uppercase | ✅ Pass | 0.921s |  |
+| Count from 1 to 5 | ✅ Pass | 0.938s |  |
+| Math Calculation | ✅ Pass | 0.476s |  |
+| Basic Echo Function | ✅ Pass | 1.121s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.384s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.355s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 1.518s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 2.003s |  |
-| Streaming JSON response function | ✅ Pass | 0.980s |  |
-| Search query | ✅ Pass | 0.656s |  |
-| Streaming Search query | ✅ Pass | 0.665s |  |
-| Ask advice | ✅ Pass | 9.815s |  |
-| Streaming Ask advice | ✅ Pass | 5.741s |  |
+| JSON Response Function | ✅ Pass | 1.138s |  |
+| Search Query Function | ✅ Pass | 1.120s |  |
+| Ask Advice Function | ✅ Pass | 1.293s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 1.477s |  |
+| Penetration Testing Methodology | ✅ Pass | 4.959s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 8.399s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.823s |  |
+| Penetration Testing Framework | ✅ Pass | 13.583s |  |
+| Web Application Security Scanner | ✅ Pass | 6.359s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.004s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 18/18 (100.00%) successful tests
 
-**Average latency**: 1.811s
+**Average latency**: 2.624s
 
 ---
 
@@ -417,30 +444,33 @@ Generated: Tue, 13 May 2025 21:54:21 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Completion: What is 2+2? Write only the... | ✅ Pass | 4.737s |  |
-| Completion: Write 'Hello World' in uppe... | ✅ Pass | 3.109s |  |
-| System-User: Count from 1 to 5, separate... | ✅ Pass | 3.939s |  |
-| Streaming System-User: Count from 1 to 5, separate... | ✅ Pass | 3.602s |  |
-| System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.938s |  |
-| Streaming System-User: Calculate 5 * 10 and provid... | ✅ Pass | 3.850s |  |
-| SimpleJSON: Return a JSON with a person... | ✅ Pass | 4.396s |  |
-| Basic echo function | ✅ Pass | 2.951s |  |
-| Streaming Basic echo function | ✅ Pass | 3.104s |  |
+| Simple Math | ✅ Pass | 3.021s |  |
+| Text Transform Uppercase | ✅ Pass | 3.398s |  |
+| Count from 1 to 5 | ✅ Pass | 2.324s |  |
+| Math Calculation | ✅ Pass | 2.707s |  |
+| Basic Echo Function | ✅ Pass | 1.407s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 3.113s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 3.046s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 2.410s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON response function | ✅ Pass | 3.728s |  |
-| Streaming JSON response function | ✅ Pass | 2.776s |  |
-| Search query | ✅ Pass | 3.291s |  |
-| Streaming Search query | ✅ Pass | 2.951s |  |
-| Ask advice | ✅ Pass | 7.132s |  |
-| Streaming Ask advice | ✅ Pass | 7.671s |  |
+| JSON Response Function | ✅ Pass | 1.636s |  |
+| Search Query Function | ✅ Pass | 2.407s |  |
+| Ask Advice Function | ✅ Pass | 1.769s |  |
+| Streaming Search Query Function Streaming | ❌ Fail | 2.229s | expected 1 tool calls, got 0 |
+| Penetration Testing Methodology | ✅ Pass | 5.018s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 3.909s |  |
+| SQL Injection Attack Type | ✅ Pass | 4.176s |  |
+| Penetration Testing Framework | ✅ Pass | 10.707s |  |
+| Web Application Security Scanner | ✅ Pass | 5.503s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.412s |  |
 
-**Summary**: 15/15 (100.00%) successful tests
+**Summary**: 17/18 (94.44%) successful tests
 
-**Average latency**: 4.078s
+**Average latency**: 3.345s
 
 ---
 

@@ -3,6 +3,14 @@
 <div align="center" style="font-size: 1.5em; margin: 20px 0;">
     <strong>P</strong>enetration testing <strong>A</strong>rtificial <strong>G</strong>eneral <strong>I</strong>ntelligence
 </div>
+<br>
+<div align="center">
+
+> 🚀 **Join the Community!** Connect with security researchers, AI enthusiasts, and fellow ethical hackers. Get support, share insights, and stay updated with the latest PentAGI developments.
+
+[![Discord](https://img.shields.io/badge/Discord-7289DA?logo=discord&logoColor=white)](https://discord.gg/2xrMh7qX6m)⠀[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?logo=telegram&logoColor=white)](https://t.me/+Ka9i6CNwe71hMWQy)
+
+</div>
 
 ## 📖 Table of Contents
 
@@ -474,6 +482,7 @@ OPEN_AI_KEY=your_openai_key
 ANTHROPIC_API_KEY=your_anthropic_key
 
 # Optional: Additional search capabilities
+DUCKDUCKGO_ENABLED=true
 GOOGLE_API_KEY=your_google_key
 GOOGLE_CX_KEY=your_google_cx
 TAVILY_API_KEY=your_tavily_key
@@ -667,6 +676,34 @@ For using GitHub OAuth you need to create a new OAuth application in your GitHub
 
 For using Google OAuth you need to create a new OAuth application in your Google account and set the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` file.
 
+### Docker Image Configuration
+
+PentAGI allows you to configure Docker image selection for executing various tasks. The system automatically chooses the most appropriate image based on the task type, but you can constrain this selection by specifying your preferred images:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DOCKER_DEFAULT_IMAGE` | `debian:latest` | Default Docker image for general tasks and ambiguous cases |
+| `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for security/penetration testing tasks |
+
+When these environment variables are set, AI agents will be limited to the image choices you specify. This is particularly useful for:
+
+- **Security Enforcement**: Restricting usage to only verified and trusted images
+- **Environment Standardization**: Using corporate or customized images across all operations
+- **Performance Optimization**: Utilizing pre-built images with necessary tools already installed
+
+Configuration examples:
+
+```bash
+# Using a custom image for general tasks
+DOCKER_DEFAULT_IMAGE=mycompany/custom-debian:latest
+
+# Using a specialized image for penetration testing
+DOCKER_DEFAULT_IMAGE_FOR_PENTEST=mycompany/pentest-tools:v2.0
+```
+
+> [!NOTE]
+> If a user explicitly specifies a particular Docker image in their task, the system will try to use that exact image, ignoring these settings. These variables only affect the system's automatic image selection process.
+
 ## 💻 Development
 
 ### Development Requirements
@@ -792,9 +829,10 @@ The utility features parallel testing of multiple agents, detailed reporting, an
 ### Key Features
 
 - **Parallel Testing**: Tests multiple agents simultaneously for faster results
-- **Comprehensive Test Suite**: Evaluates basic completion, JSON responses, function calling, and more
+- **Comprehensive Test Suite**: Evaluates basic completion, JSON responses, function calling, and penetration testing knowledge
 - **Detailed Reporting**: Generates markdown reports with success rates and performance metrics
 - **Flexible Configuration**: Test specific agents or test groups as needed
+- **Specialized Test Groups**: Includes domain-specific tests for cybersecurity and penetration testing scenarios
 
 ### Usage Scenarios
 
@@ -814,10 +852,10 @@ go run cmd/ctester/*.go -config ../examples/configs/openrouter.provider.yml -ver
 go run cmd/ctester/*.go -config ../examples/configs/deepinfra.provider.yml -report ../test-report.md
 
 # Test specific agent types only 
-go run cmd/ctester/*.go -agents simple,simple_json,agent -verbose
+go run cmd/ctester/*.go -agents simple,simple_json,primary_agent -verbose
 
 # Test specific test groups only
-go run cmd/ctester/*.go -tests "Simple Completion,System User Prompts" -verbose
+go run cmd/ctester/*.go -groups basic,advanced -verbose
 ```
 
 #### For Users (using Docker image)
@@ -832,7 +870,7 @@ docker run --rm -v $(pwd)/.env:/opt/pentagi/.env vxcontrol/pentagi /opt/pentagi/
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   -v $(pwd)/my-config.yml:/opt/pentagi/config.yml \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/config.yml -verbose
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/config.yml -agents simple,primary_agent,coder -verbose
 
 # Generate a detailed report
 docker run --rm \
@@ -860,17 +898,50 @@ docker run --rm \
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepseek.provider.yml
+
+# Test with Custom OpenAI configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
 ```
 
 To use these configurations, your `.env` file only needs to contain:
 
 ```
-LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.deepseek.com
+LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.deepseek.com or https://api.openai.com/v1
 LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
-LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml
-LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format (default: false)
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml
+LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
 ```
+
+#### Using OpenAI with Unverified Organizations
+
+For OpenAI accounts with unverified organizations that don't have access to the latest reasoning models (o1, o3, o4-mini), you need to use a custom configuration.
+
+To use OpenAI with unverified organization accounts, configure your `.env` file as follows:
+
+```bash
+LLM_SERVER_URL=https://api.openai.com/v1
+LLM_SERVER_KEY=your_openai_api_key
+LLM_SERVER_MODEL=                                # Leave empty, models are specified in config
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/custom-openai.provider.yml
+LLM_SERVER_LEGACY_REASONING=true                 # Required for OpenAI reasoning format
+```
+
+This configuration uses the pre-built `custom-openai.provider.yml` file that maps all agent types to models available for unverified organizations, using `o3-mini` instead of models like `o1`, `o3`, and `o4-mini`.
+
+You can test this configuration using:
+
+```bash
+# Test with custom OpenAI configuration for unverified accounts
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
+```
+
+> [!NOTE]
+> The `LLM_SERVER_LEGACY_REASONING=true` setting is crucial for OpenAI compatibility as it ensures reasoning parameters are sent in the format expected by OpenAI's API.
 
 #### Running Tests in a Production Environment
 
@@ -879,6 +950,9 @@ If you already have a running PentAGI container and want to test the current con
 ```bash
 # Run ctester in an existing container using current environment variables
 docker exec -it pentagi /opt/pentagi/bin/ctester -verbose
+
+# Test specific agent types with deterministic ordering
+docker exec -it pentagi /opt/pentagi/bin/ctester -agents simple,primary_agent,pentester -groups basic,knowledge -verbose
 
 # Generate a report file inside the container
 docker exec -it pentagi /opt/pentagi/bin/ctester -report /opt/pentagi/data/agent-test-report.md
@@ -892,11 +966,40 @@ docker cp pentagi:/opt/pentagi/data/agent-test-report.md ./
 The utility accepts several options:
 
 - `-env <path>` - Path to environment file (default: `.env`)
+- `-type <provider>` - Provider type: `custom`, `openai`, `anthropic`, `bedrock`, `ollama`, `gemini` (default: `custom`)
 - `-config <path>` - Path to custom provider config (default: from `LLM_SERVER_CONFIG_PATH` env variable)
+- `-tests <path>` - Path to custom tests YAML file (optional)
 - `-report <path>` - Path to write the report file (optional)
 - `-agents <list>` - Comma-separated list of agent types to test (default: `all`)
-- `-tests <list>` - Comma-separated list of test groups to run (default: `all`)
+- `-groups <list>` - Comma-separated list of test groups to run (default: `all`)
 - `-verbose` - Enable verbose output with detailed test results for each agent
+
+### Available Agent Types
+
+Agents are tested in the following deterministic order:
+
+1. **simple** - Basic completion tasks
+2. **simple_json** - JSON-structured responses
+3. **primary_agent** - Main reasoning agent
+4. **assistant** - Interactive assistant mode
+5. **generator** - Content generation
+6. **refiner** - Content refinement and improvement
+7. **adviser** - Expert advice and consultation
+8. **reflector** - Self-reflection and analysis
+9. **searcher** - Information gathering and search
+10. **enricher** - Data enrichment and expansion
+11. **coder** - Code generation and analysis
+12. **installer** - Installation and setup tasks
+13. **pentester** - Penetration testing and security assessment
+
+### Available Test Groups
+
+- **basic** - Fundamental completion and prompt response tests
+- **advanced** - Complex reasoning and function calling tests  
+- **json** - JSON format validation and structure tests (specifically designed for `simple_json` agent)
+- **knowledge** - Domain-specific cybersecurity and penetration testing knowledge tests
+
+> **Note**: The `json` test group is specifically designed for the `simple_json` agent type, while all other agents are tested with `basic`, `advanced`, and `knowledge` groups. This specialization ensures optimal testing coverage for each agent's intended purpose.
 
 ### Example Provider Configuration
 
@@ -923,10 +1026,13 @@ simple_json:
 
 ### Optimization Workflow
 
-1. **Create a baseline**: Run tests with default configuration
-2. **Experiment**: Try different models for each agent type
-3. **Compare results**: Look for the best success rate and performance
-4. **Deploy optimal configuration**: Use in production with your optimized setup
+1. **Create a baseline**: Run tests with default configuration to establish benchmark performance
+2. **Analyze agent-specific performance**: Review the deterministic agent ordering to identify underperforming agents
+3. **Test specialized configurations**: Experiment with different models for each agent type using provider-specific configs
+4. **Focus on domain knowledge**: Pay special attention to knowledge group tests for cybersecurity expertise
+5. **Validate function calling**: Ensure tool-based tests pass consistently for critical agent types
+6. **Compare results**: Look for the best success rate and performance across all test groups
+7. **Deploy optimal configuration**: Use in production with your optimized setup
 
 This tool helps ensure your AI agents are using the most effective models for their specific tasks, improving reliability while optimizing costs.
 

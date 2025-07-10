@@ -5,6 +5,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import type { Provider } from '@/models/Provider';
 
 import ChatAgents from './ChatAgents';
 import ChatAssistantMessages from './ChatAssistantMessages';
@@ -33,8 +34,8 @@ interface ChatTabsProps {
     assistants: AssistantFragmentFragment[];
     assistantLogs?: AssistantLogFragmentFragment[];
     selectedAssistantId?: string | null;
-    selectedProvider: string;
-    providers: string[];
+    selectedProvider: Provider | null;
+    providers: Provider[];
     onSelectAssistant?: (assistantId: string | null) => void;
     onCreateAssistant?: () => void;
     onDeleteAssistant?: (assistantId: string) => void;

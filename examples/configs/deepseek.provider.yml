@@ -19,7 +19,7 @@ simple_json:
     input: 0.27
     output: 1.1
 
-agent:
+primary_agent:
   model: "deepseek-chat"
   temperature: 0.7
   top_p: 0.95

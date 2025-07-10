@@ -3641,10 +3641,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "string"
-                                            }
+                                            "$ref": "#/definitions/models.ProviderInfo"
                                         }
                                     }
                                 }
@@ -4857,7 +4854,7 @@
             "properties": {
                 "extensions": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "headers": {
                     "$ref": "#/definitions/http.Header"
@@ -4870,7 +4867,7 @@
                 },
                 "variables": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 }
             }
         },
@@ -4891,7 +4888,7 @@
                 },
                 "extensions": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "hasNext": {
                     "type": "boolean"
@@ -4958,7 +4955,8 @@
             "required": [
                 "language",
                 "model",
-                "model_provider",
+                "model_provider_name",
+                "model_provider_type",
                 "status",
                 "title"
             ],
@@ -4988,9 +4986,12 @@
                     "type": "string",
                     "maxLength": 70
                 },
-                "model_provider": {
+                "model_provider_name": {
                     "type": "string",
                     "maxLength": 70
+                },
+                "model_provider_type": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -5008,7 +5009,8 @@
             "required": [
                 "language",
                 "model",
-                "model_provider",
+                "model_provider_name",
+                "model_provider_type",
                 "status",
                 "title"
             ],
@@ -5041,9 +5043,12 @@
                     "type": "string",
                     "maxLength": 70
                 },
-                "model_provider": {
+                "model_provider_name": {
                     "type": "string",
                     "maxLength": 70
+                },
+                "model_provider_type": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -5213,7 +5218,8 @@
             "required": [
                 "language",
                 "model",
-                "model_provider",
+                "model_provider_name",
+                "model_provider_type",
                 "status",
                 "title"
             ],
@@ -5239,9 +5245,12 @@
                     "type": "string",
                     "maxLength": 70
                 },
-                "model_provider": {
+                "model_provider_name": {
                     "type": "string",
                     "maxLength": 70
+                },
+                "model_provider_type": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -5263,7 +5272,8 @@
             "required": [
                 "language",
                 "model",
-                "model_provider",
+                "model_provider_name",
+                "model_provider_type",
                 "status",
                 "tasks",
                 "title"
@@ -5290,9 +5300,12 @@
                     "type": "string",
                     "maxLength": 70
                 },
-                "model_provider": {
+                "model_provider_name": {
                     "type": "string",
                     "maxLength": 70
+                },
+                "model_provider_type": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -5479,6 +5492,9 @@
                 "type"
             ],
             "properties": {
+                "created_at": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer",
                     "minimum": 0
@@ -5487,6 +5503,9 @@
                     "type": "string"
                 },
                 "type": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "user_id": {
@@ -5534,6 +5553,23 @@
                     "enum": [
                         "automation"
                     ]
+                }
+            }
+        },
+        "models.ProviderInfo": {
+            "type": "object",
+            "required": [
+                "name",
+                "type"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "my openai provider"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "openai"
                 }
             }
         },

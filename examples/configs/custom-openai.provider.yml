@@ -1,0 +1,130 @@
+simple:
+  model: "gpt-4.1-mini"
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 3000
+  price:
+    input: 0.4
+    output: 1.6
+
+simple_json:
+  model: "gpt-4.1-mini"
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 3000
+  json: true
+  price:
+    input: 0.4
+    output: 1.6
+
+primary_agent:
+  model: "o3-mini" # o4-mini
+  n: 1
+  max_tokens: 4000
+  reasoning:
+    effort: low
+  price:
+    input: 1.1
+    output: 4.4
+
+assistant:
+  model: "o3-mini" # o4-mini
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.1
+    output: 4.4
+
+generator:
+  model: "o3-mini" # o3
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: medium
+  price:
+    input: 1.1
+    output: 4.4
+
+refiner:
+  model: "gpt-4.1"
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 2.0
+    output: 8.0
+
+adviser:
+  model: "o3-mini" # o4-mini
+  n: 1
+  max_tokens: 4000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.1
+    output: 4.4
+
+reflector:
+  model: "o3-mini" # o4-mini
+  n: 1
+  max_tokens: 3000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.1
+    output: 4.4
+
+searcher:
+  model: "gpt-4.1-mini"
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.4
+    output: 1.6
+
+enricher:
+  model: "gpt-4.1-mini"
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.4
+    output: 1.6
+
+coder:
+  model: "gpt-4.1"
+  temperature: 0.2
+  top_p: 0.1
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 2.0
+    output: 8.0
+
+installer:
+  model: "gpt-4.1"
+  temperature: 0.2
+  top_p: 0.1
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 2.0
+    output: 8.0
+
+pentester:
+  model: "o3-mini" # o4-mini
+  n: 1
+  max_tokens: 4000
+  reasoning:
+    effort: low
+  price:
+    input: 1.1
+    output: 4.4

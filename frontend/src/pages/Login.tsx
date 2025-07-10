@@ -21,6 +21,7 @@ const Login = () => {
             try {
                 const info: AuthInfoResponse = await axios.get('/info');
                 if (info?.status === 'success' && info?.data?.providers?.length) {
+                    // OAuth providers are returned as string[] from API
                     setProviders(info.data.providers);
                 }
             } catch {

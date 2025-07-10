@@ -19,7 +19,7 @@ simple_json:
     input: 0.1
     output: 0.2
 
-agent:
+primary_agent:
   model: "deepseek-ai/DeepSeek-R1"
   temperature: 0.7
   top_p: 0.9

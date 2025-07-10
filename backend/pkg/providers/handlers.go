@@ -12,7 +12,7 @@ import (
 	"pentagi/pkg/docker"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
-	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/schema"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -144,7 +144,7 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 			return "", wrapErrorEndSpan(adviserCtx, adviserSpan, "failed to get system adviser template", err)
 		}
 
-		opt := provider.OptionsTypeAdviser
+		opt := pconfig.OptionsTypeAdviser
 		msgChainType := database.MsgchainTypeAdviser
 		advice, err := fp.performSimpleChain(adviserCtx, taskID, subtaskID, opt, msgChainType, systemAdviserTmpl, userAdviserTmpl)
 		if err != nil {
@@ -531,7 +531,7 @@ func (fp *flowProvider) GetMemoristHandler(ctx context.Context, taskID, subtaskI
 		} else if subtaskID != nil {
 			executionDetails += fmt.Sprintf("user no specified subtask, using current subtask '%d'\n", *subtaskID)
 		} else {
-			executionDetails += fmt.Sprintf("user no specified subtask, using all subtasks related to the task\n")
+			executionDetails += "user no specified subtask, using all subtasks related to the task\n"
 		}
 
 		memoristContext := map[string]map[string]any{
@@ -680,6 +680,7 @@ func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtask
 				"MaintenanceToolName":     tools.MaintenanceToolName,
 				"SummarizationToolName":   cast.SummarizationToolName,
 				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+				"IsDefaultDockerImage":    strings.HasPrefix(strings.ToLower(fp.image), pentestDockerImage),
 				"DockerImage":             fp.image,
 				"Cwd":                     docker.WorkFolderPathInContainer,
 				"ContainerPorts":          fp.getContainerPortsDescription(),
@@ -1024,18 +1025,21 @@ func (fp *flowProvider) GetSummarizeResultHandler(taskID, subtaskID *int64) tool
 
 		// TODO: here need to summarize result by chunks in iterations
 		if len(result) > 2*msgSummarizerLimit {
-			result = result[:msgSummarizerLimit] +
-				"\n\n{TRUNCATED}...\n\n" +
-				result[len(result)-msgSummarizerLimit:]
+			result = database.SanitizeUTF8(
+				result[:msgSummarizerLimit] +
+					"\n\n{TRUNCATED}...\n\n" +
+					result[len(result)-msgSummarizerLimit:],
+			)
 		}
 
-		opt := provider.OptionsTypeSimple
+		opt := pconfig.OptionsTypeSimple
 		msgChainType := database.MsgchainTypeSummarizer
 		summary, err := fp.performSimpleChain(ctx, taskID, subtaskID, opt, msgChainType, systemSummarizerTmpl, result)
 		if err != nil {
 			return "", wrapErrorEndSpan(ctx, summarizerSpan, "failed to get summary", err)
 		}
 
+		summary = database.SanitizeUTF8(summary)
 		summarizerSpan.End(
 			langfuse.WithEndSpanStatus("success"),
 			langfuse.WithEndSpanOutput(summary),
@@ -1087,7 +1091,7 @@ func (fp *flowProvider) fixToolCallArgs(
 		return nil, fmt.Errorf("failed to get system tool call fixer template: %w", err)
 	}
 
-	opt := provider.OptionsTypeSimpleJSON
+	opt := pconfig.OptionsTypeSimpleJSON
 	msgChainType := database.MsgchainTypeToolCallFixer
 	toolCallFixerResult, err := fp.performSimpleChain(ctx, nil, nil, opt, msgChainType, systemToolCallFixerTmpl, userToolCallFixerTmpl)
 	if err != nil {

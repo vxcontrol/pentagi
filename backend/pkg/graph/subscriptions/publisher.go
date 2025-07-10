@@ -5,6 +5,7 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/converter"
+	"pentagi/pkg/providers/pconfig"
 )
 
 type flowPublisher struct {
@@ -101,4 +102,16 @@ func (p *flowPublisher) AssistantLogAdded(ctx context.Context, assistantLog data
 
 func (p *flowPublisher) AssistantLogUpdated(ctx context.Context, assistantLog database.Assistantlog, appendPart bool) {
 	p.ctrl.assistantLogUpdated.Publish(ctx, p.flowID, converter.ConvertAssistantLog(assistantLog, appendPart))
+}
+
+func (p *flowPublisher) ProviderCreated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
+	p.ctrl.providerCreated.Publish(ctx, p.userID, converter.ConvertProvider(provider, cfg))
+}
+
+func (p *flowPublisher) ProviderUpdated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
+	p.ctrl.providerUpdated.Publish(ctx, p.userID, converter.ConvertProvider(provider, cfg))
+}
+
+func (p *flowPublisher) ProviderDeleted(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
+	p.ctrl.providerDeleted.Publish(ctx, p.userID, converter.ConvertProvider(provider, cfg))
 }

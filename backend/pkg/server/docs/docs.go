@@ -3649,10 +3649,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "string"
-                                            }
+                                            "$ref": "#/definitions/models.ProviderInfo"
                                         }
                                     }
                                 }
@@ -4865,7 +4862,7 @@ const docTemplate = `{
             "properties": {
                 "extensions": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "headers": {
                     "$ref": "#/definitions/http.Header"
@@ -4878,7 +4875,7 @@ const docTemplate = `{
                 },
                 "variables": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 }
             }
         },
@@ -4899,7 +4896,7 @@ const docTemplate = `{
                 },
                 "extensions": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "hasNext": {
                     "type": "boolean"
@@ -4966,7 +4963,8 @@ const docTemplate = `{
             "required": [
                 "language",
                 "model",
-                "model_provider",
+                "model_provider_name",
+                "model_provider_type",
                 "status",
                 "title"
             ],
@@ -4996,9 +4994,12 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 70
                 },
-                "model_provider": {
+                "model_provider_name": {
                     "type": "string",
                     "maxLength": 70
+                },
+                "model_provider_type": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -5016,7 +5017,8 @@ const docTemplate = `{
             "required": [
                 "language",
                 "model",
-                "model_provider",
+                "model_provider_name",
+                "model_provider_type",
                 "status",
                 "title"
             ],
@@ -5049,9 +5051,12 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 70
                 },
-                "model_provider": {
+                "model_provider_name": {
                     "type": "string",
                     "maxLength": 70
+                },
+                "model_provider_type": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -5221,7 +5226,8 @@ const docTemplate = `{
             "required": [
                 "language",
                 "model",
-                "model_provider",
+                "model_provider_name",
+                "model_provider_type",
                 "status",
                 "title"
             ],
@@ -5247,9 +5253,12 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 70
                 },
-                "model_provider": {
+                "model_provider_name": {
                     "type": "string",
                     "maxLength": 70
+                },
+                "model_provider_type": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -5271,7 +5280,8 @@ const docTemplate = `{
             "required": [
                 "language",
                 "model",
-                "model_provider",
+                "model_provider_name",
+                "model_provider_type",
                 "status",
                 "tasks",
                 "title"
@@ -5298,9 +5308,12 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 70
                 },
-                "model_provider": {
+                "model_provider_name": {
                     "type": "string",
                     "maxLength": 70
+                },
+                "model_provider_type": {
+                    "type": "string"
                 },
                 "status": {
                     "type": "string"
@@ -5487,6 +5500,9 @@ const docTemplate = `{
                 "type"
             ],
             "properties": {
+                "created_at": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer",
                     "minimum": 0
@@ -5495,6 +5511,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "type": {
+                    "type": "string"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "user_id": {
@@ -5542,6 +5561,23 @@ const docTemplate = `{
                     "enum": [
                         "automation"
                     ]
+                }
+            }
+        },
+        "models.ProviderInfo": {
+            "type": "object",
+            "required": [
+                "name",
+                "type"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "my openai provider"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "openai"
                 }
             }
         },
