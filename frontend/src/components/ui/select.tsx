@@ -45,7 +45,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
 
 Select.displayName = 'Select';
 
-// Простые компоненты для совместимости с существующими паттернами
+// Simple components for compatibility with existing patterns
 const SelectTrigger = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
     ({ className, children, ...props }, ref) => (
         <div
@@ -97,14 +97,18 @@ const SelectItem = React.forwardRef<HTMLOptionElement, React.OptionHTMLAttribute
 
 SelectItem.displayName = 'SelectItem';
 
-const SelectValue = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanElement>>(
-    ({ className, children, ...props }, ref) => (
+interface SelectValueProps extends React.HTMLAttributes<HTMLSpanElement> {
+    placeholder?: string;
+}
+
+const SelectValue = React.forwardRef<HTMLSpanElement, SelectValueProps>(
+    ({ className, children, placeholder, ...props }, ref) => (
         <span
             ref={ref}
-            className={cn('block truncate', className)}
+            className={cn('block truncate', placeholder && !children ? 'text-muted-foreground' : '', className)}
             {...props}
         >
-            {children}
+            {children || placeholder}
         </span>
     ),
 );

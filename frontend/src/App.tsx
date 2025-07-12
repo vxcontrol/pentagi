@@ -8,6 +8,7 @@ import PageLoader from '@/components/PageLoader';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PublicRoute from '@/components/PublicRoute';
 import RouteChangeTracker from '@/components/RouteChangeTracker';
+import SettingsLayout from '@/components/SettingsLayout';
 import client from '@/lib/apollo';
 import { isAuthenticated } from '@/lib/auth';
 import { axios } from '@/lib/axios';
@@ -15,7 +16,9 @@ import Chat from '@/pages/Chat';
 import Login from '@/pages/Login';
 import OAuthResult from '@/pages/OAuthResult';
 import Report from '@/pages/Report';
-import Settings from '@/pages/Settings';
+import SettingsPrompts from '@/pages/settings/SettingsPrompts';
+import SettingsProvider from '@/pages/settings/SettingsProvider';
+import SettingsProviders from '@/pages/settings/SettingsProviders';
 import ThemeProvider from '@/providers/ThemeProvider';
 
 import type { AuthInfoResponse } from './models/Info';
@@ -85,27 +88,43 @@ const App = () => {
                                     element={<Chat />}
                                 />
 
+                                {/* Settings with nested routes */}
                                 <Route
                                     path="settings"
-                                    element={<Settings />}
-                                />
-
-                                {/* Model settings routes */}
-                                <Route
-                                    path="settings/models/:providerId"
-                                    element={<Settings />}
-                                />
-
-                                {/* Prompt settings routes */}
-                                <Route
-                                    path="settings/prompts/agents/:agentId"
-                                    element={<Settings />}
-                                />
-
-                                <Route
-                                    path="settings/prompts/tools/:toolId"
-                                    element={<Settings />}
-                                />
+                                    element={<SettingsLayout />}
+                                >
+                                    <Route
+                                        index
+                                        element={
+                                            <Navigate
+                                                to="providers"
+                                                replace
+                                            />
+                                        }
+                                    />
+                                    <Route
+                                        path="providers"
+                                        element={<SettingsProviders />}
+                                    />
+                                    <Route
+                                        path="providers/:providerId"
+                                        element={<SettingsProvider />}
+                                    />
+                                    <Route
+                                        path="prompts"
+                                        element={<SettingsPrompts />}
+                                    />
+                                    {/* Catch-all route for unknown settings paths */}
+                                    <Route
+                                        path="*"
+                                        element={
+                                            <Navigate
+                                                to="/settings/providers"
+                                                replace
+                                            />
+                                        }
+                                    />
+                                </Route>
                             </Route>
 
                             {/* report routes */}
