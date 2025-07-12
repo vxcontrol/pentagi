@@ -18,6 +18,8 @@ import (
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/custom"
 	"pentagi/pkg/providers/embeddings"
+	"pentagi/pkg/providers/gemini"
+	"pentagi/pkg/providers/ollama"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
@@ -164,6 +166,18 @@ func NewProviderController(
 		defaultConfigs[provider.ProviderAnthropic] = config
 	}
 
+	if config, err := gemini.DefaultProviderConfig(); err != nil {
+		return nil, fmt.Errorf("failed to create gemini provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderGemini] = config
+	}
+
+	if config, err := ollama.DefaultProviderConfig(cfg); err != nil {
+		return nil, fmt.Errorf("failed to create ollama provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderOllama] = config
+	}
+
 	if config, err := custom.DefaultProviderConfig(cfg); err != nil {
 		return nil, fmt.Errorf("failed to create custom provider config: %w", err)
 	} else {
@@ -186,6 +200,23 @@ func NewProviderController(
 		}
 
 		providers[provider.DefaultProviderNameAnthropic] = p
+	}
+
+	if cfg.GeminiAPIKey != "" {
+		p, err := gemini.New(cfg, defaultConfigs[provider.ProviderGemini])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create gemini provider: %w", err)
+		}
+
+		providers[provider.DefaultProviderNameGemini] = p
+	}
+
+	if cfg.OllamaServerURL != "" {
+		p, err := ollama.New(cfg, defaultConfigs[provider.ProviderOllama])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ollama provider: %w", err)
+		}
+		providers[provider.DefaultProviderNameOllama] = p
 	}
 
 	if cfg.LLMServerURL != "" && (cfg.LLMServerModel != "" || cfg.LLMServerConfig != "") {
@@ -559,11 +590,19 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 		}
 		return anthropic.New(pc.cfg, anthropicConfig)
 	case provider.ProviderGemini:
-		return nil, fmt.Errorf("gemini provider is not supported")
+		geminiConfig, err := gemini.BuildProviderConfig(prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build gemini provider config: %w", err)
+		}
+		return gemini.New(pc.cfg, geminiConfig)
 	case provider.ProviderBedrock:
 		return nil, fmt.Errorf("bedrock provider is not supported")
 	case provider.ProviderOllama:
-		return nil, fmt.Errorf("ollama provider is not supported")
+		ollamaConfig, err := ollama.BuildProviderConfig(pc.cfg, prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build ollama provider config: %w", err)
+		}
+		return ollama.New(pc.cfg, ollamaConfig)
 	case provider.ProviderCustom:
 		customConfig, err := custom.BuildProviderConfig(pc.cfg, prv.Config)
 		if err != nil {
@@ -890,11 +929,11 @@ func (pc *providerController) buildProviderFromConfig(
 	case provider.ProviderCustom:
 		return custom.New(pc.cfg, config)
 	case provider.ProviderGemini:
-		return nil, fmt.Errorf("gemini provider is not supported")
+		return gemini.New(pc.cfg, config)
 	case provider.ProviderBedrock:
 		return nil, fmt.Errorf("bedrock provider is not supported")
 	case provider.ProviderOllama:
-		return nil, fmt.Errorf("ollama provider is not supported")
+		return ollama.New(pc.cfg, config)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", prvtype)
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1466,145 +1467,402 @@ func TestProvidersConfig_GetOptionsForType_WithDefaults(t *testing.T) {
 	}
 }
 
-func TestProviderConfig_BuildOptionsMap(t *testing.T) {
+func TestLoadModelsConfigData(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      *ProviderConfig
-		wantNil     bool
-		checkResult func(*testing.T, map[ProviderOptionsType][]llms.CallOption)
+		name    string
+		yaml    string
+		wantErr bool
+		check   func(*testing.T, ModelsConfig)
 	}{
 		{
-			name:    "nil config",
-			config:  nil,
-			wantNil: true,
+			name:    "empty yaml",
+			yaml:    "",
+			wantErr: false,
+			check: func(t *testing.T, models ModelsConfig) {
+				assert.Len(t, models, 0)
+			},
 		},
 		{
-			name: "empty config with defaults",
-			config: &ProviderConfig{
-				defaultOptions: []llms.CallOption{
-					llms.WithTemperature(0.5),
-					llms.WithMaxTokens(1000),
+			name:    "invalid yaml",
+			yaml:    "invalid: [yaml",
+			wantErr: true,
+		},
+		{
+			name: "basic models with various configurations",
+			yaml: `
+- name: gpt-4o
+  description: Fast, intelligent, flexible GPT model ideal for complex penetration testing scenarios
+  thinking: false
+  release_date: 2024-05-13
+  price:
+    input: 2.5
+    output: 10.0
+- name: o3-mini
+  description: Small but powerful reasoning model excellent for step-by-step security analysis
+  thinking: true
+  release_date: 2025-01-31
+  price:
+    input: 1.1
+    output: 4.4
+- name: gemma-3-27b-it
+  description: Open-source model ideal for on-premises security operations
+  thinking: false
+  release_date: 2024-02-21
+- name: free-model
+  price:
+    input: 0.0
+    output: 0.0
+`,
+			wantErr: false,
+			check: func(t *testing.T, models ModelsConfig) {
+				require.Len(t, models, 4)
+
+				// Check first model (full config)
+				model1 := models[0]
+				assert.Equal(t, "gpt-4o", model1.Name)
+				require.NotNil(t, model1.Description)
+				assert.Contains(t, *model1.Description, "penetration testing")
+				require.NotNil(t, model1.Thinking)
+				assert.False(t, *model1.Thinking)
+				require.NotNil(t, model1.ReleaseDate)
+				assert.Equal(t, time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC), *model1.ReleaseDate)
+				require.NotNil(t, model1.Price)
+				assert.Equal(t, 2.5, model1.Price.Input)
+
+				// Check thinking model
+				model2 := models[1]
+				assert.Equal(t, "o3-mini", model2.Name)
+				require.NotNil(t, model2.Thinking)
+				assert.True(t, *model2.Thinking)
+
+				// Check free model without price
+				model3 := models[2]
+				assert.Equal(t, "gemma-3-27b-it", model3.Name)
+				assert.Nil(t, model3.Price)
+
+				// Check model with zero price
+				model4 := models[3]
+				assert.Equal(t, "free-model", model4.Name)
+				require.NotNil(t, model4.Price)
+				assert.Equal(t, 0.0, model4.Price.Input)
+			},
+		},
+		{
+			name: "model with invalid date format",
+			yaml: `
+- name: invalid-date-model
+  release_date: "invalid-date"
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			models, err := LoadModelsConfigData([]byte(tt.yaml))
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			if tt.check != nil {
+				tt.check(t, models)
+			}
+		})
+	}
+}
+
+func TestModelConfig_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		want    ModelConfig
+		wantErr bool
+	}{
+		{
+			name: "empty object",
+			json: "{}",
+			want: ModelConfig{},
+		},
+		{
+			name: "model with all fields",
+			json: `{
+				"name": "gpt-4o",
+				"description": "Fast, intelligent model",
+				"thinking": false,
+				"release_date": "2024-05-13",
+				"price": {
+					"input": 2.5,
+					"output": 10.0
+				}
+			}`,
+			want: ModelConfig{
+				Name:        "gpt-4o",
+				Description: stringPtr("Fast, intelligent model"),
+				Thinking:    boolPtr(false),
+				ReleaseDate: timePtr(time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC)),
+				Price: &PriceInfo{
+					Input:  2.5,
+					Output: 10.0,
 				},
 			},
-			checkResult: func(t *testing.T, options map[ProviderOptionsType][]llms.CallOption) {
-				// All provider types should be present
-				expectedTypes := []ProviderOptionsType{
-					OptionsTypeSimple,
-					OptionsTypeSimpleJSON,
-					OptionsTypePrimaryAgent,
-					OptionsTypeAssistant,
-					OptionsTypeGenerator,
-					OptionsTypeRefiner,
-					OptionsTypeAdviser,
-					OptionsTypeReflector,
-					OptionsTypeSearcher,
-					OptionsTypeEnricher,
-					OptionsTypeCoder,
-					OptionsTypeInstaller,
-					OptionsTypePentester,
-				}
+		},
+		{
+			name: "thinking model",
+			json: `{
+				"name": "o3-mini",
+				"thinking": true,
+				"release_date": "2025-01-31"
+			}`,
+			want: ModelConfig{
+				Name:        "o3-mini",
+				Thinking:    boolPtr(true),
+				ReleaseDate: timePtr(time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC)),
+			},
+		},
+		{
+			name: "minimal model",
+			json: `{"name": "test-model"}`,
+			want: ModelConfig{Name: "test-model"},
+		},
+		{
+			name:    "invalid date format",
+			json:    `{"name": "test", "release_date": "invalid-date"}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid json",
+			json:    "{invalid}",
+			wantErr: true,
+		},
+	}
 
-				assert.Len(t, options, len(expectedTypes), "All provider types should be present")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got ModelConfig
+			err := json.Unmarshal([]byte(tt.json), &got)
 
-				for _, optType := range expectedTypes {
-					opt, exists := options[optType]
-					assert.True(t, exists, "Option type %s should exist", optType)
-					assert.NotNil(t, opt, "Option for type %s should not be nil", optType)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.Name, got.Name)
+
+			if tt.want.Description != nil {
+				require.NotNil(t, got.Description)
+				assert.Equal(t, *tt.want.Description, *got.Description)
+			} else {
+				assert.Nil(t, got.Description)
+			}
+
+			if tt.want.Thinking != nil {
+				require.NotNil(t, got.Thinking)
+				assert.Equal(t, *tt.want.Thinking, *got.Thinking)
+			} else {
+				assert.Nil(t, got.Thinking)
+			}
+
+			if tt.want.ReleaseDate != nil {
+				require.NotNil(t, got.ReleaseDate)
+				assert.Equal(t, *tt.want.ReleaseDate, *got.ReleaseDate)
+			} else {
+				assert.Nil(t, got.ReleaseDate)
+			}
+
+			if tt.want.Price != nil {
+				require.NotNil(t, got.Price)
+				assert.Equal(t, tt.want.Price.Input, got.Price.Input)
+				assert.Equal(t, tt.want.Price.Output, got.Price.Output)
+			} else {
+				assert.Nil(t, got.Price)
+			}
+		})
+	}
+}
+
+func TestModelConfig_UnmarshalYAML(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		want    ModelConfig
+		wantErr bool
+	}{
+		{
+			name: "basic model yaml",
+			yaml: `
+name: gpt-4o
+description: Fast, intelligent model
+thinking: false
+release_date: 2024-05-13
+price:
+  input: 2.5
+  output: 10.0
+`,
+			want: ModelConfig{
+				Name:        "gpt-4o",
+				Description: stringPtr("Fast, intelligent model"),
+				Thinking:    boolPtr(false),
+				ReleaseDate: timePtr(time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC)),
+				Price: &PriceInfo{
+					Input:  2.5,
+					Output: 10.0,
+				},
+			},
+		},
+		{
+			name: "minimal yaml",
+			yaml: "name: test-model",
+			want: ModelConfig{Name: "test-model"},
+		},
+		{
+			name:    "invalid date yaml",
+			yaml:    "name: test\nrelease_date: invalid-date",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got ModelConfig
+			err := yaml.Unmarshal([]byte(tt.yaml), &got)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// Helper functions for creating pointers to primitive types
+func stringPtr(s string) *string {
+	return &s
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
+}
+
+func TestModelConfig_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name   string
+		config ModelConfig
+		check  func(*testing.T, []byte)
+	}{
+		{
+			name:   "empty config",
+			config: ModelConfig{},
+			check: func(t *testing.T, data []byte) {
+				var result map[string]any
+				err := json.Unmarshal(data, &result)
+				require.NoError(t, err)
+				// Empty config should omit all fields (or just have empty name)
+				// Accept both empty object or object with just empty name
+				if len(result) > 0 {
+					// If there are fields, name might be empty string
+					if name, exists := result["name"]; exists {
+						assert.Equal(t, "", name)
+					}
 				}
 			},
 		},
 		{
-			name: "config with some agent configurations",
-			config: func() *ProviderConfig {
-				cfg := &ProviderConfig{
-					defaultOptions: []llms.CallOption{
-						llms.WithTemperature(0.5),
-						llms.WithMaxTokens(1000),
-					},
-				}
+			name: "full config",
+			config: ModelConfig{
+				Name:        "gpt-4o",
+				Description: stringPtr("Fast model"),
+				Thinking:    boolPtr(false),
+				ReleaseDate: timePtr(time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC)),
+				Price:       &PriceInfo{Input: 2.5, Output: 10.0},
+			},
+			check: func(t *testing.T, data []byte) {
+				var result map[string]any
+				err := json.Unmarshal(data, &result)
+				require.NoError(t, err)
 
-				// Configure simple agent
-				simpleJSON := `{
-					"model": "simple-model",
-					"max_tokens": 100,
-					"temperature": 0.7
-				}`
-				cfg.Simple = &AgentConfig{}
-				err := json.Unmarshal([]byte(simpleJSON), cfg.Simple)
-				if err != nil {
-					t.Fatal(err)
-				}
+				assert.Equal(t, "gpt-4o", result["name"])
+				assert.Equal(t, "Fast model", result["description"])
+				assert.Equal(t, false, result["thinking"])
+				assert.Equal(t, "2024-05-13", result["release_date"])
 
-				// Configure agent
-				agentJSON := `{
-					"model": "agent-model",
-					"max_tokens": 200,
-					"temperature": 0.8
-				}`
-				cfg.PrimaryAgent = &AgentConfig{}
-				err = json.Unmarshal([]byte(agentJSON), cfg.PrimaryAgent)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				return cfg
-			}(),
-			checkResult: func(t *testing.T, options map[ProviderOptionsType][]llms.CallOption) {
-				// All provider types should be present
-				expectedTypes := []ProviderOptionsType{
-					OptionsTypeSimple,
-					OptionsTypeSimpleJSON,
-					OptionsTypePrimaryAgent,
-					OptionsTypeAssistant,
-					OptionsTypeGenerator,
-					OptionsTypeRefiner,
-					OptionsTypeAdviser,
-					OptionsTypeReflector,
-					OptionsTypeSearcher,
-					OptionsTypeEnricher,
-					OptionsTypeCoder,
-					OptionsTypeInstaller,
-					OptionsTypePentester,
-				}
-
-				assert.Len(t, options, len(expectedTypes), "All provider types should be present")
-
-				// Simple should have 3 options (model, max_tokens, temperature)
-				simpleOpts := options[OptionsTypeSimple]
-				assert.Len(t, simpleOpts, 3, "Simple options should have 3 elements")
-
-				// SimpleJSON should have simple options + JSON mode
-				simpleJSONOpts := options[OptionsTypeSimpleJSON]
-				assert.Len(t, simpleJSONOpts, 4, "SimpleJSON options should have 4 elements (simple + JSON)")
-
-				// Agent should have 3 options (model, max_tokens, temperature)
-				agentOpts := options[OptionsTypePrimaryAgent]
-				assert.Len(t, agentOpts, 3, "Agent options should have 3 elements")
-
-				// Assistant should have agent options (backward compatibility)
-				assistantOpts := options[OptionsTypeAssistant]
-				assert.Len(t, assistantOpts, 3, "Assistant options should have 3 elements (using agent config)")
-
-				// Other types should use defaults
-				generatorOpts := options[OptionsTypeGenerator]
-				assert.Len(t, generatorOpts, 2, "Generator options should use defaults")
+				price, ok := result["price"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, 2.5, price["input"])
+				assert.Equal(t, 10.0, price["output"])
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.BuildOptionsMap()
+			got, err := json.Marshal(tt.config)
+			require.NoError(t, err)
+			tt.check(t, got)
+		})
+	}
+}
 
-			if tt.wantNil {
-				assert.Nil(t, result)
-				return
-			}
+func TestModelConfig_MarshalYAML(t *testing.T) {
+	tests := []struct {
+		name   string
+		config ModelConfig
+		check  func(*testing.T, []byte)
+	}{
+		{
+			name:   "empty config",
+			config: ModelConfig{},
+			check: func(t *testing.T, data []byte) {
+				var result map[string]any
+				err := yaml.Unmarshal(data, &result)
+				require.NoError(t, err)
+				// Empty config should omit all fields (or just have empty name)
+				// Accept both empty object or object with just empty name
+				if len(result) > 0 {
+					// If there are fields, name might be empty string
+					if name, exists := result["name"]; exists {
+						assert.Equal(t, "", name)
+					}
+				}
+			},
+		},
+		{
+			name: "full config",
+			config: ModelConfig{
+				Name:        "gpt-4o",
+				Description: stringPtr("Fast model"),
+				Thinking:    boolPtr(false),
+				ReleaseDate: timePtr(time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC)),
+				Price:       &PriceInfo{Input: 2.5, Output: 10.0},
+			},
+			check: func(t *testing.T, data []byte) {
+				var result map[string]any
+				err := yaml.Unmarshal(data, &result)
+				require.NoError(t, err)
 
-			assert.NotNil(t, result)
-			if tt.checkResult != nil {
-				tt.checkResult(t, result)
-			}
+				assert.Equal(t, "gpt-4o", result["name"])
+				assert.Equal(t, "Fast model", result["description"])
+				assert.Equal(t, false, result["thinking"])
+				assert.Equal(t, "2024-05-13", result["release_date"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := yaml.Marshal(tt.config)
+			require.NoError(t, err)
+			tt.check(t, got)
 		})
 	}
 }

@@ -1,4 +1,4 @@
-package anthropic
+package gemini
 
 import (
 	"context"
@@ -11,18 +11,18 @@ import (
 	"pentagi/pkg/providers/provider"
 
 	"github.com/vxcontrol/langchaingo/llms"
-	"github.com/vxcontrol/langchaingo/llms/anthropic"
+	"github.com/vxcontrol/langchaingo/llms/googleai"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const AnthropicAgentModel = "claude-sonnet-4-20250514"
+const GeminiAgentModel = "gemini-2.5-flash"
 
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
-		llms.WithModel(AnthropicAgentModel),
+		llms.WithModel(GeminiAgentModel),
 		llms.WithTemperature(1.0),
 		llms.WithN(1),
 		llms.WithMaxTokens(4000),
@@ -54,23 +54,49 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 	return pconfig.LoadModelsConfigData(configData)
 }
 
-type anthropicProvider struct {
-	llm            *anthropic.LLM
+// apiKeyTransport adds the API key to requests
+// This is needed because the Google API library doesn't add the API key
+// when WithHTTPClient is used with WithAPIKey
+type apiKeyTransport struct {
+	wrapped http.RoundTripper
+	apiKey  string
+}
+
+func (t *apiKeyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Clone the request to avoid modifying the original
+	newReq := req.Clone(req.Context())
+	q := newReq.URL.Query()
+	if q.Get("key") == "" && t.apiKey != "" {
+		q.Set("key", t.apiKey)
+		newReq.URL.RawQuery = q.Encode()
+	}
+	return t.wrapped.RoundTrip(newReq)
+}
+
+type geminiProvider struct {
+	llm            *googleai.GoogleAI
 	models         pconfig.ModelsConfig
 	providerConfig *pconfig.ProviderConfig
 }
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
-	baseURL := cfg.AnthropicServerURL
-	httpClient := http.DefaultClient
+	opts := []googleai.Option{
+		googleai.WithRest(),
+		googleai.WithAPIKey(cfg.GeminiAPIKey),
+		googleai.WithEndpoint(cfg.GeminiServerURL),
+		googleai.WithDefaultModel(GeminiAgentModel),
+	}
 	if cfg.ProxyURL != "" {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				Proxy: func(req *http.Request) (*url.URL, error) {
-					return url.Parse(cfg.ProxyURL)
+		opts = append(opts, googleai.WithHTTPClient(&http.Client{
+			Transport: &apiKeyTransport{
+				wrapped: &http.Transport{
+					Proxy: func(req *http.Request) (*url.URL, error) {
+						return url.Parse(cfg.ProxyURL)
+					},
 				},
+				apiKey: cfg.GeminiAPIKey,
 			},
-		}
+		}))
 	}
 
 	models, err := DefaultModels()
@@ -78,45 +104,40 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		return nil, err
 	}
 
-	client, err := anthropic.New(
-		anthropic.WithToken(cfg.AnthropicAPIKey),
-		anthropic.WithModel(AnthropicAgentModel),
-		anthropic.WithBaseURL(baseURL),
-		anthropic.WithHTTPClient(httpClient),
-	)
+	client, err := googleai.New(context.Background(), opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	return &anthropicProvider{
+	return &geminiProvider{
 		llm:            client,
 		models:         models,
 		providerConfig: providerConfig,
 	}, nil
 }
 
-func (p *anthropicProvider) Type() provider.ProviderType {
-	return provider.ProviderAnthropic
+func (p *geminiProvider) Type() provider.ProviderType {
+	return provider.ProviderGemini
 }
 
-func (p *anthropicProvider) GetRawConfig() []byte {
+func (p *geminiProvider) GetRawConfig() []byte {
 	return p.providerConfig.GetRawConfig()
 }
 
-func (p *anthropicProvider) GetProviderConfig() *pconfig.ProviderConfig {
+func (p *geminiProvider) GetProviderConfig() *pconfig.ProviderConfig {
 	return p.providerConfig
 }
 
-func (p *anthropicProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
+func (p *geminiProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
 	return p.providerConfig.GetPriceInfoForType(opt)
 }
 
-func (p *anthropicProvider) GetModels() pconfig.ModelsConfig {
+func (p *geminiProvider) GetModels() pconfig.ModelsConfig {
 	return p.models
 }
 
-func (p *anthropicProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: AnthropicAgentModel}
+func (p *geminiProvider) Model(opt pconfig.ProviderOptionsType) string {
+	opts := llms.CallOptions{Model: GeminiAgentModel}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
@@ -124,7 +145,7 @@ func (p *anthropicProvider) Model(opt pconfig.ProviderOptionsType) string {
 	return opts.Model
 }
 
-func (p *anthropicProvider) Call(
+func (p *geminiProvider) Call(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
 	prompt string,
@@ -135,7 +156,7 @@ func (p *anthropicProvider) Call(
 	)
 }
 
-func (p *anthropicProvider) CallEx(
+func (p *geminiProvider) CallEx(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
 	chain []llms.MessageContent,
@@ -149,7 +170,7 @@ func (p *anthropicProvider) CallEx(
 	)
 }
 
-func (p *anthropicProvider) CallWithTools(
+func (p *geminiProvider) CallWithTools(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
 	chain []llms.MessageContent,
@@ -165,14 +186,14 @@ func (p *anthropicProvider) CallWithTools(
 	)
 }
 
-func (p *anthropicProvider) GetUsage(info map[string]any) (int64, int64) {
+func (p *geminiProvider) GetUsage(info map[string]any) (int64, int64) {
 	var inputTokens, outputTokens int64
-	if value, ok := info["InputTokens"]; ok {
-		inputTokens = int64(value.(int))
+	if value, ok := info["input_tokens"]; ok {
+		inputTokens = int64(value.(int32))
 	}
 
-	if value, ok := info["OutputTokens"]; ok {
-		outputTokens = int64(value.(int))
+	if value, ok := info["output_tokens"]; ok {
+		outputTokens = int64(value.(int32))
 	}
 
 	return inputTokens, outputTokens

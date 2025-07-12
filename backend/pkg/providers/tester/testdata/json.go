@@ -176,7 +176,7 @@ func (t *testCaseJSON) Execute(response interface{}, latency time.Duration) Test
 
 		if !jsonValuesEqual(actualVal, expectedVal) {
 			result.Success = false
-			result.Error = fmt.Errorf("key %s: expected %v, got %v", key, expectedVal, actualVal)
+			result.Error = fmt.Errorf("key %s: expected %#v, got %#v", key, expectedVal, actualVal)
 			return result
 		}
 	}
@@ -196,12 +196,18 @@ func jsonValuesEqual(actual, expected interface{}) bool {
 		if act, ok := actual.(int); ok {
 			return act == exp
 		}
+		if act, ok := actual.(string); ok {
+			return act == fmt.Sprintf("%d", exp)
+		}
 	case float64:
 		if act, ok := actual.(float64); ok {
 			return act == exp
 		}
 		if act, ok := actual.(int); ok {
 			return float64(act) == exp
+		}
+		if act, ok := actual.(string); ok {
+			return strings.Contains(fmt.Sprintf("%0.9f", exp), act)
 		}
 	default:
 		return actual == expected

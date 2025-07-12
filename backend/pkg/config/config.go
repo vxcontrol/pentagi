@@ -77,6 +77,14 @@ type Config struct {
 	LLMServerConfig          string `env:"LLM_SERVER_CONFIG_PATH"`
 	LLMServerLegacyReasoning bool   `env:"LLM_SERVER_LEGACY_REASONING" envDefault:"false"`
 
+	// Ollama LLM provider
+	OllamaServerURL    string `env:"OLLAMA_SERVER_URL"`
+	OllamaServerConfig string `env:"OLLAMA_SERVER_CONFIG_PATH"`
+
+	// Google AI (Gemini) LLM provider
+	GeminiAPIKey    string `env:"GEMINI_API_KEY"`
+	GeminiServerURL string `env:"GEMINI_SERVER_URL" envDefault:"https://generativelanguage.googleapis.com"`
+
 	// DuckDuckGo search engine
 	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
 

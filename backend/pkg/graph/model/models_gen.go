@@ -156,8 +156,11 @@ type MessageLog struct {
 }
 
 type ModelConfig struct {
-	Name  string      `json:"name"`
-	Price *ModelPrice `json:"price,omitempty"`
+	Name        string      `json:"name"`
+	Description *string     `json:"description,omitempty"`
+	ReleaseDate *time.Time  `json:"releaseDate,omitempty"`
+	Thinking    *bool       `json:"thinking,omitempty"`
+	Price       *ModelPrice `json:"price,omitempty"`
 }
 
 type ModelPrice struct {

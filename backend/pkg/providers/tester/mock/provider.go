@@ -71,6 +71,11 @@ func (p *Provider) GetUsage(info map[string]any) (int64, int64) {
 	return 100, 50 // Mock token counts
 }
 
+// GetModels implements provider.Provider
+func (p *Provider) GetModels() pconfig.ModelsConfig {
+	return pconfig.ModelsConfig{}
+}
+
 // Call implements provider.Provider for simple prompt calls
 func (p *Provider) Call(ctx context.Context, opt pconfig.ProviderOptionsType, prompt string) (string, error) {
 	// Look for exact match

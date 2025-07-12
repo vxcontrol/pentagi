@@ -561,8 +561,8 @@ github.com/vmihailenco/tagparser v0.1.2 h1:gnjoVuB/kljJ5wICEEOpx98oXMWPLj22G67Vb
 github.com/vmihailenco/tagparser v0.1.2/go.mod h1:OeAg3pn3UbLjkWt+rN9oFYB6u/cQgqMEUPoW2WPyhdI=
 github.com/vmihailenco/tagparser/v2 v2.0.0 h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAhO7/IwNM9g=
 github.com/vmihailenco/tagparser/v2 v2.0.0/go.mod h1:Wri+At7QHww0WTrCBeu4J6bNtoV6mEfg5OIWRZA9qds=
-github.com/vxcontrol/langchaingo v0.1.13-update.5 h1:n2CxgfrZrXXV7nXXlvBnGThABHf6nx3azYaDdNJJHuA=
-github.com/vxcontrol/langchaingo v0.1.13-update.5/go.mod h1:2jMMGZCZog0jnS99VbszeRWIDUws9TokUDJ32AREqVQ=
+github.com/vxcontrol/langchaingo v0.1.14-0.20250710212524-b94dd9cfe359 h1:ekRze3vsUs3qWXzS+JgpQxIAiAxI59jB1P9DCsJVUHk=
+github.com/vxcontrol/langchaingo v0.1.14-0.20250710212524-b94dd9cfe359/go.mod h1:2jMMGZCZog0jnS99VbszeRWIDUws9TokUDJ32AREqVQ=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
 github.com/wk8/go-ordered-map/v2 v2.1.8/go.mod h1:5nJHM5DyteebpVlHnWMV0rPz6Zp7+xBAnxjb1X5vnTw=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=

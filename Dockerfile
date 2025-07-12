@@ -102,6 +102,7 @@ COPY --from=be-build /etester /opt/pentagi/bin/etester
 COPY --from=fe-build /frontend/dist /opt/pentagi/fe
 
 # Copy provider configuration files
+COPY examples/configs/ollama.provider.yml /opt/pentagi/conf/
 COPY examples/configs/openrouter.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepinfra.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepseek.provider.yml /opt/pentagi/conf/

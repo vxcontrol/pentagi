@@ -13,6 +13,9 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/converter"
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/providers/anthropic"
+	"pentagi/pkg/providers/gemini"
+	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/templates"
@@ -937,9 +940,10 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 	}).Debug("get providers")
 
 	config := model.ProvidersConfig{
-		Enabled: &model.ProvidersReadinessStatus{},
-		Default: &model.DefaultProvidersConfig{},
-		Models:  &model.ProvidersModelsList{},
+		Enabled:     &model.ProvidersReadinessStatus{},
+		Default:     &model.DefaultProvidersConfig{},
+		Models:      &model.ProvidersModelsList{},
+		UserDefined: make([]*model.ProviderConfig, 0),
 	}
 
 	now := time.Now()
@@ -956,10 +960,19 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		switch prvtype {
 		case provider.ProviderOpenAI:
 			config.Default.Openai = mpcfg
+			if models, err := openai.DefaultModels(); err == nil {
+				config.Models.Openai = converter.ConvertModels(models)
+			}
 		case provider.ProviderAnthropic:
 			config.Default.Anthropic = mpcfg
+			if models, err := anthropic.DefaultModels(); err == nil {
+				config.Models.Anthropic = converter.ConvertModels(models)
+			}
 		case provider.ProviderGemini:
 			config.Default.Gemini = mpcfg
+			if models, err := gemini.DefaultModels(); err == nil {
+				config.Models.Gemini = converter.ConvertModels(models)
+			}
 		case provider.ProviderBedrock:
 			config.Default.Bedrock = mpcfg
 		case provider.ProviderOllama:
@@ -982,8 +995,14 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Enabled.Bedrock = true
 		case provider.ProviderOllama:
 			config.Enabled.Ollama = true
+			if p, ok := defaultProviders[provider.DefaultProviderNameOllama]; ok {
+				config.Models.Ollama = converter.ConvertModels(p.GetModels())
+			}
 		case provider.ProviderCustom:
 			config.Enabled.Custom = true
+			if p, ok := defaultProviders[provider.DefaultProviderNameCustom]; ok {
+				config.Models.Custom = converter.ConvertModels(p.GetModels())
+			}
 		}
 	}
 

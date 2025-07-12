@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/vxcontrol/langchaingo/llms"
 	"gopkg.in/yaml.v3"
@@ -43,6 +44,16 @@ var AllAgentTypes = []ProviderOptionsType{
 	OptionsTypeInstaller,
 	OptionsTypePentester,
 }
+
+type ModelConfig struct {
+	Name        string     `json:"name,omitempty" yaml:"name,omitempty"`
+	Description *string    `json:"description,omitempty" yaml:"description,omitempty"`
+	ReleaseDate *time.Time `json:"release_date,omitempty" yaml:"release_date,omitempty"`
+	Thinking    *bool      `json:"thinking,omitempty" yaml:"thinking,omitempty"`
+	Price       *PriceInfo `json:"price,omitempty" yaml:"price,omitempty"`
+}
+
+type ModelsConfig []ModelConfig
 
 type PriceInfo struct {
 	Input  float64 `json:"input,omitempty" yaml:"input,omitempty"`
@@ -143,6 +154,157 @@ func LoadConfigData(configData []byte, defaultOptions []llms.CallOption) (*Provi
 	config.rawConfig = configData
 
 	return &config, nil
+}
+
+func LoadModelsConfigData(configData []byte) (ModelsConfig, error) {
+	var modelsConfig ModelsConfig
+
+	if err := yaml.Unmarshal(configData, &modelsConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse models config: %w", err)
+	}
+
+	return modelsConfig, nil
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for ModelConfig
+func (mc *ModelConfig) UnmarshalJSON(data []byte) error {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Parse each field manually
+	if name, ok := raw["name"].(string); ok {
+		mc.Name = name
+	}
+
+	if desc, ok := raw["description"].(string); ok {
+		mc.Description = &desc
+	}
+
+	if thinking, ok := raw["thinking"].(bool); ok {
+		mc.Thinking = &thinking
+	}
+
+	if dateStr, ok := raw["release_date"].(string); ok && dateStr != "" {
+		parsedDate, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			return fmt.Errorf("invalid release_date format, expected YYYY-MM-DD: %w", err)
+		}
+		mc.ReleaseDate = &parsedDate
+	}
+
+	if priceData, ok := raw["price"]; ok && priceData != nil {
+		priceBytes, err := json.Marshal(priceData)
+		if err != nil {
+			return err
+		}
+		var price PriceInfo
+		if err := json.Unmarshal(priceBytes, &price); err != nil {
+			return err
+		}
+		mc.Price = &price
+	}
+
+	return nil
+}
+
+// UnmarshalYAML implements custom YAML unmarshaling for ModelConfig
+func (mc *ModelConfig) UnmarshalYAML(value *yaml.Node) error {
+	var raw map[string]any
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+
+	// Parse each field manually
+	if name, ok := raw["name"].(string); ok {
+		mc.Name = name
+	}
+
+	if desc, ok := raw["description"].(string); ok {
+		mc.Description = &desc
+	}
+
+	if thinking, ok := raw["thinking"].(bool); ok {
+		mc.Thinking = &thinking
+	}
+
+	// Handle release_date - YAML can parse it as string or time.Time
+	if dateValue, ok := raw["release_date"]; ok && dateValue != nil {
+		switch v := dateValue.(type) {
+		case string:
+			if v != "" {
+				parsedDate, err := time.Parse("2006-01-02", v)
+				if err != nil {
+					return fmt.Errorf("invalid release_date format, expected YYYY-MM-DD: %w", err)
+				}
+				mc.ReleaseDate = &parsedDate
+			}
+		case time.Time:
+			// YAML automatically parsed it as time.Time
+			mc.ReleaseDate = &v
+		}
+	}
+
+	if priceData, ok := raw["price"]; ok && priceData != nil {
+		priceBytes, err := yaml.Marshal(priceData)
+		if err != nil {
+			return err
+		}
+		var price PriceInfo
+		if err := yaml.Unmarshal(priceBytes, &price); err != nil {
+			return err
+		}
+		mc.Price = &price
+	}
+
+	return nil
+}
+
+// MarshalJSON implements custom JSON marshaling for ModelConfig
+func (mc ModelConfig) MarshalJSON() ([]byte, error) {
+	aux := map[string]any{}
+
+	if mc.Name != "" {
+		aux["name"] = mc.Name
+	}
+	if mc.Description != nil {
+		aux["description"] = *mc.Description
+	}
+	if mc.Thinking != nil {
+		aux["thinking"] = *mc.Thinking
+	}
+	if mc.ReleaseDate != nil {
+		aux["release_date"] = mc.ReleaseDate.Format("2006-01-02")
+	}
+	if mc.Price != nil {
+		aux["price"] = mc.Price
+	}
+
+	return json.Marshal(aux)
+}
+
+// MarshalYAML implements custom YAML marshaling for ModelConfig
+func (mc ModelConfig) MarshalYAML() (any, error) {
+	aux := map[string]any{}
+
+	if mc.Name != "" {
+		aux["name"] = mc.Name
+	}
+	if mc.Description != nil {
+		aux["description"] = *mc.Description
+	}
+	if mc.Thinking != nil {
+		aux["thinking"] = *mc.Thinking
+	}
+	if mc.ReleaseDate != nil {
+		aux["release_date"] = mc.ReleaseDate.Format("2006-01-02")
+	}
+	if mc.Price != nil {
+		aux["price"] = mc.Price
+	}
+
+	return aux, nil
 }
 
 // handleLegacyConfig provides backward compatibility for old config format

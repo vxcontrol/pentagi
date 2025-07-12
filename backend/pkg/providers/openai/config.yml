@@ -1,5 +1,5 @@
 simple:
-  model: "gpt-4.1-mini"
+  model: gpt-4.1-mini
   temperature: 0.5
   top_p: 0.5
   n: 1
@@ -9,7 +9,7 @@ simple:
     output: 1.6
 
 simple_json:
-  model: "gpt-4.1-mini"
+  model: gpt-4.1-mini
   temperature: 0.5
   top_p: 0.5
   n: 1
@@ -20,7 +20,7 @@ simple_json:
     output: 1.6
 
 primary_agent:
-  model: "o4-mini"
+  model: o4-mini
   n: 1
   max_tokens: 4000
   reasoning:
@@ -30,7 +30,7 @@ primary_agent:
     output: 4.4
 
 assistant:
-  model: "o4-mini"
+  model: o4-mini
   n: 1
   max_tokens: 6000
   reasoning:
@@ -40,7 +40,7 @@ assistant:
     output: 4.4
 
 generator:
-  model: "o1"
+  model: o1
   n: 1
   max_tokens: 8192
   reasoning:
@@ -50,7 +50,7 @@ generator:
     output: 60.0
 
 refiner:
-  model: "gpt-4.1"
+  model: gpt-4.1
   temperature: 0.7
   top_p: 0.8
   n: 1
@@ -60,7 +60,7 @@ refiner:
     output: 8.0
 
 adviser:
-  model: "o4-mini"
+  model: o4-mini
   n: 1
   max_tokens: 4000
   reasoning:
@@ -70,7 +70,7 @@ adviser:
     output: 4.4
 
 reflector:
-  model: "o4-mini"
+  model: o4-mini
   n: 1
   max_tokens: 3000
   reasoning:
@@ -80,7 +80,7 @@ reflector:
     output: 4.4
 
 searcher:
-  model: "gpt-4.1-mini"
+  model: gpt-4.1-mini
   temperature: 0.7
   top_p: 0.8
   n: 1
@@ -90,7 +90,7 @@ searcher:
     output: 1.6
 
 enricher:
-  model: "gpt-4.1-mini"
+  model: gpt-4.1-mini
   temperature: 0.7
   top_p: 0.8
   n: 1
@@ -100,7 +100,7 @@ enricher:
     output: 1.6
 
 coder:
-  model: "gpt-4.1"
+  model: gpt-4.1
   temperature: 0.2
   top_p: 0.1
   n: 1
@@ -110,7 +110,7 @@ coder:
     output: 8.0
 
 installer:
-  model: "gpt-4.1"
+  model: gpt-4.1
   temperature: 0.2
   top_p: 0.1
   n: 1
@@ -120,7 +120,7 @@ installer:
     output: 8.0
 
 pentester:
-  model: "o4-mini"
+  model: o4-mini
   n: 1
   max_tokens: 4000
   reasoning:
