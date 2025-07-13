@@ -949,7 +949,7 @@ export type ModelConfigFragmentFragment = { name: string; price?: { input: numbe
 export type ProviderFragmentFragment = { name: string; type: ProviderType };
 
 export type ProviderConfigFragmentFragment = {
-    id: string;
+    id: number;
     name: string;
     type: ProviderType;
     createdAt: any;

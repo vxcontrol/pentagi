@@ -1,6 +1,6 @@
 import { ArrowLeft, FileText, Plug, Settings as SettingsIcon } from 'lucide-react';
 import { useMemo } from 'react';
-import { NavLink, Outlet, useMatch } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
 
 import { Separator } from '@/components/ui/separator';
 import {
@@ -50,8 +50,9 @@ const menuItems: readonly MenuItem[] = [
 
 // Individual menu item component to properly use hooks
 const SettingsSidebarMenuItem = ({ item }: SettingsSidebarMenuItemProps) => {
-    const match = useMatch(item.path);
-    const isActive = !!match;
+    const location = useLocation();
+    // Check if current path starts with item path (for nested routes)
+    const isActive = location.pathname.startsWith(item.path);
 
     return (
         <SidebarMenuItem>
@@ -70,17 +71,35 @@ const SettingsSidebarMenuItem = ({ item }: SettingsSidebarMenuItemProps) => {
 
 // Settings header component
 const SettingsHeader = () => {
-    // Call useMatch for each menu item at the top level
-    const items = menuItems.map((item) => ({
-        ...item,
-        isActive: !!useMatch(item.path),
-    }));
+    const location = useLocation();
+    const params = useParams();
 
     // Memoize title calculation for better performance
     const title = useMemo(() => {
-        const item = items.find((item) => item.isActive) ?? menuItems[0];
-        return item?.title ?? 'Settings';
-    }, [items]);
+        const path = location.pathname;
+
+        // Check for specific nested routes
+        if (path === '/settings/providers/new') {
+            return 'Create Provider';
+        }
+
+        if (path.startsWith('/settings/providers/') && params.providerId && params.providerId !== 'new') {
+            return 'Edit Provider';
+        }
+
+        if (path === '/settings/prompts/new') {
+            return 'Create Prompt';
+        }
+
+        if (path.startsWith('/settings/prompts/') && params.promptId && params.promptId !== 'new') {
+            return 'Edit Prompt';
+        }
+
+        // Find matching main section
+        const activeItem = menuItems.find((item) => path.startsWith(item.path));
+
+        return activeItem?.title ?? 'Settings';
+    }, [location.pathname, params]);
 
     return (
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">

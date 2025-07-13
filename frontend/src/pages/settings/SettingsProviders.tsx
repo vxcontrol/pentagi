@@ -9,7 +9,11 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
-import { useSettingsProvidersQuery, type ProviderConfigFragmentFragment } from '@/graphql/types';
+import {
+    useDeleteProviderMutation,
+    useSettingsProvidersQuery,
+    type ProviderConfigFragmentFragment,
+} from '@/graphql/types';
 import { type ColumnDef } from '@tanstack/react-table';
 import {
     AlertCircle,
@@ -21,6 +25,7 @@ import {
     Plus,
     Settings,
 } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 type Provider = ProviderConfigFragmentFragment;
@@ -45,14 +50,30 @@ const SettingsProvidersHeader = () => {
 
 const SettingsProviders = () => {
     const { data, loading, error } = useSettingsProvidersQuery();
+    const [deleteProvider, { loading: deleteLoading, error: deleteError }] = useDeleteProviderMutation();
+    const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
     const navigate = useNavigate();
 
-    const handleProviderEdit = (providerId: string) => {
+    const handleProviderEdit = (providerId: number) => {
         navigate(`/settings/providers/${providerId}`);
     };
 
-    const handleProviderDelete = (providerId: string) => {
-        console.log('delete', providerId);
+    const handleProviderDelete = async (providerId: number) => {
+        try {
+            setDeleteErrorMessage(null);
+            console.log('Deleting provider:', providerId);
+
+            await deleteProvider({
+                variables: { providerId: providerId.toString() },
+                refetchQueries: ['settingsProviders'],
+            });
+
+            // Clear any existing error messages on successful deletion
+            setDeleteErrorMessage(null);
+        } catch (error) {
+            console.error('Delete error:', error);
+            setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
+        }
     };
 
     const columns: ColumnDef<Provider>[] = [
@@ -175,8 +196,18 @@ const SettingsProviders = () => {
                                 <DropdownMenuItem onClick={() => handleProviderEdit(provider.id)}>
                                     Edit provider
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleProviderDelete(provider.id)}>
-                                    Delete provider
+                                <DropdownMenuItem
+                                    onClick={() => handleProviderDelete(provider.id)}
+                                    disabled={deleteLoading}
+                                >
+                                    {deleteLoading ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        'Delete provider'
+                                    )}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -312,6 +343,16 @@ const SettingsProviders = () => {
     return (
         <div className="space-y-4">
             <SettingsProvidersHeader />
+
+            {/* Delete Error Alert */}
+            {(deleteError || deleteErrorMessage) && (
+                <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error deleting provider</AlertTitle>
+                    <AlertDescription>{deleteError?.message || deleteErrorMessage}</AlertDescription>
+                </Alert>
+            )}
+
             <DataTable
                 columns={columns}
                 data={providers}
