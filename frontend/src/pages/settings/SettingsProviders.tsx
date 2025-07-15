@@ -253,7 +253,8 @@ const SettingsProviders = () => {
                 name: getName(key),
                 key,
                 data,
-            }));
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
 
         return (
             <div className="p-4 bg-muted/20 border-t">

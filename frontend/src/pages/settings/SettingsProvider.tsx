@@ -6,6 +6,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusCard } from '@/components/ui/status-card';
 import {
     ProviderType,
@@ -21,37 +22,350 @@ import {
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Check, ChevronsUpDown, Loader2, Save, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useMemo, useState } from 'react';
+import { useController, useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 
 type Provider = ProviderConfigFragmentFragment;
 
+// Universal field components using useController
+interface ControllerProps {
+    name: string;
+    control: any;
+    disabled?: boolean;
+}
+
+interface BaseInputProps {
+    placeholder?: string;
+}
+
+interface NumberInputProps extends BaseInputProps {
+    step?: string;
+    min?: string;
+    max?: string;
+}
+
+interface BaseFieldProps extends ControllerProps {
+    label: string;
+}
+
+interface FormInputStringItemProps extends BaseFieldProps, BaseInputProps {
+    description?: string;
+}
+
+interface FormInputNumberItemProps extends BaseFieldProps, NumberInputProps {
+    valueType?: 'float' | 'integer';
+    description?: string;
+}
+
+const FormInputStringItem: React.FC<FormInputStringItemProps> = ({
+    name,
+    control,
+    disabled,
+    label,
+    placeholder,
+    description,
+}) => {
+    const { field, fieldState } = useController({
+        name,
+        control,
+        defaultValue: undefined,
+        disabled,
+    });
+
+    const inputProps = { placeholder };
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Input
+                    {...field}
+                    {...inputProps}
+                    value={field.value ?? ''}
+                />
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+};
+
+const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
+    name,
+    control,
+    disabled,
+    label,
+    placeholder,
+    step,
+    min,
+    max,
+    valueType = 'float',
+    description,
+}) => {
+    const { field, fieldState } = useController({
+        name,
+        control,
+        defaultValue: undefined,
+        disabled,
+    });
+
+    const parseValue = (value: string) => {
+        if (value === '') {
+            return undefined;
+        }
+
+        return valueType === 'float' ? parseFloat(value) : parseInt(value);
+    };
+
+    const inputProps = {
+        type: 'number' as const,
+        step,
+        min,
+        max,
+        placeholder,
+    };
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Input
+                    {...field}
+                    {...inputProps}
+                    value={field.value ?? ''}
+                    onChange={(event) => {
+                        const value = event.target.value;
+                        field.onChange(parseValue(value));
+                    }}
+                />
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+};
+
+interface FormComboboxItemProps extends BaseFieldProps, BaseInputProps {
+    options: string[] | { provider: string; models: string[] }[];
+    allowCustom?: boolean;
+    width?: string;
+    description?: string;
+}
+
+const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
+    name,
+    control,
+    disabled,
+    label,
+    placeholder,
+    options,
+    allowCustom = true,
+    width = 'w-[400px]',
+    description,
+}) => {
+    const { field, fieldState } = useController({
+        name,
+        control,
+        defaultValue: undefined,
+        disabled,
+    });
+
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+
+    // Handle both flat array and grouped data
+    const isGroupedData = options.length > 0 && typeof options[0] === 'object';
+
+    const filteredOptions = isGroupedData
+        ? (options as { provider: string; models: string[] }[])
+              .map((group) => ({
+                  provider: group.provider,
+                  models: group.models.filter((model) => model.toLowerCase().includes(search.toLowerCase())),
+              }))
+              .filter((group) => group.models.length > 0)
+        : (options as string[]).filter((option) => option.toLowerCase().includes(search.toLowerCase()));
+
+    const displayValue = field.value ?? '';
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Popover
+                    open={open}
+                    onOpenChange={setOpen}
+                >
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={open}
+                            className={cn('w-full justify-between', !displayValue && 'text-muted-foreground')}
+                            disabled={disabled}
+                        >
+                            {displayValue || placeholder}
+                            <ChevronsUpDown className="opacity-50" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                        className={cn(width, 'p-0')}
+                        align="start"
+                    >
+                        <Command>
+                            <CommandInput
+                                placeholder={`Search ${label.toLowerCase()}...`}
+                                className="h-9"
+                                value={search}
+                                onValueChange={setSearch}
+                            />
+                            <CommandList>
+                                <CommandEmpty>
+                                    <div className="text-center py-2">
+                                        <p className="text-sm text-muted-foreground">No {label.toLowerCase()} found.</p>
+                                        {search && allowCustom && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="mt-2"
+                                                onClick={() => {
+                                                    field.onChange(search);
+                                                    setOpen(false);
+                                                    setSearch('');
+                                                }}
+                                            >
+                                                Use "{search}" as custom {label.toLowerCase()}
+                                            </Button>
+                                        )}
+                                    </div>
+                                </CommandEmpty>
+                                {isGroupedData ? (
+                                    // Render grouped data
+                                    (filteredOptions as { provider: string; models: string[] }[]).map((group) => (
+                                        <CommandGroup
+                                            key={group.provider}
+                                            heading={group.provider}
+                                        >
+                                            {group.models.map((model) => (
+                                                <CommandItem
+                                                    key={model}
+                                                    value={model}
+                                                    onSelect={() => {
+                                                        field.onChange(model);
+                                                        setOpen(false);
+                                                        setSearch('');
+                                                    }}
+                                                >
+                                                    {model}
+                                                    <Check
+                                                        className={cn(
+                                                            'ml-auto',
+                                                            displayValue === model ? 'opacity-100' : 'opacity-0',
+                                                        )}
+                                                    />
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    ))
+                                ) : (
+                                    // Render flat data
+                                    <CommandGroup>
+                                        {(filteredOptions as string[]).map((option) => (
+                                            <CommandItem
+                                                key={option}
+                                                value={option}
+                                                onSelect={() => {
+                                                    field.onChange(option);
+                                                    setOpen(false);
+                                                    setSearch('');
+                                                }}
+                                            >
+                                                {option}
+                                                <Check
+                                                    className={cn(
+                                                        'ml-auto',
+                                                        displayValue === option ? 'opacity-100' : 'opacity-0',
+                                                    )}
+                                                />
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                )}
+                            </CommandList>
+                        </Command>
+                    </PopoverContent>
+                </Popover>
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+};
+
 // Define agent configuration schema
 const agentConfigSchema = z
     .object({
-        model: z.string(),
-        temperature: z.number().nullable().optional(),
-        maxTokens: z.number().nullable().optional(),
-        topK: z.number().nullable().optional(),
-        topP: z.number().nullable().optional(),
-        minLength: z.number().nullable().optional(),
-        maxLength: z.number().nullable().optional(),
-        repetitionPenalty: z.number().nullable().optional(),
-        frequencyPenalty: z.number().nullable().optional(),
-        presencePenalty: z.number().nullable().optional(),
+        model: z.preprocess((value) => value || '', z.string().min(1, 'Model is required')),
+        temperature: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        maxTokens: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        topK: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        topP: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        minLength: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        maxLength: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        repetitionPenalty: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        frequencyPenalty: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        presencePenalty: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
         reasoning: z
             .object({
-                effort: z.string().nullable().optional(),
-                maxTokens: z.number().nullable().optional(),
+                effort: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.string().nullable().optional(),
+                ),
+                maxTokens: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.number().nullable().optional(),
+                ),
             })
             .nullable()
             .optional(),
         price: z
             .object({
-                input: z.number().nullable().optional(),
-                output: z.number().nullable().optional(),
+                input: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.number().nullable().optional(),
+                ),
+                output: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.number().nullable().optional(),
+                ),
             })
             .nullable()
             .optional(),
@@ -60,48 +374,15 @@ const agentConfigSchema = z
 
 // Define form schema
 const formSchema = z.object({
-    type: z.string().min(1, 'Provider type is required'),
-    name: z.string().min(1, 'Provider name is required'),
-    agents: z
-        .object({
-            agent: agentConfigSchema,
-            assistant: agentConfigSchema,
-            coder: agentConfigSchema,
-            pentester: agentConfigSchema,
-            searcher: agentConfigSchema,
-            generator: agentConfigSchema,
-            refiner: agentConfigSchema,
-            adviser: agentConfigSchema,
-            reflector: agentConfigSchema,
-            simple: agentConfigSchema,
-            simpleJson: agentConfigSchema,
-            enricher: agentConfigSchema,
-            installer: agentConfigSchema,
-        })
-        .optional(),
+    type: z.preprocess((value) => value || '', z.string().min(1, 'Provider type is required')),
+    name: z.preprocess((value) => value || '', z.string().min(1, 'Provider name is required')),
+    agents: z.record(z.string(), agentConfigSchema).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
 
 // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
 const getName = (key: string): string => key.replace(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
-
-// All agent types (updated to include enricher and installer)
-const agentTypes = [
-    'agent',
-    'assistant',
-    'coder',
-    'pentester',
-    'searcher',
-    'generator',
-    'refiner',
-    'adviser',
-    'reflector',
-    'simple',
-    'simpleJson',
-    'enricher',
-    'installer',
-] as const;
 
 // Helper function to convert string to ReasoningEffort enum
 const getReasoningEffort = (effort: string | null | undefined): ReasoningEffort | null => {
@@ -127,42 +408,41 @@ const transformFormToGraphQL = (
     type: ProviderType;
     agents: AgentsConfigInput;
 } => {
-    const agents: AgentsConfigInput = {} as AgentsConfigInput;
-
-    // Process each agent
-    agentTypes.forEach((agentKey) => {
-        const agentData = formData.agents?.[agentKey];
-        if (agentData) {
-            const agentConfig: AgentConfigInput = {
-                model: agentData.model || '',
-                temperature: agentData.temperature || null,
-                maxTokens: agentData.maxTokens || null,
-                topK: agentData.topK || null,
-                topP: agentData.topP || null,
-                minLength: agentData.minLength || null,
-                maxLength: agentData.maxLength || null,
-                repetitionPenalty: agentData.repetitionPenalty || null,
-                frequencyPenalty: agentData.frequencyPenalty || null,
-                presencePenalty: agentData.presencePenalty || null,
-                reasoning: agentData.reasoning
+    const agents = Object.entries(formData.agents || {})
+        .filter(([, data]) => data?.model)
+        .reduce((configs, [key, data]) => {
+            const config: AgentConfigInput = {
+                model: data!.model, // After filter, data and model are guaranteed to exist
+                temperature: data?.temperature ?? null,
+                maxTokens: data?.maxTokens ?? null,
+                topK: data?.topK ?? null,
+                topP: data?.topP ?? null,
+                minLength: data?.minLength ?? null,
+                maxLength: data?.maxLength ?? null,
+                repetitionPenalty: data?.repetitionPenalty ?? null,
+                frequencyPenalty: data?.frequencyPenalty ?? null,
+                presencePenalty: data?.presencePenalty ?? null,
+                reasoning: data?.reasoning
                     ? {
-                          effort: getReasoningEffort(agentData.reasoning.effort),
-                          maxTokens: agentData.reasoning.maxTokens || null,
+                          effort: getReasoningEffort(data?.reasoning.effort),
+                          maxTokens: data?.reasoning.maxTokens ?? null,
                       }
                     : null,
                 price:
-                    agentData.price &&
-                    typeof agentData.price.input === 'number' &&
-                    typeof agentData.price.output === 'number'
+                    data?.price &&
+                    data?.price.input !== null &&
+                    data?.price.output !== null &&
+                    typeof data?.price.input === 'number' &&
+                    typeof data?.price.output === 'number'
                         ? {
-                              input: agentData.price.input,
-                              output: agentData.price.output,
+                              input: data?.price.input,
+                              output: data?.price.output,
                           }
                         : null,
             };
-            agents[agentKey as keyof AgentsConfigInput] = agentConfig;
-        }
-    });
+
+            return { ...configs, [key]: config };
+        }, {} as AgentsConfigInput);
 
     return {
         name: formData.name,
@@ -186,19 +466,77 @@ const SettingsProvider = () => {
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            name: '',
-            type: '',
+            name: undefined,
+            type: undefined,
             agents: {},
         },
     });
 
-    // Watch all form values and log to console
-    // const formValues = form.watch();
+    // Watch selected type
     const selectedType = form.watch('type');
 
-    // useEffect(() => {
-    //     console.log('Form values changed:', formValues);
-    // }, [formValues]);
+    // Get dynamic agent types from data
+    const agentTypes = useMemo(() => {
+        let agentsSource = null;
+
+        if (isNew && selectedType && data?.settingsProviders?.default) {
+            // For new providers, use default provider for selected type
+            agentsSource =
+                data.settingsProviders.default?.[selectedType as keyof typeof data.settingsProviders.default]?.agents;
+        } else if (!isNew && providerId && data?.settingsProviders?.userDefined) {
+            // For existing providers, use current provider's agents
+            const provider = data.settingsProviders.userDefined.find((p: Provider) => p.id === +providerId);
+            agentsSource = provider?.agents;
+        }
+
+        // If no specific source, try to get from any available default provider
+        if (!agentsSource && data?.settingsProviders?.default) {
+            const defaultProviders = data.settingsProviders.default;
+            // Try to find first available default provider with agents
+            const firstDefaultProvider = Object.values(defaultProviders).find((provider) => provider?.agents);
+            agentsSource = firstDefaultProvider?.agents;
+        }
+
+        // Extract agent types from the source
+        if (agentsSource) {
+            return Object.entries(agentsSource)
+                .filter(([key, data]) => key !== '__typename' && data)
+                .map(([key]) => key)
+                .sort();
+        }
+
+        // Fallback to hardcoded list if no data available
+        return [
+            'adviser',
+            'agent',
+            'assistant',
+            'coder',
+            'enricher',
+            'generator',
+            'installer',
+            'pentester',
+            'reflector',
+            'refiner',
+            'searcher',
+            'simple',
+            'simpleJson',
+        ];
+    }, [isNew, selectedType, providerId, data]);
+
+    // Get all available models grouped by provider
+    const availableModels = useMemo(() => {
+        if (!data?.settingsProviders?.models) {
+            return [];
+        }
+
+        return Object.entries(data.settingsProviders.models)
+            .filter(([provider, models]) => provider !== '__typename' && models?.length)
+            .map(([provider, models]) => ({
+                provider: getName(provider),
+                models: models?.map((model) => model.name)?.sort() ?? [],
+            }))
+            .sort((a, b) => a.provider.localeCompare(b.provider));
+    }, [data]);
 
     // Fill agents when provider type is selected (only for new providers)
     useEffect(() => {
@@ -222,8 +560,8 @@ const SettingsProvider = () => {
         if (isNew || !providerId) {
             // For new provider, start with empty form
             form.reset({
-                name: '',
-                type: '',
+                name: undefined,
+                type: undefined,
                 agents: {},
             });
             return;
@@ -239,8 +577,8 @@ const SettingsProvider = () => {
         const { name, type, agents } = provider;
 
         form.reset({
-            name: name || '',
-            type: type || '',
+            name: name || undefined,
+            type: type || undefined,
             agents: agents || {},
         });
     }, [data, isNew, providerId, form]);
@@ -353,87 +691,25 @@ const SettingsProvider = () => {
                             )}
 
                             {/* Form fields */}
-                            <FormField
-                                control={form.control}
+                            <FormComboboxItem
                                 name="type"
-                                render={({ field }) => (
-                                    <FormItem className="flex flex-col gap-1">
-                                        <FormLabel>Type</FormLabel>
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <FormControl>
-                                                    <Button
-                                                        variant="outline"
-                                                        role="combobox"
-                                                        className={cn(
-                                                            'w-[200px] justify-between',
-                                                            !field.value && 'text-muted-foreground',
-                                                        )}
-                                                        disabled={isSubmitting}
-                                                    >
-                                                        {field.value
-                                                            ? providers.find((provider) => provider === field.value)
-                                                            : 'Select provider'}
-                                                        <ChevronsUpDown className="opacity-50" />
-                                                    </Button>
-                                                </FormControl>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-[200px] p-0">
-                                                <Command>
-                                                    <CommandInput
-                                                        placeholder="Search framework..."
-                                                        className="h-9"
-                                                    />
-                                                    <CommandList>
-                                                        <CommandEmpty>No framework found.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            {providers.map((provider) => (
-                                                                <CommandItem
-                                                                    value={provider}
-                                                                    key={provider}
-                                                                    onSelect={() => {
-                                                                        form.setValue('type', provider);
-                                                                    }}
-                                                                >
-                                                                    {provider}
-                                                                    <Check
-                                                                        className={cn(
-                                                                            'ml-auto',
-                                                                            provider === field.value
-                                                                                ? 'opacity-100'
-                                                                                : 'opacity-0',
-                                                                        )}
-                                                                    />
-                                                                </CommandItem>
-                                                            ))}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                        <FormDescription>The type of language model provider</FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
+                                label="Type"
+                                placeholder="Select provider"
+                                options={providers}
+                                control={form.control}
+                                disabled={isSubmitting}
+                                allowCustom={false}
+                                width="w-[200px]"
+                                description="The type of language model provider"
                             />
 
-                            <FormField
-                                control={form.control}
+                            <FormInputStringItem
                                 name="name"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Name</FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                placeholder="Enter provider name"
-                                                disabled={isSubmitting}
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                        <FormDescription>A unique name for your provider configuration</FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
+                                label="Name"
+                                placeholder="Enter provider name"
+                                control={form.control}
+                                disabled={isSubmitting}
+                                description="A unique name for your provider configuration"
                             />
 
                             {/* Agents Configuration Section */}
@@ -460,414 +736,204 @@ const SettingsProvider = () => {
                                             <AccordionContent className="space-y-4 pt-4">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-[1px]">
                                                     {/* Model field */}
-                                                    <FormField
+                                                    <FormComboboxItem
+                                                        name={`agents.${agentKey}.model`}
+                                                        label="Model"
+                                                        placeholder="Select or enter model name"
+                                                        options={availableModels}
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.model` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Model</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        placeholder="e.g., gpt-4, claude-3"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
                                                     />
 
                                                     {/* Temperature field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.temperature`}
+                                                        label="Temperature"
+                                                        placeholder="0.7"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.temperature` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Temperature</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.1"
-                                                                        min="0"
-                                                                        max="2"
-                                                                        placeholder="0.7"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseFloat(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        step="0.1"
+                                                        min="0"
+                                                        max="2"
                                                     />
 
                                                     {/* Max Tokens field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.maxTokens`}
+                                                        label="Max Tokens"
+                                                        placeholder="1000"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.maxTokens` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Max Tokens</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        min="1"
-                                                                        placeholder="1000"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseInt(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        min="1"
+                                                        valueType="integer"
                                                     />
 
                                                     {/* Top P field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.topP`}
+                                                        label="Top P"
+                                                        placeholder="0.9"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.topP` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Top P</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        max="1"
-                                                                        placeholder="0.9"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseFloat(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        step="0.01"
+                                                        min="0"
+                                                        max="1"
                                                     />
 
                                                     {/* Top K field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.topK`}
+                                                        label="Top K"
+                                                        placeholder="40"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.topK` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Top K</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        min="1"
-                                                                        placeholder="40"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseInt(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        min="1"
+                                                        valueType="integer"
                                                     />
 
                                                     {/* Min Length field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.minLength`}
+                                                        label="Min Length"
+                                                        placeholder="0"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.minLength` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Min Length</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        placeholder="0"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseInt(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        min="0"
+                                                        valueType="integer"
                                                     />
 
                                                     {/* Max Length field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.maxLength`}
+                                                        label="Max Length"
+                                                        placeholder="2000"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.maxLength` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Max Length</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        min="1"
-                                                                        placeholder="2000"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseInt(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        min="1"
+                                                        valueType="integer"
                                                     />
 
                                                     {/* Repetition Penalty field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.repetitionPenalty`}
+                                                        label="Repetition Penalty"
+                                                        placeholder="1.0"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.repetitionPenalty` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Repetition Penalty</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        max="2"
-                                                                        placeholder="1.0"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseFloat(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        step="0.01"
+                                                        min="0"
+                                                        max="2"
                                                     />
 
                                                     {/* Frequency Penalty field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.frequencyPenalty`}
+                                                        label="Frequency Penalty"
+                                                        placeholder="0.0"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.frequencyPenalty` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Frequency Penalty</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        max="2"
-                                                                        placeholder="0.0"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseFloat(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        step="0.01"
+                                                        min="0"
+                                                        max="2"
                                                     />
 
                                                     {/* Presence Penalty field */}
-                                                    <FormField
+                                                    <FormInputNumberItem
+                                                        name={`agents.${agentKey}.presencePenalty`}
+                                                        label="Presence Penalty"
+                                                        placeholder="0.0"
                                                         control={form.control}
-                                                        name={`agents.${agentKey}.presencePenalty` as const}
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Presence Penalty</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="number"
-                                                                        step="0.01"
-                                                                        min="0"
-                                                                        max="2"
-                                                                        placeholder="0.0"
-                                                                        disabled={isSubmitting}
-                                                                        {...field}
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => {
-                                                                            const value = e.target.value;
-                                                                            field.onChange(
-                                                                                value === '' ? null : parseFloat(value),
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                            </FormItem>
-                                                        )}
+                                                        disabled={isSubmitting}
+                                                        step="0.01"
+                                                        min="0"
+                                                        max="2"
                                                     />
                                                 </div>
 
                                                 {/* Reasoning Configuration */}
-                                                <div className="mt-6 p-[1px] space-y-4">
-                                                    <h4 className="text-sm font-medium">Reasoning Configuration</h4>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        {/* Reasoning Effort field */}
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`agents.${agentKey}.reasoning.effort` as const}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>Reasoning Effort</FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            placeholder="e.g., low, medium, high"
+                                                <div className="col-span-full">
+                                                    <div className="mt-6 space-y-4">
+                                                        <h4 className="text-sm font-medium">Reasoning Configuration</h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {/* Reasoning Effort field */}
+                                                            <FormField
+                                                                control={form.control}
+                                                                name={`agents.${agentKey}.reasoning.effort`}
+                                                                render={({ field }) => (
+                                                                    <FormItem>
+                                                                        <FormLabel>Reasoning Effort</FormLabel>
+                                                                        <Select
+                                                                            onValueChange={field.onChange}
+                                                                            defaultValue={field.value || undefined}
                                                                             disabled={isSubmitting}
-                                                                            {...field}
-                                                                            value={field.value ?? ''}
-                                                                            onChange={(e) => {
-                                                                                const value = e.target.value;
-                                                                                field.onChange(
-                                                                                    value === '' ? null : value,
-                                                                                );
-                                                                            }}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                                        >
+                                                                            <FormControl>
+                                                                                <SelectTrigger>
+                                                                                    <SelectValue placeholder="Select effort level (optional)" />
+                                                                                </SelectTrigger>
+                                                                            </FormControl>
+                                                                            <SelectContent>
+                                                                                <SelectItem value={ReasoningEffort.Low}>
+                                                                                    Low
+                                                                                </SelectItem>
+                                                                                <SelectItem
+                                                                                    value={ReasoningEffort.Medium}
+                                                                                >
+                                                                                    Medium
+                                                                                </SelectItem>
+                                                                                <SelectItem
+                                                                                    value={ReasoningEffort.High}
+                                                                                >
+                                                                                    High
+                                                                                </SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                        <FormMessage />
+                                                                    </FormItem>
+                                                                )}
+                                                            />
 
-                                                        {/* Reasoning Max Tokens field */}
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`agents.${agentKey}.reasoning.maxTokens` as const}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>Reasoning Max Tokens</FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            type="number"
-                                                                            min="1"
-                                                                            placeholder="1000"
-                                                                            disabled={isSubmitting}
-                                                                            {...field}
-                                                                            value={field.value ?? ''}
-                                                                            onChange={(e) => {
-                                                                                const value = e.target.value;
-                                                                                field.onChange(
-                                                                                    value === ''
-                                                                                        ? null
-                                                                                        : parseInt(value),
-                                                                                );
-                                                                            }}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                            {/* Reasoning Max Tokens field */}
+                                                            <FormInputNumberItem
+                                                                name={`agents.${agentKey}.reasoning.maxTokens`}
+                                                                label="Reasoning Max Tokens"
+                                                                placeholder="1000"
+                                                                control={form.control}
+                                                                disabled={isSubmitting}
+                                                                min="1"
+                                                                valueType="integer"
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Price Configuration */}
-                                                <div className="mt-6 p-[1px] space-y-4">
-                                                    <h4 className="text-sm font-medium">Price Configuration</h4>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        {/* Price Input field */}
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`agents.${agentKey}.price.input` as const}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>Input Price</FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            type="number"
-                                                                            step="0.000001"
-                                                                            min="0"
-                                                                            placeholder="0.001"
-                                                                            disabled={isSubmitting}
-                                                                            {...field}
-                                                                            value={field.value ?? ''}
-                                                                            onChange={(e) => {
-                                                                                const value = e.target.value;
-                                                                                field.onChange(
-                                                                                    value === ''
-                                                                                        ? null
-                                                                                        : parseFloat(value),
-                                                                                );
-                                                                            }}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                <div className="col-span-full">
+                                                    <div className="mt-6 space-y-4">
+                                                        <h4 className="text-sm font-medium">Price Configuration</h4>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {/* Price Input field */}
+                                                            <FormInputNumberItem
+                                                                name={`agents.${agentKey}.price.input`}
+                                                                label="Input Price"
+                                                                placeholder="0.001"
+                                                                control={form.control}
+                                                                disabled={isSubmitting}
+                                                                step="0.000001"
+                                                                min="0"
+                                                            />
 
-                                                        {/* Price Output field */}
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`agents.${agentKey}.price.output` as const}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>Output Price</FormLabel>
-                                                                    <FormControl>
-                                                                        <Input
-                                                                            type="number"
-                                                                            step="0.000001"
-                                                                            min="0"
-                                                                            placeholder="0.002"
-                                                                            disabled={isSubmitting}
-                                                                            {...field}
-                                                                            value={field.value ?? ''}
-                                                                            onChange={(e) => {
-                                                                                const value = e.target.value;
-                                                                                field.onChange(
-                                                                                    value === ''
-                                                                                        ? null
-                                                                                        : parseFloat(value),
-                                                                                );
-                                                                            }}
-                                                                        />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
+                                                            {/* Price Output field */}
+                                                            <FormInputNumberItem
+                                                                name={`agents.${agentKey}.price.output`}
+                                                                label="Output Price"
+                                                                placeholder="0.002"
+                                                                control={form.control}
+                                                                disabled={isSubmitting}
+                                                                step="0.000001"
+                                                                min="0"
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </AccordionContent>
