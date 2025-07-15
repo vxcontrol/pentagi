@@ -1,0 +1,123 @@
+simple:
+  model: us.anthropic.claude-3-5-haiku-20241022-v1:0
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 3000
+  price:
+    input: 0.8
+    output: 4.0
+
+simple_json:
+  model: us.anthropic.claude-3-5-haiku-20241022-v1:0
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 3000
+  json: true
+  price:
+    input: 0.8
+    output: 4.0
+
+primary_agent:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 3.0
+    output: 15.0
+
+assistant:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 3.0
+    output: 15.0
+
+generator:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 3.0
+    output: 15.0
+
+refiner:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 3.0
+    output: 15.0
+
+adviser:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 3.0
+    output: 15.0
+
+reflector:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 3.0
+    output: 15.0
+
+searcher:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 3.0
+    output: 15.0
+
+enricher:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 3.0
+    output: 15.0
+
+coder:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 0.2
+  top_p: 0.2
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 3.0
+    output: 15.0
+
+installer:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 0.2
+  top_p: 0.2
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 3.0
+    output: 15.0
+
+pentester:
+  model: us.anthropic.claude-sonnet-4-20250514-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 3.0
+    output: 15.0

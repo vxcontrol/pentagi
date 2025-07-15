@@ -14,6 +14,7 @@ import (
 	"pentagi/pkg/database/converter"
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/providers/anthropic"
+	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/gemini"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
@@ -975,6 +976,9 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			}
 		case provider.ProviderBedrock:
 			config.Default.Bedrock = mpcfg
+			if models, err := bedrock.DefaultModels(); err == nil {
+				config.Models.Bedrock = converter.ConvertModels(models)
+			}
 		case provider.ProviderOllama:
 			config.Default.Ollama = mpcfg
 		case provider.ProviderCustom:

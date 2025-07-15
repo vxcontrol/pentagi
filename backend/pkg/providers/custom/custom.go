@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -281,14 +282,18 @@ func loadModelsFromServer(baseURL, baseKey string, client *http.Client) pconfig.
 
 		// Check for reasoning support in supported_parameters
 		if len(model.SupportedParameters) > 0 {
-			thinking := false
-			for _, param := range model.SupportedParameters {
-				if param == "reasoning" {
-					thinking = true
-					break
-				}
-			}
+			thinking := slices.Contains(model.SupportedParameters, "reasoning")
 			modelConfig.Thinking = &thinking
+		}
+
+		// Check for tool support
+		if len(model.SupportedParameters) > 0 {
+			// Skip models if we sure they don't support tools and structured outputs
+			hasTools := slices.Contains(model.SupportedParameters, "tools")
+			hasStructuredOutputs := slices.Contains(model.SupportedParameters, "structured_outputs")
+			if !hasTools && !hasStructuredOutputs {
+				continue
+			}
 		}
 
 		// Parse pricing if available

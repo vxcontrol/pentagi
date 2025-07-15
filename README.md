@@ -482,6 +482,11 @@ OPEN_AI_KEY=your_openai_key
 ANTHROPIC_API_KEY=your_anthropic_key
 GEMINI_API_KEY=your_gemini_key
 
+# Optional: AWS Bedrock provider (enterprise-grade models)
+BEDROCK_REGION=us-east-1
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+
 # Optional: Local LLM provider (zero-cost inference)
 OLLAMA_SERVER_URL=http://localhost:11434
 
@@ -536,7 +541,7 @@ Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default
 > [!NOTE]
 > If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml` and `docker-compose-observability.yml` to use Langfuse and Observability services.
 > 
-> You have to set at least one Language Model provider (OpenAI, Anthropic, Gemini, or Ollama) to use PentAGI. Ollama provides zero-cost local inference if you have sufficient computational resources. Additional API keys for search engines are optional but recommended for better results.
+> You have to set at least one Language Model provider (OpenAI, Anthropic, Gemini, AWS Bedrock, or Ollama) to use PentAGI. AWS Bedrock provides enterprise-grade access to multiple foundation models from leading AI companies, while Ollama provides zero-cost local inference if you have sufficient computational resources. Additional API keys for search engines are optional but recommended for better results.
 > 
 > `LLM_SERVER_*` environment variables are experimental feature and will be changed in the future. Right now you can use them to specify custom LLM server URL and one model for all agent types.
 > 
@@ -695,6 +700,81 @@ The Gemini provider offers advanced features including:
 - **Security-Focused Models**: Specialized configurations optimized for penetration testing workflows
 
 The system automatically selects appropriate Gemini models based on agent requirements, balancing performance, capabilities, and cost-effectiveness.
+
+### AWS Bedrock Provider Configuration
+
+PentAGI integrates with Amazon Bedrock, offering access to a wide range of foundation models from leading AI companies including Anthropic, AI21, Cohere, Meta, and Amazon's own models:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
+| `BEDROCK_ACCESS_KEY_ID` | | AWS access key ID for authentication |
+| `BEDROCK_SECRET_ACCESS_KEY` | | AWS secret access key for authentication |
+| `BEDROCK_SERVER_URL` | | Optional custom Bedrock endpoint URL |
+
+Configuration examples:
+
+```bash
+# Basic AWS Bedrock setup with credentials
+BEDROCK_REGION=us-east-1
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+
+# Using with proxy for enhanced security
+BEDROCK_REGION=us-east-1
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+PROXY_URL=http://your-proxy:8080
+
+# Using custom endpoint (for VPC endpoints or testing)
+BEDROCK_REGION=us-east-1
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+BEDROCK_SERVER_URL=https://bedrock-runtime.us-east-1.amazonaws.com
+```
+
+> [!IMPORTANT]
+> **AWS Bedrock Rate Limits Warning**
+>
+> The default PentAGI configuration for AWS Bedrock uses two primary models:
+> - `us.anthropic.claude-sonnet-4-20250514-v1:0` (for most agents) - **2 requests per minute** for new AWS accounts
+> - `us.anthropic.claude-3-5-haiku-20241022-v1:0` (for simple tasks) - **20 requests per minute** for new AWS accounts
+>
+> These default rate limits are **extremely restrictive** for comfortable penetration testing scenarios and will significantly impact your workflow. We **strongly recommend**:
+>
+> 1. **Request quota increases** for your AWS Bedrock models through the AWS Service Quotas console
+> 2. **Use provisioned throughput models** with hourly billing for higher throughput requirements
+> 3. **Switch to alternative models** with higher default quotas (e.g., Amazon Nova series, Meta Llama models)
+> 4. **Consider using a different LLM provider** (OpenAI, Anthropic, Gemini) if you need immediate high-throughput access
+>
+> Without adequate rate limits, you may experience frequent delays, timeouts, and degraded testing performance.
+
+The AWS Bedrock provider delivers comprehensive capabilities including:
+
+- **Multi-Provider Access**: Access to models from Anthropic (Claude), AI21 (Jamba), Cohere (Command), Meta (Llama), Amazon (Nova, Titan), and DeepSeek (R1) through a single interface
+- **Advanced Reasoning**: Support for Claude 4 and other reasoning-capable models with step-by-step thinking
+- **Multimodal Models**: Amazon Nova series supporting text, image, and video processing for comprehensive security analysis
+- **Enterprise Security**: AWS-native security controls, VPC integration, and compliance certifications
+- **Cost Optimization**: Wide range of model sizes and capabilities for cost-effective penetration testing
+- **Regional Availability**: Deploy models in your preferred AWS region for data residency and performance
+- **High Performance**: Low-latency inference through AWS's global infrastructure
+
+The system automatically selects appropriate Bedrock models based on task complexity and requirements, leveraging the full spectrum of available foundation models for optimal security testing results.
+
+> [!WARNING]
+> **Converse API Requirements**
+>
+> PentAGI uses the **Amazon Bedrock Converse API** for model interactions, which requires models to support the following features:
+> - ✅ **Converse** - Basic conversation API support
+> - ✅ **ConverseStream** - Streaming response support  
+> - ✅ **Tool use** - Function calling capabilities for penetration testing tools
+> - ✅ **Streaming tool use** - Real-time tool execution feedback
+>
+> **Before selecting models**, verify their feature support at: [Supported models and model features](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
+>
+> ⚠️ **Important**: Some models like AI21 Jurassic-2 and Cohere Command (Text) have **limited chat support** and may not work properly with PentAGI's multi-turn conversation workflows.
+
+> **Note**: AWS credentials can also be provided through IAM roles, environment variables, or AWS credential files following standard AWS SDK authentication patterns. Ensure your AWS account has appropriate permissions for Amazon Bedrock service access.
 
 For advanced configuration options and detailed setup instructions, please visit our [documentation](https://docs.pentagi.com).
 
@@ -1038,6 +1118,11 @@ docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -type gemini
 
+# Test with AWS Bedrock configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -type bedrock
+
 # Test with Custom OpenAI configuration
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
@@ -1069,6 +1154,12 @@ ANTHROPIC_SERVER_URL=https://api.anthropic.com/v1  # Anthropic API endpoint
 # For Gemini (Google AI)
 GEMINI_API_KEY=your_gemini_api_key               # Your Google AI API key
 GEMINI_SERVER_URL=https://generativelanguage.googleapis.com  # Google AI API endpoint
+
+# For AWS Bedrock (enterprise foundation models)
+BEDROCK_REGION=us-east-1                         # AWS region for Bedrock service
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key        # AWS access key ID
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key    # AWS secret access key
+BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint
 
 # For Ollama (local inference)
 OLLAMA_SERVER_URL=http://localhost:11434         # Your Ollama server URL
