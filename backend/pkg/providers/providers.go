@@ -16,6 +16,7 @@ import (
 	"pentagi/pkg/docker"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers/anthropic"
+	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/custom"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/gemini"
@@ -172,6 +173,12 @@ func NewProviderController(
 		defaultConfigs[provider.ProviderGemini] = config
 	}
 
+	if config, err := bedrock.DefaultProviderConfig(); err != nil {
+		return nil, fmt.Errorf("failed to create bedrock provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderBedrock] = config
+	}
+
 	if config, err := ollama.DefaultProviderConfig(cfg); err != nil {
 		return nil, fmt.Errorf("failed to create ollama provider config: %w", err)
 	} else {
@@ -209,6 +216,14 @@ func NewProviderController(
 		}
 
 		providers[provider.DefaultProviderNameGemini] = p
+	}
+
+	if cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "" {
+		p, err := bedrock.New(cfg, defaultConfigs[provider.ProviderBedrock])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create bedrock provider: %w", err)
+		}
+		providers[provider.DefaultProviderNameBedrock] = p
 	}
 
 	if cfg.OllamaServerURL != "" {
@@ -596,7 +611,11 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 		}
 		return gemini.New(pc.cfg, geminiConfig)
 	case provider.ProviderBedrock:
-		return nil, fmt.Errorf("bedrock provider is not supported")
+		bedrockConfig, err := bedrock.BuildProviderConfig(prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build bedrock provider config: %w", err)
+		}
+		return bedrock.New(pc.cfg, bedrockConfig)
 	case provider.ProviderOllama:
 		ollamaConfig, err := ollama.BuildProviderConfig(pc.cfg, prv.Config)
 		if err != nil {
@@ -931,7 +950,7 @@ func (pc *providerController) buildProviderFromConfig(
 	case provider.ProviderGemini:
 		return gemini.New(pc.cfg, config)
 	case provider.ProviderBedrock:
-		return nil, fmt.Errorf("bedrock provider is not supported")
+		return bedrock.New(pc.cfg, config)
 	case provider.ProviderOllama:
 		return ollama.New(pc.cfg, config)
 	default:

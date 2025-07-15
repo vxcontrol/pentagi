@@ -2,14 +2,24 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/pconfig"
 
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/vxcontrol/langchaingo/llms"
+)
+
+const (
+	MaxTooManyRequestsRetries = 10
+	TooManyRequestsRetryDelay = 5 * time.Second
 )
 
 type GenerateContentFunc func(
@@ -114,7 +124,26 @@ func WrapGenerateFromSinglePrompt(
 		Parts: []llms.ContentPart{llms.TextContent{Text: prompt}},
 	}
 
-	resp, err := llm.GenerateContent(ctx, []llms.MessageContent{msg}, options...)
+	var (
+		err  error
+		resp *llms.ContentResponse
+	)
+
+	for idx := range MaxTooManyRequestsRetries {
+		resp, err = llm.GenerateContent(ctx, []llms.MessageContent{msg}, options...)
+		if err != nil {
+			if isTooManyRequestsError(err) {
+				select {
+				case <-ctx.Done():
+					return "", ctx.Err()
+				case <-time.After(TooManyRequestsRetryDelay + time.Duration(idx)*time.Second):
+				}
+				continue
+			}
+		}
+		break
+	}
+
 	if err != nil {
 		generation.End(
 			langfuse.WithEndGenerationStatus(err.Error()),
@@ -193,7 +222,26 @@ func WrapGenerateContent(
 		langfuse.WithStartGenerationModelParameters(langfuse.GetLangchainModelParameters(options)),
 	)
 
-	resp, err := fn(ctx, messages, options...)
+	var (
+		err  error
+		resp *llms.ContentResponse
+	)
+
+	for idx := range MaxTooManyRequestsRetries {
+		resp, err = fn(ctx, messages, options...)
+		if err != nil {
+			if isTooManyRequestsError(err) {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(TooManyRequestsRetryDelay + time.Duration(idx)*time.Second):
+				}
+				continue
+			}
+		}
+		break
+	}
+
 	if err != nil {
 		generation.End(
 			langfuse.WithEndGenerationStatus(err.Error()),
@@ -239,4 +287,29 @@ func WrapGenerateContent(
 	)
 
 	return resp, nil
+}
+
+func isTooManyRequestsError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	for errNested := err; errNested != nil; errNested = errors.Unwrap(errNested) {
+		if errResp, ok := errNested.(*awshttp.ResponseError); ok {
+			return errResp.Response.StatusCode == http.StatusTooManyRequests
+		}
+		if errThrottling, ok := errNested.(*types.ThrottlingException); ok && errThrottling.Message != nil {
+			return strings.Contains(strings.ToLower(*errThrottling.Message), "too many requests")
+		}
+	}
+
+	errStr := strings.ToLower(err.Error())
+	if strings.Contains(errStr, "statuscode: 429") {
+		return true
+	}
+	if strings.Contains(errStr, "toomanyrequests") || strings.Contains(errStr, "too many requests") {
+		return true
+	}
+
+	return false
 }

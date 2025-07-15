@@ -85,6 +85,12 @@ type Config struct {
 	GeminiAPIKey    string `env:"GEMINI_API_KEY"`
 	GeminiServerURL string `env:"GEMINI_SERVER_URL" envDefault:"https://generativelanguage.googleapis.com"`
 
+	// Bedrock
+	BedrockRegion    string `env:"BEDROCK_REGION" envDefault:"us-east-1"`
+	BedrockAccessKey string `env:"BEDROCK_ACCESS_KEY_ID"`
+	BedrockSecretKey string `env:"BEDROCK_SECRET_ACCESS_KEY"`
+	BedrockServerURL string `env:"BEDROCK_SERVER_URL"`
+
 	// DuckDuckGo search engine
 	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
 

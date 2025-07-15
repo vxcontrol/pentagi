@@ -11,6 +11,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/anthropic"
+	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/custom"
 	"pentagi/pkg/providers/gemini"
 	"pentagi/pkg/providers/ollama"
@@ -31,6 +32,7 @@ func main() {
 	reportPath := flag.String("report", "", "Path to write report file")
 	agentTypes := flag.String("agents", "all", "Comma-separated agent types to test")
 	testGroups := flag.String("groups", "all", "Comma-separated test groups to run")
+	workers := flag.Int("workers", 4, "Number of workers to use")
 	verbose := flag.Bool("verbose", false, "Enable verbose output")
 	flag.Parse()
 
@@ -85,7 +87,11 @@ func main() {
 		testOptions = append(testOptions, tester.WithCustomRegistry(registry))
 	}
 
-	testOptions = append(testOptions, tester.WithVerbose(*verbose))
+	testOptions = append(
+		testOptions,
+		tester.WithVerbose(*verbose),
+		tester.WithParallelWorkers(*workers),
+	)
 
 	results, err := tester.TestProvider(context.Background(), prv, testOptions...)
 	if err != nil {
@@ -143,6 +149,16 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		}
 		return gemini.New(cfg, providerConfig)
 
+	case "bedrock":
+		if cfg.BedrockAccessKey == "" {
+			return nil, fmt.Errorf("Bedrock access key is not set")
+		}
+		providerConfig, err := bedrock.DefaultProviderConfig()
+		if err != nil {
+			return nil, fmt.Errorf("error creating bedrock provider config: %w", err)
+		}
+		return bedrock.New(cfg, providerConfig)
+
 	case "ollama":
 		if cfg.OllamaServerURL == "" {
 			return nil, fmt.Errorf("Ollama server URL is not set")
@@ -152,8 +168,6 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 			return nil, fmt.Errorf("error creating ollama provider config: %w", err)
 		}
 		return ollama.New(cfg, providerConfig)
-
-	//TODO: Add gemini, bedrock, ollama providers
 
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", providerType)
