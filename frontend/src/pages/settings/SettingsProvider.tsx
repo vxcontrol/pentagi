@@ -148,7 +148,9 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
 };
 
 interface FormComboboxItemProps extends BaseFieldProps, BaseInputProps {
-    options: string[] | { provider: string; models: string[] }[];
+    options:
+        | string[]
+        | { provider: string; models: { name: string; price?: { input: number; output: number } | null }[] }[];
     allowCustom?: boolean;
     width?: string;
     description?: string;
@@ -162,7 +164,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
     placeholder,
     options,
     allowCustom = true,
-    width = 'w-[400px]',
+    width = 'w-[600px]',
     description,
 }) => {
     const { field, fieldState } = useController({
@@ -179,13 +181,18 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
     const isGroupedData = options.length > 0 && typeof options[0] === 'object';
 
     const filteredOptions = isGroupedData
-        ? (options as { provider: string; models: string[] }[])
+        ? (
+              options as {
+                  provider: string;
+                  models: { name: string; price?: { input: number; output: number } | null }[];
+              }[]
+          )
               .map((group) => ({
                   provider: group.provider,
-                  models: group.models.filter((model) => model.toLowerCase().includes(search.toLowerCase())),
+                  models: group.models.filter((model) => model?.name?.toLowerCase().includes(search?.toLowerCase())),
               }))
               .filter((group) => group.models.length > 0)
-        : (options as string[]).filter((option) => option.toLowerCase().includes(search.toLowerCase()));
+        : (options as string[]).filter((option) => option?.toLowerCase().includes(search?.toLowerCase()));
 
     const displayValue = field.value ?? '';
 
@@ -242,26 +249,39 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                                 </CommandEmpty>
                                 {isGroupedData ? (
                                     // Render grouped data
-                                    (filteredOptions as { provider: string; models: string[] }[]).map((group) => (
+                                    (
+                                        filteredOptions as {
+                                            provider: string;
+                                            models: {
+                                                name: string;
+                                                price?: { input: number; output: number } | null;
+                                            }[];
+                                        }[]
+                                    ).map((group) => (
                                         <CommandGroup
                                             key={group.provider}
                                             heading={group.provider}
                                         >
                                             {group.models.map((model) => (
                                                 <CommandItem
-                                                    key={model}
-                                                    value={model}
+                                                    key={model.name}
+                                                    value={model.name}
                                                     onSelect={() => {
-                                                        field.onChange(model);
+                                                        field.onChange(model.name);
                                                         setOpen(false);
                                                         setSearch('');
                                                     }}
                                                 >
-                                                    {model}
+                                                    <div className="flex items-center justify-between w-full min-w-0 gap-2">
+                                                        <span className="truncate">{model.name}</span>
+                                                        <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                                                            {formatPrice(model.price)}
+                                                        </span>
+                                                    </div>
                                                     <Check
                                                         className={cn(
                                                             'ml-auto',
-                                                            displayValue === model ? 'opacity-100' : 'opacity-0',
+                                                            displayValue === model.name ? 'opacity-100' : 'opacity-0',
                                                         )}
                                                     />
                                                 </CommandItem>
@@ -384,6 +404,20 @@ type FormData = z.infer<typeof formSchema>;
 // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
 const getName = (key: string): string => key.replace(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
+// Format price for display
+const formatPrice = (price?: { input: number; output: number } | null): string => {
+    if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
+        return 'free';
+    }
+
+    const formatValue = (value: number): string => {
+        // Show up to 6 decimal places without trailing zeros
+        return value.toFixed(6).replace(/\.?0+$/, '');
+    };
+
+    return `$${formatValue(price.input)}/$${formatValue(price.output)}`;
+};
+
 // Helper function to convert string to ReasoningEffort enum
 const getReasoningEffort = (effort: string | null | undefined): ReasoningEffort | null => {
     if (!effort) return null;
@@ -409,7 +443,7 @@ const transformFormToGraphQL = (
     agents: AgentsConfigInput;
 } => {
     const agents = Object.entries(formData.agents || {})
-        .filter(([, data]) => data?.model)
+        .filter(([key, data]) => key !== '__typename' && data?.model)
         .reduce((configs, [key, data]) => {
             const config: AgentConfigInput = {
                 model: data!.model, // After filter, data and model are guaranteed to exist
@@ -533,7 +567,13 @@ const SettingsProvider = () => {
             .filter(([provider, models]) => provider !== '__typename' && models?.length)
             .map(([provider, models]) => ({
                 provider: getName(provider),
-                models: models?.map((model) => model.name)?.sort() ?? [],
+                models:
+                    models
+                        ?.map((model) => ({
+                            name: model.name,
+                            price: model.price,
+                        }))
+                        ?.sort((a, b) => a.name.localeCompare(b.name)) ?? [],
             }))
             .sort((a, b) => a.provider.localeCompare(b.provider));
     }, [data]);
@@ -547,7 +587,10 @@ const SettingsProvider = () => {
         const defaultProvider =
             data.settingsProviders.default[selectedType as keyof typeof data.settingsProviders.default];
         if (defaultProvider?.agents) {
-            form.setValue('agents', defaultProvider.agents);
+            form.setValue(
+                'agents',
+                Object.fromEntries(Object.entries(defaultProvider.agents).filter(([key]) => key !== '__typename')),
+            );
         }
     }, [selectedType, isNew, data, form]);
 
@@ -586,10 +629,8 @@ const SettingsProvider = () => {
     const onSubmit = async (formData: FormData) => {
         try {
             setSubmitError(null);
-            console.log('Form submitted:', formData);
 
             const mutationData = transformFormToGraphQL(formData);
-            console.log('Mutation data:', mutationData);
 
             if (isNew) {
                 // Create new provider
@@ -621,7 +662,6 @@ const SettingsProvider = () => {
 
         try {
             setSubmitError(null);
-            console.log('Deleting provider:', providerId);
 
             await deleteProvider({
                 variables: { providerId },
