@@ -49,8 +49,8 @@ const SettingsProvidersHeader = () => {
 };
 
 const SettingsProviders = () => {
-    const { data, loading, error } = useSettingsProvidersQuery();
-    const [deleteProvider, { loading: deleteLoading, error: deleteError }] = useDeleteProviderMutation();
+    const { data, loading: isLoading, error } = useSettingsProvidersQuery();
+    const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
     const navigate = useNavigate();
 
@@ -198,9 +198,9 @@ const SettingsProviders = () => {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                     onClick={() => handleProviderDelete(provider.id)}
-                                    disabled={deleteLoading}
+                                    disabled={isDeleteLoading}
                                 >
-                                    {deleteLoading ? (
+                                    {isDeleteLoading ? (
                                         <>
                                             <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                             Deleting...
@@ -290,7 +290,7 @@ const SettingsProviders = () => {
         );
     };
 
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="space-y-4">
                 <SettingsProvidersHeader />

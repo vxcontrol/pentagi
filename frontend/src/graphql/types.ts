@@ -228,8 +228,11 @@ export enum MessageLogType {
 }
 
 export type ModelConfig = {
+    description?: Maybe<Scalars['String']['output']>;
     name: Scalars['String']['output'];
     price?: Maybe<ModelPrice>;
+    releaseDate?: Maybe<Scalars['Time']['output']>;
+    thinking?: Maybe<Scalars['Boolean']['output']>;
 };
 
 export type ModelPrice = {

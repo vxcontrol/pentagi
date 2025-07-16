@@ -21,10 +21,10 @@ import {
 } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Check, ChevronsUpDown, Loader2, Save, Trash2 } from 'lucide-react';
+import { AlertCircle, Check, ChevronsUpDown, Lightbulb, Loader2, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
 type Provider = ProviderConfigFragmentFragment;
@@ -148,11 +148,9 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
 };
 
 interface FormComboboxItemProps extends BaseFieldProps, BaseInputProps {
-    options:
-        | string[]
-        | { provider: string; models: { name: string; price?: { input: number; output: number } | null }[] }[];
+    options: string[];
     allowCustom?: boolean;
-    width?: string;
+    contentClass?: string;
     description?: string;
 }
 
@@ -164,7 +162,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
     placeholder,
     options,
     allowCustom = true,
-    width = 'w-[600px]',
+    contentClass,
     description,
 }) => {
     const { field, fieldState } = useController({
@@ -177,22 +175,8 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    // Handle both flat array and grouped data
-    const isGroupedData = options.length > 0 && typeof options[0] === 'object';
-
-    const filteredOptions = isGroupedData
-        ? (
-              options as {
-                  provider: string;
-                  models: { name: string; price?: { input: number; output: number } | null }[];
-              }[]
-          )
-              .map((group) => ({
-                  provider: group.provider,
-                  models: group.models.filter((model) => model?.name?.toLowerCase().includes(search?.toLowerCase())),
-              }))
-              .filter((group) => group.models.length > 0)
-        : (options as string[]).filter((option) => option?.toLowerCase().includes(search?.toLowerCase()));
+    // Filter options based on search
+    const filteredOptions = options.filter((option) => option?.toLowerCase().includes(search?.toLowerCase()));
 
     const displayValue = field.value ?? '';
 
@@ -217,8 +201,12 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                        className={cn(width, 'p-0')}
+                        className={cn(contentClass, 'p-0')}
                         align="start"
+                        style={{
+                            width: 'var(--radix-popover-trigger-width)',
+                            maxHeight: 'var(--radix-popover-content-available-height)',
+                        }}
                     >
                         <Command>
                             <CommandInput
@@ -247,74 +235,186 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                                         )}
                                     </div>
                                 </CommandEmpty>
-                                {isGroupedData ? (
-                                    // Render grouped data
-                                    (
-                                        filteredOptions as {
-                                            provider: string;
-                                            models: {
-                                                name: string;
-                                                price?: { input: number; output: number } | null;
-                                            }[];
-                                        }[]
-                                    ).map((group) => (
-                                        <CommandGroup
-                                            key={group.provider}
-                                            heading={group.provider}
+                                <CommandGroup>
+                                    {filteredOptions.map((option) => (
+                                        <CommandItem
+                                            key={option}
+                                            value={option}
+                                            onSelect={() => {
+                                                field.onChange(option);
+                                                setOpen(false);
+                                                setSearch('');
+                                            }}
                                         >
-                                            {group.models.map((model) => (
-                                                <CommandItem
-                                                    key={model.name}
-                                                    value={model.name}
-                                                    onSelect={() => {
-                                                        field.onChange(model.name);
+                                            {option}
+                                            <Check
+                                                className={cn(
+                                                    'ml-auto',
+                                                    displayValue === option ? 'opacity-100' : 'opacity-0',
+                                                )}
+                                            />
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            </CommandList>
+                        </Command>
+                    </PopoverContent>
+                </Popover>
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+};
+
+interface ModelOption {
+    name: string;
+    thinking?: boolean;
+    price?: { input: number; output: number } | null;
+}
+
+interface FormModelComboboxItemProps extends BaseFieldProps, BaseInputProps {
+    options: ModelOption[];
+    allowCustom?: boolean;
+    contentClass?: string;
+    description?: string;
+}
+
+const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
+    name,
+    control,
+    disabled,
+    label,
+    placeholder,
+    options,
+    allowCustom = true,
+    contentClass,
+    description,
+}) => {
+    const { field, fieldState } = useController({
+        name,
+        control,
+        defaultValue: undefined,
+        disabled,
+    });
+
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+
+    // Filter options based on search
+    const filteredOptions = options.filter((option) => option.name?.toLowerCase().includes(search?.toLowerCase()));
+
+    const displayValue = field.value ?? '';
+
+    // Format price for display
+    const formatPrice = (price?: { input: number; output: number } | null): string => {
+        if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
+            return 'free';
+        }
+
+        const formatValue = (value: number): string => {
+            return value.toFixed(6).replace(/\.?0+$/, '');
+        };
+
+        return `$${formatValue(price.input)}/$${formatValue(price.output)}`;
+    };
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Popover
+                    open={open}
+                    onOpenChange={setOpen}
+                >
+                    <div className="flex w-full">
+                        {/* Input field - main control */}
+                        <Input
+                            value={displayValue}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            placeholder={placeholder}
+                            disabled={disabled}
+                            className="rounded-r-none border-r-0 focus-visible:z-10"
+                        />
+                        {/* Dropdown trigger button */}
+                        <PopoverTrigger asChild>
+                            <Button
+                                variant="outline"
+                                className="rounded-l-none border-l-0 px-3 hover:z-10"
+                                disabled={disabled}
+                                type="button"
+                            >
+                                <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                            className={cn(contentClass, 'p-0 w-80 sm:w-[480px] md:w-[640px]')}
+                            align="end"
+                        >
+                            <Command>
+                                <CommandInput
+                                    placeholder={`Search ${label.toLowerCase()}...`}
+                                    className="h-9"
+                                    value={search}
+                                    onValueChange={setSearch}
+                                />
+                                <CommandList>
+                                    <CommandEmpty>
+                                        <div className="text-center py-2">
+                                            <p className="text-sm text-muted-foreground">
+                                                No {label.toLowerCase()} found.
+                                            </p>
+                                            {search && allowCustom && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="mt-2"
+                                                    onClick={() => {
+                                                        field.onChange(search);
                                                         setOpen(false);
                                                         setSearch('');
                                                     }}
                                                 >
-                                                    <div className="flex items-center justify-between w-full min-w-0 gap-2">
-                                                        <span className="truncate">{model.name}</span>
-                                                        <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-                                                            {formatPrice(model.price)}
-                                                        </span>
-                                                    </div>
-                                                    <Check
-                                                        className={cn(
-                                                            'ml-auto',
-                                                            displayValue === model.name ? 'opacity-100' : 'opacity-0',
-                                                        )}
-                                                    />
-                                                </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    ))
-                                ) : (
-                                    // Render flat data
+                                                    Use "{search}" as custom {label.toLowerCase()}
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </CommandEmpty>
                                     <CommandGroup>
-                                        {(filteredOptions as string[]).map((option) => (
+                                        {filteredOptions.map((option) => (
                                             <CommandItem
-                                                key={option}
-                                                value={option}
+                                                key={option.name}
+                                                value={option.name}
                                                 onSelect={() => {
-                                                    field.onChange(option);
+                                                    field.onChange(option.name);
                                                     setOpen(false);
                                                     setSearch('');
                                                 }}
                                             >
-                                                {option}
+                                                <div className="flex items-center justify-between w-full min-w-0 gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <span className="truncate">{option.name}</span>
+                                                        {option.thinking && (
+                                                            <Lightbulb className="h-3 w-3 text-muted-foreground" />
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                                                        {formatPrice(option.price)}
+                                                    </span>
+                                                </div>
                                                 <Check
                                                     className={cn(
                                                         'ml-auto',
-                                                        displayValue === option ? 'opacity-100' : 'opacity-0',
+                                                        displayValue === option.name ? 'opacity-100' : 'opacity-0',
                                                     )}
                                                 />
                                             </CommandItem>
                                         ))}
                                     </CommandGroup>
-                                )}
-                            </CommandList>
-                        </Command>
-                    </PopoverContent>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </div>
                 </Popover>
             </FormControl>
             {description && <FormDescription>{description}</FormDescription>}
@@ -395,7 +495,10 @@ const agentConfigSchema = z
 // Define form schema
 const formSchema = z.object({
     type: z.preprocess((value) => value || '', z.string().min(1, 'Provider type is required')),
-    name: z.preprocess((value) => value || '', z.string().min(1, 'Provider name is required')),
+    name: z.preprocess(
+        (value) => value || '',
+        z.string().min(1, 'Provider name is required').max(50, 'Maximum 50 characters allowed'),
+    ),
     agents: z.record(z.string(), agentConfigSchema).optional(),
 });
 
@@ -403,20 +506,6 @@ type FormData = z.infer<typeof formSchema>;
 
 // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
 const getName = (key: string): string => key.replace(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
-
-// Format price for display
-const formatPrice = (price?: { input: number; output: number } | null): string => {
-    if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
-        return 'free';
-    }
-
-    const formatValue = (value: number): string => {
-        // Show up to 6 decimal places without trailing zeros
-        return value.toFixed(6).replace(/\.?0+$/, '');
-    };
-
-    return `$${formatValue(price.input)}/$${formatValue(price.output)}`;
-};
 
 // Helper function to convert string to ReasoningEffort enum
 const getReasoningEffort = (effort: string | null | undefined): ReasoningEffort | null => {
@@ -488,14 +577,15 @@ const transformFormToGraphQL = (
 const SettingsProvider = () => {
     const { providerId } = useParams<{ providerId: string }>();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { data, loading, error } = useSettingsProvidersQuery();
-    const [createProvider, { loading: createLoading, error: createError }] = useCreateProviderMutation();
-    const [updateProvider, { loading: updateLoading, error: updateError }] = useUpdateProviderMutation();
-    const [deleteProvider, { loading: deleteLoading, error: deleteError }] = useDeleteProviderMutation();
+    const [createProvider, { loading: isCreateLoading, error: createError }] = useCreateProviderMutation();
+    const [updateProvider, { loading: isUpdateLoading, error: updateError }] = useUpdateProviderMutation();
+    const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
     const [submitError, setSubmitError] = useState<string | null>(null);
 
     const isNew = providerId === 'new';
-    const isSubmitting = createLoading || updateLoading || deleteLoading;
+    const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading;
 
     const form = useForm<FormData>({
         resolver: zodResolver(formSchema),
@@ -508,6 +598,15 @@ const SettingsProvider = () => {
 
     // Watch selected type
     const selectedType = form.watch('type');
+
+    // Read query parameters for form initialization (stable)
+    const formQueryParams = useMemo(
+        () => ({
+            type: searchParams.get('type'),
+            id: searchParams.get('id'),
+        }),
+        [searchParams],
+    );
 
     // Get dynamic agent types from data
     const agentTypes = useMemo(() => {
@@ -557,56 +656,137 @@ const SettingsProvider = () => {
         ];
     }, [isNew, selectedType, providerId, data]);
 
-    // Get all available models grouped by provider
+    // Get available models filtered by selected provider type
     const availableModels = useMemo(() => {
-        if (!data?.settingsProviders?.models) {
+        if (!data?.settingsProviders?.models || !selectedType) {
             return [];
         }
 
-        return Object.entries(data.settingsProviders.models)
-            .filter(([provider, models]) => provider !== '__typename' && models?.length)
-            .map(([provider, models]) => ({
-                provider: getName(provider),
-                models:
-                    models
-                        ?.map((model) => ({
-                            name: model.name,
-                            price: model.price,
-                        }))
-                        ?.sort((a, b) => a.name.localeCompare(b.name)) ?? [],
+        // Filter models by selected provider type
+        const models = data.settingsProviders.models;
+        const providerModels = models[selectedType as keyof typeof models];
+        if (!providerModels?.length) {
+            return [];
+        }
+
+        return providerModels
+            .map((model: any) => ({
+                name: model.name,
+                thinking: model.thinking,
+                price: model.price,
             }))
-            .sort((a, b) => a.provider.localeCompare(b.provider));
-    }, [data]);
+            .filter((model) => model.name) // Remove any models without names
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [data, selectedType]);
 
     // Fill agents when provider type is selected (only for new providers)
     useEffect(() => {
-        if (!isNew || !selectedType || !data?.settingsProviders?.default) {
+        if (!isNew || !selectedType || !data?.settingsProviders?.default || !availableModels.length) {
             return;
         }
 
         const defaultProvider =
             data.settingsProviders.default[selectedType as keyof typeof data.settingsProviders.default];
         if (defaultProvider?.agents) {
-            form.setValue(
-                'agents',
-                Object.fromEntries(Object.entries(defaultProvider.agents).filter(([key]) => key !== '__typename')),
+            const agentsToSet = Object.fromEntries(
+                Object.entries(defaultProvider.agents)
+                    .filter(([key]) => key !== '__typename')
+                    .map(([key, data]) => {
+                        // const agent = Object.fromEntries(
+                        //     Object.entries(data).filter(([key]) => key !== '__typename'),
+                        // ) as AgentConfigInput;
+                        const agent = { ...data };
+
+                        // Check if the model from defaultProvider exists in availableModels
+                        if (agent.model && !availableModels.find((m) => m.name === agent.model)) {
+                            // Use first available model if default model not found
+                            agent.model = availableModels[0]?.name || agent.model;
+                        }
+
+                        return [key, agent];
+                    }),
             );
+
+            form.setValue('agents', agentsToSet);
         }
-    }, [selectedType, isNew, data, form]);
+    }, [selectedType, isNew, data, form, availableModels]);
+
+    // Update query parameter when type changes (only for new providers)
+    useEffect(() => {
+        if (!isNew) {
+            // Clear query parameters for existing providers
+            if (searchParams.size) {
+                setSearchParams({});
+            }
+
+            return;
+        }
+
+        // Don't update query params if we're copying from existing provider
+        const queryId = searchParams.get('id');
+        if (queryId) {
+            return;
+        }
+
+        // Don't update query params on initial load if we're reading from query params
+        const queryType = searchParams.get('type');
+        if (!selectedType && queryType) {
+            return;
+        }
+
+        // Update query parameter based on selected type
+        setSearchParams((prev) => {
+            const params = new URLSearchParams(prev);
+            if (selectedType) {
+                params.set('type', selectedType);
+            } else {
+                params.delete('type');
+            }
+            return params;
+        });
+    }, [selectedType, setSearchParams, isNew, searchParams]); // Include searchParams since we read from it
 
     // Fill form with data when available
     useEffect(() => {
-        if (!data?.settingsProviders) return;
+        if (!data?.settingsProviders) {
+            return;
+        }
 
         const providers = data.settingsProviders;
 
         if (isNew || !providerId) {
-            // For new provider, start with empty form
-            form.reset({
-                name: undefined,
-                type: undefined,
-                agents: {},
-            });
+            // For new provider, start with empty form but check for type query parameter
+            const queryType = formQueryParams.type ?? undefined;
+            const queryId = formQueryParams.id;
+
+            // If we have an id in query params, copy from existing provider
+            if (queryId && data?.settingsProviders?.userDefined) {
+                const sourceProvider = data.settingsProviders.userDefined.find((p: Provider) => p.id === +queryId);
+
+                if (sourceProvider) {
+                    const { name, type: sourceType, agents } = sourceProvider;
+
+                    form.reset({
+                        name: `${name} (Copy)`,
+                        type: sourceType ?? undefined,
+                        agents: agents
+                            ? Object.fromEntries(Object.entries(agents).filter(([key]) => key !== '__typename'))
+                            : {},
+                    });
+
+                    return;
+                }
+            }
+
+            // Default new provider form - but only if selectedType is not set
+            // to avoid conflicts with agent filling useEffect
+            if (!selectedType) {
+                form.reset({
+                    name: undefined,
+                    type: queryType,
+                    agents: {},
+                });
+            }
             return;
         }
 
@@ -624,7 +804,7 @@ const SettingsProvider = () => {
             type: type || undefined,
             agents: agents || {},
         });
-    }, [data, isNew, providerId, form]);
+    }, [data, isNew, providerId, form, formQueryParams, selectedType]);
 
     const onSubmit = async (formData: FormData) => {
         try {
@@ -737,9 +917,8 @@ const SettingsProvider = () => {
                                 placeholder="Select provider"
                                 options={providers}
                                 control={form.control}
-                                disabled={isSubmitting}
+                                disabled={isLoading || !!selectedType}
                                 allowCustom={false}
-                                width="w-[200px]"
                                 description="The type of language model provider"
                             />
 
@@ -748,7 +927,7 @@ const SettingsProvider = () => {
                                 label="Name"
                                 placeholder="Enter provider name"
                                 control={form.control}
-                                disabled={isSubmitting}
+                                disabled={isLoading}
                                 description="A unique name for your provider configuration"
                             />
 
@@ -776,13 +955,13 @@ const SettingsProvider = () => {
                                             <AccordionContent className="space-y-4 pt-4">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-[1px]">
                                                     {/* Model field */}
-                                                    <FormComboboxItem
+                                                    <FormModelComboboxItem
                                                         name={`agents.${agentKey}.model`}
                                                         label="Model"
                                                         placeholder="Select or enter model name"
                                                         options={availableModels}
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                     />
 
                                                     {/* Temperature field */}
@@ -791,7 +970,7 @@ const SettingsProvider = () => {
                                                         label="Temperature"
                                                         placeholder="0.7"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         step="0.1"
                                                         min="0"
                                                         max="2"
@@ -803,7 +982,7 @@ const SettingsProvider = () => {
                                                         label="Max Tokens"
                                                         placeholder="1000"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         min="1"
                                                         valueType="integer"
                                                     />
@@ -814,7 +993,7 @@ const SettingsProvider = () => {
                                                         label="Top P"
                                                         placeholder="0.9"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         step="0.01"
                                                         min="0"
                                                         max="1"
@@ -826,7 +1005,7 @@ const SettingsProvider = () => {
                                                         label="Top K"
                                                         placeholder="40"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         min="1"
                                                         valueType="integer"
                                                     />
@@ -837,7 +1016,7 @@ const SettingsProvider = () => {
                                                         label="Min Length"
                                                         placeholder="0"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         min="0"
                                                         valueType="integer"
                                                     />
@@ -848,7 +1027,7 @@ const SettingsProvider = () => {
                                                         label="Max Length"
                                                         placeholder="2000"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         min="1"
                                                         valueType="integer"
                                                     />
@@ -859,7 +1038,7 @@ const SettingsProvider = () => {
                                                         label="Repetition Penalty"
                                                         placeholder="1.0"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         step="0.01"
                                                         min="0"
                                                         max="2"
@@ -871,7 +1050,7 @@ const SettingsProvider = () => {
                                                         label="Frequency Penalty"
                                                         placeholder="0.0"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         step="0.01"
                                                         min="0"
                                                         max="2"
@@ -883,7 +1062,7 @@ const SettingsProvider = () => {
                                                         label="Presence Penalty"
                                                         placeholder="0.0"
                                                         control={form.control}
-                                                        disabled={isSubmitting}
+                                                        disabled={isLoading}
                                                         step="0.01"
                                                         min="0"
                                                         max="2"
@@ -891,7 +1070,7 @@ const SettingsProvider = () => {
                                                 </div>
 
                                                 {/* Reasoning Configuration */}
-                                                <div className="col-span-full">
+                                                <div className="col-span-full p-[1px]">
                                                     <div className="mt-6 space-y-4">
                                                         <h4 className="text-sm font-medium">Reasoning Configuration</h4>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -905,7 +1084,7 @@ const SettingsProvider = () => {
                                                                         <Select
                                                                             onValueChange={field.onChange}
                                                                             defaultValue={field.value || undefined}
-                                                                            disabled={isSubmitting}
+                                                                            disabled={isLoading}
                                                                         >
                                                                             <FormControl>
                                                                                 <SelectTrigger>
@@ -939,7 +1118,7 @@ const SettingsProvider = () => {
                                                                 label="Reasoning Max Tokens"
                                                                 placeholder="1000"
                                                                 control={form.control}
-                                                                disabled={isSubmitting}
+                                                                disabled={isLoading}
                                                                 min="1"
                                                                 valueType="integer"
                                                             />
@@ -948,7 +1127,7 @@ const SettingsProvider = () => {
                                                 </div>
 
                                                 {/* Price Configuration */}
-                                                <div className="col-span-full">
+                                                <div className="col-span-full p-[1px]">
                                                     <div className="mt-6 space-y-4">
                                                         <h4 className="text-sm font-medium">Price Configuration</h4>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -958,7 +1137,7 @@ const SettingsProvider = () => {
                                                                 label="Input Price"
                                                                 placeholder="0.001"
                                                                 control={form.control}
-                                                                disabled={isSubmitting}
+                                                                disabled={isLoading}
                                                                 step="0.000001"
                                                                 min="0"
                                                             />
@@ -969,7 +1148,7 @@ const SettingsProvider = () => {
                                                                 label="Output Price"
                                                                 placeholder="0.002"
                                                                 control={form.control}
-                                                                disabled={isSubmitting}
+                                                                disabled={isLoading}
                                                                 step="0.000001"
                                                                 min="0"
                                                             />
@@ -994,10 +1173,14 @@ const SettingsProvider = () => {
                         type="button"
                         variant="destructive"
                         onClick={onDelete}
-                        disabled={isSubmitting}
+                        disabled={isLoading}
                     >
-                        {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        {deleteLoading ? 'Deleting...' : 'Delete'}
+                        {isDeleteLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Trash2 className="h-4 w-4" />
+                        )}
+                        {isDeleteLoading ? 'Deleting...' : 'Delete'}
                     </Button>
                 )}
 
@@ -1007,7 +1190,7 @@ const SettingsProvider = () => {
                         type="button"
                         variant="outline"
                         onClick={() => navigate('/settings/providers')}
-                        disabled={isSubmitting}
+                        disabled={isLoading}
                     >
                         Cancel
                     </Button>
@@ -1015,10 +1198,10 @@ const SettingsProvider = () => {
                         form="provider-form"
                         variant="secondary"
                         type="submit"
-                        disabled={isSubmitting}
+                        disabled={isLoading}
                     >
-                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        {isSubmitting ? 'Saving...' : isNew ? 'Create Provider' : 'Update Provider'}
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {isLoading ? 'Saving...' : isNew ? 'Create Provider' : 'Update Provider'}
                     </Button>
                 </div>
             </div>
