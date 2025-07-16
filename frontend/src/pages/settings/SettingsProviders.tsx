@@ -1,3 +1,9 @@
+import Anthropic from '@/components/icons/Anthropic';
+import Bedrock from '@/components/icons/Bedrock';
+import Custom from '@/components/icons/Custom';
+import Gemini from '@/components/icons/Gemini';
+import Ollama from '@/components/icons/Ollama';
+import OpenAi from '@/components/icons/OpenAi';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
 import {
+    ProviderType,
     useDeleteProviderMutation,
     useSettingsProvidersQuery,
     type ProviderConfigFragmentFragment,
@@ -20,30 +27,75 @@ import {
     ArrowUpDown,
     ChevronDown,
     ChevronRight,
+    Copy,
     Loader2,
     MoreHorizontal,
+    Pencil,
     Plus,
     Settings,
+    Trash,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 type Provider = ProviderConfigFragmentFragment;
 
+const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
+    [ProviderType.Anthropic]: Anthropic,
+    [ProviderType.Bedrock]: Bedrock,
+    [ProviderType.Custom]: Custom,
+    [ProviderType.Gemini]: Gemini,
+    [ProviderType.Ollama]: Ollama,
+    [ProviderType.Openai]: OpenAi,
+};
+
+const providerTypes = [
+    { type: ProviderType.Anthropic, label: 'Anthropic' },
+    { type: ProviderType.Bedrock, label: 'Bedrock' },
+    { type: ProviderType.Custom, label: 'Custom' },
+    { type: ProviderType.Gemini, label: 'Gemini' },
+    { type: ProviderType.Ollama, label: 'Ollama' },
+    { type: ProviderType.Openai, label: 'OpenAI' },
+];
+
 const SettingsProvidersHeader = () => {
     const navigate = useNavigate();
+
+    const handleProviderCreate = (providerType: string) => {
+        navigate(`/settings/providers/new?type=${providerType}`);
+    };
 
     return (
         <div className="flex items-center justify-between">
             <p className="text-muted-foreground">Manage language model providers</p>
 
-            <Button
-                onClick={() => navigate('/settings/providers/new')}
-                variant="secondary"
-            >
-                <Plus className="h-4 w-4" />
-                Add Provider
-            </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="secondary">
+                        Create Provider
+                        <ChevronDown className="h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                    align="end"
+                    style={{
+                        width: 'var(--radix-dropdown-menu-trigger-width)',
+                    }}
+                >
+                    {providerTypes.map(({ type, label }) => {
+                        const Icon = providerIcons[type];
+                        return (
+                            <DropdownMenuItem
+                                key={type}
+                                onClick={() => handleProviderCreate(type)}
+                            >
+                                {Icon && <Icon className="h-4 w-4" />}
+                                {label}
+                            </DropdownMenuItem>
+                        );
+                    })}
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 };
@@ -58,10 +110,13 @@ const SettingsProviders = () => {
         navigate(`/settings/providers/${providerId}`);
     };
 
+    const handleProviderClone = (providerId: number) => {
+        navigate(`/settings/providers/new?id=${providerId}`);
+    };
+
     const handleProviderDelete = async (providerId: number) => {
         try {
             setDeleteErrorMessage(null);
-            console.log('Deleting provider:', providerId);
 
             await deleteProvider({
                 variables: { providerId: providerId.toString() },
@@ -71,7 +126,6 @@ const SettingsProviders = () => {
             // Clear any existing error messages on successful deletion
             setDeleteErrorMessage(null);
         } catch (error) {
-            console.error('Delete error:', error);
             setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
         }
     };
@@ -130,7 +184,16 @@ const SettingsProviders = () => {
                     </Button>
                 );
             },
-            cell: ({ row }) => <Badge variant="outline">{row.getValue('type')}</Badge>,
+            cell: ({ row }) => {
+                const providerType = row.getValue('type') as ProviderType;
+                const Icon = providerIcons[providerType];
+                return (
+                    <Badge variant="outline">
+                        {Icon && <Icon className="h-3 w-3 mr-1" />}
+                        {providerTypes.find((p) => p.type === providerType)?.label || providerType}
+                    </Badge>
+                );
+            },
         },
         {
             accessorKey: 'createdAt',
@@ -192,9 +255,17 @@ const SettingsProviders = () => {
                                     <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent
+                                align="end"
+                                className="min-w-[6rem]"
+                            >
                                 <DropdownMenuItem onClick={() => handleProviderEdit(provider.id)}>
-                                    Edit provider
+                                    <Pencil className="h-3 w-3" />
+                                    Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleProviderClone(provider.id)}>
+                                    <Copy className="h-4 w-4" />
+                                    Clone
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                     onClick={() => handleProviderDelete(provider.id)}
@@ -202,11 +273,14 @@ const SettingsProviders = () => {
                                 >
                                     {isDeleteLoading ? (
                                         <>
-                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            <Loader2 className="h-4 w-4 animate-spin" />
                                             Deleting...
                                         </>
                                     ) : (
-                                        'Delete provider'
+                                        <>
+                                            <Trash className="h-4 w-4" />
+                                            Delete
+                                        </>
                                     )}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
