@@ -3,6 +3,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -14,6 +15,7 @@ import {
     useCreateProviderMutation,
     useDeleteProviderMutation,
     useSettingsProvidersQuery,
+    useTestProviderMutation,
     useUpdateProviderMutation,
     type AgentConfigInput,
     type AgentsConfigInput,
@@ -21,7 +23,19 @@ import {
 } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Check, ChevronsUpDown, Lightbulb, Loader2, Save, Trash2 } from 'lucide-react';
+import {
+    AlertCircle,
+    Check,
+    CheckCircle,
+    ChevronsUpDown,
+    Clock,
+    Lightbulb,
+    Loader2,
+    Play,
+    Save,
+    Trash2,
+    XCircle,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useController, useForm } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -504,6 +518,9 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
+// Type for agents field in form
+type FormAgents = FormData['agents'];
+
 // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
 const getName = (key: string): string => key.replace(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
@@ -574,6 +591,159 @@ const transformFormToGraphQL = (
     };
 };
 
+// Helper function to recursively remove __typename from objects
+const normalizeGraphQLData = (obj: unknown): unknown => {
+    if (obj === null || obj === undefined) {
+        return obj;
+    }
+
+    if (Array.isArray(obj)) {
+        return obj.map(normalizeGraphQLData);
+    }
+
+    if (typeof obj === 'object') {
+        return Object.fromEntries(
+            Object.entries(obj)
+                .filter(([key]) => key !== '__typename')
+                .map(([key, value]) => [key, normalizeGraphQLData(value)]),
+        );
+    }
+
+    return obj;
+};
+
+// Component to render test results dialog
+const TestResultsDialog = ({
+    open,
+    onOpenChange,
+    results,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    results: any;
+}) => {
+    if (!results) return null;
+
+    // Transform results object to array, removing __typename
+    const agentResults = Object.entries(results)
+        .filter(([key]) => key !== '__typename')
+        .map(([agentType, agentData]: [string, any]) => ({
+            agentType,
+            tests: agentData?.tests || [],
+        }));
+
+    const getStatusIcon = (result: boolean) => {
+        if (result === true) {
+            return <CheckCircle className="h-4 w-4 text-green-500" />;
+        } else if (result === false) {
+            return <XCircle className="h-4 w-4 text-red-500" />;
+        } else {
+            return <Clock className="h-4 w-4 text-yellow-500" />;
+        }
+    };
+
+    const getStatusColor = (result: boolean) => {
+        if (result === true) {
+            return 'text-green-600';
+        } else if (result === false) {
+            return 'text-red-600';
+        } else {
+            return 'text-yellow-600';
+        }
+    };
+
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={onOpenChange}
+        >
+            <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
+                    <DialogTitle>Provider Test Results</DialogTitle>
+                </DialogHeader>
+                <div className="flex-1 overflow-y-auto space-y-6">
+                    <Accordion
+                        type="multiple"
+                        className="w-full"
+                    >
+                        {agentResults.map(({ agentType, tests }) => {
+                            const testsCount = tests.length;
+                            const successTestsCount = tests.filter((test: any) => test.result === true).length;
+
+                            return (
+                                <AccordionItem
+                                    key={agentType}
+                                    value={agentType}
+                                >
+                                    <AccordionTrigger className="text-left">
+                                        <div className="flex items-center justify-between w-full mr-4">
+                                            <span className="text-lg font-semibold capitalize">{agentType}</span>
+                                            <span className="text-sm text-muted-foreground">
+                                                {successTestsCount}/{testsCount} tests passed
+                                            </span>
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                        <div className="space-y-3 pt-2">
+                                            {tests.map((test: any, index: number) => (
+                                                <div
+                                                    key={index}
+                                                    className="border rounded-lg p-3"
+                                                >
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            {getStatusIcon(test.result)}
+                                                            <span className="font-medium">{test.name}</span>
+                                                            {test.type && (
+                                                                <span className="text-sm text-muted-foreground">
+                                                                    ({test.type})
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                                            {test.reasoning !== undefined && (
+                                                                <span>Reasoning: {test.reasoning ? 'Yes' : 'No'}</span>
+                                                            )}
+                                                            {test.streaming !== undefined && (
+                                                                <span>Streaming: {test.streaming ? 'Yes' : 'No'}</span>
+                                                            )}
+                                                            {test.latency && <span>Latency: {test.latency}ms</span>}
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        className={`text-sm font-medium ${getStatusColor(test.result)}`}
+                                                    >
+                                                        Result:{' '}
+                                                        {test.result === true
+                                                            ? 'Success'
+                                                            : test.result === false
+                                                              ? 'Failed'
+                                                              : 'Unknown'}
+                                                    </div>
+                                                    {test.error && (
+                                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                                                            <strong>Error:</strong> {test.error}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {tests.length === 0 && (
+                                                <div className="text-center py-4 text-muted-foreground">
+                                                    No tests available for this agent
+                                                </div>
+                                            )}
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            );
+                        })}
+                    </Accordion>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 const SettingsProvider = () => {
     const { providerId } = useParams<{ providerId: string }>();
     const navigate = useNavigate();
@@ -582,7 +752,10 @@ const SettingsProvider = () => {
     const [createProvider, { loading: isCreateLoading, error: createError }] = useCreateProviderMutation();
     const [updateProvider, { loading: isUpdateLoading, error: updateError }] = useUpdateProviderMutation();
     const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
+    const [testProvider, { loading: isTestLoading, error: testError }] = useTestProviderMutation();
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [testDialogOpen, setTestDialogOpen] = useState(false);
+    const [testResults, setTestResults] = useState<any>(null);
 
     const isNew = providerId === 'new';
     const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading;
@@ -687,8 +860,9 @@ const SettingsProvider = () => {
 
         const defaultProvider =
             data.settingsProviders.default[selectedType as keyof typeof data.settingsProviders.default];
+
         if (defaultProvider?.agents) {
-            const agentsToSet = Object.fromEntries(
+            const agents = Object.fromEntries(
                 Object.entries(defaultProvider.agents)
                     .filter(([key]) => key !== '__typename')
                     .map(([key, data]) => {
@@ -707,7 +881,7 @@ const SettingsProvider = () => {
                     }),
             );
 
-            form.setValue('agents', agentsToSet);
+            form.setValue('agents', normalizeGraphQLData(agents) as FormAgents);
         }
     }, [selectedType, isNew, data, form, availableModels]);
 
@@ -769,9 +943,7 @@ const SettingsProvider = () => {
                     form.reset({
                         name: `${name} (Copy)`,
                         type: sourceType ?? undefined,
-                        agents: agents
-                            ? Object.fromEntries(Object.entries(agents).filter(([key]) => key !== '__typename'))
-                            : {},
+                        agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
                     });
 
                     return;
@@ -802,7 +974,7 @@ const SettingsProvider = () => {
         form.reset({
             name: name || undefined,
             type: type || undefined,
-            agents: agents || {},
+            agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
         });
     }, [data, isNew, providerId, form, formQueryParams, selectedType]);
 
@@ -856,6 +1028,86 @@ const SettingsProvider = () => {
         }
     };
 
+    const onTest = async () => {
+        // Trigger form validation
+        const isValid = await form.trigger();
+
+        if (!isValid) {
+            const errors = form.formState.errors;
+
+            // Helper function to format field names for display
+            const formatFieldName = (fieldPath: string): string => {
+                return fieldPath
+                    .split('.')
+                    .map((part) => {
+                        // Capitalize first letter and add spaces before uppercase letters
+                        return part.charAt(0).toUpperCase() + part.slice(1).replace(/([A-Z])/g, ' $1');
+                    })
+                    .join(' → ');
+            };
+
+            // Show validation errors to user
+            const errorMessages = Object.entries(errors)
+                .map(([field, error]: [string, any]) => {
+                    if (error?.message) {
+                        return `• ${formatFieldName(field)}: ${error.message}`;
+                    }
+                    if (error && typeof error === 'object') {
+                        // Handle nested errors (like agents.simple.model)
+                        return Object.entries(error)
+                            .map(([subField, subError]: [string, any]) => {
+                                if (subError?.message) {
+                                    return `• ${formatFieldName(`${field}.${subField}`)}: ${subError.message}`;
+                                }
+                                if (subError && typeof subError === 'object') {
+                                    return Object.entries(subError)
+                                        .map(([nestedField, nestedError]: [string, any]) => {
+                                            if (nestedError?.message) {
+                                                return `• ${formatFieldName(`${field}.${subField}.${nestedField}`)}: ${nestedError.message}`;
+                                            }
+                                            return null;
+                                        })
+                                        .filter(Boolean)
+                                        .join('\n');
+                                }
+                                return null;
+                            })
+                            .filter(Boolean)
+                            .join('\n');
+                    }
+                    return null;
+                })
+                .filter(Boolean)
+                .join('\n');
+
+            setSubmitError(`Please fix the following validation errors:\n\n${errorMessages}`);
+
+            return;
+        }
+
+        try {
+            setSubmitError(null);
+
+            // Get form data and transform it
+            const formData = form.getValues();
+            const mutationData = transformFormToGraphQL(formData);
+
+            const result = await testProvider({
+                variables: {
+                    type: mutationData.type,
+                    agents: mutationData.agents,
+                },
+            });
+
+            // Save results and open dialog
+            setTestResults(result.data?.testProvider);
+            setTestDialogOpen(true);
+        } catch (error) {
+            console.error('Test error:', error);
+            setSubmitError(error instanceof Error ? error.message : 'An error occurred while testing');
+        }
+    };
+
     if (loading) {
         return (
             <StatusCard
@@ -880,7 +1132,7 @@ const SettingsProvider = () => {
         ? Object.keys(data?.settingsProviders.models).filter((key) => key !== '__typename')
         : [];
 
-    const mutationError = createError || updateError || deleteError || submitError;
+    const mutationError = createError || updateError || deleteError || testError || submitError;
 
     return (
         <>
@@ -905,7 +1157,11 @@ const SettingsProvider = () => {
                                     <AlertCircle className="h-4 w-4" />
                                     <AlertTitle>Error</AlertTitle>
                                     <AlertDescription>
-                                        {mutationError instanceof Error ? mutationError.message : mutationError}
+                                        {mutationError instanceof Error ? (
+                                            mutationError.message
+                                        ) : (
+                                            <div className="whitespace-pre-line">{mutationError}</div>
+                                        )}
                                     </AlertDescription>
                                 </Alert>
                             )}
@@ -1167,24 +1423,34 @@ const SettingsProvider = () => {
 
             {/* Sticky buttons at bottom */}
             <div className="flex items-center sticky -bottom-4 bg-background border-t mt-4 -mx-4 -mb-4 p-4 shadow-lg">
-                {/* Delete button - only show when editing existing provider */}
-                {!isNew && (
+                <div className="flex space-x-2">
+                    {/* Delete button - only show when editing existing provider */}
+                    {!isNew && (
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={onDelete}
+                            disabled={isLoading}
+                        >
+                            {isDeleteLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Trash2 className="h-4 w-4" />
+                            )}
+                            {isDeleteLoading ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    )}
                     <Button
                         type="button"
-                        variant="destructive"
-                        onClick={onDelete}
-                        disabled={isLoading}
+                        variant="outline"
+                        onClick={onTest}
+                        disabled={isLoading || isTestLoading}
                     >
-                        {isDeleteLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Trash2 className="h-4 w-4" />
-                        )}
-                        {isDeleteLoading ? 'Deleting...' : 'Delete'}
+                        {isTestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                        {isTestLoading ? 'Testing...' : 'Test'}
                     </Button>
-                )}
+                </div>
 
-                {/* Right side buttons */}
                 <div className="flex space-x-2 ml-auto">
                     <Button
                         type="button"
@@ -1205,6 +1471,12 @@ const SettingsProvider = () => {
                     </Button>
                 </div>
             </div>
+
+            <TestResultsDialog
+                open={testDialogOpen}
+                onOpenChange={setTestDialogOpen}
+                results={testResults}
+            />
         </>
     );
 };
