@@ -1,3 +1,4 @@
+import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -612,16 +613,14 @@ const normalizeGraphQLData = (obj: unknown): unknown => {
     return obj;
 };
 
-// Component to render test results dialog
-const TestResultsDialog = ({
-    open,
-    onOpenChange,
-    results,
-}: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
+interface TestResultsDialogProps {
+    isOpen: boolean;
+    handleOpenChange: (isOpen: boolean) => void;
     results: any;
-}) => {
+}
+
+// Component to render test results dialog
+const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDialogProps) => {
     if (!results) return null;
 
     // Transform results object to array, removing __typename
@@ -654,8 +653,8 @@ const TestResultsDialog = ({
 
     return (
         <Dialog
-            open={open}
-            onOpenChange={onOpenChange}
+            open={isOpen}
+            onOpenChange={handleOpenChange}
         >
             <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
                 <DialogHeader className="flex-shrink-0">
@@ -754,8 +753,9 @@ const SettingsProvider = () => {
     const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
     const [testProvider, { loading: isTestLoading, error: testError }] = useTestProviderMutation();
     const [submitError, setSubmitError] = useState<string | null>(null);
-    const [testDialogOpen, setTestDialogOpen] = useState(false);
+    const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
     const [testResults, setTestResults] = useState<any>(null);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     const isNew = providerId === 'new';
     const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading;
@@ -978,7 +978,7 @@ const SettingsProvider = () => {
         });
     }, [data, isNew, providerId, form, formQueryParams, selectedType]);
 
-    const onSubmit = async (formData: FormData) => {
+    const handleSubmit = async (formData: FormData) => {
         try {
             setSubmitError(null);
 
@@ -1009,7 +1009,12 @@ const SettingsProvider = () => {
         }
     };
 
-    const onDelete = async () => {
+    const handleDelete = () => {
+        if (isNew || !providerId) return;
+        setIsDeleteDialogOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
         if (isNew || !providerId) return;
 
         try {
@@ -1028,7 +1033,7 @@ const SettingsProvider = () => {
         }
     };
 
-    const onTest = async () => {
+    const handleTest = async () => {
         // Trigger form validation
         const isValid = await form.trigger();
 
@@ -1101,7 +1106,7 @@ const SettingsProvider = () => {
 
             // Save results and open dialog
             setTestResults(result.data?.testProvider);
-            setTestDialogOpen(true);
+            setIsTestDialogOpen(true);
         } catch (error) {
             console.error('Test error:', error);
             setSubmitError(error instanceof Error ? error.message : 'An error occurred while testing');
@@ -1148,7 +1153,7 @@ const SettingsProvider = () => {
                     <Form {...form}>
                         <form
                             id="provider-form"
-                            onSubmit={form.handleSubmit(onSubmit)}
+                            onSubmit={form.handleSubmit(handleSubmit)}
                             className="space-y-6"
                         >
                             {/* Error Alert */}
@@ -1429,7 +1434,7 @@ const SettingsProvider = () => {
                         <Button
                             type="button"
                             variant="destructive"
-                            onClick={onDelete}
+                            onClick={handleDelete}
                             disabled={isLoading}
                         >
                             {isDeleteLoading ? (
@@ -1443,7 +1448,7 @@ const SettingsProvider = () => {
                     <Button
                         type="button"
                         variant="outline"
-                        onClick={onTest}
+                        onClick={handleTest}
                         disabled={isLoading || isTestLoading}
                     >
                         {isTestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -1473,9 +1478,17 @@ const SettingsProvider = () => {
             </div>
 
             <TestResultsDialog
-                open={testDialogOpen}
-                onOpenChange={setTestDialogOpen}
+                isOpen={isTestDialogOpen}
+                handleOpenChange={setIsTestDialogOpen}
                 results={testResults}
+            />
+
+            <DeleteConfirmationDialog
+                isOpen={isDeleteDialogOpen}
+                handleOpenChange={setIsDeleteDialogOpen}
+                handleConfirm={handleConfirmDelete}
+                itemName={form.watch('name')}
+                itemType="provider"
             />
         </>
     );

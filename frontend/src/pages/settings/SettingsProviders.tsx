@@ -1,3 +1,4 @@
+import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog';
 import Anthropic from '@/components/icons/Anthropic';
 import Bedrock from '@/components/icons/Bedrock';
 import Custom from '@/components/icons/Custom';
@@ -12,6 +13,7 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
@@ -104,6 +106,8 @@ const SettingsProviders = () => {
     const { data, loading: isLoading, error } = useSettingsProvidersQuery();
     const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
     const navigate = useNavigate();
 
     const handleProviderEdit = (providerId: number) => {
@@ -114,7 +118,16 @@ const SettingsProviders = () => {
         navigate(`/settings/providers/new?id=${providerId}`);
     };
 
-    const handleProviderDelete = async (providerId: number) => {
+    const handleProviderDeleteDialogOpen = (provider: Provider) => {
+        setDeletingProvider(provider);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const handleProviderDelete = async (providerId: number | undefined) => {
+        if (!providerId) {
+            return;
+        }
+
         try {
             setDeleteErrorMessage(null);
 
@@ -123,7 +136,7 @@ const SettingsProviders = () => {
                 refetchQueries: ['settingsProviders'],
             });
 
-            // Clear any existing error messages on successful deletion
+            setDeletingProvider(null);
             setDeleteErrorMessage(null);
         } catch (error) {
             setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
@@ -267,11 +280,12 @@ const SettingsProviders = () => {
                                     <Copy className="h-4 w-4" />
                                     Clone
                                 </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                    onClick={() => handleProviderDelete(provider.id)}
-                                    disabled={isDeleteLoading}
+                                    onClick={() => handleProviderDeleteDialogOpen(provider)}
+                                    disabled={isDeleteLoading && deletingProvider?.id === provider.id}
                                 >
-                                    {isDeleteLoading ? (
+                                    {isDeleteLoading && deletingProvider?.id === provider.id ? (
                                         <>
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                             Deleting...
@@ -432,6 +446,14 @@ const SettingsProviders = () => {
                 columns={columns}
                 data={providers}
                 renderSubComponent={renderSubComponent}
+            />
+
+            <DeleteConfirmationDialog
+                isOpen={isDeleteDialogOpen}
+                handleOpenChange={setIsDeleteDialogOpen}
+                handleConfirm={() => handleProviderDelete(deletingProvider?.id)}
+                itemName={deletingProvider?.name}
+                itemType="provider"
             />
         </div>
     );
