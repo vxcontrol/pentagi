@@ -39,10 +39,11 @@ interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
     renderSubComponent?: (props: { row: any }) => React.ReactElement;
+    initialPageSize?: number;
 }
 
 const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
-    ({ columns, data, renderSubComponent }, ref) => {
+    ({ columns, data, renderSubComponent, initialPageSize = 10 }, ref) => {
         const [sorting, setSorting] = React.useState<SortingState>([]);
         const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
         const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
@@ -62,6 +63,11 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
             onRowSelectionChange: setRowSelection,
             onExpandedChange: setExpanded,
             getExpandedRowModel: getExpandedRowModel(),
+            initialState: {
+                pagination: {
+                    pageSize: initialPageSize,
+                },
+            },
             state: {
                 sorting,
                 columnFilters,
@@ -202,24 +208,26 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                             {table.getFilteredRowModel().rows.length} row(s) selected.
                         </div>
                     )}
-                    <div className="space-x-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => table.previousPage()}
-                            disabled={!table.getCanPreviousPage()}
-                        >
-                            Previous
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => table.nextPage()}
-                            disabled={!table.getCanNextPage()}
-                        >
-                            Next
-                        </Button>
-                    </div>
+                    {(table.getCanPreviousPage() || table.getCanNextPage()) && (
+                        <div className="space-x-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => table.previousPage()}
+                                disabled={!table.getCanPreviousPage()}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => table.nextPage()}
+                                disabled={!table.getCanNextPage()}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
         );

@@ -1,4 +1,4 @@
-import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -1483,12 +1483,14 @@ const SettingsProvider = () => {
                 results={testResults}
             />
 
-            <DeleteConfirmationDialog
+            <ConfirmationDialog
                 isOpen={isDeleteDialogOpen}
                 handleOpenChange={setIsDeleteDialogOpen}
                 handleConfirm={handleConfirmDelete}
                 itemName={form.watch('name')}
                 itemType="provider"
+                confirmText="Delete"
+                cancelText="Cancel"
             />
         </>
     );

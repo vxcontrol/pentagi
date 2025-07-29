@@ -16,6 +16,7 @@ import Chat from '@/pages/Chat';
 import Login from '@/pages/Login';
 import OAuthResult from '@/pages/OAuthResult';
 import Report from '@/pages/Report';
+import SettingsPrompt from '@/pages/settings/SettingsPrompt';
 import SettingsPrompts from '@/pages/settings/SettingsPrompts';
 import SettingsProvider from '@/pages/settings/SettingsProvider';
 import SettingsProviders from '@/pages/settings/SettingsProviders';
@@ -113,6 +114,10 @@ const App = () => {
                                     <Route
                                         path="prompts"
                                         element={<SettingsPrompts />}
+                                    />
+                                    <Route
+                                        path="prompts/:promptId"
+                                        element={<SettingsPrompt />}
                                     />
                                     {/* Catch-all route for unknown settings paths */}
                                     <Route

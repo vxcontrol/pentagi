@@ -1,4 +1,4 @@
-import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 import Anthropic from '@/components/icons/Anthropic';
 import Bedrock from '@/components/icons/Bedrock';
 import Custom from '@/components/icons/Custom';
@@ -448,12 +448,14 @@ const SettingsProviders = () => {
                 renderSubComponent={renderSubComponent}
             />
 
-            <DeleteConfirmationDialog
+            <ConfirmationDialog
                 isOpen={isDeleteDialogOpen}
                 handleOpenChange={setIsDeleteDialogOpen}
                 handleConfirm={() => handleProviderDelete(deletingProvider?.id)}
                 itemName={deletingProvider?.name}
                 itemType="provider"
+                confirmText="Delete"
+                cancelText="Cancel"
             />
         </div>
     );
