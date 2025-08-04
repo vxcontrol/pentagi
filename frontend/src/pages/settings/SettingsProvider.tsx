@@ -978,7 +978,10 @@ const SettingsProvider = () => {
         });
     }, [data, isNew, providerId, form, formQueryParams, selectedType]);
 
-    const handleSubmit = async (formData: FormData) => {
+    const handleSubmit = async () => {
+        // Get all form data including disabled fields
+        const formData = form.watch();
+
         try {
             setSubmitError(null);
 
@@ -1093,8 +1096,8 @@ const SettingsProvider = () => {
         try {
             setSubmitError(null);
 
-            // Get form data and transform it
-            const formData = form.getValues();
+            // Get form data and transform it - including disabled fields
+            const formData = form.watch();
             const mutationData = transformFormToGraphQL(formData);
 
             const result = await testProvider({

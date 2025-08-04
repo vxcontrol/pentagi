@@ -17,6 +17,7 @@ import {
     type AgentPrompt,
     type AgentPrompts,
     type DefaultPrompt,
+    type PromptType,
 } from '@/graphql/types';
 import { type ColumnDef } from '@tanstack/react-table';
 import {
@@ -46,6 +47,8 @@ type AgentPromptTableData = {
     humanTemplate?: string;
     systemStatus: 'Default' | 'Custom' | 'N/A';
     humanStatus: 'Default' | 'Custom' | 'N/A';
+    systemType?: PromptType; // Type for system prompt lookup
+    humanType?: PromptType; // Type for human prompt lookup
 };
 
 type ToolPromptTableData = {
@@ -53,6 +56,7 @@ type ToolPromptTableData = {
     displayName: string; // Formatted display name
     template: string;
     status: 'Default' | 'Custom' | 'N/A';
+    promptType?: PromptType; // Type for prompt lookup
 };
 
 const SettingsPromptsHeader = () => {
@@ -233,6 +237,8 @@ const SettingsPrompts = () => {
                         : 'Default'
                     : 'N/A',
                 humanStatus: !!(prompts as AgentPrompts)?.human ? (hasCustomHuman ? 'Custom' : 'Default') : 'N/A',
+                systemType,
+                humanType,
             };
 
             agentEntries.push(agentData);
@@ -266,6 +272,7 @@ const SettingsPrompts = () => {
                 displayName: formatName(key),
                 template: (prompt as DefaultPrompt)?.template || '',
                 status: (prompt as DefaultPrompt)?.template ? (hasCustomTool ? 'Custom' : 'Default') : 'N/A',
+                promptType: toolType,
             };
 
             toolEntries.push(toolData);
@@ -537,6 +544,14 @@ const SettingsPrompts = () => {
     const renderAgentSubComponent = ({ row }: { row: any }) => {
         const agent = row.original as AgentPromptTableData;
 
+        // Find userDefined prompts for this agent type
+        const userSystemPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === agent.systemType);
+        const userHumanPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === agent.humanType);
+
+        // Use userDefined templates if available, otherwise use default
+        const systemTemplate = userSystemPrompt?.template || agent.systemTemplate;
+        const humanTemplate = userHumanPrompt?.template || agent.humanTemplate;
+
         return (
             <div className="p-4 bg-muted/20 border-t space-y-4">
                 <h4 className="font-medium">Prompt Templates</h4>
@@ -548,21 +563,37 @@ const SettingsPrompts = () => {
                             <h5 className="font-medium text-sm mb-2 flex items-center gap-2">
                                 <Code className="h-3 w-3" />
                                 System Prompt
+                                {userSystemPrompt && (
+                                    <Badge
+                                        variant="secondary"
+                                        className="text-xs"
+                                    >
+                                        Custom
+                                    </Badge>
+                                )}
                             </h5>
                             <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-64 whitespace-pre-wrap">
-                                {agent.systemTemplate}
+                                {systemTemplate}
                             </pre>
                         </div>
                     )}
 
-                    {agent.hasHuman && agent.humanTemplate && (
+                    {agent.hasHuman && humanTemplate && (
                         <div>
                             <h5 className="font-medium text-sm mb-2 flex items-center gap-2">
                                 <User className="h-3 w-3" />
                                 Human Prompt
+                                {userHumanPrompt && (
+                                    <Badge
+                                        variant="secondary"
+                                        className="text-xs"
+                                    >
+                                        Custom
+                                    </Badge>
+                                )}
                             </h5>
                             <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-64 whitespace-pre-wrap">
-                                {agent.humanTemplate}
+                                {humanTemplate}
                             </pre>
                         </div>
                     )}
@@ -575,10 +606,27 @@ const SettingsPrompts = () => {
     const renderToolSubComponent = ({ row }: { row: any }) => {
         const tool = row.original as ToolPromptTableData;
 
+        // Find userDefined prompt for this tool type
+        const userToolPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === tool.promptType);
+
+        // Use userDefined template if available, otherwise use default
+        const template = userToolPrompt?.template || tool.template;
+
         return (
             <div className="p-4 bg-muted/20 border-t">
+                <div className="mb-2 flex items-center gap-2">
+                    <h5 className="font-medium text-sm">Template</h5>
+                    {userToolPrompt && (
+                        <Badge
+                            variant="secondary"
+                            className="text-xs"
+                        >
+                            Custom
+                        </Badge>
+                    )}
+                </div>
                 <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-64 whitespace-pre-wrap">
-                    {tool.template}
+                    {template}
                 </pre>
             </div>
         );

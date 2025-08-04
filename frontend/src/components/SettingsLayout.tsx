@@ -154,12 +154,12 @@ const SettingsSidebar = () => {
 const SettingsLayout = () => {
     return (
         <SidebarProvider>
-            <div className="flex h-screen w-full">
+            <div className="flex h-screen w-full overflow-hidden">
                 <SettingsSidebar />
                 <SidebarInset className="flex flex-1 flex-col">
                     <SettingsHeader />
                     {/* Content area for nested routes */}
-                    <main className="flex-1 overflow-auto p-4">
+                    <main className="flex-1 overflow-auto p-4 min-h-0">
                         <Outlet />
                     </main>
                 </SidebarInset>

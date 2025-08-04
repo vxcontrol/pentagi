@@ -3,7 +3,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { StatusCard } from '@/components/ui/status-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,10 +18,11 @@ import {
     type AgentPrompts,
     type DefaultPrompt,
 } from '@/graphql/types';
+import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Bot, CheckCircle, Code, Loader2, RotateCcw, Save, User, Wrench, XCircle } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useController, useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -37,19 +38,130 @@ const humanFormSchema = z.object({
 type SystemFormData = z.infer<typeof systemFormSchema>;
 type HumanFormData = z.infer<typeof humanFormSchema>;
 
+// Universal field components using useController
+interface ControllerProps {
+    name: string;
+    control: any;
+    disabled?: boolean;
+}
+
+interface BaseTextareaProps {
+    placeholder?: string;
+    className?: string;
+}
+
+interface BaseFieldProps extends ControllerProps {
+    label?: string;
+}
+
+interface FormTextareaItemProps extends BaseFieldProps, BaseTextareaProps {
+    description?: string;
+}
+
+const FormTextareaItem: React.FC<FormTextareaItemProps> = ({
+    name,
+    control,
+    disabled,
+    label,
+    placeholder,
+    className,
+    description,
+}) => {
+    const { field, fieldState } = useController({
+        name,
+        control,
+        defaultValue: '',
+        disabled,
+    });
+
+    return (
+        <FormItem>
+            {label && <FormLabel>{label}</FormLabel>}
+            <FormControl>
+                <Textarea
+                    {...field}
+                    placeholder={placeholder}
+                    className={cn('!min-h-[640px] font-mono text-sm', className)}
+                    disabled={disabled}
+                />
+            </FormControl>
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+};
+
 // Helper function to format display name
 const formatName = (key: string): string => {
     return key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
 };
 
+// Helper function to extract used variables from template
+const getUsedVariables = (template: string | undefined): Set<string> => {
+    const usedVariables = new Set<string>();
+    if (!template) return usedVariables;
+
+    const variableRegex = /\{\{\.(\w+)\}\}/g;
+    let match;
+
+    while ((match = variableRegex.exec(template)) !== null) {
+        const variable = match[1];
+        if (variable) {
+            usedVariables.add(variable);
+        }
+    }
+
+    return usedVariables;
+};
+
+// Variables Component
+interface VariablesProps {
+    variables: string[];
+    currentTemplate: string;
+    onVariableClick: (variable: string) => void;
+}
+
+const Variables: React.FC<VariablesProps> = ({ variables, currentTemplate, onVariableClick }) => {
+    if (variables.length === 0) return null;
+
+    const usedVariables = getUsedVariables(currentTemplate);
+
+    return (
+        <div className="mb-4 p-3 bg-muted/50 rounded-md border">
+            <h4 className="text-sm font-medium text-muted-foreground mb-2">Available Variables:</h4>
+            <div className="flex flex-wrap gap-1">
+                {variables.map((variable) => {
+                    const isUsed = usedVariables.has(variable);
+                    return (
+                        <code
+                            key={variable}
+                            className={`px-2 py-1 border rounded text-xs font-mono cursor-pointer transition-colors ${
+                                isUsed
+                                    ? 'bg-green-100 border-green-300 text-green-800 hover:bg-green-200'
+                                    : 'bg-background text-foreground hover:bg-accent'
+                            }`}
+                            onClick={() => onVariableClick(variable)}
+                        >
+                            {`{{.${variable}}}`}
+                        </code>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 const SettingsPrompt = () => {
     const { promptId } = useParams<{ promptId: string }>();
     const navigate = useNavigate();
+
+    // GraphQL queries and mutations
     const { data, loading, error } = useSettingsPromptsQuery();
     const [createPrompt, { loading: isCreateLoading, error: createError }] = useCreatePromptMutation();
     const [updatePrompt, { loading: isUpdateLoading, error: updateError }] = useUpdatePromptMutation();
     const [deletePrompt, { loading: isDeleteLoading, error: deleteError }] = useDeletePromptMutation();
     const [validatePrompt, { loading: isValidateLoading, error: validateError }] = useValidatePromptMutation();
+
+    // Local state management
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'system' | 'human'>('system');
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -175,6 +287,7 @@ const SettingsPrompt = () => {
         }
     };
 
+    // Form instances for each tab
     const systemForm = useForm<SystemFormData>({
         resolver: zodResolver(systemFormSchema),
         defaultValues: {
@@ -192,24 +305,6 @@ const SettingsPrompt = () => {
     // Watch form values to detect used variables
     const systemTemplate = systemForm.watch('template');
     const humanTemplate = humanForm.watch('template');
-
-    // Helper function to extract used variables from template
-    const getUsedVariables = (template: string | undefined): Set<string> => {
-        const usedVariables = new Set<string>();
-        if (!template) return usedVariables;
-
-        const variableRegex = /\{\{\.(\w+)\}\}/g;
-        let match;
-
-        while ((match = variableRegex.exec(template)) !== null) {
-            const variable = match[1];
-            if (variable) {
-                usedVariables.add(variable);
-            }
-        }
-
-        return usedVariables;
-    };
 
     // Determine prompt type and get prompt data
     const promptInfo = useMemo(() => {
@@ -284,7 +379,51 @@ const SettingsPrompt = () => {
         return null;
     }, [promptId, data]);
 
-    // Fill form with current prompt data
+    // Compute variables data based on active tab and prompt info
+    const variablesData = useMemo(() => {
+        if (!promptInfo) return null;
+
+        let variables: string[] = [];
+        let formId = '';
+        let currentTemplate = '';
+
+        if (activeTab === 'system') {
+            variables =
+                promptInfo.type === 'agent'
+                    ? (promptInfo.data as AgentPrompts | AgentPrompt)?.system?.variables || []
+                    : (promptInfo.data as DefaultPrompt)?.variables || [];
+            formId = 'system-prompt-form';
+            currentTemplate = systemTemplate;
+        } else if (activeTab === 'human' && promptInfo.type === 'agent' && promptInfo.hasHuman) {
+            variables = (promptInfo.data as AgentPrompts)?.human?.variables || [];
+            formId = 'human-prompt-form';
+            currentTemplate = humanTemplate;
+        }
+
+        return { variables, formId, currentTemplate };
+    }, [promptInfo, activeTab, systemTemplate, humanTemplate]);
+
+    // Handle variable click with useCallback for better performance
+    const handleVariableClickCallback = useCallback(
+        (variable: string) => {
+            if (!variablesData) return;
+
+            const field =
+                activeTab === 'system'
+                    ? {
+                          value: systemTemplate,
+                          onChange: (value: string) => systemForm.setValue('template', value),
+                      }
+                    : {
+                          value: humanTemplate,
+                          onChange: (value: string) => humanForm.setValue('template', value),
+                      };
+            handleVariableClick(variable, field, variablesData.formId);
+        },
+        [activeTab, systemTemplate, humanTemplate, variablesData, systemForm, humanForm],
+    );
+
+    // Fill forms with current prompt data when available
     useEffect(() => {
         if (promptInfo) {
             systemForm.reset({
@@ -296,6 +435,7 @@ const SettingsPrompt = () => {
         }
     }, [promptInfo, systemForm, humanForm]);
 
+    // Form submission handlers
     const handleSystemSubmit = async (formData: SystemFormData) => {
         if (!promptInfo) return;
 
@@ -398,6 +538,7 @@ const SettingsPrompt = () => {
         }
     };
 
+    // Loading state
     if (loading) {
         return (
             <StatusCard
@@ -408,6 +549,7 @@ const SettingsPrompt = () => {
         );
     }
 
+    // Error state
     if (error) {
         return (
             <Alert variant="destructive">
@@ -418,6 +560,7 @@ const SettingsPrompt = () => {
         );
     }
 
+    // Prompt not found state
     if (!promptInfo) {
         return (
             <Alert variant="destructive">
@@ -499,31 +642,15 @@ const SettingsPrompt = () => {
                                     )}
 
                                     {/* System Template Field */}
-                                    <FormField
-                                        control={systemForm.control}
+                                    <FormTextareaItem
                                         name="template"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                {/* <FormLabel className="flex items-center gap-2">
-                                                    <Code className="h-4 w-4" />
-                                                    {promptInfo.type === 'tool' ? 'Template' : 'System Prompt'}
-                                                </FormLabel> */}
-                                                <FormControl>
-                                                    <Textarea
-                                                        {...field}
-                                                        placeholder={
-                                                            promptInfo.type === 'tool'
-                                                                ? 'Enter the tool template...'
-                                                                : 'Enter the system prompt template...'
-                                                        }
-                                                        className="!min-h-[640px] font-mono text-sm"
-                                                        disabled={isLoading}
-                                                    />
-                                                </FormControl>
-
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
+                                        control={systemForm.control}
+                                        disabled={isLoading}
+                                        placeholder={
+                                            promptInfo.type === 'tool'
+                                                ? 'Enter the tool template...'
+                                                : 'Enter the system prompt template...'
+                                        }
                                     />
                                 </form>
                             </Form>
@@ -556,27 +683,11 @@ const SettingsPrompt = () => {
                                         )}
 
                                         {/* Human Template Field */}
-                                        <FormField
-                                            control={humanForm.control}
+                                        <FormTextareaItem
                                             name="template"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    {/* <FormLabel className="flex items-center gap-2">
-                                                        <Bot className="h-4 w-4" />
-                                                        Human Prompt
-                                                    </FormLabel> */}
-                                                    <FormControl>
-                                                        <Textarea
-                                                            {...field}
-                                                            placeholder="Enter the human prompt template..."
-                                                            className="!min-h-[640px] font-mono text-sm"
-                                                            disabled={isLoading}
-                                                        />
-                                                    </FormControl>
-
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
+                                            control={humanForm.control}
+                                            disabled={isLoading}
+                                            placeholder="Enter the human prompt template..."
                                         />
                                     </form>
                                 </Form>
@@ -586,145 +697,90 @@ const SettingsPrompt = () => {
                 </CardContent>
             </Card>
 
-            {/* Fixed Variables Block */}
-            {(() => {
-                if (!promptInfo) return null;
+            {/* Sticky footer with variables and buttons */}
+            <div className="sticky -bottom-4 bg-background border-t mt-4 -mx-4 -mb-4 p-4 shadow-lg">
+                {/* Variables */}
+                {variablesData && (
+                    <Variables
+                        variables={variablesData.variables}
+                        currentTemplate={variablesData.currentTemplate}
+                        onVariableClick={handleVariableClickCallback}
+                    />
+                )}
 
-                let variables: string[] = [];
-                let formId = '';
-                let currentField: any = null;
-                let currentTemplate = '';
-
-                if (activeTab === 'system') {
-                    variables =
-                        promptInfo.type === 'agent'
-                            ? (promptInfo.data as AgentPrompts | AgentPrompt)?.system?.variables || []
-                            : (promptInfo.data as DefaultPrompt)?.variables || [];
-                    formId = 'system-prompt-form';
-                    currentField = systemForm.getValues();
-                    currentTemplate = systemTemplate;
-                } else if (activeTab === 'human' && promptInfo.type === 'agent' && promptInfo.hasHuman) {
-                    variables = (promptInfo.data as AgentPrompts)?.human?.variables || [];
-                    formId = 'human-prompt-form';
-                    currentField = humanForm.getValues();
-                    currentTemplate = humanTemplate;
-                }
-
-                if (variables.length === 0) return null;
-
-                const usedVariables = getUsedVariables(currentTemplate);
-
-                return (
-                    <div className="sticky -bottom-4 bg-background border-t mt-4 -mx-4 p-4 shadow-lg">
-                        <div className="mb-4 p-3 bg-muted/50 rounded-md border">
-                            <h4 className="text-sm font-medium text-muted-foreground mb-2">Available Variables:</h4>
-                            <div className="flex flex-wrap gap-1">
-                                {variables.map((variable) => {
-                                    const isUsed = usedVariables.has(variable);
-                                    return (
-                                        <code
-                                            key={variable}
-                                            className={`px-2 py-1 border rounded text-xs font-mono cursor-pointer transition-colors ${
-                                                isUsed
-                                                    ? 'bg-green-100 border-green-300 text-green-800 hover:bg-green-200'
-                                                    : 'bg-background text-foreground hover:bg-accent'
-                                            }`}
-                                            onClick={() => {
-                                                const field =
-                                                    activeTab === 'system'
-                                                        ? {
-                                                              value: systemTemplate,
-                                                              onChange: (value: string) =>
-                                                                  systemForm.setValue('template', value),
-                                                          }
-                                                        : {
-                                                              value: humanTemplate,
-                                                              onChange: (value: string) =>
-                                                                  humanForm.setValue('template', value),
-                                                          };
-                                                handleVariableClick(variable, field, formId);
-                                            }}
-                                        >
-                                            {`{{.${variable}}}`}
-                                        </code>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <div className="flex items-center">
-                            <div className="flex items-center space-x-2">
-                                {/* Reset button - only show when user has custom prompt */}
-                                {((activeTab === 'system' && promptInfo.userSystemPrompt) ||
-                                    (activeTab === 'human' && promptInfo.userHumanPrompt)) && (
-                                    <Button
-                                        type="button"
-                                        variant="destructive"
-                                        onClick={handleReset}
-                                        disabled={isLoading}
-                                    >
-                                        {isDeleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw />}
-                                        {isDeleteLoading ? 'Resetting...' : 'Reset'}
-                                    </Button>
-                                )}
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={handleValidate}
-                                    disabled={isLoading}
-                                >
-                                    {isValidateLoading ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <CheckCircle className="h-4 w-4" />
-                                    )}
-                                    {isValidateLoading ? 'Validating...' : 'Validate'}
-                                </Button>
-                            </div>
-
-                            <div className="flex space-x-2 ml-auto">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => navigate('/settings/prompts')}
-                                    disabled={isLoading}
-                                >
-                                    Cancel
-                                </Button>
-                                {activeTab === 'system' && (
-                                    <Button
-                                        form="system-prompt-form"
-                                        variant="secondary"
-                                        type="submit"
-                                        disabled={isLoading}
-                                    >
-                                        {isLoading ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Save className="h-4 w-4" />
-                                        )}
-                                        {isLoading ? 'Saving...' : 'Save Changes'}
-                                    </Button>
-                                )}
-                                {activeTab === 'human' && promptInfo.type === 'agent' && promptInfo.hasHuman && (
-                                    <Button
-                                        form="human-prompt-form"
-                                        variant="secondary"
-                                        type="submit"
-                                        disabled={isLoading}
-                                    >
-                                        {isLoading ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Save className="h-4 w-4" />
-                                        )}
-                                        {isLoading ? 'Saving...' : 'Save Changes'}
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
+                {/* Action buttons */}
+                <div className="flex items-center">
+                    <div className="flex space-x-2">
+                        {/* Reset button - only show when user has custom prompt */}
+                        {((activeTab === 'system' && promptInfo?.userSystemPrompt) ||
+                            (activeTab === 'human' && promptInfo?.userHumanPrompt)) && (
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={handleReset}
+                                disabled={isLoading}
+                            >
+                                {isDeleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw />}
+                                {isDeleteLoading ? 'Resetting...' : 'Reset'}
+                            </Button>
+                        )}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleValidate}
+                            disabled={isLoading}
+                        >
+                            {isValidateLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <CheckCircle className="h-4 w-4" />
+                            )}
+                            {isValidateLoading ? 'Validating...' : 'Validate'}
+                        </Button>
                     </div>
-                );
-            })()}
+
+                    <div className="flex space-x-2 ml-auto">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => navigate('/settings/prompts')}
+                            disabled={isLoading}
+                        >
+                            Cancel
+                        </Button>
+                        {activeTab === 'system' && (
+                            <Button
+                                form="system-prompt-form"
+                                variant="secondary"
+                                type="submit"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Save className="h-4 w-4" />
+                                )}
+                                {isLoading ? 'Saving...' : 'Save Changes'}
+                            </Button>
+                        )}
+                        {activeTab === 'human' && promptInfo?.type === 'agent' && promptInfo?.hasHuman && (
+                            <Button
+                                form="human-prompt-form"
+                                variant="secondary"
+                                type="submit"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <Save className="h-4 w-4" />
+                                )}
+                                {isLoading ? 'Saving...' : 'Save Changes'}
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </div>
 
             {/* Reset Confirmation Dialog */}
             <ConfirmationDialog
