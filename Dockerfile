@@ -80,8 +80,7 @@ RUN addgroup -g 998 docker && \
     addgroup pentagi docker
 
 # Install required packages
-RUN apk --no-cache add ca-certificates openssl shadow && \
-    rm -rf /var/cache/apk/*
+RUN apk --no-cache add ca-certificates openssl shadow
 
 ADD entrypoint.sh /opt/pentagi/bin/
 
