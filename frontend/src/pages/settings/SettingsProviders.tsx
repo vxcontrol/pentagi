@@ -26,9 +26,9 @@ import {
 import { type ColumnDef } from '@tanstack/react-table';
 import {
     AlertCircle,
-    ArrowUpDown,
+    ArrowDown,
+    ArrowUp,
     ChevronDown,
-    ChevronRight,
     Copy,
     Loader2,
     MoreHorizontal,
@@ -68,7 +68,7 @@ const SettingsProvidersHeader = () => {
     };
 
     return (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
             <p className="text-muted-foreground">Manage language model providers</p>
 
             <DropdownMenu>
@@ -145,38 +145,23 @@ const SettingsProviders = () => {
 
     const columns: ColumnDef<Provider>[] = [
         {
-            id: 'expander',
-            size: 16,
-            enableHiding: false,
-            meta: {
-                headerClassName: 'pr-0',
-                cellClassName: 'pr-0',
-            },
-            header: () => null,
-            cell: ({ row }) => {
-                return (
-                    <>
-                        {row.getIsExpanded() ? (
-                            <ChevronDown className="h-4 w-4" />
-                        ) : (
-                            <ChevronRight className="h-4 w-4" />
-                        )}
-                    </>
-                );
-            },
-        },
-        {
             accessorKey: 'name',
             size: 400,
             header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
                 return (
                     <Button
-                        variant="ghost"
-                        className="-mx-4"
+                        variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
                     >
                         Name
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="h-4 w-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="h-4 w-4" />
+                        ) : null}
                     </Button>
                 );
             },
@@ -184,16 +169,22 @@ const SettingsProviders = () => {
         },
         {
             accessorKey: 'type',
-            size: 100,
+            size: 160,
             header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
                 return (
                     <Button
-                        variant="ghost"
-                        className="-mx-4"
+                        variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
                     >
                         Type
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="h-4 w-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="h-4 w-4" />
+                        ) : null}
                     </Button>
                 );
             },
@@ -210,16 +201,22 @@ const SettingsProviders = () => {
         },
         {
             accessorKey: 'createdAt',
-            size: 100,
+            size: 120,
             header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
                 return (
                     <Button
-                        variant="ghost"
-                        className="-mx-4"
+                        variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
                     >
                         Created
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="h-4 w-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="h-4 w-4" />
+                        ) : null}
                     </Button>
                 );
             },
@@ -230,16 +227,22 @@ const SettingsProviders = () => {
         },
         {
             accessorKey: 'updatedAt',
-            size: 100,
+            size: 120,
             header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
                 return (
                     <Button
-                        variant="ghost"
-                        className="-mx-4"
+                        variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
                     >
                         Updated
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="h-4 w-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="h-4 w-4" />
+                        ) : null}
                     </Button>
                 );
             },
@@ -348,7 +351,7 @@ const SettingsProviders = () => {
             <div className="p-4 bg-muted/20 border-t">
                 <h4 className="font-medium">Agent Configurations</h4>
                 <hr className="my-4 border-muted-foreground/20" />
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
                     {agentTypes.map(({ name, key, data }) => {
                         // Get all fields from data, including nested objects
                         const fields = data ? getFields(data) : [];
@@ -446,6 +449,8 @@ const SettingsProviders = () => {
                 columns={columns}
                 data={providers}
                 renderSubComponent={renderSubComponent}
+                filterColumn="name"
+                filterPlaceholder="Filter provider names..."
             />
 
             <ConfirmationDialog

@@ -22,7 +22,8 @@ import {
 import { type ColumnDef } from '@tanstack/react-table';
 import {
     AlertCircle,
-    ArrowUpDown,
+    ArrowDown,
+    ArrowUp,
     Bot,
     Code,
     Loader2,
@@ -284,17 +285,23 @@ const SettingsPrompts = () => {
     // Agent prompts table columns
     const agentColumns: ColumnDef<AgentPromptTableData>[] = [
         {
-            accessorKey: 'name',
+            accessorKey: 'displayName',
             size: 200,
             header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
                 return (
                     <Button
-                        variant="ghost"
-                        className="-mx-4"
+                        variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
                     >
                         Agent Name
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="h-4 w-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="h-4 w-4" />
+                        ) : null}
                     </Button>
                 );
             },
@@ -444,17 +451,23 @@ const SettingsPrompts = () => {
     // Tool prompts table columns
     const toolColumns: ColumnDef<ToolPromptTableData>[] = [
         {
-            accessorKey: 'name',
+            accessorKey: 'displayName',
             size: 300,
             header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
                 return (
                     <Button
-                        variant="ghost"
-                        className="-mx-4"
+                        variant="link"
+                        className="flex items-center gap-2 p-0 hover:no-underline text-muted-foreground hover:text-primary"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                     >
                         Tool Name
-                        <ArrowUpDown className="ml-2 h-4 w-4" />
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="h-4 w-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="h-4 w-4" />
+                        ) : null}
                     </Button>
                 );
             },
@@ -693,6 +706,8 @@ const SettingsPrompts = () => {
                             data={agentPrompts}
                             renderSubComponent={renderAgentSubComponent}
                             initialPageSize={1000}
+                            filterColumn="displayName"
+                            filterPlaceholder="Filter agent names..."
                         />
                     </div>
                 )}
@@ -711,6 +726,8 @@ const SettingsPrompts = () => {
                             data={toolPrompts}
                             renderSubComponent={renderToolSubComponent}
                             initialPageSize={1000}
+                            filterColumn="displayName"
+                            filterPlaceholder="Filter tool names..."
                         />
                     </div>
                 )}
