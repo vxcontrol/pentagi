@@ -16,6 +16,8 @@ import Chat from '@/pages/Chat';
 import Login from '@/pages/Login';
 import OAuthResult from '@/pages/OAuthResult';
 import Report from '@/pages/Report';
+import SettingsMcpServer from '@/pages/settings/SettingsMcpServer';
+import SettingsMcpServers from '@/pages/settings/SettingsMcpServers';
 import SettingsPrompt from '@/pages/settings/SettingsPrompt';
 import SettingsPrompts from '@/pages/settings/SettingsPrompts';
 import SettingsProvider from '@/pages/settings/SettingsProvider';
@@ -106,6 +108,18 @@ const App = () => {
                                     <Route
                                         path="providers"
                                         element={<SettingsProviders />}
+                                    />
+                                    <Route
+                                        path="mcp-servers"
+                                        element={<SettingsMcpServers />}
+                                    />
+                                    <Route
+                                        path="mcp-servers/new"
+                                        element={<SettingsMcpServer />}
+                                    />
+                                    <Route
+                                        path="mcp-servers/:mcpServerId"
+                                        element={<SettingsMcpServer />}
                                     />
                                     <Route
                                         path="providers/:providerId"
