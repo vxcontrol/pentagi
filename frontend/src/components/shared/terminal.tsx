@@ -15,6 +15,170 @@ import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/providers/theme-provider';
 
+/**
+ * Sanitizes terminal output by handling binary/non-printable characters.
+ * Preserves ANSI escape sequences for colors and formatting.
+ * Replaces all non-ASCII characters with dots to prevent xterm.js parser errors.
+ *
+ * This aggressive approach is necessary because binary data (like JPEG files)
+ * gets interpreted as UTF-8 by JavaScript, creating "fake" Unicode characters
+ * that cause xterm.js parser to fail.
+ *
+ * @param input - The raw string that may contain binary or non-printable characters
+ * @returns Sanitized string safe for terminal display
+ */
+const sanitizeTerminalOutput = (input: string): string => {
+    if (!input) {
+        return input;
+    }
+
+    const result: string[] = [];
+    let index = 0;
+
+    while (index < input.length) {
+        const charCode = input.charCodeAt(index);
+
+        // Check for ANSI escape sequence (ESC [ ... or ESC followed by other sequences)
+        if (charCode === 0x1b) {
+            // ESC character
+            const escapeStart = index;
+            index++;
+
+            if (index < input.length) {
+                const nextChar = input.charAt(index);
+                const nextCharCode = input.charCodeAt(index);
+
+                // CSI sequence: ESC [
+                if (nextChar === '[') {
+                    index++;
+
+                    // Read until we find the final byte (0x40-0x7E) or hit a problematic char
+                    let validSequence = true;
+
+                    while (index < input.length) {
+                        const seqChar = input.charCodeAt(index);
+
+                        // Only allow ASCII characters within CSI sequence
+                        if (seqChar > 0x7e || seqChar < 0x20) {
+                            validSequence = false;
+
+                            break;
+                        }
+
+                        index++;
+
+                        // Final byte of CSI sequence (letters and some symbols)
+                        if (seqChar >= 0x40 && seqChar <= 0x7e) {
+                            break;
+                        }
+                    }
+
+                    if (validSequence) {
+                        result.push(input.slice(escapeStart, index));
+                    } else {
+                        // Invalid sequence - replace ESC with dot and continue from next char
+                        result.push('.');
+                        index = escapeStart + 1;
+                    }
+
+                    continue;
+                }
+
+                // OSC sequence: ESC ]
+                if (nextChar === ']') {
+                    index++;
+
+                    let validSequence = true;
+                    const maxOscLength = 256; // Reasonable limit for OSC sequences
+                    const startIdx = index;
+
+                    while (index < input.length && index - startIdx < maxOscLength) {
+                        const seqChar = input.charCodeAt(index);
+
+                        // BEL terminates OSC
+                        if (seqChar === 0x07) {
+                            index++;
+
+                            break;
+                        }
+
+                        // ST (ESC \) terminates OSC
+                        if (seqChar === 0x1b && index + 1 < input.length && input.charAt(index + 1) === '\\') {
+                            index += 2;
+
+                            break;
+                        }
+
+                        // Only allow printable ASCII in OSC sequences
+                        if (seqChar > 0x7e || (seqChar < 0x20 && seqChar !== 0x07)) {
+                            validSequence = false;
+
+                            break;
+                        }
+
+                        index++;
+                    }
+
+                    // Check if we exceeded max length without finding terminator
+                    if (index - startIdx >= maxOscLength) {
+                        validSequence = false;
+                    }
+
+                    if (validSequence) {
+                        result.push(input.slice(escapeStart, index));
+                    } else {
+                        result.push('.');
+                        index = escapeStart + 1;
+                    }
+
+                    continue;
+                }
+
+                // Simple escape sequences: ESC followed by single ASCII char
+                if (nextCharCode >= 0x20 && nextCharCode <= 0x7e) {
+                    // Common escape sequences
+                    if (/[78cDEHMNOPVWXZ\\^_=><()]/.test(nextChar)) {
+                        index++;
+                        result.push(input.slice(escapeStart, index));
+
+                        continue;
+                    }
+                }
+            }
+
+            // Unknown or invalid escape - replace with dot
+            result.push('.');
+            continue;
+        }
+
+        // Preserve standard whitespace characters
+        if (charCode === 0x09 || charCode === 0x0a || charCode === 0x0d) {
+            result.push(input.charAt(index));
+            index++;
+            continue;
+        }
+
+        // ASCII printable range (0x20-0x7E) - safe to display
+        if (charCode >= 0x20 && charCode <= 0x7e) {
+            result.push(input.charAt(index));
+            index++;
+            continue;
+        }
+
+        // Everything else (control chars, high-bit chars, Unicode) -> dot
+        // This includes:
+        // - Control characters 0x00-0x1F (except tab, LF, CR)
+        // - DEL (0x7F)
+        // - C1 control characters (0x80-0x9F)
+        // - All Unicode characters above 0x7F
+        // - Surrogate pairs, emoji, CJK, Cyrillic, etc.
+        result.push('.');
+        index++;
+    }
+
+    return result.join('');
+};
+
 const terminalOptions: ITerminalOptions = {
     allowProposedApi: true,
     allowTransparency: true,
@@ -462,7 +626,7 @@ const Terminal = ({
                 // Add logs in batch for performance optimization
                 safeTerminalOperation(() => {
                     for (const log of newLogs.filter(Boolean)) {
-                        terminal.writeln(log);
+                        terminal.writeln(sanitizeTerminalOutput(log));
                     }
 
                     // Scroll down only once after adding all logs
@@ -480,7 +644,7 @@ const Terminal = ({
 
                     // Add all logs in batch again
                     for (const log of logs.filter(Boolean)) {
-                        terminal.writeln(log);
+                        terminal.writeln(sanitizeTerminalOutput(log));
                     }
 
                     terminal.scrollToBottom();

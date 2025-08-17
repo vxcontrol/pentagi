@@ -138,6 +138,9 @@ const subscriptionToCacheFieldMap: Record<string, string> = {
     assistantLogAdded: 'assistantLogs',
     assistantLogUpdated: 'assistantLogs',
     assistantUpdated: 'assistants',
+    flowCreated: 'flows',
+    flowDeleted: 'flows',
+    flowUpdated: 'flows',
     messageLogAdded: 'messageLogs',
     messageLogUpdated: 'messageLogs',
     screenshotAdded: 'screenshots',
@@ -158,6 +161,7 @@ const findItemIndex = (
 // Helper function to handle cache field update for a single subscription
 const handleCacheFieldUpdate = (
     subscriptionName: string,
+    cacheField: string,
     existing: unknown,
     newItem: { id: number | string },
     readField: (fieldName: string, ref: Reference) => unknown,
@@ -191,7 +195,11 @@ const handleCacheFieldUpdate = (
         return existingArray;
     }
 
-    // Item doesn't exist - add it to the end
+    // Item doesn't exist - add it to the beginning for flows (newest first), to the end for others
+    if (cacheField === 'flows') {
+        return [newRef, ...existingArray];
+    }
+
     return [...existingArray, newRef];
 };
 
@@ -210,7 +218,7 @@ const processSubscriptionUpdate = (
         cache.modify({
             fields: {
                 [cacheField]: (existing, { readField, toReference }) =>
-                    handleCacheFieldUpdate(subscriptionName, existing, newItem, readField, toReference),
+                    handleCacheFieldUpdate(subscriptionName, cacheField, existing, newItem, readField, toReference),
             },
         });
     } catch (error) {
