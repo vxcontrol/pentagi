@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, Plug, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, FileText, Plug, Server, Settings as SettingsIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
 
@@ -46,6 +46,12 @@ const menuItems: readonly MenuItem[] = [
         path: '/settings/prompts',
         icon: <FileText className="size-4" />,
     },
+    {
+        id: 'mcp-servers',
+        title: 'MCP Servers',
+        path: '/settings/mcp-servers',
+        icon: <Server className="size-4" />,
+    },
 ] as const;
 
 // Individual menu item component to properly use hooks
@@ -85,6 +91,14 @@ const SettingsHeader = () => {
 
         if (path.startsWith('/settings/providers/') && params.providerId && params.providerId !== 'new') {
             return 'Edit Provider';
+        }
+
+        if (path === '/settings/mcp-servers/new') {
+            return 'Create MCP Server';
+        }
+
+        if (path.startsWith('/settings/mcp-servers/')) {
+            return 'Edit MCP Server';
         }
 
         if (path === '/settings/prompts/new') {
