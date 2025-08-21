@@ -190,6 +190,22 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.GetSummarizer(),
 		), nil
 
+	case tools.SearxngToolName:
+		return tools.NewSearxngTool(
+			te.flowID,
+			te.taskID,
+			te.subtaskID,
+			te.cfg.SearxngURL,
+			te.cfg.SearxngCategories,
+			te.cfg.SearxngLanguage,
+			te.cfg.SearxngSafeSearch,
+			te.cfg.SearxngTimeRange,
+			te.cfg.SearxngProxyURL,
+			0, // timeout (will use default)
+			te.proxies.GetSearchLogProvider(),
+			te.GetSummarizer(),
+		), nil
+
 	case tools.SearchInMemoryToolName:
 		return tools.NewMemoryTool(
 			te.flowID,

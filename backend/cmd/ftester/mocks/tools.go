@@ -176,6 +176,39 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		resultObj = builder.String()
 
+	case tools.SearxngToolName:
+		var searchArgs tools.SearchAction
+		if err := json.Unmarshal(args, &searchArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling search arguments: %w", err)
+		}
+
+		terminal.PrintMock("Searxng search:")
+		terminal.PrintKeyValue("Query", searchArgs.Query)
+		terminal.PrintKeyValueFormat("Max results", "%d", searchArgs.MaxResults.Int())
+
+		var builder strings.Builder
+		builder.WriteString("# Search Results\n\n")
+		builder.WriteString(fmt.Sprintf("This is a mock response from the Searxng meta search engine for query '%s'. In a real implementation, this would return actual search results aggregated from multiple search engines with customizable categories, language settings, and safety filters.\n\n", searchArgs.Query))
+
+		builder.WriteString("## Results\n\n")
+		for i := 1; i <= min(searchArgs.MaxResults.Int(), 5); i++ {
+			builder.WriteString(fmt.Sprintf("%d. **Mock Result %d** - Mock title about %s\n", i, i, searchArgs.Query))
+			builder.WriteString(fmt.Sprintf("   URL: https://example.com/searxng/result%d\n", i))
+			builder.WriteString(fmt.Sprintf("   Source: Mock Engine %d\n", i))
+			builder.WriteString(fmt.Sprintf("   Content: This is a mock content snippet that would appear in a real Searxng search result. It contains relevant information about '%s' that helps answer your query.\n\n", searchArgs.Query))
+		}
+
+		builder.WriteString("## Quick Answers\n\n")
+		builder.WriteString("- Mock answer: Based on your query, here's a quick answer that Searxng might provide.\n")
+		builder.WriteString("- Related search: You might also be interested in searching for related terms.\n\n")
+
+		builder.WriteString("## Related Searches\n\n")
+		builder.WriteString(fmt.Sprintf("- %s alternatives\n", searchArgs.Query))
+		builder.WriteString(fmt.Sprintf("- %s tutorial\n", searchArgs.Query))
+		builder.WriteString(fmt.Sprintf("- %s vs other search engines\n", searchArgs.Query))
+
+		resultObj = builder.String()
+
 	case tools.SearchToolName:
 		var searchArgs tools.ComplexSearch
 		if err := json.Unmarshal(args, &searchArgs); err != nil {
