@@ -26,6 +26,7 @@ const (
 	TavilyToolName            = "tavily"
 	TraversaalToolName        = "traversaal"
 	PerplexityToolName        = "perplexity"
+	SearxngToolName           = "searxng"
 	SearchToolName            = "search"
 	SearchResultToolName      = "search_result"
 	EnricherResultToolName    = "enricher_result"
@@ -73,6 +74,7 @@ var toolsTypeMapping = map[string]ToolType{
 	TavilyToolName:            SearchNetworkToolType,
 	TraversaalToolName:        SearchNetworkToolType,
 	PerplexityToolName:        SearchNetworkToolType,
+	SearxngToolName:           SearchNetworkToolType,
 	SearchToolName:            AgentToolType,
 	SearchResultToolName:      StoreAgentResultToolType,
 	EnricherResultToolName:    StoreAgentResultToolType,
@@ -108,6 +110,7 @@ var allowedStoringInMemoryTools = []string{
 	TavilyToolName,
 	TraversaalToolName,
 	PerplexityToolName,
+	SearxngToolName,
 	MaintenanceToolName,
 	CoderToolName,
 	PentesterToolName,
@@ -182,6 +185,13 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Name: PerplexityToolName,
 		Description: "Search in the perplexity search engine, it's a fully complex query and detailed research report " +
 			"with answer by query and detailed information from the web sites and other sources augmented by the LLM",
+		Parameters: reflector.Reflect(&SearchAction{}),
+	},
+	SearxngToolName: {
+		Name: SearxngToolName,
+		Description: "Search in the searxng meta search engine, it's a privacy-focused search engine " +
+			"that aggregates results from multiple search engines with customizable categories, " +
+			"language settings, and safety filters",
 		Parameters: reflector.Reflect(&SearchAction{}),
 	},
 	EnricherResultToolName: {
@@ -303,7 +313,7 @@ func getMessageType(name string) database.MsglogType {
 	case BrowserToolName:
 		return database.MsglogTypeBrowser
 	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, TraversaalToolName,
-		PerplexityToolName, SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName:
+		PerplexityToolName, SearxngToolName, SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:
 		return database.MsglogTypeAdvice

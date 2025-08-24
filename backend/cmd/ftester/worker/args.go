@@ -295,6 +295,7 @@ func getStructTypeForFunction(funcName string) (reflect.Type, error) {
 		tools.TavilyToolName:            &tools.SearchAction{},
 		tools.TraversaalToolName:        &tools.SearchAction{},
 		tools.PerplexityToolName:        &tools.SearchAction{},
+		tools.SearxngToolName:           &tools.SearchAction{},
 		tools.MemoristToolName:          &tools.MemoristAction{},
 		tools.SearchInMemoryToolName:    &tools.SearchInMemoryAction{},
 		tools.SearchGuideToolName:       &tools.SearchGuideAction{},
