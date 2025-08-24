@@ -30,7 +30,7 @@ type SearxngTool struct {
 	timeRange  string
 	proxyURL   string
 	timeout    time.Duration
-	searchLog  SearchLogProvider
+	slp        SearchLogProvider
 	summarizer SummarizeHandler
 }
 
@@ -40,7 +40,7 @@ func NewSearxngTool(
 	taskID, subtaskID *int64,
 	baseURL, categories, language, safeSearch, timeRange, proxyURL string,
 	timeout int,
-	searchLog SearchLogProvider,
+	slp SearchLogProvider,
 	summarizer SummarizeHandler,
 ) *SearxngTool {
 	tool := &SearxngTool{
@@ -53,7 +53,7 @@ func NewSearxngTool(
 		safeSearch: safeSearch,
 		timeRange:  timeRange,
 		proxyURL:   proxyURL,
-		searchLog:  searchLog,
+		slp:        slp,
 		summarizer: summarizer,
 	}
 
@@ -68,7 +68,7 @@ func NewSearxngTool(
 
 // IsAvailable checks if the Searxng tool is available
 func (s *SearxngTool) IsAvailable() bool {
-	return s.baseURL != "" && s.searchLog != nil
+	return s.baseURL != "" && s.slp != nil
 }
 
 // Handle handles the Searxng search tool execution
@@ -88,9 +88,22 @@ func (s *SearxngTool) Handle(ctx context.Context, name string, args json.RawMess
 	}
 
 	// Log the search
-	searchLogID, err := s.searchLog.PutLog(ctx, database.MsgchainTypeAssistant, database.MsgchainTypeAssistant, database.SearchengineTypeSearxng, searchArgs.Query, "", s.taskID, s.subtaskID)
-	if err != nil {
-		logrus.WithError(err).Error("failed to create search log")
+	var searchLogID int64
+	var err error
+	if agentCtx, ok := GetAgentContext(ctx); ok {
+		searchLogID, err = s.slp.PutLog(
+			ctx,
+			agentCtx.ParentAgentType,
+			agentCtx.CurrentAgentType,
+			database.SearchengineTypeSearxng,
+			searchArgs.Query,
+			"",
+			s.taskID,
+			s.subtaskID,
+		)
+		if err != nil {
+			logrus.WithError(err).Error("failed to create search log")
+		}
 	}
 
 	// Perform the search
@@ -98,9 +111,20 @@ func (s *SearxngTool) Handle(ctx context.Context, name string, args json.RawMess
 	if err != nil {
 		// Update search log with error
 		if searchLogID > 0 {
-			_, updateErr := s.searchLog.PutLog(ctx, database.MsgchainTypeAssistant, database.MsgchainTypeAssistant, database.SearchengineTypeSearxng, searchArgs.Query, err.Error(), s.taskID, s.subtaskID)
-			if updateErr != nil {
-				logrus.WithError(updateErr).Error("failed to update search log with error")
+			if agentCtx, ok := GetAgentContext(ctx); ok {
+				_, updateErr := s.slp.PutLog(
+					ctx,
+					agentCtx.ParentAgentType,
+					agentCtx.CurrentAgentType,
+					database.SearchengineTypeSearxng,
+					searchArgs.Query,
+					err.Error(),
+					s.taskID,
+					s.subtaskID,
+				)
+				if updateErr != nil {
+					logrus.WithError(updateErr).Error("failed to update search log with error")
+				}
 			}
 		}
 		return "", fmt.Errorf("searxng search failed: %w", err)
@@ -109,9 +133,20 @@ func (s *SearxngTool) Handle(ctx context.Context, name string, args json.RawMess
 	// Update search log with results
 	if searchLogID > 0 {
 		resultJSON, _ := json.Marshal(results)
-		_, updateErr := s.searchLog.PutLog(ctx, database.MsgchainTypeAssistant, database.MsgchainTypeAssistant, database.SearchengineTypeSearxng, searchArgs.Query, string(resultJSON), s.taskID, s.subtaskID)
-		if updateErr != nil {
-			logrus.WithError(updateErr).Error("failed to update search log with results")
+		if agentCtx, ok := GetAgentContext(ctx); ok {
+			_, updateErr := s.slp.PutLog(
+				ctx,
+				agentCtx.ParentAgentType,
+				agentCtx.CurrentAgentType,
+				database.SearchengineTypeSearxng,
+				searchArgs.Query,
+				string(resultJSON),
+				s.taskID,
+				s.subtaskID,
+			)
+			if updateErr != nil {
+				logrus.WithError(updateErr).Error("failed to update search log with results")
+			}
 		}
 	}
 
