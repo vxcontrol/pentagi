@@ -11,15 +11,8 @@ import {
 } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import Anthropic from '@/components/icons/Anthropic';
-import Bedrock from '@/components/icons/Bedrock';
-import Custom from '@/components/icons/Custom';
-import Gemini from '@/components/icons/Gemini';
-import Ollama from '@/components/icons/Ollama';
-import OpenAi from '@/components/icons/OpenAi';
 import { cn } from '@/lib/utils';
-import { ProviderType } from '@/graphql/types';
-import { getProviderTooltip, type Provider } from '@/models/Provider';
+import { getProviderIcon, getProviderTooltip, type Provider } from '@/models/Provider';
 
 const Breadcrumb = React.forwardRef<
     HTMLElement,
@@ -134,32 +127,13 @@ const BreadcrumbProvider = React.forwardRef<
 >(({ provider, className, ...props }, ref) => {
     const actualProvider = provider;
 
-    const renderProviderIcon = () => {
-        if (!actualProvider || !actualProvider.name || !actualProvider.type) return null;
-
-        switch (actualProvider.type) {
-            case ProviderType.Openai:
-                return <OpenAi className="h-4 w-4 text-blue-500" aria-label="OpenAI" />;
-            case ProviderType.Anthropic:
-                return <Anthropic className="h-4 w-4 text-purple-500" aria-label="Anthropic" />;
-            case ProviderType.Gemini:
-                return <Gemini className="h-4 w-4 text-blue-500" aria-label="Gemini" />;
-            case ProviderType.Bedrock:
-                return <Bedrock className="h-4 w-4 text-blue-500" aria-label="Bedrock" />;
-            case ProviderType.Ollama:
-                return <Ollama className="h-4 w-4 text-blue-500" aria-label="Ollama" />;
-            default:
-                return <Custom className="h-4 w-4 text-blue-500" aria-label="Custom provider" />;
-        }
-    };
-
     const iconElement = (
         <span
             ref={ref}
             className={cn('inline-flex items-center mr-2 cursor-pointer', className)}
             {...props}
         >
-            {renderProviderIcon()}
+            {actualProvider && getProviderIcon(actualProvider)}
         </span>
     );
 

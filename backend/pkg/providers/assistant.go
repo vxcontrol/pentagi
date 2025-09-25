@@ -84,6 +84,7 @@ func (ap *assistantProvider) PrepareAgentChain(ctx context.Context) (int64, erro
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
 		"flow_id":      ap.fp.flowID,
 	})
@@ -112,6 +113,7 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
 		"flow_id":      ap.fp.flowID,
 		"msg_chain_id": ap.msgChainID,
@@ -220,6 +222,7 @@ func (ap *assistantProvider) PutInputToAgentChain(ctx context.Context, input str
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
 		"flow_id":      ap.fp.flowID,
 		"msg_chain_id": ap.msgChainID,
@@ -272,6 +275,7 @@ func (ap *assistantProvider) getAssistantUseAgents(ctx context.Context) (bool, e
 
 func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (string, error) {
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
 		"flow_id":      ap.fp.flowID,
 	})
@@ -327,6 +331,7 @@ func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (stri
 
 func (ap *assistantProvider) getAssistantExecutionContext(ctx context.Context) (string, error) {
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
 		"flow_id":      ap.fp.flowID,
 	})

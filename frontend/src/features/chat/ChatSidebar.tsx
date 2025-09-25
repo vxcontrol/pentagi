@@ -49,7 +49,7 @@ import { StatusType } from '@/graphql/types';
 import { axios } from '@/lib/axios';
 import { cn } from '@/lib/utils';
 import type { User } from '@/models/User';
-import { getProviderDisplayName, type Provider } from '@/models/Provider';
+import { getProviderDisplayName, getProviderIcon, type Provider } from '@/models/Provider';
 import { useThemeStore } from '@/store/theme-store';
 
 interface ChatSidebarProps {
@@ -173,13 +173,13 @@ const ChatSidebar = ({
                                     size="sm"
                                     className="ml-auto h-8 gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                 >
-                                    <span>{selectedProvider ? getProviderDisplayName(selectedProvider) : 'Select Provider'}</span>
-                                    <ChevronsUpDown className="size-4" />
+                                    <span className="truncate max-w-[90px]">{selectedProvider ? getProviderDisplayName(selectedProvider) : 'Select Provider'}</span>
+                                    <ChevronsUpDown className="size-4 shrink-0" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                                 align="end"
-                                className="w-[--radix-dropdown-menu-trigger-width]"
+                                className="min-w-[150px] max-w-[280px] w-fit"
                                 onCloseAutoFocus={(e) => {
                                     e.preventDefault();
                                 }}
@@ -193,7 +193,17 @@ const ChatSidebar = ({
                                         }}
                                         className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                     >
-                                        {getProviderDisplayName(provider)} {selectedProvider?.name === provider.name && <Check className="ml-auto" />}
+                                        <div className="flex items-center gap-2 w-full min-w-0">
+                                            <div className="shrink-0">
+                                                {getProviderIcon(provider, "h-4 w-4 shrink-0")}
+                                            </div>
+                                            <span className="flex-1 truncate max-w-[180px]">{getProviderDisplayName(provider)}</span>
+                                            {selectedProvider?.name === provider.name && (
+                                                <div className="shrink-0">
+                                                    <Check className="h-4 w-4 shrink-0" />
+                                                </div>
+                                            )}
+                                        </div>
                                     </DropdownMenuItem>
                                 ))}
                             </DropdownMenuContent>

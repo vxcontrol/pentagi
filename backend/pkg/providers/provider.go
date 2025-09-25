@@ -474,7 +474,12 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.PrepareAgentChain")
 	defer span.End()
 
+	optAgentType := pconfig.OptionsTypePrimaryAgent
+	msgChainType := database.MsgchainTypePrimaryAgent
+
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":   fp.Type(),
+		"agent":      optAgentType,
 		"flow_id":    fp.flowID,
 		"task_id":    taskID,
 		"subtask_id": subtaskID,
@@ -522,8 +527,6 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 		return 0, fmt.Errorf("failed to get system prompt for primary agent template: %w", err)
 	}
 
-	optAgentType := pconfig.OptionsTypePrimaryAgent
-	msgChainType := database.MsgchainTypePrimaryAgent
 	msgChainID, _, err := fp.restoreChain(
 		ctx, &taskID, &subtaskID, optAgentType, msgChainType, systemAgentTmpl, subtask.Description,
 	)
@@ -539,7 +542,12 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.PerformAgentChain")
 	defer span.End()
 
+	optAgentType := pconfig.OptionsTypePrimaryAgent
+	msgChainType := database.MsgchainTypePrimaryAgent
+
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     fp.Type(),
+		"agent":        optAgentType,
 		"flow_id":      fp.flowID,
 		"task_id":      taskID,
 		"subtask_id":   subtaskID,
@@ -735,9 +743,9 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 		return PerformResultError, wrapErrorEndSpan(ctx, executorSpan, "failed to get primary executor", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypePrimaryAgent)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(
-		ctx, pconfig.OptionsTypePrimaryAgent, msgChain.ID, &taskID, &subtaskID, chain, executor, fp.summarizer,
+		ctx, optAgentType, msgChain.ID, &taskID, &subtaskID, chain, executor, fp.summarizer,
 	)
 	if err != nil {
 		return PerformResultError, wrapErrorEndSpan(ctx, executorSpan, "failed to perform primary agent chain", err)
@@ -753,6 +761,7 @@ func (fp *flowProvider) PutInputToAgentChain(ctx context.Context, msgChainID int
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     fp.Type(),
 		"flow_id":      fp.flowID,
 		"msg_chain_id": msgChainID,
 		"input":        input[:min(len(input), 1000)],
@@ -770,6 +779,7 @@ func (fp *flowProvider) EnsureChainConsistency(ctx context.Context, msgChainID i
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     fp.Type(),
 		"flow_id":      fp.flowID,
 		"msg_chain_id": msgChainID,
 	})

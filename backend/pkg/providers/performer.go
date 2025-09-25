@@ -57,13 +57,20 @@ func (fp *flowProvider) performAgentChain(
 		summarizerHandler = fp.GetSummarizeResultHandler(taskID, subtaskID)
 	)
 
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"agent":        fp.Type(),
+	fields := logrus.Fields{
+		"provider":     fp.Type(),
+		"agent":        optAgentType,
 		"flow_id":      fp.flowID,
-		"task_id":      taskID,
-		"subtask_id":   subtaskID,
 		"msg_chain_id": chainID,
-	})
+	}
+	if taskID != nil {
+		fields["task_id"] = *taskID
+	}
+	if subtaskID != nil {
+		fields["subtask_id"] = *subtaskID
+	}
+
+	logger := logrus.WithContext(ctx).WithFields(fields)
 
 	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
 	if err != nil {
@@ -417,13 +424,22 @@ func (fp *flowProvider) performReflector(
 		msgChainType = database.MsgchainTypeReflector
 	)
 
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"agent":      fp.Type(),
-		"flow_id":    fp.flowID,
-		"task_id":    taskID,
-		"subtask_id": subtaskID,
-		"iteration":  iteration,
-	})
+	fields := logrus.Fields{
+		"provider":     fp.Type(),
+		"agent":        optAgentType,
+		"origin":       optOriginType,
+		"flow_id":      fp.flowID,
+		"msg_chain_id": chainID,
+		"iteration":    iteration,
+	}
+	if taskID != nil {
+		fields["task_id"] = *taskID
+	}
+	if subtaskID != nil {
+		fields["subtask_id"] = *subtaskID
+	}
+
+	logger := logrus.WithContext(ctx).WithFields(fields)
 
 	if iteration > maxReflectorCallsPerChain {
 		msg := "reflector called too many times"
