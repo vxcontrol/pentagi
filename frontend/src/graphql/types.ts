@@ -1,5 +1,5 @@
-import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
+import { gql } from '@apollo/client';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
@@ -10,1556 +10,1745 @@ export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' |
 const defaultOptions = {} as const;
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
-  ID: { input: string; output: string; }
-  String: { input: string; output: string; }
-  Boolean: { input: boolean; output: boolean; }
-  Int: { input: number; output: number; }
-  Float: { input: number; output: number; }
-  Time: { input: any; output: any; }
+    ID: { input: string; output: string };
+    String: { input: string; output: string };
+    Boolean: { input: boolean; output: boolean };
+    Int: { input: number; output: number };
+    Float: { input: number; output: number };
+    Time: { input: any; output: any };
 };
 
 export type AgentConfig = {
-  frequencyPenalty?: Maybe<Scalars['Float']['output']>;
-  maxLength?: Maybe<Scalars['Int']['output']>;
-  maxTokens?: Maybe<Scalars['Int']['output']>;
-  minLength?: Maybe<Scalars['Int']['output']>;
-  model: Scalars['String']['output'];
-  presencePenalty?: Maybe<Scalars['Float']['output']>;
-  price?: Maybe<ModelPrice>;
-  reasoning?: Maybe<ReasoningConfig>;
-  repetitionPenalty?: Maybe<Scalars['Float']['output']>;
-  temperature?: Maybe<Scalars['Float']['output']>;
-  topK?: Maybe<Scalars['Int']['output']>;
-  topP?: Maybe<Scalars['Float']['output']>;
+    frequencyPenalty?: Maybe<Scalars['Float']['output']>;
+    maxLength?: Maybe<Scalars['Int']['output']>;
+    maxTokens?: Maybe<Scalars['Int']['output']>;
+    minLength?: Maybe<Scalars['Int']['output']>;
+    model: Scalars['String']['output'];
+    presencePenalty?: Maybe<Scalars['Float']['output']>;
+    price?: Maybe<ModelPrice>;
+    reasoning?: Maybe<ReasoningConfig>;
+    repetitionPenalty?: Maybe<Scalars['Float']['output']>;
+    temperature?: Maybe<Scalars['Float']['output']>;
+    topK?: Maybe<Scalars['Int']['output']>;
+    topP?: Maybe<Scalars['Float']['output']>;
 };
 
 export type AgentConfigInput = {
-  frequencyPenalty?: InputMaybe<Scalars['Float']['input']>;
-  maxLength?: InputMaybe<Scalars['Int']['input']>;
-  maxTokens?: InputMaybe<Scalars['Int']['input']>;
-  minLength?: InputMaybe<Scalars['Int']['input']>;
-  model: Scalars['String']['input'];
-  presencePenalty?: InputMaybe<Scalars['Float']['input']>;
-  price?: InputMaybe<ModelPriceInput>;
-  reasoning?: InputMaybe<ReasoningConfigInput>;
-  repetitionPenalty?: InputMaybe<Scalars['Float']['input']>;
-  temperature?: InputMaybe<Scalars['Float']['input']>;
-  topK?: InputMaybe<Scalars['Int']['input']>;
-  topP?: InputMaybe<Scalars['Float']['input']>;
+    frequencyPenalty?: InputMaybe<Scalars['Float']['input']>;
+    maxLength?: InputMaybe<Scalars['Int']['input']>;
+    maxTokens?: InputMaybe<Scalars['Int']['input']>;
+    minLength?: InputMaybe<Scalars['Int']['input']>;
+    model: Scalars['String']['input'];
+    presencePenalty?: InputMaybe<Scalars['Float']['input']>;
+    price?: InputMaybe<ModelPriceInput>;
+    reasoning?: InputMaybe<ReasoningConfigInput>;
+    repetitionPenalty?: InputMaybe<Scalars['Float']['input']>;
+    temperature?: InputMaybe<Scalars['Float']['input']>;
+    topK?: InputMaybe<Scalars['Int']['input']>;
+    topP?: InputMaybe<Scalars['Float']['input']>;
 };
 
 export type AgentLog = {
-  createdAt: Scalars['Time']['output'];
-  executor: AgentType;
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  initiator: AgentType;
-  result: Scalars['String']['output'];
-  subtaskId?: Maybe<Scalars['ID']['output']>;
-  task: Scalars['String']['output'];
-  taskId?: Maybe<Scalars['ID']['output']>;
+    createdAt: Scalars['Time']['output'];
+    executor: AgentType;
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    initiator: AgentType;
+    result: Scalars['String']['output'];
+    subtaskId?: Maybe<Scalars['ID']['output']>;
+    task: Scalars['String']['output'];
+    taskId?: Maybe<Scalars['ID']['output']>;
 };
 
 export type AgentPrompt = {
-  system: DefaultPrompt;
+    system: DefaultPrompt;
 };
 
 export type AgentPrompts = {
-  human: DefaultPrompt;
-  system: DefaultPrompt;
+    human: DefaultPrompt;
+    system: DefaultPrompt;
 };
 
 export type AgentTestResult = {
-  tests: Array<TestResult>;
+    tests: Array<TestResult>;
 };
 
 export enum AgentType {
-  Adviser = 'adviser',
-  Assistant = 'assistant',
-  Coder = 'coder',
-  Enricher = 'enricher',
-  Generator = 'generator',
-  Installer = 'installer',
-  Memorist = 'memorist',
-  Pentester = 'pentester',
-  PrimaryAgent = 'primary_agent',
-  Refiner = 'refiner',
-  Reflector = 'reflector',
-  Reporter = 'reporter',
-  Searcher = 'searcher',
-  Summarizer = 'summarizer',
-  ToolCallFixer = 'tool_call_fixer'
+    Adviser = 'adviser',
+    Assistant = 'assistant',
+    Coder = 'coder',
+    Enricher = 'enricher',
+    Generator = 'generator',
+    Installer = 'installer',
+    Memorist = 'memorist',
+    Pentester = 'pentester',
+    PrimaryAgent = 'primary_agent',
+    Refiner = 'refiner',
+    Reflector = 'reflector',
+    Reporter = 'reporter',
+    Searcher = 'searcher',
+    Summarizer = 'summarizer',
+    ToolCallFixer = 'tool_call_fixer',
 }
 
 export type AgentsConfig = {
-  adviser: AgentConfig;
-  agent: AgentConfig;
-  assistant: AgentConfig;
-  coder: AgentConfig;
-  enricher: AgentConfig;
-  generator: AgentConfig;
-  installer: AgentConfig;
-  pentester: AgentConfig;
-  refiner: AgentConfig;
-  reflector: AgentConfig;
-  searcher: AgentConfig;
-  simple: AgentConfig;
-  simpleJson: AgentConfig;
+    adviser: AgentConfig;
+    agent: AgentConfig;
+    assistant: AgentConfig;
+    coder: AgentConfig;
+    enricher: AgentConfig;
+    generator: AgentConfig;
+    installer: AgentConfig;
+    pentester: AgentConfig;
+    refiner: AgentConfig;
+    reflector: AgentConfig;
+    searcher: AgentConfig;
+    simple: AgentConfig;
+    simpleJson: AgentConfig;
 };
 
 export type AgentsConfigInput = {
-  adviser: AgentConfigInput;
-  agent: AgentConfigInput;
-  assistant: AgentConfigInput;
-  coder: AgentConfigInput;
-  enricher: AgentConfigInput;
-  generator: AgentConfigInput;
-  installer: AgentConfigInput;
-  pentester: AgentConfigInput;
-  refiner: AgentConfigInput;
-  reflector: AgentConfigInput;
-  searcher: AgentConfigInput;
-  simple: AgentConfigInput;
-  simpleJson: AgentConfigInput;
+    adviser: AgentConfigInput;
+    agent: AgentConfigInput;
+    assistant: AgentConfigInput;
+    coder: AgentConfigInput;
+    enricher: AgentConfigInput;
+    generator: AgentConfigInput;
+    installer: AgentConfigInput;
+    pentester: AgentConfigInput;
+    refiner: AgentConfigInput;
+    reflector: AgentConfigInput;
+    searcher: AgentConfigInput;
+    simple: AgentConfigInput;
+    simpleJson: AgentConfigInput;
 };
 
 export type AgentsPrompts = {
-  adviser: AgentPrompts;
-  assistant: AgentPrompt;
-  coder: AgentPrompts;
-  enricher: AgentPrompts;
-  generator: AgentPrompts;
-  installer: AgentPrompts;
-  memorist: AgentPrompts;
-  pentester: AgentPrompts;
-  primaryAgent: AgentPrompt;
-  refiner: AgentPrompts;
-  reflector: AgentPrompts;
-  reporter: AgentPrompts;
-  searcher: AgentPrompts;
-  summarizer: AgentPrompt;
-  toolCallFixer: AgentPrompts;
+    adviser: AgentPrompts;
+    assistant: AgentPrompt;
+    coder: AgentPrompts;
+    enricher: AgentPrompts;
+    generator: AgentPrompts;
+    installer: AgentPrompts;
+    memorist: AgentPrompts;
+    pentester: AgentPrompts;
+    primaryAgent: AgentPrompt;
+    refiner: AgentPrompts;
+    reflector: AgentPrompts;
+    reporter: AgentPrompts;
+    searcher: AgentPrompts;
+    summarizer: AgentPrompt;
+    toolCallFixer: AgentPrompts;
 };
 
 export type Assistant = {
-  createdAt: Scalars['Time']['output'];
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  provider: Provider;
-  status: StatusType;
-  title: Scalars['String']['output'];
-  updatedAt: Scalars['Time']['output'];
-  useAgents: Scalars['Boolean']['output'];
+    createdAt: Scalars['Time']['output'];
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    provider: Provider;
+    status: StatusType;
+    title: Scalars['String']['output'];
+    updatedAt: Scalars['Time']['output'];
+    useAgents: Scalars['Boolean']['output'];
 };
 
 export type AssistantLog = {
-  appendPart: Scalars['Boolean']['output'];
-  assistantId: Scalars['ID']['output'];
-  createdAt: Scalars['Time']['output'];
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  message: Scalars['String']['output'];
-  result: Scalars['String']['output'];
-  resultFormat: ResultFormat;
-  thinking?: Maybe<Scalars['String']['output']>;
-  type: MessageLogType;
+    appendPart: Scalars['Boolean']['output'];
+    assistantId: Scalars['ID']['output'];
+    createdAt: Scalars['Time']['output'];
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    message: Scalars['String']['output'];
+    result: Scalars['String']['output'];
+    resultFormat: ResultFormat;
+    thinking?: Maybe<Scalars['String']['output']>;
+    type: MessageLogType;
 };
 
 export type DefaultPrompt = {
-  template: Scalars['String']['output'];
-  type: PromptType;
-  variables: Array<Scalars['String']['output']>;
+    template: Scalars['String']['output'];
+    type: PromptType;
+    variables: Array<Scalars['String']['output']>;
 };
 
 export type DefaultPrompts = {
-  agents: AgentsPrompts;
-  tools: ToolsPrompts;
+    agents: AgentsPrompts;
+    tools: ToolsPrompts;
 };
 
 export type DefaultProvidersConfig = {
-  anthropic: ProviderConfig;
-  bedrock?: Maybe<ProviderConfig>;
-  custom?: Maybe<ProviderConfig>;
-  gemini?: Maybe<ProviderConfig>;
-  ollama?: Maybe<ProviderConfig>;
-  openai: ProviderConfig;
+    anthropic: ProviderConfig;
+    bedrock?: Maybe<ProviderConfig>;
+    custom?: Maybe<ProviderConfig>;
+    gemini?: Maybe<ProviderConfig>;
+    ollama?: Maybe<ProviderConfig>;
+    openai: ProviderConfig;
 };
 
 export type Flow = {
-  createdAt: Scalars['Time']['output'];
-  id: Scalars['ID']['output'];
-  provider: Provider;
-  status: StatusType;
-  terminals?: Maybe<Array<Terminal>>;
-  title: Scalars['String']['output'];
-  updatedAt: Scalars['Time']['output'];
+    createdAt: Scalars['Time']['output'];
+    id: Scalars['ID']['output'];
+    provider: Provider;
+    status: StatusType;
+    terminals?: Maybe<Array<Terminal>>;
+    title: Scalars['String']['output'];
+    updatedAt: Scalars['Time']['output'];
 };
 
 export type FlowAssistant = {
-  assistant: Assistant;
-  flow: Flow;
+    assistant: Assistant;
+    flow: Flow;
 };
 
 export type MessageLog = {
-  createdAt: Scalars['Time']['output'];
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  message: Scalars['String']['output'];
-  result: Scalars['String']['output'];
-  resultFormat: ResultFormat;
-  subtaskId?: Maybe<Scalars['ID']['output']>;
-  taskId?: Maybe<Scalars['ID']['output']>;
-  thinking?: Maybe<Scalars['String']['output']>;
-  type: MessageLogType;
+    createdAt: Scalars['Time']['output'];
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    message: Scalars['String']['output'];
+    result: Scalars['String']['output'];
+    resultFormat: ResultFormat;
+    subtaskId?: Maybe<Scalars['ID']['output']>;
+    taskId?: Maybe<Scalars['ID']['output']>;
+    thinking?: Maybe<Scalars['String']['output']>;
+    type: MessageLogType;
 };
 
 export enum MessageLogType {
-  Advice = 'advice',
-  Answer = 'answer',
-  Ask = 'ask',
-  Browser = 'browser',
-  Done = 'done',
-  File = 'file',
-  Input = 'input',
-  Report = 'report',
-  Search = 'search',
-  Terminal = 'terminal',
-  Thoughts = 'thoughts'
+    Advice = 'advice',
+    Answer = 'answer',
+    Ask = 'ask',
+    Browser = 'browser',
+    Done = 'done',
+    File = 'file',
+    Input = 'input',
+    Report = 'report',
+    Search = 'search',
+    Terminal = 'terminal',
+    Thoughts = 'thoughts',
 }
 
 export type ModelConfig = {
-  name: Scalars['String']['output'];
-  price?: Maybe<ModelPrice>;
+    description?: Maybe<Scalars['String']['output']>;
+    name: Scalars['String']['output'];
+    price?: Maybe<ModelPrice>;
+    releaseDate?: Maybe<Scalars['Time']['output']>;
+    thinking?: Maybe<Scalars['Boolean']['output']>;
 };
 
 export type ModelPrice = {
-  input: Scalars['Float']['output'];
-  output: Scalars['Float']['output'];
+    input: Scalars['Float']['output'];
+    output: Scalars['Float']['output'];
 };
 
 export type ModelPriceInput = {
-  input: Scalars['Float']['input'];
-  output: Scalars['Float']['input'];
+    input: Scalars['Float']['input'];
+    output: Scalars['Float']['input'];
 };
 
 export type Mutation = {
-  callAssistant: ResultType;
-  createAssistant: FlowAssistant;
-  createFlow: Flow;
-  createPrompt: UserPrompt;
-  createProvider: ProviderConfig;
-  deleteAssistant: ResultType;
-  deleteFlow: ResultType;
-  deletePrompt: ResultType;
-  deleteProvider: ResultType;
-  finishFlow: ResultType;
-  putUserInput: ResultType;
-  stopAssistant: Assistant;
-  stopFlow: ResultType;
-  testAgent: AgentTestResult;
-  testProvider: ProviderTestResult;
-  updatePrompt: UserPrompt;
-  updateProvider: ProviderConfig;
-  validatePrompt: PromptValidationResult;
+    callAssistant: ResultType;
+    createAssistant: FlowAssistant;
+    createFlow: Flow;
+    createPrompt: UserPrompt;
+    createProvider: ProviderConfig;
+    deleteAssistant: ResultType;
+    deleteFlow: ResultType;
+    deletePrompt: ResultType;
+    deleteProvider: ResultType;
+    finishFlow: ResultType;
+    putUserInput: ResultType;
+    stopAssistant: Assistant;
+    stopFlow: ResultType;
+    testAgent: AgentTestResult;
+    testProvider: ProviderTestResult;
+    updatePrompt: UserPrompt;
+    updateProvider: ProviderConfig;
+    validatePrompt: PromptValidationResult;
 };
-
 
 export type MutationCallAssistantArgs = {
-  assistantId: Scalars['ID']['input'];
-  flowId: Scalars['ID']['input'];
-  input: Scalars['String']['input'];
-  useAgents: Scalars['Boolean']['input'];
+    assistantId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
+    input: Scalars['String']['input'];
+    useAgents: Scalars['Boolean']['input'];
 };
-
 
 export type MutationCreateAssistantArgs = {
-  flowId: Scalars['ID']['input'];
-  input: Scalars['String']['input'];
-  modelProvider: Scalars['String']['input'];
-  useAgents: Scalars['Boolean']['input'];
+    flowId: Scalars['ID']['input'];
+    input: Scalars['String']['input'];
+    modelProvider: Scalars['String']['input'];
+    useAgents: Scalars['Boolean']['input'];
 };
-
 
 export type MutationCreateFlowArgs = {
-  input: Scalars['String']['input'];
-  modelProvider: Scalars['String']['input'];
+    input: Scalars['String']['input'];
+    modelProvider: Scalars['String']['input'];
 };
-
 
 export type MutationCreatePromptArgs = {
-  template: Scalars['String']['input'];
-  type: PromptType;
+    template: Scalars['String']['input'];
+    type: PromptType;
 };
-
 
 export type MutationCreateProviderArgs = {
-  agents: AgentsConfigInput;
-  name: Scalars['String']['input'];
-  type: ProviderType;
+    agents: AgentsConfigInput;
+    name: Scalars['String']['input'];
+    type: ProviderType;
 };
-
 
 export type MutationDeleteAssistantArgs = {
-  assistantId: Scalars['ID']['input'];
-  flowId: Scalars['ID']['input'];
+    assistantId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type MutationDeleteFlowArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type MutationDeletePromptArgs = {
-  promptId: Scalars['ID']['input'];
+    promptId: Scalars['ID']['input'];
 };
-
 
 export type MutationDeleteProviderArgs = {
-  providerId: Scalars['ID']['input'];
+    providerId: Scalars['ID']['input'];
 };
-
 
 export type MutationFinishFlowArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type MutationPutUserInputArgs = {
-  flowId: Scalars['ID']['input'];
-  input: Scalars['String']['input'];
+    flowId: Scalars['ID']['input'];
+    input: Scalars['String']['input'];
 };
-
 
 export type MutationStopAssistantArgs = {
-  assistantId: Scalars['ID']['input'];
-  flowId: Scalars['ID']['input'];
+    assistantId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type MutationStopFlowArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type MutationTestAgentArgs = {
-  agent: AgentConfigInput;
-  agentType: AgentType;
-  type: ProviderType;
+    agent: AgentConfigInput;
+    agentType: AgentType;
+    type: ProviderType;
 };
-
 
 export type MutationTestProviderArgs = {
-  agents: AgentsConfigInput;
-  type: ProviderType;
+    agents: AgentsConfigInput;
+    type: ProviderType;
 };
-
 
 export type MutationUpdatePromptArgs = {
-  promptId: Scalars['ID']['input'];
-  template: Scalars['String']['input'];
+    promptId: Scalars['ID']['input'];
+    template: Scalars['String']['input'];
 };
-
 
 export type MutationUpdateProviderArgs = {
-  agents: AgentsConfigInput;
-  name: Scalars['String']['input'];
-  providerId: Scalars['ID']['input'];
+    agents: AgentsConfigInput;
+    name: Scalars['String']['input'];
+    providerId: Scalars['ID']['input'];
 };
 
-
 export type MutationValidatePromptArgs = {
-  template: Scalars['String']['input'];
-  type: PromptType;
+    template: Scalars['String']['input'];
+    type: PromptType;
 };
 
 export enum PromptType {
-  Adviser = 'adviser',
-  Assistant = 'assistant',
-  Coder = 'coder',
-  Enricher = 'enricher',
-  ExecutionLogs = 'execution_logs',
-  FlowDescriptor = 'flow_descriptor',
-  FullExecutionContext = 'full_execution_context',
-  Generator = 'generator',
-  ImageChooser = 'image_chooser',
-  InputToolcallFixer = 'input_toolcall_fixer',
-  Installer = 'installer',
-  LanguageChooser = 'language_chooser',
-  Memorist = 'memorist',
-  Pentester = 'pentester',
-  PrimaryAgent = 'primary_agent',
-  QuestionAdviser = 'question_adviser',
-  QuestionCoder = 'question_coder',
-  QuestionEnricher = 'question_enricher',
-  QuestionInstaller = 'question_installer',
-  QuestionMemorist = 'question_memorist',
-  QuestionPentester = 'question_pentester',
-  QuestionReflector = 'question_reflector',
-  QuestionSearcher = 'question_searcher',
-  Refiner = 'refiner',
-  Reflector = 'reflector',
-  Reporter = 'reporter',
-  Searcher = 'searcher',
-  ShortExecutionContext = 'short_execution_context',
-  SubtasksGenerator = 'subtasks_generator',
-  SubtasksRefiner = 'subtasks_refiner',
-  Summarizer = 'summarizer',
-  TaskDescriptor = 'task_descriptor',
-  TaskReporter = 'task_reporter',
-  ToolcallFixer = 'toolcall_fixer'
+    Adviser = 'adviser',
+    Assistant = 'assistant',
+    Coder = 'coder',
+    Enricher = 'enricher',
+    ExecutionLogs = 'execution_logs',
+    FlowDescriptor = 'flow_descriptor',
+    FullExecutionContext = 'full_execution_context',
+    Generator = 'generator',
+    ImageChooser = 'image_chooser',
+    InputToolcallFixer = 'input_toolcall_fixer',
+    Installer = 'installer',
+    LanguageChooser = 'language_chooser',
+    Memorist = 'memorist',
+    Pentester = 'pentester',
+    PrimaryAgent = 'primary_agent',
+    QuestionAdviser = 'question_adviser',
+    QuestionCoder = 'question_coder',
+    QuestionEnricher = 'question_enricher',
+    QuestionInstaller = 'question_installer',
+    QuestionMemorist = 'question_memorist',
+    QuestionPentester = 'question_pentester',
+    QuestionReflector = 'question_reflector',
+    QuestionSearcher = 'question_searcher',
+    Refiner = 'refiner',
+    Reflector = 'reflector',
+    Reporter = 'reporter',
+    Searcher = 'searcher',
+    ShortExecutionContext = 'short_execution_context',
+    SubtasksGenerator = 'subtasks_generator',
+    SubtasksRefiner = 'subtasks_refiner',
+    Summarizer = 'summarizer',
+    TaskDescriptor = 'task_descriptor',
+    TaskReporter = 'task_reporter',
+    ToolcallFixer = 'toolcall_fixer',
 }
 
 export enum PromptValidationErrorType {
-  EmptyTemplate = 'empty_template',
-  RenderingFailed = 'rendering_failed',
-  SyntaxError = 'syntax_error',
-  UnauthorizedVariable = 'unauthorized_variable',
-  UnknownType = 'unknown_type',
-  VariableTypeMismatch = 'variable_type_mismatch'
+    EmptyTemplate = 'empty_template',
+    RenderingFailed = 'rendering_failed',
+    SyntaxError = 'syntax_error',
+    UnauthorizedVariable = 'unauthorized_variable',
+    UnknownType = 'unknown_type',
+    VariableTypeMismatch = 'variable_type_mismatch',
 }
 
 export type PromptValidationResult = {
-  details?: Maybe<Scalars['String']['output']>;
-  errorType?: Maybe<PromptValidationErrorType>;
-  line?: Maybe<Scalars['Int']['output']>;
-  message?: Maybe<Scalars['String']['output']>;
-  result: ResultType;
+    details?: Maybe<Scalars['String']['output']>;
+    errorType?: Maybe<PromptValidationErrorType>;
+    line?: Maybe<Scalars['Int']['output']>;
+    message?: Maybe<Scalars['String']['output']>;
+    result: ResultType;
 };
 
 export type PromptsConfig = {
-  default: DefaultPrompts;
-  userDefined?: Maybe<Array<UserPrompt>>;
+    default: DefaultPrompts;
+    userDefined?: Maybe<Array<UserPrompt>>;
 };
 
 export type Provider = {
-  name: Scalars['String']['output'];
-  type: ProviderType;
+    name: Scalars['String']['output'];
+    type: ProviderType;
 };
 
 export type ProviderConfig = {
-  agents: AgentsConfig;
-  createdAt: Scalars['Time']['output'];
-  id: Scalars['ID']['output'];
-  name: Scalars['String']['output'];
-  type: ProviderType;
-  updatedAt: Scalars['Time']['output'];
+    agents: AgentsConfig;
+    createdAt: Scalars['Time']['output'];
+    id: Scalars['ID']['output'];
+    name: Scalars['String']['output'];
+    type: ProviderType;
+    updatedAt: Scalars['Time']['output'];
 };
 
 export type ProviderTestResult = {
-  adviser: AgentTestResult;
-  agent: AgentTestResult;
-  assistant: AgentTestResult;
-  coder: AgentTestResult;
-  enricher: AgentTestResult;
-  generator: AgentTestResult;
-  installer: AgentTestResult;
-  pentester: AgentTestResult;
-  refiner: AgentTestResult;
-  reflector: AgentTestResult;
-  searcher: AgentTestResult;
-  simple: AgentTestResult;
-  simpleJson: AgentTestResult;
+    adviser: AgentTestResult;
+    agent: AgentTestResult;
+    assistant: AgentTestResult;
+    coder: AgentTestResult;
+    enricher: AgentTestResult;
+    generator: AgentTestResult;
+    installer: AgentTestResult;
+    pentester: AgentTestResult;
+    refiner: AgentTestResult;
+    reflector: AgentTestResult;
+    searcher: AgentTestResult;
+    simple: AgentTestResult;
+    simpleJson: AgentTestResult;
 };
 
 export enum ProviderType {
-  Anthropic = 'anthropic',
-  Bedrock = 'bedrock',
-  Custom = 'custom',
-  Gemini = 'gemini',
-  Ollama = 'ollama',
-  Openai = 'openai'
+    Anthropic = 'anthropic',
+    Bedrock = 'bedrock',
+    Custom = 'custom',
+    Gemini = 'gemini',
+    Ollama = 'ollama',
+    Openai = 'openai',
 }
 
 export type ProvidersConfig = {
-  default: DefaultProvidersConfig;
-  enabled: ProvidersReadinessStatus;
-  models: ProvidersModelsList;
-  userDefined?: Maybe<Array<ProviderConfig>>;
+    default: DefaultProvidersConfig;
+    enabled: ProvidersReadinessStatus;
+    models: ProvidersModelsList;
+    userDefined?: Maybe<Array<ProviderConfig>>;
 };
 
 export type ProvidersModelsList = {
-  anthropic: Array<ModelConfig>;
-  bedrock?: Maybe<Array<ModelConfig>>;
-  custom?: Maybe<Array<ModelConfig>>;
-  gemini: Array<ModelConfig>;
-  ollama?: Maybe<Array<ModelConfig>>;
-  openai: Array<ModelConfig>;
+    anthropic: Array<ModelConfig>;
+    bedrock?: Maybe<Array<ModelConfig>>;
+    custom?: Maybe<Array<ModelConfig>>;
+    gemini: Array<ModelConfig>;
+    ollama?: Maybe<Array<ModelConfig>>;
+    openai: Array<ModelConfig>;
 };
 
 export type ProvidersReadinessStatus = {
-  anthropic: Scalars['Boolean']['output'];
-  bedrock: Scalars['Boolean']['output'];
-  custom: Scalars['Boolean']['output'];
-  gemini: Scalars['Boolean']['output'];
-  ollama: Scalars['Boolean']['output'];
-  openai: Scalars['Boolean']['output'];
+    anthropic: Scalars['Boolean']['output'];
+    bedrock: Scalars['Boolean']['output'];
+    custom: Scalars['Boolean']['output'];
+    gemini: Scalars['Boolean']['output'];
+    ollama: Scalars['Boolean']['output'];
+    openai: Scalars['Boolean']['output'];
 };
 
 export type Query = {
-  agentLogs?: Maybe<Array<AgentLog>>;
-  assistantLogs?: Maybe<Array<AssistantLog>>;
-  assistants?: Maybe<Array<Assistant>>;
-  flow: Flow;
-  flows?: Maybe<Array<Flow>>;
-  messageLogs?: Maybe<Array<MessageLog>>;
-  providers: Array<Provider>;
-  screenshots?: Maybe<Array<Screenshot>>;
-  searchLogs?: Maybe<Array<SearchLog>>;
-  settings: Settings;
-  settingsPrompts: PromptsConfig;
-  settingsProviders: ProvidersConfig;
-  tasks?: Maybe<Array<Task>>;
-  terminalLogs?: Maybe<Array<TerminalLog>>;
-  vectorStoreLogs?: Maybe<Array<VectorStoreLog>>;
+    agentLogs?: Maybe<Array<AgentLog>>;
+    assistantLogs?: Maybe<Array<AssistantLog>>;
+    assistants?: Maybe<Array<Assistant>>;
+    flow: Flow;
+    flows?: Maybe<Array<Flow>>;
+    messageLogs?: Maybe<Array<MessageLog>>;
+    providers: Array<Provider>;
+    screenshots?: Maybe<Array<Screenshot>>;
+    searchLogs?: Maybe<Array<SearchLog>>;
+    settings: Settings;
+    settingsPrompts: PromptsConfig;
+    settingsProviders: ProvidersConfig;
+    tasks?: Maybe<Array<Task>>;
+    terminalLogs?: Maybe<Array<TerminalLog>>;
+    vectorStoreLogs?: Maybe<Array<VectorStoreLog>>;
 };
-
 
 export type QueryAgentLogsArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type QueryAssistantLogsArgs = {
-  assistantId: Scalars['ID']['input'];
-  flowId: Scalars['ID']['input'];
+    assistantId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type QueryAssistantsArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type QueryFlowArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type QueryMessageLogsArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type QueryScreenshotsArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type QuerySearchLogsArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type QueryTasksArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type QueryTerminalLogsArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
 
-
 export type QueryVectorStoreLogsArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
 
 export type ReasoningConfig = {
-  effort?: Maybe<ReasoningEffort>;
-  maxTokens?: Maybe<Scalars['Int']['output']>;
+    effort?: Maybe<ReasoningEffort>;
+    maxTokens?: Maybe<Scalars['Int']['output']>;
 };
 
 export type ReasoningConfigInput = {
-  effort?: InputMaybe<ReasoningEffort>;
-  maxTokens?: InputMaybe<Scalars['Int']['input']>;
+    effort?: InputMaybe<ReasoningEffort>;
+    maxTokens?: InputMaybe<Scalars['Int']['input']>;
 };
 
 export enum ReasoningEffort {
-  High = 'high',
-  Low = 'low',
-  Medium = 'medium'
+    High = 'high',
+    Low = 'low',
+    Medium = 'medium',
 }
 
 export enum ResultFormat {
-  Markdown = 'markdown',
-  Plain = 'plain',
-  Terminal = 'terminal'
+    Markdown = 'markdown',
+    Plain = 'plain',
+    Terminal = 'terminal',
 }
 
 export enum ResultType {
-  Error = 'error',
-  Success = 'success'
+    Error = 'error',
+    Success = 'success',
 }
 
 export type Screenshot = {
-  createdAt: Scalars['Time']['output'];
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  name: Scalars['String']['output'];
-  url: Scalars['String']['output'];
+    createdAt: Scalars['Time']['output'];
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    name: Scalars['String']['output'];
+    url: Scalars['String']['output'];
 };
 
 export type SearchLog = {
-  createdAt: Scalars['Time']['output'];
-  engine: Scalars['String']['output'];
-  executor: AgentType;
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  initiator: AgentType;
-  query: Scalars['String']['output'];
-  result: Scalars['String']['output'];
-  subtaskId?: Maybe<Scalars['ID']['output']>;
-  taskId?: Maybe<Scalars['ID']['output']>;
+    createdAt: Scalars['Time']['output'];
+    engine: Scalars['String']['output'];
+    executor: AgentType;
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    initiator: AgentType;
+    query: Scalars['String']['output'];
+    result: Scalars['String']['output'];
+    subtaskId?: Maybe<Scalars['ID']['output']>;
+    taskId?: Maybe<Scalars['ID']['output']>;
 };
 
 export type Settings = {
-  askUser: Scalars['Boolean']['output'];
-  assistantUseAgents: Scalars['Boolean']['output'];
-  debug: Scalars['Boolean']['output'];
-  dockerInside: Scalars['Boolean']['output'];
+    askUser: Scalars['Boolean']['output'];
+    assistantUseAgents: Scalars['Boolean']['output'];
+    debug: Scalars['Boolean']['output'];
+    dockerInside: Scalars['Boolean']['output'];
 };
 
 export enum StatusType {
-  Created = 'created',
-  Failed = 'failed',
-  Finished = 'finished',
-  Running = 'running',
-  Waiting = 'waiting'
+    Created = 'created',
+    Failed = 'failed',
+    Finished = 'finished',
+    Running = 'running',
+    Waiting = 'waiting',
 }
 
 export type Subscription = {
-  agentLogAdded: AgentLog;
-  assistantCreated: Assistant;
-  assistantDeleted: Assistant;
-  assistantLogAdded: AssistantLog;
-  assistantLogUpdated: AssistantLog;
-  assistantUpdated: Assistant;
-  flowCreated: Flow;
-  flowDeleted: Flow;
-  flowUpdated: Flow;
-  messageLogAdded: MessageLog;
-  messageLogUpdated: MessageLog;
-  providerCreated: ProviderConfig;
-  providerDeleted: ProviderConfig;
-  providerUpdated: ProviderConfig;
-  screenshotAdded: Screenshot;
-  searchLogAdded: SearchLog;
-  taskCreated: Task;
-  taskUpdated: Task;
-  terminalLogAdded: TerminalLog;
-  vectorStoreLogAdded: VectorStoreLog;
+    agentLogAdded: AgentLog;
+    assistantCreated: Assistant;
+    assistantDeleted: Assistant;
+    assistantLogAdded: AssistantLog;
+    assistantLogUpdated: AssistantLog;
+    assistantUpdated: Assistant;
+    flowCreated: Flow;
+    flowDeleted: Flow;
+    flowUpdated: Flow;
+    messageLogAdded: MessageLog;
+    messageLogUpdated: MessageLog;
+    providerCreated: ProviderConfig;
+    providerDeleted: ProviderConfig;
+    providerUpdated: ProviderConfig;
+    screenshotAdded: Screenshot;
+    searchLogAdded: SearchLog;
+    taskCreated: Task;
+    taskUpdated: Task;
+    terminalLogAdded: TerminalLog;
+    vectorStoreLogAdded: VectorStoreLog;
 };
-
 
 export type SubscriptionAgentLogAddedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionAssistantCreatedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionAssistantDeletedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionAssistantLogAddedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionAssistantLogUpdatedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionAssistantUpdatedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionMessageLogAddedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionMessageLogUpdatedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionScreenshotAddedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionSearchLogAddedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionTaskCreatedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionTaskUpdatedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
-
 
 export type SubscriptionTerminalLogAddedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
 
-
 export type SubscriptionVectorStoreLogAddedArgs = {
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 };
 
 export type Subtask = {
-  createdAt: Scalars['Time']['output'];
-  description: Scalars['String']['output'];
-  id: Scalars['ID']['output'];
-  result: Scalars['String']['output'];
-  status: StatusType;
-  taskId: Scalars['ID']['output'];
-  title: Scalars['String']['output'];
-  updatedAt: Scalars['Time']['output'];
+    createdAt: Scalars['Time']['output'];
+    description: Scalars['String']['output'];
+    id: Scalars['ID']['output'];
+    result: Scalars['String']['output'];
+    status: StatusType;
+    taskId: Scalars['ID']['output'];
+    title: Scalars['String']['output'];
+    updatedAt: Scalars['Time']['output'];
 };
 
 export type Task = {
-  createdAt: Scalars['Time']['output'];
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  input: Scalars['String']['output'];
-  result: Scalars['String']['output'];
-  status: StatusType;
-  subtasks?: Maybe<Array<Subtask>>;
-  title: Scalars['String']['output'];
-  updatedAt: Scalars['Time']['output'];
+    createdAt: Scalars['Time']['output'];
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    input: Scalars['String']['output'];
+    result: Scalars['String']['output'];
+    status: StatusType;
+    subtasks?: Maybe<Array<Subtask>>;
+    title: Scalars['String']['output'];
+    updatedAt: Scalars['Time']['output'];
 };
 
 export type Terminal = {
-  connected: Scalars['Boolean']['output'];
-  createdAt: Scalars['Time']['output'];
-  id: Scalars['ID']['output'];
-  image: Scalars['String']['output'];
-  name: Scalars['String']['output'];
-  type: TerminalType;
+    connected: Scalars['Boolean']['output'];
+    createdAt: Scalars['Time']['output'];
+    id: Scalars['ID']['output'];
+    image: Scalars['String']['output'];
+    name: Scalars['String']['output'];
+    type: TerminalType;
 };
 
 export type TerminalLog = {
-  createdAt: Scalars['Time']['output'];
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  terminal: Scalars['ID']['output'];
-  text: Scalars['String']['output'];
-  type: TerminalLogType;
+    createdAt: Scalars['Time']['output'];
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    terminal: Scalars['ID']['output'];
+    text: Scalars['String']['output'];
+    type: TerminalLogType;
 };
 
 export enum TerminalLogType {
-  Stderr = 'stderr',
-  Stdin = 'stdin',
-  Stdout = 'stdout'
+    Stderr = 'stderr',
+    Stdin = 'stdin',
+    Stdout = 'stdout',
 }
 
 export enum TerminalType {
-  Primary = 'primary',
-  Secondary = 'secondary'
+    Primary = 'primary',
+    Secondary = 'secondary',
 }
 
 export type TestResult = {
-  error?: Maybe<Scalars['String']['output']>;
-  latency?: Maybe<Scalars['Int']['output']>;
-  name: Scalars['String']['output'];
-  reasoning: Scalars['Boolean']['output'];
-  result: Scalars['Boolean']['output'];
-  streaming: Scalars['Boolean']['output'];
-  type: Scalars['String']['output'];
+    error?: Maybe<Scalars['String']['output']>;
+    latency?: Maybe<Scalars['Int']['output']>;
+    name: Scalars['String']['output'];
+    reasoning: Scalars['Boolean']['output'];
+    result: Scalars['Boolean']['output'];
+    streaming: Scalars['Boolean']['output'];
+    type: Scalars['String']['output'];
 };
 
 export type ToolsPrompts = {
-  chooseDockerImage: DefaultPrompt;
-  chooseUserLanguage: DefaultPrompt;
-  getExecutionLogs: DefaultPrompt;
-  getFlowDescription: DefaultPrompt;
-  getFullExecutionContext: DefaultPrompt;
-  getShortExecutionContext: DefaultPrompt;
-  getTaskDescription: DefaultPrompt;
+    chooseDockerImage: DefaultPrompt;
+    chooseUserLanguage: DefaultPrompt;
+    getExecutionLogs: DefaultPrompt;
+    getFlowDescription: DefaultPrompt;
+    getFullExecutionContext: DefaultPrompt;
+    getShortExecutionContext: DefaultPrompt;
+    getTaskDescription: DefaultPrompt;
 };
 
 export type UserPrompt = {
-  createdAt: Scalars['Time']['output'];
-  id: Scalars['ID']['output'];
-  template: Scalars['String']['output'];
-  type: PromptType;
-  updatedAt: Scalars['Time']['output'];
+    createdAt: Scalars['Time']['output'];
+    id: Scalars['ID']['output'];
+    template: Scalars['String']['output'];
+    type: PromptType;
+    updatedAt: Scalars['Time']['output'];
 };
 
 export enum VectorStoreAction {
-  Retrieve = 'retrieve',
-  Store = 'store'
+    Retrieve = 'retrieve',
+    Store = 'store',
 }
 
 export type VectorStoreLog = {
-  action: VectorStoreAction;
-  createdAt: Scalars['Time']['output'];
-  executor: AgentType;
-  filter: Scalars['String']['output'];
-  flowId: Scalars['ID']['output'];
-  id: Scalars['ID']['output'];
-  initiator: AgentType;
-  query: Scalars['String']['output'];
-  result: Scalars['String']['output'];
-  subtaskId?: Maybe<Scalars['ID']['output']>;
-  taskId?: Maybe<Scalars['ID']['output']>;
+    action: VectorStoreAction;
+    createdAt: Scalars['Time']['output'];
+    executor: AgentType;
+    filter: Scalars['String']['output'];
+    flowId: Scalars['ID']['output'];
+    id: Scalars['ID']['output'];
+    initiator: AgentType;
+    query: Scalars['String']['output'];
+    result: Scalars['String']['output'];
+    subtaskId?: Maybe<Scalars['ID']['output']>;
+    taskId?: Maybe<Scalars['ID']['output']>;
 };
 
-export type FlowOverviewFragmentFragment = { id: string, title: string, status: StatusType };
+export type FlowOverviewFragmentFragment = { id: string; title: string; status: StatusType };
 
-export type SettingsFragmentFragment = { debug: boolean, askUser: boolean, dockerInside: boolean, assistantUseAgents: boolean };
+export type SettingsFragmentFragment = {
+    debug: boolean;
+    askUser: boolean;
+    dockerInside: boolean;
+    assistantUseAgents: boolean;
+};
 
-export type FlowFragmentFragment = { id: string, title: string, status: StatusType, createdAt: any, updatedAt: any, terminals?: Array<TerminalFragmentFragment> | null, provider: ProviderFragmentFragment };
+export type FlowFragmentFragment = {
+    id: string;
+    title: string;
+    status: StatusType;
+    createdAt: any;
+    updatedAt: any;
+    terminals?: Array<TerminalFragmentFragment> | null;
+    provider: ProviderFragmentFragment;
+};
 
-export type TerminalFragmentFragment = { id: string, type: TerminalType, name: string, image: string, connected: boolean, createdAt: any };
+export type TerminalFragmentFragment = {
+    id: string;
+    type: TerminalType;
+    name: string;
+    image: string;
+    connected: boolean;
+    createdAt: any;
+};
 
-export type TaskFragmentFragment = { id: string, title: string, status: StatusType, input: string, result: string, flowId: string, createdAt: any, updatedAt: any, subtasks?: Array<SubtaskFragmentFragment> | null };
+export type TaskFragmentFragment = {
+    id: string;
+    title: string;
+    status: StatusType;
+    input: string;
+    result: string;
+    flowId: string;
+    createdAt: any;
+    updatedAt: any;
+    subtasks?: Array<SubtaskFragmentFragment> | null;
+};
 
-export type SubtaskFragmentFragment = { id: string, status: StatusType, title: string, description: string, result: string, taskId: string, createdAt: any, updatedAt: any };
+export type SubtaskFragmentFragment = {
+    id: string;
+    status: StatusType;
+    title: string;
+    description: string;
+    result: string;
+    taskId: string;
+    createdAt: any;
+    updatedAt: any;
+};
 
-export type TerminalLogFragmentFragment = { id: string, flowId: string, type: TerminalLogType, text: string, terminal: string, createdAt: any };
+export type TerminalLogFragmentFragment = {
+    id: string;
+    flowId: string;
+    type: TerminalLogType;
+    text: string;
+    terminal: string;
+    createdAt: any;
+};
 
-export type MessageLogFragmentFragment = { id: string, type: MessageLogType, message: string, thinking?: string | null, result: string, resultFormat: ResultFormat, flowId: string, taskId?: string | null, subtaskId?: string | null, createdAt: any };
+export type MessageLogFragmentFragment = {
+    id: string;
+    type: MessageLogType;
+    message: string;
+    thinking?: string | null;
+    result: string;
+    resultFormat: ResultFormat;
+    flowId: string;
+    taskId?: string | null;
+    subtaskId?: string | null;
+    createdAt: any;
+};
 
-export type ScreenshotFragmentFragment = { id: string, flowId: string, name: string, url: string, createdAt: any };
+export type ScreenshotFragmentFragment = { id: string; flowId: string; name: string; url: string; createdAt: any };
 
-export type AgentLogFragmentFragment = { id: string, flowId: string, initiator: AgentType, executor: AgentType, task: string, result: string, taskId?: string | null, subtaskId?: string | null, createdAt: any };
+export type AgentLogFragmentFragment = {
+    id: string;
+    flowId: string;
+    initiator: AgentType;
+    executor: AgentType;
+    task: string;
+    result: string;
+    taskId?: string | null;
+    subtaskId?: string | null;
+    createdAt: any;
+};
 
-export type SearchLogFragmentFragment = { id: string, flowId: string, initiator: AgentType, executor: AgentType, engine: string, query: string, result: string, taskId?: string | null, subtaskId?: string | null, createdAt: any };
+export type SearchLogFragmentFragment = {
+    id: string;
+    flowId: string;
+    initiator: AgentType;
+    executor: AgentType;
+    engine: string;
+    query: string;
+    result: string;
+    taskId?: string | null;
+    subtaskId?: string | null;
+    createdAt: any;
+};
 
-export type VectorStoreLogFragmentFragment = { id: string, flowId: string, initiator: AgentType, executor: AgentType, filter: string, query: string, action: VectorStoreAction, result: string, taskId?: string | null, subtaskId?: string | null, createdAt: any };
+export type VectorStoreLogFragmentFragment = {
+    id: string;
+    flowId: string;
+    initiator: AgentType;
+    executor: AgentType;
+    filter: string;
+    query: string;
+    action: VectorStoreAction;
+    result: string;
+    taskId?: string | null;
+    subtaskId?: string | null;
+    createdAt: any;
+};
 
-export type AssistantFragmentFragment = { id: string, title: string, status: StatusType, flowId: string, useAgents: boolean, createdAt: any, updatedAt: any, provider: ProviderFragmentFragment };
+export type AssistantFragmentFragment = {
+    id: string;
+    title: string;
+    status: StatusType;
+    flowId: string;
+    useAgents: boolean;
+    createdAt: any;
+    updatedAt: any;
+    provider: ProviderFragmentFragment;
+};
 
-export type AssistantLogFragmentFragment = { id: string, type: MessageLogType, message: string, thinking?: string | null, result: string, resultFormat: ResultFormat, appendPart: boolean, flowId: string, assistantId: string, createdAt: any };
+export type AssistantLogFragmentFragment = {
+    id: string;
+    type: MessageLogType;
+    message: string;
+    thinking?: string | null;
+    result: string;
+    resultFormat: ResultFormat;
+    appendPart: boolean;
+    flowId: string;
+    assistantId: string;
+    createdAt: any;
+};
 
-export type TestResultFragmentFragment = { name: string, type: string, result: boolean, reasoning: boolean, streaming: boolean, latency?: number | null, error?: string | null };
+export type TestResultFragmentFragment = {
+    name: string;
+    type: string;
+    result: boolean;
+    reasoning: boolean;
+    streaming: boolean;
+    latency?: number | null;
+    error?: string | null;
+};
 
 export type AgentTestResultFragmentFragment = { tests: Array<TestResultFragmentFragment> };
 
-export type ProviderTestResultFragmentFragment = { simple: AgentTestResultFragmentFragment, simpleJson: AgentTestResultFragmentFragment, agent: AgentTestResultFragmentFragment, assistant: AgentTestResultFragmentFragment, generator: AgentTestResultFragmentFragment, refiner: AgentTestResultFragmentFragment, adviser: AgentTestResultFragmentFragment, reflector: AgentTestResultFragmentFragment, searcher: AgentTestResultFragmentFragment, enricher: AgentTestResultFragmentFragment, coder: AgentTestResultFragmentFragment, installer: AgentTestResultFragmentFragment, pentester: AgentTestResultFragmentFragment };
+export type ProviderTestResultFragmentFragment = {
+    simple: AgentTestResultFragmentFragment;
+    simpleJson: AgentTestResultFragmentFragment;
+    agent: AgentTestResultFragmentFragment;
+    assistant: AgentTestResultFragmentFragment;
+    generator: AgentTestResultFragmentFragment;
+    refiner: AgentTestResultFragmentFragment;
+    adviser: AgentTestResultFragmentFragment;
+    reflector: AgentTestResultFragmentFragment;
+    searcher: AgentTestResultFragmentFragment;
+    enricher: AgentTestResultFragmentFragment;
+    coder: AgentTestResultFragmentFragment;
+    installer: AgentTestResultFragmentFragment;
+    pentester: AgentTestResultFragmentFragment;
+};
 
-export type ModelConfigFragmentFragment = { name: string, price?: { input: number, output: number } | null };
+export type ModelConfigFragmentFragment = { name: string; price?: { input: number; output: number } | null };
 
-export type ProviderFragmentFragment = { name: string, type: ProviderType };
+export type ProviderFragmentFragment = { name: string; type: ProviderType };
 
-export type ProviderConfigFragmentFragment = { id: string, name: string, type: ProviderType, createdAt: any, updatedAt: any, agents: AgentsConfigFragmentFragment };
+export type ProviderConfigFragmentFragment = {
+    id: number;
+    name: string;
+    type: ProviderType;
+    createdAt: any;
+    updatedAt: any;
+    agents: AgentsConfigFragmentFragment;
+};
 
-export type AgentsConfigFragmentFragment = { simple: AgentConfigFragmentFragment, simpleJson: AgentConfigFragmentFragment, agent: AgentConfigFragmentFragment, assistant: AgentConfigFragmentFragment, generator: AgentConfigFragmentFragment, refiner: AgentConfigFragmentFragment, adviser: AgentConfigFragmentFragment, reflector: AgentConfigFragmentFragment, searcher: AgentConfigFragmentFragment, enricher: AgentConfigFragmentFragment, coder: AgentConfigFragmentFragment, installer: AgentConfigFragmentFragment, pentester: AgentConfigFragmentFragment };
+export type AgentsConfigFragmentFragment = {
+    simple: AgentConfigFragmentFragment;
+    simpleJson: AgentConfigFragmentFragment;
+    agent: AgentConfigFragmentFragment;
+    assistant: AgentConfigFragmentFragment;
+    generator: AgentConfigFragmentFragment;
+    refiner: AgentConfigFragmentFragment;
+    adviser: AgentConfigFragmentFragment;
+    reflector: AgentConfigFragmentFragment;
+    searcher: AgentConfigFragmentFragment;
+    enricher: AgentConfigFragmentFragment;
+    coder: AgentConfigFragmentFragment;
+    installer: AgentConfigFragmentFragment;
+    pentester: AgentConfigFragmentFragment;
+};
 
-export type AgentConfigFragmentFragment = { model: string, maxTokens?: number | null, temperature?: number | null, topK?: number | null, topP?: number | null, minLength?: number | null, maxLength?: number | null, repetitionPenalty?: number | null, frequencyPenalty?: number | null, presencePenalty?: number | null, reasoning?: { effort?: ReasoningEffort | null, maxTokens?: number | null } | null, price?: { input: number, output: number } | null };
+export type AgentConfigFragmentFragment = {
+    model: string;
+    maxTokens?: number | null;
+    temperature?: number | null;
+    topK?: number | null;
+    topP?: number | null;
+    minLength?: number | null;
+    maxLength?: number | null;
+    repetitionPenalty?: number | null;
+    frequencyPenalty?: number | null;
+    presencePenalty?: number | null;
+    reasoning?: { effort?: ReasoningEffort | null; maxTokens?: number | null } | null;
+    price?: { input: number; output: number } | null;
+};
 
-export type UserPromptFragmentFragment = { id: string, type: PromptType, template: string, createdAt: any, updatedAt: any };
+export type UserPromptFragmentFragment = {
+    id: string;
+    type: PromptType;
+    template: string;
+    createdAt: any;
+    updatedAt: any;
+};
 
-export type DefaultPromptFragmentFragment = { type: PromptType, template: string, variables: Array<string> };
+export type DefaultPromptFragmentFragment = { type: PromptType; template: string; variables: Array<string> };
 
-export type PromptValidationResultFragmentFragment = { result: ResultType, errorType?: PromptValidationErrorType | null, message?: string | null, line?: number | null, details?: string | null };
+export type PromptValidationResultFragmentFragment = {
+    result: ResultType;
+    errorType?: PromptValidationErrorType | null;
+    message?: string | null;
+    line?: number | null;
+    details?: string | null;
+};
 
-export type FlowsQueryVariables = Exact<{ [key: string]: never; }>;
-
+export type FlowsQueryVariables = Exact<{ [key: string]: never }>;
 
 export type FlowsQuery = { flows?: Array<FlowOverviewFragmentFragment> | null };
 
-export type ProvidersQueryVariables = Exact<{ [key: string]: never; }>;
-
+export type ProvidersQueryVariables = Exact<{ [key: string]: never }>;
 
 export type ProvidersQuery = { providers: Array<ProviderFragmentFragment> };
 
-export type SettingsQueryVariables = Exact<{ [key: string]: never; }>;
-
+export type SettingsQueryVariables = Exact<{ [key: string]: never }>;
 
 export type SettingsQuery = { settings: SettingsFragmentFragment };
 
-export type SettingsProvidersQueryVariables = Exact<{ [key: string]: never; }>;
+export type SettingsProvidersQueryVariables = Exact<{ [key: string]: never }>;
 
+export type SettingsProvidersQuery = {
+    settingsProviders: {
+        enabled: {
+            openai: boolean;
+            anthropic: boolean;
+            gemini: boolean;
+            bedrock: boolean;
+            ollama: boolean;
+            custom: boolean;
+        };
+        default: {
+            openai: ProviderConfigFragmentFragment;
+            anthropic: ProviderConfigFragmentFragment;
+            gemini?: ProviderConfigFragmentFragment | null;
+            bedrock?: ProviderConfigFragmentFragment | null;
+            ollama?: ProviderConfigFragmentFragment | null;
+            custom?: ProviderConfigFragmentFragment | null;
+        };
+        userDefined?: Array<ProviderConfigFragmentFragment> | null;
+        models: {
+            openai: Array<ModelConfigFragmentFragment>;
+            anthropic: Array<ModelConfigFragmentFragment>;
+            gemini: Array<ModelConfigFragmentFragment>;
+            bedrock?: Array<ModelConfigFragmentFragment> | null;
+            ollama?: Array<ModelConfigFragmentFragment> | null;
+            custom?: Array<ModelConfigFragmentFragment> | null;
+        };
+    };
+};
 
-export type SettingsProvidersQuery = { settingsProviders: { enabled: { openai: boolean, anthropic: boolean, gemini: boolean, bedrock: boolean, ollama: boolean, custom: boolean }, default: { openai: ProviderConfigFragmentFragment, anthropic: ProviderConfigFragmentFragment, gemini?: ProviderConfigFragmentFragment | null, bedrock?: ProviderConfigFragmentFragment | null, ollama?: ProviderConfigFragmentFragment | null, custom?: ProviderConfigFragmentFragment | null }, userDefined?: Array<ProviderConfigFragmentFragment> | null, models: { openai: Array<ModelConfigFragmentFragment>, anthropic: Array<ModelConfigFragmentFragment>, gemini: Array<ModelConfigFragmentFragment>, bedrock?: Array<ModelConfigFragmentFragment> | null, ollama?: Array<ModelConfigFragmentFragment> | null, custom?: Array<ModelConfigFragmentFragment> | null } } };
+export type SettingsPromptsQueryVariables = Exact<{ [key: string]: never }>;
 
-export type SettingsPromptsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type SettingsPromptsQuery = { settingsPrompts: { default: { agents: { primaryAgent: { system: DefaultPromptFragmentFragment }, assistant: { system: DefaultPromptFragmentFragment }, pentester: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, coder: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, installer: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, searcher: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, memorist: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, adviser: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, generator: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, refiner: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, reporter: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, reflector: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, enricher: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, toolCallFixer: { system: DefaultPromptFragmentFragment, human: DefaultPromptFragmentFragment }, summarizer: { system: DefaultPromptFragmentFragment } }, tools: { getFlowDescription: DefaultPromptFragmentFragment, getTaskDescription: DefaultPromptFragmentFragment, getExecutionLogs: DefaultPromptFragmentFragment, getFullExecutionContext: DefaultPromptFragmentFragment, getShortExecutionContext: DefaultPromptFragmentFragment, chooseDockerImage: DefaultPromptFragmentFragment, chooseUserLanguage: DefaultPromptFragmentFragment } }, userDefined?: Array<UserPromptFragmentFragment> | null } };
+export type SettingsPromptsQuery = {
+    settingsPrompts: {
+        default: {
+            agents: {
+                primaryAgent: { system: DefaultPromptFragmentFragment };
+                assistant: { system: DefaultPromptFragmentFragment };
+                pentester: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                coder: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                installer: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                searcher: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                memorist: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                adviser: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                generator: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                refiner: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                reporter: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                reflector: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                enricher: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                toolCallFixer: { system: DefaultPromptFragmentFragment; human: DefaultPromptFragmentFragment };
+                summarizer: { system: DefaultPromptFragmentFragment };
+            };
+            tools: {
+                getFlowDescription: DefaultPromptFragmentFragment;
+                getTaskDescription: DefaultPromptFragmentFragment;
+                getExecutionLogs: DefaultPromptFragmentFragment;
+                getFullExecutionContext: DefaultPromptFragmentFragment;
+                getShortExecutionContext: DefaultPromptFragmentFragment;
+                chooseDockerImage: DefaultPromptFragmentFragment;
+                chooseUserLanguage: DefaultPromptFragmentFragment;
+            };
+        };
+        userDefined?: Array<UserPromptFragmentFragment> | null;
+    };
+};
 
 export type FlowQueryVariables = Exact<{
-  id: Scalars['ID']['input'];
+    id: Scalars['ID']['input'];
 }>;
 
-
-export type FlowQuery = { flow: FlowFragmentFragment, tasks?: Array<TaskFragmentFragment> | null, screenshots?: Array<ScreenshotFragmentFragment> | null, terminalLogs?: Array<TerminalLogFragmentFragment> | null, messageLogs?: Array<MessageLogFragmentFragment> | null, agentLogs?: Array<AgentLogFragmentFragment> | null, searchLogs?: Array<SearchLogFragmentFragment> | null, vectorStoreLogs?: Array<VectorStoreLogFragmentFragment> | null };
+export type FlowQuery = {
+    flow: FlowFragmentFragment;
+    tasks?: Array<TaskFragmentFragment> | null;
+    screenshots?: Array<ScreenshotFragmentFragment> | null;
+    terminalLogs?: Array<TerminalLogFragmentFragment> | null;
+    messageLogs?: Array<MessageLogFragmentFragment> | null;
+    agentLogs?: Array<AgentLogFragmentFragment> | null;
+    searchLogs?: Array<SearchLogFragmentFragment> | null;
+    vectorStoreLogs?: Array<VectorStoreLogFragmentFragment> | null;
+};
 
 export type TasksQueryVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type TasksQuery = { tasks?: Array<TaskFragmentFragment> | null };
 
 export type AssistantsQueryVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type AssistantsQuery = { assistants?: Array<AssistantFragmentFragment> | null };
 
 export type AssistantLogsQueryVariables = Exact<{
-  flowId: Scalars['ID']['input'];
-  assistantId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
+    assistantId: Scalars['ID']['input'];
 }>;
-
 
 export type AssistantLogsQuery = { assistantLogs?: Array<AssistantLogFragmentFragment> | null };
 
 export type FlowReportQueryVariables = Exact<{
-  id: Scalars['ID']['input'];
+    id: Scalars['ID']['input'];
 }>;
 
-
-export type FlowReportQuery = { flow: FlowFragmentFragment, tasks?: Array<TaskFragmentFragment> | null };
+export type FlowReportQuery = { flow: FlowFragmentFragment; tasks?: Array<TaskFragmentFragment> | null };
 
 export type CreateFlowMutationVariables = Exact<{
-  modelProvider: Scalars['String']['input'];
-  input: Scalars['String']['input'];
+    modelProvider: Scalars['String']['input'];
+    input: Scalars['String']['input'];
 }>;
-
 
 export type CreateFlowMutation = { createFlow: FlowFragmentFragment };
 
 export type DeleteFlowMutationVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type DeleteFlowMutation = { deleteFlow: ResultType };
 
 export type PutUserInputMutationVariables = Exact<{
-  flowId: Scalars['ID']['input'];
-  input: Scalars['String']['input'];
+    flowId: Scalars['ID']['input'];
+    input: Scalars['String']['input'];
 }>;
-
 
 export type PutUserInputMutation = { putUserInput: ResultType };
 
 export type FinishFlowMutationVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type FinishFlowMutation = { finishFlow: ResultType };
 
 export type StopFlowMutationVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type StopFlowMutation = { stopFlow: ResultType };
 
 export type CreateAssistantMutationVariables = Exact<{
-  flowId: Scalars['ID']['input'];
-  modelProvider: Scalars['String']['input'];
-  input: Scalars['String']['input'];
-  useAgents: Scalars['Boolean']['input'];
+    flowId: Scalars['ID']['input'];
+    modelProvider: Scalars['String']['input'];
+    input: Scalars['String']['input'];
+    useAgents: Scalars['Boolean']['input'];
 }>;
 
-
-export type CreateAssistantMutation = { createAssistant: { flow: FlowFragmentFragment, assistant: AssistantFragmentFragment } };
+export type CreateAssistantMutation = {
+    createAssistant: { flow: FlowFragmentFragment; assistant: AssistantFragmentFragment };
+};
 
 export type CallAssistantMutationVariables = Exact<{
-  flowId: Scalars['ID']['input'];
-  assistantId: Scalars['ID']['input'];
-  input: Scalars['String']['input'];
-  useAgents: Scalars['Boolean']['input'];
+    flowId: Scalars['ID']['input'];
+    assistantId: Scalars['ID']['input'];
+    input: Scalars['String']['input'];
+    useAgents: Scalars['Boolean']['input'];
 }>;
-
 
 export type CallAssistantMutation = { callAssistant: ResultType };
 
 export type StopAssistantMutationVariables = Exact<{
-  flowId: Scalars['ID']['input'];
-  assistantId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
+    assistantId: Scalars['ID']['input'];
 }>;
-
 
 export type StopAssistantMutation = { stopAssistant: AssistantFragmentFragment };
 
 export type DeleteAssistantMutationVariables = Exact<{
-  flowId: Scalars['ID']['input'];
-  assistantId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
+    assistantId: Scalars['ID']['input'];
 }>;
-
 
 export type DeleteAssistantMutation = { deleteAssistant: ResultType };
 
 export type TestAgentMutationVariables = Exact<{
-  type: ProviderType;
-  agentType: AgentType;
-  agent: AgentConfigInput;
+    type: ProviderType;
+    agentType: AgentType;
+    agent: AgentConfigInput;
 }>;
-
 
 export type TestAgentMutation = { testAgent: AgentTestResultFragmentFragment };
 
 export type TestProviderMutationVariables = Exact<{
-  type: ProviderType;
-  agents: AgentsConfigInput;
+    type: ProviderType;
+    agents: AgentsConfigInput;
 }>;
-
 
 export type TestProviderMutation = { testProvider: ProviderTestResultFragmentFragment };
 
 export type CreateProviderMutationVariables = Exact<{
-  name: Scalars['String']['input'];
-  type: ProviderType;
-  agents: AgentsConfigInput;
+    name: Scalars['String']['input'];
+    type: ProviderType;
+    agents: AgentsConfigInput;
 }>;
-
 
 export type CreateProviderMutation = { createProvider: ProviderConfigFragmentFragment };
 
 export type UpdateProviderMutationVariables = Exact<{
-  providerId: Scalars['ID']['input'];
-  name: Scalars['String']['input'];
-  agents: AgentsConfigInput;
+    providerId: Scalars['ID']['input'];
+    name: Scalars['String']['input'];
+    agents: AgentsConfigInput;
 }>;
-
 
 export type UpdateProviderMutation = { updateProvider: ProviderConfigFragmentFragment };
 
 export type DeleteProviderMutationVariables = Exact<{
-  providerId: Scalars['ID']['input'];
+    providerId: Scalars['ID']['input'];
 }>;
-
 
 export type DeleteProviderMutation = { deleteProvider: ResultType };
 
 export type ValidatePromptMutationVariables = Exact<{
-  type: PromptType;
-  template: Scalars['String']['input'];
+    type: PromptType;
+    template: Scalars['String']['input'];
 }>;
-
 
 export type ValidatePromptMutation = { validatePrompt: PromptValidationResultFragmentFragment };
 
 export type CreatePromptMutationVariables = Exact<{
-  type: PromptType;
-  template: Scalars['String']['input'];
+    type: PromptType;
+    template: Scalars['String']['input'];
 }>;
-
 
 export type CreatePromptMutation = { createPrompt: UserPromptFragmentFragment };
 
 export type UpdatePromptMutationVariables = Exact<{
-  promptId: Scalars['ID']['input'];
-  template: Scalars['String']['input'];
+    promptId: Scalars['ID']['input'];
+    template: Scalars['String']['input'];
 }>;
-
 
 export type UpdatePromptMutation = { updatePrompt: UserPromptFragmentFragment };
 
 export type DeletePromptMutationVariables = Exact<{
-  promptId: Scalars['ID']['input'];
+    promptId: Scalars['ID']['input'];
 }>;
-
 
 export type DeletePromptMutation = { deletePrompt: ResultType };
 
 export type TerminalLogAddedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type TerminalLogAddedSubscription = { terminalLogAdded: TerminalLogFragmentFragment };
 
 export type MessageLogAddedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type MessageLogAddedSubscription = { messageLogAdded: MessageLogFragmentFragment };
 
 export type MessageLogUpdatedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type MessageLogUpdatedSubscription = { messageLogUpdated: MessageLogFragmentFragment };
 
 export type ScreenshotAddedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type ScreenshotAddedSubscription = { screenshotAdded: ScreenshotFragmentFragment };
 
 export type AgentLogAddedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type AgentLogAddedSubscription = { agentLogAdded: AgentLogFragmentFragment };
 
 export type SearchLogAddedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type SearchLogAddedSubscription = { searchLogAdded: SearchLogFragmentFragment };
 
 export type VectorStoreLogAddedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type VectorStoreLogAddedSubscription = { vectorStoreLogAdded: VectorStoreLogFragmentFragment };
 
 export type AssistantCreatedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type AssistantCreatedSubscription = { assistantCreated: AssistantFragmentFragment };
 
 export type AssistantUpdatedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type AssistantUpdatedSubscription = { assistantUpdated: AssistantFragmentFragment };
 
 export type AssistantDeletedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type AssistantDeletedSubscription = { assistantDeleted: AssistantFragmentFragment };
 
 export type AssistantLogAddedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type AssistantLogAddedSubscription = { assistantLogAdded: AssistantLogFragmentFragment };
 
 export type AssistantLogUpdatedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type AssistantLogUpdatedSubscription = { assistantLogUpdated: AssistantLogFragmentFragment };
 
-export type FlowCreatedSubscriptionVariables = Exact<{ [key: string]: never; }>;
+export type FlowCreatedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
+export type FlowCreatedSubscription = {
+    flowCreated: {
+        id: string;
+        title: string;
+        status: StatusType;
+        createdAt: any;
+        updatedAt: any;
+        terminals?: Array<TerminalFragmentFragment> | null;
+        provider: ProviderFragmentFragment;
+    };
+};
 
-export type FlowCreatedSubscription = { flowCreated: { id: string, title: string, status: StatusType, createdAt: any, updatedAt: any, terminals?: Array<TerminalFragmentFragment> | null, provider: ProviderFragmentFragment } };
+export type FlowDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
-export type FlowDeletedSubscriptionVariables = Exact<{ [key: string]: never; }>;
+export type FlowDeletedSubscription = { flowDeleted: { id: string; status: StatusType; updatedAt: any } };
 
+export type FlowUpdatedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
-export type FlowDeletedSubscription = { flowDeleted: { id: string, status: StatusType, updatedAt: any } };
-
-export type FlowUpdatedSubscriptionVariables = Exact<{ [key: string]: never; }>;
-
-
-export type FlowUpdatedSubscription = { flowUpdated: { id: string, title: string, status: StatusType, updatedAt: any, terminals?: Array<TerminalFragmentFragment> | null } };
+export type FlowUpdatedSubscription = {
+    flowUpdated: {
+        id: string;
+        title: string;
+        status: StatusType;
+        updatedAt: any;
+        terminals?: Array<TerminalFragmentFragment> | null;
+    };
+};
 
 export type TaskCreatedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
-
 
 export type TaskCreatedSubscription = { taskCreated: TaskFragmentFragment };
 
 export type TaskUpdatedSubscriptionVariables = Exact<{
-  flowId: Scalars['ID']['input'];
+    flowId: Scalars['ID']['input'];
 }>;
 
+export type TaskUpdatedSubscription = {
+    taskUpdated: {
+        id: string;
+        status: StatusType;
+        result: string;
+        updatedAt: any;
+        subtasks?: Array<SubtaskFragmentFragment> | null;
+    };
+};
 
-export type TaskUpdatedSubscription = { taskUpdated: { id: string, status: StatusType, result: string, updatedAt: any, subtasks?: Array<SubtaskFragmentFragment> | null } };
-
-export type ProviderCreatedSubscriptionVariables = Exact<{ [key: string]: never; }>;
-
+export type ProviderCreatedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
 export type ProviderCreatedSubscription = { providerCreated: ProviderConfigFragmentFragment };
 
-export type ProviderUpdatedSubscriptionVariables = Exact<{ [key: string]: never; }>;
-
+export type ProviderUpdatedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
 export type ProviderUpdatedSubscription = { providerUpdated: ProviderConfigFragmentFragment };
 
-export type ProviderDeletedSubscriptionVariables = Exact<{ [key: string]: never; }>;
-
+export type ProviderDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
 export type ProviderDeletedSubscription = { providerDeleted: ProviderConfigFragmentFragment };
 
 export const FlowOverviewFragmentFragmentDoc = gql`
     fragment flowOverviewFragment on Flow {
-  id
-  title
-  status
-}
-    `;
+        id
+        title
+        status
+    }
+`;
 export const SettingsFragmentFragmentDoc = gql`
     fragment settingsFragment on Settings {
-  debug
-  askUser
-  dockerInside
-  assistantUseAgents
-}
-    `;
+        debug
+        askUser
+        dockerInside
+        assistantUseAgents
+    }
+`;
 export const TerminalFragmentFragmentDoc = gql`
     fragment terminalFragment on Terminal {
-  id
-  type
-  name
-  image
-  connected
-  createdAt
-}
-    `;
+        id
+        type
+        name
+        image
+        connected
+        createdAt
+    }
+`;
 export const ProviderFragmentFragmentDoc = gql`
     fragment providerFragment on Provider {
-  name
-  type
-}
-    `;
+        name
+        type
+    }
+`;
 export const FlowFragmentFragmentDoc = gql`
     fragment flowFragment on Flow {
-  id
-  title
-  status
-  terminals {
-    ...terminalFragment
-  }
-  provider {
-    ...providerFragment
-  }
-  createdAt
-  updatedAt
-}
-    `;
+        id
+        title
+        status
+        terminals {
+            ...terminalFragment
+        }
+        provider {
+            ...providerFragment
+        }
+        createdAt
+        updatedAt
+    }
+`;
 export const SubtaskFragmentFragmentDoc = gql`
     fragment subtaskFragment on Subtask {
-  id
-  status
-  title
-  description
-  result
-  taskId
-  createdAt
-  updatedAt
-}
-    `;
+        id
+        status
+        title
+        description
+        result
+        taskId
+        createdAt
+        updatedAt
+    }
+`;
 export const TaskFragmentFragmentDoc = gql`
     fragment taskFragment on Task {
-  id
-  title
-  status
-  input
-  result
-  flowId
-  subtasks {
-    ...subtaskFragment
-  }
-  createdAt
-  updatedAt
-}
-    `;
+        id
+        title
+        status
+        input
+        result
+        flowId
+        subtasks {
+            ...subtaskFragment
+        }
+        createdAt
+        updatedAt
+    }
+`;
 export const TerminalLogFragmentFragmentDoc = gql`
     fragment terminalLogFragment on TerminalLog {
-  id
-  flowId
-  type
-  text
-  terminal
-  createdAt
-}
-    `;
+        id
+        flowId
+        type
+        text
+        terminal
+        createdAt
+    }
+`;
 export const MessageLogFragmentFragmentDoc = gql`
     fragment messageLogFragment on MessageLog {
-  id
-  type
-  message
-  thinking
-  result
-  resultFormat
-  flowId
-  taskId
-  subtaskId
-  createdAt
-}
-    `;
+        id
+        type
+        message
+        thinking
+        result
+        resultFormat
+        flowId
+        taskId
+        subtaskId
+        createdAt
+    }
+`;
 export const ScreenshotFragmentFragmentDoc = gql`
     fragment screenshotFragment on Screenshot {
-  id
-  flowId
-  name
-  url
-  createdAt
-}
-    `;
+        id
+        flowId
+        name
+        url
+        createdAt
+    }
+`;
 export const AgentLogFragmentFragmentDoc = gql`
     fragment agentLogFragment on AgentLog {
-  id
-  flowId
-  initiator
-  executor
-  task
-  result
-  taskId
-  subtaskId
-  createdAt
-}
-    `;
+        id
+        flowId
+        initiator
+        executor
+        task
+        result
+        taskId
+        subtaskId
+        createdAt
+    }
+`;
 export const SearchLogFragmentFragmentDoc = gql`
     fragment searchLogFragment on SearchLog {
-  id
-  flowId
-  initiator
-  executor
-  engine
-  query
-  result
-  taskId
-  subtaskId
-  createdAt
-}
-    `;
+        id
+        flowId
+        initiator
+        executor
+        engine
+        query
+        result
+        taskId
+        subtaskId
+        createdAt
+    }
+`;
 export const VectorStoreLogFragmentFragmentDoc = gql`
     fragment vectorStoreLogFragment on VectorStoreLog {
-  id
-  flowId
-  initiator
-  executor
-  filter
-  query
-  action
-  result
-  taskId
-  subtaskId
-  createdAt
-}
-    `;
+        id
+        flowId
+        initiator
+        executor
+        filter
+        query
+        action
+        result
+        taskId
+        subtaskId
+        createdAt
+    }
+`;
 export const AssistantFragmentFragmentDoc = gql`
     fragment assistantFragment on Assistant {
-  id
-  title
-  status
-  provider {
-    ...providerFragment
-  }
-  flowId
-  useAgents
-  createdAt
-  updatedAt
-}
-    `;
+        id
+        title
+        status
+        provider {
+            ...providerFragment
+        }
+        flowId
+        useAgents
+        createdAt
+        updatedAt
+    }
+`;
 export const AssistantLogFragmentFragmentDoc = gql`
     fragment assistantLogFragment on AssistantLog {
-  id
-  type
-  message
-  thinking
-  result
-  resultFormat
-  appendPart
-  flowId
-  assistantId
-  createdAt
-}
-    `;
+        id
+        type
+        message
+        thinking
+        result
+        resultFormat
+        appendPart
+        flowId
+        assistantId
+        createdAt
+    }
+`;
 export const TestResultFragmentFragmentDoc = gql`
     fragment testResultFragment on TestResult {
-  name
-  type
-  result
-  reasoning
-  streaming
-  latency
-  error
-}
-    `;
+        name
+        type
+        result
+        reasoning
+        streaming
+        latency
+        error
+    }
+`;
 export const AgentTestResultFragmentFragmentDoc = gql`
     fragment agentTestResultFragment on AgentTestResult {
-  tests {
-    ...testResultFragment
-  }
-}
-    `;
+        tests {
+            ...testResultFragment
+        }
+    }
+`;
 export const ProviderTestResultFragmentFragmentDoc = gql`
     fragment providerTestResultFragment on ProviderTestResult {
-  simple {
-    ...agentTestResultFragment
-  }
-  simpleJson {
-    ...agentTestResultFragment
-  }
-  agent {
-    ...agentTestResultFragment
-  }
-  assistant {
-    ...agentTestResultFragment
-  }
-  generator {
-    ...agentTestResultFragment
-  }
-  refiner {
-    ...agentTestResultFragment
-  }
-  adviser {
-    ...agentTestResultFragment
-  }
-  reflector {
-    ...agentTestResultFragment
-  }
-  searcher {
-    ...agentTestResultFragment
-  }
-  enricher {
-    ...agentTestResultFragment
-  }
-  coder {
-    ...agentTestResultFragment
-  }
-  installer {
-    ...agentTestResultFragment
-  }
-  pentester {
-    ...agentTestResultFragment
-  }
-}
-    `;
+        simple {
+            ...agentTestResultFragment
+        }
+        simpleJson {
+            ...agentTestResultFragment
+        }
+        agent {
+            ...agentTestResultFragment
+        }
+        assistant {
+            ...agentTestResultFragment
+        }
+        generator {
+            ...agentTestResultFragment
+        }
+        refiner {
+            ...agentTestResultFragment
+        }
+        adviser {
+            ...agentTestResultFragment
+        }
+        reflector {
+            ...agentTestResultFragment
+        }
+        searcher {
+            ...agentTestResultFragment
+        }
+        enricher {
+            ...agentTestResultFragment
+        }
+        coder {
+            ...agentTestResultFragment
+        }
+        installer {
+            ...agentTestResultFragment
+        }
+        pentester {
+            ...agentTestResultFragment
+        }
+    }
+`;
 export const ModelConfigFragmentFragmentDoc = gql`
     fragment modelConfigFragment on ModelConfig {
-  name
-  price {
-    input
-    output
-  }
-}
-    `;
+        name
+        price {
+            input
+            output
+        }
+    }
+`;
 export const AgentConfigFragmentFragmentDoc = gql`
     fragment agentConfigFragment on AgentConfig {
-  model
-  maxTokens
-  temperature
-  topK
-  topP
-  minLength
-  maxLength
-  repetitionPenalty
-  frequencyPenalty
-  presencePenalty
-  reasoning {
-    effort
-    maxTokens
-  }
-  price {
-    input
-    output
-  }
-}
-    `;
+        model
+        maxTokens
+        temperature
+        topK
+        topP
+        minLength
+        maxLength
+        repetitionPenalty
+        frequencyPenalty
+        presencePenalty
+        reasoning {
+            effort
+            maxTokens
+        }
+        price {
+            input
+            output
+        }
+    }
+`;
 export const AgentsConfigFragmentFragmentDoc = gql`
     fragment agentsConfigFragment on AgentsConfig {
-  simple {
-    ...agentConfigFragment
-  }
-  simpleJson {
-    ...agentConfigFragment
-  }
-  agent {
-    ...agentConfigFragment
-  }
-  assistant {
-    ...agentConfigFragment
-  }
-  generator {
-    ...agentConfigFragment
-  }
-  refiner {
-    ...agentConfigFragment
-  }
-  adviser {
-    ...agentConfigFragment
-  }
-  reflector {
-    ...agentConfigFragment
-  }
-  searcher {
-    ...agentConfigFragment
-  }
-  enricher {
-    ...agentConfigFragment
-  }
-  coder {
-    ...agentConfigFragment
-  }
-  installer {
-    ...agentConfigFragment
-  }
-  pentester {
-    ...agentConfigFragment
-  }
-}
-    `;
+        simple {
+            ...agentConfigFragment
+        }
+        simpleJson {
+            ...agentConfigFragment
+        }
+        agent {
+            ...agentConfigFragment
+        }
+        assistant {
+            ...agentConfigFragment
+        }
+        generator {
+            ...agentConfigFragment
+        }
+        refiner {
+            ...agentConfigFragment
+        }
+        adviser {
+            ...agentConfigFragment
+        }
+        reflector {
+            ...agentConfigFragment
+        }
+        searcher {
+            ...agentConfigFragment
+        }
+        enricher {
+            ...agentConfigFragment
+        }
+        coder {
+            ...agentConfigFragment
+        }
+        installer {
+            ...agentConfigFragment
+        }
+        pentester {
+            ...agentConfigFragment
+        }
+    }
+`;
 export const ProviderConfigFragmentFragmentDoc = gql`
     fragment providerConfigFragment on ProviderConfig {
-  id
-  name
-  type
-  agents {
-    ...agentsConfigFragment
-  }
-  createdAt
-  updatedAt
-}
-    `;
+        id
+        name
+        type
+        agents {
+            ...agentsConfigFragment
+        }
+        createdAt
+        updatedAt
+    }
+`;
 export const UserPromptFragmentFragmentDoc = gql`
     fragment userPromptFragment on UserPrompt {
-  id
-  type
-  template
-  createdAt
-  updatedAt
-}
-    `;
+        id
+        type
+        template
+        createdAt
+        updatedAt
+    }
+`;
 export const DefaultPromptFragmentFragmentDoc = gql`
     fragment defaultPromptFragment on DefaultPrompt {
-  type
-  template
-  variables
-}
-    `;
+        type
+        template
+        variables
+    }
+`;
 export const PromptValidationResultFragmentFragmentDoc = gql`
     fragment promptValidationResultFragment on PromptValidationResult {
-  result
-  errorType
-  message
-  line
-  details
-}
-    `;
+        result
+        errorType
+        message
+        line
+        details
+    }
+`;
 export const FlowsDocument = gql`
     query flows {
-  flows {
-    ...flowOverviewFragment
-  }
-}
-    ${FlowOverviewFragmentFragmentDoc}`;
+        flows {
+            ...flowOverviewFragment
+        }
+    }
+    ${FlowOverviewFragmentFragmentDoc}
+`;
 
 /**
  * __useFlowsQuery__
@@ -1577,28 +1766,31 @@ export const FlowsDocument = gql`
  * });
  */
 export function useFlowsQuery(baseOptions?: Apollo.QueryHookOptions<FlowsQuery, FlowsQueryVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
-      }
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
+}
 export function useFlowsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<FlowsQuery, FlowsQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
-        }
-export function useFlowsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowsQuery, FlowsQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
-        }
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
+}
+export function useFlowsSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowsQuery, FlowsQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
+}
 export type FlowsQueryHookResult = ReturnType<typeof useFlowsQuery>;
 export type FlowsLazyQueryHookResult = ReturnType<typeof useFlowsLazyQuery>;
 export type FlowsSuspenseQueryHookResult = ReturnType<typeof useFlowsSuspenseQuery>;
 export type FlowsQueryResult = Apollo.QueryResult<FlowsQuery, FlowsQueryVariables>;
 export const ProvidersDocument = gql`
     query providers {
-  providers {
-    ...providerFragment
-  }
-}
-    ${ProviderFragmentFragmentDoc}`;
+        providers {
+            ...providerFragment
+        }
+    }
+    ${ProviderFragmentFragmentDoc}
+`;
 
 /**
  * __useProvidersQuery__
@@ -1616,28 +1808,33 @@ export const ProvidersDocument = gql`
  * });
  */
 export function useProvidersQuery(baseOptions?: Apollo.QueryHookOptions<ProvidersQuery, ProvidersQueryVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
-      }
-export function useProvidersLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<ProvidersQuery, ProvidersQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
-        }
-export function useProvidersSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<ProvidersQuery, ProvidersQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
-        }
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
+}
+export function useProvidersLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<ProvidersQuery, ProvidersQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
+}
+export function useProvidersSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<ProvidersQuery, ProvidersQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
+}
 export type ProvidersQueryHookResult = ReturnType<typeof useProvidersQuery>;
 export type ProvidersLazyQueryHookResult = ReturnType<typeof useProvidersLazyQuery>;
 export type ProvidersSuspenseQueryHookResult = ReturnType<typeof useProvidersSuspenseQuery>;
 export type ProvidersQueryResult = Apollo.QueryResult<ProvidersQuery, ProvidersQueryVariables>;
 export const SettingsDocument = gql`
     query settings {
-  settings {
-    ...settingsFragment
-  }
-}
-    ${SettingsFragmentFragmentDoc}`;
+        settings {
+            ...settingsFragment
+        }
+    }
+    ${SettingsFragmentFragmentDoc}
+`;
 
 /**
  * __useSettingsQuery__
@@ -1655,81 +1852,84 @@ export const SettingsDocument = gql`
  * });
  */
 export function useSettingsQuery(baseOptions?: Apollo.QueryHookOptions<SettingsQuery, SettingsQueryVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
-      }
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
+}
 export function useSettingsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<SettingsQuery, SettingsQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
-        }
-export function useSettingsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SettingsQuery, SettingsQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
-        }
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
+}
+export function useSettingsSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SettingsQuery, SettingsQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
+}
 export type SettingsQueryHookResult = ReturnType<typeof useSettingsQuery>;
 export type SettingsLazyQueryHookResult = ReturnType<typeof useSettingsLazyQuery>;
 export type SettingsSuspenseQueryHookResult = ReturnType<typeof useSettingsSuspenseQuery>;
 export type SettingsQueryResult = Apollo.QueryResult<SettingsQuery, SettingsQueryVariables>;
 export const SettingsProvidersDocument = gql`
     query settingsProviders {
-  settingsProviders {
-    enabled {
-      openai
-      anthropic
-      gemini
-      bedrock
-      ollama
-      custom
+        settingsProviders {
+            enabled {
+                openai
+                anthropic
+                gemini
+                bedrock
+                ollama
+                custom
+            }
+            default {
+                openai {
+                    ...providerConfigFragment
+                }
+                anthropic {
+                    ...providerConfigFragment
+                }
+                gemini {
+                    ...providerConfigFragment
+                }
+                bedrock {
+                    ...providerConfigFragment
+                }
+                ollama {
+                    ...providerConfigFragment
+                }
+                custom {
+                    ...providerConfigFragment
+                }
+            }
+            userDefined {
+                ...providerConfigFragment
+            }
+            models {
+                openai {
+                    ...modelConfigFragment
+                }
+                anthropic {
+                    ...modelConfigFragment
+                }
+                gemini {
+                    ...modelConfigFragment
+                }
+                bedrock {
+                    ...modelConfigFragment
+                }
+                ollama {
+                    ...modelConfigFragment
+                }
+                custom {
+                    ...modelConfigFragment
+                }
+            }
+        }
     }
-    default {
-      openai {
-        ...providerConfigFragment
-      }
-      anthropic {
-        ...providerConfigFragment
-      }
-      gemini {
-        ...providerConfigFragment
-      }
-      bedrock {
-        ...providerConfigFragment
-      }
-      ollama {
-        ...providerConfigFragment
-      }
-      custom {
-        ...providerConfigFragment
-      }
-    }
-    userDefined {
-      ...providerConfigFragment
-    }
-    models {
-      openai {
-        ...modelConfigFragment
-      }
-      anthropic {
-        ...modelConfigFragment
-      }
-      gemini {
-        ...modelConfigFragment
-      }
-      bedrock {
-        ...modelConfigFragment
-      }
-      ollama {
-        ...modelConfigFragment
-      }
-      custom {
-        ...modelConfigFragment
-      }
-    }
-  }
-}
     ${ProviderConfigFragmentFragmentDoc}
-${AgentsConfigFragmentFragmentDoc}
-${AgentConfigFragmentFragmentDoc}
-${ModelConfigFragmentFragmentDoc}`;
+    ${AgentsConfigFragmentFragmentDoc}
+    ${AgentConfigFragmentFragmentDoc}
+    ${ModelConfigFragmentFragmentDoc}
+`;
 
 /**
  * __useSettingsProvidersQuery__
@@ -1746,170 +1946,185 @@ ${ModelConfigFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useSettingsProvidersQuery(baseOptions?: Apollo.QueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(SettingsProvidersDocument, options);
-      }
-export function useSettingsProvidersLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(SettingsProvidersDocument, options);
-        }
-export function useSettingsProvidersSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(SettingsProvidersDocument, options);
-        }
+export function useSettingsProvidersQuery(
+    baseOptions?: Apollo.QueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(SettingsProvidersDocument, options);
+}
+export function useSettingsProvidersLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(
+        SettingsProvidersDocument,
+        options,
+    );
+}
+export function useSettingsProvidersSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(
+        SettingsProvidersDocument,
+        options,
+    );
+}
 export type SettingsProvidersQueryHookResult = ReturnType<typeof useSettingsProvidersQuery>;
 export type SettingsProvidersLazyQueryHookResult = ReturnType<typeof useSettingsProvidersLazyQuery>;
 export type SettingsProvidersSuspenseQueryHookResult = ReturnType<typeof useSettingsProvidersSuspenseQuery>;
 export type SettingsProvidersQueryResult = Apollo.QueryResult<SettingsProvidersQuery, SettingsProvidersQueryVariables>;
 export const SettingsPromptsDocument = gql`
     query settingsPrompts {
-  settingsPrompts {
-    default {
-      agents {
-        primaryAgent {
-          system {
-            ...defaultPromptFragment
-          }
+        settingsPrompts {
+            default {
+                agents {
+                    primaryAgent {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    assistant {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    pentester {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    coder {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    installer {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    searcher {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    memorist {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    adviser {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    generator {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    refiner {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    reporter {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    reflector {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    enricher {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    toolCallFixer {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                        human {
+                            ...defaultPromptFragment
+                        }
+                    }
+                    summarizer {
+                        system {
+                            ...defaultPromptFragment
+                        }
+                    }
+                }
+                tools {
+                    getFlowDescription {
+                        ...defaultPromptFragment
+                    }
+                    getTaskDescription {
+                        ...defaultPromptFragment
+                    }
+                    getExecutionLogs {
+                        ...defaultPromptFragment
+                    }
+                    getFullExecutionContext {
+                        ...defaultPromptFragment
+                    }
+                    getShortExecutionContext {
+                        ...defaultPromptFragment
+                    }
+                    chooseDockerImage {
+                        ...defaultPromptFragment
+                    }
+                    chooseUserLanguage {
+                        ...defaultPromptFragment
+                    }
+                }
+            }
+            userDefined {
+                ...userPromptFragment
+            }
         }
-        assistant {
-          system {
-            ...defaultPromptFragment
-          }
-        }
-        pentester {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        coder {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        installer {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        searcher {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        memorist {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        adviser {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        generator {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        refiner {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        reporter {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        reflector {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        enricher {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        toolCallFixer {
-          system {
-            ...defaultPromptFragment
-          }
-          human {
-            ...defaultPromptFragment
-          }
-        }
-        summarizer {
-          system {
-            ...defaultPromptFragment
-          }
-        }
-      }
-      tools {
-        getFlowDescription {
-          ...defaultPromptFragment
-        }
-        getTaskDescription {
-          ...defaultPromptFragment
-        }
-        getExecutionLogs {
-          ...defaultPromptFragment
-        }
-        getFullExecutionContext {
-          ...defaultPromptFragment
-        }
-        getShortExecutionContext {
-          ...defaultPromptFragment
-        }
-        chooseDockerImage {
-          ...defaultPromptFragment
-        }
-        chooseUserLanguage {
-          ...defaultPromptFragment
-        }
-      }
     }
-    userDefined {
-      ...userPromptFragment
-    }
-  }
-}
     ${DefaultPromptFragmentFragmentDoc}
-${UserPromptFragmentFragmentDoc}`;
+    ${UserPromptFragmentFragmentDoc}
+`;
 
 /**
  * __useSettingsPromptsQuery__
@@ -1926,60 +2141,72 @@ ${UserPromptFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useSettingsPromptsQuery(baseOptions?: Apollo.QueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(SettingsPromptsDocument, options);
-      }
-export function useSettingsPromptsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(SettingsPromptsDocument, options);
-        }
-export function useSettingsPromptsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(SettingsPromptsDocument, options);
-        }
+export function useSettingsPromptsQuery(
+    baseOptions?: Apollo.QueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(SettingsPromptsDocument, options);
+}
+export function useSettingsPromptsLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(SettingsPromptsDocument, options);
+}
+export function useSettingsPromptsSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(
+        SettingsPromptsDocument,
+        options,
+    );
+}
 export type SettingsPromptsQueryHookResult = ReturnType<typeof useSettingsPromptsQuery>;
 export type SettingsPromptsLazyQueryHookResult = ReturnType<typeof useSettingsPromptsLazyQuery>;
 export type SettingsPromptsSuspenseQueryHookResult = ReturnType<typeof useSettingsPromptsSuspenseQuery>;
 export type SettingsPromptsQueryResult = Apollo.QueryResult<SettingsPromptsQuery, SettingsPromptsQueryVariables>;
 export const FlowDocument = gql`
     query flow($id: ID!) {
-  flow(flowId: $id) {
-    ...flowFragment
-  }
-  tasks(flowId: $id) {
-    ...taskFragment
-  }
-  screenshots(flowId: $id) {
-    ...screenshotFragment
-  }
-  terminalLogs(flowId: $id) {
-    ...terminalLogFragment
-  }
-  messageLogs(flowId: $id) {
-    ...messageLogFragment
-  }
-  agentLogs(flowId: $id) {
-    ...agentLogFragment
-  }
-  searchLogs(flowId: $id) {
-    ...searchLogFragment
-  }
-  vectorStoreLogs(flowId: $id) {
-    ...vectorStoreLogFragment
-  }
-}
+        flow(flowId: $id) {
+            ...flowFragment
+        }
+        tasks(flowId: $id) {
+            ...taskFragment
+        }
+        screenshots(flowId: $id) {
+            ...screenshotFragment
+        }
+        terminalLogs(flowId: $id) {
+            ...terminalLogFragment
+        }
+        messageLogs(flowId: $id) {
+            ...messageLogFragment
+        }
+        agentLogs(flowId: $id) {
+            ...agentLogFragment
+        }
+        searchLogs(flowId: $id) {
+            ...searchLogFragment
+        }
+        vectorStoreLogs(flowId: $id) {
+            ...vectorStoreLogFragment
+        }
+    }
     ${FlowFragmentFragmentDoc}
-${TerminalFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}
-${TaskFragmentFragmentDoc}
-${SubtaskFragmentFragmentDoc}
-${ScreenshotFragmentFragmentDoc}
-${TerminalLogFragmentFragmentDoc}
-${MessageLogFragmentFragmentDoc}
-${AgentLogFragmentFragmentDoc}
-${SearchLogFragmentFragmentDoc}
-${VectorStoreLogFragmentFragmentDoc}`;
+    ${TerminalFragmentFragmentDoc}
+    ${ProviderFragmentFragmentDoc}
+    ${TaskFragmentFragmentDoc}
+    ${SubtaskFragmentFragmentDoc}
+    ${ScreenshotFragmentFragmentDoc}
+    ${TerminalLogFragmentFragmentDoc}
+    ${MessageLogFragmentFragmentDoc}
+    ${AgentLogFragmentFragmentDoc}
+    ${SearchLogFragmentFragmentDoc}
+    ${VectorStoreLogFragmentFragmentDoc}
+`;
 
 /**
  * __useFlowQuery__
@@ -1997,30 +2224,36 @@ ${VectorStoreLogFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useFlowQuery(baseOptions: Apollo.QueryHookOptions<FlowQuery, FlowQueryVariables> & ({ variables: FlowQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
-      }
+export function useFlowQuery(
+    baseOptions: Apollo.QueryHookOptions<FlowQuery, FlowQueryVariables> &
+        ({ variables: FlowQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
+}
 export function useFlowLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<FlowQuery, FlowQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
-        }
-export function useFlowSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowQuery, FlowQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
-        }
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
+}
+export function useFlowSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowQuery, FlowQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
+}
 export type FlowQueryHookResult = ReturnType<typeof useFlowQuery>;
 export type FlowLazyQueryHookResult = ReturnType<typeof useFlowLazyQuery>;
 export type FlowSuspenseQueryHookResult = ReturnType<typeof useFlowSuspenseQuery>;
 export type FlowQueryResult = Apollo.QueryResult<FlowQuery, FlowQueryVariables>;
 export const TasksDocument = gql`
     query tasks($flowId: ID!) {
-  tasks(flowId: $flowId) {
-    ...taskFragment
-  }
-}
+        tasks(flowId: $flowId) {
+            ...taskFragment
+        }
+    }
     ${TaskFragmentFragmentDoc}
-${SubtaskFragmentFragmentDoc}`;
+    ${SubtaskFragmentFragmentDoc}
+`;
 
 /**
  * __useTasksQuery__
@@ -2038,30 +2271,36 @@ ${SubtaskFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useTasksQuery(baseOptions: Apollo.QueryHookOptions<TasksQuery, TasksQueryVariables> & ({ variables: TasksQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
-      }
+export function useTasksQuery(
+    baseOptions: Apollo.QueryHookOptions<TasksQuery, TasksQueryVariables> &
+        ({ variables: TasksQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
+}
 export function useTasksLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<TasksQuery, TasksQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
-        }
-export function useTasksSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<TasksQuery, TasksQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
-        }
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
+}
+export function useTasksSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<TasksQuery, TasksQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
+}
 export type TasksQueryHookResult = ReturnType<typeof useTasksQuery>;
 export type TasksLazyQueryHookResult = ReturnType<typeof useTasksLazyQuery>;
 export type TasksSuspenseQueryHookResult = ReturnType<typeof useTasksSuspenseQuery>;
 export type TasksQueryResult = Apollo.QueryResult<TasksQuery, TasksQueryVariables>;
 export const AssistantsDocument = gql`
     query assistants($flowId: ID!) {
-  assistants(flowId: $flowId) {
-    ...assistantFragment
-  }
-}
+        assistants(flowId: $flowId) {
+            ...assistantFragment
+        }
+    }
     ${AssistantFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}`;
+    ${ProviderFragmentFragmentDoc}
+`;
 
 /**
  * __useAssistantsQuery__
@@ -2079,29 +2318,37 @@ ${ProviderFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useAssistantsQuery(baseOptions: Apollo.QueryHookOptions<AssistantsQuery, AssistantsQueryVariables> & ({ variables: AssistantsQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
-      }
-export function useAssistantsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<AssistantsQuery, AssistantsQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
-        }
-export function useAssistantsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<AssistantsQuery, AssistantsQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
-        }
+export function useAssistantsQuery(
+    baseOptions: Apollo.QueryHookOptions<AssistantsQuery, AssistantsQueryVariables> &
+        ({ variables: AssistantsQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
+}
+export function useAssistantsLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<AssistantsQuery, AssistantsQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
+}
+export function useAssistantsSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<AssistantsQuery, AssistantsQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
+}
 export type AssistantsQueryHookResult = ReturnType<typeof useAssistantsQuery>;
 export type AssistantsLazyQueryHookResult = ReturnType<typeof useAssistantsLazyQuery>;
 export type AssistantsSuspenseQueryHookResult = ReturnType<typeof useAssistantsSuspenseQuery>;
 export type AssistantsQueryResult = Apollo.QueryResult<AssistantsQuery, AssistantsQueryVariables>;
 export const AssistantLogsDocument = gql`
     query assistantLogs($flowId: ID!, $assistantId: ID!) {
-  assistantLogs(flowId: $flowId, assistantId: $assistantId) {
-    ...assistantLogFragment
-  }
-}
-    ${AssistantLogFragmentFragmentDoc}`;
+        assistantLogs(flowId: $flowId, assistantId: $assistantId) {
+            ...assistantLogFragment
+        }
+    }
+    ${AssistantLogFragmentFragmentDoc}
+`;
 
 /**
  * __useAssistantLogsQuery__
@@ -2120,36 +2367,44 @@ export const AssistantLogsDocument = gql`
  *   },
  * });
  */
-export function useAssistantLogsQuery(baseOptions: Apollo.QueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables> & ({ variables: AssistantLogsQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(AssistantLogsDocument, options);
-      }
-export function useAssistantLogsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(AssistantLogsDocument, options);
-        }
-export function useAssistantLogsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(AssistantLogsDocument, options);
-        }
+export function useAssistantLogsQuery(
+    baseOptions: Apollo.QueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables> &
+        ({ variables: AssistantLogsQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(AssistantLogsDocument, options);
+}
+export function useAssistantLogsLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(AssistantLogsDocument, options);
+}
+export function useAssistantLogsSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(AssistantLogsDocument, options);
+}
 export type AssistantLogsQueryHookResult = ReturnType<typeof useAssistantLogsQuery>;
 export type AssistantLogsLazyQueryHookResult = ReturnType<typeof useAssistantLogsLazyQuery>;
 export type AssistantLogsSuspenseQueryHookResult = ReturnType<typeof useAssistantLogsSuspenseQuery>;
 export type AssistantLogsQueryResult = Apollo.QueryResult<AssistantLogsQuery, AssistantLogsQueryVariables>;
 export const FlowReportDocument = gql`
     query flowReport($id: ID!) {
-  flow(flowId: $id) {
-    ...flowFragment
-  }
-  tasks(flowId: $id) {
-    ...taskFragment
-  }
-}
+        flow(flowId: $id) {
+            ...flowFragment
+        }
+        tasks(flowId: $id) {
+            ...taskFragment
+        }
+    }
     ${FlowFragmentFragmentDoc}
-${TerminalFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}
-${TaskFragmentFragmentDoc}
-${SubtaskFragmentFragmentDoc}`;
+    ${TerminalFragmentFragmentDoc}
+    ${ProviderFragmentFragmentDoc}
+    ${TaskFragmentFragmentDoc}
+    ${SubtaskFragmentFragmentDoc}
+`;
 
 /**
  * __useFlowReportQuery__
@@ -2167,31 +2422,39 @@ ${SubtaskFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useFlowReportQuery(baseOptions: Apollo.QueryHookOptions<FlowReportQuery, FlowReportQueryVariables> & ({ variables: FlowReportQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
-      }
-export function useFlowReportLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>) {
-          const options = {...defaultOptions, ...baseOptions}
-          return Apollo.useLazyQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
-        }
-export function useFlowReportSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>) {
-          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
-          return Apollo.useSuspenseQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
-        }
+export function useFlowReportQuery(
+    baseOptions: Apollo.QueryHookOptions<FlowReportQuery, FlowReportQueryVariables> &
+        ({ variables: FlowReportQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
+}
+export function useFlowReportLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
+}
+export function useFlowReportSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
+}
 export type FlowReportQueryHookResult = ReturnType<typeof useFlowReportQuery>;
 export type FlowReportLazyQueryHookResult = ReturnType<typeof useFlowReportLazyQuery>;
 export type FlowReportSuspenseQueryHookResult = ReturnType<typeof useFlowReportSuspenseQuery>;
 export type FlowReportQueryResult = Apollo.QueryResult<FlowReportQuery, FlowReportQueryVariables>;
 export const CreateFlowDocument = gql`
     mutation createFlow($modelProvider: String!, $input: String!) {
-  createFlow(modelProvider: $modelProvider, input: $input) {
-    ...flowFragment
-  }
-}
+        createFlow(modelProvider: $modelProvider, input: $input) {
+            ...flowFragment
+        }
+    }
     ${FlowFragmentFragmentDoc}
-${TerminalFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}`;
+    ${TerminalFragmentFragmentDoc}
+    ${ProviderFragmentFragmentDoc}
+`;
 export type CreateFlowMutationFn = Apollo.MutationFunction<CreateFlowMutation, CreateFlowMutationVariables>;
 
 /**
@@ -2212,18 +2475,20 @@ export type CreateFlowMutationFn = Apollo.MutationFunction<CreateFlowMutation, C
  *   },
  * });
  */
-export function useCreateFlowMutation(baseOptions?: Apollo.MutationHookOptions<CreateFlowMutation, CreateFlowMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<CreateFlowMutation, CreateFlowMutationVariables>(CreateFlowDocument, options);
-      }
+export function useCreateFlowMutation(
+    baseOptions?: Apollo.MutationHookOptions<CreateFlowMutation, CreateFlowMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<CreateFlowMutation, CreateFlowMutationVariables>(CreateFlowDocument, options);
+}
 export type CreateFlowMutationHookResult = ReturnType<typeof useCreateFlowMutation>;
 export type CreateFlowMutationResult = Apollo.MutationResult<CreateFlowMutation>;
 export type CreateFlowMutationOptions = Apollo.BaseMutationOptions<CreateFlowMutation, CreateFlowMutationVariables>;
 export const DeleteFlowDocument = gql`
     mutation deleteFlow($flowId: ID!) {
-  deleteFlow(flowId: $flowId)
-}
-    `;
+        deleteFlow(flowId: $flowId)
+    }
+`;
 export type DeleteFlowMutationFn = Apollo.MutationFunction<DeleteFlowMutation, DeleteFlowMutationVariables>;
 
 /**
@@ -2243,18 +2508,20 @@ export type DeleteFlowMutationFn = Apollo.MutationFunction<DeleteFlowMutation, D
  *   },
  * });
  */
-export function useDeleteFlowMutation(baseOptions?: Apollo.MutationHookOptions<DeleteFlowMutation, DeleteFlowMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<DeleteFlowMutation, DeleteFlowMutationVariables>(DeleteFlowDocument, options);
-      }
+export function useDeleteFlowMutation(
+    baseOptions?: Apollo.MutationHookOptions<DeleteFlowMutation, DeleteFlowMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<DeleteFlowMutation, DeleteFlowMutationVariables>(DeleteFlowDocument, options);
+}
 export type DeleteFlowMutationHookResult = ReturnType<typeof useDeleteFlowMutation>;
 export type DeleteFlowMutationResult = Apollo.MutationResult<DeleteFlowMutation>;
 export type DeleteFlowMutationOptions = Apollo.BaseMutationOptions<DeleteFlowMutation, DeleteFlowMutationVariables>;
 export const PutUserInputDocument = gql`
     mutation putUserInput($flowId: ID!, $input: String!) {
-  putUserInput(flowId: $flowId, input: $input)
-}
-    `;
+        putUserInput(flowId: $flowId, input: $input)
+    }
+`;
 export type PutUserInputMutationFn = Apollo.MutationFunction<PutUserInputMutation, PutUserInputMutationVariables>;
 
 /**
@@ -2275,18 +2542,23 @@ export type PutUserInputMutationFn = Apollo.MutationFunction<PutUserInputMutatio
  *   },
  * });
  */
-export function usePutUserInputMutation(baseOptions?: Apollo.MutationHookOptions<PutUserInputMutation, PutUserInputMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<PutUserInputMutation, PutUserInputMutationVariables>(PutUserInputDocument, options);
-      }
+export function usePutUserInputMutation(
+    baseOptions?: Apollo.MutationHookOptions<PutUserInputMutation, PutUserInputMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<PutUserInputMutation, PutUserInputMutationVariables>(PutUserInputDocument, options);
+}
 export type PutUserInputMutationHookResult = ReturnType<typeof usePutUserInputMutation>;
 export type PutUserInputMutationResult = Apollo.MutationResult<PutUserInputMutation>;
-export type PutUserInputMutationOptions = Apollo.BaseMutationOptions<PutUserInputMutation, PutUserInputMutationVariables>;
+export type PutUserInputMutationOptions = Apollo.BaseMutationOptions<
+    PutUserInputMutation,
+    PutUserInputMutationVariables
+>;
 export const FinishFlowDocument = gql`
     mutation finishFlow($flowId: ID!) {
-  finishFlow(flowId: $flowId)
-}
-    `;
+        finishFlow(flowId: $flowId)
+    }
+`;
 export type FinishFlowMutationFn = Apollo.MutationFunction<FinishFlowMutation, FinishFlowMutationVariables>;
 
 /**
@@ -2306,18 +2578,20 @@ export type FinishFlowMutationFn = Apollo.MutationFunction<FinishFlowMutation, F
  *   },
  * });
  */
-export function useFinishFlowMutation(baseOptions?: Apollo.MutationHookOptions<FinishFlowMutation, FinishFlowMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<FinishFlowMutation, FinishFlowMutationVariables>(FinishFlowDocument, options);
-      }
+export function useFinishFlowMutation(
+    baseOptions?: Apollo.MutationHookOptions<FinishFlowMutation, FinishFlowMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<FinishFlowMutation, FinishFlowMutationVariables>(FinishFlowDocument, options);
+}
 export type FinishFlowMutationHookResult = ReturnType<typeof useFinishFlowMutation>;
 export type FinishFlowMutationResult = Apollo.MutationResult<FinishFlowMutation>;
 export type FinishFlowMutationOptions = Apollo.BaseMutationOptions<FinishFlowMutation, FinishFlowMutationVariables>;
 export const StopFlowDocument = gql`
     mutation stopFlow($flowId: ID!) {
-  stopFlow(flowId: $flowId)
-}
-    `;
+        stopFlow(flowId: $flowId)
+    }
+`;
 export type StopFlowMutationFn = Apollo.MutationFunction<StopFlowMutation, StopFlowMutationVariables>;
 
 /**
@@ -2337,34 +2611,35 @@ export type StopFlowMutationFn = Apollo.MutationFunction<StopFlowMutation, StopF
  *   },
  * });
  */
-export function useStopFlowMutation(baseOptions?: Apollo.MutationHookOptions<StopFlowMutation, StopFlowMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<StopFlowMutation, StopFlowMutationVariables>(StopFlowDocument, options);
-      }
+export function useStopFlowMutation(
+    baseOptions?: Apollo.MutationHookOptions<StopFlowMutation, StopFlowMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<StopFlowMutation, StopFlowMutationVariables>(StopFlowDocument, options);
+}
 export type StopFlowMutationHookResult = ReturnType<typeof useStopFlowMutation>;
 export type StopFlowMutationResult = Apollo.MutationResult<StopFlowMutation>;
 export type StopFlowMutationOptions = Apollo.BaseMutationOptions<StopFlowMutation, StopFlowMutationVariables>;
 export const CreateAssistantDocument = gql`
     mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!) {
-  createAssistant(
-    flowId: $flowId
-    modelProvider: $modelProvider
-    input: $input
-    useAgents: $useAgents
-  ) {
-    flow {
-      ...flowFragment
+        createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents) {
+            flow {
+                ...flowFragment
+            }
+            assistant {
+                ...assistantFragment
+            }
+        }
     }
-    assistant {
-      ...assistantFragment
-    }
-  }
-}
     ${FlowFragmentFragmentDoc}
-${TerminalFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}
-${AssistantFragmentFragmentDoc}`;
-export type CreateAssistantMutationFn = Apollo.MutationFunction<CreateAssistantMutation, CreateAssistantMutationVariables>;
+    ${TerminalFragmentFragmentDoc}
+    ${ProviderFragmentFragmentDoc}
+    ${AssistantFragmentFragmentDoc}
+`;
+export type CreateAssistantMutationFn = Apollo.MutationFunction<
+    CreateAssistantMutation,
+    CreateAssistantMutationVariables
+>;
 
 /**
  * __useCreateAssistantMutation__
@@ -2386,23 +2661,26 @@ export type CreateAssistantMutationFn = Apollo.MutationFunction<CreateAssistantM
  *   },
  * });
  */
-export function useCreateAssistantMutation(baseOptions?: Apollo.MutationHookOptions<CreateAssistantMutation, CreateAssistantMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<CreateAssistantMutation, CreateAssistantMutationVariables>(CreateAssistantDocument, options);
-      }
+export function useCreateAssistantMutation(
+    baseOptions?: Apollo.MutationHookOptions<CreateAssistantMutation, CreateAssistantMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<CreateAssistantMutation, CreateAssistantMutationVariables>(
+        CreateAssistantDocument,
+        options,
+    );
+}
 export type CreateAssistantMutationHookResult = ReturnType<typeof useCreateAssistantMutation>;
 export type CreateAssistantMutationResult = Apollo.MutationResult<CreateAssistantMutation>;
-export type CreateAssistantMutationOptions = Apollo.BaseMutationOptions<CreateAssistantMutation, CreateAssistantMutationVariables>;
+export type CreateAssistantMutationOptions = Apollo.BaseMutationOptions<
+    CreateAssistantMutation,
+    CreateAssistantMutationVariables
+>;
 export const CallAssistantDocument = gql`
     mutation callAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean!) {
-  callAssistant(
-    flowId: $flowId
-    assistantId: $assistantId
-    input: $input
-    useAgents: $useAgents
-  )
-}
-    `;
+        callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents)
+    }
+`;
 export type CallAssistantMutationFn = Apollo.MutationFunction<CallAssistantMutation, CallAssistantMutationVariables>;
 
 /**
@@ -2425,21 +2703,27 @@ export type CallAssistantMutationFn = Apollo.MutationFunction<CallAssistantMutat
  *   },
  * });
  */
-export function useCallAssistantMutation(baseOptions?: Apollo.MutationHookOptions<CallAssistantMutation, CallAssistantMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<CallAssistantMutation, CallAssistantMutationVariables>(CallAssistantDocument, options);
-      }
+export function useCallAssistantMutation(
+    baseOptions?: Apollo.MutationHookOptions<CallAssistantMutation, CallAssistantMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<CallAssistantMutation, CallAssistantMutationVariables>(CallAssistantDocument, options);
+}
 export type CallAssistantMutationHookResult = ReturnType<typeof useCallAssistantMutation>;
 export type CallAssistantMutationResult = Apollo.MutationResult<CallAssistantMutation>;
-export type CallAssistantMutationOptions = Apollo.BaseMutationOptions<CallAssistantMutation, CallAssistantMutationVariables>;
+export type CallAssistantMutationOptions = Apollo.BaseMutationOptions<
+    CallAssistantMutation,
+    CallAssistantMutationVariables
+>;
 export const StopAssistantDocument = gql`
     mutation stopAssistant($flowId: ID!, $assistantId: ID!) {
-  stopAssistant(flowId: $flowId, assistantId: $assistantId) {
-    ...assistantFragment
-  }
-}
+        stopAssistant(flowId: $flowId, assistantId: $assistantId) {
+            ...assistantFragment
+        }
+    }
     ${AssistantFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}`;
+    ${ProviderFragmentFragmentDoc}
+`;
 export type StopAssistantMutationFn = Apollo.MutationFunction<StopAssistantMutation, StopAssistantMutationVariables>;
 
 /**
@@ -2460,19 +2744,27 @@ export type StopAssistantMutationFn = Apollo.MutationFunction<StopAssistantMutat
  *   },
  * });
  */
-export function useStopAssistantMutation(baseOptions?: Apollo.MutationHookOptions<StopAssistantMutation, StopAssistantMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<StopAssistantMutation, StopAssistantMutationVariables>(StopAssistantDocument, options);
-      }
+export function useStopAssistantMutation(
+    baseOptions?: Apollo.MutationHookOptions<StopAssistantMutation, StopAssistantMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<StopAssistantMutation, StopAssistantMutationVariables>(StopAssistantDocument, options);
+}
 export type StopAssistantMutationHookResult = ReturnType<typeof useStopAssistantMutation>;
 export type StopAssistantMutationResult = Apollo.MutationResult<StopAssistantMutation>;
-export type StopAssistantMutationOptions = Apollo.BaseMutationOptions<StopAssistantMutation, StopAssistantMutationVariables>;
+export type StopAssistantMutationOptions = Apollo.BaseMutationOptions<
+    StopAssistantMutation,
+    StopAssistantMutationVariables
+>;
 export const DeleteAssistantDocument = gql`
     mutation deleteAssistant($flowId: ID!, $assistantId: ID!) {
-  deleteAssistant(flowId: $flowId, assistantId: $assistantId)
-}
-    `;
-export type DeleteAssistantMutationFn = Apollo.MutationFunction<DeleteAssistantMutation, DeleteAssistantMutationVariables>;
+        deleteAssistant(flowId: $flowId, assistantId: $assistantId)
+    }
+`;
+export type DeleteAssistantMutationFn = Apollo.MutationFunction<
+    DeleteAssistantMutation,
+    DeleteAssistantMutationVariables
+>;
 
 /**
  * __useDeleteAssistantMutation__
@@ -2492,21 +2784,30 @@ export type DeleteAssistantMutationFn = Apollo.MutationFunction<DeleteAssistantM
  *   },
  * });
  */
-export function useDeleteAssistantMutation(baseOptions?: Apollo.MutationHookOptions<DeleteAssistantMutation, DeleteAssistantMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<DeleteAssistantMutation, DeleteAssistantMutationVariables>(DeleteAssistantDocument, options);
-      }
+export function useDeleteAssistantMutation(
+    baseOptions?: Apollo.MutationHookOptions<DeleteAssistantMutation, DeleteAssistantMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<DeleteAssistantMutation, DeleteAssistantMutationVariables>(
+        DeleteAssistantDocument,
+        options,
+    );
+}
 export type DeleteAssistantMutationHookResult = ReturnType<typeof useDeleteAssistantMutation>;
 export type DeleteAssistantMutationResult = Apollo.MutationResult<DeleteAssistantMutation>;
-export type DeleteAssistantMutationOptions = Apollo.BaseMutationOptions<DeleteAssistantMutation, DeleteAssistantMutationVariables>;
+export type DeleteAssistantMutationOptions = Apollo.BaseMutationOptions<
+    DeleteAssistantMutation,
+    DeleteAssistantMutationVariables
+>;
 export const TestAgentDocument = gql`
     mutation testAgent($type: ProviderType!, $agentType: AgentType!, $agent: AgentConfigInput!) {
-  testAgent(type: $type, agentType: $agentType, agent: $agent) {
-    ...agentTestResultFragment
-  }
-}
+        testAgent(type: $type, agentType: $agentType, agent: $agent) {
+            ...agentTestResultFragment
+        }
+    }
     ${AgentTestResultFragmentFragmentDoc}
-${TestResultFragmentFragmentDoc}`;
+    ${TestResultFragmentFragmentDoc}
+`;
 export type TestAgentMutationFn = Apollo.MutationFunction<TestAgentMutation, TestAgentMutationVariables>;
 
 /**
@@ -2528,22 +2829,25 @@ export type TestAgentMutationFn = Apollo.MutationFunction<TestAgentMutation, Tes
  *   },
  * });
  */
-export function useTestAgentMutation(baseOptions?: Apollo.MutationHookOptions<TestAgentMutation, TestAgentMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<TestAgentMutation, TestAgentMutationVariables>(TestAgentDocument, options);
-      }
+export function useTestAgentMutation(
+    baseOptions?: Apollo.MutationHookOptions<TestAgentMutation, TestAgentMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<TestAgentMutation, TestAgentMutationVariables>(TestAgentDocument, options);
+}
 export type TestAgentMutationHookResult = ReturnType<typeof useTestAgentMutation>;
 export type TestAgentMutationResult = Apollo.MutationResult<TestAgentMutation>;
 export type TestAgentMutationOptions = Apollo.BaseMutationOptions<TestAgentMutation, TestAgentMutationVariables>;
 export const TestProviderDocument = gql`
     mutation testProvider($type: ProviderType!, $agents: AgentsConfigInput!) {
-  testProvider(type: $type, agents: $agents) {
-    ...providerTestResultFragment
-  }
-}
+        testProvider(type: $type, agents: $agents) {
+            ...providerTestResultFragment
+        }
+    }
     ${ProviderTestResultFragmentFragmentDoc}
-${AgentTestResultFragmentFragmentDoc}
-${TestResultFragmentFragmentDoc}`;
+    ${AgentTestResultFragmentFragmentDoc}
+    ${TestResultFragmentFragmentDoc}
+`;
 export type TestProviderMutationFn = Apollo.MutationFunction<TestProviderMutation, TestProviderMutationVariables>;
 
 /**
@@ -2564,22 +2868,28 @@ export type TestProviderMutationFn = Apollo.MutationFunction<TestProviderMutatio
  *   },
  * });
  */
-export function useTestProviderMutation(baseOptions?: Apollo.MutationHookOptions<TestProviderMutation, TestProviderMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<TestProviderMutation, TestProviderMutationVariables>(TestProviderDocument, options);
-      }
+export function useTestProviderMutation(
+    baseOptions?: Apollo.MutationHookOptions<TestProviderMutation, TestProviderMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<TestProviderMutation, TestProviderMutationVariables>(TestProviderDocument, options);
+}
 export type TestProviderMutationHookResult = ReturnType<typeof useTestProviderMutation>;
 export type TestProviderMutationResult = Apollo.MutationResult<TestProviderMutation>;
-export type TestProviderMutationOptions = Apollo.BaseMutationOptions<TestProviderMutation, TestProviderMutationVariables>;
+export type TestProviderMutationOptions = Apollo.BaseMutationOptions<
+    TestProviderMutation,
+    TestProviderMutationVariables
+>;
 export const CreateProviderDocument = gql`
     mutation createProvider($name: String!, $type: ProviderType!, $agents: AgentsConfigInput!) {
-  createProvider(name: $name, type: $type, agents: $agents) {
-    ...providerConfigFragment
-  }
-}
+        createProvider(name: $name, type: $type, agents: $agents) {
+            ...providerConfigFragment
+        }
+    }
     ${ProviderConfigFragmentFragmentDoc}
-${AgentsConfigFragmentFragmentDoc}
-${AgentConfigFragmentFragmentDoc}`;
+    ${AgentsConfigFragmentFragmentDoc}
+    ${AgentConfigFragmentFragmentDoc}
+`;
 export type CreateProviderMutationFn = Apollo.MutationFunction<CreateProviderMutation, CreateProviderMutationVariables>;
 
 /**
@@ -2601,22 +2911,28 @@ export type CreateProviderMutationFn = Apollo.MutationFunction<CreateProviderMut
  *   },
  * });
  */
-export function useCreateProviderMutation(baseOptions?: Apollo.MutationHookOptions<CreateProviderMutation, CreateProviderMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<CreateProviderMutation, CreateProviderMutationVariables>(CreateProviderDocument, options);
-      }
+export function useCreateProviderMutation(
+    baseOptions?: Apollo.MutationHookOptions<CreateProviderMutation, CreateProviderMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<CreateProviderMutation, CreateProviderMutationVariables>(CreateProviderDocument, options);
+}
 export type CreateProviderMutationHookResult = ReturnType<typeof useCreateProviderMutation>;
 export type CreateProviderMutationResult = Apollo.MutationResult<CreateProviderMutation>;
-export type CreateProviderMutationOptions = Apollo.BaseMutationOptions<CreateProviderMutation, CreateProviderMutationVariables>;
+export type CreateProviderMutationOptions = Apollo.BaseMutationOptions<
+    CreateProviderMutation,
+    CreateProviderMutationVariables
+>;
 export const UpdateProviderDocument = gql`
     mutation updateProvider($providerId: ID!, $name: String!, $agents: AgentsConfigInput!) {
-  updateProvider(providerId: $providerId, name: $name, agents: $agents) {
-    ...providerConfigFragment
-  }
-}
+        updateProvider(providerId: $providerId, name: $name, agents: $agents) {
+            ...providerConfigFragment
+        }
+    }
     ${ProviderConfigFragmentFragmentDoc}
-${AgentsConfigFragmentFragmentDoc}
-${AgentConfigFragmentFragmentDoc}`;
+    ${AgentsConfigFragmentFragmentDoc}
+    ${AgentConfigFragmentFragmentDoc}
+`;
 export type UpdateProviderMutationFn = Apollo.MutationFunction<UpdateProviderMutation, UpdateProviderMutationVariables>;
 
 /**
@@ -2638,18 +2954,23 @@ export type UpdateProviderMutationFn = Apollo.MutationFunction<UpdateProviderMut
  *   },
  * });
  */
-export function useUpdateProviderMutation(baseOptions?: Apollo.MutationHookOptions<UpdateProviderMutation, UpdateProviderMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<UpdateProviderMutation, UpdateProviderMutationVariables>(UpdateProviderDocument, options);
-      }
+export function useUpdateProviderMutation(
+    baseOptions?: Apollo.MutationHookOptions<UpdateProviderMutation, UpdateProviderMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<UpdateProviderMutation, UpdateProviderMutationVariables>(UpdateProviderDocument, options);
+}
 export type UpdateProviderMutationHookResult = ReturnType<typeof useUpdateProviderMutation>;
 export type UpdateProviderMutationResult = Apollo.MutationResult<UpdateProviderMutation>;
-export type UpdateProviderMutationOptions = Apollo.BaseMutationOptions<UpdateProviderMutation, UpdateProviderMutationVariables>;
+export type UpdateProviderMutationOptions = Apollo.BaseMutationOptions<
+    UpdateProviderMutation,
+    UpdateProviderMutationVariables
+>;
 export const DeleteProviderDocument = gql`
     mutation deleteProvider($providerId: ID!) {
-  deleteProvider(providerId: $providerId)
-}
-    `;
+        deleteProvider(providerId: $providerId)
+    }
+`;
 export type DeleteProviderMutationFn = Apollo.MutationFunction<DeleteProviderMutation, DeleteProviderMutationVariables>;
 
 /**
@@ -2669,20 +2990,26 @@ export type DeleteProviderMutationFn = Apollo.MutationFunction<DeleteProviderMut
  *   },
  * });
  */
-export function useDeleteProviderMutation(baseOptions?: Apollo.MutationHookOptions<DeleteProviderMutation, DeleteProviderMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<DeleteProviderMutation, DeleteProviderMutationVariables>(DeleteProviderDocument, options);
-      }
+export function useDeleteProviderMutation(
+    baseOptions?: Apollo.MutationHookOptions<DeleteProviderMutation, DeleteProviderMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<DeleteProviderMutation, DeleteProviderMutationVariables>(DeleteProviderDocument, options);
+}
 export type DeleteProviderMutationHookResult = ReturnType<typeof useDeleteProviderMutation>;
 export type DeleteProviderMutationResult = Apollo.MutationResult<DeleteProviderMutation>;
-export type DeleteProviderMutationOptions = Apollo.BaseMutationOptions<DeleteProviderMutation, DeleteProviderMutationVariables>;
+export type DeleteProviderMutationOptions = Apollo.BaseMutationOptions<
+    DeleteProviderMutation,
+    DeleteProviderMutationVariables
+>;
 export const ValidatePromptDocument = gql`
     mutation validatePrompt($type: PromptType!, $template: String!) {
-  validatePrompt(type: $type, template: $template) {
-    ...promptValidationResultFragment
-  }
-}
-    ${PromptValidationResultFragmentFragmentDoc}`;
+        validatePrompt(type: $type, template: $template) {
+            ...promptValidationResultFragment
+        }
+    }
+    ${PromptValidationResultFragmentFragmentDoc}
+`;
 export type ValidatePromptMutationFn = Apollo.MutationFunction<ValidatePromptMutation, ValidatePromptMutationVariables>;
 
 /**
@@ -2703,20 +3030,26 @@ export type ValidatePromptMutationFn = Apollo.MutationFunction<ValidatePromptMut
  *   },
  * });
  */
-export function useValidatePromptMutation(baseOptions?: Apollo.MutationHookOptions<ValidatePromptMutation, ValidatePromptMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<ValidatePromptMutation, ValidatePromptMutationVariables>(ValidatePromptDocument, options);
-      }
+export function useValidatePromptMutation(
+    baseOptions?: Apollo.MutationHookOptions<ValidatePromptMutation, ValidatePromptMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<ValidatePromptMutation, ValidatePromptMutationVariables>(ValidatePromptDocument, options);
+}
 export type ValidatePromptMutationHookResult = ReturnType<typeof useValidatePromptMutation>;
 export type ValidatePromptMutationResult = Apollo.MutationResult<ValidatePromptMutation>;
-export type ValidatePromptMutationOptions = Apollo.BaseMutationOptions<ValidatePromptMutation, ValidatePromptMutationVariables>;
+export type ValidatePromptMutationOptions = Apollo.BaseMutationOptions<
+    ValidatePromptMutation,
+    ValidatePromptMutationVariables
+>;
 export const CreatePromptDocument = gql`
     mutation createPrompt($type: PromptType!, $template: String!) {
-  createPrompt(type: $type, template: $template) {
-    ...userPromptFragment
-  }
-}
-    ${UserPromptFragmentFragmentDoc}`;
+        createPrompt(type: $type, template: $template) {
+            ...userPromptFragment
+        }
+    }
+    ${UserPromptFragmentFragmentDoc}
+`;
 export type CreatePromptMutationFn = Apollo.MutationFunction<CreatePromptMutation, CreatePromptMutationVariables>;
 
 /**
@@ -2737,20 +3070,26 @@ export type CreatePromptMutationFn = Apollo.MutationFunction<CreatePromptMutatio
  *   },
  * });
  */
-export function useCreatePromptMutation(baseOptions?: Apollo.MutationHookOptions<CreatePromptMutation, CreatePromptMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<CreatePromptMutation, CreatePromptMutationVariables>(CreatePromptDocument, options);
-      }
+export function useCreatePromptMutation(
+    baseOptions?: Apollo.MutationHookOptions<CreatePromptMutation, CreatePromptMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<CreatePromptMutation, CreatePromptMutationVariables>(CreatePromptDocument, options);
+}
 export type CreatePromptMutationHookResult = ReturnType<typeof useCreatePromptMutation>;
 export type CreatePromptMutationResult = Apollo.MutationResult<CreatePromptMutation>;
-export type CreatePromptMutationOptions = Apollo.BaseMutationOptions<CreatePromptMutation, CreatePromptMutationVariables>;
+export type CreatePromptMutationOptions = Apollo.BaseMutationOptions<
+    CreatePromptMutation,
+    CreatePromptMutationVariables
+>;
 export const UpdatePromptDocument = gql`
     mutation updatePrompt($promptId: ID!, $template: String!) {
-  updatePrompt(promptId: $promptId, template: $template) {
-    ...userPromptFragment
-  }
-}
-    ${UserPromptFragmentFragmentDoc}`;
+        updatePrompt(promptId: $promptId, template: $template) {
+            ...userPromptFragment
+        }
+    }
+    ${UserPromptFragmentFragmentDoc}
+`;
 export type UpdatePromptMutationFn = Apollo.MutationFunction<UpdatePromptMutation, UpdatePromptMutationVariables>;
 
 /**
@@ -2771,18 +3110,23 @@ export type UpdatePromptMutationFn = Apollo.MutationFunction<UpdatePromptMutatio
  *   },
  * });
  */
-export function useUpdatePromptMutation(baseOptions?: Apollo.MutationHookOptions<UpdatePromptMutation, UpdatePromptMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<UpdatePromptMutation, UpdatePromptMutationVariables>(UpdatePromptDocument, options);
-      }
+export function useUpdatePromptMutation(
+    baseOptions?: Apollo.MutationHookOptions<UpdatePromptMutation, UpdatePromptMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<UpdatePromptMutation, UpdatePromptMutationVariables>(UpdatePromptDocument, options);
+}
 export type UpdatePromptMutationHookResult = ReturnType<typeof useUpdatePromptMutation>;
 export type UpdatePromptMutationResult = Apollo.MutationResult<UpdatePromptMutation>;
-export type UpdatePromptMutationOptions = Apollo.BaseMutationOptions<UpdatePromptMutation, UpdatePromptMutationVariables>;
+export type UpdatePromptMutationOptions = Apollo.BaseMutationOptions<
+    UpdatePromptMutation,
+    UpdatePromptMutationVariables
+>;
 export const DeletePromptDocument = gql`
     mutation deletePrompt($promptId: ID!) {
-  deletePrompt(promptId: $promptId)
-}
-    `;
+        deletePrompt(promptId: $promptId)
+    }
+`;
 export type DeletePromptMutationFn = Apollo.MutationFunction<DeletePromptMutation, DeletePromptMutationVariables>;
 
 /**
@@ -2802,20 +3146,26 @@ export type DeletePromptMutationFn = Apollo.MutationFunction<DeletePromptMutatio
  *   },
  * });
  */
-export function useDeletePromptMutation(baseOptions?: Apollo.MutationHookOptions<DeletePromptMutation, DeletePromptMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<DeletePromptMutation, DeletePromptMutationVariables>(DeletePromptDocument, options);
-      }
+export function useDeletePromptMutation(
+    baseOptions?: Apollo.MutationHookOptions<DeletePromptMutation, DeletePromptMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<DeletePromptMutation, DeletePromptMutationVariables>(DeletePromptDocument, options);
+}
 export type DeletePromptMutationHookResult = ReturnType<typeof useDeletePromptMutation>;
 export type DeletePromptMutationResult = Apollo.MutationResult<DeletePromptMutation>;
-export type DeletePromptMutationOptions = Apollo.BaseMutationOptions<DeletePromptMutation, DeletePromptMutationVariables>;
+export type DeletePromptMutationOptions = Apollo.BaseMutationOptions<
+    DeletePromptMutation,
+    DeletePromptMutationVariables
+>;
 export const TerminalLogAddedDocument = gql`
     subscription terminalLogAdded($flowId: ID!) {
-  terminalLogAdded(flowId: $flowId) {
-    ...terminalLogFragment
-  }
-}
-    ${TerminalLogFragmentFragmentDoc}`;
+        terminalLogAdded(flowId: $flowId) {
+            ...terminalLogFragment
+        }
+    }
+    ${TerminalLogFragmentFragmentDoc}
+`;
 
 /**
  * __useTerminalLogAddedSubscription__
@@ -2833,19 +3183,26 @@ export const TerminalLogAddedDocument = gql`
  *   },
  * });
  */
-export function useTerminalLogAddedSubscription(baseOptions: Apollo.SubscriptionHookOptions<TerminalLogAddedSubscription, TerminalLogAddedSubscriptionVariables> & ({ variables: TerminalLogAddedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<TerminalLogAddedSubscription, TerminalLogAddedSubscriptionVariables>(TerminalLogAddedDocument, options);
-      }
+export function useTerminalLogAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<TerminalLogAddedSubscription, TerminalLogAddedSubscriptionVariables> &
+        ({ variables: TerminalLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<TerminalLogAddedSubscription, TerminalLogAddedSubscriptionVariables>(
+        TerminalLogAddedDocument,
+        options,
+    );
+}
 export type TerminalLogAddedSubscriptionHookResult = ReturnType<typeof useTerminalLogAddedSubscription>;
 export type TerminalLogAddedSubscriptionResult = Apollo.SubscriptionResult<TerminalLogAddedSubscription>;
 export const MessageLogAddedDocument = gql`
     subscription messageLogAdded($flowId: ID!) {
-  messageLogAdded(flowId: $flowId) {
-    ...messageLogFragment
-  }
-}
-    ${MessageLogFragmentFragmentDoc}`;
+        messageLogAdded(flowId: $flowId) {
+            ...messageLogFragment
+        }
+    }
+    ${MessageLogFragmentFragmentDoc}
+`;
 
 /**
  * __useMessageLogAddedSubscription__
@@ -2863,19 +3220,26 @@ export const MessageLogAddedDocument = gql`
  *   },
  * });
  */
-export function useMessageLogAddedSubscription(baseOptions: Apollo.SubscriptionHookOptions<MessageLogAddedSubscription, MessageLogAddedSubscriptionVariables> & ({ variables: MessageLogAddedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<MessageLogAddedSubscription, MessageLogAddedSubscriptionVariables>(MessageLogAddedDocument, options);
-      }
+export function useMessageLogAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<MessageLogAddedSubscription, MessageLogAddedSubscriptionVariables> &
+        ({ variables: MessageLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<MessageLogAddedSubscription, MessageLogAddedSubscriptionVariables>(
+        MessageLogAddedDocument,
+        options,
+    );
+}
 export type MessageLogAddedSubscriptionHookResult = ReturnType<typeof useMessageLogAddedSubscription>;
 export type MessageLogAddedSubscriptionResult = Apollo.SubscriptionResult<MessageLogAddedSubscription>;
 export const MessageLogUpdatedDocument = gql`
     subscription messageLogUpdated($flowId: ID!) {
-  messageLogUpdated(flowId: $flowId) {
-    ...messageLogFragment
-  }
-}
-    ${MessageLogFragmentFragmentDoc}`;
+        messageLogUpdated(flowId: $flowId) {
+            ...messageLogFragment
+        }
+    }
+    ${MessageLogFragmentFragmentDoc}
+`;
 
 /**
  * __useMessageLogUpdatedSubscription__
@@ -2893,19 +3257,26 @@ export const MessageLogUpdatedDocument = gql`
  *   },
  * });
  */
-export function useMessageLogUpdatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<MessageLogUpdatedSubscription, MessageLogUpdatedSubscriptionVariables> & ({ variables: MessageLogUpdatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<MessageLogUpdatedSubscription, MessageLogUpdatedSubscriptionVariables>(MessageLogUpdatedDocument, options);
-      }
+export function useMessageLogUpdatedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<MessageLogUpdatedSubscription, MessageLogUpdatedSubscriptionVariables> &
+        ({ variables: MessageLogUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<MessageLogUpdatedSubscription, MessageLogUpdatedSubscriptionVariables>(
+        MessageLogUpdatedDocument,
+        options,
+    );
+}
 export type MessageLogUpdatedSubscriptionHookResult = ReturnType<typeof useMessageLogUpdatedSubscription>;
 export type MessageLogUpdatedSubscriptionResult = Apollo.SubscriptionResult<MessageLogUpdatedSubscription>;
 export const ScreenshotAddedDocument = gql`
     subscription screenshotAdded($flowId: ID!) {
-  screenshotAdded(flowId: $flowId) {
-    ...screenshotFragment
-  }
-}
-    ${ScreenshotFragmentFragmentDoc}`;
+        screenshotAdded(flowId: $flowId) {
+            ...screenshotFragment
+        }
+    }
+    ${ScreenshotFragmentFragmentDoc}
+`;
 
 /**
  * __useScreenshotAddedSubscription__
@@ -2923,19 +3294,26 @@ export const ScreenshotAddedDocument = gql`
  *   },
  * });
  */
-export function useScreenshotAddedSubscription(baseOptions: Apollo.SubscriptionHookOptions<ScreenshotAddedSubscription, ScreenshotAddedSubscriptionVariables> & ({ variables: ScreenshotAddedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<ScreenshotAddedSubscription, ScreenshotAddedSubscriptionVariables>(ScreenshotAddedDocument, options);
-      }
+export function useScreenshotAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<ScreenshotAddedSubscription, ScreenshotAddedSubscriptionVariables> &
+        ({ variables: ScreenshotAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ScreenshotAddedSubscription, ScreenshotAddedSubscriptionVariables>(
+        ScreenshotAddedDocument,
+        options,
+    );
+}
 export type ScreenshotAddedSubscriptionHookResult = ReturnType<typeof useScreenshotAddedSubscription>;
 export type ScreenshotAddedSubscriptionResult = Apollo.SubscriptionResult<ScreenshotAddedSubscription>;
 export const AgentLogAddedDocument = gql`
     subscription agentLogAdded($flowId: ID!) {
-  agentLogAdded(flowId: $flowId) {
-    ...agentLogFragment
-  }
-}
-    ${AgentLogFragmentFragmentDoc}`;
+        agentLogAdded(flowId: $flowId) {
+            ...agentLogFragment
+        }
+    }
+    ${AgentLogFragmentFragmentDoc}
+`;
 
 /**
  * __useAgentLogAddedSubscription__
@@ -2953,19 +3331,26 @@ export const AgentLogAddedDocument = gql`
  *   },
  * });
  */
-export function useAgentLogAddedSubscription(baseOptions: Apollo.SubscriptionHookOptions<AgentLogAddedSubscription, AgentLogAddedSubscriptionVariables> & ({ variables: AgentLogAddedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<AgentLogAddedSubscription, AgentLogAddedSubscriptionVariables>(AgentLogAddedDocument, options);
-      }
+export function useAgentLogAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<AgentLogAddedSubscription, AgentLogAddedSubscriptionVariables> &
+        ({ variables: AgentLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<AgentLogAddedSubscription, AgentLogAddedSubscriptionVariables>(
+        AgentLogAddedDocument,
+        options,
+    );
+}
 export type AgentLogAddedSubscriptionHookResult = ReturnType<typeof useAgentLogAddedSubscription>;
 export type AgentLogAddedSubscriptionResult = Apollo.SubscriptionResult<AgentLogAddedSubscription>;
 export const SearchLogAddedDocument = gql`
     subscription searchLogAdded($flowId: ID!) {
-  searchLogAdded(flowId: $flowId) {
-    ...searchLogFragment
-  }
-}
-    ${SearchLogFragmentFragmentDoc}`;
+        searchLogAdded(flowId: $flowId) {
+            ...searchLogFragment
+        }
+    }
+    ${SearchLogFragmentFragmentDoc}
+`;
 
 /**
  * __useSearchLogAddedSubscription__
@@ -2983,19 +3368,26 @@ export const SearchLogAddedDocument = gql`
  *   },
  * });
  */
-export function useSearchLogAddedSubscription(baseOptions: Apollo.SubscriptionHookOptions<SearchLogAddedSubscription, SearchLogAddedSubscriptionVariables> & ({ variables: SearchLogAddedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<SearchLogAddedSubscription, SearchLogAddedSubscriptionVariables>(SearchLogAddedDocument, options);
-      }
+export function useSearchLogAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<SearchLogAddedSubscription, SearchLogAddedSubscriptionVariables> &
+        ({ variables: SearchLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<SearchLogAddedSubscription, SearchLogAddedSubscriptionVariables>(
+        SearchLogAddedDocument,
+        options,
+    );
+}
 export type SearchLogAddedSubscriptionHookResult = ReturnType<typeof useSearchLogAddedSubscription>;
 export type SearchLogAddedSubscriptionResult = Apollo.SubscriptionResult<SearchLogAddedSubscription>;
 export const VectorStoreLogAddedDocument = gql`
     subscription vectorStoreLogAdded($flowId: ID!) {
-  vectorStoreLogAdded(flowId: $flowId) {
-    ...vectorStoreLogFragment
-  }
-}
-    ${VectorStoreLogFragmentFragmentDoc}`;
+        vectorStoreLogAdded(flowId: $flowId) {
+            ...vectorStoreLogFragment
+        }
+    }
+    ${VectorStoreLogFragmentFragmentDoc}
+`;
 
 /**
  * __useVectorStoreLogAddedSubscription__
@@ -3013,20 +3405,30 @@ export const VectorStoreLogAddedDocument = gql`
  *   },
  * });
  */
-export function useVectorStoreLogAddedSubscription(baseOptions: Apollo.SubscriptionHookOptions<VectorStoreLogAddedSubscription, VectorStoreLogAddedSubscriptionVariables> & ({ variables: VectorStoreLogAddedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<VectorStoreLogAddedSubscription, VectorStoreLogAddedSubscriptionVariables>(VectorStoreLogAddedDocument, options);
-      }
+export function useVectorStoreLogAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<
+        VectorStoreLogAddedSubscription,
+        VectorStoreLogAddedSubscriptionVariables
+    > &
+        ({ variables: VectorStoreLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<VectorStoreLogAddedSubscription, VectorStoreLogAddedSubscriptionVariables>(
+        VectorStoreLogAddedDocument,
+        options,
+    );
+}
 export type VectorStoreLogAddedSubscriptionHookResult = ReturnType<typeof useVectorStoreLogAddedSubscription>;
 export type VectorStoreLogAddedSubscriptionResult = Apollo.SubscriptionResult<VectorStoreLogAddedSubscription>;
 export const AssistantCreatedDocument = gql`
     subscription assistantCreated($flowId: ID!) {
-  assistantCreated(flowId: $flowId) {
-    ...assistantFragment
-  }
-}
+        assistantCreated(flowId: $flowId) {
+            ...assistantFragment
+        }
+    }
     ${AssistantFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}`;
+    ${ProviderFragmentFragmentDoc}
+`;
 
 /**
  * __useAssistantCreatedSubscription__
@@ -3044,20 +3446,27 @@ ${ProviderFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useAssistantCreatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<AssistantCreatedSubscription, AssistantCreatedSubscriptionVariables> & ({ variables: AssistantCreatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<AssistantCreatedSubscription, AssistantCreatedSubscriptionVariables>(AssistantCreatedDocument, options);
-      }
+export function useAssistantCreatedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<AssistantCreatedSubscription, AssistantCreatedSubscriptionVariables> &
+        ({ variables: AssistantCreatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<AssistantCreatedSubscription, AssistantCreatedSubscriptionVariables>(
+        AssistantCreatedDocument,
+        options,
+    );
+}
 export type AssistantCreatedSubscriptionHookResult = ReturnType<typeof useAssistantCreatedSubscription>;
 export type AssistantCreatedSubscriptionResult = Apollo.SubscriptionResult<AssistantCreatedSubscription>;
 export const AssistantUpdatedDocument = gql`
     subscription assistantUpdated($flowId: ID!) {
-  assistantUpdated(flowId: $flowId) {
-    ...assistantFragment
-  }
-}
+        assistantUpdated(flowId: $flowId) {
+            ...assistantFragment
+        }
+    }
     ${AssistantFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}`;
+    ${ProviderFragmentFragmentDoc}
+`;
 
 /**
  * __useAssistantUpdatedSubscription__
@@ -3075,20 +3484,27 @@ ${ProviderFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useAssistantUpdatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<AssistantUpdatedSubscription, AssistantUpdatedSubscriptionVariables> & ({ variables: AssistantUpdatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<AssistantUpdatedSubscription, AssistantUpdatedSubscriptionVariables>(AssistantUpdatedDocument, options);
-      }
+export function useAssistantUpdatedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<AssistantUpdatedSubscription, AssistantUpdatedSubscriptionVariables> &
+        ({ variables: AssistantUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<AssistantUpdatedSubscription, AssistantUpdatedSubscriptionVariables>(
+        AssistantUpdatedDocument,
+        options,
+    );
+}
 export type AssistantUpdatedSubscriptionHookResult = ReturnType<typeof useAssistantUpdatedSubscription>;
 export type AssistantUpdatedSubscriptionResult = Apollo.SubscriptionResult<AssistantUpdatedSubscription>;
 export const AssistantDeletedDocument = gql`
     subscription assistantDeleted($flowId: ID!) {
-  assistantDeleted(flowId: $flowId) {
-    ...assistantFragment
-  }
-}
+        assistantDeleted(flowId: $flowId) {
+            ...assistantFragment
+        }
+    }
     ${AssistantFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}`;
+    ${ProviderFragmentFragmentDoc}
+`;
 
 /**
  * __useAssistantDeletedSubscription__
@@ -3106,19 +3522,26 @@ ${ProviderFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useAssistantDeletedSubscription(baseOptions: Apollo.SubscriptionHookOptions<AssistantDeletedSubscription, AssistantDeletedSubscriptionVariables> & ({ variables: AssistantDeletedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<AssistantDeletedSubscription, AssistantDeletedSubscriptionVariables>(AssistantDeletedDocument, options);
-      }
+export function useAssistantDeletedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<AssistantDeletedSubscription, AssistantDeletedSubscriptionVariables> &
+        ({ variables: AssistantDeletedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<AssistantDeletedSubscription, AssistantDeletedSubscriptionVariables>(
+        AssistantDeletedDocument,
+        options,
+    );
+}
 export type AssistantDeletedSubscriptionHookResult = ReturnType<typeof useAssistantDeletedSubscription>;
 export type AssistantDeletedSubscriptionResult = Apollo.SubscriptionResult<AssistantDeletedSubscription>;
 export const AssistantLogAddedDocument = gql`
     subscription assistantLogAdded($flowId: ID!) {
-  assistantLogAdded(flowId: $flowId) {
-    ...assistantLogFragment
-  }
-}
-    ${AssistantLogFragmentFragmentDoc}`;
+        assistantLogAdded(flowId: $flowId) {
+            ...assistantLogFragment
+        }
+    }
+    ${AssistantLogFragmentFragmentDoc}
+`;
 
 /**
  * __useAssistantLogAddedSubscription__
@@ -3136,19 +3559,26 @@ export const AssistantLogAddedDocument = gql`
  *   },
  * });
  */
-export function useAssistantLogAddedSubscription(baseOptions: Apollo.SubscriptionHookOptions<AssistantLogAddedSubscription, AssistantLogAddedSubscriptionVariables> & ({ variables: AssistantLogAddedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<AssistantLogAddedSubscription, AssistantLogAddedSubscriptionVariables>(AssistantLogAddedDocument, options);
-      }
+export function useAssistantLogAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<AssistantLogAddedSubscription, AssistantLogAddedSubscriptionVariables> &
+        ({ variables: AssistantLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<AssistantLogAddedSubscription, AssistantLogAddedSubscriptionVariables>(
+        AssistantLogAddedDocument,
+        options,
+    );
+}
 export type AssistantLogAddedSubscriptionHookResult = ReturnType<typeof useAssistantLogAddedSubscription>;
 export type AssistantLogAddedSubscriptionResult = Apollo.SubscriptionResult<AssistantLogAddedSubscription>;
 export const AssistantLogUpdatedDocument = gql`
     subscription assistantLogUpdated($flowId: ID!) {
-  assistantLogUpdated(flowId: $flowId) {
-    ...assistantLogFragment
-  }
-}
-    ${AssistantLogFragmentFragmentDoc}`;
+        assistantLogUpdated(flowId: $flowId) {
+            ...assistantLogFragment
+        }
+    }
+    ${AssistantLogFragmentFragmentDoc}
+`;
 
 /**
  * __useAssistantLogUpdatedSubscription__
@@ -3166,30 +3596,40 @@ export const AssistantLogUpdatedDocument = gql`
  *   },
  * });
  */
-export function useAssistantLogUpdatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<AssistantLogUpdatedSubscription, AssistantLogUpdatedSubscriptionVariables> & ({ variables: AssistantLogUpdatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<AssistantLogUpdatedSubscription, AssistantLogUpdatedSubscriptionVariables>(AssistantLogUpdatedDocument, options);
-      }
+export function useAssistantLogUpdatedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<
+        AssistantLogUpdatedSubscription,
+        AssistantLogUpdatedSubscriptionVariables
+    > &
+        ({ variables: AssistantLogUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<AssistantLogUpdatedSubscription, AssistantLogUpdatedSubscriptionVariables>(
+        AssistantLogUpdatedDocument,
+        options,
+    );
+}
 export type AssistantLogUpdatedSubscriptionHookResult = ReturnType<typeof useAssistantLogUpdatedSubscription>;
 export type AssistantLogUpdatedSubscriptionResult = Apollo.SubscriptionResult<AssistantLogUpdatedSubscription>;
 export const FlowCreatedDocument = gql`
     subscription flowCreated {
-  flowCreated {
-    id
-    title
-    status
-    terminals {
-      ...terminalFragment
+        flowCreated {
+            id
+            title
+            status
+            terminals {
+                ...terminalFragment
+            }
+            provider {
+                ...providerFragment
+            }
+            createdAt
+            updatedAt
+        }
     }
-    provider {
-      ...providerFragment
-    }
-    createdAt
-    updatedAt
-  }
-}
     ${TerminalFragmentFragmentDoc}
-${ProviderFragmentFragmentDoc}`;
+    ${ProviderFragmentFragmentDoc}
+`;
 
 /**
  * __useFlowCreatedSubscription__
@@ -3206,21 +3646,26 @@ ${ProviderFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useFlowCreatedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<FlowCreatedSubscription, FlowCreatedSubscriptionVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<FlowCreatedSubscription, FlowCreatedSubscriptionVariables>(FlowCreatedDocument, options);
-      }
+export function useFlowCreatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<FlowCreatedSubscription, FlowCreatedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowCreatedSubscription, FlowCreatedSubscriptionVariables>(
+        FlowCreatedDocument,
+        options,
+    );
+}
 export type FlowCreatedSubscriptionHookResult = ReturnType<typeof useFlowCreatedSubscription>;
 export type FlowCreatedSubscriptionResult = Apollo.SubscriptionResult<FlowCreatedSubscription>;
 export const FlowDeletedDocument = gql`
     subscription flowDeleted {
-  flowDeleted {
-    id
-    status
-    updatedAt
-  }
-}
-    `;
+        flowDeleted {
+            id
+            status
+            updatedAt
+        }
+    }
+`;
 
 /**
  * __useFlowDeletedSubscription__
@@ -3237,25 +3682,31 @@ export const FlowDeletedDocument = gql`
  *   },
  * });
  */
-export function useFlowDeletedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<FlowDeletedSubscription, FlowDeletedSubscriptionVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<FlowDeletedSubscription, FlowDeletedSubscriptionVariables>(FlowDeletedDocument, options);
-      }
+export function useFlowDeletedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<FlowDeletedSubscription, FlowDeletedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowDeletedSubscription, FlowDeletedSubscriptionVariables>(
+        FlowDeletedDocument,
+        options,
+    );
+}
 export type FlowDeletedSubscriptionHookResult = ReturnType<typeof useFlowDeletedSubscription>;
 export type FlowDeletedSubscriptionResult = Apollo.SubscriptionResult<FlowDeletedSubscription>;
 export const FlowUpdatedDocument = gql`
     subscription flowUpdated {
-  flowUpdated {
-    id
-    title
-    status
-    terminals {
-      ...terminalFragment
+        flowUpdated {
+            id
+            title
+            status
+            terminals {
+                ...terminalFragment
+            }
+            updatedAt
+        }
     }
-    updatedAt
-  }
-}
-    ${TerminalFragmentFragmentDoc}`;
+    ${TerminalFragmentFragmentDoc}
+`;
 
 /**
  * __useFlowUpdatedSubscription__
@@ -3272,20 +3723,26 @@ export const FlowUpdatedDocument = gql`
  *   },
  * });
  */
-export function useFlowUpdatedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<FlowUpdatedSubscription, FlowUpdatedSubscriptionVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<FlowUpdatedSubscription, FlowUpdatedSubscriptionVariables>(FlowUpdatedDocument, options);
-      }
+export function useFlowUpdatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<FlowUpdatedSubscription, FlowUpdatedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowUpdatedSubscription, FlowUpdatedSubscriptionVariables>(
+        FlowUpdatedDocument,
+        options,
+    );
+}
 export type FlowUpdatedSubscriptionHookResult = ReturnType<typeof useFlowUpdatedSubscription>;
 export type FlowUpdatedSubscriptionResult = Apollo.SubscriptionResult<FlowUpdatedSubscription>;
 export const TaskCreatedDocument = gql`
     subscription taskCreated($flowId: ID!) {
-  taskCreated(flowId: $flowId) {
-    ...taskFragment
-  }
-}
+        taskCreated(flowId: $flowId) {
+            ...taskFragment
+        }
+    }
     ${TaskFragmentFragmentDoc}
-${SubtaskFragmentFragmentDoc}`;
+    ${SubtaskFragmentFragmentDoc}
+`;
 
 /**
  * __useTaskCreatedSubscription__
@@ -3303,25 +3760,32 @@ ${SubtaskFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useTaskCreatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<TaskCreatedSubscription, TaskCreatedSubscriptionVariables> & ({ variables: TaskCreatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<TaskCreatedSubscription, TaskCreatedSubscriptionVariables>(TaskCreatedDocument, options);
-      }
+export function useTaskCreatedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<TaskCreatedSubscription, TaskCreatedSubscriptionVariables> &
+        ({ variables: TaskCreatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<TaskCreatedSubscription, TaskCreatedSubscriptionVariables>(
+        TaskCreatedDocument,
+        options,
+    );
+}
 export type TaskCreatedSubscriptionHookResult = ReturnType<typeof useTaskCreatedSubscription>;
 export type TaskCreatedSubscriptionResult = Apollo.SubscriptionResult<TaskCreatedSubscription>;
 export const TaskUpdatedDocument = gql`
     subscription taskUpdated($flowId: ID!) {
-  taskUpdated(flowId: $flowId) {
-    id
-    status
-    result
-    subtasks {
-      ...subtaskFragment
+        taskUpdated(flowId: $flowId) {
+            id
+            status
+            result
+            subtasks {
+                ...subtaskFragment
+            }
+            updatedAt
+        }
     }
-    updatedAt
-  }
-}
-    ${SubtaskFragmentFragmentDoc}`;
+    ${SubtaskFragmentFragmentDoc}
+`;
 
 /**
  * __useTaskUpdatedSubscription__
@@ -3339,21 +3803,28 @@ export const TaskUpdatedDocument = gql`
  *   },
  * });
  */
-export function useTaskUpdatedSubscription(baseOptions: Apollo.SubscriptionHookOptions<TaskUpdatedSubscription, TaskUpdatedSubscriptionVariables> & ({ variables: TaskUpdatedSubscriptionVariables; skip?: boolean; } | { skip: boolean; }) ) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<TaskUpdatedSubscription, TaskUpdatedSubscriptionVariables>(TaskUpdatedDocument, options);
-      }
+export function useTaskUpdatedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<TaskUpdatedSubscription, TaskUpdatedSubscriptionVariables> &
+        ({ variables: TaskUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<TaskUpdatedSubscription, TaskUpdatedSubscriptionVariables>(
+        TaskUpdatedDocument,
+        options,
+    );
+}
 export type TaskUpdatedSubscriptionHookResult = ReturnType<typeof useTaskUpdatedSubscription>;
 export type TaskUpdatedSubscriptionResult = Apollo.SubscriptionResult<TaskUpdatedSubscription>;
 export const ProviderCreatedDocument = gql`
     subscription providerCreated {
-  providerCreated {
-    ...providerConfigFragment
-  }
-}
+        providerCreated {
+            ...providerConfigFragment
+        }
+    }
     ${ProviderConfigFragmentFragmentDoc}
-${AgentsConfigFragmentFragmentDoc}
-${AgentConfigFragmentFragmentDoc}`;
+    ${AgentsConfigFragmentFragmentDoc}
+    ${AgentConfigFragmentFragmentDoc}
+`;
 
 /**
  * __useProviderCreatedSubscription__
@@ -3370,21 +3841,27 @@ ${AgentConfigFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useProviderCreatedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<ProviderCreatedSubscription, ProviderCreatedSubscriptionVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<ProviderCreatedSubscription, ProviderCreatedSubscriptionVariables>(ProviderCreatedDocument, options);
-      }
+export function useProviderCreatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ProviderCreatedSubscription, ProviderCreatedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ProviderCreatedSubscription, ProviderCreatedSubscriptionVariables>(
+        ProviderCreatedDocument,
+        options,
+    );
+}
 export type ProviderCreatedSubscriptionHookResult = ReturnType<typeof useProviderCreatedSubscription>;
 export type ProviderCreatedSubscriptionResult = Apollo.SubscriptionResult<ProviderCreatedSubscription>;
 export const ProviderUpdatedDocument = gql`
     subscription providerUpdated {
-  providerUpdated {
-    ...providerConfigFragment
-  }
-}
+        providerUpdated {
+            ...providerConfigFragment
+        }
+    }
     ${ProviderConfigFragmentFragmentDoc}
-${AgentsConfigFragmentFragmentDoc}
-${AgentConfigFragmentFragmentDoc}`;
+    ${AgentsConfigFragmentFragmentDoc}
+    ${AgentConfigFragmentFragmentDoc}
+`;
 
 /**
  * __useProviderUpdatedSubscription__
@@ -3401,21 +3878,27 @@ ${AgentConfigFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useProviderUpdatedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<ProviderUpdatedSubscription, ProviderUpdatedSubscriptionVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<ProviderUpdatedSubscription, ProviderUpdatedSubscriptionVariables>(ProviderUpdatedDocument, options);
-      }
+export function useProviderUpdatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ProviderUpdatedSubscription, ProviderUpdatedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ProviderUpdatedSubscription, ProviderUpdatedSubscriptionVariables>(
+        ProviderUpdatedDocument,
+        options,
+    );
+}
 export type ProviderUpdatedSubscriptionHookResult = ReturnType<typeof useProviderUpdatedSubscription>;
 export type ProviderUpdatedSubscriptionResult = Apollo.SubscriptionResult<ProviderUpdatedSubscription>;
 export const ProviderDeletedDocument = gql`
     subscription providerDeleted {
-  providerDeleted {
-    ...providerConfigFragment
-  }
-}
+        providerDeleted {
+            ...providerConfigFragment
+        }
+    }
     ${ProviderConfigFragmentFragmentDoc}
-${AgentsConfigFragmentFragmentDoc}
-${AgentConfigFragmentFragmentDoc}`;
+    ${AgentsConfigFragmentFragmentDoc}
+    ${AgentConfigFragmentFragmentDoc}
+`;
 
 /**
  * __useProviderDeletedSubscription__
@@ -3432,9 +3915,14 @@ ${AgentConfigFragmentFragmentDoc}`;
  *   },
  * });
  */
-export function useProviderDeletedSubscription(baseOptions?: Apollo.SubscriptionHookOptions<ProviderDeletedSubscription, ProviderDeletedSubscriptionVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useSubscription<ProviderDeletedSubscription, ProviderDeletedSubscriptionVariables>(ProviderDeletedDocument, options);
-      }
+export function useProviderDeletedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ProviderDeletedSubscription, ProviderDeletedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ProviderDeletedSubscription, ProviderDeletedSubscriptionVariables>(
+        ProviderDeletedDocument,
+        options,
+    );
+}
 export type ProviderDeletedSubscriptionHookResult = ReturnType<typeof useProviderDeletedSubscription>;
 export type ProviderDeletedSubscriptionResult = Apollo.SubscriptionResult<ProviderDeletedSubscription>;
