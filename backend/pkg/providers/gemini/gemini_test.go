@@ -95,12 +95,14 @@ func TestModelsLoading(t *testing.T) {
 			continue
 		}
 
-		if model.Price.Input <= 0 {
-			t.Errorf("Model %s should have positive input price", model.Name)
-		}
+		if model.Price.Input != 0 || model.Price.Output != 0 { // exclude totally free models
+			if model.Price.Input <= 0 {
+				t.Errorf("Model %s should have positive input price", model.Name)
+			}
 
-		if model.Price.Output <= 0 {
-			t.Errorf("Model %s should have positive output price", model.Name)
+			if model.Price.Output <= 0 {
+				t.Errorf("Model %s should have positive output price", model.Name)
+			}
 		}
 	}
 }
@@ -150,8 +152,8 @@ func TestGetUsage(t *testing.T) {
 
 	// Test usage parsing with Google AI format
 	usageInfo := map[string]any{
-		"input_tokens":  100,
-		"output_tokens": 50,
+		"input_tokens":  int32(100),
+		"output_tokens": int32(50),
 	}
 
 	inputTokens, outputTokens := prov.GetUsage(usageInfo)

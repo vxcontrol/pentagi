@@ -62,13 +62,13 @@ flowchart TB
     classDef person fill:#08427B,stroke:#073B6F,color:#fff
     classDef system fill:#1168BD,stroke:#0B4884,color:#fff
     classDef external fill:#666666,stroke:#0B4884,color:#fff
-    
+
     pentester["👤 Security Engineer
     (User of the system)"]
-    
+
     pentagi["✨ PentAGI
     (Autonomous penetration testing system)"]
-    
+
     target["🎯 target-system
     (System under test)"]
     llm["🧠 llm-provider
@@ -79,7 +79,7 @@ flowchart TB
     (LLM Observability Dashboard)"]
     grafana["📈 grafana
     (System Monitoring Dashboard)"]
-    
+
     pentester --> |Uses HTTPS| pentagi
     pentester --> |Monitors AI HTTPS| langfuse
     pentester --> |Monitors System HTTPS| grafana
@@ -88,11 +88,11 @@ flowchart TB
     pentagi --> |Searches HTTPS| search
     pentagi --> |Reports HTTPS| langfuse
     pentagi --> |Reports HTTPS| grafana
-    
+
     class pentester person
     class pentagi system
     class target,llm,search,langfuse,grafana external
-    
+
     linkStyle default stroke:#ffffff,color:#ffffff
 ```
 
@@ -135,16 +135,16 @@ graph TB
     MQ --> |Tasks| Agent
     Agent --> |Commands| Tools
     Agent --> |Queries| DB
-    
+
     API --> |Telemetry| OTEL
     OTEL --> |Metrics| VictoriaMetrics
     OTEL --> |Traces| Jaeger
     OTEL --> |Logs| Loki
-    
+
     Grafana --> |Query| VictoriaMetrics
     Grafana --> |Query| Jaeger
     Grafana --> |Query| Loki
-    
+
     API --> |Analytics| Langfuse
     Langfuse --> |Store| ClickHouse
     Langfuse --> |Cache| Redis
@@ -154,7 +154,7 @@ graph TB
     classDef monitoring fill:#bbf,stroke:#333,stroke-width:2px,color:#000
     classDef analytics fill:#bfb,stroke:#333,stroke-width:2px,color:#000
     classDef tools fill:#fbb,stroke:#333,stroke-width:2px,color:#000
-    
+
     class UI,API,DB,MQ,Agent core
     class Grafana,VictoriaMetrics,Jaeger,Loki,OTEL monitoring
     class Langfuse,ClickHouse,Redis,MinIO analytics
@@ -173,7 +173,7 @@ erDiagram
     SubTask ||--o{ Action : contains
     Action ||--o{ Artifact : produces
     Action ||--o{ Memory : stores
-    
+
     Flow {
         string id PK
         string name "Flow name"
@@ -183,7 +183,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     Task {
         string id PK
         string flow_id FK
@@ -194,7 +194,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     SubTask {
         string id PK
         string task_id FK
@@ -206,7 +206,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     Action {
         string id PK
         string subtask_id FK
@@ -249,13 +249,13 @@ sequenceDiagram
     participant E as Executor
     participant VS as Vector Store
     participant KB as Knowledge Base
-    
+
     Note over O,KB: Flow Initialization
     O->>VS: Query similar tasks
     VS-->>O: Return experiences
     O->>KB: Load relevant knowledge
     KB-->>O: Return context
-    
+
     Note over O,R: Research Phase
     O->>R: Analyze target
     R->>VS: Search similar cases
@@ -264,7 +264,7 @@ sequenceDiagram
     KB-->>R: Return known issues
     R->>VS: Store findings
     R-->>O: Research results
-    
+
     Note over O,D: Planning Phase
     O->>D: Plan attack
     D->>VS: Query exploits
@@ -272,7 +272,7 @@ sequenceDiagram
     D->>KB: Load tools info
     KB-->>D: Return capabilities
     D-->>O: Attack plan
-    
+
     Note over O,E: Execution Phase
     O->>E: Execute plan
     E->>KB: Load tool guides
@@ -293,39 +293,39 @@ graph TB
         KB[Knowledge Base<br/>Domain Expertise]
         Tools[Tools Knowledge<br/>Usage Patterns]
     end
-    
+
     subgraph "Working Memory"
         Context[Current Context<br/>Task State]
         Goals[Active Goals<br/>Objectives]
         State[System State<br/>Resources]
     end
-    
+
     subgraph "Episodic Memory"
         Actions[Past Actions<br/>Commands History]
         Results[Action Results<br/>Outcomes]
         Patterns[Success Patterns<br/>Best Practices]
     end
-    
+
     Context --> |Query| VS
     VS --> |Retrieve| Context
-    
+
     Goals --> |Consult| KB
     KB --> |Guide| Goals
-    
+
     State --> |Record| Actions
     Actions --> |Learn| Patterns
     Patterns --> |Store| VS
-    
+
     Tools --> |Inform| State
     Results --> |Update| Tools
-    
+
     VS --> |Enhance| KB
     KB --> |Index| VS
 
     classDef ltm fill:#f9f,stroke:#333,stroke-width:2px,color:#000
     classDef wm fill:#bbf,stroke:#333,stroke-width:2px,color:#000
     classDef em fill:#bfb,stroke:#333,stroke-width:2px,color:#000
-    
+
     class VS,KB,Tools ltm
     class Context,Goals,State wm
     class Actions,Results,Patterns em
@@ -351,11 +351,11 @@ flowchart TD
     I --> J{Is New Chain Smaller?}
     J -->|Yes| K[Return Optimized Chain]
     J -->|No| C
-    
+
     classDef process fill:#bbf,stroke:#333,stroke-width:2px,color:#000
     classDef decision fill:#bfb,stroke:#333,stroke-width:2px,color:#000
     classDef output fill:#fbb,stroke:#333,stroke-width:2px,color:#000
-    
+
     class A,D,E,F,G,H,I process
     class B,J decision
     class C,K output
@@ -540,11 +540,11 @@ Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default
 
 > [!NOTE]
 > If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml` and `docker-compose-observability.yml` to use Langfuse and Observability services.
-> 
+>
 > You have to set at least one Language Model provider (OpenAI, Anthropic, Gemini, AWS Bedrock, or Ollama) to use PentAGI. AWS Bedrock provides enterprise-grade access to multiple foundation models from leading AI companies, while Ollama provides zero-cost local inference if you have sufficient computational resources. Additional API keys for search engines are optional but recommended for better results.
-> 
+>
 > `LLM_SERVER_*` environment variables are experimental feature and will be changed in the future. Right now you can use them to specify custom LLM server URL and one model for all agent types.
-> 
+>
 > `PROXY_URL` is a global proxy URL for all LLM providers and external search systems. You can use it for isolation from external networks.
 >
 > The `docker-compose.yml` file runs the PentAGI service as root user because it needs access to docker.sock for container management. If you're using TCP/IP network connection to Docker instead of socket file, you can remove root privileges and use the default `pentagi` user for better security.
@@ -603,7 +603,7 @@ OLLAMA_SERVER_URL=http://ollama-server:11434
 OLLAMA_SERVER_CONFIG_PATH=/path/to/ollama-config.yml
 
 # Default configuration file inside the docker container (just for example)
-OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama.provider.yml
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
 ```
 
 The system automatically discovers available models from your Ollama server and provides zero-cost inference for penetration testing workflows.
@@ -766,7 +766,7 @@ The system automatically selects appropriate Bedrock models based on task comple
 >
 > PentAGI uses the **Amazon Bedrock Converse API** for model interactions, which requires models to support the following features:
 > - ✅ **Converse** - Basic conversation API support
-> - ✅ **ConverseStream** - Streaming response support  
+> - ✅ **ConverseStream** - Streaming response support
 > - ✅ **Tool use** - Function calling capabilities for penetration testing tools
 > - ✅ **Streaming tool use** - Real-time tool execution feedback
 >
@@ -856,9 +856,9 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 
 > [!NOTE]
 > If you want to use Observability stack with Langfuse, you need to enable integration in `.env` file to set `LANGFUSE_OTEL_EXPORTER_OTLP_ENDPOINT` to `http://otelcol:4318`.
-> 
+>
 > And you need to run both stacks `docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d` to have all services running.
-> 
+>
 > Also you can register aliases for these commands in your shell to run it faster:
 >
 > ```bash
@@ -924,19 +924,19 @@ DOCKER_DEFAULT_IMAGE_FOR_PENTEST=mycompany/pentest-tools:v2.0
 
 Run once `cd backend && go mod download` to install needed packages.
 
-For generating swagger files have to run 
+For generating swagger files have to run
 
 ```bash
 swag init -g ../../pkg/server/router.go -o pkg/server/docs/ --parseDependency --parseInternal --parseDepth 2 -d cmd/pentagi
 ```
 
-before installing `swag` package via 
+before installing `swag` package via
 
 ```bash
 go install github.com/swaggo/swag/cmd/swag@v1.8.7
 ```
 
-For generating graphql resolver files have to run 
+For generating graphql resolver files have to run
 
 ```bash
 go run github.com/99designs/gqlgen --config ./gqlgen/gqlgen.yml
@@ -1055,7 +1055,7 @@ go run cmd/ctester/*.go -config ../examples/configs/openrouter.provider.yml -ver
 # Generate a report file
 go run cmd/ctester/*.go -config ../examples/configs/deepinfra.provider.yml -report ../test-report.md
 
-# Test specific agent types only 
+# Test specific agent types only
 go run cmd/ctester/*.go -agents simple,simple_json,primary_agent -verbose
 
 # Test specific test groups only
@@ -1131,7 +1131,7 @@ docker run --rm \
 # Test with Ollama configuration (local inference)
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama.provider.yml
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-llama318b.provider.yml
 ```
 
 To use these configurations, your `.env` file only needs to contain:
@@ -1162,8 +1162,8 @@ BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key    # AWS secret access key
 BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint
 
 # For Ollama (local inference)
-OLLAMA_SERVER_URL=http://localhost:11434         # Your Ollama server URL
-OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama.provider.yml
+OLLAMA_SERVER_URL=http://localhost:11434         # Your Ollama server URL (only for test run)
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
 ```
 
 #### Using OpenAI with Unverified Organizations
@@ -1246,7 +1246,7 @@ Agents are tested in the following deterministic order:
 ### Available Test Groups
 
 - **basic** - Fundamental completion and prompt response tests
-- **advanced** - Complex reasoning and function calling tests  
+- **advanced** - Complex reasoning and function calling tests
 - **json** - JSON format validation and structure tests (specifically designed for `simple_json` agent)
 - **knowledge** - Domain-specific cybersecurity and penetration testing knowledge tests
 
@@ -1405,7 +1405,7 @@ Available search parameters:
 - `-query STRING`: Search query text (required)
 - `-doc_type STRING`: Filter by document type (answer, memory, guide, code)
 - `-flow_id NUMBER`: Filter by flow ID (positive number)
-- `-answer_type STRING`: Filter by answer type (guide, vulnerability, code, tool, other) 
+- `-answer_type STRING`: Filter by answer type (guide, vulnerability, code, tool, other)
 - `-guide_type STRING`: Filter by guide type (install, configure, use, pentest, development, other)
 - `-limit NUMBER`: Maximum number of results (default: 3)
 - `-threshold NUMBER`: Similarity threshold (0.0-1.0, default: 0.7)

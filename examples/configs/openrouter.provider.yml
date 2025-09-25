@@ -20,7 +20,7 @@ simple_json:
     output: 1.6
 
 primary_agent:
-  model: "openai/o4-mini" # x-ai/grok-3-mini-beta
+  model: "openai/o4-mini" # x-ai/grok-3-mini
   n: 1
   max_tokens: 6000
   reasoning:
@@ -30,9 +30,7 @@ primary_agent:
     output: 4.4
 
 assistant:
-  model: "x-ai/grok-3-beta" # x-ai/grok-3-mini-beta, google/gemini-2.5-flash-preview:thinking
-  temperature: 0.6
-  top_p: 0.95
+  model: "x-ai/grok-4" # x-ai/grok-3-mini, google/gemini-2.5-flash, openai/o4-mini
   n: 1
   max_tokens: 6000
   price:
@@ -40,7 +38,7 @@ assistant:
     output: 15
 
 generator:
-  model: "anthropic/claude-3.7-sonnet:thinking"
+  model: "anthropic/claude-sonnet-4"
   n: 1
   max_tokens: 12000
   reasoning:
@@ -50,17 +48,17 @@ generator:
     output: 15
 
 refiner:
-  model: "google/gemini-2.5-flash-preview:thinking"
+  model: "google/gemini-2.5-pro"
   n: 1
   max_tokens: 10000
   reasoning:
-    max_tokens: 2000
+    effort: medium
   price:
-    input: 0.15
-    output: 3.5
+    input: 1.25
+    output: 10
 
 adviser:
-  model: "google/gemini-2.5-pro-preview"
+  model: "google/gemini-2.5-pro"
   n: 1
   max_tokens: 6000
   reasoning:
@@ -80,7 +78,7 @@ reflector:
     output: 1.6
 
 searcher:
-  model: "x-ai/grok-3-mini-beta"
+  model: "x-ai/grok-3-mini"
   n: 1
   max_tokens: 4000
   reasoning:
@@ -100,7 +98,7 @@ enricher:
     output: 1.6
 
 coder:
-  model: "anthropic/claude-3.7-sonnet:thinking"
+  model: "anthropic/claude-sonnet-4"
   n: 1
   max_tokens: 8000
   reasoning:
@@ -110,21 +108,19 @@ coder:
     output: 15
 
 installer:
-  model: "google/gemini-2.5-flash-preview:thinking"
+  model: "google/gemini-2.5-flash"
   n: 1
   max_tokens: 4000
   reasoning:
     max_tokens: 1024
   price:
-    input: 0.15
-    output: 3.5
+    input: 0.3
+    output: 2.5
 
 pentester:
-  model: "x-ai/grok-3-mini-beta"
+  model: "moonshotai/kimi-k2"
   n: 1
   max_tokens: 6000
-  reasoning:
-    max_tokens: 2048
   price:
-    input: 0.3
-    output: 0.5
+    input: 0.14
+    output: 2.49

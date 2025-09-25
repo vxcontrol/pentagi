@@ -19,7 +19,7 @@ collector:
       key: ""
   http-server:
     host-port: :14268
-  num-workers: 100 
+  num-workers: 100
   queue-size: 5000
   queue-size-memory: "0"
   tags: ""

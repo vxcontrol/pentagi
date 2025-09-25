@@ -22,26 +22,6 @@ func TestJSONTestCase(t *testing.T) {
     name: "John Doe"
     age: 30
   streaming: false
-
-- id: "test_array"
-  name: "JSON Array Test"
-  type: "json"
-  group: "json"
-  messages:
-    - role: "user"
-      content: "Create JSON array"
-  is_array: true
-  streaming: false
-
-- id: "test_failure"
-  name: "JSON Failure Test"
-  type: "json"
-  group: "json"
-  messages:
-    - role: "user"
-      content: "Return invalid JSON"
-  expect_failure: true
-  streaming: false
 `
 
 	var definitions []TestDefinition
@@ -50,8 +30,8 @@ func TestJSONTestCase(t *testing.T) {
 		t.Fatalf("Failed to parse YAML: %v", err)
 	}
 
-	if len(definitions) != 3 {
-		t.Fatalf("Expected 3 definitions, got %d", len(definitions))
+	if len(definitions) != 1 {
+		t.Fatalf("Expected 1 definition, got %d", len(definitions))
 	}
 
 	// test JSON object case
@@ -84,70 +64,50 @@ func TestJSONTestCase(t *testing.T) {
 	if result.Success {
 		t.Errorf("Expected failure for missing required field, got success")
 	}
-
-	// test JSON array case
-	arrayDef := definitions[1]
-	testCase, err = newJSONTestCase(arrayDef)
-	if err != nil {
-		t.Fatalf("Failed to create JSON array test case: %v", err)
-	}
-
-	// test execution with valid array
-	validArray := `[{"name": "red", "hex": "#FF0000"}, {"name": "blue", "hex": "#0000FF"}]`
-	result = testCase.Execute(validArray, time.Millisecond*100)
-	if !result.Success {
-		t.Errorf("Expected success for valid JSON array, got failure: %v", result.Error)
-	}
-
-	// test execution with invalid array
-	invalidArray := `{"not": "array"}`
-	result = testCase.Execute(invalidArray, time.Millisecond*100)
-	if result.Success {
-		t.Errorf("Expected failure for invalid JSON array, got success")
-	}
-
-	// test failure case
-	failureDef := definitions[2]
-	testCase, err = newJSONTestCase(failureDef)
-	if err != nil {
-		t.Fatalf("Failed to create JSON failure test case: %v", err)
-	}
-
-	// test execution with invalid JSON (should succeed as we expect failure)
-	invalidJSON = `{invalid json`
-	result = testCase.Execute(invalidJSON, time.Millisecond*100)
-	if !result.Success {
-		t.Errorf("Expected success for expected failure case, got failure: %v", result.Error)
-	}
-
-	// test execution with valid JSON (should fail as we expect failure)
-	validJSON = `{"valid": "json"}`
-	result = testCase.Execute(validJSON, time.Millisecond*100)
-	if result.Success {
-		t.Errorf("Expected failure when valid JSON provided for expect_failure test, got success")
-	}
 }
 
-func TestJSONValuesEqual(t *testing.T) {
+func TestJSONValueValidation(t *testing.T) {
 	tests := []struct {
-		actual   interface{}
-		expected interface{}
+		name     string
+		actual   any
+		expected any
 		want     bool
 	}{
-		{"test", "test", true},
-		{123, 123, true},
-		{123.0, 123, true}, // float64 to int conversion
-		{123, 123.0, true}, // int to float64 conversion
-		{true, true, true},
-		{"test", "other", false},
-		{123, 456, false},
-		{true, false, false},
+		// Basic exact matches
+		{"string_exact", "test", "test", true},
+		{"int_exact", 123, 123, true},
+		{"bool_exact", true, true, true},
+
+		// JSON unmarshaling type conversions
+		{"float_to_int", 123.0, 123, true},     // JSON unmarshaling produces float64
+		{"int_to_float", 123, 123.0, true},     // int to float64 conversion
+		{"string_int", "123", 123, true},       // string to int conversion
+		{"string_float", "123.5", 123.5, true}, // string to float conversion
+		{"string_bool", "true", true, true},    // string to bool conversion
+
+		// Case insensitive string matching
+		{"string_case", "TEST", "test", true},
+		{"string_case_mixed", "Test", "TEST", true},
+
+		// Failures
+		{"string_different", "test", "other", false},
+		{"int_different", 123, 456, false},
+		{"bool_different", true, false, false},
+		{"type_mismatch", "test", 123, false},
+
+		// JSON-specific scenarios
+		{"json_string_number", "42", 42, true},
+		{"json_string_float", "3.14", 3.14, true},
+		{"json_bool_string", "false", false, true},
 	}
 
 	for _, tt := range tests {
-		got := jsonValuesEqual(tt.actual, tt.expected)
-		if got != tt.want {
-			t.Errorf("jsonValuesEqual(%v, %v) = %v, want %v", tt.actual, tt.expected, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateArgumentValue("", tt.actual, tt.expected)
+			if succeed := err == nil; succeed != tt.want {
+				t.Errorf("validateArgumentValue(%v, %v) = %v, want %v, error: %v",
+					tt.actual, tt.expected, succeed, tt.want, err)
+			}
+		})
 	}
 }

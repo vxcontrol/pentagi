@@ -3,7 +3,7 @@
         "-checks=\"all,-ST1005\""
     ],
     "go.testEnvVars": {
-      "WORKSPACE_DIR": "${workspaceFolder}/backend"
+      "INSTALLER_LOG_FILE": "${workspaceFolder}/build/log.json"
     },
     "go.testExplorer.enable": true,
     "search.useIgnoreFiles": true,

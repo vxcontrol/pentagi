@@ -160,7 +160,11 @@ func testWorker(ctx context.Context, requests <-chan testRequest, responses chan
 				if !result.Success {
 					status = "FAIL"
 				}
-				log.Printf("[%s] %s - %s (%v)", status, req.agentType, result.Name, result.Latency)
+				var errorStr string
+				if result.Error != nil {
+					errorStr = fmt.Sprintf("\n%v", result.Error)
+				}
+				log.Printf("[%s] %s - %s (%v)%s", status, req.agentType, result.Name, result.Latency, errorStr)
 			}
 		}
 

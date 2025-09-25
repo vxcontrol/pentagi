@@ -294,12 +294,12 @@ CREATE INDEX screenshots_flow_id_idx ON screenshots(flow_id);
 CREATE INDEX screenshots_name_idx ON screenshots(name);
 CREATE INDEX screenshots_url_idx ON screenshots(url);
 
-CREATE OR REPLACE FUNCTION update_modified_column()   
+CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS
 $$
 BEGIN
     NEW.updated_at = now();
-    RETURN NEW;   
+    RETURN NEW;
 END;
 $$
 LANGUAGE plpgsql;

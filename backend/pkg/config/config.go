@@ -41,8 +41,8 @@ type Config struct {
 	CookieSigningSalt string `env:"COOKIE_SIGNING_SALT"`
 
 	// Scraper (browser)
-	ScraperPublicURL  string `env:"SCRAPER_PUBLIC_URL" envDefault:"https://someuser:somepass@scraper"`
-	ScraperPrivateURL string `env:"SCRAPER_PRIVATE_URL" envDefault:"https://someuser:somepass@scraper"`
+	ScraperPublicURL  string `env:"SCRAPER_PUBLIC_URL"`
+	ScraperPrivateURL string `env:"SCRAPER_PRIVATE_URL"`
 
 	// OpenAI
 	OpenAIKey       string `env:"OPEN_AI_KEY"`

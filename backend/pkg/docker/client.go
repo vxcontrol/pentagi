@@ -95,7 +95,7 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		socket = getHostDockerSocket(ctx, cli)
 	}
 	inside := cfg.DockerInside
-	network := cfg.DockerNetwork
+	netName := cfg.DockerNetwork
 	publicIP := cfg.DockerPublicIP
 	defImage := strings.ToLower(cfg.DockerDefaultImage)
 	if defImage == "" {
@@ -119,6 +119,11 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 
 	hostDir := getHostDataDir(ctx, cli, dataDir, cfg.DockerWorkDir)
 
+	// ensure network exists if configured
+	if err := ensureDockerNetwork(ctx, cli, netName); err != nil {
+		return nil, fmt.Errorf("failed to ensure docker network %s: %w", netName, err)
+	}
+
 	logger := logrus.StandardLogger()
 	logger.WithFields(logrus.Fields{
 		"docker_name":    info.Name,
@@ -141,7 +146,7 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		inside:   inside,
 		defImage: defImage,
 		socket:   socket,
-		network:  network,
+		network:  netName,
 		publicIP: publicIP,
 	}, nil
 }
@@ -688,4 +693,25 @@ func getHostDataDir(ctx context.Context, cli *client.Client, dataDir, workDir st
 		// and it's not the same as the host machine's directory
 		return ""
 	}
+}
+
+// ensureDockerNetwork verifies that a docker network with the given name exists;
+// if it does not, it attempts to create it.
+func ensureDockerNetwork(ctx context.Context, cli *client.Client, name string) error {
+	if name == "" {
+		return nil
+	}
+
+	if _, err := cli.NetworkInspect(ctx, name, network.InspectOptions{}); err == nil {
+		return nil
+	}
+
+	_, err := cli.NetworkCreate(ctx, name, network.CreateOptions{
+		Driver: "bridge",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create network %s: %w", name, err)
+	}
+
+	return nil
 }

@@ -33,6 +33,8 @@ import (
 
 const deltaCallCounter = 10000
 
+const defaultTestParallelWorkersNumber = 8
+
 const pentestDockerImage = "vxcontrol/kali-linux"
 
 type ProviderController interface {
@@ -799,6 +801,7 @@ func (pc *providerController) TestAgent(
 		tempProvider,
 		tester.WithAgentTypes(agentType),
 		tester.WithVerbose(false),
+		tester.WithParallelWorkers(defaultTestParallelWorkersNumber),
 	)
 	if err != nil {
 		return result, fmt.Errorf("failed to test agent: %w", err)
@@ -866,6 +869,7 @@ func (pc *providerController) TestProvider(
 		ctx,
 		testProvider,
 		tester.WithVerbose(false),
+		tester.WithParallelWorkers(defaultTestParallelWorkersNumber),
 	)
 	if err != nil {
 		return results, fmt.Errorf("failed to test provider: %w", err)

@@ -274,10 +274,10 @@ func TestLoadModelsFromServer(t *testing.T) {
 					{
 						"id": "no-reasoning-model",
 						"description": "Model without reasoning support",
-						"supported_parameters": ["max_tokens", "temperature"]
+						"supported_parameters": ["max_tokens", "tools", "temperature"]
 					},
 					{
-						"id": "invalid-timestamp-model", 
+						"id": "invalid-timestamp-model",
 						"created": 0,
 						"description": ""
 					},
@@ -490,10 +490,16 @@ func TestProviderModelsIntegration(t *testing.T) {
 					"description": "Basic model without special features"
 				},
 				{
-					"id": "model-b", 
+					"id": "model-b",
+					"created": 1686588896,
+					"supported_parameters": ["reasoning", "max_tokens", "tools"],
+					"pricing": {"prompt": "0.001", "completion": "0.002"}
+				},
+				{
+					"id": "model-c",
 					"created": 1686588896,
 					"supported_parameters": ["reasoning", "max_tokens"],
-					"pricing": {"prompt": "0.001", "completion": "0.002"}
+					"pricing": {"prompt": "0.003", "completion": "0.004"}
 				}
 			]
 		}`)
@@ -517,7 +523,7 @@ func TestProviderModelsIntegration(t *testing.T) {
 	}
 
 	models := prov.GetModels()
-	if len(models) != 2 {
+	if len(models) != 2 { // exclude model-c, it has no tools
 		t.Errorf("Expected 2 models, got %d", len(models))
 		return
 	}

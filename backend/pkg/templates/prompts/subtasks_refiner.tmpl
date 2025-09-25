@@ -1,10 +1,10 @@
 <refinement_context>
   <instruction>Optimize the remaining subtasks for user's task based on execution results</instruction>
-  
+
   <user_task>
     <input>{{.Task.Input}}</input>
   </user_task>
-  
+
   {{if .Tasks}}
   <previous_tasks>
     {{range .Tasks}}
@@ -17,7 +17,7 @@
     {{end}}
   </previous_tasks>
   {{end}}
-  
+
   {{if .CompletedSubtasks}}
   <completed_subtasks>
     {{range .CompletedSubtasks}}
@@ -31,7 +31,7 @@
     {{end}}
   </completed_subtasks>
   {{end}}
-  
+
   {{if .PlannedSubtasks}}
   <planned_subtasks>
     {{range .PlannedSubtasks}}
@@ -54,7 +54,7 @@
   {{.ExecutionState}}
   </execution_state>
   {{end}}
-  
+
   {{if .ExecutionLogs}}
   <execution_logs>
   {{.ExecutionLogs}}

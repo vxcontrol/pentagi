@@ -2,6 +2,8 @@ package testdata
 
 import (
 	"testing"
+
+	"github.com/vxcontrol/langchaingo/llms"
 )
 
 func TestRegistryLoad(t *testing.T) {
@@ -256,6 +258,159 @@ func TestBuiltinRegistry(t *testing.T) {
 		_, err := registry.GetTestSuite(group)
 		if err != nil {
 			t.Errorf("Failed to create test suite for group %s: %v", group, err)
+		}
+	}
+}
+
+func TestRegistryExtendedMessageTests(t *testing.T) {
+	yamlData := `
+- id: "memory_test_completion"
+  name: "Memory Test with Extended Messages"
+  type: "completion"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are helpful"
+    - role: "user"
+      content: "Remember my name is Alice"
+    - role: "assistant"
+      content: "I'll remember that your name is Alice"
+    - role: "user"
+      content: "What is my name?"
+  expected: "Alice"
+  streaming: false
+
+- id: "memory_test_tool"
+  name: "Memory Test with Tool Calls"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant"
+    - role: "user"
+      content: "Get weather for London"
+    - role: "assistant"
+      content: "I'll get the weather for London"
+      tool_calls:
+        - id: "call_1"
+          type: "function"
+          function:
+            name: "get_weather"
+            arguments:
+              location: "London"
+    - role: "tool"
+      tool_call_id: "call_1"
+      name: "get_weather"
+      content: "Weather in London is cloudy, 15°C"
+    - role: "user"
+      content: "Now get weather for Paris"
+  tools:
+    - name: "get_weather"
+      description: "Gets current weather for a location"
+      parameters:
+        type: "object"
+        properties:
+          location:
+            type: "string"
+            description: "City name"
+        required: ["location"]
+  expected:
+    - function_name: "get_weather"
+      arguments:
+        location: "Paris"
+  streaming: false
+`
+
+	registry, err := LoadRegistryFromYAML([]byte(yamlData))
+	if err != nil {
+		t.Fatalf("Failed to load registry from YAML: %v", err)
+	}
+
+	// test completion tests with extended messages
+	completionTests := registry.GetTestsByType(TestTypeCompletion)
+	if len(completionTests) != 1 {
+		t.Errorf("Expected 1 completion test, got %d", len(completionTests))
+	}
+
+	// test tool tests with extended messages
+	toolTests := registry.GetTestsByType(TestTypeTool)
+	if len(toolTests) != 1 {
+		t.Errorf("Expected 1 tool test, got %d", len(toolTests))
+	}
+
+	// test completion test case creation with extended messages
+	completionCase, err := registry.createTestCase(completionTests[0])
+	if err != nil {
+		t.Fatalf("Failed to create completion test case: %v", err)
+	}
+
+	if completionCase.Type() != TestTypeCompletion {
+		t.Errorf("Expected completion test type, got %s", completionCase.Type())
+	}
+
+	messages := completionCase.Messages()
+	if len(messages) != 4 {
+		t.Errorf("Expected 4 messages, got %d", len(messages))
+	}
+
+	// test tool test case creation with extended messages including tool calls
+	toolCase, err := registry.createTestCase(toolTests[0])
+	if err != nil {
+		t.Fatalf("Failed to create tool test case: %v", err)
+	}
+
+	if toolCase.Type() != TestTypeTool {
+		t.Errorf("Expected tool test type, got %s", toolCase.Type())
+	}
+
+	toolMessages := toolCase.Messages()
+	if len(toolMessages) != 5 {
+		t.Errorf("Expected 5 messages, got %d", len(toolMessages))
+	}
+
+	// verify assistant message with tool calls is properly parsed
+	assistantMsg := toolMessages[2]
+	var toolCallPart *llms.ToolCall
+	for _, part := range assistantMsg.Parts {
+		if tc, ok := part.(llms.ToolCall); ok {
+			toolCallPart = &tc
+			break
+		}
+	}
+	if toolCallPart == nil {
+		t.Error("Expected tool call in assistant message parts")
+	} else {
+		if toolCallPart.ID != "call_1" {
+			t.Errorf("Expected tool call ID 'call_1', got %s", toolCallPart.ID)
+		}
+		if toolCallPart.FunctionCall.Name != "get_weather" {
+			t.Errorf("Expected function name 'get_weather', got %s", toolCallPart.FunctionCall.Name)
+		}
+		if toolCallPart.FunctionCall.Arguments != `{"location":"London"}` {
+			t.Errorf("Unexpected function call arguments, got %s", toolCallPart.FunctionCall.Arguments)
+		}
+	}
+
+	// verify tool response message is properly parsed
+	toolMsg := toolMessages[3]
+	var toolResponsePart *llms.ToolCallResponse
+	for _, part := range toolMsg.Parts {
+		if tr, ok := part.(llms.ToolCallResponse); ok {
+			toolResponsePart = &tr
+			break
+		}
+	}
+	if toolResponsePart == nil {
+		t.Error("Expected tool response in tool message parts")
+	} else {
+		if toolResponsePart.ToolCallID != "call_1" {
+			t.Errorf("Expected tool call ID 'call_1', got %s", toolResponsePart.ToolCallID)
+		}
+		if toolResponsePart.Name != "get_weather" {
+			t.Errorf("Expected tool name 'get_weather', got %s", toolResponsePart.Name)
+		}
+		if toolResponsePart.Content != "Weather in London is cloudy, 15°C" {
+			t.Errorf("Unexpected tool response content, got %s", toolResponsePart.Content)
 		}
 	}
 }

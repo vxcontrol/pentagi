@@ -23,21 +23,21 @@ elif [ "$SERVER_USE_SSL" = "true" ]; then
         -keyout ${SERVER_SSL_KEY} \
         -subj "/C=US/ST=NY/L=NY/O=PentAGI/OU=Project/CN=localhost" \
         -out ${SERVER_SSL_CSR}
-    
+
     echo "subjectAltName=DNS:pentagi.local" > extfile.tmp
     echo "keyUsage=critical,digitalSignature,keyAgreement" >> extfile.tmp
-    
+
     openssl x509 -req \
         -days 730 \
         -extfile extfile.tmp \
         -in ${SERVER_SSL_CSR} \
         -CA ${SERVER_SSL_CA_CRT} -CAkey ${SERVER_SSL_CA_KEY} -CAcreateserial \
         -out ${SERVER_SSL_CRT}
-    
+
     rm extfile.tmp
-    
+
     cat ${SERVER_SSL_CA_CRT} >> ${SERVER_SSL_CRT}
-    
+
     chmod g+r ${SERVER_SSL_KEY}
     chmod g+r ${SERVER_SSL_CA_KEY}
 fi

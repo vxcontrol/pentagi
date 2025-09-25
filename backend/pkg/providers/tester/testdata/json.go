@@ -16,49 +16,34 @@ type testCaseJSON struct {
 	def TestDefinition
 
 	// state for streaming and response collection
-	mu            sync.Mutex
-	content       strings.Builder
-	reasoning     strings.Builder
-	messages      []llms.MessageContent
-	expected      map[string]interface{}
-	isArray       bool
-	expectFailure bool
+	mu        sync.Mutex
+	content   strings.Builder
+	reasoning strings.Builder
+	messages  []llms.MessageContent
+	expected  map[string]any
 }
 
 func newJSONTestCase(def TestDefinition) (TestCase, error) {
 	// for array tests, expected can be empty or nil
-	var expected map[string]interface{}
-	if !def.IsArray && def.Expected != nil {
-		exp, ok := def.Expected.(map[string]interface{})
+	var expected map[string]any
+	if def.Expected != nil {
+		exp, ok := def.Expected.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("JSON test expected must be map[string]interface{}")
+			return nil, fmt.Errorf("JSON test expected must be map[string]any")
 		}
 		expected = exp
 	}
 
-	// convert MessageData to llms.MessageContent
-	var messages []llms.MessageContent
-	for _, msg := range def.Messages {
-		var msgType llms.ChatMessageType
-		switch strings.ToLower(msg.Role) {
-		case "system":
-			msgType = llms.ChatMessageTypeSystem
-		case "user", "human":
-			msgType = llms.ChatMessageTypeHuman
-		case "assistant", "ai":
-			msgType = llms.ChatMessageTypeAI
-		default:
-			return nil, fmt.Errorf("unknown message role: %s", msg.Role)
-		}
-		messages = append(messages, llms.TextParts(msgType, msg.Content))
+	// convert MessagesData to llms.MessageContent
+	messages, err := def.Messages.ToMessageContent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert messages: %v", err)
 	}
 
 	return &testCaseJSON{
-		def:           def,
-		expected:      expected,
-		messages:      messages,
-		isArray:       def.IsArray,
-		expectFailure: def.ExpectFailure,
+		def:      def,
+		expected: expected,
+		messages: messages,
 	}, nil
 }
 
@@ -86,7 +71,7 @@ func (t *testCaseJSON) StreamingCallback() streaming.Callback {
 	}
 }
 
-func (t *testCaseJSON) Execute(response interface{}, latency time.Duration) TestResult {
+func (t *testCaseJSON) Execute(response any, latency time.Duration) TestResult {
 	result := TestResult{
 		ID:        t.def.ID,
 		Name:      t.def.Name,
@@ -130,89 +115,23 @@ func (t *testCaseJSON) Execute(response interface{}, latency time.Duration) Test
 	jsonContent = extractJSON(jsonContent)
 	jsonBytes := []byte(jsonContent)
 
-	// check for array tests
-	if t.isArray {
-		var parsed []interface{}
-		if err := json.Unmarshal(jsonBytes, &parsed); err != nil {
-			if t.expectFailure {
-				result.Success = true
-				return result
-			}
-			result.Success = false
-			result.Error = fmt.Errorf("invalid JSON array response: %v", err)
-			return result
-		}
-		result.Success = true
-		return result
-	}
-
 	// parse JSON object
-	var parsed map[string]interface{}
+	var parsed any
 	if err := json.Unmarshal(jsonBytes, &parsed); err != nil {
-		if t.expectFailure {
-			result.Success = true
-			return result
-		}
 		result.Success = false
 		result.Error = fmt.Errorf("invalid JSON response: %v", err)
 		return result
 	}
 
-	// for negative tests, if we got valid JSON when expecting failure
-	if t.expectFailure {
-		result.Success = false
-		result.Error = fmt.Errorf("expected JSON parsing to fail, but got valid JSON")
-		return result
-	}
-
 	// validate expected values
-	for key, expectedVal := range t.expected {
-		actualVal, exists := parsed[key]
-		if !exists {
-			result.Success = false
-			result.Error = fmt.Errorf("missing required key: %s", key)
-			return result
-		}
-
-		if !jsonValuesEqual(actualVal, expectedVal) {
-			result.Success = false
-			result.Error = fmt.Errorf("key %s: expected %#v, got %#v", key, expectedVal, actualVal)
-			return result
-		}
+	if err := validateArgumentValue("", parsed, t.expected); err != nil {
+		result.Success = false
+		result.Error = fmt.Errorf("got %#v, expected %#v: %w", parsed, t.expected, err)
+		return result
 	}
 
 	result.Success = true
 	return result
-}
-
-// jsonValuesEqual compares JSON values with type conversion
-func jsonValuesEqual(actual, expected interface{}) bool {
-	// handle numeric type conversions (JSON unmarshaling can produce float64)
-	switch exp := expected.(type) {
-	case int:
-		if act, ok := actual.(float64); ok {
-			return act == float64(exp)
-		}
-		if act, ok := actual.(int); ok {
-			return act == exp
-		}
-		if act, ok := actual.(string); ok {
-			return act == fmt.Sprintf("%d", exp)
-		}
-	case float64:
-		if act, ok := actual.(float64); ok {
-			return act == exp
-		}
-		if act, ok := actual.(int); ok {
-			return float64(act) == exp
-		}
-		if act, ok := actual.(string); ok {
-			return strings.Contains(fmt.Sprintf("%0.9f", exp), act)
-		}
-	default:
-		return actual == expected
-	}
-	return actual == expected
 }
 
 // extractJSON extracts JSON content from text that may contain code blocks or extra text
@@ -245,6 +164,12 @@ func extractJSON(content string) string {
 				}
 			}
 		}
+	}
+
+	// try to parse as a valid JSON and return one
+	var raw any
+	if err := json.Unmarshal([]byte(content), &raw); err == nil {
+		return content
 	}
 
 	// try to find JSON array boundaries first (higher priority)

@@ -279,8 +279,8 @@ func (fp *flowProvider) callWithRetries(
 ) (*callResult, error) {
 	var (
 		err     error
+		errs    []error
 		msgType = database.MsglogTypeAnswer
-		parts   []string
 		resp    *llms.ContentResponse
 		result  callResult
 	)
@@ -288,10 +288,46 @@ func (fp *flowProvider) callWithRetries(
 	ticker := time.NewTicker(delayBetweenRetries)
 	defer ticker.Stop()
 
+	fillResult := func(resp *llms.ContentResponse) error {
+		var parts []string
+
+		if resp == nil || len(resp.Choices) == 0 {
+			return fmt.Errorf("no choices in response")
+		}
+
+		for _, choice := range resp.Choices {
+			if strings.TrimSpace(choice.Content) != "" {
+				parts = append(parts, choice.Content)
+			}
+
+			if choice.GenerationInfo != nil {
+				result.info = choice.GenerationInfo
+			}
+
+			for _, toolCall := range choice.ToolCalls {
+				if toolCall.FunctionCall == nil {
+					continue
+				}
+				result.funcCalls = append(result.funcCalls, toolCall)
+			}
+
+			if choice.ReasoningContent != "" {
+				result.thinking = choice.ReasoningContent
+			}
+		}
+
+		result.content = strings.Join(parts, "\n")
+		if strings.Trim(result.content, "' \"\n\r\t") == "" && len(result.funcCalls) == 0 {
+			return fmt.Errorf("no content and tool calls in response")
+		}
+
+		return nil
+	}
+
 	for idx := 0; idx <= maxRetriesToCallAgentChain; idx++ {
 		if idx == maxRetriesToCallAgentChain {
 			msg := fmt.Sprintf("failed to call agent chain: max retries reached, %d", idx)
-			return nil, fmt.Errorf(msg+": %w", err)
+			return nil, fmt.Errorf(msg+": %w", errors.Join(errs...))
 		}
 
 		var streamCb streaming.Callback
@@ -328,7 +364,12 @@ func (fp *flowProvider) callWithRetries(
 
 		resp, err = fp.CallWithTools(ctx, optAgentType, chain, executor.Tools(), streamCb)
 		if err == nil {
+			err = fillResult(resp)
+		}
+		if err == nil {
 			break
+		} else {
+			errs = append(errs, err)
 		}
 
 		ticker.Reset(delayBetweenRetries)
@@ -339,31 +380,6 @@ func (fp *flowProvider) callWithRetries(
 		}
 	}
 
-	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("no choices in response")
-	}
-
-	for _, choice := range resp.Choices {
-		if strings.TrimSpace(choice.Content) != "" {
-			parts = append(parts, choice.Content)
-		}
-
-		if choice.GenerationInfo != nil {
-			result.info = choice.GenerationInfo
-		}
-
-		for _, toolCall := range choice.ToolCalls {
-			if toolCall.FunctionCall == nil {
-				continue
-			}
-			result.funcCalls = append(result.funcCalls, toolCall)
-		}
-		if choice.ReasoningContent != "" {
-			result.thinking = choice.ReasoningContent
-		}
-	}
-
-	result.content = strings.Join(parts, "\n")
 	if fp.streamCb != nil && result.streamID != 0 {
 		fp.streamCb(ctx, &StreamMessageChunk{
 			Type:     StreamMessageChunkTypeUpdate,

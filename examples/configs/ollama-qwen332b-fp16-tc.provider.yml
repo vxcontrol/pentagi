@@ -1,0 +1,64 @@
+simple:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+simple_json:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+primary_agent:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+assistant:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+generator:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+refiner:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+adviser:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+reflector:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+searcher:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+enricher:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+coder:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+installer:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000
+
+pentester:
+  model: "qwen3:32b-fp16-tc"
+  n: 1
+  max_tokens: 40000

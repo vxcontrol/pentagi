@@ -1,7 +1,9 @@
 .DS_Store
 .env
 .env.*
+.state
 !.env.example
+!backend/cmd/installer/files/links/.env
 
 backend/tmp
 backend/build
@@ -18,4 +20,5 @@ node_modules
 
 build/*
 data/*
+.bak/*
 !.gitkeep

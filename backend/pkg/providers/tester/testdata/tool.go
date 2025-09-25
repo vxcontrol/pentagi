@@ -26,14 +26,14 @@ type testCaseTool struct {
 
 func newToolTestCase(def TestDefinition) (TestCase, error) {
 	// parse expected tool calls
-	expectedInterface, ok := def.Expected.([]interface{})
+	expectedInterface, ok := def.Expected.([]any)
 	if !ok {
 		return nil, fmt.Errorf("tool test expected must be array of tool calls")
 	}
 
 	var expected []ExpectedToolCall
 	for _, exp := range expectedInterface {
-		expMap, ok := exp.(map[string]interface{})
+		expMap, ok := exp.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("tool call expected must be object")
 		}
@@ -43,7 +43,7 @@ func newToolTestCase(def TestDefinition) (TestCase, error) {
 			return nil, fmt.Errorf("function_name must be string")
 		}
 
-		arguments, ok := expMap["arguments"].(map[string]interface{})
+		arguments, ok := expMap["arguments"].(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("arguments must be object")
 		}
@@ -54,21 +54,10 @@ func newToolTestCase(def TestDefinition) (TestCase, error) {
 		})
 	}
 
-	// convert MessageData to llms.MessageContent
-	var messages []llms.MessageContent
-	for _, msg := range def.Messages {
-		var msgType llms.ChatMessageType
-		switch strings.ToLower(msg.Role) {
-		case "system":
-			msgType = llms.ChatMessageTypeSystem
-		case "user", "human":
-			msgType = llms.ChatMessageTypeHuman
-		case "assistant", "ai":
-			msgType = llms.ChatMessageTypeAI
-		default:
-			return nil, fmt.Errorf("unknown message role: %s", msg.Role)
-		}
-		messages = append(messages, llms.TextParts(msgType, msg.Content))
+	// convert MessagesData to llms.MessageContent
+	messages, err := def.Messages.ToMessageContent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert messages: %v", err)
 	}
 
 	// convert ToolData to llms.Tool
@@ -117,7 +106,7 @@ func (t *testCaseTool) StreamingCallback() streaming.Callback {
 	}
 }
 
-func (t *testCaseTool) Execute(response interface{}, latency time.Duration) TestResult {
+func (t *testCaseTool) Execute(response any, latency time.Duration) TestResult {
 	result := TestResult{
 		ID:        t.def.ID,
 		Name:      t.def.Name,
@@ -161,97 +150,284 @@ func (t *testCaseTool) Execute(response interface{}, latency time.Duration) Test
 		toolCalls = append(toolCalls, choice.ToolCalls...)
 	}
 
-	if len(toolCalls) != len(t.expected) {
+	// ensure at least one tool call was made
+	if len(toolCalls) == 0 {
 		result.Success = false
-		result.Error = fmt.Errorf("expected %d tool calls, got %d", len(t.expected), len(toolCalls))
+		result.Error = fmt.Errorf("no tool calls found, expected at least %d", len(t.expected))
 		return result
 	}
 
-	// validate each tool call
-	for i, expected := range t.expected {
-		if i >= len(toolCalls) {
-			result.Success = false
-			result.Error = fmt.Errorf("missing tool call %d", i)
-			return result
-		}
-
-		call := toolCalls[i]
-		if call.FunctionCall == nil {
-			result.Success = false
-			result.Error = fmt.Errorf("tool call %d has no function call", i)
-			return result
-		}
-
-		if call.FunctionCall.Name != expected.FunctionName {
-			result.Success = false
-			result.Error = fmt.Errorf("expected function %s, got %s", expected.FunctionName, call.FunctionCall.Name)
-			return result
-		}
-
-		// parse and validate arguments
-		var args map[string]interface{}
-		if err := json.Unmarshal([]byte(call.FunctionCall.Arguments), &args); err != nil {
-			result.Success = false
-			result.Error = fmt.Errorf("invalid function arguments: %v", err)
-			return result
-		}
-
-		// check required arguments
-		for key, expectedVal := range expected.Arguments {
-			actualVal, exists := args[key]
-			if !exists {
-				result.Success = false
-				result.Error = fmt.Errorf("function %s missing argument: %s", expected.FunctionName, key)
-				return result
-			}
-
-			if !validateArgumentValue(key, actualVal, expectedVal, expected.FunctionName) {
-				result.Success = false
-				result.Error = fmt.Errorf("function %s arg %s: expected %v, got %v", expected.FunctionName, key, expectedVal, actualVal)
-				return result
-			}
-		}
+	// validate that each expected function call has a matching tool call
+	if err := t.validateExpectedToolCalls(toolCalls); err != nil {
+		result.Success = false
+		result.Error = err
+		return result
 	}
 
 	result.Success = true
 	return result
 }
 
-// validateArgumentValue performs flexible validation for function arguments using JSON comparison
-func validateArgumentValue(key string, actual, expected interface{}, functionName string) bool {
-	// convert both values to JSON and compare
+// validateExpectedToolCalls checks that each expected function call has at least one matching tool call
+func (t *testCaseTool) validateExpectedToolCalls(toolCalls []llms.ToolCall) error {
+	for _, expected := range t.expected {
+		if err := t.findMatchingToolCall(toolCalls, expected); err != nil {
+			return fmt.Errorf("expected function '%s' not found in tool calls: %w", expected.FunctionName, err)
+		}
+	}
+	return nil
+}
+
+// findMatchingToolCall searches for a tool call that matches the expected function call
+func (t *testCaseTool) findMatchingToolCall(toolCalls []llms.ToolCall, expected ExpectedToolCall) error {
+	var lastErr error
+	for _, call := range toolCalls {
+		if call.FunctionCall == nil {
+			return fmt.Errorf("tool call %s has no function call", call.FunctionCall.Name)
+		}
+
+		if call.FunctionCall.Name != expected.FunctionName {
+			continue
+		}
+
+		// parse and validate arguments
+		var args map[string]any
+		if err := json.Unmarshal([]byte(call.FunctionCall.Arguments), &args); err != nil {
+			return fmt.Errorf("invalid JSON in tool call %s: %v", call.FunctionCall.Name, err)
+		}
+
+		// check if all required arguments match
+		if lastErr = t.validateFunctionArguments(args, expected); lastErr == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected function %s not found in tool calls", expected.FunctionName)
+}
+
+// validateFunctionArguments checks if all expected arguments match the actual arguments
+func (t *testCaseTool) validateFunctionArguments(args map[string]any, expected ExpectedToolCall) error {
+	for key, expectedVal := range expected.Arguments {
+		actualVal, exists := args[key]
+		if !exists {
+			return fmt.Errorf("argument %s not found in tool call", key)
+		}
+
+		if err := validateArgumentValue(key, actualVal, expectedVal); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateArgumentValue performs flexible validation for function arguments using type-specific comparison
+func validateArgumentValue(key string, actual, expected any) error {
+	// fast path: JSON comparison first
 	actualBytes, err1 := json.Marshal(actual)
 	expectedBytes, err2 := json.Marshal(expected)
-
-	if err1 != nil || err2 != nil {
-		// if JSON marshaling fails, fall back to direct comparison
-		return jsonValuesEqual(actual, expected)
+	if err1 == nil && err2 == nil && string(actualBytes) == string(expectedBytes) {
+		return nil
 	}
 
-	// direct JSON comparison
-	if string(actualBytes) == string(expectedBytes) {
-		return true
+	var err error
+	switch expected := expected.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		err = compareNumeric(actual, expected)
+	case float32, float64:
+		err = compareFloat(actual, expected)
+	case string:
+		err = compareString(actual, expected)
+	case bool:
+		err = compareBool(actual, expected)
+	case []any:
+		err = compareSlice(actual, expected)
+	case map[string]any:
+		err = compareMap(actual, expected)
+	default:
+		err = fmt.Errorf("unsupported type: %T", expected)
 	}
 
-	// for strings, allow more flexible comparison
-	actualStr, actualIsStr := actual.(string)
-	expectedStr, expectedIsStr := expected.(string)
+	if err != nil {
+		return fmt.Errorf("invalid argument '%s': %w", key, err)
+	}
 
-	if actualIsStr && expectedIsStr {
-		actualStr = strings.TrimSpace(actualStr)
-		expectedStr = strings.TrimSpace(expectedStr)
+	return nil
+}
 
-		// case-insensitive comparison
-		if strings.EqualFold(actualStr, expectedStr) {
-			return true
+func compareNumeric(actual, expected any) error {
+	expectedStr := fmt.Sprintf("%v", expected)
+
+	switch actual := actual.(type) {
+	case string:
+		if strings.TrimSpace(actual) != expectedStr {
+			return fmt.Errorf("expected %s, got %s", expectedStr, actual)
 		}
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		if fmt.Sprintf("%v", actual) != expectedStr {
+			return fmt.Errorf("expected %s, got %v", expectedStr, actual)
+		}
+	case float32:
+		if fmt.Sprintf("%d", int(actual)) != expectedStr {
+			return fmt.Errorf("expected %s, got %d", expectedStr, int(actual))
+		}
+	case float64:
+		if fmt.Sprintf("%d", int(actual)) != expectedStr {
+			return fmt.Errorf("expected %s, got %d", expectedStr, int(actual))
+		}
+	default:
+		return fmt.Errorf("unsupported type for numeric comparison: %T", actual)
+	}
 
-		// allow partial matches for longer strings (more than 10 chars)
-		if len(expectedStr) > 10 {
-			return strings.Contains(strings.ToLower(actualStr), strings.ToLower(expectedStr)) ||
-				strings.Contains(strings.ToLower(expectedStr), strings.ToLower(actualStr))
+	return nil
+}
+
+func compareFloat(actual, expected any) error {
+	expectedStr := fmt.Sprintf("%.5f", expected)
+
+	switch actual := actual.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		actualStr := fmt.Sprintf("%v", actual)
+		if !strings.HasPrefix(expectedStr, actualStr) && !strings.HasPrefix(actualStr, expectedStr) {
+			return fmt.Errorf("expected %s, got %s", expectedStr, actualStr)
+		}
+	case float32, float64:
+		actualStr := fmt.Sprintf("%.5f", actual)
+		if actualStr != expectedStr {
+			return fmt.Errorf("expected %s, got %s", expectedStr, actualStr)
+		}
+	case string:
+		actualStr := strings.TrimSpace(actual)
+		if !strings.Contains(actualStr, expectedStr) && !strings.Contains(expectedStr, actualStr) {
+			return fmt.Errorf("expected %s, got %s", expectedStr, actualStr)
+		}
+	default:
+		return fmt.Errorf("unsupported type for float comparison: %T", actual)
+	}
+
+	return nil
+}
+
+func compareString(actual, expected any) error {
+	expectedStr := strings.ToLower(expected.(string))
+
+	switch actual := actual.(type) {
+	case string:
+		actualStr := strings.ToLower(strings.TrimSpace(actual))
+		if actualStr == expectedStr {
+			return nil
+		}
+		if len(expectedStr) > 10 || len(actualStr) > 10 {
+			if strings.Contains(actualStr, expectedStr) || strings.Contains(expectedStr, actualStr) {
+				return nil
+			}
+		}
+		return fmt.Errorf("expected %s, got %s", expectedStr, actualStr)
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		actualStr := strings.ToLower(fmt.Sprintf("%v", actual))
+		if actualStr != expectedStr {
+			return fmt.Errorf("expected %s, got %s", expectedStr, actualStr)
+		}
+	case float32, float64:
+		actualStr := strings.ToLower(fmt.Sprintf("%v", actual))
+		if actualStr != expectedStr {
+			return fmt.Errorf("expected %s, got %s", expectedStr, actualStr)
+		}
+	default:
+		return fmt.Errorf("unsupported type for string comparison: %T", actual)
+	}
+
+	return nil
+}
+
+func compareBool(actual, expected any) error {
+	expectedBool := expected.(bool)
+
+	switch actual := actual.(type) {
+	case bool:
+		if actual != expectedBool {
+			return fmt.Errorf("expected %t, got %t", expectedBool, actual)
+		}
+	case string:
+		actualStr := strings.Trim(strings.ToLower(actual), "' \"\n\r\t")
+		expectedStr := fmt.Sprintf("%t", expectedBool)
+		if actualStr != expectedStr {
+			return fmt.Errorf("expected %s, got %s", expectedStr, actualStr)
+		}
+	default:
+		return fmt.Errorf("unsupported type for bool comparison: %T", actual)
+	}
+
+	return nil
+}
+
+func compareSlice(actual any, expected []any) error {
+	switch actual := actual.(type) {
+	case []any:
+		// each element in expected must match at least one element in actual
+		for _, exp := range expected {
+			found := false
+			var lastErr error
+			for _, act := range actual {
+				if lastErr = validateArgumentValue("", act, exp); lastErr == nil {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("expected %v, got %v: %w", expected, actual, lastErr)
+			}
+		}
+		return nil
+	case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		// actual simple type must match at least one element in expected
+		var lastErr error
+		for _, exp := range expected {
+			if lastErr = validateArgumentValue("", actual, exp); lastErr == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("expected %v, got %v: %w", expected, actual, lastErr)
+	default:
+		return fmt.Errorf("unsupported type for slice comparison: %T", actual)
+	}
+}
+
+func compareMap(actual, expected any) error {
+	var lastErr error
+	if actualSlice, ok := actual.([]any); ok {
+		for _, actualMap := range actualSlice {
+			if lastErr = compareMap(actualMap, expected); lastErr == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("expected %v, got %v: %w", expected, actual, lastErr)
+	}
+
+	if actualSlice, ok := actual.([]map[string]any); ok {
+		for _, actualMap := range actualSlice {
+			if lastErr = compareMap(actualMap, expected); lastErr == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("expected %v, got %v: %w", expected, actual, lastErr)
+	}
+
+	actualMap, ok := actual.(map[string]any)
+	if !ok {
+		return fmt.Errorf("expected map, got %T", actual)
+	}
+
+	expectedMap := expected.(map[string]any)
+
+	// exact key match required
+	for key, expectedVal := range expectedMap {
+		actualVal, exists := actualMap[key]
+		if !exists {
+			return fmt.Errorf("expected key %s not found in actual map", key)
+		}
+		if err := validateArgumentValue(key, actualVal, expectedVal); err != nil {
+			return err
 		}
 	}
 
-	return false
+	return nil
 }

@@ -563,7 +563,7 @@ input AgentsConfigInput {
 type Query {
   # Provider management
   providers: [Provider!]!
-  
+
   # Flow and assistant management
   assistants(flowId: ID!): [Assistant!]
   flows: [Flow!]
