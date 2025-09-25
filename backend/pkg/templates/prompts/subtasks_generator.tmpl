@@ -1,10 +1,10 @@
 <task_context>
   <instruction>Generate optimized subtasks to solve the user's task efficiently</instruction>
-  
+
   <user_task>
     <input>{{.Task.Input}}</input>
   </user_task>
-  
+
   {{if .Tasks}}
   <previous_tasks>
     {{range .Tasks}}
@@ -17,7 +17,7 @@
     {{end}}
   </previous_tasks>
   {{end}}
-  
+
   {{if .Subtasks}}
   <previous_subtasks>
     {{range .Subtasks}}

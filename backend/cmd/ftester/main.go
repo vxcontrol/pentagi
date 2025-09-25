@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -29,8 +28,9 @@ import (
 
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
-	providerTypeStr := flag.String("provider", "custom", "Provider type (openai, custom, anthropic)")
+	providerName := flag.String("provider", "custom", "Provider name (openai, anthropic, gemini, bedrock, ollama, custom)")
 	flowID := flag.Int64("flow", 0, "Flow ID for testing functions that require it (0 means using mocks)")
+	userID := flag.Int64("user", 0, "User ID for testing functions that require it (1 is default admin user)")
 	taskID := flag.Int64("task", 0, "Task ID for testing functions with default unset")
 	subtaskID := flag.Int64("subtask", 0, "Subtask ID for testing functions with default unset")
 	flag.Parse()
@@ -90,7 +90,7 @@ func main() {
 	terminal.PrintHeader("Function Tester (ftester)")
 	terminal.PrintInfo("Starting ftester with the following parameters:")
 	terminal.PrintKeyValue("Environment file", *envFile)
-	terminal.PrintKeyValue("Provider", *providerTypeStr)
+	terminal.PrintKeyValue("Provider", *providerName)
 	if *flowID != 0 {
 		terminal.PrintKeyValue("Flow ID", fmt.Sprintf("%d", *flowID))
 	} else {
@@ -112,25 +112,9 @@ func main() {
 	}
 
 	// Initialize provider controller
-	providerController, err := providers.NewProviderController(cfg, dockerClient)
+	providerController, err := providers.NewProviderController(cfg, queries, dockerClient)
 	if err != nil {
 		log.Fatalf("Failed to initialize provider controller: %v", err)
-	}
-
-	// Convert provider type string to correct provider type
-	*providerTypeStr = strings.ToLower(*providerTypeStr)
-	var prvType provider.ProviderType
-
-	switch *providerTypeStr {
-	case "custom":
-		prvType = provider.ProviderCustom
-	case "openai":
-		prvType = provider.ProviderOpenAI
-	case "anthropic":
-		prvType = provider.ProviderAnthropic
-	default:
-		terminal.PrintWarning("Unknown provider type '%s', using 'custom' instead", *providerTypeStr)
-		prvType = provider.ProviderCustom
 	}
 
 	// Initialize tester with appropriate proxy interfaces
@@ -141,9 +125,10 @@ func main() {
 		dockerClient,
 		providerController,
 		*flowID,
+		*userID,
 		taskID,
 		subtaskID,
-		prvType,
+		provider.ProviderName(*providerName),
 	)
 	if err != nil {
 		log.Fatalf("Failed to initialize tester worker: %v", err)

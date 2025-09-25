@@ -3,6 +3,10 @@ package provider
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
+
+	"pentagi/pkg/providers/pconfig"
 
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
@@ -16,78 +20,119 @@ func (p ProviderType) String() string {
 
 const (
 	ProviderOpenAI    ProviderType = "openai"
-	ProviderCustom    ProviderType = "custom"
 	ProviderAnthropic ProviderType = "anthropic"
+	ProviderGemini    ProviderType = "gemini"
+	ProviderBedrock   ProviderType = "bedrock"
+	ProviderOllama    ProviderType = "ollama"
+	ProviderCustom    ProviderType = "custom"
 )
 
-type ProviderOptionsType string
+type ProviderName string
+
+func (p ProviderName) String() string {
+	return string(p)
+}
 
 const (
-	OptionsTypeAgent      ProviderOptionsType = "agent"
-	OptionsTypeAssistant  ProviderOptionsType = "assistant"
-	OptionsTypeSimple     ProviderOptionsType = "simple"
-	OptionsTypeSimpleJSON ProviderOptionsType = "simple_json"
-	OptionsTypeAdviser    ProviderOptionsType = "adviser"
-	OptionsTypeGenerator  ProviderOptionsType = "generator"
-	OptionsTypeRefiner    ProviderOptionsType = "refiner"
-	OptionsTypeSearcher   ProviderOptionsType = "searcher"
-	OptionsTypeEnricher   ProviderOptionsType = "enricher"
-	OptionsTypeCoder      ProviderOptionsType = "coder"
-	OptionsTypeInstaller  ProviderOptionsType = "installer"
-	OptionsTypePentester  ProviderOptionsType = "pentester"
-	OptionsTypeReflector  ProviderOptionsType = "reflector"
+	DefaultProviderNameOpenAI    ProviderName = ProviderName(ProviderOpenAI)
+	DefaultProviderNameAnthropic ProviderName = ProviderName(ProviderAnthropic)
+	DefaultProviderNameGemini    ProviderName = ProviderName(ProviderGemini)
+	DefaultProviderNameBedrock   ProviderName = ProviderName(ProviderBedrock)
+	DefaultProviderNameOllama    ProviderName = ProviderName(ProviderOllama)
+	DefaultProviderNameCustom    ProviderName = ProviderName(ProviderCustom)
 )
-
-var ErrInvalidProviderOptionsType = fmt.Errorf("provider options type not found")
 
 type Provider interface {
 	Type() ProviderType
-	Model(opt ProviderOptionsType) string
+	Model(opt pconfig.ProviderOptionsType) string
 	GetUsage(info map[string]any) (int64, int64)
 
-	Call(ctx context.Context, opt ProviderOptionsType, prompt string) (string, error)
+	Call(ctx context.Context, opt pconfig.ProviderOptionsType, prompt string) (string, error)
 	CallEx(
 		ctx context.Context,
-		opt ProviderOptionsType,
+		opt pconfig.ProviderOptionsType,
 		chain []llms.MessageContent,
 		streamCb streaming.Callback,
 	) (*llms.ContentResponse, error)
 	CallWithTools(
 		ctx context.Context,
-		opt ProviderOptionsType,
+		opt pconfig.ProviderOptionsType,
 		chain []llms.MessageContent,
 		tools []llms.Tool,
 		streamCb streaming.Callback,
 	) (*llms.ContentResponse, error)
+
+	// Configuration access methods
+	GetRawConfig() []byte
+	GetProviderConfig() *pconfig.ProviderConfig
+
+	// Pricing information methods
+	GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo
+
+	// Models information methods
+	GetModels() pconfig.ModelsConfig
 }
 
-type ProvidersList []ProviderType
+type (
+	ProvidersListNames []ProviderName
+	ProvidersListTypes []ProviderType
+	Providers          map[ProviderName]Provider
+	ProvidersConfig    map[ProviderType]*pconfig.ProviderConfig
+)
 
-type Providers map[ProviderType]Provider
+func (pln ProvidersListNames) Contains(pname ProviderName) bool {
+	for _, item := range pln {
+		if item == pname {
+			return true
+		}
+	}
+	return false
+}
 
-func (p Providers) Get(ptype ProviderType) (Provider, error) {
-	provider, ok := p[ptype]
+func (plt ProvidersListTypes) Contains(ptype ProviderType) bool {
+	for _, item := range plt {
+		if item == ptype {
+			return true
+		}
+	}
+	return false
+}
+
+func (p Providers) Get(pname ProviderName) (Provider, error) {
+	provider, ok := p[pname]
 	if !ok {
-		return nil, fmt.Errorf("unknown provider: %s", provider)
+		return nil, fmt.Errorf("provider not found by name '%s'", pname)
 	}
 
 	return provider, nil
 }
 
-func (p Providers) List() ProvidersList {
-	providers := make([]ProviderType, 0, len(p))
-	for provider := range p {
-		providers = append(providers, provider)
+func (p Providers) ListNames() ProvidersListNames {
+	listNames := make([]ProviderName, 0, len(p))
+	for pname := range p {
+		listNames = append(listNames, pname)
 	}
 
-	return providers
+	sort.Slice(listNames, func(i, j int) bool {
+		return strings.Compare(string(listNames[i]), string(listNames[j])) > 0
+	})
+
+	return listNames
 }
 
-func (p Providers) ListStrings() []string {
-	providers := make([]string, 0, len(p))
-	for provider := range p {
-		providers = append(providers, string(provider))
+func (p Providers) ListTypes() ProvidersListTypes {
+	mapTypes := make(map[ProviderType]struct{})
+	for _, provider := range p {
+		mapTypes[provider.Type()] = struct{}{}
 	}
 
-	return providers
+	listTypes := make([]ProviderType, 0, len(mapTypes))
+	for ptype := range mapTypes {
+		listTypes = append(listTypes, ptype)
+	}
+	sort.Slice(listTypes, func(i, j int) bool {
+		return strings.Compare(string(listTypes[i]), string(listTypes[j])) > 0
+	})
+
+	return listTypes
 }

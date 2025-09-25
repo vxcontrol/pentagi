@@ -799,7 +799,7 @@ DATA STRUCTURE:
 
 HANDLING PREVIOUSLY SUMMARIZED CONTENT:
 When you encounter a sequence of messages where:
-1. A message contains <tool_call name="%s"> 
+1. A message contains <tool_call name="%s">
 2. Followed by a message with role="tool" containing execution history
 
 This pattern is a crucial signal - it means you're looking at ALREADY summarized information. When you see this:
@@ -826,7 +826,7 @@ DATA STRUCTURE:
 
 HANDLING PREVIOUSLY SUMMARIZED CONTENT:
 When you encounter a sequence of messages where:
-1. A message contains <tool_call name="%s"> 
+1. A message contains <tool_call name="%s">
 2. Followed by a message with role="tool" containing execution history
 
 This pattern is a crucial signal - it means you're looking at ALREADY summarized information. When you see this:

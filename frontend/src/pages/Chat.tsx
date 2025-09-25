@@ -54,6 +54,7 @@ import {
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { Log } from '@/lib/log';
 import type { User } from '@/models/User';
+import { isProviderValid, findProviderByName, sortProviders, type Provider } from '@/models/Provider';
 
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
 
@@ -116,10 +117,10 @@ const Chat = () => {
     // Create sorted providers list to ensure consistent order
     const sortedProviders = useMemo(() => {
         const providers = providersData?.providers || [];
-        return [...providers].sort();
+        return sortProviders(providers);
     }, [providersData?.providers]);
 
-    const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+    const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
     const [user, setUser] = useState<User | null>(null);
     const needsProviderUpdateRef = useRef(true);
     const previousFlowIdRef = useRef(flowId);
@@ -155,8 +156,7 @@ const Chat = () => {
                 needsProviderUpdateRef.current = true;
             } else {
                 // Case 2: Check if selected provider is still available
-                const isProviderStillAvailable = sortedProviders.includes(selectedProvider);
-                if (!isProviderStillAvailable) {
+                if (!isProviderValid(selectedProvider, sortedProviders)) {
                     needsProviderUpdateRef.current = true;
                 }
             }
@@ -169,15 +169,22 @@ const Chat = () => {
             needsProviderUpdateRef.current = false;
 
             // Check if we have a previously saved provider
-            const savedProvider = localStorage.getItem(SELECTED_PROVIDER_KEY);
+            const savedProviderName = localStorage.getItem(SELECTED_PROVIDER_KEY);
 
             // Case 3: If saved provider exists and is valid, use it
-            if (savedProvider && sortedProviders.includes(savedProvider)) {
-                setSelectedProvider(savedProvider);
-            } else if (sortedProviders[0]) {
+            if (savedProviderName) {
+                const savedProvider = findProviderByName(savedProviderName, sortedProviders);
+                if (savedProvider) {
+                    setSelectedProvider(savedProvider);
+                    return;
+                }
+            }
+            
+            // If no saved provider or it's invalid, use the first available
+            if (sortedProviders.length > 0 && sortedProviders[0]) {
                 const firstProvider = sortedProviders[0];
                 setSelectedProvider(firstProvider);
-                localStorage.setItem(SELECTED_PROVIDER_KEY, firstProvider);
+                localStorage.setItem(SELECTED_PROVIDER_KEY, firstProvider.name);
             }
         }
     }, [sortedProviders]);
@@ -217,15 +224,15 @@ const Chat = () => {
     }, [navigate]);
 
     // Handle provider selection changes
-    const handleProviderChange = (provider: string) => {
+    const handleProviderChange = (provider: Provider) => {
         setSelectedProvider(provider);
-        localStorage.setItem(SELECTED_PROVIDER_KEY, provider);
+        localStorage.setItem(SELECTED_PROVIDER_KEY, provider.name);
     };
 
     // Check if selected provider is still valid whenever provider list changes
     useEffect(() => {
         // Skip initial render and only check when we have providers and a previously selected provider
-        if (sortedProviders.length > 0 && selectedProvider && !sortedProviders.includes(selectedProvider)) {
+        if (sortedProviders.length > 0 && selectedProvider && !isProviderValid(selectedProvider, sortedProviders)) {
             // If selected provider is no longer valid, mark for update
             needsProviderUpdateRef.current = true;
         }
@@ -347,21 +354,21 @@ const Chat = () => {
             return;
         }
 
-        // Always select the first assistant (newest) when flow changes or assistants update
-        // unless there's already a valid selected assistant for this flow
-        const currentSelectedAssistantId = selectedAssistantIds[selectedFlowId];
         const firstAssistantId = assistantsData.assistants[0]?.id;
-        
-        // Check if current selection is still valid
-        const isCurrentSelectionValid = currentSelectedAssistantId && 
-            assistantsData.assistants.some(assistant => assistant.id === currentSelectedAssistantId);
-        
-        // Auto-select first assistant if:
-        // 1. No assistant is currently selected for this flow, OR
-        // 2. Currently selected assistant is no longer in the list (was deleted)
-        if (!isCurrentSelectionValid && firstAssistantId) {
+        if (!firstAssistantId) return;
+
+        // Check if we have made a selection for this flow yet
+        const hasSelectionBeenMade = selectedFlowId in selectedAssistantIds;
+        const currentSelectedAssistantId = selectedAssistantIds[selectedFlowId];
+
+        if (!hasSelectionBeenMade) {
+            // No selection has been made yet, auto-select first assistant
+            handleSelectAssistant(firstAssistantId);
+        } else if (currentSelectedAssistantId !== null && !assistantsData.assistants.some(assistant => assistant.id === currentSelectedAssistantId)) {
+            // Selection was made but assistant was deleted, auto-select first assistant
             handleSelectAssistant(firstAssistantId);
         }
+        // If currentSelectedAssistantId === null, it means user intentionally chose to create new assistant, so don't auto-select
     }, [selectedFlowId, assistantsData?.assistants, selectedAssistantIds, handleSelectAssistant]);
 
     // Trigger initial assistant selection when data changes (legacy support)
@@ -396,13 +403,13 @@ const Chat = () => {
             let providerToUse = '';
 
             // First try to use the selected provider if it's valid
-            if (selectedProvider && sortedProviders.includes(selectedProvider)) {
-                providerToUse = selectedProvider;
+            if (selectedProvider && isProviderValid(selectedProvider, sortedProviders)) {
+                providerToUse = selectedProvider.name;
             } else if (sortedProviders.length > 0) {
                 // If no provider is selected or it's invalid, try to use the first available
                 const firstAvailableProvider = sortedProviders[0];
-                if (typeof firstAvailableProvider === 'string') {
-                    providerToUse = firstAvailableProvider;
+                if (firstAvailableProvider) {
+                    providerToUse = firstAvailableProvider.name;
                     // Mark for update rather than updating directly
                     needsProviderUpdateRef.current = true;
                 }
@@ -507,7 +514,7 @@ const Chat = () => {
             const { data } = await createAssistant({
                 variables: {
                     flowId: flowIdToUse,
-                    modelProvider: selectedProvider,
+                    modelProvider: selectedProvider.name,
                     input: message.trim(),
                     useAgents,
                 },
@@ -650,7 +657,7 @@ const Chat = () => {
                     assistants={assistantsData?.assistants ?? []}
                     assistantLogs={assistantLogsData?.assistantLogs ?? []}
                     selectedAssistantId={selectedAssistantId}
-                    selectedProvider={selectedProvider ?? ''}
+                    selectedProvider={selectedProvider}
                     providers={sortedProviders}
                     onSelectAssistant={handleSelectAssistant}
                     onCreateAssistant={handleInitiateAssistantCreation}
@@ -671,7 +678,7 @@ const Chat = () => {
                 user={user}
                 flows={flowsData?.flows ?? []}
                 providers={sortedProviders}
-                selectedProvider={selectedProvider ?? ''}
+                selectedProvider={selectedProvider}
                 selectedFlowId={selectedFlowId}
                 onChangeSelectedFlowId={handleChangeSelectedFlowId}
                 onChangeSelectedProvider={handleProviderChange}
@@ -726,7 +733,7 @@ const Chat = () => {
                                             assistants={assistantsData?.assistants ?? []}
                                             assistantLogs={assistantLogsData?.assistantLogs ?? []}
                                             selectedAssistantId={selectedAssistantId}
-                                            selectedProvider={selectedProvider ?? ''}
+                                            selectedProvider={selectedProvider}
                                             providers={sortedProviders}
                                             onSelectAssistant={handleSelectAssistant}
                                             onCreateAssistant={handleInitiateAssistantCreation}

@@ -6,7 +6,7 @@ extensions:
 receivers:
   otlp:
     protocols:
-      grpc: 
+      grpc:
         endpoint: 0.0.0.0:8148
       http:
         endpoint: 0.0.0.0:4318

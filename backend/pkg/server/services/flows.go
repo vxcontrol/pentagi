@@ -323,15 +323,18 @@ func (s *FlowService) CreateFlow(c *gin.Context) {
 		return
 	}
 
-	prvtype := provider.ProviderType(createFlow.Provider)
-	if _, err := s.pc.Get(prvtype); err != nil {
+	uid := c.GetUint64("uid")
+	prvname := provider.ProviderName(createFlow.Provider)
+
+	prv, err := s.pc.GetProvider(c, prvname, int64(uid))
+	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting provider: not found")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
+	prvtype := prv.Type()
 
-	uid := c.GetUint64("uid")
-	fw, err := s.fc.CreateFlow(c, int64(uid), createFlow.Input, prvtype, createFlow.Functions)
+	fw, err := s.fc.CreateFlow(c, int64(uid), createFlow.Input, prvname, prvtype, createFlow.Functions)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error creating flow")
 		response.Error(c, response.ErrInternal, err)

@@ -1,0 +1,140 @@
+# Gemini 2.5 Series - Advanced thinking models with enhanced reasoning capabilities
+- name: gemini-2.5-pro
+  description: Most advanced reasoning model capable of complex multi-step security analysis, sophisticated threat modeling, and comprehensive penetration testing methodologies
+  thinking: true
+  release_date: 2025-06-17
+  price:
+    input: 1.25
+    output: 10.0
+
+- name: gemini-2.5-flash
+  description: Best price-performance thinking model ideal for large-scale security assessments, automated vulnerability analysis, and high-volume penetration testing workflows
+  thinking: true
+  release_date: 2025-06-17
+  price:
+    input: 0.3
+    output: 2.5
+
+- name: gemini-2.5-pro-preview-06-05
+  description: Preview of advanced reasoning capabilities perfect for experimental security research and cutting-edge threat analysis techniques
+  thinking: true
+  release_date: 2025-06-05
+  price:
+    input: 1.25
+    output: 10.0
+
+- name: gemini-2.5-pro-preview-05-06
+  description: Earlier preview of Gemini 2.5 Pro with enhanced reasoning for systematic security research and methodical threat analysis
+  thinking: true
+  release_date: 2025-05-06
+  price:
+    input: 1.25
+    output: 10.0
+
+- name: gemini-2.5-pro-preview-03-25
+  description: Early experimental preview of Gemini 2.5 Pro with thinking capabilities for innovative security research
+  thinking: true
+  release_date: 2025-03-25
+  price:
+    input: 1.25
+    output: 10.0
+
+- name: gemini-2.5-flash-preview-05-20
+  description: Preview thinking model optimized for systematic security assessments and methodical penetration testing approaches
+  thinking: true
+  release_date: 2025-05-20
+  price:
+    input: 0.3
+    output: 2.5
+
+- name: gemini-2.5-flash-preview-04-17
+  description: Earlier preview of Gemini 2.5 Flash with thinking capabilities for experimental security workflows
+  thinking: true
+  release_date: 2025-04-17
+  price:
+    input: 0.3
+    output: 2.5
+
+- name: gemini-2.5-flash-lite-preview-06-17
+  description: Fastest and most cost-effective thinking model designed for high-throughput security scanning and rapid vulnerability classification
+  thinking: true
+  release_date: 2025-06-17
+  price:
+    input: 0.1
+    output: 0.4
+
+# Gemini 2.0 Series - Balanced multimodal models for agent-based security operations
+- name: gemini-2.0-flash
+  description: Well-balanced multimodal model optimized for diverse security tasks, real-time threat monitoring, and interactive penetration testing scenarios
+  thinking: false
+  release_date: 2025-01-30
+  price:
+    input: 0.1
+    output: 0.4
+
+- name: gemini-2.0-flash-lite
+  description: Lightweight model perfect for continuous security monitoring, basic vulnerability scanning, and automated security alert processing
+  thinking: false
+  release_date: 2025-02-05
+  price:
+    input: 0.075
+    output: 0.3
+
+- name: gemini-2.0-flash-exp
+  description: Experimental model with enhanced capabilities ideal for testing new security methodologies and innovative penetration testing approaches
+  thinking: false
+  release_date: 2024-12-11
+  price:
+    input: 0.1
+    output: 0.4
+
+- name: gemini-2.0-pro-exp
+  description: Experimental pro model combining advanced reasoning with enhanced security analysis capabilities for complex threat research
+  thinking: true
+  release_date: 2025-02-05
+  price:
+    input: 1.25
+    output: 5.0
+
+# Gemini 1.5 Series - Proven stable models with extensive context handling
+- name: gemini-1.5-pro-latest
+  description: Stable Gemini 1.5 Pro with 2M token context window - excellent for analyzing large codebases and comprehensive security documentation review
+  thinking: false
+  release_date: 2024-09-24
+  price:
+    input: 1.25
+    output: 5.0
+
+- name: gemini-1.5-flash-latest
+  description: Stable Gemini 1.5 Flash optimized for scalable vulnerability assessment workflows and high-volume security scanning and automated report generation
+  thinking: false
+  release_date: 2024-09-24
+  price:
+    input: 0.075
+    output: 0.3
+
+- name: gemini-1.5-flash-8b-latest
+  description: Gemini 1.5 Flash-8B - most cost-effective for simple vulnerability detection, basic security scanning and resource-constrained operations
+  thinking: false
+  release_date: 2024-10-24
+  price:
+    input: 0.0375
+    output: 0.15
+
+# Experimental and Thinking Models
+- name: gemini-2.0-flash-thinking-exp
+  description: Experimental thinking-enabled model combining speed with reasoning capabilities for innovative security research and advanced threat analysis
+  thinking: true
+  release_date: 2025-01-21
+  price:
+    input: 0.1
+    output: 0.7
+
+# Specialized Models
+- name: gemma-3-27b-it
+  description: Open-source model ideal for on-premises security operations, privacy-sensitive penetration testing, and customizable security analysis workflows
+  thinking: false
+  release_date: 2024-02-21
+  price:
+    input: 0.0
+    output: 0.0

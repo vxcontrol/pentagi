@@ -26,6 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 var (
@@ -75,13 +76,13 @@ func NewGraphqlService(
 		MaxMemory: 32 << 20, // 32MB
 	})
 
-	srv.SetQueryCache(lru.New(1000))
+	srv.SetQueryCache(lru.New[*ast.QueryDocument](1000))
 
 	srv.Use(extension.Introspection{})
 	srv.Use(extension.AutomaticPersistedQuery{
-		Cache: lru.New(100),
+		Cache: lru.New[string](100),
 	})
-	srv.Use(extension.FixedComplexityLimit(1000))
+	srv.Use(extension.FixedComplexityLimit(20000))
 
 	ov := newOriginValidator(origins)
 

@@ -13,6 +13,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -58,6 +59,7 @@ type newAssistantWorkerCtx struct {
 	flowID    int64
 	input     string
 	useAgents bool
+	prvname   provider.ProviderName
 	prvtype   provider.ProviderType
 	functions *tools.Functions
 
@@ -84,9 +86,10 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"flow_id":  awc.flowID,
-		"user_id":  awc.userID,
-		"provider": awc.prvtype,
+		"flow_id":       awc.flowID,
+		"user_id":       awc.userID,
+		"provider_name": awc.prvname.String(),
+		"provider_type": awc.prvtype.String(),
 	})
 
 	user, err := awc.db.GetUser(ctx, awc.userID)
@@ -102,15 +105,15 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	}
 
 	assistant, err := awc.db.CreateAssistant(ctx, database.CreateAssistantParams{
-		Title:         "untitled",
-		Status:        database.AssistantStatusCreated,
-		Model:         "unknown",
-		ModelProvider: string(awc.prvtype),
-		Language:      "English",
-		Functions:     []byte("{}"),
-		Prompts:       []byte("{}"),
-		FlowID:        awc.flowID,
-		UseAgents:     awc.useAgents,
+		Title:             "untitled",
+		Status:            database.AssistantStatusCreated,
+		Model:             "unknown",
+		ModelProviderName: string(awc.prvname),
+		ModelProviderType: database.ProviderType(awc.prvtype),
+		Language:          "English",
+		Functions:         []byte("{}"),
+		FlowID:            awc.flowID,
+		UseAgents:         awc.useAgents,
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to create assistant in DB")
@@ -128,14 +131,15 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 			langfuse.WithTraceInput(awc.input),
 			langfuse.WithTraceSessionId(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
-				"assistant_id": assistant.ID,
-				"flow_id":      awc.flowID,
-				"user_id":      awc.userID,
-				"user_email":   user.Mail,
-				"user_name":    user.Name,
-				"user_hash":    user.Hash,
-				"user_role":    user.RoleName,
-				"provider":     awc.prvtype,
+				"assistant_id":  assistant.ID,
+				"flow_id":       awc.flowID,
+				"user_id":       awc.userID,
+				"user_email":    user.Mail,
+				"user_name":     user.Name,
+				"user_hash":     user.Hash,
+				"user_role":     user.RoleName,
+				"provider_name": awc.prvname.String(),
+				"provider_type": awc.prvtype.String(),
 			}),
 		),
 	)
@@ -153,8 +157,8 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow tools executor", err)
 	}
-	assistantProvider, err := awc.provs.NewAssistantProvider(ctx, awc.db, awc.prvtype, prompter, executor,
-		assistant.ID, awc.flowID, container.Image, awc.input, aslw.StreamFlowAssistantMsg)
+	assistantProvider, err := awc.provs.NewAssistantProvider(ctx, awc.prvname, prompter, executor,
+		assistant.ID, awc.flowID, awc.userID, container.Image, awc.input, aslw.StreamFlowAssistantMsg)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to get assistant provider", err)
 	}
@@ -169,20 +173,14 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to marshal functions", err)
 	}
 
-	templatesBlob, err := prompter.DumpTemplates()
-	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to dump prompter templates", err)
-	}
-
 	logger = logger.WithField("msg_chain_id", msgChainID)
 	logger.Info("assistant provider prepared")
 
 	assistant, err = awc.db.UpdateAssistant(ctx, database.UpdateAssistantParams{
 		Title:      assistantProvider.Title(),
-		Model:      assistantProvider.Model(provider.OptionsTypeAgent),
+		Model:      assistantProvider.Model(pconfig.OptionsTypePrimaryAgent),
 		Language:   assistantProvider.Language(),
 		Functions:  functionsBlob,
-		Prompts:    templatesBlob,
 		TraceID:    database.StringToNullString(observation.TraceID()),
 		MsgchainID: database.Int64ToNullInt64(&msgChainID),
 		ID:         assistant.ID,
@@ -264,11 +262,12 @@ func LoadAssistantWorker(
 	}
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"assistant_id": assistant.ID,
-		"flow_id":      awc.flowID,
-		"user_id":      awc.userID,
-		"msg_chain_id": assistant.MsgchainID,
-		"provider":     assistant.ModelProvider,
+		"assistant_id":  assistant.ID,
+		"flow_id":       awc.flowID,
+		"user_id":       awc.userID,
+		"msg_chain_id":  assistant.MsgchainID,
+		"provider_name": assistant.ModelProviderName,
+		"provider_type": assistant.ModelProviderType,
 	})
 
 	user, err := awc.db.GetUser(ctx, awc.userID)
@@ -290,14 +289,15 @@ func LoadAssistantWorker(
 			langfuse.WithTraceTags([]string{"controller", "assistant"}),
 			langfuse.WithTraceSessionId(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
-				"assistant_id": assistant.ID,
-				"flow_id":      awc.flowID,
-				"user_id":      awc.userID,
-				"user_email":   user.Mail,
-				"user_name":    user.Name,
-				"user_hash":    user.Hash,
-				"user_role":    user.RoleName,
-				"provider":     assistant.ModelProvider,
+				"assistant_id":  assistant.ID,
+				"flow_id":       awc.flowID,
+				"user_id":       awc.userID,
+				"user_email":    user.Mail,
+				"user_name":     user.Name,
+				"user_hash":     user.Hash,
+				"user_role":     user.RoleName,
+				"provider_name": assistant.ModelProviderName,
+				"provider_type": assistant.ModelProviderType,
 			}),
 		),
 	)
@@ -320,8 +320,8 @@ func LoadAssistantWorker(
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow tools executor", err)
 	}
-	assistantProvider, err := awc.provs.LoadAssistantProvider(awc.db, provider.ProviderType(assistant.ModelProvider),
-		prompter, executor, assistant.ID, awc.flowID, container.Image, assistant.Language, assistant.Title,
+	assistantProvider, err := awc.provs.LoadAssistantProvider(ctx, provider.ProviderName(assistant.ModelProviderName),
+		prompter, executor, assistant.ID, awc.flowID, awc.userID, container.Image, assistant.Language, assistant.Title,
 		aslw.StreamFlowAssistantMsg)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to get assistant provider", err)

@@ -83,11 +83,17 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			}),
 		}
 
-		logger = logger.WithFields(logrus.Fields{
-			"query":      action.Question[:min(len(action.Question), 1000)],
-			"task_id":    action.TaskID,
-			"subtask_id": action.SubtaskID,
-		})
+		fields := logrus.Fields{
+			"query": action.Question[:min(len(action.Question), 1000)],
+		}
+		if action.TaskID != nil {
+			fields["task_id"] = action.TaskID.Int64()
+		}
+		if action.SubtaskID != nil {
+			fields["subtask_id"] = action.SubtaskID.Int64()
+		}
+
+		logger = logger.WithFields(fields)
 
 		docs, err := m.store.SimilaritySearch(
 			ctx,

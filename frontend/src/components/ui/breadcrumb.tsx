@@ -11,10 +11,8 @@ import {
 } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import Anthropic from '@/components/icons/Anthropic';
-import Custom from '@/components/icons/Custom';
-import OpenAi from '@/components/icons/OpenAi';
 import { cn } from '@/lib/utils';
+import { getProviderIcon, getProviderTooltip, type Provider } from '@/models/Provider';
 
 const Breadcrumb = React.forwardRef<
     HTMLElement,
@@ -124,22 +122,10 @@ BreadcrumbStatus.displayName = 'BreadcrumbStatus';
 const BreadcrumbProvider = React.forwardRef<
     HTMLSpanElement,
     React.ComponentPropsWithoutRef<'span'> & {
-        provider?: string | null;
+        provider?: Provider | null;
     }
 >(({ provider, className, ...props }, ref) => {
-    const renderProviderIcon = () => {
-        if (!provider) return null;
-
-        const providerLower = provider.toLowerCase();
-        
-        if (providerLower.includes('openai')) {
-            return <OpenAi className="h-4 w-4 text-green-500" aria-label="OpenAI" />;
-        } else if (providerLower.includes('anthropic')) {
-            return <Anthropic className="h-4 w-4 text-purple-500" aria-label="Anthropic" />;
-        } else {
-            return <Custom className="h-4 w-4 text-blue-500" aria-label="Custom provider" />;
-        }
-    };
+    const actualProvider = provider;
 
     const iconElement = (
         <span
@@ -147,18 +133,18 @@ const BreadcrumbProvider = React.forwardRef<
             className={cn('inline-flex items-center mr-2 cursor-pointer', className)}
             {...props}
         >
-            {renderProviderIcon()}
+            {actualProvider && getProviderIcon(actualProvider)}
         </span>
     );
 
-    if (!provider) {
+    if (!actualProvider) {
         return null;
     }
 
     return (
         <Tooltip>
             <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
-            <TooltipContent>{provider}</TooltipContent>
+            <TooltipContent>{getProviderTooltip(actualProvider)}</TooltipContent>
         </Tooltip>
     );
 });

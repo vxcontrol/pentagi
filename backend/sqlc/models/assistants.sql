@@ -43,7 +43,7 @@ WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: CreateAssistant :one
 INSERT INTO assistants (
-  title, status, model, model_provider, language, functions, prompts, flow_id, use_agents
+  title, status, model, model_provider_name, model_provider_type, language, functions, flow_id, use_agents
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
@@ -51,8 +51,8 @@ RETURNING *;
 
 -- name: UpdateAssistant :one
 UPDATE assistants
-SET title = $1, model = $2, language = $3, functions = $4, prompts = $5, trace_id = $6, msgchain_id = $7
-WHERE id = $8
+SET title = $1, model = $2, language = $3, functions = $4, trace_id = $5, msgchain_id = $6
+WHERE id = $7
 RETURNING *;
 
 -- name: UpdateAssistantUseAgents :one

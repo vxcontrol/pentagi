@@ -1,0 +1,42 @@
+# Claude 3.5 series - Fast and efficient models for security tasks
+- name: claude-3-5-haiku-latest
+  description: Fastest Claude model delivering intelligence at blazing speeds - perfect for quick vulnerability scans and real-time security monitoring
+  thinking: false
+  release_date: 2024-10-22
+  price:
+    input: 0.8
+    output: 4.0
+
+- name: claude-3-5-sonnet-latest
+  description: High-intelligence model with exceptional capability for complex security analysis, threat hunting, and comprehensive penetration testing
+  thinking: false
+  release_date: 2024-10-22
+  price:
+    input: 3.0
+    output: 15.0
+
+# Claude 3.7 series - Advanced models with extended thinking capabilities
+- name: claude-3-7-sonnet-latest
+  description: High-performance model with extended thinking capabilities ideal for methodical security research and step-by-step attack planning
+  thinking: true
+  release_date: 2025-02-24
+  price:
+    input: 3.0
+    output: 15.0
+
+# Claude 4 series - Most capable models for advanced security operations
+- name: claude-sonnet-4-0
+  description: Latest high-performance model with exceptional reasoning - optimal for sophisticated penetration testing and advanced threat analysis
+  thinking: true
+  release_date: 2025-05-22
+  price:
+    input: 3.0
+    output: 15.0
+
+- name: claude-opus-4-0
+  description: Most powerful and capable Claude model with superior reasoning - designed for complex security research and advanced exploit development
+  thinking: true
+  release_date: 2025-05-22
+  price:
+    input: 15.0
+    output: 75.0

@@ -38,10 +38,10 @@ const returnOAuthUri = '/oauth/result';
 const errorMessage = 'Invalid login or password';
 const errorProviderMessage = 'Authentication failed';
 
-type Provider = 'google' | 'github';
+type OAuthProvider = 'google' | 'github';
 
 interface AuthProviderAction {
-    id: Provider;
+    id: OAuthProvider;
     name: string;
     icon: React.ReactNode;
 }
@@ -60,7 +60,7 @@ const providerActions: AuthProviderAction[] = [
 ];
 
 interface LoginFormProps {
-    providers: string[];
+    providers: string[]; // OAuth providers: ['google', 'github']
     returnUrl?: string;
 }
 
@@ -117,7 +117,7 @@ const LoginForm = ({ providers, returnUrl = '/chat/new' }: LoginFormProps) => {
         }
     };
 
-    const handleProviderLoginPopupOpen = async (provider: Provider): Promise<AuthInfoResponse> => {
+    const handleProviderLoginPopupOpen = async (provider: OAuthProvider): Promise<AuthInfoResponse> => {
         const width = 500;
         const height = 600;
         const left = window.screenX + (window.outerWidth - width) / 2;
@@ -201,7 +201,7 @@ const LoginForm = ({ providers, returnUrl = '/chat/new' }: LoginFormProps) => {
         });
     };
 
-    const handleProviderLogin = async (provider: Provider) => {
+    const handleProviderLogin = async (provider: OAuthProvider) => {
         setError(null);
         setIsSubmitting(true);
 

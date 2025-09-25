@@ -17,13 +17,13 @@ INSERT INTO prompts (
 ) VALUES (
   $1, $2, $3
 )
-RETURNING id, type, user_id, prompt
+RETURNING id, type, user_id, prompt, created_at, updated_at
 `
 
 type CreateUserPromptParams struct {
-	Type   string `json:"type"`
-	UserID int64  `json:"user_id"`
-	Prompt string `json:"prompt"`
+	Type   PromptType `json:"type"`
+	UserID int64      `json:"user_id"`
+	Prompt string     `json:"prompt"`
 }
 
 func (q *Queries) CreateUserPrompt(ctx context.Context, arg CreateUserPromptParams) (Prompt, error) {
@@ -34,13 +34,132 @@ func (q *Queries) CreateUserPrompt(ctx context.Context, arg CreateUserPromptPara
 		&i.Type,
 		&i.UserID,
 		&i.Prompt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deletePrompt = `-- name: DeletePrompt :exec
+DELETE FROM prompts
+WHERE id = $1
+`
+
+func (q *Queries) DeletePrompt(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deletePrompt, id)
+	return err
+}
+
+const deleteUserPrompt = `-- name: DeleteUserPrompt :exec
+DELETE FROM prompts
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteUserPromptParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error {
+	_, err := q.db.ExecContext(ctx, deleteUserPrompt, arg.ID, arg.UserID)
+	return err
+}
+
+const getPrompts = `-- name: GetPrompts :many
+SELECT
+  p.id, p.type, p.user_id, p.prompt, p.created_at, p.updated_at
+FROM prompts p
+ORDER BY p.user_id ASC, p.type ASC
+`
+
+func (q *Queries) GetPrompts(ctx context.Context) ([]Prompt, error) {
+	rows, err := q.db.QueryContext(ctx, getPrompts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Prompt
+	for rows.Next() {
+		var i Prompt
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.UserID,
+			&i.Prompt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserPrompt = `-- name: GetUserPrompt :one
+SELECT
+  p.id, p.type, p.user_id, p.prompt, p.created_at, p.updated_at
+FROM prompts p
+INNER JOIN users u ON p.user_id = u.id
+WHERE p.id = $1 AND p.user_id = $2
+`
+
+type GetUserPromptParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetUserPrompt(ctx context.Context, arg GetUserPromptParams) (Prompt, error) {
+	row := q.db.QueryRowContext(ctx, getUserPrompt, arg.ID, arg.UserID)
+	var i Prompt
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.UserID,
+		&i.Prompt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserPromptByType = `-- name: GetUserPromptByType :one
+SELECT
+  p.id, p.type, p.user_id, p.prompt, p.created_at, p.updated_at
+FROM prompts p
+INNER JOIN users u ON p.user_id = u.id
+WHERE p.type = $1 AND p.user_id = $2
+LIMIT 1
+`
+
+type GetUserPromptByTypeParams struct {
+	Type   PromptType `json:"type"`
+	UserID int64      `json:"user_id"`
+}
+
+func (q *Queries) GetUserPromptByType(ctx context.Context, arg GetUserPromptByTypeParams) (Prompt, error) {
+	row := q.db.QueryRowContext(ctx, getUserPromptByType, arg.Type, arg.UserID)
+	var i Prompt
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.UserID,
+		&i.Prompt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUserPrompts = `-- name: GetUserPrompts :many
 SELECT
-  p.id, p.type, p.user_id, p.prompt
+  p.id, p.type, p.user_id, p.prompt, p.created_at, p.updated_at
 FROM prompts p
 INNER JOIN users u ON p.user_id = u.id
 WHERE p.user_id = $1
@@ -61,6 +180,8 @@ func (q *Queries) GetUserPrompts(ctx context.Context, userID int64) ([]Prompt, e
 			&i.Type,
 			&i.UserID,
 			&i.Prompt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -75,52 +196,82 @@ func (q *Queries) GetUserPrompts(ctx context.Context, userID int64) ([]Prompt, e
 	return items, nil
 }
 
-const getUserTypePrompt = `-- name: GetUserTypePrompt :one
-SELECT
-  p.id, p.type, p.user_id, p.prompt
-FROM prompts p
-INNER JOIN users u ON p.user_id = u.id
-WHERE p.type = $1 AND p.user_id = $2
+const updatePrompt = `-- name: UpdatePrompt :one
+UPDATE prompts
+SET prompt = $1
+WHERE id = $2
+RETURNING id, type, user_id, prompt, created_at, updated_at
 `
 
-type GetUserTypePromptParams struct {
-	Type   string `json:"type"`
-	UserID int64  `json:"user_id"`
+type UpdatePromptParams struct {
+	Prompt string `json:"prompt"`
+	ID     int64  `json:"id"`
 }
 
-func (q *Queries) GetUserTypePrompt(ctx context.Context, arg GetUserTypePromptParams) (Prompt, error) {
-	row := q.db.QueryRowContext(ctx, getUserTypePrompt, arg.Type, arg.UserID)
+func (q *Queries) UpdatePrompt(ctx context.Context, arg UpdatePromptParams) (Prompt, error) {
+	row := q.db.QueryRowContext(ctx, updatePrompt, arg.Prompt, arg.ID)
 	var i Prompt
 	err := row.Scan(
 		&i.ID,
 		&i.Type,
 		&i.UserID,
 		&i.Prompt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const updateUserTypePrompt = `-- name: UpdateUserTypePrompt :one
+const updateUserPrompt = `-- name: UpdateUserPrompt :one
 UPDATE prompts
 SET prompt = $1
-WHERE type = $2 AND user_id = $3
-RETURNING id, type, user_id, prompt
+WHERE id = $2 AND user_id = $3
+RETURNING id, type, user_id, prompt, created_at, updated_at
 `
 
-type UpdateUserTypePromptParams struct {
+type UpdateUserPromptParams struct {
 	Prompt string `json:"prompt"`
-	Type   string `json:"type"`
+	ID     int64  `json:"id"`
 	UserID int64  `json:"user_id"`
 }
 
-func (q *Queries) UpdateUserTypePrompt(ctx context.Context, arg UpdateUserTypePromptParams) (Prompt, error) {
-	row := q.db.QueryRowContext(ctx, updateUserTypePrompt, arg.Prompt, arg.Type, arg.UserID)
+func (q *Queries) UpdateUserPrompt(ctx context.Context, arg UpdateUserPromptParams) (Prompt, error) {
+	row := q.db.QueryRowContext(ctx, updateUserPrompt, arg.Prompt, arg.ID, arg.UserID)
 	var i Prompt
 	err := row.Scan(
 		&i.ID,
 		&i.Type,
 		&i.UserID,
 		&i.Prompt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserPromptByType = `-- name: UpdateUserPromptByType :one
+UPDATE prompts
+SET prompt = $1
+WHERE type = $2 AND user_id = $3
+RETURNING id, type, user_id, prompt, created_at, updated_at
+`
+
+type UpdateUserPromptByTypeParams struct {
+	Prompt string     `json:"prompt"`
+	Type   PromptType `json:"type"`
+	UserID int64      `json:"user_id"`
+}
+
+func (q *Queries) UpdateUserPromptByType(ctx context.Context, arg UpdateUserPromptByTypeParams) (Prompt, error) {
+	row := q.db.QueryRowContext(ctx, updateUserPromptByType, arg.Prompt, arg.Type, arg.UserID)
+	var i Prompt
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.UserID,
+		&i.Prompt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

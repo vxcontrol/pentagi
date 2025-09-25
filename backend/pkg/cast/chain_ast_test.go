@@ -1,7 +1,6 @@
 package cast
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -638,7 +637,7 @@ func TestComplexGeneratedChains(t *testing.T) {
 			// If we had missing responses and force=true, dumped chain should be longer
 			if tc.missingResps > 0 {
 				assert.True(t, len(dumpedChain) >= len(chain),
-					fmt.Sprintf("Dumped chain should be at least as long as original when fixing missing responses"))
+					"Dumped chain should be at least as long as original when fixing missing responses")
 			}
 
 			// Check if all tool calls have responses

@@ -33,7 +33,10 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
+    expose:
+      - 3030/tcp
     environment: &langfuse-worker-env
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:${LANGFUSE_LISTEN_PORT:-4000}}
       DATABASE_URL: postgresql://${LANGFUSE_POSTGRES_USER:-postgres}:${LANGFUSE_POSTGRES_PASSWORD:-postgres}@langfuse-postgres:5432/${LANGFUSE_POSTGRES_DB:-langfuse}
       SALT: ${LANGFUSE_SALT:-myglobalsalt} # change this to a random string
       ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000} # generate via `openssl rand -hex 32`
@@ -46,6 +49,7 @@ services:
       CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
       CLICKHOUSE_CLUSTER_ENABLED: ${LANGFUSE_CLICKHOUSE_CLUSTER_ENABLED:-false}
+      LANGFUSE_USE_AZURE_BLOB: ${LANGFUSE_USE_AZURE_BLOB:-false}
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
       LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_REGION:-auto}
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_ACCESS_KEY_ID:-minio}
@@ -60,9 +64,26 @@ services:
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${LANGFUSE_S3_ENDPOINT:-http://langfuse-minio:9000}
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: ${LANGFUSE_S3_FORCE_PATH_STYLE:-true}
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: ${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
+      LANGFUSE_S3_BATCH_EXPORT_ENABLED: ${LANGFUSE_S3_BATCH_EXPORT_ENABLED:-true}
+      LANGFUSE_S3_BATCH_EXPORT_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+      LANGFUSE_S3_BATCH_EXPORT_REGION: ${LANGFUSE_S3_REGION:-auto}
+      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: ${LANGFUSE_S3_ENDPOINT:-http://langfuse-minio:9000}
+      LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: ${LANGFUSE_S3_ENDPOINT:-http://langfuse-minio:9000}
+      LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: ${LANGFUSE_S3_ACCESS_KEY_ID:-minio}
+      LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: ${LANGFUSE_S3_SECRET_ACCESS_KEY:-miniosecret}
       REDIS_HOST: ${LANGFUSE_REDIS_HOST:-langfuse-redis}
       REDIS_PORT: ${LANGFUSE_REDIS_PORT:-6379}
       REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-myredissecret}
+      REDIS_TLS_ENABLED: ${LANGFUSE_REDIS_TLS_ENABLED:-false}
+      REDIS_TLS_CA: ${LANGFUSE_REDIS_TLS_CA:-/certs/ca.crt}
+      REDIS_TLS_CERT: ${LANGFUSE_REDIS_TLS_CERT:-/certs/redis.crt}
+      REDIS_TLS_KEY: ${LANGFUSE_REDIS_TLS_KEY:-/certs/redis.key}
+      LANGFUSE_INGESTION_QUEUE_DELAY_MS: ${LANGFUSE_INGESTION_QUEUE_DELAY_MS:-}
+      LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS: ${LANGFUSE_INGESTION_CLICKHOUSE_WRITE_INTERVAL_MS:-}
+      LANGFUSE_INGESTION_CLICKHOUSE_WRITE_BATCH_SIZE: ${LANGFUSE_INGESTION_CLICKHOUSE_WRITE_BATCH_SIZE:-}
+      LANGFUSE_INGESTION_CLICKHOUSE_MAX_ATTEMPTS: ${LANGFUSE_INGESTION_CLICKHOUSE_MAX_ATTEMPTS:-}
+      EMAIL_FROM_ADDRESS: ${LANGFUSE_EMAIL_FROM_ADDRESS:-}
+      SMTP_CONNECTION_URL: ${LANGFUSE_SMTP_CONNECTION_URL:-}
     logging:
       options:
         max-size: 50m
@@ -79,12 +100,12 @@ services:
     expose:
       - 3000/tcp
     ports:
-      - 127.0.0.1:4000:3000
+      - ${LANGFUSE_LISTEN_IP:-127.0.0.1}:${LANGFUSE_LISTEN_PORT:-4000}:3000
     environment:
       <<: *langfuse-worker-env
       NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:4000}
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-mysecret}
-      LANGFUSE_LOG_LEVEL: ${LANGFUSE_LOG_LEVEL:-debug}
+      LANGFUSE_LOG_LEVEL: ${LANGFUSE_LOG_LEVEL:-info}
       LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-ocm47619l0000872mcd2dlbqwb}
       LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-PentAGI Demo}
       LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-cm47619l0000872mcd2dlbqwb}
@@ -124,7 +145,7 @@ services:
       - pentagi-network
 
   clickhouse:
-    image: clickhouse/clickhouse-server
+    image: clickhouse/clickhouse-server:24
     restart: unless-stopped
     user: "101:101"
     container_name: langfuse-clickhouse
@@ -150,7 +171,7 @@ services:
       - langfuse-network
 
   minio:
-    image: minio/minio
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
     restart: unless-stopped
     container_name: langfuse-minio
     hostname: langfuse-minio
@@ -212,7 +233,7 @@ services:
       - langfuse-network
 
   postgres:
-    image: postgres:${LANGFUSE_POSTGRES_VERSION:-latest}
+    image: postgres:16
     restart: unless-stopped
     container_name: langfuse-postgres
     hostname: langfuse-postgres

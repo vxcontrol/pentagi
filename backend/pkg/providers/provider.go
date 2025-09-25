@@ -13,6 +13,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/embeddings"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -67,7 +68,7 @@ type StreamMessageHandler func(ctx context.Context, chunk *StreamMessageChunk) e
 
 type FlowProvider interface {
 	Type() provider.ProviderType
-	Model(opt provider.ProviderOptionsType) string
+	Model(opt pconfig.ProviderOptionsType) string
 	Image() string
 	Title() string
 	Language() string
@@ -185,7 +186,7 @@ func (fp *flowProvider) GetTaskTitle(ctx context.Context, input string) (string,
 		return "", wrapErrorEndSpan(ctx, getterSpan, "failed to get flow title template", err)
 	}
 
-	title, err := fp.Call(ctx, provider.OptionsTypeSimple, titleTmpl)
+	title, err := fp.Call(ctx, pconfig.OptionsTypeSimple, titleTmpl)
 	if err != nil {
 		return "", wrapErrorEndSpan(ctx, getterSpan, "failed to get flow title", err)
 	}
@@ -329,7 +330,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 
 	refinerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template", err)
+		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template (1)", err)
 	}
 
 	// TODO: here need to store it in the database and use it as a cache for next runs
@@ -343,7 +344,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 		refinerContext["user"]["ExecutionState"] = executionState
 		refinerTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
 		if err != nil {
-			return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template", err)
+			return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template (2)", err)
 		}
 
 		if len(refinerTmpl) < msgRefinerSizeLimit {
@@ -355,7 +356,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 			refinerContext["user"]["ExecutionLogs"] = msgLogsSummary
 			refinerTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
 			if err != nil {
-				return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template", err)
+				return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template (3)", err)
 			}
 		}
 	}
@@ -421,7 +422,7 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 
 	reporterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeTaskReporter, reporterContext["user"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template", err)
+		return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template (1)", err)
 	}
 
 	if len(reporterTmpl) < msgReporterSizeLimit {
@@ -434,7 +435,7 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 		reporterContext["user"]["ExecutionState"] = executionState
 		reporterTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeTaskReporter, reporterContext["user"])
 		if err != nil {
-			return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template", err)
+			return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template (2)", err)
 		}
 
 		if len(reporterTmpl) < msgReporterSizeLimit {
@@ -444,6 +445,10 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 			}
 
 			reporterContext["user"]["ExecutionLogs"] = msgLogsSummary
+			reporterTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeTaskReporter, reporterContext["user"])
+			if err != nil {
+				return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template (3)", err)
+			}
 		}
 	}
 
@@ -469,7 +474,12 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.PrepareAgentChain")
 	defer span.End()
 
+	optAgentType := pconfig.OptionsTypePrimaryAgent
+	msgChainType := database.MsgchainTypePrimaryAgent
+
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":   fp.Type(),
+		"agent":      optAgentType,
 		"flow_id":    fp.flowID,
 		"task_id":    taskID,
 		"subtask_id": subtaskID,
@@ -517,8 +527,6 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 		return 0, fmt.Errorf("failed to get system prompt for primary agent template: %w", err)
 	}
 
-	optAgentType := provider.OptionsTypeAgent
-	msgChainType := database.MsgchainTypePrimaryAgent
 	msgChainID, _, err := fp.restoreChain(
 		ctx, &taskID, &subtaskID, optAgentType, msgChainType, systemAgentTmpl, subtask.Description,
 	)
@@ -534,7 +542,12 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.PerformAgentChain")
 	defer span.End()
 
+	optAgentType := pconfig.OptionsTypePrimaryAgent
+	msgChainType := database.MsgchainTypePrimaryAgent
+
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     fp.Type(),
+		"agent":        optAgentType,
 		"flow_id":      fp.flowID,
 		"task_id":      taskID,
 		"subtask_id":   subtaskID,
@@ -730,9 +743,9 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 		return PerformResultError, wrapErrorEndSpan(ctx, executorSpan, "failed to get primary executor", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, database.MsgchainTypePrimaryAgent)
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(
-		ctx, provider.OptionsTypeAgent, msgChain.ID, &taskID, &subtaskID, chain, executor, fp.summarizer,
+		ctx, optAgentType, msgChain.ID, &taskID, &subtaskID, chain, executor, fp.summarizer,
 	)
 	if err != nil {
 		return PerformResultError, wrapErrorEndSpan(ctx, executorSpan, "failed to perform primary agent chain", err)
@@ -748,6 +761,7 @@ func (fp *flowProvider) PutInputToAgentChain(ctx context.Context, msgChainID int
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     fp.Type(),
 		"flow_id":      fp.flowID,
 		"msg_chain_id": msgChainID,
 		"input":        input[:min(len(input), 1000)],
@@ -765,6 +779,7 @@ func (fp *flowProvider) EnsureChainConsistency(ctx context.Context, msgChainID i
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     fp.Type(),
 		"flow_id":      fp.flowID,
 		"msg_chain_id": msgChainID,
 	})

@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronDown, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import debounce from 'lodash/debounce';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -21,7 +21,9 @@ import type { AssistantFragmentFragment, AssistantLogFragmentFragment } from '@/
 import { useSettingsQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
+import { isProviderValid, type Provider } from '@/models/Provider';
 
+import { useChatScroll } from '../../hooks/use-chat-scroll';
 import ChatMessage from './ChatMessage';
 
 interface ChatAssistantMessagesProps {
@@ -30,8 +32,8 @@ interface ChatAssistantMessagesProps {
     className?: string;
     assistants: AssistantFragmentFragment[];
     selectedAssistantId?: string | null;
-    selectedProvider: string;
-    providers: string[];
+    selectedProvider: Provider | null;
+    providers: Provider[];
     onSelectAssistant?: (assistantId: string | null) => void;
     onCreateAssistant?: () => void;
     onDeleteAssistant?: (assistantId: string) => void;
@@ -59,102 +61,20 @@ const ChatAssistantMessages = ({
     onCreateNewAssistant,
     onStopAssistant,
 }: ChatAssistantMessagesProps) => {
-    const messagesEndRef = useRef<HTMLDivElement>(null);
     const [isCreatingAssistant, setIsCreatingAssistant] = useState(false);
 
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
 
-    const scrollableContainerRef = useRef<HTMLDivElement>(null);
-    const [isScrolledToBottom, setIsScrolledToBottom] = useState(true);
-    const isScrolledToBottomRef = useRef(true);
-    const needsScrollRef = useRef(false);
-    const animationFrameRef = useRef<number | null>(null);
-    const prevScrollTopRef = useRef<number>(0);
-    const lastScrollTimeRef = useRef<number>(0);
-    const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const scrollThrottleDelay = 500; // 500ms throttle
     const textareaId = 'chat-textarea';
+
+    const { containerRef, endRef, isScrolledToBottom, hasNewMessages, scrollToEnd } = useChatScroll(
+        useMemo(() => (logs ? [...(logs || [])] : []), [logs]),
+        selectedAssistantId ?? null,
+    );
 
     // Get system settings
     const { data: settingsData } = useSettingsQuery();
-
-    // Update ref when state changes
-    useEffect(() => {
-        isScrolledToBottomRef.current = isScrolledToBottom;
-    }, [isScrolledToBottom]);
-
-    const scrollMessages = useCallback(() => {
-        const now = Date.now();
-        const timeSinceLastScroll = now - lastScrollTimeRef.current;
-
-        // Only scroll if enough time has passed since the last scroll
-        if (timeSinceLastScroll >= scrollThrottleDelay && messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-            lastScrollTimeRef.current = now;
-        }
-    }, [scrollThrottleDelay]);
-
-    // Throttled scroll function that respects the delay
-    const throttledScrollMessages = useCallback(() => {
-        const now = Date.now();
-        const timeSinceLastScroll = now - lastScrollTimeRef.current;
-
-        // Clear any existing timeout
-        if (scrollTimeoutRef.current) {
-            clearTimeout(scrollTimeoutRef.current);
-            scrollTimeoutRef.current = null;
-        }
-
-        if (timeSinceLastScroll >= scrollThrottleDelay) {
-            // Enough time has passed, scroll immediately
-            scrollMessages();
-        } else {
-            // Not enough time has passed, schedule a scroll for later
-            const remainingTime = scrollThrottleDelay - timeSinceLastScroll;
-            scrollTimeoutRef.current = setTimeout(() => {
-                scrollMessages();
-                scrollTimeoutRef.current = null;
-            }, remainingTime);
-        }
-    }, [scrollMessages, scrollThrottleDelay]);
-
-    useEffect(() => {
-        if (scrollableContainerRef.current) {
-            prevScrollTopRef.current = scrollableContainerRef.current.scrollTop;
-        }
-    }, []);
-
-    const handleScroll = useCallback(() => {
-        const el = scrollableContainerRef.current;
-        if (!el) return;
-
-        const { scrollTop, scrollHeight, clientHeight } = el;
-        const effectivelyAtBottom = scrollHeight - scrollTop <= clientHeight + 2;
-
-        if (effectivelyAtBottom) {
-            if (!isScrolledToBottomRef.current) {
-                setIsScrolledToBottom(true);
-                needsScrollRef.current = false;
-            }
-        } else {
-            const scrollUpThreshold = 10;
-            if (isScrolledToBottomRef.current && scrollTop < prevScrollTopRef.current - scrollUpThreshold) {
-                setIsScrolledToBottom(false);
-            }
-        }
-        prevScrollTopRef.current = scrollTop;
-    }, []);
-
-    useEffect(() => {
-        const scrollableElement = scrollableContainerRef.current;
-        if (!scrollableElement) return;
-
-        scrollableElement.addEventListener('scroll', handleScroll);
-        return () => {
-            scrollableElement.removeEventListener('scroll', handleScroll);
-        };
-    }, [handleScroll]);
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         resolver: zodResolver(searchFormSchema),
@@ -167,10 +87,11 @@ const ChatAssistantMessages = ({
 
     // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
-        () => debounce((value: string) => {
-            setDebouncedSearchValue(value);
-        }, 500),
-        []
+        () =>
+            debounce((value: string) => {
+                setDebouncedSearchValue(value);
+            }, 500),
+        [],
     );
 
     // Update debounced search value when input value changes
@@ -210,13 +131,14 @@ const ChatAssistantMessages = ({
 
     // Check if selected provider is available
     const isProviderAvailable = useMemo(() => {
-        return providers.includes(selectedProvider);
+        if (!selectedProvider) return false;
+        return isProviderValid(selectedProvider, providers);
     }, [providers, selectedProvider]);
 
     // Check if the assistant's provider is available
     const isAssistantProviderAvailable = useMemo(() => {
         if (!selectedAssistant) return true; // If no assistant is selected, consider provider available
-        return providers.includes(selectedAssistant.provider);
+        return isProviderValid(selectedAssistant.provider, providers);
     }, [providers, selectedAssistant]);
 
     // Calculate default useAgents value
@@ -315,39 +237,6 @@ const ChatAssistantMessages = ({
         }
     }, [textareaId]);
 
-    // Single useEffect for all cleanup and scroll logic
-    useEffect(() => {
-        if (isScrolledToBottom) {
-            needsScrollRef.current = true;
-            if (!animationFrameRef.current) {
-                animationFrameRef.current = requestAnimationFrame(() => {
-                    if (needsScrollRef.current) {
-                        throttledScrollMessages();
-                        needsScrollRef.current = false;
-                    }
-                    animationFrameRef.current = null;
-                });
-            }
-        } else {
-            needsScrollRef.current = false;
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-                animationFrameRef.current = null;
-            }
-        }
-
-        return () => {
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-                animationFrameRef.current = null;
-            }
-            if (scrollTimeoutRef.current) {
-                clearTimeout(scrollTimeoutRef.current);
-                scrollTimeoutRef.current = null;
-            }
-        };
-    }, [filteredLogs, throttledScrollMessages, isScrolledToBottom]);
-
     return (
         <div className={cn('flex h-full flex-col', className)}>
             <div className="sticky top-0 z-10 bg-background pb-4">
@@ -402,7 +291,7 @@ const ChatAssistantMessages = ({
                                         className={cn(
                                             'flex items-center justify-between gap-2',
                                             selectedAssistantId === assistant.id && 'bg-accent font-medium',
-                                            !providers.includes(assistant.provider) && 'opacity-50',
+                                            !isProviderValid(assistant.provider, providers) && 'opacity-50',
                                         )}
                                         tabIndex={-1}
                                     >
@@ -419,7 +308,7 @@ const ChatAssistantMessages = ({
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm">{assistant.title}</span>
-                                                    {!providers.includes(assistant.provider) && (
+                                                    {!isProviderValid(assistant.provider, providers) && (
                                                         <span className="text-xs text-destructive">(unavailable)</span>
                                                     )}
                                                 </div>
@@ -484,48 +373,58 @@ const ChatAssistantMessages = ({
                 </div>
             </div>
 
-            {isCreatingAssistant
-                ? (
-                    <div className="flex flex-1 items-center justify-center">
-                        <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                            <Loader2 className="size-12 animate-spin" />
-                            <p>Creating assistant...</p>
-                        </div>
+            {isCreatingAssistant ? (
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                        <Loader2 className="size-12 animate-spin" />
+                        <p>Creating assistant...</p>
                     </div>
-                )
-                : selectedAssistantId
-                    ? (
-                        // Show messages for selected assistant
-                        <div ref={scrollableContainerRef} className="flex-1 space-y-4 overflow-y-auto pb-4">
-                            {filteredLogs.map((log) => (
-                                <ChatMessage
-                                    key={log.id}
-                                    log={log}
-                                    searchValue={debouncedSearchValue}
-                                />
-                            ))}
-                            <div ref={messagesEndRef} />
-                        </div>
-                    )
-                    : selectedFlowId === 'new'
-                        ? (
-                            // Show placeholder for new flow
-                            <div className="flex flex-1 items-center justify-center">
-                                <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                    <p>No Active Assistants</p>
-                                    <p className="text-xs">Start by typing a message to create a new assistant</p>
-                                </div>
-                            </div>
-                        )
-                        : (
-                            // Show placeholder when no assistant is selected in existing flow
-                            <div className="flex flex-1 items-center justify-center">
-                                <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                    <p>No Assistant Selected</p>
-                                    <p className="text-xs">Select an assistant from the dropdown or create a new one</p>
-                                </div>
-                            </div>
-                        )}
+                </div>
+            ) : selectedAssistantId ? (
+                // Show messages for selected assistant
+                <div className="relative pb-4 h-full overflow-y-hidden">
+                    <div
+                        ref={containerRef}
+                        className="h-full space-y-4 overflow-y-auto"
+                    >
+                        {filteredLogs.map((log) => (
+                            <ChatMessage
+                                key={log.id}
+                                log={log}
+                                searchValue={debouncedSearchValue}
+                            />
+                        ))}
+                        <div ref={endRef} />
+                    </div>
+
+                    {hasNewMessages && !isScrolledToBottom && (
+                        <Button
+                            type="button"
+                            size="icon"
+                            className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-full shadow-md hover:shadow-lg"
+                            onClick={() => scrollToEnd()}
+                        >
+                            <ChevronDown />
+                        </Button>
+                    )}
+                </div>
+            ) : selectedFlowId === 'new' ? (
+                // Show placeholder for new flow
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <p>No Active Assistants</p>
+                        <p className="text-xs">Start by typing a message to create a new assistant</p>
+                    </div>
+                </div>
+            ) : (
+                // Show placeholder when no assistant is selected in existing flow
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <p>No Assistant Selected</p>
+                        <p className="text-xs">Select an assistant from the dropdown or create a new one</p>
+                    </div>
+                </div>
+            )}
 
             <div className="sticky bottom-0 border-t bg-background p-px pt-4">
                 <ChatAssistantFormInput

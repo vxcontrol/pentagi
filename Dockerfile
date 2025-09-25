@@ -101,6 +101,10 @@ COPY --from=be-build /etester /opt/pentagi/bin/etester
 COPY --from=fe-build /frontend/dist /opt/pentagi/fe
 
 # Copy provider configuration files
+COPY examples/configs/vllm-qwen332b-fp16.provider.yml /opt/pentagi/conf/
+COPY examples/configs/ollama-qwen332b-fp16-tc.provider.yml /opt/pentagi/conf/
+COPY examples/configs/ollama-qwq32b-fp16-tc.provider.yml /opt/pentagi/conf/
+COPY examples/configs/ollama-llama318b.provider.yml /opt/pentagi/conf/
 COPY examples/configs/openrouter.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepinfra.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepseek.provider.yml /opt/pentagi/conf/

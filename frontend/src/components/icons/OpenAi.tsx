@@ -9,8 +9,6 @@ const OpenAi = ({ className, ...props }: OpenAiProps) => {
         <svg
             fill="currentColor"
             fillRule="evenodd"
-            height="1em"
-            width="1em"
             viewBox="0 0 24 24"
             className={cn(className)}
             {...props}

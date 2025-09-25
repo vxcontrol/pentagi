@@ -9,6 +9,21 @@ import (
 	"time"
 )
 
+type AgentConfig struct {
+	Model             string           `json:"model"`
+	MaxTokens         *int             `json:"maxTokens,omitempty"`
+	Temperature       *float64         `json:"temperature,omitempty"`
+	TopK              *int             `json:"topK,omitempty"`
+	TopP              *float64         `json:"topP,omitempty"`
+	MinLength         *int             `json:"minLength,omitempty"`
+	MaxLength         *int             `json:"maxLength,omitempty"`
+	RepetitionPenalty *float64         `json:"repetitionPenalty,omitempty"`
+	FrequencyPenalty  *float64         `json:"frequencyPenalty,omitempty"`
+	PresencePenalty   *float64         `json:"presencePenalty,omitempty"`
+	Reasoning         *ReasoningConfig `json:"reasoning,omitempty"`
+	Price             *ModelPrice      `json:"price,omitempty"`
+}
+
 type AgentLog struct {
 	ID        int64     `json:"id"`
 	Initiator AgentType `json:"initiator"`
@@ -21,11 +36,58 @@ type AgentLog struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type AgentPrompt struct {
+	System *DefaultPrompt `json:"system"`
+}
+
+type AgentPrompts struct {
+	System *DefaultPrompt `json:"system"`
+	Human  *DefaultPrompt `json:"human"`
+}
+
+type AgentTestResult struct {
+	Tests []*TestResult `json:"tests"`
+}
+
+type AgentsConfig struct {
+	Simple     *AgentConfig `json:"simple"`
+	SimpleJSON *AgentConfig `json:"simpleJson"`
+	Agent      *AgentConfig `json:"agent"`
+	Assistant  *AgentConfig `json:"assistant"`
+	Generator  *AgentConfig `json:"generator"`
+	Refiner    *AgentConfig `json:"refiner"`
+	Adviser    *AgentConfig `json:"adviser"`
+	Reflector  *AgentConfig `json:"reflector"`
+	Searcher   *AgentConfig `json:"searcher"`
+	Enricher   *AgentConfig `json:"enricher"`
+	Coder      *AgentConfig `json:"coder"`
+	Installer  *AgentConfig `json:"installer"`
+	Pentester  *AgentConfig `json:"pentester"`
+}
+
+type AgentsPrompts struct {
+	PrimaryAgent  *AgentPrompt  `json:"primaryAgent"`
+	Assistant     *AgentPrompt  `json:"assistant"`
+	Pentester     *AgentPrompts `json:"pentester"`
+	Coder         *AgentPrompts `json:"coder"`
+	Installer     *AgentPrompts `json:"installer"`
+	Searcher      *AgentPrompts `json:"searcher"`
+	Memorist      *AgentPrompts `json:"memorist"`
+	Adviser       *AgentPrompts `json:"adviser"`
+	Generator     *AgentPrompts `json:"generator"`
+	Refiner       *AgentPrompts `json:"refiner"`
+	Reporter      *AgentPrompts `json:"reporter"`
+	Reflector     *AgentPrompts `json:"reflector"`
+	Enricher      *AgentPrompts `json:"enricher"`
+	ToolCallFixer *AgentPrompts `json:"toolCallFixer"`
+	Summarizer    *AgentPrompt  `json:"summarizer"`
+}
+
 type Assistant struct {
 	ID        int64      `json:"id"`
 	Title     string     `json:"title"`
 	Status    StatusType `json:"status"`
-	Provider  string     `json:"provider"`
+	Provider  *Provider  `json:"provider"`
 	FlowID    int64      `json:"flowId"`
 	UseAgents bool       `json:"useAgents"`
 	CreatedAt time.Time  `json:"createdAt"`
@@ -45,12 +107,32 @@ type AssistantLog struct {
 	CreatedAt    time.Time      `json:"createdAt"`
 }
 
+type DefaultPrompt struct {
+	Type      PromptType `json:"type"`
+	Template  string     `json:"template"`
+	Variables []string   `json:"variables"`
+}
+
+type DefaultPrompts struct {
+	Agents *AgentsPrompts `json:"agents"`
+	Tools  *ToolsPrompts  `json:"tools"`
+}
+
+type DefaultProvidersConfig struct {
+	Openai    *ProviderConfig `json:"openai"`
+	Anthropic *ProviderConfig `json:"anthropic"`
+	Gemini    *ProviderConfig `json:"gemini,omitempty"`
+	Bedrock   *ProviderConfig `json:"bedrock,omitempty"`
+	Ollama    *ProviderConfig `json:"ollama,omitempty"`
+	Custom    *ProviderConfig `json:"custom,omitempty"`
+}
+
 type Flow struct {
 	ID        int64       `json:"id"`
 	Title     string      `json:"title"`
 	Status    StatusType  `json:"status"`
 	Terminals []*Terminal `json:"terminals,omitempty"`
-	Provider  string      `json:"provider"`
+	Provider  *Provider   `json:"provider"`
 	CreatedAt time.Time   `json:"createdAt"`
 	UpdatedAt time.Time   `json:"updatedAt"`
 }
@@ -73,15 +155,96 @@ type MessageLog struct {
 	CreatedAt    time.Time      `json:"createdAt"`
 }
 
+type ModelConfig struct {
+	Name        string      `json:"name"`
+	Description *string     `json:"description,omitempty"`
+	ReleaseDate *time.Time  `json:"releaseDate,omitempty"`
+	Thinking    *bool       `json:"thinking,omitempty"`
+	Price       *ModelPrice `json:"price,omitempty"`
+}
+
+type ModelPrice struct {
+	Input  float64 `json:"input"`
+	Output float64 `json:"output"`
+}
+
 type Mutation struct {
 }
 
-type Prompt struct {
-	Type   string `json:"type"`
-	Prompt string `json:"prompt"`
+type PromptValidationResult struct {
+	Result    ResultType                 `json:"result"`
+	ErrorType *PromptValidationErrorType `json:"errorType,omitempty"`
+	Message   *string                    `json:"message,omitempty"`
+	Line      *int                       `json:"line,omitempty"`
+	Details   *string                    `json:"details,omitempty"`
+}
+
+type PromptsConfig struct {
+	Default     *DefaultPrompts `json:"default"`
+	UserDefined []*UserPrompt   `json:"userDefined,omitempty"`
+}
+
+type Provider struct {
+	Name string       `json:"name"`
+	Type ProviderType `json:"type"`
+}
+
+type ProviderConfig struct {
+	ID        int64         `json:"id"`
+	Name      string        `json:"name"`
+	Type      ProviderType  `json:"type"`
+	Agents    *AgentsConfig `json:"agents"`
+	CreatedAt time.Time     `json:"createdAt"`
+	UpdatedAt time.Time     `json:"updatedAt"`
+}
+
+type ProviderTestResult struct {
+	Simple     *AgentTestResult `json:"simple"`
+	SimpleJSON *AgentTestResult `json:"simpleJson"`
+	Agent      *AgentTestResult `json:"agent"`
+	Assistant  *AgentTestResult `json:"assistant"`
+	Generator  *AgentTestResult `json:"generator"`
+	Refiner    *AgentTestResult `json:"refiner"`
+	Adviser    *AgentTestResult `json:"adviser"`
+	Reflector  *AgentTestResult `json:"reflector"`
+	Searcher   *AgentTestResult `json:"searcher"`
+	Enricher   *AgentTestResult `json:"enricher"`
+	Coder      *AgentTestResult `json:"coder"`
+	Installer  *AgentTestResult `json:"installer"`
+	Pentester  *AgentTestResult `json:"pentester"`
+}
+
+type ProvidersConfig struct {
+	Enabled     *ProvidersReadinessStatus `json:"enabled"`
+	Default     *DefaultProvidersConfig   `json:"default"`
+	UserDefined []*ProviderConfig         `json:"userDefined,omitempty"`
+	Models      *ProvidersModelsList      `json:"models"`
+}
+
+type ProvidersModelsList struct {
+	Openai    []*ModelConfig `json:"openai"`
+	Anthropic []*ModelConfig `json:"anthropic"`
+	Gemini    []*ModelConfig `json:"gemini"`
+	Bedrock   []*ModelConfig `json:"bedrock,omitempty"`
+	Ollama    []*ModelConfig `json:"ollama,omitempty"`
+	Custom    []*ModelConfig `json:"custom,omitempty"`
+}
+
+type ProvidersReadinessStatus struct {
+	Openai    bool `json:"openai"`
+	Anthropic bool `json:"anthropic"`
+	Gemini    bool `json:"gemini"`
+	Bedrock   bool `json:"bedrock"`
+	Ollama    bool `json:"ollama"`
+	Custom    bool `json:"custom"`
 }
 
 type Query struct {
+}
+
+type ReasoningConfig struct {
+	Effort    *ReasoningEffort `json:"effort,omitempty"`
+	MaxTokens *int             `json:"maxTokens,omitempty"`
 }
 
 type Screenshot struct {
@@ -154,6 +317,34 @@ type TerminalLog struct {
 	Text      string          `json:"text"`
 	Terminal  int64           `json:"terminal"`
 	CreatedAt time.Time       `json:"createdAt"`
+}
+
+type TestResult struct {
+	Name      string  `json:"name"`
+	Type      string  `json:"type"`
+	Result    bool    `json:"result"`
+	Reasoning bool    `json:"reasoning"`
+	Streaming bool    `json:"streaming"`
+	Latency   *int    `json:"latency,omitempty"`
+	Error     *string `json:"error,omitempty"`
+}
+
+type ToolsPrompts struct {
+	GetFlowDescription       *DefaultPrompt `json:"getFlowDescription"`
+	GetTaskDescription       *DefaultPrompt `json:"getTaskDescription"`
+	GetExecutionLogs         *DefaultPrompt `json:"getExecutionLogs"`
+	GetFullExecutionContext  *DefaultPrompt `json:"getFullExecutionContext"`
+	GetShortExecutionContext *DefaultPrompt `json:"getShortExecutionContext"`
+	ChooseDockerImage        *DefaultPrompt `json:"chooseDockerImage"`
+	ChooseUserLanguage       *DefaultPrompt `json:"chooseUserLanguage"`
+}
+
+type UserPrompt struct {
+	ID        int64      `json:"id"`
+	Type      PromptType `json:"type"`
+	Template  string     `json:"template"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
 type VectorStoreLog struct {
@@ -293,6 +484,252 @@ func (e *MessageLogType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e MessageLogType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type PromptType string
+
+const (
+	PromptTypePrimaryAgent          PromptType = "primary_agent"
+	PromptTypeAssistant             PromptType = "assistant"
+	PromptTypePentester             PromptType = "pentester"
+	PromptTypeQuestionPentester     PromptType = "question_pentester"
+	PromptTypeCoder                 PromptType = "coder"
+	PromptTypeQuestionCoder         PromptType = "question_coder"
+	PromptTypeInstaller             PromptType = "installer"
+	PromptTypeQuestionInstaller     PromptType = "question_installer"
+	PromptTypeSearcher              PromptType = "searcher"
+	PromptTypeQuestionSearcher      PromptType = "question_searcher"
+	PromptTypeMemorist              PromptType = "memorist"
+	PromptTypeQuestionMemorist      PromptType = "question_memorist"
+	PromptTypeAdviser               PromptType = "adviser"
+	PromptTypeQuestionAdviser       PromptType = "question_adviser"
+	PromptTypeGenerator             PromptType = "generator"
+	PromptTypeSubtasksGenerator     PromptType = "subtasks_generator"
+	PromptTypeRefiner               PromptType = "refiner"
+	PromptTypeSubtasksRefiner       PromptType = "subtasks_refiner"
+	PromptTypeReporter              PromptType = "reporter"
+	PromptTypeTaskReporter          PromptType = "task_reporter"
+	PromptTypeReflector             PromptType = "reflector"
+	PromptTypeQuestionReflector     PromptType = "question_reflector"
+	PromptTypeEnricher              PromptType = "enricher"
+	PromptTypeQuestionEnricher      PromptType = "question_enricher"
+	PromptTypeToolcallFixer         PromptType = "toolcall_fixer"
+	PromptTypeInputToolcallFixer    PromptType = "input_toolcall_fixer"
+	PromptTypeSummarizer            PromptType = "summarizer"
+	PromptTypeImageChooser          PromptType = "image_chooser"
+	PromptTypeLanguageChooser       PromptType = "language_chooser"
+	PromptTypeFlowDescriptor        PromptType = "flow_descriptor"
+	PromptTypeTaskDescriptor        PromptType = "task_descriptor"
+	PromptTypeExecutionLogs         PromptType = "execution_logs"
+	PromptTypeFullExecutionContext  PromptType = "full_execution_context"
+	PromptTypeShortExecutionContext PromptType = "short_execution_context"
+)
+
+var AllPromptType = []PromptType{
+	PromptTypePrimaryAgent,
+	PromptTypeAssistant,
+	PromptTypePentester,
+	PromptTypeQuestionPentester,
+	PromptTypeCoder,
+	PromptTypeQuestionCoder,
+	PromptTypeInstaller,
+	PromptTypeQuestionInstaller,
+	PromptTypeSearcher,
+	PromptTypeQuestionSearcher,
+	PromptTypeMemorist,
+	PromptTypeQuestionMemorist,
+	PromptTypeAdviser,
+	PromptTypeQuestionAdviser,
+	PromptTypeGenerator,
+	PromptTypeSubtasksGenerator,
+	PromptTypeRefiner,
+	PromptTypeSubtasksRefiner,
+	PromptTypeReporter,
+	PromptTypeTaskReporter,
+	PromptTypeReflector,
+	PromptTypeQuestionReflector,
+	PromptTypeEnricher,
+	PromptTypeQuestionEnricher,
+	PromptTypeToolcallFixer,
+	PromptTypeInputToolcallFixer,
+	PromptTypeSummarizer,
+	PromptTypeImageChooser,
+	PromptTypeLanguageChooser,
+	PromptTypeFlowDescriptor,
+	PromptTypeTaskDescriptor,
+	PromptTypeExecutionLogs,
+	PromptTypeFullExecutionContext,
+	PromptTypeShortExecutionContext,
+}
+
+func (e PromptType) IsValid() bool {
+	switch e {
+	case PromptTypePrimaryAgent, PromptTypeAssistant, PromptTypePentester, PromptTypeQuestionPentester, PromptTypeCoder, PromptTypeQuestionCoder, PromptTypeInstaller, PromptTypeQuestionInstaller, PromptTypeSearcher, PromptTypeQuestionSearcher, PromptTypeMemorist, PromptTypeQuestionMemorist, PromptTypeAdviser, PromptTypeQuestionAdviser, PromptTypeGenerator, PromptTypeSubtasksGenerator, PromptTypeRefiner, PromptTypeSubtasksRefiner, PromptTypeReporter, PromptTypeTaskReporter, PromptTypeReflector, PromptTypeQuestionReflector, PromptTypeEnricher, PromptTypeQuestionEnricher, PromptTypeToolcallFixer, PromptTypeInputToolcallFixer, PromptTypeSummarizer, PromptTypeImageChooser, PromptTypeLanguageChooser, PromptTypeFlowDescriptor, PromptTypeTaskDescriptor, PromptTypeExecutionLogs, PromptTypeFullExecutionContext, PromptTypeShortExecutionContext:
+		return true
+	}
+	return false
+}
+
+func (e PromptType) String() string {
+	return string(e)
+}
+
+func (e *PromptType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = PromptType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid PromptType", str)
+	}
+	return nil
+}
+
+func (e PromptType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type PromptValidationErrorType string
+
+const (
+	PromptValidationErrorTypeSyntaxError          PromptValidationErrorType = "syntax_error"
+	PromptValidationErrorTypeUnauthorizedVariable PromptValidationErrorType = "unauthorized_variable"
+	PromptValidationErrorTypeRenderingFailed      PromptValidationErrorType = "rendering_failed"
+	PromptValidationErrorTypeEmptyTemplate        PromptValidationErrorType = "empty_template"
+	PromptValidationErrorTypeVariableTypeMismatch PromptValidationErrorType = "variable_type_mismatch"
+	PromptValidationErrorTypeUnknownType          PromptValidationErrorType = "unknown_type"
+)
+
+var AllPromptValidationErrorType = []PromptValidationErrorType{
+	PromptValidationErrorTypeSyntaxError,
+	PromptValidationErrorTypeUnauthorizedVariable,
+	PromptValidationErrorTypeRenderingFailed,
+	PromptValidationErrorTypeEmptyTemplate,
+	PromptValidationErrorTypeVariableTypeMismatch,
+	PromptValidationErrorTypeUnknownType,
+}
+
+func (e PromptValidationErrorType) IsValid() bool {
+	switch e {
+	case PromptValidationErrorTypeSyntaxError, PromptValidationErrorTypeUnauthorizedVariable, PromptValidationErrorTypeRenderingFailed, PromptValidationErrorTypeEmptyTemplate, PromptValidationErrorTypeVariableTypeMismatch, PromptValidationErrorTypeUnknownType:
+		return true
+	}
+	return false
+}
+
+func (e PromptValidationErrorType) String() string {
+	return string(e)
+}
+
+func (e *PromptValidationErrorType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = PromptValidationErrorType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid PromptValidationErrorType", str)
+	}
+	return nil
+}
+
+func (e PromptValidationErrorType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type ProviderType string
+
+const (
+	ProviderTypeOpenai    ProviderType = "openai"
+	ProviderTypeAnthropic ProviderType = "anthropic"
+	ProviderTypeGemini    ProviderType = "gemini"
+	ProviderTypeBedrock   ProviderType = "bedrock"
+	ProviderTypeOllama    ProviderType = "ollama"
+	ProviderTypeCustom    ProviderType = "custom"
+)
+
+var AllProviderType = []ProviderType{
+	ProviderTypeOpenai,
+	ProviderTypeAnthropic,
+	ProviderTypeGemini,
+	ProviderTypeBedrock,
+	ProviderTypeOllama,
+	ProviderTypeCustom,
+}
+
+func (e ProviderType) IsValid() bool {
+	switch e {
+	case ProviderTypeOpenai, ProviderTypeAnthropic, ProviderTypeGemini, ProviderTypeBedrock, ProviderTypeOllama, ProviderTypeCustom:
+		return true
+	}
+	return false
+}
+
+func (e ProviderType) String() string {
+	return string(e)
+}
+
+func (e *ProviderType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ProviderType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ProviderType", str)
+	}
+	return nil
+}
+
+func (e ProviderType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type ReasoningEffort string
+
+const (
+	ReasoningEffortHigh   ReasoningEffort = "high"
+	ReasoningEffortMedium ReasoningEffort = "medium"
+	ReasoningEffortLow    ReasoningEffort = "low"
+)
+
+var AllReasoningEffort = []ReasoningEffort{
+	ReasoningEffortHigh,
+	ReasoningEffortMedium,
+	ReasoningEffortLow,
+}
+
+func (e ReasoningEffort) IsValid() bool {
+	switch e {
+	case ReasoningEffortHigh, ReasoningEffortMedium, ReasoningEffortLow:
+		return true
+	}
+	return false
+}
+
+func (e ReasoningEffort) String() string {
+	return string(e)
+}
+
+func (e *ReasoningEffort) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ReasoningEffort(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ReasoningEffort", str)
+	}
+	return nil
+}
+
+func (e ReasoningEffort) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

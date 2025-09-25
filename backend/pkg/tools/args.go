@@ -190,11 +190,12 @@ type Bool bool
 
 func (b *Bool) UnmarshalJSON(data []byte) error {
 	sdata := strings.Trim(strings.ToLower(string(data)), "' \"\n\r\t")
-	if sdata == "true" {
+	switch sdata {
+	case "true":
 		*b = true
-	} else if sdata == "false" {
+	case "false":
 		*b = false
-	} else {
+	default:
 		return fmt.Errorf("invalid bool value: %s", sdata)
 	}
 	return nil

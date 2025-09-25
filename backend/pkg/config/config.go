@@ -41,8 +41,8 @@ type Config struct {
 	CookieSigningSalt string `env:"COOKIE_SIGNING_SALT"`
 
 	// Scraper (browser)
-	ScraperPublicURL  string `env:"SCRAPER_PUBLIC_URL" envDefault:"https://someuser:somepass@scraper"`
-	ScraperPrivateURL string `env:"SCRAPER_PRIVATE_URL" envDefault:"https://someuser:somepass@scraper"`
+	ScraperPublicURL  string `env:"SCRAPER_PUBLIC_URL"`
+	ScraperPrivateURL string `env:"SCRAPER_PRIVATE_URL"`
 
 	// OpenAI
 	OpenAIKey       string `env:"OPEN_AI_KEY"`
@@ -76,6 +76,20 @@ type Config struct {
 	LLMServerModel           string `env:"LLM_SERVER_MODEL"`
 	LLMServerConfig          string `env:"LLM_SERVER_CONFIG_PATH"`
 	LLMServerLegacyReasoning bool   `env:"LLM_SERVER_LEGACY_REASONING" envDefault:"false"`
+
+	// Ollama LLM provider
+	OllamaServerURL    string `env:"OLLAMA_SERVER_URL"`
+	OllamaServerConfig string `env:"OLLAMA_SERVER_CONFIG_PATH"`
+
+	// Google AI (Gemini) LLM provider
+	GeminiAPIKey    string `env:"GEMINI_API_KEY"`
+	GeminiServerURL string `env:"GEMINI_SERVER_URL" envDefault:"https://generativelanguage.googleapis.com"`
+
+	// Bedrock
+	BedrockRegion    string `env:"BEDROCK_REGION" envDefault:"us-east-1"`
+	BedrockAccessKey string `env:"BEDROCK_ACCESS_KEY_ID"`
+	BedrockSecretKey string `env:"BEDROCK_SECRET_ACCESS_KEY"`
+	BedrockServerURL string `env:"BEDROCK_SERVER_URL"`
 
 	// DuckDuckGo search engine
 	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`

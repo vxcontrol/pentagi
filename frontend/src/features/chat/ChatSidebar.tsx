@@ -8,6 +8,7 @@ import {
     MoreHorizontal,
     Pause,
     Plus,
+    Settings,
     Sun,
     Trash2,
     UserIcon,
@@ -18,12 +19,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import Logo from '@/components/icons/Logo';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -53,14 +49,15 @@ import { StatusType } from '@/graphql/types';
 import { axios } from '@/lib/axios';
 import { cn } from '@/lib/utils';
 import type { User } from '@/models/User';
+import { getProviderDisplayName, getProviderIcon, type Provider } from '@/models/Provider';
 import { useThemeStore } from '@/store/theme-store';
 
 interface ChatSidebarProps {
     user: User | null;
     flows: FlowOverviewFragmentFragment[];
-    providers: string[];
-    selectedProvider: string;
-    onChangeSelectedProvider: (provider: string) => void;
+    providers: Provider[];
+    selectedProvider: Provider | null;
+    onChangeSelectedProvider: (provider: Provider) => void;
     selectedFlowId: string | null;
     onChangeSelectedFlowId: (id: string) => void;
     onDeleteFlow: (id: string) => Promise<void>;
@@ -76,7 +73,7 @@ const ChatSidebarMenuItemText = ({ text }: { text: string }) => {
 
         if (element) {
             const shouldTruncate = element.scrollWidth > element.clientWidth;
-            setIsTruncated((current) => shouldTruncate !== current ? shouldTruncate : current);
+            setIsTruncated((current) => (shouldTruncate !== current ? shouldTruncate : current));
         }
     }, [text]);
 
@@ -176,27 +173,37 @@ const ChatSidebar = ({
                                     size="sm"
                                     className="ml-auto h-8 gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                 >
-                                    <span>{selectedProvider}</span>
-                                    <ChevronsUpDown className="size-4" />
+                                    <span className="truncate max-w-[90px]">{selectedProvider ? getProviderDisplayName(selectedProvider) : 'Select Provider'}</span>
+                                    <ChevronsUpDown className="size-4 shrink-0" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                                 align="end"
-                                className="w-[--radix-dropdown-menu-trigger-width]"
+                                className="min-w-[150px] max-w-[280px] w-fit"
                                 onCloseAutoFocus={(e) => {
                                     e.preventDefault();
                                 }}
                             >
                                 {providers.map((provider) => (
                                     <DropdownMenuItem
-                                        key={provider}
+                                        key={provider.name}
                                         onSelect={(e) => {
                                             e.preventDefault();
                                             onChangeSelectedProvider(provider);
                                         }}
                                         className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                     >
-                                        {provider} {provider === selectedProvider && <Check className="ml-auto" />}
+                                        <div className="flex items-center gap-2 w-full min-w-0">
+                                            <div className="shrink-0">
+                                                {getProviderIcon(provider, "h-4 w-4 shrink-0")}
+                                            </div>
+                                            <span className="flex-1 truncate max-w-[180px]">{getProviderDisplayName(provider)}</span>
+                                            {selectedProvider?.name === provider.name && (
+                                                <div className="shrink-0">
+                                                    <Check className="h-4 w-4 shrink-0" />
+                                                </div>
+                                            )}
+                                        </div>
                                     </DropdownMenuItem>
                                 ))}
                             </DropdownMenuContent>
@@ -213,7 +220,8 @@ const ChatSidebar = ({
                             size="icon"
                             className={cn(
                                 'relative size-8',
-                                (selectedFlowId === 'new' || window.location.pathname === '/chat/new') && 'text-primary after:absolute after:left-1/2 after:top-full after:size-1.5 after:-translate-x-1/2 after:rounded-full after:bg-primary dark:text-primary-foreground dark:after:bg-primary-foreground',
+                                (selectedFlowId === 'new' || window.location.pathname === '/chat/new') &&
+                                    'text-primary after:absolute after:left-1/2 after:top-full after:size-1.5 after:-translate-x-1/2 after:rounded-full after:bg-primary dark:text-primary-foreground dark:after:bg-primary-foreground',
                             )}
                             onClick={() => onChangeSelectedFlowId('new')}
                         >
@@ -247,9 +255,10 @@ const ChatSidebar = ({
                                             {
                                                 'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
                                                     isSelected,
-                                                'text-muted-foreground': [StatusType.Finished, StatusType.Failed].includes(
-                                                    flow.status,
-                                                ),
+                                                'text-muted-foreground': [
+                                                    StatusType.Finished,
+                                                    StatusType.Failed,
+                                                ].includes(flow.status),
                                             },
                                         )}
                                         onClick={() => onChangeSelectedFlowId(flow.id)}
@@ -280,9 +289,7 @@ const ChatSidebar = ({
                                             }}
                                         >
                                             <DropdownMenuTrigger asChild>
-                                                <SidebarMenuAction
-                                                    className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
-                                                >
+                                                <SidebarMenuAction className="focus:outline-none focus-visible:outline-none focus-visible:ring-0">
                                                     <MoreHorizontal />
                                                 </SidebarMenuAction>
                                             </DropdownMenuTrigger>
@@ -317,6 +324,24 @@ const ChatSidebar = ({
             </SidebarContent>
             <SidebarFooter>
                 <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            asChild
+                            className={cn(
+                                'relative cursor-pointer overflow-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                {
+                                    'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
+                                        location.pathname === '/settings',
+                                },
+                            )}
+                            onClick={() => navigate('/settings')}
+                        >
+                            <div className="flex w-full items-center gap-2">
+                                <Settings className="size-4" />
+                                <span>Settings</span>
+                            </div>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
                     <SidebarMenuItem>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -388,7 +413,10 @@ const ChatSidebar = ({
             </SidebarFooter>
             <SidebarRail />
 
-            <Dialog open={isPasswordModalOpen} onOpenChange={(open) => setIsPasswordModalOpen(open)}>
+            <Dialog
+                open={isPasswordModalOpen}
+                onOpenChange={(open) => setIsPasswordModalOpen(open)}
+            >
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Change Password</DialogTitle>

@@ -30,7 +30,7 @@ services:
     expose:
       - 3000/tcp
     ports:
-      - 127.0.0.1:3000:3000
+      - ${GRAFANA_LISTEN_IP:-127.0.0.1}:${GRAFANA_LISTEN_PORT:-3000}:3000
     environment:
       GF_USERS_ALLOW_SIGN_UP: false
       GF_EXPLORE_ENABLED: true
@@ -117,8 +117,8 @@ services:
       - 8148/tcp
       - 4318/tcp
     ports:
-      - 127.0.0.1:8148:8148
-      - 127.0.0.1:4318:4318
+      - ${OTEL_GRPC_LISTEN_IP:-127.0.0.1}:${OTEL_GRPC_LISTEN_PORT:-8148}:8148
+      - ${OTEL_HTTP_LISTEN_IP:-127.0.0.1}:${OTEL_HTTP_LISTEN_PORT:-4318}:4318
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:
@@ -166,7 +166,7 @@ services:
       CLICKHOUSE_DB: jaeger
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: clickhouse
-    ulimits: 
+    ulimits:
       nofile:
         hard: 262144
         soft: 262144

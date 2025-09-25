@@ -1,12 +1,11 @@
-package custom
+package pconfig
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"pentagi/pkg/providers/provider"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -139,7 +138,7 @@ func TestLoadConfig(t *testing.T) {
 		configFile  string
 		content     string
 		wantErr     bool
-		checkConfig func(*testing.T, *ProvidersConfig)
+		checkConfig func(*testing.T, *ProviderConfig)
 	}{
 		{
 			name:       "empty path",
@@ -174,7 +173,7 @@ func TestLoadConfig(t *testing.T) {
 					"temperature": 0.7
 				}
 			}`,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -195,7 +194,7 @@ func TestLoadConfig(t *testing.T) {
 					}
 				}
 			}`,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -222,7 +221,7 @@ func TestLoadConfig(t *testing.T) {
 					}
 				}
 			}`,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -249,7 +248,7 @@ func TestLoadConfig(t *testing.T) {
 					}
 				}
 			}`,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -271,7 +270,7 @@ simple:
   max_tokens: 100
   temperature: 0.7
 `,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -290,7 +289,7 @@ simple:
     effort: high
     max_tokens: 8000
 `,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -315,7 +314,7 @@ simple:
     effort: low
     max_tokens: 0
 `,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -340,7 +339,7 @@ simple:
     effort: none
     max_tokens: 2500
 `,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg.Simple)
 				assert.Equal(t, "test-model", cfg.Simple.Model)
 				assert.Equal(t, 100, cfg.Simple.MaxTokens)
@@ -372,6 +371,228 @@ simple:
 			}
 
 			assert.NoError(t, err)
+			if tt.checkConfig != nil {
+				tt.checkConfig(t, cfg)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_BackwardCompatibility(t *testing.T) {
+	tests := []struct {
+		name        string
+		configFile  string
+		content     string
+		format      string
+		wantErr     bool
+		checkConfig func(*testing.T, *ProviderConfig)
+	}{
+		{
+			name:       "legacy agent config JSON",
+			configFile: "legacy.json",
+			format:     "json",
+			content: `{
+				"agent": {
+					"model": "legacy-model",
+					"max_tokens": 200,
+					"temperature": 0.8
+				},
+				"simple": {
+					"model": "simple-model",
+					"max_tokens": 100
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent' field")
+				assert.Equal(t, "legacy-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 200, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.8, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Simple, "Simple config should be preserved")
+				assert.Equal(t, "simple-model", cfg.Simple.Model)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent for backward compatibility")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+		{
+			name:       "legacy agent config YAML",
+			configFile: "legacy.yaml",
+			format:     "yaml",
+			content: `
+agent:
+  model: legacy-yaml-model
+  max_tokens: 300
+  temperature: 0.9
+simple:
+  model: simple-yaml-model
+  max_tokens: 150
+`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent' field")
+				assert.Equal(t, "legacy-yaml-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 300, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.9, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Simple, "Simple config should be preserved")
+				assert.Equal(t, "simple-yaml-model", cfg.Simple.Model)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent for backward compatibility")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+		{
+			name:       "new primary_agent config takes precedence JSON",
+			configFile: "new_format.json",
+			format:     "json",
+			content: `{
+				"primary_agent": {
+					"model": "new-model",
+					"max_tokens": 400,
+					"temperature": 0.6
+				},
+				"agent": {
+					"model": "old-model",
+					"max_tokens": 200,
+					"temperature": 0.8
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set")
+				// Should use primary_agent, not legacy agent
+				assert.Equal(t, "new-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 400, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.6, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+		{
+			name:       "explicit assistant config overrides default YAML",
+			configFile: "explicit_assistant.yaml",
+			format:     "yaml",
+			content: `
+agent:
+  model: agent-model
+  max_tokens: 200
+assistant:
+  model: assistant-model
+  max_tokens: 500
+  temperature: 0.5
+`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent'")
+				assert.Equal(t, "agent-model", cfg.PrimaryAgent.Model)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set")
+				// Should use explicit assistant config, not agent
+				assert.Equal(t, "assistant-model", cfg.Assistant.Model)
+				assert.Equal(t, 500, cfg.Assistant.MaxTokens)
+				assert.Equal(t, 0.5, cfg.Assistant.Temperature)
+				assert.NotEqual(t, cfg.PrimaryAgent, cfg.Assistant, "Assistant should not be the same as PrimaryAgent")
+			},
+		},
+		{
+			name:       "no agent configs at all",
+			configFile: "no_agents.json",
+			format:     "json",
+			content: `{
+				"simple": {
+					"model": "simple-only",
+					"max_tokens": 100
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				assert.Nil(t, cfg.PrimaryAgent, "PrimaryAgent should be nil")
+				assert.Nil(t, cfg.Assistant, "Assistant should be nil")
+				require.NotNil(t, cfg.Simple, "Simple should be set")
+				assert.Equal(t, "simple-only", cfg.Simple.Model)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, tt.configFile)
+			err := os.WriteFile(configPath, []byte(tt.content), 0644)
+			require.NoError(t, err)
+
+			cfg, err := LoadConfig(configPath, nil)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			if tt.checkConfig != nil {
+				tt.checkConfig(t, cfg)
+			}
+		})
+	}
+}
+
+func TestLoadConfigData_BackwardCompatibility(t *testing.T) {
+	tests := []struct {
+		name        string
+		configData  string
+		format      string
+		wantErr     bool
+		checkConfig func(*testing.T, *ProviderConfig)
+	}{
+		{
+			name:   "legacy agent config JSON data",
+			format: "json",
+			configData: `{
+				"agent": {
+					"model": "legacy-data-model",
+					"max_tokens": 250,
+					"temperature": 0.7
+				}
+			}`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent' field")
+				assert.Equal(t, "legacy-data-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 250, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.7, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+		{
+			name:   "legacy agent config YAML data",
+			format: "yaml",
+			configData: `
+agent:
+  model: legacy-yaml-data-model
+  max_tokens: 350
+  temperature: 0.85
+`,
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
+				require.NotNil(t, cfg.PrimaryAgent, "PrimaryAgent should be set from legacy 'agent' field")
+				assert.Equal(t, "legacy-yaml-data-model", cfg.PrimaryAgent.Model)
+				assert.Equal(t, 350, cfg.PrimaryAgent.MaxTokens)
+				assert.Equal(t, 0.85, cfg.PrimaryAgent.Temperature)
+
+				require.NotNil(t, cfg.Assistant, "Assistant should be set from PrimaryAgent")
+				assert.Equal(t, cfg.PrimaryAgent, cfg.Assistant)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := LoadConfigData([]byte(tt.configData), nil)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
 			if tt.checkConfig != nil {
 				tt.checkConfig(t, cfg)
 			}
@@ -806,7 +1027,7 @@ response_mime_type: application/json
 }
 
 func TestProvidersConfig_GetOptionsForType(t *testing.T) {
-	config := &ProvidersConfig{
+	config := &ProviderConfig{
 		Simple: &AgentConfig{},
 	}
 
@@ -821,26 +1042,26 @@ func TestProvidersConfig_GetOptionsForType(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		config  *ProvidersConfig
-		optType provider.ProviderOptionsType
+		config  *ProviderConfig
+		optType ProviderOptionsType
 		wantLen int
 	}{
 		{
 			name:    "nil config",
 			config:  nil,
-			optType: provider.OptionsTypeSimple,
+			optType: OptionsTypeSimple,
 			wantLen: 0,
 		},
 		{
 			name:    "existing config",
 			config:  config,
-			optType: provider.OptionsTypeSimple,
+			optType: OptionsTypeSimple,
 			wantLen: 3,
 		},
 		{
 			name:    "non-existing config",
 			config:  config,
-			optType: provider.OptionsTypeAgent,
+			optType: OptionsTypePrimaryAgent,
 			wantLen: 0,
 		},
 		{
@@ -1077,15 +1298,15 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 		configFile     string
 		content        string
 		defaultOptions []llms.CallOption
-		checkConfig    func(*testing.T, *ProvidersConfig)
+		checkConfig    func(*testing.T, *ProviderConfig)
 	}{
 		{
 			name:           "empty path with defaults",
 			configFile:     "",
 			defaultOptions: defaultOptions,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				// when configPath is empty, we should create a new config with defaults
-				cfg = &ProvidersConfig{defaultOptions: defaultOptions}
+				cfg = &ProviderConfig{defaultOptions: defaultOptions}
 				require.NotNil(t, cfg)
 				assert.Equal(t, defaultOptions, cfg.defaultOptions)
 			},
@@ -1097,9 +1318,9 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 			defaultOptions: []llms.CallOption{
 				llms.WithTemperature(0.5),
 			},
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg)
-				options := cfg.GetOptionsForType(provider.OptionsTypeSimple)
+				options := cfg.GetOptionsForType(OptionsTypeSimple)
 				assert.Len(t, options, 1)
 			},
 		},
@@ -1112,11 +1333,11 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 				}
 			}`,
 			defaultOptions: defaultOptions,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg)
-				options := cfg.GetOptionsForType(provider.OptionsTypeSimple)
+				options := cfg.GetOptionsForType(OptionsTypeSimple)
 				assert.Len(t, options, 1) // should use agent config, not defaults
-				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
+				options = cfg.GetOptionsForType(OptionsTypePrimaryAgent)
 				assert.Len(t, options, 2) // should use defaults
 			},
 		},
@@ -1129,11 +1350,11 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 				}
 			}`,
 			defaultOptions: defaultOptions,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg)
-				options := cfg.GetOptionsForType(provider.OptionsTypeAssistant)
+				options := cfg.GetOptionsForType(OptionsTypeAssistant)
 				assert.Len(t, options, 1) // should use agent config (backward compatibility)
-				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
+				options = cfg.GetOptionsForType(OptionsTypePrimaryAgent)
 				assert.Len(t, options, 1)
 			},
 		},
@@ -1146,11 +1367,11 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 				}
 			}`,
 			defaultOptions: defaultOptions,
-			checkConfig: func(t *testing.T, cfg *ProvidersConfig) {
+			checkConfig: func(t *testing.T, cfg *ProviderConfig) {
 				require.NotNil(t, cfg)
-				options := cfg.GetOptionsForType(provider.OptionsTypeAssistant)
+				options := cfg.GetOptionsForType(OptionsTypeAssistant)
 				assert.Len(t, options, 1) // should use assistant config
-				options = cfg.GetOptionsForType(provider.OptionsTypeAgent)
+				options = cfg.GetOptionsForType(OptionsTypePrimaryAgent)
 				assert.Len(t, options, 2) // should use defaults
 			},
 		},
@@ -1168,7 +1389,7 @@ func TestLoadConfig_WithDefaultOptions(t *testing.T) {
 
 			cfg, err := LoadConfig(configPath, tt.defaultOptions)
 			if configPath == "" {
-				cfg = &ProvidersConfig{defaultOptions: tt.defaultOptions}
+				cfg = &ProviderConfig{defaultOptions: tt.defaultOptions}
 			}
 			require.NoError(t, err)
 			if tt.checkConfig != nil {
@@ -1184,7 +1405,7 @@ func TestProvidersConfig_GetOptionsForType_WithDefaults(t *testing.T) {
 		llms.WithMaxTokens(1000),
 	}
 
-	config := &ProvidersConfig{
+	config := &ProviderConfig{
 		Simple:         &AgentConfig{},
 		defaultOptions: defaultOptions,
 	}
@@ -1200,29 +1421,29 @@ func TestProvidersConfig_GetOptionsForType_WithDefaults(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		config      *ProvidersConfig
-		optType     provider.ProviderOptionsType
+		config      *ProviderConfig
+		optType     ProviderOptionsType
 		wantLen     int
 		useDefaults bool
 	}{
 		{
 			name:        "nil config",
 			config:      nil,
-			optType:     provider.OptionsTypeSimple,
+			optType:     OptionsTypeSimple,
 			wantLen:     0,
 			useDefaults: false,
 		},
 		{
 			name:        "existing config",
 			config:      config,
-			optType:     provider.OptionsTypeSimple,
+			optType:     OptionsTypeSimple,
 			wantLen:     3,
 			useDefaults: false,
 		},
 		{
 			name:        "non-existing config with defaults",
 			config:      config,
-			optType:     provider.OptionsTypeAgent,
+			optType:     OptionsTypePrimaryAgent,
 			wantLen:     2,
 			useDefaults: true,
 		},
@@ -1242,6 +1463,406 @@ func TestProvidersConfig_GetOptionsForType_WithDefaults(t *testing.T) {
 			if tt.useDefaults {
 				assert.Equal(t, defaultOptions, options)
 			}
+		})
+	}
+}
+
+func TestLoadModelsConfigData(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+		check   func(*testing.T, ModelsConfig)
+	}{
+		{
+			name:    "empty yaml",
+			yaml:    "",
+			wantErr: false,
+			check: func(t *testing.T, models ModelsConfig) {
+				assert.Len(t, models, 0)
+			},
+		},
+		{
+			name:    "invalid yaml",
+			yaml:    "invalid: [yaml",
+			wantErr: true,
+		},
+		{
+			name: "basic models with various configurations",
+			yaml: `
+- name: gpt-4o
+  description: Fast, intelligent, flexible GPT model ideal for complex penetration testing scenarios
+  thinking: false
+  release_date: 2024-05-13
+  price:
+    input: 2.5
+    output: 10.0
+- name: o3-mini
+  description: Small but powerful reasoning model excellent for step-by-step security analysis
+  thinking: true
+  release_date: 2025-01-31
+  price:
+    input: 1.1
+    output: 4.4
+- name: gemma-3-27b-it
+  description: Open-source model ideal for on-premises security operations
+  thinking: false
+  release_date: 2024-02-21
+- name: free-model
+  price:
+    input: 0.0
+    output: 0.0
+`,
+			wantErr: false,
+			check: func(t *testing.T, models ModelsConfig) {
+				require.Len(t, models, 4)
+
+				// Check first model (full config)
+				model1 := models[0]
+				assert.Equal(t, "gpt-4o", model1.Name)
+				require.NotNil(t, model1.Description)
+				assert.Contains(t, *model1.Description, "penetration testing")
+				require.NotNil(t, model1.Thinking)
+				assert.False(t, *model1.Thinking)
+				require.NotNil(t, model1.ReleaseDate)
+				assert.Equal(t, time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC), *model1.ReleaseDate)
+				require.NotNil(t, model1.Price)
+				assert.Equal(t, 2.5, model1.Price.Input)
+
+				// Check thinking model
+				model2 := models[1]
+				assert.Equal(t, "o3-mini", model2.Name)
+				require.NotNil(t, model2.Thinking)
+				assert.True(t, *model2.Thinking)
+
+				// Check free model without price
+				model3 := models[2]
+				assert.Equal(t, "gemma-3-27b-it", model3.Name)
+				assert.Nil(t, model3.Price)
+
+				// Check model with zero price
+				model4 := models[3]
+				assert.Equal(t, "free-model", model4.Name)
+				require.NotNil(t, model4.Price)
+				assert.Equal(t, 0.0, model4.Price.Input)
+			},
+		},
+		{
+			name: "model with invalid date format",
+			yaml: `
+- name: invalid-date-model
+  release_date: "invalid-date"
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			models, err := LoadModelsConfigData([]byte(tt.yaml))
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			if tt.check != nil {
+				tt.check(t, models)
+			}
+		})
+	}
+}
+
+func TestModelConfig_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		json    string
+		want    ModelConfig
+		wantErr bool
+	}{
+		{
+			name: "empty object",
+			json: "{}",
+			want: ModelConfig{},
+		},
+		{
+			name: "model with all fields",
+			json: `{
+				"name": "gpt-4o",
+				"description": "Fast, intelligent model",
+				"thinking": false,
+				"release_date": "2024-05-13",
+				"price": {
+					"input": 2.5,
+					"output": 10.0
+				}
+			}`,
+			want: ModelConfig{
+				Name:        "gpt-4o",
+				Description: stringPtr("Fast, intelligent model"),
+				Thinking:    boolPtr(false),
+				ReleaseDate: timePtr(time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC)),
+				Price: &PriceInfo{
+					Input:  2.5,
+					Output: 10.0,
+				},
+			},
+		},
+		{
+			name: "thinking model",
+			json: `{
+				"name": "o3-mini",
+				"thinking": true,
+				"release_date": "2025-01-31"
+			}`,
+			want: ModelConfig{
+				Name:        "o3-mini",
+				Thinking:    boolPtr(true),
+				ReleaseDate: timePtr(time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC)),
+			},
+		},
+		{
+			name: "minimal model",
+			json: `{"name": "test-model"}`,
+			want: ModelConfig{Name: "test-model"},
+		},
+		{
+			name:    "invalid date format",
+			json:    `{"name": "test", "release_date": "invalid-date"}`,
+			wantErr: true,
+		},
+		{
+			name:    "invalid json",
+			json:    "{invalid}",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got ModelConfig
+			err := json.Unmarshal([]byte(tt.json), &got)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.Name, got.Name)
+
+			if tt.want.Description != nil {
+				require.NotNil(t, got.Description)
+				assert.Equal(t, *tt.want.Description, *got.Description)
+			} else {
+				assert.Nil(t, got.Description)
+			}
+
+			if tt.want.Thinking != nil {
+				require.NotNil(t, got.Thinking)
+				assert.Equal(t, *tt.want.Thinking, *got.Thinking)
+			} else {
+				assert.Nil(t, got.Thinking)
+			}
+
+			if tt.want.ReleaseDate != nil {
+				require.NotNil(t, got.ReleaseDate)
+				assert.Equal(t, *tt.want.ReleaseDate, *got.ReleaseDate)
+			} else {
+				assert.Nil(t, got.ReleaseDate)
+			}
+
+			if tt.want.Price != nil {
+				require.NotNil(t, got.Price)
+				assert.Equal(t, tt.want.Price.Input, got.Price.Input)
+				assert.Equal(t, tt.want.Price.Output, got.Price.Output)
+			} else {
+				assert.Nil(t, got.Price)
+			}
+		})
+	}
+}
+
+func TestModelConfig_UnmarshalYAML(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		want    ModelConfig
+		wantErr bool
+	}{
+		{
+			name: "basic model yaml",
+			yaml: `
+name: gpt-4o
+description: Fast, intelligent model
+thinking: false
+release_date: 2024-05-13
+price:
+  input: 2.5
+  output: 10.0
+`,
+			want: ModelConfig{
+				Name:        "gpt-4o",
+				Description: stringPtr("Fast, intelligent model"),
+				Thinking:    boolPtr(false),
+				ReleaseDate: timePtr(time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC)),
+				Price: &PriceInfo{
+					Input:  2.5,
+					Output: 10.0,
+				},
+			},
+		},
+		{
+			name: "minimal yaml",
+			yaml: "name: test-model",
+			want: ModelConfig{Name: "test-model"},
+		},
+		{
+			name:    "invalid date yaml",
+			yaml:    "name: test\nrelease_date: invalid-date",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got ModelConfig
+			err := yaml.Unmarshal([]byte(tt.yaml), &got)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// Helper functions for creating pointers to primitive types
+func stringPtr(s string) *string {
+	return &s
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
+}
+
+func TestModelConfig_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name   string
+		config ModelConfig
+		check  func(*testing.T, []byte)
+	}{
+		{
+			name:   "empty config",
+			config: ModelConfig{},
+			check: func(t *testing.T, data []byte) {
+				var result map[string]any
+				err := json.Unmarshal(data, &result)
+				require.NoError(t, err)
+				// Empty config should omit all fields (or just have empty name)
+				// Accept both empty object or object with just empty name
+				if len(result) > 0 {
+					// If there are fields, name might be empty string
+					if name, exists := result["name"]; exists {
+						assert.Equal(t, "", name)
+					}
+				}
+			},
+		},
+		{
+			name: "full config",
+			config: ModelConfig{
+				Name:        "gpt-4o",
+				Description: stringPtr("Fast model"),
+				Thinking:    boolPtr(false),
+				ReleaseDate: timePtr(time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC)),
+				Price:       &PriceInfo{Input: 2.5, Output: 10.0},
+			},
+			check: func(t *testing.T, data []byte) {
+				var result map[string]any
+				err := json.Unmarshal(data, &result)
+				require.NoError(t, err)
+
+				assert.Equal(t, "gpt-4o", result["name"])
+				assert.Equal(t, "Fast model", result["description"])
+				assert.Equal(t, false, result["thinking"])
+				assert.Equal(t, "2024-05-13", result["release_date"])
+
+				price, ok := result["price"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, 2.5, price["input"])
+				assert.Equal(t, 10.0, price["output"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := json.Marshal(tt.config)
+			require.NoError(t, err)
+			tt.check(t, got)
+		})
+	}
+}
+
+func TestModelConfig_MarshalYAML(t *testing.T) {
+	tests := []struct {
+		name   string
+		config ModelConfig
+		check  func(*testing.T, []byte)
+	}{
+		{
+			name:   "empty config",
+			config: ModelConfig{},
+			check: func(t *testing.T, data []byte) {
+				var result map[string]any
+				err := yaml.Unmarshal(data, &result)
+				require.NoError(t, err)
+				// Empty config should omit all fields (or just have empty name)
+				// Accept both empty object or object with just empty name
+				if len(result) > 0 {
+					// If there are fields, name might be empty string
+					if name, exists := result["name"]; exists {
+						assert.Equal(t, "", name)
+					}
+				}
+			},
+		},
+		{
+			name: "full config",
+			config: ModelConfig{
+				Name:        "gpt-4o",
+				Description: stringPtr("Fast model"),
+				Thinking:    boolPtr(false),
+				ReleaseDate: timePtr(time.Date(2024, 5, 13, 0, 0, 0, 0, time.UTC)),
+				Price:       &PriceInfo{Input: 2.5, Output: 10.0},
+			},
+			check: func(t *testing.T, data []byte) {
+				var result map[string]any
+				err := yaml.Unmarshal(data, &result)
+				require.NoError(t, err)
+
+				assert.Equal(t, "gpt-4o", result["name"])
+				assert.Equal(t, "Fast model", result["description"])
+				assert.Equal(t, false, result["thinking"])
+				assert.Equal(t, "2024-05-13", result["release_date"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := yaml.Marshal(tt.config)
+			require.NoError(t, err)
+			tt.check(t, got)
 		})
 	}
 }

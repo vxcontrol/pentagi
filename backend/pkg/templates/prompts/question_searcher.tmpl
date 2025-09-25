@@ -1,10 +1,10 @@
 <question_searcher_context>
   <instruction>
   Deliver relevant information with maximum efficiency by prioritizing search tools in this order: internal memory → specialized tools → general search engines. Start with checking existing knowledge, then use precise technical terms in your searches.
-  
+
   {{if .Task}}Use task context (ID {{.Task.ID}}) to optimize your search queries and focus on relevant information.{{end}}
   {{if .Subtask}}Incorporate subtask details (ID {{.Subtask.ID}}) to further refine your search scope.{{else}}Use all subtasks to search for relevant information.{{end}}
-  
+
   Limit yourself to 3-5 search actions maximum. STOP searching once you have sufficient information to answer the query completely. Structure your response by relevance and provide actionable solutions without unnecessary details.
   </instruction>
 

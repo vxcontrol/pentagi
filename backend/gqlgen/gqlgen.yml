@@ -66,7 +66,9 @@ resolver:
 # gqlgen will search for any type names in the schema in these go packages
 # if they match it will use them, otherwise it will generate them.
 autobind:
+#  - "pentagi/pkg/database"
 #  - "pentagi/pkg/graph/model"
+#  - "pentagi/pkg/providers"
 
 # This section declares type mapping between the GraphQL and go type systems
 #
@@ -90,3 +92,15 @@ models:
   Uint:
     model:
       - github.com/99designs/gqlgen/graphql.Uint
+  JSON:
+    model:
+      - encoding/json.RawMessage
+  # Input types for avoiding types duplication
+  ReasoningConfigInput:
+    model: pentagi/pkg/graph/model.ReasoningConfig
+  ModelPriceInput:
+    model: pentagi/pkg/graph/model.ModelPrice
+  AgentConfigInput:
+    model: pentagi/pkg/graph/model.AgentConfig
+  AgentsConfigInput:
+    model: pentagi/pkg/graph/model.AgentsConfig

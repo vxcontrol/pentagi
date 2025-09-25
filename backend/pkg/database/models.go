@@ -337,6 +337,126 @@ func (ns NullMsglogType) Value() (driver.Value, error) {
 	return string(ns.MsglogType), nil
 }
 
+type PromptType string
+
+const (
+	PromptTypePrimaryAgent          PromptType = "primary_agent"
+	PromptTypeAssistant             PromptType = "assistant"
+	PromptTypePentester             PromptType = "pentester"
+	PromptTypeQuestionPentester     PromptType = "question_pentester"
+	PromptTypeCoder                 PromptType = "coder"
+	PromptTypeQuestionCoder         PromptType = "question_coder"
+	PromptTypeInstaller             PromptType = "installer"
+	PromptTypeQuestionInstaller     PromptType = "question_installer"
+	PromptTypeSearcher              PromptType = "searcher"
+	PromptTypeQuestionSearcher      PromptType = "question_searcher"
+	PromptTypeMemorist              PromptType = "memorist"
+	PromptTypeQuestionMemorist      PromptType = "question_memorist"
+	PromptTypeAdviser               PromptType = "adviser"
+	PromptTypeQuestionAdviser       PromptType = "question_adviser"
+	PromptTypeGenerator             PromptType = "generator"
+	PromptTypeSubtasksGenerator     PromptType = "subtasks_generator"
+	PromptTypeRefiner               PromptType = "refiner"
+	PromptTypeSubtasksRefiner       PromptType = "subtasks_refiner"
+	PromptTypeReporter              PromptType = "reporter"
+	PromptTypeTaskReporter          PromptType = "task_reporter"
+	PromptTypeReflector             PromptType = "reflector"
+	PromptTypeQuestionReflector     PromptType = "question_reflector"
+	PromptTypeEnricher              PromptType = "enricher"
+	PromptTypeQuestionEnricher      PromptType = "question_enricher"
+	PromptTypeToolcallFixer         PromptType = "toolcall_fixer"
+	PromptTypeInputToolcallFixer    PromptType = "input_toolcall_fixer"
+	PromptTypeSummarizer            PromptType = "summarizer"
+	PromptTypeImageChooser          PromptType = "image_chooser"
+	PromptTypeLanguageChooser       PromptType = "language_chooser"
+	PromptTypeFlowDescriptor        PromptType = "flow_descriptor"
+	PromptTypeTaskDescriptor        PromptType = "task_descriptor"
+	PromptTypeExecutionLogs         PromptType = "execution_logs"
+	PromptTypeFullExecutionContext  PromptType = "full_execution_context"
+	PromptTypeShortExecutionContext PromptType = "short_execution_context"
+)
+
+func (e *PromptType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PromptType(s)
+	case string:
+		*e = PromptType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PromptType: %T", src)
+	}
+	return nil
+}
+
+type NullPromptType struct {
+	PromptType PromptType `json:"prompt_type"`
+	Valid      bool       `json:"valid"` // Valid is true if PromptType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPromptType) Scan(value interface{}) error {
+	if value == nil {
+		ns.PromptType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PromptType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPromptType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PromptType), nil
+}
+
+type ProviderType string
+
+const (
+	ProviderTypeOpenai    ProviderType = "openai"
+	ProviderTypeAnthropic ProviderType = "anthropic"
+	ProviderTypeGemini    ProviderType = "gemini"
+	ProviderTypeBedrock   ProviderType = "bedrock"
+	ProviderTypeOllama    ProviderType = "ollama"
+	ProviderTypeCustom    ProviderType = "custom"
+)
+
+func (e *ProviderType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ProviderType(s)
+	case string:
+		*e = ProviderType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ProviderType: %T", src)
+	}
+	return nil
+}
+
+type NullProviderType struct {
+	ProviderType ProviderType `json:"provider_type"`
+	Valid        bool         `json:"valid"` // Valid is true if ProviderType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullProviderType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ProviderType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ProviderType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullProviderType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ProviderType), nil
+}
+
 type SearchengineType string
 
 const (
@@ -701,21 +821,21 @@ type Agentlog struct {
 }
 
 type Assistant struct {
-	ID            int64           `json:"id"`
-	Status        AssistantStatus `json:"status"`
-	Title         string          `json:"title"`
-	Model         string          `json:"model"`
-	ModelProvider string          `json:"model_provider"`
-	Language      string          `json:"language"`
-	Functions     json.RawMessage `json:"functions"`
-	Prompts       json.RawMessage `json:"prompts"`
-	TraceID       sql.NullString  `json:"trace_id"`
-	FlowID        int64           `json:"flow_id"`
-	UseAgents     bool            `json:"use_agents"`
-	MsgchainID    sql.NullInt64   `json:"msgchain_id"`
-	CreatedAt     sql.NullTime    `json:"created_at"`
-	UpdatedAt     sql.NullTime    `json:"updated_at"`
-	DeletedAt     sql.NullTime    `json:"deleted_at"`
+	ID                int64           `json:"id"`
+	Status            AssistantStatus `json:"status"`
+	Title             string          `json:"title"`
+	Model             string          `json:"model"`
+	ModelProviderName string          `json:"model_provider_name"`
+	Language          string          `json:"language"`
+	Functions         json.RawMessage `json:"functions"`
+	TraceID           sql.NullString  `json:"trace_id"`
+	FlowID            int64           `json:"flow_id"`
+	UseAgents         bool            `json:"use_agents"`
+	MsgchainID        sql.NullInt64   `json:"msgchain_id"`
+	CreatedAt         sql.NullTime    `json:"created_at"`
+	UpdatedAt         sql.NullTime    `json:"updated_at"`
+	DeletedAt         sql.NullTime    `json:"deleted_at"`
+	ModelProviderType ProviderType    `json:"model_provider_type"`
 }
 
 type Assistantlog struct {
@@ -744,19 +864,19 @@ type Container struct {
 }
 
 type Flow struct {
-	ID            int64           `json:"id"`
-	Status        FlowStatus      `json:"status"`
-	Title         string          `json:"title"`
-	Model         string          `json:"model"`
-	ModelProvider string          `json:"model_provider"`
-	Language      string          `json:"language"`
-	Functions     json.RawMessage `json:"functions"`
-	Prompts       json.RawMessage `json:"prompts"`
-	UserID        int64           `json:"user_id"`
-	CreatedAt     sql.NullTime    `json:"created_at"`
-	UpdatedAt     sql.NullTime    `json:"updated_at"`
-	DeletedAt     sql.NullTime    `json:"deleted_at"`
-	TraceID       sql.NullString  `json:"trace_id"`
+	ID                int64           `json:"id"`
+	Status            FlowStatus      `json:"status"`
+	Title             string          `json:"title"`
+	Model             string          `json:"model"`
+	ModelProviderName string          `json:"model_provider_name"`
+	Language          string          `json:"language"`
+	Functions         json.RawMessage `json:"functions"`
+	UserID            int64           `json:"user_id"`
+	CreatedAt         sql.NullTime    `json:"created_at"`
+	UpdatedAt         sql.NullTime    `json:"updated_at"`
+	DeletedAt         sql.NullTime    `json:"deleted_at"`
+	TraceID           sql.NullString  `json:"trace_id"`
+	ModelProviderType ProviderType    `json:"model_provider_type"`
 }
 
 type Msgchain struct {
@@ -794,10 +914,23 @@ type Privilege struct {
 }
 
 type Prompt struct {
-	ID     int64  `json:"id"`
-	Type   string `json:"type"`
-	UserID int64  `json:"user_id"`
-	Prompt string `json:"prompt"`
+	ID        int64        `json:"id"`
+	Type      PromptType   `json:"type"`
+	UserID    int64        `json:"user_id"`
+	Prompt    string       `json:"prompt"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
+}
+
+type Provider struct {
+	ID        int64           `json:"id"`
+	UserID    int64           `json:"user_id"`
+	Type      ProviderType    `json:"type"`
+	Name      string          `json:"name"`
+	Config    json.RawMessage `json:"config"`
+	CreatedAt sql.NullTime    `json:"created_at"`
+	UpdatedAt sql.NullTime    `json:"updated_at"`
+	DeletedAt sql.NullTime    `json:"deleted_at"`
 }
 
 type Role struct {

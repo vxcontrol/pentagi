@@ -1,5 +1,6 @@
 scalar Time
 
+# Core execution status for flows, tasks and agents
 enum StatusType {
   created
   running
@@ -8,6 +9,62 @@ enum StatusType {
   failed
 }
 
+# LLM provider types supported by PentAGI
+enum ProviderType {
+  openai
+  anthropic
+  gemini
+  bedrock
+  ollama
+  custom
+}
+
+# Reasoning effort levels for advanced AI models (OpenAI format)
+enum ReasoningEffort {
+  high
+  medium
+  low
+}
+
+# Template types for AI agent prompts and system operations
+enum PromptType {
+  primary_agent
+  assistant
+  pentester
+  question_pentester
+  coder
+  question_coder
+  installer
+  question_installer
+  searcher
+  question_searcher
+  memorist
+  question_memorist
+  adviser
+  question_adviser
+  generator
+  subtasks_generator
+  refiner
+  subtasks_refiner
+  reporter
+  task_reporter
+  reflector
+  question_reflector
+  enricher
+  question_enricher
+  toolcall_fixer
+  input_toolcall_fixer
+  summarizer
+  image_chooser
+  language_chooser
+  flow_descriptor
+  task_descriptor
+  execution_logs
+  full_execution_context
+  short_execution_context
+}
+
+# AI agent types for autonomous penetration testing
 enum AgentType {
   primary_agent
   reporter
@@ -26,12 +83,14 @@ enum AgentType {
   assistant
 }
 
+# Terminal output stream types
 enum TerminalLogType {
   stdin
   stdout
   stderr
 }
 
+# Message types for agent communication and logging
 enum MessageLogType {
   answer
   report
@@ -46,6 +105,7 @@ enum MessageLogType {
   done
 }
 
+# Output format types for responses
 enum ResultFormat {
   plain
   markdown
@@ -67,12 +127,16 @@ enum VectorStoreAction {
   store
 }
 
+# ==================== Core System Types ====================
+
 type Settings {
   debug: Boolean!
   askUser: Boolean!
   dockerInside: Boolean!
   assistantUseAgents: Boolean!
 }
+
+# ==================== Flow Management Types ====================
 
 type Terminal {
   id: ID!
@@ -87,7 +151,7 @@ type Assistant {
   id: ID!
   title: String!
   status: StatusType!
-  provider: String!
+  provider: Provider!
   flowId: ID!
   useAgents: Boolean!
   createdAt: Time!
@@ -104,7 +168,7 @@ type Flow {
   title: String!
   status: StatusType!
   terminals: [Terminal!]
-  provider: String!
+  provider: Provider!
   createdAt: Time!
   updatedAt: Time!
 }
@@ -131,6 +195,8 @@ type Subtask {
   createdAt: Time!
   updatedAt: Time!
 }
+
+# ==================== Logging Types ====================
 
 type AssistantLog {
   id: ID!
@@ -214,55 +280,353 @@ type Screenshot {
   createdAt: Time!
 }
 
-type Prompt {
-  type: String!
-  prompt: String!
+# ==================== Prompt Management Types ====================
+
+# Validation error types for user-provided prompts
+enum PromptValidationErrorType {
+  syntax_error
+  unauthorized_variable
+  rendering_failed
+  empty_template
+  variable_type_mismatch
+  unknown_type
 }
 
+type PromptValidationResult {
+  result: ResultType!
+  errorType: PromptValidationErrorType
+  message: String
+  line: Int
+  details: String
+}
+
+# Default system prompt with available variables
+type DefaultPrompt {
+  type: PromptType!
+  template: String!
+  variables: [String!]!
+}
+
+# User-customized prompt template
+type UserPrompt {
+  id: ID!
+  type: PromptType!
+  template: String!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+# Single system prompt AI agent configuration
+type AgentPrompt {
+  system: DefaultPrompt!
+}
+
+# System and human prompt pair AI agent configuration
+type AgentPrompts {
+  system: DefaultPrompt!
+  human: DefaultPrompt!
+}
+
+# All agent prompt configurations
+type AgentsPrompts {
+  primaryAgent: AgentPrompt!
+  assistant: AgentPrompt!
+  pentester: AgentPrompts!
+  coder: AgentPrompts!
+  installer: AgentPrompts!
+  searcher: AgentPrompts!
+  memorist: AgentPrompts!
+  adviser: AgentPrompts!
+  generator: AgentPrompts!
+  refiner: AgentPrompts!
+  reporter: AgentPrompts!
+  reflector: AgentPrompts!
+  enricher: AgentPrompts!
+  toolCallFixer: AgentPrompts!
+  summarizer: AgentPrompt!
+}
+
+# Tool-specific prompt configurations
+type ToolsPrompts {
+  getFlowDescription: DefaultPrompt!
+  getTaskDescription: DefaultPrompt!
+  getExecutionLogs: DefaultPrompt!
+  getFullExecutionContext: DefaultPrompt!
+  getShortExecutionContext: DefaultPrompt!
+  chooseDockerImage: DefaultPrompt!
+  chooseUserLanguage: DefaultPrompt!
+}
+
+# Complete default prompt configuration (read only)
+type DefaultPrompts {
+  agents: AgentsPrompts!
+  tools: ToolsPrompts!
+}
+
+# Prompts configuration including user customizations
+type PromptsConfig {
+  default: DefaultPrompts!
+  userDefined: [UserPrompt!]
+}
+
+# ==================== Testing & Validation Types ====================
+
+type TestResult {
+  name: String!
+  type: String!
+  result: Boolean!
+  reasoning: Boolean!
+  streaming: Boolean!
+  latency: Int
+  error: String
+}
+
+type AgentTestResult {
+  tests: [TestResult!]!
+}
+
+type ProviderTestResult {
+  simple: AgentTestResult!
+  simpleJson: AgentTestResult!
+  agent: AgentTestResult!
+  assistant: AgentTestResult!
+  generator: AgentTestResult!
+  refiner: AgentTestResult!
+  adviser: AgentTestResult!
+  reflector: AgentTestResult!
+  searcher: AgentTestResult!
+  enricher: AgentTestResult!
+  coder: AgentTestResult!
+  installer: AgentTestResult!
+  pentester: AgentTestResult!
+}
+
+# ==================== Provider Configuration Types ====================
+
+# Short provider view for selector
+type Provider {
+  name: String!
+  type: ProviderType!
+}
+
+# Provider model manifest
+type ModelConfig {
+  name: String!
+  description: String
+  releaseDate: Time
+  thinking: Boolean
+  price: ModelPrice
+}
+
+# Available models for each provider type
+type ProvidersModelsList {
+  openai: [ModelConfig!]!
+  anthropic: [ModelConfig!]!
+  gemini: [ModelConfig!]!
+  bedrock: [ModelConfig!]
+  ollama: [ModelConfig!]
+  custom: [ModelConfig!]
+}
+
+# Provider availability status
+type ProvidersReadinessStatus {
+  openai: Boolean!
+  anthropic: Boolean!
+  gemini: Boolean!
+  bedrock: Boolean!
+  ollama: Boolean!
+  custom: Boolean!
+}
+
+# Default provider configurations
+type DefaultProvidersConfig {
+  openai: ProviderConfig!
+  anthropic: ProviderConfig!
+  gemini: ProviderConfig
+  bedrock: ProviderConfig
+  ollama: ProviderConfig
+  custom: ProviderConfig
+}
+
+# Complete providers configuration
+type ProvidersConfig {
+  enabled: ProvidersReadinessStatus!
+  default: DefaultProvidersConfig!
+  userDefined: [ProviderConfig!]
+  models: ProvidersModelsList!
+}
+
+# Individual provider configuration
+type ProviderConfig {
+  id: ID!
+  name: String!
+  type: ProviderType!
+  agents: AgentsConfig!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+# AI model reasoning configuration
+type ReasoningConfig {
+  effort: ReasoningEffort
+  maxTokens: Int
+}
+
+# Model pricing information
+type ModelPrice {
+  input: Float!
+  output: Float!
+}
+
+# AI agent configuration parameters
+type AgentConfig {
+  model: String!
+  maxTokens: Int
+  temperature: Float
+  topK: Int
+  topP: Float
+  minLength: Int
+  maxLength: Int
+  repetitionPenalty: Float
+  frequencyPenalty: Float
+  presencePenalty: Float
+  reasoning: ReasoningConfig
+  price: ModelPrice
+}
+
+# All agent type configurations for a provider
+type AgentsConfig {
+  simple: AgentConfig!
+  simpleJson: AgentConfig!
+  agent: AgentConfig!
+  assistant: AgentConfig!
+  generator: AgentConfig!
+  refiner: AgentConfig!
+  adviser: AgentConfig!
+  reflector: AgentConfig!
+  searcher: AgentConfig!
+  enricher: AgentConfig!
+  coder: AgentConfig!
+  installer: AgentConfig!
+  pentester: AgentConfig!
+}
+
+# ==================== Input Types ====================
+
+# Input type for ReasoningConfig
+input ReasoningConfigInput {
+  effort: ReasoningEffort
+  maxTokens: Int
+}
+
+# Input type for ModelPrice
+input ModelPriceInput {
+  input: Float!
+  output: Float!
+}
+
+# Input type for AgentConfig
+input AgentConfigInput {
+  model: String!
+  maxTokens: Int
+  temperature: Float
+  topK: Int
+  topP: Float
+  minLength: Int
+  maxLength: Int
+  repetitionPenalty: Float
+  frequencyPenalty: Float
+  presencePenalty: Float
+  reasoning: ReasoningConfigInput
+  price: ModelPriceInput
+}
+
+# Input type for AgentsConfig
+input AgentsConfigInput {
+  simple: AgentConfigInput!
+  simpleJson: AgentConfigInput!
+  agent: AgentConfigInput!
+  assistant: AgentConfigInput!
+  generator: AgentConfigInput!
+  refiner: AgentConfigInput!
+  adviser: AgentConfigInput!
+  reflector: AgentConfigInput!
+  searcher: AgentConfigInput!
+  enricher: AgentConfigInput!
+  coder: AgentConfigInput!
+  installer: AgentConfigInput!
+  pentester: AgentConfigInput!
+}
+
+# ==================== GraphQL Operations ====================
+
 type Query {
-  providers: [String!]!
-  prompts: [Prompt!]!
-  prompt(promptType: String!): String!
+  # Provider management
+  providers: [Provider!]!
+
+  # Flow and assistant management
+  assistants(flowId: ID!): [Assistant!]
   flows: [Flow!]
   flow(flowId: ID!): Flow!
+
+  # Task and execution logs
   tasks(flowId: ID!): [Task!]
   screenshots(flowId: ID!): [Screenshot!]
-  assistants(flowId: ID!): [Assistant!]
   terminalLogs(flowId: ID!): [TerminalLog!]
   messageLogs(flowId: ID!): [MessageLog!]
   agentLogs(flowId: ID!): [AgentLog!]
   searchLogs(flowId: ID!): [SearchLog!]
   vectorStoreLogs(flowId: ID!): [VectorStoreLog!]
   assistantLogs(flowId: ID!, assistantId: ID!): [AssistantLog!]
+
+  # System settings
   settings: Settings!
+  settingsProviders: ProvidersConfig!
+  settingsPrompts: PromptsConfig!
 }
 
 type Mutation {
+  # Flow management
   createFlow(modelProvider: String!, input: String!): Flow!
   putUserInput(flowId: ID!, input: String!): ResultType!
   stopFlow(flowId: ID!): ResultType!
   finishFlow(flowId: ID!): ResultType!
   deleteFlow(flowId: ID!): ResultType!
 
+  # Assistant management
   createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!): FlowAssistant!
   callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!): ResultType!
   stopAssistant(flowId: ID!, assistantId: ID!): Assistant!
   deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!
 
-  updatePrompt(promptType: String!, prompt: String!): ResultType!
-  resetPrompt(promptType: String!): ResultType!
+  # Testing and validation
+  testAgent(type: ProviderType!, agentType: AgentType!, agent: AgentConfigInput!): AgentTestResult!
+  testProvider(type: ProviderType!, agents: AgentsConfigInput!): ProviderTestResult!
+  createProvider(name: String!, type: ProviderType!, agents: AgentsConfigInput!): ProviderConfig!
+  updateProvider(providerId: ID!, name: String!, agents: AgentsConfigInput!): ProviderConfig!
+  deleteProvider(providerId: ID!): ResultType!
+
+  # Prompt management
+  validatePrompt(type: PromptType!, template: String!): PromptValidationResult!
+  createPrompt(type: PromptType!, template: String!): UserPrompt!
+  updatePrompt(promptId: ID!, template: String!): UserPrompt!
+  deletePrompt(promptId: ID!): ResultType!
 }
 
 type Subscription {
+  # Flow events
   flowCreated: Flow!
   flowDeleted: Flow!
   flowUpdated: Flow!
   taskCreated(flowId: ID!): Task!
   taskUpdated(flowId: ID!): Task!
+
+  # Assistant events
   assistantCreated(flowId: ID!): Assistant!
   assistantUpdated(flowId: ID!): Assistant!
   assistantDeleted(flowId: ID!): Assistant!
 
+  # Log events
   screenshotAdded(flowId: ID!): Screenshot!
   terminalLogAdded(flowId: ID!): TerminalLog!
   messageLogAdded(flowId: ID!): MessageLog!
@@ -272,4 +636,9 @@ type Subscription {
   vectorStoreLogAdded(flowId: ID!): VectorStoreLog!
   assistantLogAdded(flowId: ID!): AssistantLog!
   assistantLogUpdated(flowId: ID!): AssistantLog!
+
+  # Provider events
+  providerCreated: ProviderConfig!
+  providerUpdated: ProviderConfig!
+  providerDeleted: ProviderConfig!
 }

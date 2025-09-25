@@ -16,6 +16,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -61,6 +62,7 @@ type newFlowWorkerCtx struct {
 	userID    int64
 	input     string
 	dryRun    bool
+	prvname   provider.ProviderName
 	prvtype   provider.ProviderType
 	functions *tools.Functions
 
@@ -111,14 +113,14 @@ func NewFlowWorker(
 	defer span.End()
 
 	flow, err := fwc.db.CreateFlow(ctx, database.CreateFlowParams{
-		Title:         "untitled",
-		Status:        database.FlowStatusCreated,
-		Model:         "unknown",
-		ModelProvider: string(fwc.prvtype),
-		Language:      "English",
-		Functions:     []byte("{}"),
-		UserID:        fwc.userID,
-		Prompts:       []byte("{}"),
+		Title:             "untitled",
+		Status:            database.FlowStatusCreated,
+		Model:             "unknown",
+		ModelProviderName: fwc.prvname.String(),
+		ModelProviderType: database.ProviderType(fwc.prvtype),
+		Language:          "English",
+		Functions:         []byte("{}"),
+		UserID:            fwc.userID,
 	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to create flow in DB")
@@ -126,9 +128,10 @@ func NewFlowWorker(
 	}
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"flow_id":  flow.ID,
-		"user_id":  fwc.userID,
-		"provider": fwc.prvtype,
+		"flow_id":       flow.ID,
+		"user_id":       fwc.userID,
+		"provider_name": fwc.prvname.String(),
+		"provider_type": fwc.prvtype.String(),
 	})
 	logger.Info("flow created in DB")
 
@@ -146,13 +149,14 @@ func NewFlowWorker(
 			langfuse.WithTraceInput(fwc.input),
 			langfuse.WithTraceSessionId(fmt.Sprintf("flow-%d", flow.ID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
-				"flow_id":    flow.ID,
-				"user_id":    fwc.userID,
-				"user_email": user.Mail,
-				"user_name":  user.Name,
-				"user_hash":  user.Hash,
-				"user_role":  user.RoleName,
-				"provider":   fwc.prvtype,
+				"flow_id":       flow.ID,
+				"user_id":       fwc.userID,
+				"user_email":    user.Mail,
+				"user_name":     user.Name,
+				"user_hash":     user.Hash,
+				"user_role":     user.RoleName,
+				"provider_name": fwc.prvname.String(),
+				"provider_type": fwc.prvtype.String(),
 			}),
 		),
 	)
@@ -164,7 +168,7 @@ func NewFlowWorker(
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
 	}
-	flowProvider, err := fwc.provs.NewFlowProvider(ctx, fwc.db, fwc.prvtype, prompter, executor, flow.ID, fwc.input)
+	flowProvider, err := fwc.provs.NewFlowProvider(ctx, fwc.prvname, prompter, executor, flow.ID, fwc.userID, fwc.input)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow provider", err)
 	}
@@ -174,17 +178,11 @@ func NewFlowWorker(
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to marshal functions", err)
 	}
 
-	templatesBlob, err := prompter.DumpTemplates()
-	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to dump prompter templates", err)
-	}
-
 	flow, err = fwc.db.UpdateFlow(ctx, database.UpdateFlowParams{
 		Title:     flowProvider.Title(),
-		Model:     flowProvider.Model(provider.OptionsTypeAgent),
+		Model:     flowProvider.Model(pconfig.OptionsTypePrimaryAgent),
 		Language:  flowProvider.Language(),
 		Functions: functionsBlob,
-		Prompts:   templatesBlob,
 		TraceID:   database.StringToNullString(observation.TraceID()),
 		ID:        flow.ID,
 	})
@@ -280,9 +278,10 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	}
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"flow_id":  flow.ID,
-		"user_id":  flow.UserID,
-		"provider": flow.ModelProvider,
+		"flow_id":       flow.ID,
+		"user_id":       flow.UserID,
+		"provider_name": flow.ModelProviderName,
+		"provider_type": flow.ModelProviderType,
 	})
 
 	container, err := fwc.db.GetFlowPrimaryContainer(ctx, flow.ID)
@@ -307,13 +306,14 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 			langfuse.WithTraceTags([]string{"controller", "flow"}),
 			langfuse.WithTraceSessionId(fmt.Sprintf("flow-%d", flow.ID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
-				"flow_id":    flow.ID,
-				"user_id":    flow.UserID,
-				"user_email": user.Mail,
-				"user_name":  user.Name,
-				"user_hash":  user.Hash,
-				"user_role":  user.RoleName,
-				"provider":   flow.ModelProvider,
+				"flow_id":       flow.ID,
+				"user_id":       flow.UserID,
+				"user_email":    user.Mail,
+				"user_name":     user.Name,
+				"user_hash":     user.Hash,
+				"user_role":     user.RoleName,
+				"provider_name": flow.ModelProviderName,
+				"provider_type": flow.ModelProviderType,
 			}),
 		),
 	)
@@ -330,8 +330,8 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
 	}
-	flowProvider, err := fwc.provs.LoadFlowProvider(fwc.db, provider.ProviderType(flow.ModelProvider),
-		prompter, executor, flow.ID, container.Image, flow.Language, flow.Title)
+	flowProvider, err := fwc.provs.LoadFlowProvider(ctx, provider.ProviderName(flow.ModelProviderName),
+		prompter, executor, flow.ID, flow.UserID, container.Image, flow.Language, flow.Title)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow provider", err)
 	}

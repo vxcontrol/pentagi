@@ -48,7 +48,7 @@ definitions:
   graphql.RawParams:
     properties:
       extensions:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
       headers:
         $ref: '#/definitions/http.Header'
@@ -57,7 +57,7 @@ definitions:
       query:
         type: string
       variables:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
     type: object
   graphql.Response:
@@ -71,7 +71,7 @@ definitions:
           $ref: '#/definitions/gqlerror.Error'
         type: array
       extensions:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
       hasNext:
         type: boolean
@@ -134,8 +134,10 @@ definitions:
       model:
         maxLength: 70
         type: string
-      model_provider:
+      model_provider_name:
         maxLength: 70
+        type: string
+      model_provider_type:
         type: string
       status:
         type: string
@@ -146,7 +148,8 @@ definitions:
     required:
     - language
     - model
-    - model_provider
+    - model_provider_name
+    - model_provider_type
     - status
     - title
     type: object
@@ -172,8 +175,10 @@ definitions:
       model:
         maxLength: 70
         type: string
-      model_provider:
+      model_provider_name:
         maxLength: 70
+        type: string
+      model_provider_type:
         type: string
       status:
         type: string
@@ -184,7 +189,8 @@ definitions:
     required:
     - language
     - model
-    - model_provider
+    - model_provider_name
+    - model_provider_type
     - status
     - title
     type: object
@@ -312,8 +318,10 @@ definitions:
       model:
         maxLength: 70
         type: string
-      model_provider:
+      model_provider_name:
         maxLength: 70
+        type: string
+      model_provider_type:
         type: string
       status:
         type: string
@@ -327,7 +335,8 @@ definitions:
     required:
     - language
     - model
-    - model_provider
+    - model_provider_name
+    - model_provider_type
     - status
     - title
     type: object
@@ -348,8 +357,10 @@ definitions:
       model:
         maxLength: 70
         type: string
-      model_provider:
+      model_provider_name:
         maxLength: 70
+        type: string
+      model_provider_type:
         type: string
       status:
         type: string
@@ -367,7 +378,8 @@ definitions:
     required:
     - language
     - model
-    - model_provider
+    - model_provider_name
+    - model_provider_type
     - status
     - tasks
     - title
@@ -484,12 +496,16 @@ definitions:
     type: object
   models.Prompt:
     properties:
+      created_at:
+        type: string
       id:
         minimum: 0
         type: integer
       prompt:
         type: string
       type:
+        type: string
+      updated_at:
         type: string
       user_id:
         minimum: 0
@@ -526,6 +542,18 @@ definitions:
         type: string
     required:
     - ttl
+    - type
+    type: object
+  models.ProviderInfo:
+    properties:
+      name:
+        example: my openai provider
+        type: string
+      type:
+        example: openai
+        type: string
+    required:
+    - name
     - type
     type: object
   models.Role:
@@ -3556,9 +3584,7 @@ paths:
             - $ref: '#/definitions/SuccessResponse'
             - properties:
                 data:
-                  items:
-                    type: string
-                  type: array
+                  $ref: '#/definitions/models.ProviderInfo'
               type: object
         "403":
           description: getting providers not permitted

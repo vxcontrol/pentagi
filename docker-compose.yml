@@ -29,7 +29,7 @@ services:
     expose:
       - 8443/tcp
     ports:
-      - 127.0.0.1:8443:8443
+      - ${PENTAGI_LISTEN_IP:-127.0.0.1}:${PENTAGI_LISTEN_PORT:-8443}:8443
     depends_on:
       - pgvector
     environment:
@@ -41,16 +41,25 @@ services:
       - OPEN_AI_SERVER_URL=${OPEN_AI_SERVER_URL:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_SERVER_URL=${ANTHROPIC_SERVER_URL:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_SERVER_URL=${GEMINI_SERVER_URL:-}
+      - BEDROCK_REGION=${BEDROCK_REGION:-}
+      - BEDROCK_ACCESS_KEY_ID=${BEDROCK_ACCESS_KEY_ID:-}
+      - BEDROCK_SECRET_ACCESS_KEY=${BEDROCK_SECRET_ACCESS_KEY:-}
+      - BEDROCK_SERVER_URL=${BEDROCK_SERVER_URL:-}
       - LLM_SERVER_URL=${LLM_SERVER_URL:-}
       - LLM_SERVER_KEY=${LLM_SERVER_KEY:-}
       - LLM_SERVER_MODEL=${LLM_SERVER_MODEL:-}
       - LLM_SERVER_CONFIG_PATH=${LLM_SERVER_CONFIG_PATH:-}
       - LLM_SERVER_LEGACY_REASONING=${LLM_SERVER_LEGACY_REASONING:-}
+      - OLLAMA_SERVER_URL=${OLLAMA_SERVER_URL:-}
+      - OLLAMA_SERVER_CONFIG_PATH=${OLLAMA_SERVER_CONFIG_PATH:-}
       - EMBEDDING_URL=${EMBEDDING_URL:-}
       - EMBEDDING_KEY=${EMBEDDING_KEY:-}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}
       - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-}
+      - EMBEDDING_STRIP_NEW_LINES=${EMBEDDING_STRIP_NEW_LINES:-}
       - SUMMARIZER_PRESERVE_LAST=${SUMMARIZER_PRESERVE_LAST:-}
       - SUMMARIZER_USE_QA=${SUMMARIZER_USE_QA:-}
       - SUMMARIZER_SUM_MSG_HUMAN_IN_QA=${SUMMARIZER_SUM_MSG_HUMAN_IN_QA:-}
@@ -82,7 +91,7 @@ services:
       - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID:-}
       - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET:-}
       - DATABASE_URL=postgres://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
-      - DUCKDUCKGO_ENABLED=${DUCKDUCKGO_ENABLED:-true}
+      - DUCKDUCKGO_ENABLED=${DUCKDUCKGO_ENABLED:-}
       - SEARXNG_URL=${SEARXNG_URL:-}
       - SEARXNG_CATEGORIES=${SEARXNG_CATEGORIES:-}
       - SEARXNG_LANGUAGE=${SEARXNG_LANGUAGE:-}
@@ -91,6 +100,7 @@ services:
       - SEARXNG_PROXY_URL=${SEARXNG_PROXY_URL:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GOOGLE_CX_KEY=${GOOGLE_CX_KEY:-}
+      - GOOGLE_LR_KEY=${GOOGLE_LR_KEY:-}
       - TRAVERSAAL_API_KEY=${TRAVERSAAL_API_KEY:-}
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
@@ -117,9 +127,11 @@ services:
         max-size: 50m
         max-file: '7'
     volumes:
-      - pentagi-data:/opt/pentagi/data
-      - pentagi-ssl:/opt/pentagi/ssl
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PENTAGI_DATA_DIR:-pentagi-data}:/opt/pentagi/data
+      - ${PENTAGI_SSL_DIR:-pentagi-ssl}:/opt/pentagi/ssl
+      - ${PENTAGI_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${PENTAGI_LLM_SERVER_CONFIG_PATH:-./example.provider.yml}:${PENTAGI_LLM_SERVER_CONFIG_PATH:-/opt/pentagi/conf/example.provider.yml}
+      - ${DOCKER_CERT_PATH:-./docker-ssl}:${DOCKER_CERT_PATH:-/opt/pentagi/docker-ssl}
     user: root:root # while using docker.sock
     networks:
       - pentagi-network
@@ -160,9 +172,7 @@ services:
     ports:
       - 127.0.0.1:9187:9187
     environment:
-      - DATA_SOURCE_NAME=pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
-      - DATA_SOURCE_USER=${PENTAGI_POSTGRES_USER:-postgres}
-      - DATA_SOURCE_PASS=${PENTAGI_POSTGRES_PASSWORD:-postgres}
+      - DATA_SOURCE_NAME=postgresql://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
     logging:
       options:
         max-size: 50m

@@ -1,0 +1,116 @@
+simple:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+simple_json:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+primary_agent:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+assistant:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+generator:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+refiner:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+adviser:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+reflector:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+searcher:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+enricher:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+coder:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+installer:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768
+
+pentester:
+  model: "Qwen/Qwen3-32B"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  n: 1
+  max_tokens: 32768

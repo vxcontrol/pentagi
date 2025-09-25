@@ -28,6 +28,7 @@ type FlowController interface {
 		ctx context.Context,
 		userID int64,
 		input string,
+		prvname provider.ProviderName,
 		prvtype provider.ProviderType,
 		functions *tools.Functions,
 	) (FlowWorker, error)
@@ -37,6 +38,7 @@ type FlowController interface {
 		flowID int64,
 		input string,
 		useAgents bool,
+		prvname provider.ProviderName,
 		prvtype provider.ProviderType,
 		functions *tools.Functions,
 	) (AssistantWorker, error)
@@ -131,6 +133,7 @@ func (fc *flowController) CreateFlow(
 	ctx context.Context,
 	userID int64,
 	input string,
+	prvname provider.ProviderName,
 	prvtype provider.ProviderType,
 	functions *tools.Functions,
 ) (FlowWorker, error) {
@@ -140,6 +143,7 @@ func (fc *flowController) CreateFlow(
 	fw, err := NewFlowWorker(ctx, newFlowWorkerCtx{
 		userID:    userID,
 		input:     input,
+		prvname:   prvname,
 		prvtype:   prvtype,
 		functions: functions,
 		flowWorkerCtx: flowWorkerCtx{
@@ -174,6 +178,7 @@ func (fc *flowController) CreateAssistant(
 	flowID int64,
 	input string,
 	useAgents bool,
+	prvname provider.ProviderName,
 	prvtype provider.ProviderType,
 	functions *tools.Functions,
 ) (AssistantWorker, error) {
@@ -208,6 +213,7 @@ func (fc *flowController) CreateAssistant(
 			userID:        userID,
 			input:         input,
 			dryRun:        true,
+			prvname:       prvname,
 			prvtype:       prvtype,
 			functions:     functions,
 			flowWorkerCtx: flowWorkerCtx,
@@ -278,6 +284,7 @@ func (fc *flowController) CreateAssistant(
 		userID:        userID,
 		flowID:        flowID,
 		input:         input,
+		prvname:       prvname,
 		prvtype:       prvtype,
 		useAgents:     useAgents,
 		functions:     functions,

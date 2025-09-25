@@ -152,6 +152,10 @@ CREATE INDEX assistantlogs_message_idx ON assistantlogs(message);
 CREATE INDEX assistantlogs_result_format_idx ON assistantlogs(result_format);
 CREATE INDEX assistantlogs_flow_id_idx ON assistantlogs(flow_id);
 CREATE INDEX assistantlogs_assistant_id_idx ON assistantlogs(assistant_id);
+
+CREATE OR REPLACE TRIGGER update_assistants_modified
+  BEFORE UPDATE ON assistants
+  FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 -- +goose StatementEnd
 
 -- +goose Down

@@ -50,7 +50,7 @@ You can watch the video **PentAGI overview**:
 - 💾 Persistent Storage. All commands and outputs are stored in PostgreSQL with [pgvector](https://hub.docker.com/r/vxcontrol/pgvector) extension.
 - 🎯 Scalable Architecture. Microservices-based design supporting horizontal scaling.
 - 🏠 Self-Hosted Solution. Complete control over your deployment and data.
-- 🔑 Flexible Authentication. Support for various LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Deep Infra](https://deepinfra.com/), [OpenRouter](https://openrouter.ai/), [DeepSeek](https://www.deepseek.com/)) and custom configurations.
+- 🔑 Flexible Authentication. Support for various LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Ollama](https://ollama.com/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Google AI/Gemini](https://ai.google.dev/), [Deep Infra](https://deepinfra.com/), [OpenRouter](https://openrouter.ai/), [DeepSeek](https://www.deepseek.com/en)) and custom configurations.
 - ⚡ Quick Deployment. Easy setup through [Docker Compose](https://docs.docker.com/compose/) with comprehensive environment configuration.
 
 ## 🏗️ Architecture
@@ -62,24 +62,24 @@ flowchart TB
     classDef person fill:#08427B,stroke:#073B6F,color:#fff
     classDef system fill:#1168BD,stroke:#0B4884,color:#fff
     classDef external fill:#666666,stroke:#0B4884,color:#fff
-    
+
     pentester["👤 Security Engineer
     (User of the system)"]
-    
+
     pentagi["✨ PentAGI
     (Autonomous penetration testing system)"]
-    
+
     target["🎯 target-system
     (System under test)"]
     llm["🧠 llm-provider
-    (OpenAI/Anthropic/Custom)"]
+    (OpenAI/Anthropic/Ollama/Bedrock/Gemini/Custom)"]
     search["🔍 search-systems
     (Google/DuckDuckGo/Tavily/Traversaal/Perplexity/Searxng)"]
     langfuse["📊 langfuse-ui
     (LLM Observability Dashboard)"]
     grafana["📈 grafana
     (System Monitoring Dashboard)"]
-    
+
     pentester --> |Uses HTTPS| pentagi
     pentester --> |Monitors AI HTTPS| langfuse
     pentester --> |Monitors System HTTPS| grafana
@@ -88,11 +88,11 @@ flowchart TB
     pentagi --> |Searches HTTPS| search
     pentagi --> |Reports HTTPS| langfuse
     pentagi --> |Reports HTTPS| grafana
-    
+
     class pentester person
     class pentagi system
     class target,llm,search,langfuse,grafana external
-    
+
     linkStyle default stroke:#ffffff,color:#ffffff
 ```
 
@@ -135,16 +135,16 @@ graph TB
     MQ --> |Tasks| Agent
     Agent --> |Commands| Tools
     Agent --> |Queries| DB
-    
+
     API --> |Telemetry| OTEL
     OTEL --> |Metrics| VictoriaMetrics
     OTEL --> |Traces| Jaeger
     OTEL --> |Logs| Loki
-    
+
     Grafana --> |Query| VictoriaMetrics
     Grafana --> |Query| Jaeger
     Grafana --> |Query| Loki
-    
+
     API --> |Analytics| Langfuse
     Langfuse --> |Store| ClickHouse
     Langfuse --> |Cache| Redis
@@ -154,7 +154,7 @@ graph TB
     classDef monitoring fill:#bbf,stroke:#333,stroke-width:2px,color:#000
     classDef analytics fill:#bfb,stroke:#333,stroke-width:2px,color:#000
     classDef tools fill:#fbb,stroke:#333,stroke-width:2px,color:#000
-    
+
     class UI,API,DB,MQ,Agent core
     class Grafana,VictoriaMetrics,Jaeger,Loki,OTEL monitoring
     class Langfuse,ClickHouse,Redis,MinIO analytics
@@ -173,7 +173,7 @@ erDiagram
     SubTask ||--o{ Action : contains
     Action ||--o{ Artifact : produces
     Action ||--o{ Memory : stores
-    
+
     Flow {
         string id PK
         string name "Flow name"
@@ -183,7 +183,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     Task {
         string id PK
         string flow_id FK
@@ -194,7 +194,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     SubTask {
         string id PK
         string task_id FK
@@ -206,7 +206,7 @@ erDiagram
         timestamp created_at
         timestamp updated_at
     }
-    
+
     Action {
         string id PK
         string subtask_id FK
@@ -249,13 +249,13 @@ sequenceDiagram
     participant E as Executor
     participant VS as Vector Store
     participant KB as Knowledge Base
-    
+
     Note over O,KB: Flow Initialization
     O->>VS: Query similar tasks
     VS-->>O: Return experiences
     O->>KB: Load relevant knowledge
     KB-->>O: Return context
-    
+
     Note over O,R: Research Phase
     O->>R: Analyze target
     R->>VS: Search similar cases
@@ -264,7 +264,7 @@ sequenceDiagram
     KB-->>R: Return known issues
     R->>VS: Store findings
     R-->>O: Research results
-    
+
     Note over O,D: Planning Phase
     O->>D: Plan attack
     D->>VS: Query exploits
@@ -272,7 +272,7 @@ sequenceDiagram
     D->>KB: Load tools info
     KB-->>D: Return capabilities
     D-->>O: Attack plan
-    
+
     Note over O,E: Execution Phase
     O->>E: Execute plan
     E->>KB: Load tool guides
@@ -293,39 +293,39 @@ graph TB
         KB[Knowledge Base<br/>Domain Expertise]
         Tools[Tools Knowledge<br/>Usage Patterns]
     end
-    
+
     subgraph "Working Memory"
         Context[Current Context<br/>Task State]
         Goals[Active Goals<br/>Objectives]
         State[System State<br/>Resources]
     end
-    
+
     subgraph "Episodic Memory"
         Actions[Past Actions<br/>Commands History]
         Results[Action Results<br/>Outcomes]
         Patterns[Success Patterns<br/>Best Practices]
     end
-    
+
     Context --> |Query| VS
     VS --> |Retrieve| Context
-    
+
     Goals --> |Consult| KB
     KB --> |Guide| Goals
-    
+
     State --> |Record| Actions
     Actions --> |Learn| Patterns
     Patterns --> |Store| VS
-    
+
     Tools --> |Inform| State
     Results --> |Update| Tools
-    
+
     VS --> |Enhance| KB
     KB --> |Index| VS
 
     classDef ltm fill:#f9f,stroke:#333,stroke-width:2px,color:#000
     classDef wm fill:#bbf,stroke:#333,stroke-width:2px,color:#000
     classDef em fill:#bfb,stroke:#333,stroke-width:2px,color:#000
-    
+
     class VS,KB,Tools ltm
     class Context,Goals,State wm
     class Actions,Results,Patterns em
@@ -351,11 +351,11 @@ flowchart TD
     I --> J{Is New Chain Smaller?}
     J -->|Yes| K[Return Optimized Chain]
     J -->|No| C
-    
+
     classDef process fill:#bbf,stroke:#333,stroke-width:2px,color:#000
     classDef decision fill:#bfb,stroke:#333,stroke-width:2px,color:#000
     classDef output fill:#fbb,stroke:#333,stroke-width:2px,color:#000
-    
+
     class A,D,E,F,G,H,I process
     class B,J decision
     class C,K output
@@ -480,6 +480,15 @@ curl -o .env https://raw.githubusercontent.com/vxcontrol/pentagi/master/.env.exa
 # Required: At least one of these LLM providers
 OPEN_AI_KEY=your_openai_key
 ANTHROPIC_API_KEY=your_anthropic_key
+GEMINI_API_KEY=your_gemini_key
+
+# Optional: AWS Bedrock provider (enterprise-grade models)
+BEDROCK_REGION=us-east-1
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+
+# Optional: Local LLM provider (zero-cost inference)
+OLLAMA_SERVER_URL=http://localhost:11434
 
 # Optional: Additional search capabilities
 DUCKDUCKGO_ENABLED=true
@@ -532,11 +541,11 @@ Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default
 
 > [!NOTE]
 > If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml` and `docker-compose-observability.yml` to use Langfuse and Observability services.
-> 
-> You have to set at least one Language Model provider (OpenAI or Anthropic) to use PentAGI. Additional API keys for search engines are optional but recommended for better results.
-> 
+>
+> You have to set at least one Language Model provider (OpenAI, Anthropic, Gemini, AWS Bedrock, or Ollama) to use PentAGI. AWS Bedrock provides enterprise-grade access to multiple foundation models from leading AI companies, while Ollama provides zero-cost local inference if you have sufficient computational resources. Additional API keys for search engines are optional but recommended for better results.
+>
 > `LLM_SERVER_*` environment variables are experimental feature and will be changed in the future. Right now you can use them to specify custom LLM server URL and one model for all agent types.
-> 
+>
 > `PROXY_URL` is a global proxy URL for all LLM providers and external search systems. You can use it for isolation from external networks.
 >
 > The `docker-compose.yml` file runs the PentAGI service as root user because it needs access to docker.sock for container management. If you're using TCP/IP network connection to Docker instead of socket file, you can remove root privileges and use the default `pentagi` user for better security.
@@ -572,6 +581,201 @@ The `LLM_SERVER_LEGACY_REASONING` setting affects how reasoning parameters are s
 - `true`: Uses legacy format with string-based `reasoning_effort` parameter
 
 This setting is important when working with different LLM providers as they may expect different reasoning formats in their API requests. If you encounter reasoning-related errors with custom providers, try changing this setting.
+
+### Local LLM Provider Configuration
+
+PentAGI supports Ollama for local LLM inference, providing zero-cost operation and enhanced privacy:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OLLAMA_SERVER_URL` | | URL of your Ollama server |
+| `OLLAMA_SERVER_CONFIG_PATH` | | Path to custom agent configuration file |
+
+Configuration examples:
+
+```bash
+# Basic Ollama setup
+OLLAMA_SERVER_URL=http://localhost:11434
+
+# Remote Ollama server
+OLLAMA_SERVER_URL=http://ollama-server:11434
+
+# Custom configuration with agent-specific models
+OLLAMA_SERVER_CONFIG_PATH=/path/to/ollama-config.yml
+
+# Default configuration file inside the docker container (just for example)
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
+```
+
+The system automatically discovers available models from your Ollama server and provides zero-cost inference for penetration testing workflows.
+
+### OpenAI Provider Configuration
+
+PentAGI supports OpenAI's advanced language models, including the latest reasoning-capable o-series models designed for complex analytical tasks:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPEN_AI_KEY` | | API key for OpenAI services |
+| `OPEN_AI_SERVER_URL` | `https://api.openai.com/v1` | OpenAI API endpoint |
+
+Configuration examples:
+
+```bash
+# Basic OpenAI setup
+OPEN_AI_KEY=your_openai_api_key
+OPEN_AI_SERVER_URL=https://api.openai.com/v1
+
+# Using with proxy for enhanced security
+OPEN_AI_KEY=your_openai_api_key
+PROXY_URL=http://your-proxy:8080
+```
+
+The OpenAI provider offers cutting-edge capabilities including:
+
+- **Reasoning Models**: Advanced o-series models (o1, o3, o4-mini) with step-by-step analytical thinking
+- **Latest GPT-4.1 Series**: Flagship models optimized for complex security research and exploit development
+- **Cost-Effective Options**: From nano models for high-volume scanning to powerful reasoning models for deep analysis
+- **Versatile Performance**: Fast, intelligent models perfect for multi-step security analysis and penetration testing
+- **Proven Reliability**: Industry-leading models with consistent performance across diverse security scenarios
+
+The system automatically selects appropriate OpenAI models based on task complexity, optimizing for both performance and cost-effectiveness.
+
+### Anthropic Provider Configuration
+
+PentAGI integrates with Anthropic's Claude models, known for their exceptional safety, reasoning capabilities, and sophisticated understanding of complex security contexts:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | | API key for Anthropic services |
+| `ANTHROPIC_SERVER_URL` | `https://api.anthropic.com/v1` | Anthropic API endpoint |
+
+Configuration examples:
+
+```bash
+# Basic Anthropic setup
+ANTHROPIC_API_KEY=your_anthropic_api_key
+ANTHROPIC_SERVER_URL=https://api.anthropic.com/v1
+
+# Using with proxy for secure environments
+ANTHROPIC_API_KEY=your_anthropic_api_key
+PROXY_URL=http://your-proxy:8080
+```
+
+The Anthropic provider delivers superior capabilities including:
+
+- **Advanced Reasoning**: Claude 4 series with exceptional reasoning for sophisticated penetration testing
+- **Extended Thinking**: Claude 3.7 with step-by-step thinking capabilities for methodical security research
+- **High-Speed Performance**: Claude 3.5 Haiku for blazing-fast vulnerability scans and real-time monitoring
+- **Comprehensive Analysis**: Claude Sonnet models for complex security analysis and threat hunting
+- **Safety-First Design**: Built-in safety mechanisms ensuring responsible security testing practices
+
+The system leverages Claude's advanced understanding of security contexts to provide thorough and responsible penetration testing guidance.
+
+### Google AI (Gemini) Provider Configuration
+
+PentAGI supports Google's Gemini models through the Google AI API, offering state-of-the-art reasoning capabilities and multimodal features:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GEMINI_API_KEY` | | API key for Google AI services |
+| `GEMINI_SERVER_URL` | `https://generativelanguage.googleapis.com` | Google AI API endpoint |
+
+Configuration examples:
+
+```bash
+# Basic Gemini setup
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_SERVER_URL=https://generativelanguage.googleapis.com
+
+# Using with proxy
+GEMINI_API_KEY=your_gemini_api_key
+PROXY_URL=http://your-proxy:8080
+```
+
+The Gemini provider offers advanced features including:
+
+- **Thinking Capabilities**: Advanced reasoning models (Gemini 2.5 series) with step-by-step analysis
+- **Multimodal Support**: Text and image processing for comprehensive security assessments
+- **Large Context Windows**: Up to 2M tokens for analyzing extensive codebases and documentation
+- **Cost-Effective Options**: From high-performance pro models to economical flash variants
+- **Security-Focused Models**: Specialized configurations optimized for penetration testing workflows
+
+The system automatically selects appropriate Gemini models based on agent requirements, balancing performance, capabilities, and cost-effectiveness.
+
+### AWS Bedrock Provider Configuration
+
+PentAGI integrates with Amazon Bedrock, offering access to a wide range of foundation models from leading AI companies including Anthropic, AI21, Cohere, Meta, and Amazon's own models:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
+| `BEDROCK_ACCESS_KEY_ID` | | AWS access key ID for authentication |
+| `BEDROCK_SECRET_ACCESS_KEY` | | AWS secret access key for authentication |
+| `BEDROCK_SERVER_URL` | | Optional custom Bedrock endpoint URL |
+
+Configuration examples:
+
+```bash
+# Basic AWS Bedrock setup with credentials
+BEDROCK_REGION=us-east-1
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+
+# Using with proxy for enhanced security
+BEDROCK_REGION=us-east-1
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+PROXY_URL=http://your-proxy:8080
+
+# Using custom endpoint (for VPC endpoints or testing)
+BEDROCK_REGION=us-east-1
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+BEDROCK_SERVER_URL=https://bedrock-runtime.us-east-1.amazonaws.com
+```
+
+> [!IMPORTANT]
+> **AWS Bedrock Rate Limits Warning**
+>
+> The default PentAGI configuration for AWS Bedrock uses two primary models:
+> - `us.anthropic.claude-sonnet-4-20250514-v1:0` (for most agents) - **2 requests per minute** for new AWS accounts
+> - `us.anthropic.claude-3-5-haiku-20241022-v1:0` (for simple tasks) - **20 requests per minute** for new AWS accounts
+>
+> These default rate limits are **extremely restrictive** for comfortable penetration testing scenarios and will significantly impact your workflow. We **strongly recommend**:
+>
+> 1. **Request quota increases** for your AWS Bedrock models through the AWS Service Quotas console
+> 2. **Use provisioned throughput models** with hourly billing for higher throughput requirements
+> 3. **Switch to alternative models** with higher default quotas (e.g., Amazon Nova series, Meta Llama models)
+> 4. **Consider using a different LLM provider** (OpenAI, Anthropic, Gemini) if you need immediate high-throughput access
+>
+> Without adequate rate limits, you may experience frequent delays, timeouts, and degraded testing performance.
+
+The AWS Bedrock provider delivers comprehensive capabilities including:
+
+- **Multi-Provider Access**: Access to models from Anthropic (Claude), AI21 (Jamba), Cohere (Command), Meta (Llama), Amazon (Nova, Titan), and DeepSeek (R1) through a single interface
+- **Advanced Reasoning**: Support for Claude 4 and other reasoning-capable models with step-by-step thinking
+- **Multimodal Models**: Amazon Nova series supporting text, image, and video processing for comprehensive security analysis
+- **Enterprise Security**: AWS-native security controls, VPC integration, and compliance certifications
+- **Cost Optimization**: Wide range of model sizes and capabilities for cost-effective penetration testing
+- **Regional Availability**: Deploy models in your preferred AWS region for data residency and performance
+- **High Performance**: Low-latency inference through AWS's global infrastructure
+
+The system automatically selects appropriate Bedrock models based on task complexity and requirements, leveraging the full spectrum of available foundation models for optimal security testing results.
+
+> [!WARNING]
+> **Converse API Requirements**
+>
+> PentAGI uses the **Amazon Bedrock Converse API** for model interactions, which requires models to support the following features:
+> - ✅ **Converse** - Basic conversation API support
+> - ✅ **ConverseStream** - Streaming response support
+> - ✅ **Tool use** - Function calling capabilities for penetration testing tools
+> - ✅ **Streaming tool use** - Real-time tool execution feedback
+>
+> **Before selecting models**, verify their feature support at: [Supported models and model features](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
+>
+> ⚠️ **Important**: Some models like AI21 Jurassic-2 and Cohere Command (Text) have **limited chat support** and may not work properly with PentAGI's multi-turn conversation workflows.
+
+> **Note**: AWS credentials can also be provided through IAM roles, environment variables, or AWS credential files following standard AWS SDK authentication patterns. Ensure your AWS account has appropriate permissions for Amazon Bedrock service access.
 
 For advanced configuration options and detailed setup instructions, please visit our [documentation](https://docs.pentagi.com).
 
@@ -653,9 +857,9 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 
 > [!NOTE]
 > If you want to use Observability stack with Langfuse, you need to enable integration in `.env` file to set `LANGFUSE_OTEL_EXPORTER_OTLP_ENDPOINT` to `http://otelcol:4318`.
-> 
+>
 > And you need to run both stacks `docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d` to have all services running.
-> 
+>
 > Also you can register aliases for these commands in your shell to run it faster:
 >
 > ```bash
@@ -721,19 +925,19 @@ DOCKER_DEFAULT_IMAGE_FOR_PENTEST=mycompany/pentest-tools:v2.0
 
 Run once `cd backend && go mod download` to install needed packages.
 
-For generating swagger files have to run 
+For generating swagger files have to run
 
 ```bash
 swag init -g ../../pkg/server/router.go -o pkg/server/docs/ --parseDependency --parseInternal --parseDepth 2 -d cmd/pentagi
 ```
 
-before installing `swag` package via 
+before installing `swag` package via
 
 ```bash
 go install github.com/swaggo/swag/cmd/swag@v1.8.7
 ```
 
-For generating graphql resolver files have to run 
+For generating graphql resolver files have to run
 
 ```bash
 go run github.com/99designs/gqlgen --config ./gqlgen/gqlgen.yml
@@ -830,9 +1034,10 @@ The utility features parallel testing of multiple agents, detailed reporting, an
 ### Key Features
 
 - **Parallel Testing**: Tests multiple agents simultaneously for faster results
-- **Comprehensive Test Suite**: Evaluates basic completion, JSON responses, function calling, and more
+- **Comprehensive Test Suite**: Evaluates basic completion, JSON responses, function calling, and penetration testing knowledge
 - **Detailed Reporting**: Generates markdown reports with success rates and performance metrics
 - **Flexible Configuration**: Test specific agents or test groups as needed
+- **Specialized Test Groups**: Includes domain-specific tests for cybersecurity and penetration testing scenarios
 
 ### Usage Scenarios
 
@@ -851,11 +1056,11 @@ go run cmd/ctester/*.go -config ../examples/configs/openrouter.provider.yml -ver
 # Generate a report file
 go run cmd/ctester/*.go -config ../examples/configs/deepinfra.provider.yml -report ../test-report.md
 
-# Test specific agent types only 
-go run cmd/ctester/*.go -agents simple,simple_json,agent -verbose
+# Test specific agent types only
+go run cmd/ctester/*.go -agents simple,simple_json,primary_agent -verbose
 
 # Test specific test groups only
-go run cmd/ctester/*.go -tests "Simple Completion,System User Prompts" -verbose
+go run cmd/ctester/*.go -groups basic,advanced -verbose
 ```
 
 #### For Users (using Docker image)
@@ -870,7 +1075,7 @@ docker run --rm -v $(pwd)/.env:/opt/pentagi/.env vxcontrol/pentagi /opt/pentagi/
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   -v $(pwd)/my-config.yml:/opt/pentagi/config.yml \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/config.yml -verbose
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/config.yml -agents simple,primary_agent,coder -verbose
 
 # Generate a detailed report
 docker run --rm \
@@ -881,7 +1086,7 @@ docker run --rm \
 
 #### Using Pre-configured Providers
 
-The Docker image comes with pre-configured provider files for OpenRouter or DeepInfra or DeepSeek:
+The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, DeepInfra, DeepSeek):
 
 ```bash
 # Test with OpenRouter configuration
@@ -899,10 +1104,35 @@ docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepseek.provider.yml
 
+# Test with OpenAI configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -type openai
+
+# Test with Anthropic configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -type anthropic
+
+# Test with Gemini configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -type gemini
+
+# Test with AWS Bedrock configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -type bedrock
+
 # Test with Custom OpenAI configuration
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
+
+# Test with Ollama configuration (local inference)
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-llama318b.provider.yml
 ```
 
 To use these configurations, your `.env` file only needs to contain:
@@ -913,6 +1143,28 @@ LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
 LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml
 LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
+
+# For OpenAI (official API)
+OPEN_AI_KEY=your_openai_api_key                  # Your OpenAI API key
+OPEN_AI_SERVER_URL=https://api.openai.com/v1     # OpenAI API endpoint
+
+# For Anthropic (Claude models)
+ANTHROPIC_API_KEY=your_anthropic_api_key         # Your Anthropic API key
+ANTHROPIC_SERVER_URL=https://api.anthropic.com/v1  # Anthropic API endpoint
+
+# For Gemini (Google AI)
+GEMINI_API_KEY=your_gemini_api_key               # Your Google AI API key
+GEMINI_SERVER_URL=https://generativelanguage.googleapis.com  # Google AI API endpoint
+
+# For AWS Bedrock (enterprise foundation models)
+BEDROCK_REGION=us-east-1                         # AWS region for Bedrock service
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key        # AWS access key ID
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key    # AWS secret access key
+BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint
+
+# For Ollama (local inference)
+OLLAMA_SERVER_URL=http://localhost:11434         # Your Ollama server URL (only for test run)
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
 ```
 
 #### Using OpenAI with Unverified Organizations
@@ -951,6 +1203,9 @@ If you already have a running PentAGI container and want to test the current con
 # Run ctester in an existing container using current environment variables
 docker exec -it pentagi /opt/pentagi/bin/ctester -verbose
 
+# Test specific agent types with deterministic ordering
+docker exec -it pentagi /opt/pentagi/bin/ctester -agents simple,primary_agent,pentester -groups basic,knowledge -verbose
+
 # Generate a report file inside the container
 docker exec -it pentagi /opt/pentagi/bin/ctester -report /opt/pentagi/data/agent-test-report.md
 
@@ -963,11 +1218,40 @@ docker cp pentagi:/opt/pentagi/data/agent-test-report.md ./
 The utility accepts several options:
 
 - `-env <path>` - Path to environment file (default: `.env`)
+- `-type <provider>` - Provider type: `custom`, `openai`, `anthropic`, `ollama`, `bedrock`, `gemini` (default: `custom`)
 - `-config <path>` - Path to custom provider config (default: from `LLM_SERVER_CONFIG_PATH` env variable)
+- `-tests <path>` - Path to custom tests YAML file (optional)
 - `-report <path>` - Path to write the report file (optional)
 - `-agents <list>` - Comma-separated list of agent types to test (default: `all`)
-- `-tests <list>` - Comma-separated list of test groups to run (default: `all`)
+- `-groups <list>` - Comma-separated list of test groups to run (default: `all`)
 - `-verbose` - Enable verbose output with detailed test results for each agent
+
+### Available Agent Types
+
+Agents are tested in the following deterministic order:
+
+1. **simple** - Basic completion tasks
+2. **simple_json** - JSON-structured responses
+3. **primary_agent** - Main reasoning agent
+4. **assistant** - Interactive assistant mode
+5. **generator** - Content generation
+6. **refiner** - Content refinement and improvement
+7. **adviser** - Expert advice and consultation
+8. **reflector** - Self-reflection and analysis
+9. **searcher** - Information gathering and search
+10. **enricher** - Data enrichment and expansion
+11. **coder** - Code generation and analysis
+12. **installer** - Installation and setup tasks
+13. **pentester** - Penetration testing and security assessment
+
+### Available Test Groups
+
+- **basic** - Fundamental completion and prompt response tests
+- **advanced** - Complex reasoning and function calling tests
+- **json** - JSON format validation and structure tests (specifically designed for `simple_json` agent)
+- **knowledge** - Domain-specific cybersecurity and penetration testing knowledge tests
+
+> **Note**: The `json` test group is specifically designed for the `simple_json` agent type, while all other agents are tested with `basic`, `advanced`, and `knowledge` groups. This specialization ensures optimal testing coverage for each agent's intended purpose.
 
 ### Example Provider Configuration
 
@@ -994,10 +1278,13 @@ simple_json:
 
 ### Optimization Workflow
 
-1. **Create a baseline**: Run tests with default configuration
-2. **Experiment**: Try different models for each agent type
-3. **Compare results**: Look for the best success rate and performance
-4. **Deploy optimal configuration**: Use in production with your optimized setup
+1. **Create a baseline**: Run tests with default configuration to establish benchmark performance
+2. **Analyze agent-specific performance**: Review the deterministic agent ordering to identify underperforming agents
+3. **Test specialized configurations**: Experiment with different models for each agent type using provider-specific configs
+4. **Focus on domain knowledge**: Pay special attention to knowledge group tests for cybersecurity expertise
+5. **Validate function calling**: Ensure tool-based tests pass consistently for critical agent types
+6. **Compare results**: Look for the best success rate and performance across all test groups
+7. **Deploy optimal configuration**: Use in production with your optimized setup
 
 This tool helps ensure your AI agents are using the most effective models for their specific tasks, improving reliability while optimizing costs.
 
@@ -1119,7 +1406,7 @@ Available search parameters:
 - `-query STRING`: Search query text (required)
 - `-doc_type STRING`: Filter by document type (answer, memory, guide, code)
 - `-flow_id NUMBER`: Filter by flow ID (positive number)
-- `-answer_type STRING`: Filter by answer type (guide, vulnerability, code, tool, other) 
+- `-answer_type STRING`: Filter by answer type (guide, vulnerability, code, tool, other)
 - `-guide_type STRING`: Filter by guide type (install, configure, use, pentest, development, other)
 - `-limit NUMBER`: Maximum number of results (default: 3)
 - `-threshold NUMBER`: Similarity threshold (0.0-1.0, default: 0.7)
@@ -1364,7 +1651,7 @@ To access detailed logs:
 The main utility accepts several options:
 
 - `-env <path>` - Path to environment file (optional, default: `.env`)
-- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `custom`)
+- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `ollama`, `bedrock`, `gemini`, `custom`)
 - `-flow <id>` - Flow ID for testing (0 means using mocks, default: `0`)
 - `-task <id>` - Task ID for agent context (optional)
 - `-subtask <id>` - Subtask ID for agent context (optional)
