@@ -121,6 +121,14 @@ type Config struct {
 	PerplexityModel       string `env:"PERPLEXITY_MODEL" envDefault:"sonar"`
 	PerplexityContextSize string `env:"PERPLEXITY_CONTEXT_SIZE" envDefault:"low"`
 
+	// Searxng search engine
+	SearxngURL        string `env:"SEARXNG_URL"`
+	SearxngCategories string `env:"SEARXNG_CATEGORIES" envDefault:"general"`
+	SearxngLanguage   string `env:"SEARXNG_LANGUAGE" envDefault:"en"`
+	SearxngSafeSearch string `env:"SEARXNG_SAFESearch" envDefault:"0"`
+	SearxngTimeRange  string `env:"SEARXNG_TIME_RANGE"`
+	SearxngProxyURL   string `env:"SEARXNG_PROXY_URL"`
+
 	// Assistant
 	AssistantUseAgents                bool `env:"ASSISTANT_USE_AGENTS" envDefault:"false"`
 	AssistantSummarizerPreserveLast   bool `env:"ASSISTANT_SUMMARIZER_PRESERVE_LAST" envDefault:"true"`

@@ -466,6 +466,7 @@ const (
 	SearchengineTypeBrowser    SearchengineType = "browser"
 	SearchengineTypeDuckduckgo SearchengineType = "duckduckgo"
 	SearchengineTypePerplexity SearchengineType = "perplexity"
+	SearchengineTypeSearxng    SearchengineType = "searxng"
 )
 
 func (e *SearchengineType) Scan(src interface{}) error {

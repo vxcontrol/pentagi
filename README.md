@@ -40,7 +40,7 @@ You can watch the video **PentAGI overview**:
 - 🔬 Professional Pentesting Tools. Built-in suite of 20+ professional security tools including nmap, metasploit, sqlmap, and more.
 - 🧠 Smart Memory System. Long-term storage of research results and successful approaches for future use.
 - 🔍 Web Intelligence. Built-in browser via [scraper](https://hub.docker.com/r/vxcontrol/scraper) for gathering latest information from web sources.
-- 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/) and [Google Custom Search](https://programmablesearchengine.google.com/) for comprehensive information gathering.
+- 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/) and [Searxng](https://searxng.org) for comprehensive information gathering.
 - 👥 Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks.
 - 📊 Comprehensive Monitoring. Detailed logging and integration with Grafana/Prometheus for real-time system observation.
 - 📝 Detailed Reporting. Generation of thorough vulnerability reports with exploitation guides.
@@ -74,7 +74,7 @@ flowchart TB
     llm["🧠 llm-provider
     (OpenAI/Anthropic/Ollama/Bedrock/Gemini/Custom)"]
     search["🔍 search-systems
-    (Google/DuckDuckGo/Tavily/Traversaal/Perplexity)"]
+    (Google/DuckDuckGo/Tavily/Traversaal/Perplexity/Searxng)"]
     langfuse["📊 langfuse-ui
     (LLM Observability Dashboard)"]
     grafana["📈 grafana
@@ -499,6 +499,7 @@ TRAVERSAAL_API_KEY=your_traversaal_key
 PERPLEXITY_API_KEY=your_perplexity_key
 PERPLEXITY_MODEL=sonar-pro
 PERPLEXITY_CONTEXT_SIZE=medium
+SEARXNG_URL=http://localhost:8080  # Searxng instance URL
 
 # Assistant configuration
 ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating new assistants
@@ -1479,6 +1480,7 @@ go run cmd/ftester/main.go browser
 - **tavily**: Search using Tavily AI search engine
 - **traversaal**: Search using Traversaal AI search engine
 - **perplexity**: Search using Perplexity AI
+- **searxng**: Search using Searxng meta search engine
 
 ### Vector Database Functions
 - **search_in_memory**: Search for information in vector database
