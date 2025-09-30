@@ -1,6 +1,6 @@
 # Claude 3.5 series - Fast and efficient models for security tasks
 - name: claude-3-5-haiku-latest
-  description: Fastest Claude model delivering intelligence at blazing speeds - perfect for quick vulnerability scans and real-time security monitoring
+  description: Ultra-fast model with exceptional function calling and low latency. Ideal for high-frequency security scanning, rapid vulnerability detection, real-time monitoring, and bulk automated testing where speed is paramount. Strong tool orchestration capabilities at minimal cost.
   thinking: false
   release_date: 2024-10-22
   price:
@@ -8,7 +8,7 @@
     output: 4.0
 
 - name: claude-3-5-sonnet-latest
-  description: High-intelligence model with exceptional capability for complex security analysis, threat hunting, and comprehensive penetration testing
+  description: High-intelligence balanced model with superior comprehension and robust function calling. Excellent for complex threat hunting, comprehensive vulnerability analysis, sophisticated penetration testing, and multi-tool security workflows requiring deep contextual understanding.
   thinking: false
   release_date: 2024-10-22
   price:
@@ -17,7 +17,7 @@
 
 # Claude 3.7 series - Advanced models with extended thinking capabilities
 - name: claude-3-7-sonnet-latest
-  description: High-performance model with extended thinking capabilities ideal for methodical security research and step-by-step attack planning
+  description: Advanced model with extended chain-of-thought reasoning for deliberate security analysis. Excels at methodical attack planning, step-by-step exploit development, and systematic vulnerability research requiring careful reasoning and strategic decision-making in autonomous security testing.
   thinking: true
   release_date: 2025-02-24
   price:
@@ -26,17 +26,33 @@
 
 # Claude 4 series - Most capable models for advanced security operations
 - name: claude-sonnet-4-0
-  description: Latest high-performance model with exceptional reasoning - optimal for sophisticated penetration testing and advanced threat analysis
+  description: High-performance reasoning model with exceptional analytical capabilities (superseded by sonnet-4-5). Strong at complex threat modeling, multi-tool coordination, and advanced penetration testing. Maintains excellent function calling and autonomous agent performance.
   thinking: true
   release_date: 2025-05-22
   price:
     input: 3.0
     output: 15.0
 
+- name: claude-sonnet-4-5
+  description: State-of-the-art reasoning model with superior analytical depth and enhanced tool integration. Premier choice for sophisticated penetration testing, advanced threat analysis, complex exploit development, and autonomous security research requiring deep reasoning and precise tool orchestration.
+  thinking: true
+  release_date: 2025-09-29
+  price:
+    input: 3.0
+    output: 15.0
+
 - name: claude-opus-4-0
-  description: Most powerful and capable Claude model with superior reasoning - designed for complex security research and advanced exploit development
+  description: Flagship reasoning powerhouse with maximum capability (superseded by opus-4-1). Exceptional at highly complex security research, novel attack vector discovery, and intricate multi-stage penetration testing requiring extensive analytical depth and strategic planning.
   thinking: true
   release_date: 2025-05-22
+  price:
+    input: 15.0
+    output: 75.0
+
+- name: claude-opus-4-1
+  description: Ultimate reasoning model with unparalleled analytical depth and comprehensive security expertise. Designed for critical security research, advanced zero-day discovery, sophisticated red team operations, and complex autonomous penetration testing requiring maximum intelligence and reasoning capability.
+  thinking: true
+  release_date: 2025-08-05
   price:
     input: 15.0
     output: 75.0

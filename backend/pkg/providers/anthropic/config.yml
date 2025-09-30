@@ -20,104 +20,122 @@ simple_json:
     output: 4.0
 
 primary_agent:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
   n: 1
   max_tokens: 4000
+  reasoning:
+    max_tokens: 1024
   price:
     input: 3.0
     output: 15.0
 
 assistant:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
   n: 1
   max_tokens: 6000
+  reasoning:
+    max_tokens: 2048
   price:
     input: 3.0
     output: 15.0
 
 generator:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
   n: 1
   max_tokens: 8192
+  reasoning:
+    max_tokens: 4096
   price:
     input: 3.0
     output: 15.0
 
 refiner:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
   n: 1
   max_tokens: 8192
+  reasoning:
+    max_tokens: 2048
   price:
     input: 3.0
     output: 15.0
 
 adviser:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
-  top_p: 0.8
   n: 1
-  max_tokens: 4000
+  max_tokens: 6000
+  reasoning:
+    max_tokens: 4096
   price:
     input: 3.0
     output: 15.0
 
 reflector:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
-  top_p: 0.8
   n: 1
   max_tokens: 4000
+  reasoning:
+    max_tokens: 0
   price:
     input: 3.0
     output: 15.0
 
 searcher:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
   n: 1
   max_tokens: 4000
+  reasoning:
+    max_tokens: 1024
   price:
     input: 3.0
     output: 15.0
 
 enricher:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
   n: 1
   max_tokens: 4000
+  reasoning:
+    max_tokens: 0
   price:
     input: 3.0
     output: 15.0
 
 coder:
-  model: claude-sonnet-4-20250514
-  temperature: 0.2
-  top_p: 0.2
+  model: claude-sonnet-4-5-20250929
+  temperature: 1.0
   n: 1
   max_tokens: 6000
+  reasoning:
+    max_tokens: 2048
   price:
     input: 3.0
     output: 15.0
 
 installer:
-  model: claude-sonnet-4-20250514
-  temperature: 0.2
-  top_p: 0.2
+  model: claude-sonnet-4-5-20250929
+  temperature: 1.0
   n: 1
   max_tokens: 6000
+  reasoning:
+    max_tokens: 1024
   price:
     input: 3.0
     output: 15.0
 
 pentester:
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-5-20250929
   temperature: 1.0
   n: 1
   max_tokens: 4000
+  reasoning:
+    max_tokens: 1024
   price:
     input: 3.0
     output: 15.0

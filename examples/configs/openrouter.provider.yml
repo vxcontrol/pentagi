@@ -20,32 +20,34 @@ simple_json:
     output: 1.6
 
 primary_agent:
-  model: "openai/o4-mini" # x-ai/grok-3-mini
+  model: "openai/gpt-5" # x-ai/grok-3-mini, openai/o4-mini
   n: 1
   max_tokens: 6000
   reasoning:
     effort: medium
   price:
-    input: 1.1
-    output: 4.4
+    input: 1.25
+    output: 10.0
 
 assistant:
-  model: "x-ai/grok-4" # x-ai/grok-3-mini, google/gemini-2.5-flash, openai/o4-mini
+  model: "openai/gpt-5" # x-ai/grok-4, x-ai/grok-3-mini, google/gemini-2.5-flash, openai/o4-mini
   n: 1
   max_tokens: 6000
+  reasoning:
+    effort: medium
   price:
-    input: 3
-    output: 15
+    input: 1.25
+    output: 10.0
 
 generator:
-  model: "anthropic/claude-sonnet-4"
+  model: "anthropic/claude-sonnet-4.5"
   n: 1
   max_tokens: 12000
   reasoning:
     max_tokens: 4000
   price:
-    input: 3
-    output: 15
+    input: 3.0
+    output: 15.0
 
 refiner:
   model: "google/gemini-2.5-pro"
@@ -55,7 +57,7 @@ refiner:
     effort: medium
   price:
     input: 1.25
-    output: 10
+    output: 10.0
 
 adviser:
   model: "google/gemini-2.5-pro"
@@ -65,7 +67,7 @@ adviser:
     effort: high
   price:
     input: 1.25
-    output: 10
+    output: 10.0
 
 reflector:
   model: "openai/gpt-4.1-mini"
@@ -98,14 +100,14 @@ enricher:
     output: 1.6
 
 coder:
-  model: "anthropic/claude-sonnet-4"
+  model: "anthropic/claude-sonnet-4.5"
   n: 1
   max_tokens: 8000
   reasoning:
     max_tokens: 2000
   price:
-    input: 3
-    output: 15
+    input: 3.0
+    output: 15.0
 
 installer:
   model: "google/gemini-2.5-flash"
@@ -118,9 +120,9 @@ installer:
     output: 2.5
 
 pentester:
-  model: "moonshotai/kimi-k2"
+  model: "moonshotai/kimi-k2-0905"
   n: 1
   max_tokens: 6000
   price:
-    input: 0.14
-    output: 2.49
+    input: 0.4
+    output: 2.0

@@ -1,50 +1,54 @@
 simple:
-  model: "meta-llama/Llama-3.3-70B-Instruct"
-  temperature: 0.6
+  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  temperature: 0.7
   top_p: 0.95
   n: 1
   max_tokens: 4000
   price:
-    input: 0.038
-    output: 0.12
+    input: 0.14
+    output: 1.4
 
 simple_json:
-  model: "google/gemma-3-27b-it"
+  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
   temperature: 0.7
   top_p: 1.0
   n: 1
   max_tokens: 4000
   json: true
   price:
-    input: 0.09
-    output: 0.17
+    input: 0.14
+    output: 1.4
 
 primary_agent:
-  model: "deepseek-ai/DeepSeek-R1-0528-Turbo"
+  model: "moonshotai/Kimi-K2-Instruct-0905"
+  temperature: 1.0
   n: 1
   max_tokens: 6000
   price:
-    input: 1.0
-    output: 3.0
+    input: 0.4
+    output: 2.0
 
 assistant:
-  model: "deepseek-ai/DeepSeek-R1-0528-Turbo"
+  model: "moonshotai/Kimi-K2-Instruct-0905"
+  temperature: 1.0
   n: 1
   max_tokens: 8000
   price:
-    input: 1.0
-    output: 3.0
+    input: 0.4
+    output: 2.0
 
 generator:
-  model: "deepseek-ai/DeepSeek-R1-0528-Turbo"
+  model: "google/gemini-2.5-pro"
+  temperature: 1.0
   n: 1
-  max_tokens: 12000
+  max_tokens: 8000
   price:
-    input: 1.0
-    output: 3.0
+    input: 1.25
+    output: 10.0
 
 refiner:
   model: "deepseek-ai/DeepSeek-R1-0528-Turbo"
+  temperature: 1.0
   n: 1
   max_tokens: 8000
   price:
@@ -53,22 +57,25 @@ refiner:
 
 adviser:
   model: "google/gemini-2.5-pro"
+  temperature: 1.0
   n: 1
   max_tokens: 4000
   price:
-    input: 0.875
-    output: 7.0
+    input: 1.25
+    output: 10.0
 
 reflector:
-  model: "google/gemini-2.5-flash"
+  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  temperature: 1.0
   n: 1
   max_tokens: 4000
   price:
-    input: 0.21
-    output: 1.75
+    input: 0.14
+    output: 1.4
 
 searcher:
   model: "Qwen/Qwen3-32B"
+  temperature: 1.0
   n: 1
   max_tokens: 4000
   price:
@@ -77,6 +84,7 @@ searcher:
 
 enricher:
   model: "Qwen/Qwen3-32B"
+  temperature: 1.0
   n: 1
   max_tokens: 6000
   price:
@@ -85,6 +93,7 @@ enricher:
 
 coder:
   model: "anthropic/claude-4-sonnet"
+  temperature: 1.0
   n: 1
   max_tokens: 8000
   price:
@@ -93,16 +102,18 @@ coder:
 
 installer:
   model: "google/gemini-2.5-flash"
+  temperature: 1.0
   n: 1
   max_tokens: 6000
   price:
-    input: 0.21
-    output: 1.75
+    input: 0.3
+    output: 2.5
 
 pentester:
-  model: "moonshotai/Kimi-K2-Instruct"
+  model: "moonshotai/Kimi-K2-Instruct-0905"
+  temperature: 1.0
   n: 1
   max_tokens: 6000
   price:
-    input: 0.55
-    output: 2.2
+    input: 0.4
+    output: 2.0

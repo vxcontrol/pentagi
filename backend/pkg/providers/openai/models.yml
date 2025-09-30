@@ -1,6 +1,31 @@
+# Latest GPT-5 series - Advanced agentic models with native function calling and reasoning
+- name: gpt-5
+  description: Premier agentic model with advanced reasoning and native tool integration. Excels at autonomous security research, complex exploit chain development, and coordinating multi-tool penetration testing workflows. Optimal for sophisticated threat modeling and adaptive attack strategies.
+  thinking: true
+  release_date: 2025-08-07
+  price:
+    input: 1.25
+    output: 10.0
+
+- name: gpt-5-mini
+  description: Efficient agentic model balancing speed and intelligence for well-scoped security tasks. Ideal for automated vulnerability analysis, exploit generation, and systematic penetration testing with strong function calling capabilities for security tool orchestration.
+  thinking: true
+  release_date: 2025-08-07
+  price:
+    input: 0.25
+    output: 2.0
+
+- name: gpt-5-nano
+  description: Fastest agentic model optimized for high-throughput security scanning and rapid tool execution. Perfect for reconnaissance phases, bulk vulnerability detection, and real-time security monitoring with minimal latency in autonomous agent workflows.
+  thinking: true
+  release_date: 2025-08-07
+  price:
+    input: 0.05
+    output: 0.4
+
 # Flagship chat models - Versatile, high-intelligence models for complex tasks
 - name: gpt-4o
-  description: Fast, intelligent, flexible GPT model ideal for complex penetration testing scenarios and multi-step security analysis
+  description: Multimodal flagship model with vision capabilities and robust function calling. Excellent for comprehensive penetration testing requiring image analysis, web UI assessment, and complex multi-tool orchestration. Strong balance of speed and intelligence for real-time security operations.
   thinking: false
   release_date: 2024-05-13
   price:
@@ -8,16 +33,16 @@
     output: 10.0
 
 - name: gpt-4o-mini
-  description: Fast, affordable small model perfect for focused pentesting tasks like vulnerability scanning and quick security assessments
+  description: Compact multimodal model with strong function calling and fast inference. Optimal for high-frequency security scanning, automated vulnerability checks, and routine penetration testing tasks. Cost-effective choice for bulk operations and continuous security monitoring.
   thinking: false
   release_date: 2024-07-18
   price:
     input: 0.15
     output: 0.6
 
-# Latest GPT-4.1 series - Flagship models for complex tasks
+# Latest GPT-4.1 series - Enhanced intelligence models with improved function calling
 - name: gpt-4.1
-  description: Flagship GPT model optimized for complex security research, advanced exploit development, and comprehensive penetration testing
+  description: Enhanced flagship model with superior function calling accuracy and deeper security domain knowledge. Excels at complex threat analysis, sophisticated exploit development, and comprehensive penetration testing requiring extensive tool coordination and adaptive attack planning.
   thinking: false
   release_date: 2025-04-14
   price:
@@ -25,7 +50,7 @@
     output: 8.0
 
 - name: gpt-4.1-mini
-  description: Balanced model for intelligence, speed, and cost - excellent for routine security assessments and code analysis
+  description: Balanced performance model with improved efficiency and strong function calling. Excellent for routine security assessments, automated code analysis, and systematic vulnerability testing with optimal cost-to-intelligence ratio for production workloads.
   thinking: false
   release_date: 2025-04-14
   price:
@@ -33,16 +58,16 @@
     output: 1.6
 
 - name: gpt-4.1-nano
-  description: Fastest, most cost-effective model perfect for high-volume security scanning and basic vulnerability detection
+  description: Ultra-fast lightweight model optimized for high-throughput operations. Perfect for bulk security scanning, rapid reconnaissance, continuous monitoring, and basic vulnerability detection where speed and cost efficiency are critical.
   thinking: false
   release_date: 2025-04-14
   price:
     input: 0.1
     output: 0.4
 
-# Reasoning models - o-series models that excel at complex, multi-step security tasks
+# Reasoning models - o-series with extended chain-of-thought for complex security tasks
 - name: o3-mini
-  description: Small but powerful reasoning model excellent for step-by-step security analysis and logical penetration testing workflows
+  description: Compact reasoning model with extended thinking capabilities for methodical security analysis. Excellent at step-by-step attack planning, logical vulnerability chaining, and systematic penetration testing. Strong deliberative reasoning for complex security scenarios at an efficient cost point.
   thinking: true
   release_date: 2025-01-31
   price:
@@ -50,7 +75,7 @@
     output: 4.4
 
 - name: o4-mini
-  description: Faster, more affordable reasoning model ideal for methodical security assessments and systematic vulnerability analysis
+  description: Next-generation reasoning model with enhanced speed and accuracy. Ideal for methodical security assessments, systematic exploit development, and structured vulnerability analysis. Balances deep reasoning with faster inference for production penetration testing workflows.
   thinking: true
   release_date: 2025-04-16
   price:
@@ -58,7 +83,7 @@
     output: 4.4
 
 - name: o3
-  description: Advanced reasoning model perfect for complex security research, sophisticated attack chain development, and deep threat analysis
+  description: Advanced reasoning powerhouse for sophisticated security research and complex threat modeling. Excels at multi-stage attack chain development, deep vulnerability analysis, and intricate exploit construction requiring extensive deliberative thinking and strategic planning.
   thinking: true
   release_date: 2025-04-16
   price:
@@ -66,7 +91,7 @@
     output: 8.0
 
 - name: o1
-  description: Powerful reasoning model specialized in complex multi-step security analysis and advanced penetration testing methodologies
+  description: Premier reasoning model with maximum thinking depth for highly complex security challenges. Specialized in advanced penetration testing methodologies, novel exploit research, and sophisticated attack vector discovery. Best for critical security research requiring exhaustive analysis.
   thinking: true
   release_date: 2024-12-17
   price:
