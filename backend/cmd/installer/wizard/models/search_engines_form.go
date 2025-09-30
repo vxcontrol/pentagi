@@ -104,6 +104,49 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		config.GoogleLRKey,
 	))
 
+	// Searxng URL
+	fields = append(fields, m.createTextField("searxng_url",
+		locale.ToolsSearchEnginesSearxngURL,
+		locale.ToolsSearchEnginesSearxngURLDesc,
+		config.SearxngURL,
+		false,
+	))
+
+	// Searxng Categories
+	fields = append(fields, m.createTextField("searxng_categories",
+		locale.ToolsSearchEnginesSearxngCategories,
+		locale.ToolsSearchEnginesSearxngCategoriesDesc,
+		config.SearxngCategories,
+		false,
+	))
+
+	// Searxng Language
+	fields = append(fields, m.createSelectTextField("searxng_language",
+		locale.ToolsSearchEnginesSearxngLanguage,
+		locale.ToolsSearchEnginesSearxngLanguageDesc,
+		config.SearxngLanguage,
+		[]string{"en", "ch", "fr", "de", "it", "es", "pt", "ru", "zh"},
+		false,
+	))
+
+	// Searxng Safe Search
+	fields = append(fields, m.createSelectTextField("searxng_safe_search",
+		locale.ToolsSearchEnginesSearxngSafeSearch,
+		locale.ToolsSearchEnginesSearxngSafeSearchDesc,
+		config.SearxngSafeSearch,
+		[]string{"0", "1", "2"},
+		false,
+	))
+
+	// Searxng Time Range
+	fields = append(fields, m.createSelectTextField("searxng_time_range",
+		locale.ToolsSearchEnginesSearxngTimeRange,
+		locale.ToolsSearchEnginesSearxngTimeRangeDesc,
+		config.SearxngTimeRange,
+		[]string{"day", "month", "year"},
+		false,
+	))
+
 	m.SetFormFields(fields)
 	return nil
 }
@@ -242,6 +285,15 @@ func (m *SearchEnginesFormModel) GetCurrentConfiguration() string {
 			m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
 	}
 
+	// Searxng
+	if config.SearxngURL.Value != "" {
+		sections = append(sections, fmt.Sprintf("• Searxng: %s",
+			m.GetStyles().Success.Render(locale.StatusConfigured)))
+	} else {
+		sections = append(sections, fmt.Sprintf("• Searxng: %s",
+			m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
+	}
+
 	sections = append(sections, "")
 	if config.ConfiguredCount > 0 {
 		sections = append(sections, m.GetStyles().Success.Render(
@@ -283,6 +335,11 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 		GoogleAPIKey:          config.GoogleAPIKey,
 		GoogleCXKey:           config.GoogleCXKey,
 		GoogleLRKey:           config.GoogleLRKey,
+		SearxngURL:            config.SearxngURL,
+		SearxngCategories:     config.SearxngCategories,
+		SearxngLanguage:       config.SearxngLanguage,
+		SearxngSafeSearch:     config.SearxngSafeSearch,
+		SearxngTimeRange:      config.SearxngTimeRange,
 	}
 
 	// update field values based on form input
@@ -312,6 +369,16 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 			newConfig.GoogleCXKey.Value = value
 		case "google_lr_key":
 			newConfig.GoogleLRKey.Value = value
+		case "searxng_url":
+			newConfig.SearxngURL.Value = value
+		case "searxng_categories":
+			newConfig.SearxngCategories.Value = value
+		case "searxng_language":
+			newConfig.SearxngLanguage.Value = value
+		case "searxng_safe_search":
+			newConfig.SearxngSafeSearch.Value = value
+		case "searxng_time_range":
+			newConfig.SearxngTimeRange.Value = value
 		}
 	}
 

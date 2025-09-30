@@ -217,7 +217,7 @@ func (s *SearxngTool) performSearxngSearch(ctx context.Context, query string, ma
 		"query":  query,
 		"limit":  params.Get("limit"),
 		"engine": "searxng",
-	}).Info("Performing Searxng search")
+	}).Debug("Performing Searxng search")
 
 	resp, err := client.Do(req)
 	if err != nil {

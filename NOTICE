@@ -1,5 +1,9 @@
-PentAGI, Fully fully autonomous AI Agent capable of performing complex penetration testing tasks.
+PentAGI, Fully autonomous AI Agent capable of performing complex penetration testing tasks.
 
 Copyright 2025 PentAGI Development Team
 
 Licensed under MIT License. See LICENSE and EULA for terms.
+
+NOTICE: This software integrates VXControl Cloud SDK for enhanced intelligence services.
+VXControl Cloud SDK is licensed under AGPL-3.0 with a special exception for this official PentAGI project.
+For more details, see the License section in README.md and VXControl Cloud SDK license terms.

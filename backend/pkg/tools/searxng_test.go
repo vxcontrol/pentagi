@@ -106,7 +106,7 @@ func TestNewSearxngTool(t *testing.T) {
 		t.Errorf("Expected timeout %v, got %v", time.Duration(timeout)*time.Second, tool.timeout)
 	}
 
-	if tool.searchLog != searchLog {
+	if tool.slp != searchLog {
 		t.Error("Expected searchLog to be set")
 	}
 
@@ -118,8 +118,8 @@ func TestNewSearxngTool(t *testing.T) {
 func TestSearxngToolIsAvailable(t *testing.T) {
 	// Test with URL and searchLog available
 	tool1 := &SearxngTool{
-		baseURL:   "https://searxng.example.com",
-		searchLog: &MockSearchLogProvider{},
+		baseURL: "https://searxng.example.com",
+		slp:     &MockSearchLogProvider{},
 	}
 	if !tool1.IsAvailable() {
 		t.Error("Expected tool to be available when URL and searchLog are set")
@@ -135,8 +135,8 @@ func TestSearxngToolIsAvailable(t *testing.T) {
 
 	// Test with searchLog nil
 	tool3 := &SearxngTool{
-		baseURL:   "https://searxng.example.com",
-		searchLog: nil,
+		baseURL: "https://searxng.example.com",
+		slp:     nil,
 	}
 	if tool3.IsAvailable() {
 		t.Error("Expected tool to be unavailable when searchLog is nil")
@@ -145,8 +145,8 @@ func TestSearxngToolIsAvailable(t *testing.T) {
 
 func TestSearxngToolHandleWithInvalidArgs(t *testing.T) {
 	tool := &SearxngTool{
-		baseURL:   "https://searxng.example.com",
-		searchLog: &MockSearchLogProvider{},
+		baseURL: "https://searxng.example.com",
+		slp:     &MockSearchLogProvider{},
 	}
 
 	// Test with invalid JSON args
@@ -184,8 +184,8 @@ func TestSearxngToolHandleWithValidArgs(t *testing.T) {
 	defer mockServer.Close()
 
 	tool := &SearxngTool{
-		baseURL:   mockServer.URL,
-		searchLog: &MockSearchLogProvider{},
+		baseURL: mockServer.URL,
+		slp:     &MockSearchLogProvider{},
 		summarizer: func(ctx context.Context, result string) (string, error) {
 			return result, nil // Don't modify result for this test
 		},
@@ -226,8 +226,8 @@ func TestSearxngToolHandleWithServerError(t *testing.T) {
 	defer mockServer.Close()
 
 	tool := &SearxngTool{
-		baseURL:   mockServer.URL,
-		searchLog: &MockSearchLogProvider{},
+		baseURL: mockServer.URL,
+		slp:     &MockSearchLogProvider{},
 		summarizer: func(ctx context.Context, result string) (string, error) {
 			return result, nil
 		},
@@ -247,8 +247,8 @@ func TestSearxngToolHandleWithServerError(t *testing.T) {
 
 func TestSearxngToolHandleWithInvalidURL(t *testing.T) {
 	tool := &SearxngTool{
-		baseURL:   "invalid-url",
-		searchLog: &MockSearchLogProvider{},
+		baseURL: "invalid-url",
+		slp:     &MockSearchLogProvider{},
 		summarizer: func(ctx context.Context, result string) (string, error) {
 			return result, nil
 		},
@@ -278,8 +278,8 @@ func TestSearxngToolHandleWithNoResults(t *testing.T) {
 	defer mockServer.Close()
 
 	tool := &SearxngTool{
-		baseURL:   mockServer.URL,
-		searchLog: &MockSearchLogProvider{},
+		baseURL: mockServer.URL,
+		slp:     &MockSearchLogProvider{},
 		summarizer: func(ctx context.Context, result string) (string, error) {
 			return result, nil
 		},

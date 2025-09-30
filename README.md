@@ -40,7 +40,7 @@ You can watch the video **PentAGI overview**:
 - 🔬 Professional Pentesting Tools. Built-in suite of 20+ professional security tools including nmap, metasploit, sqlmap, and more.
 - 🧠 Smart Memory System. Long-term storage of research results and successful approaches for future use.
 - 🔍 Web Intelligence. Built-in browser via [scraper](https://hub.docker.com/r/vxcontrol/scraper) for gathering latest information from web sources.
-- 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/) and [Searxng](https://searxng.org) for comprehensive information gathering.
+- 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/), and [Searxng](https://searxng.org) for comprehensive information gathering.
 - 👥 Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks.
 - 📊 Comprehensive Monitoring. Detailed logging and integration with Grafana/Prometheus for real-time system observation.
 - 📝 Detailed Reporting. Generation of thorough vulnerability reports with exploitation guides.
@@ -460,7 +460,52 @@ The system uses Docker containers for isolation and easy deployment, with separa
 - 10GB free disk space
 - Internet access for downloading images and updates
 
-### Basic Installation
+### Using Installer (Recommended)
+
+PentAGI provides an interactive installer with a terminal-based UI for streamlined configuration and deployment. The installer guides you through system checks, LLM provider setup, search engine configuration, and security hardening.
+
+**Supported Platforms:**
+- **Linux**: amd64 ([download](https://pentagi.com/downloads/linux/amd64/installer-latest.zip)) | arm64 ([download](https://pentagi.com/downloads/linux/arm64/installer-latest.zip))
+- **Windows**: amd64
+- **macOS**: amd64 (Intel) | arm64 (M-series)
+
+**Quick Installation (Linux amd64):**
+
+```bash
+# Create installation directory
+mkdir -p pentagi && cd pentagi
+
+# Download installer
+wget -O installer.zip https://pentagi.com/downloads/linux/amd64/installer-latest.zip
+
+# Extract
+unzip installer.zip
+
+# Run interactive installer
+./installer
+```
+
+The installer will:
+1. **System Checks**: Verify Docker, network connectivity, and system requirements
+2. **Environment Setup**: Create and configure `.env` file with optimal defaults
+3. **Provider Configuration**: Set up LLM providers (OpenAI, Anthropic, Gemini, Bedrock, Ollama, Custom)
+4. **Search Engines**: Configure DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng
+5. **Security Hardening**: Generate secure credentials and configure SSL certificates
+6. **Deployment**: Start PentAGI with docker-compose
+
+**For Production & Enhanced Security:**
+
+For production deployments or security-sensitive environments, we **strongly recommend** using a distributed two-node architecture where worker operations are isolated on a separate server. This prevents untrusted code execution and network access issues on your main system.
+
+👉 **See detailed guide**: [Worker Node Setup](examples/guides/worker_node.md)
+
+The two-node setup provides:
+- **Isolated Execution**: Worker containers run on dedicated hardware
+- **Network Isolation**: Separate network boundaries for penetration testing
+- **Security Boundaries**: Docker-in-Docker with TLS authentication
+- **OOB Attack Support**: Dedicated port ranges for out-of-band techniques
+
+### Manual Installation
 
 1. Create a working directory or clone the repository:
 
@@ -499,7 +544,13 @@ TRAVERSAAL_API_KEY=your_traversaal_key
 PERPLEXITY_API_KEY=your_perplexity_key
 PERPLEXITY_MODEL=sonar-pro
 PERPLEXITY_CONTEXT_SIZE=medium
-SEARXNG_URL=http://localhost:8080  # Searxng instance URL
+
+# Searxng meta search engine (aggregates results from multiple sources)
+SEARXNG_URL=http://your-searxng-instance:8080
+SEARXNG_CATEGORIES=general
+SEARXNG_LANGUAGE=
+SEARXNG_SAFESEARCH=0
+SEARXNG_TIME_RANGE=
 
 # Assistant configuration
 ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating new assistants
@@ -608,6 +659,56 @@ OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
 ```
 
 The system automatically discovers available models from your Ollama server and provides zero-cost inference for penetration testing workflows.
+
+#### Creating Custom Ollama Models with Extended Context
+
+PentAGI requires models with larger context windows than the default Ollama configurations. You need to create custom models with increased `num_ctx` parameter through Modelfiles. While typical agent workflows consume around 64K tokens, PentAGI uses 110K context size for safety margin and handling complex penetration testing scenarios.
+
+**Important**: The `num_ctx` parameter can only be set during model creation via Modelfile - it cannot be changed after model creation or overridden at runtime.
+
+##### Example: Qwen3 32B FP16 with Extended Context
+
+Create a Modelfile named `Modelfile_qwen3_32b_fp16_tc`:
+
+```dockerfile
+FROM qwen3:32b-fp16
+PARAMETER num_ctx 110000
+PARAMETER temperature 0.3
+PARAMETER top_p 0.8
+PARAMETER min_p 0.0
+PARAMETER top_k 20
+PARAMETER repeat_penalty 1.1
+```
+
+Build the custom model:
+
+```bash
+ollama create qwen3:32b-fp16-tc -f Modelfile_qwen3_32b_fp16_tc
+```
+
+##### Example: QwQ 32B FP16 with Extended Context
+
+Create a Modelfile named `Modelfile_qwq_32b_fp16_tc`:
+
+```dockerfile
+FROM qwq:32b-fp16
+PARAMETER num_ctx 110000
+PARAMETER temperature 0.2
+PARAMETER top_p 0.7
+PARAMETER min_p 0.0
+PARAMETER top_k 40
+PARAMETER repeat_penalty 1.2
+```
+
+Build the custom model:
+
+```bash
+ollama create qwq:32b-fp16-tc -f Modelfile_qwq_32b_fp16_tc
+```
+
+> **Note**: The QwQ 32B FP16 model requires approximately **71.3 GB VRAM** for inference. Ensure your system has sufficient GPU memory before attempting to use this model.
+
+These custom models are referenced in the pre-built provider configuration files (`ollama-qwen332b-fp16-tc.provider.yml` and `ollama-qwq32b-fp16-tc.provider.yml`) that are included in the Docker image at `/opt/pentagi/conf/`.
 
 ### OpenAI Provider Configuration
 
@@ -1133,6 +1234,16 @@ docker run --rm \
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-llama318b.provider.yml
+
+# Test with Ollama Qwen3 32B configuration (requires custom model creation)
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-qwen332b-fp16-tc.provider.yml
+
+# Test with Ollama QwQ 32B configuration (requires custom model creation and 71.3GB VRAM)
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-qwq32b-fp16-tc.provider.yml
 ```
 
 To use these configurations, your `.env` file only needs to contain:
@@ -1164,7 +1275,7 @@ BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpo
 
 # For Ollama (local inference)
 OLLAMA_SERVER_URL=http://localhost:11434         # Your Ollama server URL (only for test run)
-OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml  # or ollama-qwen332b-fp16-tc.provider.yml or ollama-qwq32b-fp16-tc.provider.yml
 ```
 
 #### Using OpenAI with Unverified Organizations
@@ -1480,7 +1591,7 @@ go run cmd/ftester/main.go browser
 - **tavily**: Search using Tavily AI search engine
 - **traversaal**: Search using Traversaal AI search engine
 - **perplexity**: Search using Perplexity AI
-- **searxng**: Search using Searxng meta search engine
+- **searxng**: Search using Searxng meta search engine (aggregates results from multiple engines)
 
 ### Vector Database Functions
 - **search_in_memory**: Search for information in vector database
@@ -1679,4 +1790,30 @@ This project is made possible thanks to the following research and developments:
 
 ## 📄 License
 
-Copyright (c) PentAGI Development Team. [MIT License](https://github.com/vxcontrol/pentagi/blob/master/LICENSE)
+### PentAGI Core License
+
+**PentAGI Core**: Licensed under [MIT License](LICENSE)  
+Copyright (c) 2025 PentAGI Development Team
+
+### VXControl Cloud SDK Integration
+
+**VXControl Cloud SDK Integration**: This repository integrates [VXControl Cloud SDK](https://github.com/vxcontrol/cloud) under a **special licensing exception** that applies **ONLY** to the official PentAGI project.
+
+#### ✅ Official PentAGI Project
+- This official repository: `https://github.com/vxcontrol/pentagi`
+- Official releases distributed by VXControl LLC
+- Code used under direct authorization from VXControl LLC
+
+#### ⚠️ Important for Forks and Third-Party Use
+
+If you fork this project or create derivative works, the VXControl SDK components are subject to **AGPL-3.0** license terms. You must either:
+
+1. **Remove VXControl SDK integration**
+2. **Open source your entire application** (comply with AGPL-3.0 copyleft terms)
+3. **Obtain a commercial license** from VXControl LLC
+
+#### Commercial Licensing
+
+For commercial use of VXControl Cloud SDK in proprietary applications, contact:
+- **Email**: info@vxcontrol.com  
+- **Subject**: "VXControl Cloud SDK Commercial License"

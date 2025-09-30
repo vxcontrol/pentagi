@@ -2,10 +2,14 @@ package config
 
 import (
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 
 	"github.com/caarlos0/env/v10"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/vxcontrol/cloud/sdk"
 )
 
 type Config struct {
@@ -14,6 +18,10 @@ type Config struct {
 	Debug       bool   `env:"DEBUG" envDefault:"false"`
 	DataDir     string `env:"DATA_DIR" envDefault:"./data"`
 	AskUser     bool   `env:"ASK_USER" envDefault:"false"`
+
+	// For communication with PentAGI Cloud API
+	InstallationID string `env:"INSTALLATION_ID"`
+	LicenseKey     string `env:"LICENSE_KEY"`
 
 	// Docker (terminal) settings
 	DockerInside                 bool   `env:"DOCKER_INSIDE" envDefault:"false"`
@@ -124,10 +132,9 @@ type Config struct {
 	// Searxng search engine
 	SearxngURL        string `env:"SEARXNG_URL"`
 	SearxngCategories string `env:"SEARXNG_CATEGORIES" envDefault:"general"`
-	SearxngLanguage   string `env:"SEARXNG_LANGUAGE" envDefault:"en"`
-	SearxngSafeSearch string `env:"SEARXNG_SAFESearch" envDefault:"0"`
+	SearxngLanguage   string `env:"SEARXNG_LANGUAGE"`
+	SearxngSafeSearch string `env:"SEARXNG_SAFESEARCH" envDefault:"0"`
 	SearxngTimeRange  string `env:"SEARXNG_TIME_RANGE"`
-	SearxngProxyURL   string `env:"SEARXNG_PROXY_URL"`
 
 	// Assistant
 	AssistantUseAgents                bool `env:"ASSISTANT_USE_AGENTS" envDefault:"false"`
@@ -158,7 +165,7 @@ func NewConfig() (*Config, error) {
 	if err := env.ParseWithOptions(&config, env.Options{
 		RequiredIfNoDef: false,
 		FuncMap: map[reflect.Type]env.ParserFunc{
-			reflect.TypeOf(&url.URL{}): func(s string) (interface{}, error) {
+			reflect.TypeOf(&url.URL{}): func(s string) (any, error) {
 				if s == "" {
 					return nil, nil
 				}
@@ -169,5 +176,44 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
+	ensureInstallationID(&config)
+	ensureLicenseKey(&config)
+
 	return &config, nil
+}
+
+func ensureInstallationID(config *Config) {
+	// validate current installation ID from environment
+	if config.InstallationID != "" && uuid.Validate(config.InstallationID) == nil {
+		return
+	}
+
+	// check local file for installation ID
+	installationIDPath := filepath.Join(config.DataDir, "installation_id")
+	installationID, err := os.ReadFile(installationIDPath)
+	if err != nil {
+		config.InstallationID = uuid.New().String()
+	} else if uuid.Validate(string(installationID)) == nil {
+		config.InstallationID = string(installationID)
+	} else {
+		config.InstallationID = uuid.New().String()
+	}
+
+	// write installation ID to local file
+	_ = os.WriteFile(installationIDPath, []byte(config.InstallationID), 0644)
+}
+
+func ensureLicenseKey(config *Config) {
+	// validate current license key from environment
+	if config.LicenseKey == "" {
+		return
+	}
+
+	// check license key validity, if invalid, set to empty
+	info, err := sdk.IntrospectLicenseKey(config.LicenseKey)
+	if err != nil {
+		config.LicenseKey = ""
+	} else if !info.IsValid() {
+		config.LicenseKey = ""
+	}
 }

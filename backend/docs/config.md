@@ -22,6 +22,9 @@ This document serves as a comprehensive guide to the configuration system in Pen
   - [LLM Provider Settings](#llm-provider-settings)
     - [OpenAI](#openai)
     - [Anthropic](#anthropic)
+    - [Ollama LLM Provider](#ollama-llm-provider)
+    - [Google AI (Gemini) LLM Provider](#google-ai-gemini-llm-provider)
+    - [AWS Bedrock LLM Provider](#aws-bedrock-llm-provider)
     - [Custom LLM Provider](#custom-llm-provider)
     - [Usage Details](#usage-details-6)
   - [Embedding Settings](#embedding-settings)
@@ -42,6 +45,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Traversaal Search](#traversaal-search)
     - [Tavily Search](#tavily-search)
     - [Perplexity Search](#perplexity-search)
+    - [Searxng Search](#searxng-search)
     - [Usage Details](#usage-details-9)
   - [Proxy Settings](#proxy-settings)
     - [Usage Details](#usage-details-10)
@@ -89,6 +93,8 @@ These settings control basic application behavior and are foundational for the s
 | Debug | `DEBUG` | `false` | Enables debug mode with additional logging |
 | DataDir | `DATA_DIR` | `./data` | Directory for storing persistent data |
 | AskUser | `ASK_USER` | `false` | When enabled, requires explicit user confirmation for certain operations |
+| InstallationID | `INSTALLATION_ID` | *(none)* | Unique installation identifier for PentAGI Cloud API communication |
+| LicenseKey | `LICENSE_KEY` | *(none)* | License key for PentAGI Cloud API authentication and feature activation |
 
 ### Usage Details
 
@@ -145,6 +151,29 @@ dataDir: fte.cfg.DataDir
 // In tools.go
 if fte.cfg.AskUser {
     // Prompt user for confirmation before executing
+}
+```
+
+- **InstallationID**: A unique identifier for the PentAGI installation used for cloud API communication:
+  - Generated automatically during installation or can be manually set
+  - Required for certain cloud-based features and integrations
+
+```go
+// Used in cloud SDK initialization
+if cfg.InstallationID != "" {
+    // Initialize cloud API client with installation ID
+}
+```
+
+- **LicenseKey**: Authentication key for PentAGI Cloud API and premium feature activation:
+  - Validates license and enables licensed features
+  - Required for enterprise features and support
+  - Used for authentication with PentAGI Cloud services
+
+```go
+// Used in cloud SDK initialization
+if cfg.LicenseKey != "" {
+    // Validate license and activate premium features
 }
 ```
 
@@ -376,8 +405,8 @@ These settings control the web scraper service used for browsing websites and ta
 
 | Option | Environment Variable | Default Value | Description |
 |--------|---------------------|---------------|-------------|
-| ScraperPublicURL | `SCRAPER_PUBLIC_URL` | `https://someuser:somepass@scraper` | Public URL for accessing the scraper service from clients |
-| ScraperPrivateURL | `SCRAPER_PRIVATE_URL` | `https://someuser:somepass@scraper` | Private URL for internal scraper service access |
+| ScraperPublicURL | `SCRAPER_PUBLIC_URL` | *(none)* | Public URL for accessing the scraper service from clients |
+| ScraperPrivateURL | `SCRAPER_PRIVATE_URL` | *(none)* | Private URL for internal scraper service access |
 
 ### Usage Details
 
@@ -425,6 +454,29 @@ These settings control the integration with various Large Language Model (LLM) p
 | AnthropicAPIKey | `ANTHROPIC_API_KEY` | *(none)* | API key for Anthropic Claude services |
 | AnthropicServerURL | `ANTHROPIC_SERVER_URL` | `https://api.anthropic.com/v1` | Server URL for Anthropic API requests |
 
+### Ollama LLM Provider
+
+| Option | Environment Variable | Default Value | Description |
+|--------|---------------------|---------------|-------------|
+| OllamaServerURL | `OLLAMA_SERVER_URL` | *(none)* | Server URL for Ollama API requests |
+| OllamaServerConfig | `OLLAMA_SERVER_CONFIG_PATH` | *(none)* | Path to config file for Ollama provider options |
+
+### Google AI (Gemini) LLM Provider
+
+| Option | Environment Variable | Default Value | Description |
+|--------|---------------------|---------------|-------------|
+| GeminiAPIKey | `GEMINI_API_KEY` | *(none)* | API key for Google AI Gemini services |
+| GeminiServerURL | `GEMINI_SERVER_URL` | `https://generativelanguage.googleapis.com` | Server URL for Gemini API requests |
+
+### AWS Bedrock LLM Provider
+
+| Option | Environment Variable | Default Value | Description |
+|--------|---------------------|---------------|-------------|
+| BedrockRegion | `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
+| BedrockAccessKey | `BEDROCK_ACCESS_KEY_ID` | *(none)* | AWS access key ID for Bedrock authentication |
+| BedrockSecretKey | `BEDROCK_SECRET_ACCESS_KEY` | *(none)* | AWS secret access key for Bedrock authentication |
+| BedrockServerURL | `BEDROCK_SERVER_URL` | *(none)* | Optional custom endpoint URL for Bedrock service |
+
 ### Custom LLM Provider
 
 | Option | Environment Variable | Default Value | Description |
@@ -459,6 +511,62 @@ The LLM provider settings are used in `pkg/providers` modules to initialize and 
       anthropic.WithToken(cfg.AnthropicAPIKey),
       anthropic.WithBaseURL(baseURL),
       // ...
+  )
+  ```
+
+- **Ollama Settings**: Used in `pkg/providers/ollama/ollama.go` to create the Ollama client:
+  ```go
+  serverURL := cfg.OllamaServerURL
+
+  client, err := ollama.New(
+      ollama.WithServerURL(serverURL),
+      ollama.WithHTTPClient(httpClient),
+      ollama.WithModel(OllamaAgentModel),
+      ollama.WithPullModel(),
+  )
+
+  // Load provider options from config file if specified
+  if cfg.OllamaServerConfig != "" {
+      configData, err := os.ReadFile(cfg.OllamaServerConfig)
+      providerConfig, err := BuildProviderConfig(cfg, configData)
+      // ...
+  }
+  ```
+
+- **Gemini Settings**: Used in `pkg/providers/gemini/gemini.go` to create the Google AI client:
+  ```go
+  opts := []googleai.Option{
+      googleai.WithRest(),
+      googleai.WithAPIKey(cfg.GeminiAPIKey),
+      googleai.WithEndpoint(cfg.GeminiServerURL),
+      googleai.WithDefaultModel(GeminiAgentModel),
+  }
+
+  client, err := googleai.New(context.Background(), opts...)
+  ```
+
+- **Bedrock Settings**: Used in `pkg/providers/bedrock/bedrock.go` to create the AWS Bedrock client:
+  ```go
+  opts := []func(*bconfig.LoadOptions) error{
+      bconfig.WithRegion(cfg.BedrockRegion),
+      bconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+          cfg.BedrockAccessKey,
+          cfg.BedrockSecretKey,
+          "",
+      )),
+  }
+
+  if cfg.BedrockServerURL != "" {
+      opts = append(opts, bconfig.WithBaseEndpoint(cfg.BedrockServerURL))
+  }
+
+  bcfg, err := bconfig.LoadDefaultConfig(context.Background(), opts...)
+  bclient := bedrockruntime.NewFromConfig(bcfg)
+
+  client, err := bedrock.New(
+      bedrock.WithClient(bclient),
+      bedrock.WithModel(BedrockAgentModel),
+      bedrock.WithConverseAPI(),
   )
   ```
 
@@ -501,27 +609,51 @@ The provider registration is managed in `pkg/providers/providers.go`:
 ```go
 // Provider registration based on available credentials
 if cfg.OpenAIKey != "" {
-    openaiProvider, err := openai.New(cfg)
+    p, err := openai.New(cfg, defaultConfigs[provider.ProviderOpenAI])
     if err != nil {
-        return nil, fmt.Errorf("failed to create OpenAI provider: %w", err)
+        return nil, fmt.Errorf("failed to create openai provider: %w", err)
     }
-    pc.Register(provider.ProviderTypeOpenAI, openaiProvider)
-}
-
-if cfg.LLMServerURL != "" && (cfg.LLMServerModel != "" || cfg.LLMServerConfig != "") {
-    customProvider, err := custom.New(cfg)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create custom provider: %w", err)
-    }
-    pc.Register(provider.ProviderTypeCustom, customProvider)
+    providers[provider.DefaultProviderNameOpenAI] = p
 }
 
 if cfg.AnthropicAPIKey != "" {
-    anthropicProvider, err := anthropic.New(cfg)
+    p, err := anthropic.New(cfg, defaultConfigs[provider.ProviderAnthropic])
     if err != nil {
-        return nil, fmt.Errorf("failed to create Anthropic provider: %w", err)
+        return nil, fmt.Errorf("failed to create anthropic provider: %w", err)
     }
-    pc.Register(provider.ProviderTypeAnthropic, anthropicProvider)
+    providers[provider.DefaultProviderNameAnthropic] = p
+}
+
+if cfg.GeminiAPIKey != "" {
+    p, err := gemini.New(cfg, defaultConfigs[provider.ProviderGemini])
+    if err != nil {
+        return nil, fmt.Errorf("failed to create gemini provider: %w", err)
+    }
+    providers[provider.DefaultProviderNameGemini] = p
+}
+
+if cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "" {
+    p, err := bedrock.New(cfg, defaultConfigs[provider.ProviderBedrock])
+    if err != nil {
+        return nil, fmt.Errorf("failed to create bedrock provider: %w", err)
+    }
+    providers[provider.DefaultProviderNameBedrock] = p
+}
+
+if cfg.OllamaServerURL != "" {
+    p, err := ollama.New(cfg, defaultConfigs[provider.ProviderOllama])
+    if err != nil {
+        return nil, fmt.Errorf("failed to create ollama provider: %w", err)
+    }
+    providers[provider.DefaultProviderNameOllama] = p
+}
+
+if cfg.LLMServerURL != "" && (cfg.LLMServerModel != "" || cfg.LLMServerConfig != "") {
+    p, err := custom.New(cfg, defaultConfigs[provider.ProviderCustom])
+    if err != nil {
+        return nil, fmt.Errorf("failed to create custom provider: %w", err)
+    }
+    providers[provider.DefaultProviderNameCustom] = p
 }
 ```
 
@@ -915,6 +1047,16 @@ These settings control the integration with various search engines used for web 
 | PerplexityModel | `PERPLEXITY_MODEL` | `sonar` | Model to use for Perplexity search |
 | PerplexityContextSize | `PERPLEXITY_CONTEXT_SIZE` | `low` | Context size for Perplexity search (`low`, `medium`, `high`) |
 
+### Searxng Search
+
+| Option | Environment Variable | Default Value | Description |
+|--------|---------------------|---------------|-------------|
+| SearxngURL | `SEARXNG_URL` | *(none)* | Base URL for Searxng meta search engine instance |
+| SearxngCategories | `SEARXNG_CATEGORIES` | `general` | Search categories to use (e.g., `general`, `news`, `web`) |
+| SearxngLanguage | `SEARXNG_LANGUAGE` | *(none)* | Language filter for search results (e.g., `en`, `ch`) |
+| SearxngSafeSearch | `SEARXNG_SAFESEARCH` | `0` | Safe search filter level (`0` = none, `1` = moderate, `2` = strict) |
+| SearxngTimeRange | `SEARXNG_TIME_RANGE` | *(none)* | Time range filter (e.g., `day`, `month`, `year`) |
+
 ### Usage Details
 
 The search engine settings are used in `pkg/tools/tools.go` to configure various search providers that AI agents can use:
@@ -949,15 +1091,32 @@ perplexitySearch: &functions.PerplexitySearchFunc{
     contextSize: fte.cfg.PerplexityContextSize,
     summarizer:  cfg.Summarizer,
 },
+
+// Searxng Search configuration
+searxng := NewSearxngTool(
+    fte.flowID,
+    cfg.TaskID,
+    cfg.SubtaskID,
+    fte.cfg.SearxngURL,
+    fte.cfg.SearxngCategories,
+    fte.cfg.SearxngLanguage,
+    fte.cfg.SearxngSafeSearch,
+    fte.cfg.SearxngTimeRange,
+    fte.cfg.ProxyURL,
+    0, // timeout (will use default 30 seconds)
+    fte.slp,
+    cfg.Summarizer,
+)
 ```
 
 These settings enable:
 - Access to multiple search engines for diverse information sources
-- Configuration of search parameters like language and context size
+- Configuration of search parameters like language, context size, and time range
 - Integration of search capabilities into the AI agent's toolset
 - Web information gathering with different search strategies
+- Meta-search capabilities through Searxng, aggregating results from multiple search engines
 
-Having multiple search engine options ensures redundancy and provides different search algorithms for varied information needs.
+Having multiple search engine options ensures redundancy and provides different search algorithms for varied information needs. Searxng is particularly useful as it provides aggregated results from multiple search engines while offering enhanced privacy and customization options.
 
 ## Proxy Settings
 

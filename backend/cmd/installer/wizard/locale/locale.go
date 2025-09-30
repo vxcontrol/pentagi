@@ -930,6 +930,9 @@ const (
 • Data directory - persistent storage for agent artifacts and flow workspaces`
 
 	// Field labels and descriptions
+	ServerSettingsLicenseKey     = "License Key"
+	ServerSettingsLicenseKeyDesc = "PentAGI License Key in format of XXXX-XXXX-XXXX-XXXX"
+
 	ServerSettingsHost     = "Server Host (Listen IP)"
 	ServerSettingsHostDesc = "Bind address used by Docker port mapping (e.g., 0.0.0.0 to expose on all interfaces)"
 
@@ -960,6 +963,7 @@ const (
 	ServerSettingsCookieSigningSaltDesc = "Secret used to sign cookies (keep private)"
 
 	// Hints for fields overview
+	ServerSettingsLicenseKeyHint    = "License Key"
 	ServerSettingsHostHint          = "Listen IP"
 	ServerSettingsPortHint          = "Listen Port"
 	ServerSettingsPublicURLHint     = "Public URL"
@@ -976,6 +980,8 @@ const (
 Public URL must reflect how users reach the server. If using a subpath (e.g., /pentagi/), include it here. CORS controls browser access from specified origins. Proxy affects outbound traffic to LLM/search providers and other external services used by Tools.
 
 SSL directory allows providing custom certificates. When set, server will use server.crt and server.key from that directory. Data directory stores artifacts and working files for flows.`
+
+	ServerSettingsLicenseKeyHelp = `PentAGI License Key in format of XXXX-XXXX-XXXX-XXXX. It's used to communicate with PentAGI Cloud API.`
 
 	ServerSettingsHostHelp = `Bind address for published port in docker-compose mapping.
 
@@ -1043,6 +1049,7 @@ const (
 • Tavily - Search API for AI applications
 • Traversaal - Web scraping and search
 • Google Search - Requires API key and Custom Search Engine ID
+• Searxng - Internet metasearch engine
 
 Get API keys from:
 • Perplexity: https://www.perplexity.ai/
@@ -1050,20 +1057,30 @@ Get API keys from:
 • Traversaal: https://traversaal.ai/
 • Google: https://developers.google.com/custom-search/v1/introduction`
 
-	ToolsSearchEnginesDuckDuckGo        = "DuckDuckGo Search"
-	ToolsSearchEnginesDuckDuckGoDesc    = "Enable DuckDuckGo search (no API key required)"
-	ToolsSearchEnginesPerplexityKey     = "Perplexity API Key"
-	ToolsSearchEnginesPerplexityKeyDesc = "API key for Perplexity AI search"
-	ToolsSearchEnginesTavilyKey         = "Tavily API Key"
-	ToolsSearchEnginesTavilyKeyDesc     = "API key for Tavily search service"
-	ToolsSearchEnginesTraversaalKey     = "Traversaal API Key"
-	ToolsSearchEnginesTraversaalKeyDesc = "API key for Traversaal web scraping"
-	ToolsSearchEnginesGoogleKey         = "Google Search API Key"
-	ToolsSearchEnginesGoogleKeyDesc     = "Google Custom Search API key"
-	ToolsSearchEnginesGoogleCX          = "Google Search Engine ID"
-	ToolsSearchEnginesGoogleCXDesc      = "Google Custom Search Engine ID"
-	ToolsSearchEnginesGoogleLR          = "Google Language Restriction"
-	ToolsSearchEnginesGoogleLRDesc      = "Google Search Engine	language restriction (e.g., lang_en, lang_cn, etc.)"
+	ToolsSearchEnginesDuckDuckGo            = "DuckDuckGo Search"
+	ToolsSearchEnginesDuckDuckGoDesc        = "Enable DuckDuckGo search (no API key required)"
+	ToolsSearchEnginesPerplexityKey         = "Perplexity API Key"
+	ToolsSearchEnginesPerplexityKeyDesc     = "API key for Perplexity AI search"
+	ToolsSearchEnginesTavilyKey             = "Tavily API Key"
+	ToolsSearchEnginesTavilyKeyDesc         = "API key for Tavily search service"
+	ToolsSearchEnginesTraversaalKey         = "Traversaal API Key"
+	ToolsSearchEnginesTraversaalKeyDesc     = "API key for Traversaal web scraping"
+	ToolsSearchEnginesGoogleKey             = "Google Search API Key"
+	ToolsSearchEnginesGoogleKeyDesc         = "Google Custom Search API key"
+	ToolsSearchEnginesGoogleCX              = "Google Search Engine ID"
+	ToolsSearchEnginesGoogleCXDesc          = "Google Custom Search Engine ID"
+	ToolsSearchEnginesGoogleLR              = "Google Language Restriction"
+	ToolsSearchEnginesGoogleLRDesc          = "Google Search Engine	language restriction (e.g., lang_en, lang_cn, etc.)"
+	ToolsSearchEnginesSearxngURL            = "Searxng Search URL"
+	ToolsSearchEnginesSearxngURLDesc        = "Searxng search engine URL"
+	ToolsSearchEnginesSearxngCategories     = "Searxng Search Categories"
+	ToolsSearchEnginesSearxngCategoriesDesc = "Searxng search engine categories (e.g., general, it, web, news, technology, science, health, other)"
+	ToolsSearchEnginesSearxngLanguage       = "Searxng Search Language"
+	ToolsSearchEnginesSearxngLanguageDesc   = "Searxng search engine language (en, ch, fr, de, it, es, pt, ru, zh, empty for all languages)"
+	ToolsSearchEnginesSearxngSafeSearch     = "Searxng Safe Search"
+	ToolsSearchEnginesSearxngSafeSearchDesc = "Searxng search engine safe search (0: off, 1: moderate, 2: strict)"
+	ToolsSearchEnginesSearxngTimeRange      = "Searxng Time Range"
+	ToolsSearchEnginesSearxngTimeRangeDesc  = "Searxng search engine time range (day, month, year)"
 )
 
 // Scraper screen strings
@@ -1866,6 +1883,7 @@ const (
 	EnvDesc_DOCKER_TLS_VERIFY                = "Docker TLS Verify"
 	EnvDesc_DOCKER_CERT_PATH                 = "Docker Certificate Path"
 
+	EnvDesc_LICENSE_KEY                    = "PentAGI License Key"
 	EnvDesc_PENTAGI_LISTEN_IP              = "PentAGI Server Host"
 	EnvDesc_PENTAGI_LISTEN_PORT            = "PentAGI Server Port"
 	EnvDesc_PUBLIC_URL                     = "PentAGI Public URL"
@@ -1887,6 +1905,12 @@ const (
 
 	EnvDesc_PERPLEXITY_MODEL        = "Perplexity Model"
 	EnvDesc_PERPLEXITY_CONTEXT_SIZE = "Perplexity Context Size"
+
+	EnvDesc_SEARXNG_URL        = "Searxng Search URL"
+	EnvDesc_SEARXNG_CATEGORIES = "Searxng Search Categories"
+	EnvDesc_SEARXNG_LANGUAGE   = "Searxng Search Language"
+	EnvDesc_SEARXNG_SAFESEARCH = "Searxng Safe Search"
+	EnvDesc_SEARXNG_TIME_RANGE = "Searxng Time Range"
 
 	EnvDesc_OAUTH_GOOGLE_CLIENT_ID     = "OAuth Google Client ID"
 	EnvDesc_OAUTH_GOOGLE_CLIENT_SECRET = "OAuth Google Client Secret"

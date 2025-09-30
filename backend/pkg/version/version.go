@@ -7,10 +7,10 @@ import (
 // PackageName is service name or binary name
 var PackageName string
 
-// PackageVer is semantic version of vxapi
+// PackageVer is semantic version of the binary
 var PackageVer string
 
-// PackageRev is revision of vxapi build
+// PackageRev is revision of the binary build
 var PackageRev string
 
 func GetBinaryVersion() string {

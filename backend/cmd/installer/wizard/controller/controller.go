@@ -1189,6 +1189,13 @@ type SearchEnginesConfig struct {
 	PerplexityModel       loader.EnvVar // PERPLEXITY_MODEL
 	PerplexityContextSize loader.EnvVar // PERPLEXITY_CONTEXT_SIZE
 
+	// searxng extra settings
+	SearxngURL        loader.EnvVar // SEARXNG_URL
+	SearxngCategories loader.EnvVar // SEARXNG_CATEGORIES
+	SearxngLanguage   loader.EnvVar // SEARXNG_LANGUAGE
+	SearxngSafeSearch loader.EnvVar // SEARXNG_SAFESEARCH
+	SearxngTimeRange  loader.EnvVar // SEARXNG_TIME_RANGE
+
 	// computed fields (not directly mapped to env vars)
 	ConfiguredCount int // number of configured engines
 }
@@ -1205,6 +1212,11 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	googleLRKey, _ := c.GetVar("GOOGLE_LR_KEY")
 	perplexityModel, _ := c.GetVar("PERPLEXITY_MODEL")
 	perplexityContextSize, _ := c.GetVar("PERPLEXITY_CONTEXT_SIZE")
+	searxngURL, _ := c.GetVar("SEARXNG_URL")
+	searxngCategories, _ := c.GetVar("SEARXNG_CATEGORIES")
+	searxngLanguage, _ := c.GetVar("SEARXNG_LANGUAGE")
+	searxngSafeSearch, _ := c.GetVar("SEARXNG_SAFESEARCH")
+	searxngTimeRange, _ := c.GetVar("SEARXNG_TIME_RANGE")
 
 	config := &SearchEnginesConfig{
 		DuckDuckGoEnabled:     duckduckgoEnabled,
@@ -1216,6 +1228,11 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		GoogleAPIKey:          googleAPIKey,
 		GoogleCXKey:           googleCXKey,
 		GoogleLRKey:           googleLRKey,
+		SearxngURL:            searxngURL,
+		SearxngCategories:     searxngCategories,
+		SearxngLanguage:       searxngLanguage,
+		SearxngSafeSearch:     searxngSafeSearch,
+		SearxngTimeRange:      searxngTimeRange,
 	}
 
 	// compute configured count
@@ -1235,6 +1252,9 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		configuredCount++
 	}
 	if googleAPIKey.Value != "" && googleCXKey.Value != "" {
+		configuredCount++
+	}
+	if searxngURL.Value != "" {
 		configuredCount++
 	}
 	config.ConfiguredCount = configuredCount
@@ -1276,6 +1296,21 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	if err := c.SetVar("GOOGLE_LR_KEY", config.GoogleLRKey.Value); err != nil {
 		return fmt.Errorf("failed to set GOOGLE_LR_KEY: %w", err)
 	}
+	if err := c.SetVar("SEARXNG_URL", config.SearxngURL.Value); err != nil {
+		return fmt.Errorf("failed to set SEARXNG_URL: %w", err)
+	}
+	if err := c.SetVar("SEARXNG_CATEGORIES", config.SearxngCategories.Value); err != nil {
+		return fmt.Errorf("failed to set SEARXNG_CATEGORIES: %w", err)
+	}
+	if err := c.SetVar("SEARXNG_LANGUAGE", config.SearxngLanguage.Value); err != nil {
+		return fmt.Errorf("failed to set SEARXNG_LANGUAGE: %w", err)
+	}
+	if err := c.SetVar("SEARXNG_SAFESEARCH", config.SearxngSafeSearch.Value); err != nil {
+		return fmt.Errorf("failed to set SEARXNG_SAFESEARCH: %w", err)
+	}
+	if err := c.SetVar("SEARXNG_TIME_RANGE", config.SearxngTimeRange.Value); err != nil {
+		return fmt.Errorf("failed to set SEARXNG_TIME_RANGE: %w", err)
+	}
 
 	return nil
 }
@@ -1293,6 +1328,11 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 		"GOOGLE_API_KEY",
 		"GOOGLE_CX_KEY",
 		"GOOGLE_LR_KEY",
+		"SEARXNG_URL",
+		"SEARXNG_CATEGORIES",
+		"SEARXNG_LANGUAGE",
+		"SEARXNG_SAFESEARCH",
+		"SEARXNG_TIME_RANGE",
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -1428,6 +1468,7 @@ func (c *controller) ResetDockerConfig() *DockerConfig {
 // ServerSettingsConfig represents PentAGI server settings configuration
 type ServerSettingsConfig struct {
 	// direct form field mappings using loader.EnvVar
+	LicenseKey        loader.EnvVar // LICENSE_KEY
 	ListenIP          loader.EnvVar // PENTAGI_LISTEN_IP
 	ListenPort        loader.EnvVar // PENTAGI_LISTEN_PORT
 	PublicURL         loader.EnvVar // PUBLIC_URL
@@ -1445,6 +1486,7 @@ type ServerSettingsConfig struct {
 // GetServerSettingsConfig returns current server settings
 func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	vars, _ := c.GetVars([]string{
+		"LICENSE_KEY",
 		"PENTAGI_LISTEN_IP",
 		"PENTAGI_LISTEN_PORT",
 		"PUBLIC_URL",
@@ -1456,6 +1498,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	})
 
 	defaults := map[string]string{
+		"LICENSE_KEY":         "",
 		"PENTAGI_LISTEN_IP":   "127.0.0.1",
 		"PENTAGI_LISTEN_PORT": "8443",
 		"PUBLIC_URL":          "https://localhost:8443",
@@ -1472,6 +1515,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	}
 
 	cfg := &ServerSettingsConfig{
+		LicenseKey:        vars["LICENSE_KEY"],
 		ListenIP:          vars["PENTAGI_LISTEN_IP"],
 		ListenPort:        vars["PENTAGI_LISTEN_PORT"],
 		PublicURL:         vars["PUBLIC_URL"],
@@ -1507,6 +1551,7 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 	}
 
 	updates := map[string]string{
+		"LICENSE_KEY":         config.LicenseKey.Value,
 		"PENTAGI_LISTEN_IP":   config.ListenIP.Value,
 		"PENTAGI_LISTEN_PORT": config.ListenPort.Value,
 		"PUBLIC_URL":          config.PublicURL.Value,
@@ -1527,6 +1572,7 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 // ResetServerSettingsConfig resets server settings to defaults
 func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 	vars := []string{
+		"LICENSE_KEY",
 		"PENTAGI_LISTEN_IP",
 		"PENTAGI_LISTEN_PORT",
 		"PUBLIC_URL",
@@ -1706,6 +1752,15 @@ func (c *controller) getVariableDescription(varName string) string {
 		"GOOGLE_CX_KEY":      locale.EnvDesc_GOOGLE_CX_KEY,
 		"GOOGLE_LR_KEY":      locale.EnvDesc_GOOGLE_LR_KEY,
 
+		"PERPLEXITY_MODEL":        locale.EnvDesc_PERPLEXITY_MODEL,
+		"PERPLEXITY_CONTEXT_SIZE": locale.EnvDesc_PERPLEXITY_CONTEXT_SIZE,
+
+		"SEARXNG_URL":        locale.EnvDesc_SEARXNG_URL,
+		"SEARXNG_CATEGORIES": locale.EnvDesc_SEARXNG_CATEGORIES,
+		"SEARXNG_LANGUAGE":   locale.EnvDesc_SEARXNG_LANGUAGE,
+		"SEARXNG_SAFESEARCH": locale.EnvDesc_SEARXNG_SAFESEARCH,
+		"SEARXNG_TIME_RANGE": locale.EnvDesc_SEARXNG_TIME_RANGE,
+
 		"DOCKER_INSIDE":                    locale.EnvDesc_DOCKER_INSIDE,
 		"DOCKER_NET_ADMIN":                 locale.EnvDesc_DOCKER_NET_ADMIN,
 		"DOCKER_SOCKET":                    locale.EnvDesc_DOCKER_SOCKET,
@@ -1718,6 +1773,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"DOCKER_TLS_VERIFY":                locale.EnvDesc_DOCKER_TLS_VERIFY,
 		"DOCKER_CERT_PATH":                 locale.EnvDesc_DOCKER_CERT_PATH,
 
+		"LICENSE_KEY":                    locale.EnvDesc_LICENSE_KEY,
 		"PENTAGI_LISTEN_IP":              locale.EnvDesc_PENTAGI_LISTEN_IP,
 		"PENTAGI_LISTEN_PORT":            locale.EnvDesc_PENTAGI_LISTEN_PORT,
 		"PUBLIC_URL":                     locale.EnvDesc_PUBLIC_URL,
@@ -1729,15 +1785,13 @@ func (c *controller) getVariableDescription(varName string) string {
 		"PENTAGI_DOCKER_SOCKET":          locale.EnvDesc_PENTAGI_DOCKER_SOCKET,
 		"PENTAGI_LLM_SERVER_CONFIG_PATH": locale.EnvDesc_PENTAGI_LLM_SERVER_CONFIG_PATH,
 
-		"STATIC_DIR":              locale.EnvDesc_STATIC_DIR,
-		"STATIC_URL":              locale.EnvDesc_STATIC_URL,
-		"SERVER_PORT":             locale.EnvDesc_SERVER_PORT,
-		"SERVER_HOST":             locale.EnvDesc_SERVER_HOST,
-		"SERVER_SSL_CRT":          locale.EnvDesc_SERVER_SSL_CRT,
-		"SERVER_SSL_KEY":          locale.EnvDesc_SERVER_SSL_KEY,
-		"SERVER_USE_SSL":          locale.EnvDesc_SERVER_USE_SSL,
-		"PERPLEXITY_MODEL":        locale.EnvDesc_PERPLEXITY_MODEL,
-		"PERPLEXITY_CONTEXT_SIZE": locale.EnvDesc_PERPLEXITY_CONTEXT_SIZE,
+		"STATIC_DIR":     locale.EnvDesc_STATIC_DIR,
+		"STATIC_URL":     locale.EnvDesc_STATIC_URL,
+		"SERVER_PORT":    locale.EnvDesc_SERVER_PORT,
+		"SERVER_HOST":    locale.EnvDesc_SERVER_HOST,
+		"SERVER_SSL_CRT": locale.EnvDesc_SERVER_SSL_CRT,
+		"SERVER_SSL_KEY": locale.EnvDesc_SERVER_SSL_KEY,
+		"SERVER_USE_SSL": locale.EnvDesc_SERVER_USE_SSL,
 
 		"OAUTH_GOOGLE_CLIENT_ID":     locale.EnvDesc_OAUTH_GOOGLE_CLIENT_ID,
 		"OAUTH_GOOGLE_CLIENT_SECRET": locale.EnvDesc_OAUTH_GOOGLE_CLIENT_SECRET,
@@ -1842,6 +1896,11 @@ var criticalVariables = map[string]bool{
 	"GOOGLE_API_KEY":          true,
 	"GOOGLE_CX_KEY":           true,
 	"GOOGLE_LR_KEY":           true,
+	"SEARXNG_URL":             true,
+	"SEARXNG_CATEGORIES":      true,
+	"SEARXNG_LANGUAGE":        true,
+	"SEARXNG_SAFESEARCH":      true,
+	"SEARXNG_TIME_RANGE":      true,
 
 	// mounting custom LLM server config into pentagi container changes volume mapping
 	"PENTAGI_LLM_SERVER_CONFIG_PATH": true,
@@ -1872,6 +1931,7 @@ var criticalVariables = map[string]bool{
 
 	// server settings changes
 	"ASK_USER":            true,
+	"LICENSE_KEY":         true,
 	"PENTAGI_LISTEN_IP":   true,
 	"PENTAGI_LISTEN_PORT": true,
 	"PUBLIC_URL":          true,

@@ -200,7 +200,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.cfg.SearxngLanguage,
 			te.cfg.SearxngSafeSearch,
 			te.cfg.SearxngTimeRange,
-			te.cfg.SearxngProxyURL,
+			te.cfg.ProxyURL,
 			0, // timeout (will use default)
 			te.proxies.GetSearchLogProvider(),
 			te.GetSummarizer(),

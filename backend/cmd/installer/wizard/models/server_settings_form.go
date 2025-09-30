@@ -13,6 +13,7 @@ import (
 	"pentagi/cmd/installer/wizard/window"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/vxcontrol/cloud/sdk"
 )
 
 // ServerSettingsFormModel represents the PentAGI server settings configuration form
@@ -34,6 +35,13 @@ func NewServerSettingsFormModel(c controller.Controller, s styles.Styles, w wind
 func (m *ServerSettingsFormModel) BuildForm() tea.Cmd {
 	config := m.GetController().GetServerSettingsConfig()
 	fields := []FormField{}
+
+	fields = append(fields, m.createTextField("pentagi_license_key",
+		locale.ServerSettingsLicenseKey,
+		locale.ServerSettingsLicenseKeyDesc,
+		config.LicenseKey,
+		true,
+	))
 
 	// host and port
 	fields = append(fields, m.createTextField("pentagi_server_host",
@@ -185,6 +193,13 @@ func (m *ServerSettingsFormModel) GetCurrentConfiguration() string {
 		return maskedValue
 	}
 
+	licenseStatus := locale.StatusNotConfigured
+	if licenseKey := cfg.LicenseKey.Value; licenseKey != "" {
+		licenseStatus = locale.StatusConfigured
+	}
+	licenseStatus = m.GetStyles().Muted.Render(licenseStatus)
+	sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsLicenseKeyHint, licenseStatus))
+
 	if listenIP := cfg.ListenIP.Value; listenIP != "" {
 		listenIP = m.GetStyles().Info.Render(listenIP)
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsHostHint, listenIP))
@@ -276,6 +291,8 @@ func (m *ServerSettingsFormModel) GetHelpContent() string {
 	if fieldIndex >= 0 && fieldIndex < len(fields) {
 		field := fields[fieldIndex]
 		switch field.Key {
+		case "pentagi_license_key":
+			sections = append(sections, locale.ServerSettingsLicenseKeyHelp)
 		case "pentagi_server_host":
 			sections = append(sections, locale.ServerSettingsHostHelp)
 		case "pentagi_server_port":
@@ -305,6 +322,7 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 	fields := m.GetFormFields()
 
 	newCfg := &controller.ServerSettingsConfig{
+		LicenseKey:        cfg.LicenseKey,
 		ListenIP:          cfg.ListenIP,
 		ListenPort:        cfg.ListenPort,
 		CorsOrigins:       cfg.CorsOrigins,
@@ -319,6 +337,15 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 		value := strings.TrimSpace(field.Input.Value())
 
 		switch field.Key {
+		case "pentagi_license_key":
+			if value != "" {
+				if info, err := sdk.IntrospectLicenseKey(value); err != nil {
+					return fmt.Errorf("invalid license key: %v", err)
+				} else if !info.IsValid() {
+					return fmt.Errorf("invalid license key")
+				}
+			}
+			newCfg.LicenseKey.Value = value
 		case "pentagi_server_host":
 			newCfg.ListenIP.Value = value
 		case "pentagi_server_port":

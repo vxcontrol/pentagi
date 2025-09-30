@@ -623,26 +623,25 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			definitions = append(definitions, registryDefinitions[PerplexityToolName])
 			handlers[PerplexityToolName] = perplexity.Handle
 		}
-	}
 
-	// Register Searxng tool regardless of agent usage
-	searxng := NewSearxngTool(
-		fte.flowID,
-		nil, // taskID
-		nil, // subtaskID
-		fte.cfg.SearxngURL,
-		fte.cfg.SearxngCategories,
-		fte.cfg.SearxngLanguage,
-		fte.cfg.SearxngSafeSearch,
-		fte.cfg.SearxngTimeRange,
-		fte.cfg.SearxngProxyURL,
-		0, // timeout (will use default)
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if searxng.IsAvailable() {
-		definitions = append(definitions, registryDefinitions[SearxngToolName])
-		handlers[SearxngToolName] = searxng.Handle
+		searxng := NewSearxngTool(
+			fte.flowID,
+			nil, // taskID
+			nil, // subtaskID
+			fte.cfg.SearxngURL,
+			fte.cfg.SearxngCategories,
+			fte.cfg.SearxngLanguage,
+			fte.cfg.SearxngSafeSearch,
+			fte.cfg.SearxngTimeRange,
+			fte.cfg.ProxyURL,
+			0, // timeout (will use default)
+			fte.slp,
+			cfg.Summarizer,
+		)
+		if searxng.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[SearxngToolName])
+			handlers[SearxngToolName] = searxng.Handle
+		}
 	}
 
 	ce := &customExecutor{
@@ -1125,7 +1124,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		fte.cfg.SearxngLanguage,
 		fte.cfg.SearxngSafeSearch,
 		fte.cfg.SearxngTimeRange,
-		fte.cfg.SearxngProxyURL,
+		fte.cfg.ProxyURL,
 		0, // timeout (will use default)
 		fte.slp,
 		cfg.Summarizer,
