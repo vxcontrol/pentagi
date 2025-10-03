@@ -20,9 +20,22 @@ import {
 } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Bot, CheckCircle, Code, Loader2, RotateCcw, Save, User, Wrench, XCircle } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useController, useForm } from 'react-hook-form';
+import {
+    AlertCircle,
+    Bot,
+    CheckCircle,
+    Code,
+    FileDiff,
+    Loader2,
+    RotateCcw,
+    Save,
+    User,
+    Wrench,
+    XCircle,
+} from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReactDiffViewer from 'react-diff-viewer-continued';
+import { useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -167,6 +180,11 @@ const SettingsPrompt = () => {
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
     const [validationResult, setValidationResult] = useState<any>(null);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
+    const [isDiffDialogOpen, setIsDiffDialogOpen] = useState(false);
+    const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+    const [pendingBrowserBack, setPendingBrowserBack] = useState(false);
+    const allowBrowserLeaveRef = useRef(false);
+    const hasPushedBlockerStateRef = useRef(false);
 
     const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading || isValidateLoading;
 
@@ -302,6 +320,11 @@ const SettingsPrompt = () => {
         },
     });
 
+    // Reactive dirty state across both forms
+    const { isDirty: isSystemDirty } = useFormState({ control: systemForm.control });
+    const { isDirty: isHumanDirty } = useFormState({ control: humanForm.control });
+    const isDirty = isSystemDirty || isHumanDirty;
+
     // Watch form values to detect used variables
     const systemTemplate = systemForm.watch('template');
     const humanTemplate = humanForm.watch('template');
@@ -434,6 +457,60 @@ const SettingsPrompt = () => {
             });
         }
     }, [promptInfo, systemForm, humanForm]);
+
+    // Push a blocker entry when form is dirty to manage browser back
+    useEffect(() => {
+        if (isDirty && !hasPushedBlockerStateRef.current) {
+            window.history.pushState({ __pentagiBlock__: true }, '');
+            hasPushedBlockerStateRef.current = true;
+        }
+    }, [isDirty]);
+
+    // Intercept browser back to show confirmation dialog
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            if (!isDirty) {
+                return;
+            }
+            if (allowBrowserLeaveRef.current) {
+                allowBrowserLeaveRef.current = false;
+                return;
+            }
+            setPendingBrowserBack(true);
+            setIsLeaveDialogOpen(true);
+            window.history.forward();
+        };
+
+        window.addEventListener('popstate', handlePopState, { capture: true });
+        return () => {
+            window.removeEventListener('popstate', handlePopState, { capture: true } as any);
+        };
+    }, [isDirty]);
+
+    const handleBack = () => {
+        if (isDirty) {
+            setIsLeaveDialogOpen(true);
+            return;
+        }
+        navigate('/settings/prompts');
+    };
+
+    const handleConfirmLeave = () => {
+        if (pendingBrowserBack) {
+            allowBrowserLeaveRef.current = true;
+            setPendingBrowserBack(false);
+            window.history.go(-2);
+            return;
+        }
+        navigate('/settings/prompts');
+    };
+
+    const handleLeaveDialogOpenChange = (open: boolean) => {
+        if (!open && pendingBrowserBack) {
+            setPendingBrowserBack(false);
+        }
+        setIsLeaveDialogOpen(open);
+    };
 
     // Form submission handlers
     const handleSystemSubmit = async (formData: SystemFormData) => {
@@ -572,6 +649,90 @@ const SettingsPrompt = () => {
             </Alert>
         );
     }
+
+    // Templates for diff based on active tab
+    const currentTemplate = activeTab === 'system' ? systemTemplate : humanTemplate;
+    const defaultTemplate = activeTab === 'system' ? promptInfo.defaultSystemTemplate : promptInfo.defaultHumanTemplate;
+
+    // Styles for ReactDiffViewer aligned with shadcn (Tailwind CSS vars)
+    const diffStyles = {
+        variables: {
+            light: {
+                diffViewerBackground: 'hsl(var(--background))',
+                diffViewerColor: 'hsl(var(--foreground))',
+                addedBackground: 'hsl(142 70% 45% / 0.50)',
+                addedColor: 'hsl(var(--foreground))',
+                removedBackground: 'hsl(var(--destructive) / 0.50)',
+                removedColor: 'hsl(var(--foreground))',
+                wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
+                wordRemovedBackground: 'hsl(var(--destructive) / 0.70)',
+                addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
+                removedGutterBackground: 'hsl(var(--destructive) / 0.40)',
+                gutterBackground: 'hsl(var(--muted))',
+                gutterBackgroundDark: 'hsl(var(--muted))',
+                highlightBackground: 'hsl(var(--primary) / 0.20)',
+                highlightGutterBackground: 'hsl(var(--primary) / 0.30)',
+                codeFoldGutterBackground: 'hsl(var(--muted))',
+                codeFoldBackground: 'hsl(var(--muted))',
+                emptyLineBackground: 'hsl(var(--background))',
+                gutterColor: 'hsl(var(--muted-foreground))',
+                addedGutterColor: 'hsl(var(--muted-foreground))',
+                removedGutterColor: 'hsl(var(--muted-foreground))',
+                codeFoldContentColor: 'hsl(var(--muted-foreground))',
+                diffViewerTitleBackground: 'hsl(var(--card))',
+                diffViewerTitleColor: 'hsl(var(--card-foreground))',
+                diffViewerTitleBorderColor: 'hsl(var(--border))',
+            },
+            dark: {
+                diffViewerBackground: 'hsl(var(--background))',
+                diffViewerColor: 'hsl(var(--foreground))',
+                addedBackground: 'hsl(142 70% 45% / 0.50)',
+                addedColor: 'var(--foreground)',
+                removedBackground: 'hsl(var(--destructive) / 0.50)',
+                removedColor: 'var(--foreground)',
+                wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
+                wordRemovedBackground: 'hsl(var(--destructive) / 0.70)',
+                addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
+                removedGutterBackground: 'hsl(var(--destructive) / 0.40)',
+                gutterBackground: 'hsl(var(--muted))',
+                gutterBackgroundDark: 'hsl(var(--muted))',
+                highlightBackground: 'hsl(var(--primary) / 0.20)',
+                highlightGutterBackground: 'hsl(var(--primary) / 0.30)',
+                codeFoldGutterBackground: 'hsl(var(--muted))',
+                codeFoldBackground: 'hsl(var(--muted))',
+                emptyLineBackground: 'hsl(var(--background))',
+                gutterColor: 'hsl(var(--muted-foreground))',
+                addedGutterColor: 'hsl(var(--muted-foreground))',
+                removedGutterColor: 'hsl(var(--muted-foreground))',
+                codeFoldContentColor: 'hsl(var(--muted-foreground))',
+                diffViewerTitleBackground: 'hsl(var(--card))',
+                diffViewerTitleColor: 'hsl(var(--card-foreground))',
+                diffViewerTitleBorderColor: 'hsl(var(--border))',
+            },
+        },
+        diffContainer: {
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '0.5rem',
+        },
+        gutter: {
+            borderRight: '1px solid hsl(var(--border))',
+        },
+        content: {
+            width: '50%',
+            fontFamily:
+                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+            fontSize: '0.875rem',
+        },
+        splitView: {
+            gap: '0',
+        },
+        line: {
+            borderBottom: '1px solid hsl(var(--border) / 0.50)',
+        },
+        lineNumber: {
+            color: 'hsl(var(--muted-foreground))',
+        },
+    };
 
     const mutationError = createError || updateError || deleteError || validateError || submitError;
 
@@ -714,15 +875,27 @@ const SettingsPrompt = () => {
                         {/* Reset button - only show when user has custom prompt */}
                         {((activeTab === 'system' && promptInfo?.userSystemPrompt) ||
                             (activeTab === 'human' && promptInfo?.userHumanPrompt)) && (
-                            <Button
-                                type="button"
-                                variant="destructive"
-                                onClick={handleReset}
-                                disabled={isLoading}
-                            >
-                                {isDeleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw />}
-                                {isDeleteLoading ? 'Resetting...' : 'Reset'}
-                            </Button>
+                            <>
+                                <Button
+                                    type="button"
+                                    variant="destructive"
+                                    onClick={handleReset}
+                                    disabled={isLoading}
+                                >
+                                    {isDeleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw />}
+                                    {isDeleteLoading ? 'Resetting...' : 'Reset'}
+                                </Button>
+
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setIsDiffDialogOpen(true)}
+                                    disabled={isLoading}
+                                >
+                                    <FileDiff className="h-4 w-4" />
+                                    Diff
+                                </Button>
+                            </>
                         )}
                         <Button
                             type="button"
@@ -743,7 +916,7 @@ const SettingsPrompt = () => {
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => navigate('/settings/prompts')}
+                            onClick={handleBack}
                             disabled={isLoading}
                         >
                             Cancel
@@ -798,6 +971,19 @@ const SettingsPrompt = () => {
                 confirmIcon={<RotateCcw />}
             />
 
+            {/* Leave Confirmation Dialog */}
+            <ConfirmationDialog
+                isOpen={isLeaveDialogOpen}
+                handleOpenChange={handleLeaveDialogOpenChange}
+                handleConfirm={handleConfirmLeave}
+                title="Discard changes?"
+                description="You have unsaved changes. Are you sure you want to leave without saving?"
+                cancelText="Stay"
+                confirmText="Leave"
+                confirmVariant="destructive"
+                confirmIcon={null}
+            />
+
             {/* Validation Results Dialog */}
             <Dialog
                 open={validationDialogOpen}
@@ -847,6 +1033,31 @@ const SettingsPrompt = () => {
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Diff Dialog */}
+            <Dialog
+                open={isDiffDialogOpen}
+                onOpenChange={setIsDiffDialogOpen}
+            >
+                <DialogContent className="max-w-7xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FileDiff className="h-5 w-5" />
+                            Diff
+                        </DialogTitle>
+                        <DialogDescription>Changes between current value and default template.</DialogDescription>
+                    </DialogHeader>
+                    <div className="max-h-[70vh] overflow-auto">
+                        <ReactDiffViewer
+                            oldValue={defaultTemplate}
+                            newValue={currentTemplate}
+                            splitView
+                            useDarkTheme
+                            styles={diffStyles}
+                        />
+                    </div>
                 </DialogContent>
             </Dialog>
         </>

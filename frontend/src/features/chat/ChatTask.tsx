@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
 import Markdown from '@/components/Markdown';
 import type { TaskFragmentFragment } from '@/graphql/types';
@@ -29,7 +29,7 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
         if (!trimmedSearch) {
             return { hasResultMatch: false };
         }
-        
+
         return {
             hasResultMatch: containsSearchValue(result, trimmedSearch),
         };
@@ -38,7 +38,7 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
     // Auto-expand details if they contain search matches
     useEffect(() => {
         const trimmedSearch = searchValue.trim();
-        
+
         if (trimmedSearch) {
             // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
@@ -59,10 +59,13 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
                 <ChatTaskStatusIcon
                     status={status}
                     tooltip={`Task ID: ${id}`}
-                    className="mt-1"
+                    className="mt-[1px]"
                 />
                 <div className="font-semibold">
-                    <Markdown className="prose-sm prose-fixed break-words [&>*]:m-0 [&>p]:leading-tight" searchValue={searchValue}>
+                    <Markdown
+                        className="prose-sm prose-fixed break-words [&>*]:m-0 [&>p]:leading-tight"
+                        searchValue={searchValue}
+                    >
                         {title}
                     </Markdown>
                 </div>
@@ -78,7 +81,12 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
                     {isDetailsVisible && (
                         <>
                             <div className="my-2 border-t border-border" />
-                            <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>{result}</Markdown>
+                            <Markdown
+                                className="prose-xs prose-fixed break-words"
+                                searchValue={searchValue}
+                            >
+                                {result}
+                            </Markdown>
                         </>
                     )}
                 </div>
@@ -94,9 +102,7 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
                     ))}
                 </div>
             ) : (
-                <div className="ml-6 mt-2 text-xs text-muted-foreground">
-                    Waiting for subtasks to be created...
-                </div>
+                <div className="ml-6 mt-2 text-xs text-muted-foreground">Waiting for subtasks to be created...</div>
             )}
         </div>
     );
