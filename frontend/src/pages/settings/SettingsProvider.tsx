@@ -130,7 +130,7 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
 
     const parseValue = (value: string) => {
         if (value === '') {
-            return undefined;
+            return null;
         }
 
         return valueType === 'float' ? parseFloat(value) : parseInt(value);
