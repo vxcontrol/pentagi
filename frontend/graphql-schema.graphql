@@ -179,7 +179,7 @@ fragment providerTestResultFragment on ProviderTestResult {
     simpleJson {
         ...agentTestResultFragment
     }
-    agent {
+    primaryAgent {
         ...agentTestResultFragment
     }
     assistant {
@@ -245,7 +245,7 @@ fragment agentsConfigFragment on AgentsConfig {
     simpleJson {
         ...agentConfigFragment
     }
-    agent {
+    primaryAgent {
         ...agentConfigFragment
     }
     assistant {
@@ -648,7 +648,7 @@ mutation deleteAssistant($flowId: ID!, $assistantId: ID!) {
     deleteAssistant(flowId: $flowId, assistantId: $assistantId)
 }
 
-mutation testAgent($type: ProviderType!, $agentType: AgentType!, $agent: AgentConfigInput!) {
+mutation testAgent($type: ProviderType!, $agentType: AgentConfigType!, $agent: AgentConfigInput!) {
     testAgent(type: $type, agentType: $agentType, agent: $agent) {
         ...agentTestResultFragment
     }

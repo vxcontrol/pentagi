@@ -83,6 +83,23 @@ enum AgentType {
   assistant
 }
 
+# AI agent type for provider configuration
+enum AgentConfigType {
+  simple
+  simple_json
+  primary_agent
+  assistant
+  generator
+  refiner
+  adviser
+  reflector
+  searcher
+  enricher
+  coder
+  installer
+  pentester
+}
+
 # Terminal output stream types
 enum TerminalLogType {
   stdin
@@ -388,7 +405,7 @@ type AgentTestResult {
 type ProviderTestResult {
   simple: AgentTestResult!
   simpleJson: AgentTestResult!
-  agent: AgentTestResult!
+  primaryAgent: AgentTestResult!
   assistant: AgentTestResult!
   generator: AgentTestResult!
   refiner: AgentTestResult!
@@ -498,7 +515,7 @@ type AgentConfig {
 type AgentsConfig {
   simple: AgentConfig!
   simpleJson: AgentConfig!
-  agent: AgentConfig!
+  primaryAgent: AgentConfig!
   assistant: AgentConfig!
   generator: AgentConfig!
   refiner: AgentConfig!
@@ -545,7 +562,7 @@ input AgentConfigInput {
 input AgentsConfigInput {
   simple: AgentConfigInput!
   simpleJson: AgentConfigInput!
-  agent: AgentConfigInput!
+  primaryAgent: AgentConfigInput!
   assistant: AgentConfigInput!
   generator: AgentConfigInput!
   refiner: AgentConfigInput!
@@ -600,7 +617,7 @@ type Mutation {
   deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!
 
   # Testing and validation
-  testAgent(type: ProviderType!, agentType: AgentType!, agent: AgentConfigInput!): AgentTestResult!
+  testAgent(type: ProviderType!, agentType: AgentConfigType!, agent: AgentConfigInput!): AgentTestResult!
   testProvider(type: ProviderType!, agents: AgentsConfigInput!): ProviderTestResult!
   createProvider(name: String!, type: ProviderType!, agents: AgentsConfigInput!): ProviderConfig!
   updateProvider(providerId: ID!, name: String!, agents: AgentsConfigInput!): ProviderConfig!

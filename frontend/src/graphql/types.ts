@@ -48,6 +48,22 @@ export type AgentConfigInput = {
     topP?: InputMaybe<Scalars['Float']['input']>;
 };
 
+export enum AgentConfigType {
+    Adviser = 'adviser',
+    Assistant = 'assistant',
+    Coder = 'coder',
+    Enricher = 'enricher',
+    Generator = 'generator',
+    Installer = 'installer',
+    Pentester = 'pentester',
+    PrimaryAgent = 'primary_agent',
+    Refiner = 'refiner',
+    Reflector = 'reflector',
+    Searcher = 'searcher',
+    Simple = 'simple',
+    SimpleJson = 'simple_json',
+}
+
 export type AgentLog = {
     createdAt: Scalars['Time']['output'];
     executor: AgentType;
@@ -93,13 +109,13 @@ export enum AgentType {
 
 export type AgentsConfig = {
     adviser: AgentConfig;
-    agent: AgentConfig;
     assistant: AgentConfig;
     coder: AgentConfig;
     enricher: AgentConfig;
     generator: AgentConfig;
     installer: AgentConfig;
     pentester: AgentConfig;
+    primaryAgent: AgentConfig;
     refiner: AgentConfig;
     reflector: AgentConfig;
     searcher: AgentConfig;
@@ -109,13 +125,13 @@ export type AgentsConfig = {
 
 export type AgentsConfigInput = {
     adviser: AgentConfigInput;
-    agent: AgentConfigInput;
     assistant: AgentConfigInput;
     coder: AgentConfigInput;
     enricher: AgentConfigInput;
     generator: AgentConfigInput;
     installer: AgentConfigInput;
     pentester: AgentConfigInput;
+    primaryAgent: AgentConfigInput;
     refiner: AgentConfigInput;
     reflector: AgentConfigInput;
     searcher: AgentConfigInput;
@@ -333,7 +349,7 @@ export type MutationStopFlowArgs = {
 
 export type MutationTestAgentArgs = {
     agent: AgentConfigInput;
-    agentType: AgentType;
+    agentType: AgentConfigType;
     type: ProviderType;
 };
 
@@ -433,13 +449,13 @@ export type ProviderConfig = {
 
 export type ProviderTestResult = {
     adviser: AgentTestResult;
-    agent: AgentTestResult;
     assistant: AgentTestResult;
     coder: AgentTestResult;
     enricher: AgentTestResult;
     generator: AgentTestResult;
     installer: AgentTestResult;
     pentester: AgentTestResult;
+    primaryAgent: AgentTestResult;
     refiner: AgentTestResult;
     reflector: AgentTestResult;
     searcher: AgentTestResult;
@@ -934,7 +950,7 @@ export type AgentTestResultFragmentFragment = { tests: Array<TestResultFragmentF
 export type ProviderTestResultFragmentFragment = {
     simple: AgentTestResultFragmentFragment;
     simpleJson: AgentTestResultFragmentFragment;
-    agent: AgentTestResultFragmentFragment;
+    primaryAgent: AgentTestResultFragmentFragment;
     assistant: AgentTestResultFragmentFragment;
     generator: AgentTestResultFragmentFragment;
     refiner: AgentTestResultFragmentFragment;
@@ -952,7 +968,7 @@ export type ModelConfigFragmentFragment = { name: string; price?: { input: numbe
 export type ProviderFragmentFragment = { name: string; type: ProviderType };
 
 export type ProviderConfigFragmentFragment = {
-    id: number;
+    id: string;
     name: string;
     type: ProviderType;
     createdAt: any;
@@ -963,7 +979,7 @@ export type ProviderConfigFragmentFragment = {
 export type AgentsConfigFragmentFragment = {
     simple: AgentConfigFragmentFragment;
     simpleJson: AgentConfigFragmentFragment;
-    agent: AgentConfigFragmentFragment;
+    primaryAgent: AgentConfigFragmentFragment;
     assistant: AgentConfigFragmentFragment;
     generator: AgentConfigFragmentFragment;
     refiner: AgentConfigFragmentFragment;
@@ -1197,7 +1213,7 @@ export type DeleteAssistantMutation = { deleteAssistant: ResultType };
 
 export type TestAgentMutationVariables = Exact<{
     type: ProviderType;
-    agentType: AgentType;
+    agentType: AgentConfigType;
     agent: AgentConfigInput;
 }>;
 
@@ -1595,7 +1611,7 @@ export const ProviderTestResultFragmentFragmentDoc = gql`
         simpleJson {
             ...agentTestResultFragment
         }
-        agent {
+        primaryAgent {
             ...agentTestResultFragment
         }
         assistant {
@@ -1669,7 +1685,7 @@ export const AgentsConfigFragmentFragmentDoc = gql`
         simpleJson {
             ...agentConfigFragment
         }
-        agent {
+        primaryAgent {
             ...agentConfigFragment
         }
         assistant {
@@ -2800,7 +2816,7 @@ export type DeleteAssistantMutationOptions = Apollo.BaseMutationOptions<
     DeleteAssistantMutationVariables
 >;
 export const TestAgentDocument = gql`
-    mutation testAgent($type: ProviderType!, $agentType: AgentType!, $agent: AgentConfigInput!) {
+    mutation testAgent($type: ProviderType!, $agentType: AgentConfigType!, $agent: AgentConfigInput!) {
         testAgent(type: $type, agentType: $agentType, agent: $agent) {
             ...agentTestResultFragment
         }

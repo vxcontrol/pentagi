@@ -50,19 +50,19 @@ type AgentTestResult struct {
 }
 
 type AgentsConfig struct {
-	Simple     *AgentConfig `json:"simple"`
-	SimpleJSON *AgentConfig `json:"simpleJson"`
-	Agent      *AgentConfig `json:"agent"`
-	Assistant  *AgentConfig `json:"assistant"`
-	Generator  *AgentConfig `json:"generator"`
-	Refiner    *AgentConfig `json:"refiner"`
-	Adviser    *AgentConfig `json:"adviser"`
-	Reflector  *AgentConfig `json:"reflector"`
-	Searcher   *AgentConfig `json:"searcher"`
-	Enricher   *AgentConfig `json:"enricher"`
-	Coder      *AgentConfig `json:"coder"`
-	Installer  *AgentConfig `json:"installer"`
-	Pentester  *AgentConfig `json:"pentester"`
+	Simple       *AgentConfig `json:"simple"`
+	SimpleJSON   *AgentConfig `json:"simpleJson"`
+	PrimaryAgent *AgentConfig `json:"primaryAgent"`
+	Assistant    *AgentConfig `json:"assistant"`
+	Generator    *AgentConfig `json:"generator"`
+	Refiner      *AgentConfig `json:"refiner"`
+	Adviser      *AgentConfig `json:"adviser"`
+	Reflector    *AgentConfig `json:"reflector"`
+	Searcher     *AgentConfig `json:"searcher"`
+	Enricher     *AgentConfig `json:"enricher"`
+	Coder        *AgentConfig `json:"coder"`
+	Installer    *AgentConfig `json:"installer"`
+	Pentester    *AgentConfig `json:"pentester"`
 }
 
 type AgentsPrompts struct {
@@ -199,19 +199,19 @@ type ProviderConfig struct {
 }
 
 type ProviderTestResult struct {
-	Simple     *AgentTestResult `json:"simple"`
-	SimpleJSON *AgentTestResult `json:"simpleJson"`
-	Agent      *AgentTestResult `json:"agent"`
-	Assistant  *AgentTestResult `json:"assistant"`
-	Generator  *AgentTestResult `json:"generator"`
-	Refiner    *AgentTestResult `json:"refiner"`
-	Adviser    *AgentTestResult `json:"adviser"`
-	Reflector  *AgentTestResult `json:"reflector"`
-	Searcher   *AgentTestResult `json:"searcher"`
-	Enricher   *AgentTestResult `json:"enricher"`
-	Coder      *AgentTestResult `json:"coder"`
-	Installer  *AgentTestResult `json:"installer"`
-	Pentester  *AgentTestResult `json:"pentester"`
+	Simple       *AgentTestResult `json:"simple"`
+	SimpleJSON   *AgentTestResult `json:"simpleJson"`
+	PrimaryAgent *AgentTestResult `json:"primaryAgent"`
+	Assistant    *AgentTestResult `json:"assistant"`
+	Generator    *AgentTestResult `json:"generator"`
+	Refiner      *AgentTestResult `json:"refiner"`
+	Adviser      *AgentTestResult `json:"adviser"`
+	Reflector    *AgentTestResult `json:"reflector"`
+	Searcher     *AgentTestResult `json:"searcher"`
+	Enricher     *AgentTestResult `json:"enricher"`
+	Coder        *AgentTestResult `json:"coder"`
+	Installer    *AgentTestResult `json:"installer"`
+	Pentester    *AgentTestResult `json:"pentester"`
 }
 
 type ProvidersConfig struct {
@@ -359,6 +359,69 @@ type VectorStoreLog struct {
 	TaskID    *int64            `json:"taskId,omitempty"`
 	SubtaskID *int64            `json:"subtaskId,omitempty"`
 	CreatedAt time.Time         `json:"createdAt"`
+}
+
+type AgentConfigType string
+
+const (
+	AgentConfigTypeSimple       AgentConfigType = "simple"
+	AgentConfigTypeSimpleJSON   AgentConfigType = "simple_json"
+	AgentConfigTypePrimaryAgent AgentConfigType = "primary_agent"
+	AgentConfigTypeAssistant    AgentConfigType = "assistant"
+	AgentConfigTypeGenerator    AgentConfigType = "generator"
+	AgentConfigTypeRefiner      AgentConfigType = "refiner"
+	AgentConfigTypeAdviser      AgentConfigType = "adviser"
+	AgentConfigTypeReflector    AgentConfigType = "reflector"
+	AgentConfigTypeSearcher     AgentConfigType = "searcher"
+	AgentConfigTypeEnricher     AgentConfigType = "enricher"
+	AgentConfigTypeCoder        AgentConfigType = "coder"
+	AgentConfigTypeInstaller    AgentConfigType = "installer"
+	AgentConfigTypePentester    AgentConfigType = "pentester"
+)
+
+var AllAgentConfigType = []AgentConfigType{
+	AgentConfigTypeSimple,
+	AgentConfigTypeSimpleJSON,
+	AgentConfigTypePrimaryAgent,
+	AgentConfigTypeAssistant,
+	AgentConfigTypeGenerator,
+	AgentConfigTypeRefiner,
+	AgentConfigTypeAdviser,
+	AgentConfigTypeReflector,
+	AgentConfigTypeSearcher,
+	AgentConfigTypeEnricher,
+	AgentConfigTypeCoder,
+	AgentConfigTypeInstaller,
+	AgentConfigTypePentester,
+}
+
+func (e AgentConfigType) IsValid() bool {
+	switch e {
+	case AgentConfigTypeSimple, AgentConfigTypeSimpleJSON, AgentConfigTypePrimaryAgent, AgentConfigTypeAssistant, AgentConfigTypeGenerator, AgentConfigTypeRefiner, AgentConfigTypeAdviser, AgentConfigTypeReflector, AgentConfigTypeSearcher, AgentConfigTypeEnricher, AgentConfigTypeCoder, AgentConfigTypeInstaller, AgentConfigTypePentester:
+		return true
+	}
+	return false
+}
+
+func (e AgentConfigType) String() string {
+	return string(e)
+}
+
+func (e *AgentConfigType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AgentConfigType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AgentConfigType", str)
+	}
+	return nil
+}
+
+func (e AgentConfigType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 type AgentType string

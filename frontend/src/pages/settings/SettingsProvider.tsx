@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusCard } from '@/components/ui/status-card';
 import {
-    AgentType,
+    AgentConfigType,
     ProviderType,
     ReasoningEffort,
     useCreateProviderMutation,
@@ -826,6 +826,22 @@ const SettingsProvider = () => {
         [searchParams],
     );
 
+    const mapAgentTypes: Record<string, AgentConfigType> = {
+        "adviser": AgentConfigType.Adviser,
+        "primaryAgent": AgentConfigType.PrimaryAgent,
+        "assistant": AgentConfigType.Assistant,
+        "coder": AgentConfigType.Coder,
+        "enricher": AgentConfigType.Enricher,
+        "generator": AgentConfigType.Generator,
+        "installer": AgentConfigType.Installer,
+        "pentester": AgentConfigType.Pentester,
+        "refiner": AgentConfigType.Refiner,
+        "reflector": AgentConfigType.Reflector,
+        "searcher": AgentConfigType.Searcher,
+        "simple": AgentConfigType.Simple,
+        "simpleJson": AgentConfigType.SimpleJson,
+    };
+
     // Get dynamic agent types from data
     const agentTypes = useMemo(() => {
         let agentsSource = null;
@@ -836,7 +852,7 @@ const SettingsProvider = () => {
                 data.settingsProviders.default?.[selectedType as keyof typeof data.settingsProviders.default]?.agents;
         } else if (!isNew && providerId && data?.settingsProviders?.userDefined) {
             // For existing providers, use current provider's agents
-            const provider = data.settingsProviders.userDefined.find((p: Provider) => p.id === +providerId);
+            const provider = data.settingsProviders.userDefined.find((p: Provider) => p.id == providerId);
             agentsSource = provider?.agents;
         }
 
@@ -857,21 +873,7 @@ const SettingsProvider = () => {
         }
 
         // Fallback to hardcoded list if no data available
-        return [
-            'adviser',
-            'agent',
-            'assistant',
-            'coder',
-            'enricher',
-            'generator',
-            'installer',
-            'pentester',
-            'reflector',
-            'refiner',
-            'searcher',
-            'simple',
-            'simpleJson',
-        ];
+        return Object.keys(mapAgentTypes);
     }, [isNew, selectedType, providerId, data]);
 
     // Get available models filtered by selected provider type
@@ -980,7 +982,7 @@ const SettingsProvider = () => {
 
             // If we have an id in query params, copy from existing provider
             if (queryId && data?.settingsProviders?.userDefined) {
-                const sourceProvider = data.settingsProviders.userDefined.find((p: Provider) => p.id === +queryId);
+                const sourceProvider = data.settingsProviders.userDefined.find((p: Provider) => p.id == queryId);
 
                 if (sourceProvider) {
                     const { name, type: sourceType, agents } = sourceProvider;
@@ -1007,7 +1009,7 @@ const SettingsProvider = () => {
             return;
         }
 
-        const provider = providers.userDefined?.find((provider: Provider) => provider.id === +providerId);
+        const provider = providers.userDefined?.find((provider: Provider) => provider.id == providerId);
 
         if (!provider) {
             navigate('/settings/providers');
@@ -1214,7 +1216,7 @@ const SettingsProvider = () => {
             const agent = agents[agentKey as keyof AgentsConfigInput] as AgentConfigInput;
 
             const singleResult = await testAgent({
-                variables: { type, agentType: agentKey as AgentType, agent },
+                variables: { type, agentType: mapAgentTypes[agentKey] ?? AgentConfigType.Simple, agent },
             });
             setTestResults({ [agentKey]: singleResult.data?.testAgent });
             setIsTestDialogOpen(true);
