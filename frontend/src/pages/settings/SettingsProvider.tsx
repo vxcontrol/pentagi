@@ -758,6 +758,7 @@ const SettingsProvider = () => {
     const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
     const [testProvider, { loading: isTestLoading, error: testError }] = useTestProviderMutation();
     const [testAgent, { loading: isAgentTestLoading, error: agentTestError }] = useTestAgentMutation();
+    const [currentAgentKey, setCurrentAgentKey] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
     const [testResults, setTestResults] = useState<any>(null);
@@ -1206,24 +1207,23 @@ const SettingsProvider = () => {
 
         try {
             setSubmitError(null);
+            setCurrentAgentKey(agentKey);
             const formData = form.watch();
             const { type, agents } = transformFormToGraphQL(formData);
-            console.log('agentKey', agentKey);
-            console.log('type', type);
-            console.log('agents', agents);
 
             const agent = agents[agentKey as keyof AgentsConfigInput] as AgentConfigInput;
-            console.log('agent', agent);
 
             const singleResult = await testAgent({
                 variables: { type, agentType: agentKey as AgentType, agent },
             });
             setTestResults({ [agentKey]: singleResult.data?.testAgent });
             setIsTestDialogOpen(true);
+            setCurrentAgentKey(null);
             return;
         } catch (error) {
             console.error('Test error:', error);
             setSubmitError(error instanceof Error ? error.message : 'An error occurred while testing');
+            setCurrentAgentKey(null);
         }
     };
 
@@ -1351,17 +1351,34 @@ const SettingsProvider = () => {
                                             key={agentKey}
                                             value={agentKey}
                                         >
-                                            <AccordionTrigger className="text-left">
+                                            <AccordionTrigger className="group text-left hover:no-underline">
                                                 <div className="flex w-full items-center justify-between gap-2">
-                                                    <span>{getName(agentKey)}</span>
+                                                    <span className="group-hover:underline">{getName(agentKey)}</span>
                                                     <span
-                                                        className={`text-xs mr-2 px-2 py-1 border rounded hover:bg-accent hover:text-accent-foreground`}
+                                                        className={cn(
+                                                            'flex items-center gap-1 text-xs mr-2 px-2 py-1 border rounded hover:bg-accent hover:text-accent-foreground',
+                                                            (isTestLoading || isAgentTestLoading) &&
+                                                                'opacity-50 cursor-not-allowed pointer-events-none',
+                                                        )}
                                                         onClick={(event) => {
+                                                            if (isTestLoading || isAgentTestLoading) {
+                                                                return;
+                                                            }
+
                                                             event.stopPropagation();
-                                                            void handleTestAgent(agentKey);
+                                                            handleTestAgent(agentKey);
                                                         }}
                                                     >
-                                                        Test
+                                                        {isAgentTestLoading && currentAgentKey === agentKey ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <Play className="h-4 w-4" />
+                                                        )}
+                                                        <span className="!no-underline hover:!no-underline">
+                                                            {isAgentTestLoading && currentAgentKey === agentKey
+                                                                ? 'Testing...'
+                                                                : 'Test'}
+                                                        </span>
                                                     </span>
                                                 </div>
                                             </AccordionTrigger>
@@ -1623,7 +1640,7 @@ const SettingsProvider = () => {
                         type="button"
                         variant="outline"
                         onClick={() => handleTest()}
-                        disabled={isLoading || isTestLoading}
+                        disabled={isLoading || isTestLoading || isAgentTestLoading}
                     >
                         {isTestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                         {isTestLoading ? 'Testing...' : 'Test'}
