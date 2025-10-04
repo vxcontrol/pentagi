@@ -826,20 +826,20 @@ const SettingsProvider = () => {
         [searchParams],
     );
 
-    const mapAgentTypes: Record<string, AgentConfigType> = {
-        "adviser": AgentConfigType.Adviser,
-        "primaryAgent": AgentConfigType.PrimaryAgent,
-        "assistant": AgentConfigType.Assistant,
-        "coder": AgentConfigType.Coder,
-        "enricher": AgentConfigType.Enricher,
-        "generator": AgentConfigType.Generator,
-        "installer": AgentConfigType.Installer,
-        "pentester": AgentConfigType.Pentester,
-        "refiner": AgentConfigType.Refiner,
-        "reflector": AgentConfigType.Reflector,
-        "searcher": AgentConfigType.Searcher,
-        "simple": AgentConfigType.Simple,
-        "simpleJson": AgentConfigType.SimpleJson,
+    const agentTypesMap: Record<string, AgentConfigType> = {
+        adviser: AgentConfigType.Adviser,
+        primaryAgent: AgentConfigType.PrimaryAgent,
+        assistant: AgentConfigType.Assistant,
+        coder: AgentConfigType.Coder,
+        enricher: AgentConfigType.Enricher,
+        generator: AgentConfigType.Generator,
+        installer: AgentConfigType.Installer,
+        pentester: AgentConfigType.Pentester,
+        refiner: AgentConfigType.Refiner,
+        reflector: AgentConfigType.Reflector,
+        searcher: AgentConfigType.Searcher,
+        simple: AgentConfigType.Simple,
+        simpleJson: AgentConfigType.SimpleJson,
     };
 
     // Get dynamic agent types from data
@@ -873,7 +873,7 @@ const SettingsProvider = () => {
         }
 
         // Fallback to hardcoded list if no data available
-        return Object.keys(mapAgentTypes);
+        return Object.keys(agentTypesMap);
     }, [isNew, selectedType, providerId, data]);
 
     // Get available models filtered by selected provider type
@@ -1216,7 +1216,7 @@ const SettingsProvider = () => {
             const agent = agents[agentKey as keyof AgentsConfigInput] as AgentConfigInput;
 
             const singleResult = await testAgent({
-                variables: { type, agentType: mapAgentTypes[agentKey] ?? AgentConfigType.Simple, agent },
+                variables: { type, agentType: agentTypesMap[agentKey] ?? AgentConfigType.Simple, agent },
             });
             setTestResults({ [agentKey]: singleResult.data?.testAgent });
             setIsTestDialogOpen(true);
