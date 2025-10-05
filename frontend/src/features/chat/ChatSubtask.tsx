@@ -1,5 +1,5 @@
 import { ListCheck, ListTodo } from 'lucide-react';
-import { memo, useState, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
 import Markdown from '@/components/Markdown';
 import type { SubtaskFragmentFragment } from '@/graphql/types';
@@ -30,7 +30,7 @@ const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
         if (!trimmedSearch) {
             return { hasDescriptionMatch: false, hasResultMatch: false };
         }
-        
+
         return {
             hasDescriptionMatch: containsSearchValue(description, trimmedSearch),
             hasResultMatch: containsSearchValue(result, trimmedSearch),
@@ -40,7 +40,7 @@ const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
     // Auto-expand details if they contain search matches
     useEffect(() => {
         const trimmedSearch = searchValue.trim();
-        
+
         if (trimmedSearch) {
             // Expand details if description or result contains the search term
             if (searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch) {
@@ -58,10 +58,13 @@ const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
                 <ChatTaskStatusIcon
                     status={status}
                     tooltip={`Subtask ID: ${id}`}
-                    className="mt-0.5"
+                    className="mt-[1px]"
                 />
                 <div className="text-sm">
-                    <Markdown className="prose-sm prose-fixed break-words [&>*]:m-0 [&>p]:leading-tight" searchValue={searchValue}>
+                    <Markdown
+                        className="prose-sm prose-fixed break-words [&>*]:m-0 [&>p]:leading-tight"
+                        searchValue={searchValue}
+                    >
                         {title}
                     </Markdown>
                 </div>
@@ -83,7 +86,12 @@ const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
                                         <ListTodo className="size-4" />
                                         <span className="text-xs">Description</span>
                                     </div>
-                                    <Markdown className="prose-xs prose-fixed ml-6 break-words" searchValue={searchValue}>{description}</Markdown>
+                                    <Markdown
+                                        className="prose-xs prose-fixed ml-6 break-words"
+                                        searchValue={searchValue}
+                                    >
+                                        {description}
+                                    </Markdown>
                                     {result && <div className="my-2 border-t border-border" />}
                                 </>
                             )}
@@ -93,7 +101,12 @@ const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
                                         <ListCheck className="size-4" />
                                         <span className="text-xs">Result</span>
                                     </div>
-                                    <Markdown className="prose-xs prose-fixed ml-6 break-words" searchValue={searchValue}>{result}</Markdown>
+                                    <Markdown
+                                        className="prose-xs prose-fixed ml-6 break-words"
+                                        searchValue={searchValue}
+                                    >
+                                        {result}
+                                    </Markdown>
                                 </>
                             )}
                         </>

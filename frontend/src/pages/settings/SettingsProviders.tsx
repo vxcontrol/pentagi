@@ -110,11 +110,11 @@ const SettingsProviders = () => {
     const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
     const navigate = useNavigate();
 
-    const handleProviderEdit = (providerId: number) => {
+    const handleProviderEdit = (providerId: string) => {
         navigate(`/settings/providers/${providerId}`);
     };
 
-    const handleProviderClone = (providerId: number) => {
+    const handleProviderClone = (providerId: string) => {
         navigate(`/settings/providers/new?id=${providerId}`);
     };
 
@@ -123,7 +123,7 @@ const SettingsProviders = () => {
         setIsDeleteDialogOpen(true);
     };
 
-    const handleProviderDelete = async (providerId: number | undefined) => {
+    const handleProviderDelete = async (providerId: string | undefined) => {
         if (!providerId) {
             return;
         }

@@ -11,11 +11,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusCard } from '@/components/ui/status-card';
 import {
+    AgentConfigType,
     ProviderType,
     ReasoningEffort,
     useCreateProviderMutation,
     useDeleteProviderMutation,
     useSettingsProvidersQuery,
+    useTestAgentMutation,
     useTestProviderMutation,
     useUpdateProviderMutation,
     type AgentConfigInput,
@@ -37,8 +39,8 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { useController, useForm } from 'react-hook-form';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -128,7 +130,7 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
 
     const parseValue = (value: string) => {
         if (value === '') {
-            return undefined;
+            return null;
         }
 
         return valueType === 'float' ? parseFloat(value) : parseInt(value);
@@ -293,6 +295,7 @@ interface FormModelComboboxItemProps extends BaseFieldProps, BaseInputProps {
     allowCustom?: boolean;
     contentClass?: string;
     description?: string;
+    onOptionSelect?: (option: ModelOption) => void;
 }
 
 const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
@@ -305,6 +308,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
     allowCustom = true,
     contentClass,
     description,
+    onOptionSelect,
 }) => {
     const { field, fieldState } = useController({
         name,
@@ -346,7 +350,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                         {/* Input field - main control */}
                         <Input
                             value={displayValue}
-                            onChange={(e) => field.onChange(e.target.value)}
+                            onChange={(event) => field.onChange(event.target.value)}
                             placeholder={placeholder}
                             disabled={disabled}
                             className="rounded-r-none border-r-0 focus-visible:z-10"
@@ -402,6 +406,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                                 value={option.name}
                                                 onSelect={() => {
                                                     field.onChange(option.name);
+                                                    onOptionSelect?.(option);
                                                     setOpen(false);
                                                     setSearch('');
                                                 }}
@@ -752,10 +757,16 @@ const SettingsProvider = () => {
     const [updateProvider, { loading: isUpdateLoading, error: updateError }] = useUpdateProviderMutation();
     const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
     const [testProvider, { loading: isTestLoading, error: testError }] = useTestProviderMutation();
+    const [testAgent, { loading: isAgentTestLoading, error: agentTestError }] = useTestAgentMutation();
+    const [currentAgentKey, setCurrentAgentKey] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
     const [testResults, setTestResults] = useState<any>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+    const [pendingBrowserBack, setPendingBrowserBack] = useState(false);
+    const allowBrowserLeaveRef = useRef(false);
+    const hasPushedBlockerStateRef = useRef(false);
 
     const isNew = providerId === 'new';
     const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading;
@@ -769,6 +780,40 @@ const SettingsProvider = () => {
         },
     });
 
+    const { isDirty } = useFormState({ control: form.control });
+
+    // Maintain a blocker state at the top of history when form is dirty
+    useEffect(() => {
+        if (isDirty && !hasPushedBlockerStateRef.current) {
+            window.history.pushState({ __pentagiBlock__: true }, '');
+            hasPushedBlockerStateRef.current = true;
+        }
+    }, [isDirty]);
+
+    // Intercept browser back using popstate when form is dirty
+    useEffect(() => {
+        const handlePopState = (event: PopStateEvent) => {
+            if (!isDirty) {
+                return;
+            }
+            if (allowBrowserLeaveRef.current) {
+                // Allow single leave without blocking
+                allowBrowserLeaveRef.current = false;
+                return;
+            }
+            // User navigated back off the blocker entry to the previous one; go forward to stay
+            setPendingBrowserBack(true);
+            setIsLeaveDialogOpen(true);
+            // Return to the blocker entry
+            window.history.forward();
+        };
+
+        window.addEventListener('popstate', handlePopState, { capture: true });
+        return () => {
+            window.removeEventListener('popstate', handlePopState, { capture: true } as any);
+        };
+    }, [isDirty]);
+
     // Watch selected type
     const selectedType = form.watch('type');
 
@@ -781,6 +826,22 @@ const SettingsProvider = () => {
         [searchParams],
     );
 
+    const agentTypesMap: Record<string, AgentConfigType> = {
+        adviser: AgentConfigType.Adviser,
+        primaryAgent: AgentConfigType.PrimaryAgent,
+        assistant: AgentConfigType.Assistant,
+        coder: AgentConfigType.Coder,
+        enricher: AgentConfigType.Enricher,
+        generator: AgentConfigType.Generator,
+        installer: AgentConfigType.Installer,
+        pentester: AgentConfigType.Pentester,
+        refiner: AgentConfigType.Refiner,
+        reflector: AgentConfigType.Reflector,
+        searcher: AgentConfigType.Searcher,
+        simple: AgentConfigType.Simple,
+        simpleJson: AgentConfigType.SimpleJson,
+    };
+
     // Get dynamic agent types from data
     const agentTypes = useMemo(() => {
         let agentsSource = null;
@@ -791,7 +852,7 @@ const SettingsProvider = () => {
                 data.settingsProviders.default?.[selectedType as keyof typeof data.settingsProviders.default]?.agents;
         } else if (!isNew && providerId && data?.settingsProviders?.userDefined) {
             // For existing providers, use current provider's agents
-            const provider = data.settingsProviders.userDefined.find((p: Provider) => p.id === +providerId);
+            const provider = data.settingsProviders.userDefined.find((p: Provider) => p.id == providerId);
             agentsSource = provider?.agents;
         }
 
@@ -812,21 +873,7 @@ const SettingsProvider = () => {
         }
 
         // Fallback to hardcoded list if no data available
-        return [
-            'adviser',
-            'agent',
-            'assistant',
-            'coder',
-            'enricher',
-            'generator',
-            'installer',
-            'pentester',
-            'reflector',
-            'refiner',
-            'searcher',
-            'simple',
-            'simpleJson',
-        ];
+        return Object.keys(agentTypesMap);
     }, [isNew, selectedType, providerId, data]);
 
     // Get available models filtered by selected provider type
@@ -935,7 +982,7 @@ const SettingsProvider = () => {
 
             // If we have an id in query params, copy from existing provider
             if (queryId && data?.settingsProviders?.userDefined) {
-                const sourceProvider = data.settingsProviders.userDefined.find((p: Provider) => p.id === +queryId);
+                const sourceProvider = data.settingsProviders.userDefined.find((p: Provider) => p.id == queryId);
 
                 if (sourceProvider) {
                     const { name, type: sourceType, agents } = sourceProvider;
@@ -948,6 +995,14 @@ const SettingsProvider = () => {
 
                     return;
                 }
+            } else if (queryType && data?.settingsProviders?.default) {
+                const defaultProvider = data.settingsProviders.default[queryType as keyof typeof data.settingsProviders.default];
+
+                form.reset({
+                    name: undefined,
+                    type: queryType,
+                    agents: defaultProvider?.agents ? (normalizeGraphQLData(defaultProvider.agents) as FormAgents) : {},
+                });
             }
 
             // Default new provider form - but only if selectedType is not set
@@ -962,7 +1017,7 @@ const SettingsProvider = () => {
             return;
         }
 
-        const provider = providers.userDefined?.find((provider: Provider) => provider.id === +providerId);
+        const provider = providers.userDefined?.find((provider: Provider) => provider.id == providerId);
 
         if (!provider) {
             navigate('/settings/providers');
@@ -1036,6 +1091,7 @@ const SettingsProvider = () => {
         }
     };
 
+    // Test entire provider (all agents)
     const handleTest = async () => {
         // Trigger form validation
         const isValid = await form.trigger();
@@ -1098,22 +1154,114 @@ const SettingsProvider = () => {
 
             // Get form data and transform it - including disabled fields
             const formData = form.watch();
-            const mutationData = transformFormToGraphQL(formData);
-
+            const { type, agents } = transformFormToGraphQL(formData);
             const result = await testProvider({
                 variables: {
-                    type: mutationData.type,
-                    agents: mutationData.agents,
+                    type,
+                    agents,
                 },
             });
 
-            // Save results and open dialog
             setTestResults(result.data?.testProvider);
             setIsTestDialogOpen(true);
         } catch (error) {
             console.error('Test error:', error);
             setSubmitError(error instanceof Error ? error.message : 'An error occurred while testing');
         }
+    };
+
+    // Test a single agent (uses testAgent where supported, otherwise falls back to filtered provider test)
+    const handleTestAgent = async (agentKey: string) => {
+        // Validate only fields for this agent and general required fields
+        const isValid = await form.trigger();
+
+        if (!isValid) {
+            const errors = form.formState.errors;
+            const formatFieldName = (fieldPath: string): string =>
+                fieldPath
+                    .split('.')
+                    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).replace(/([A-Z])/g, ' $1'))
+                    .join(' → ');
+
+            const errorMessages = Object.entries(errors)
+                .map(([field, error]: [string, any]) => {
+                    if (error?.message) return `• ${formatFieldName(field)}: ${error.message}`;
+                    if (error && typeof error === 'object') {
+                        return Object.entries(error)
+                            .map(([subField, subError]: [string, any]) => {
+                                if (subError?.message)
+                                    return `• ${formatFieldName(`${field}.${subField}`)}: ${subError.message}`;
+                                if (subError && typeof subError === 'object') {
+                                    return Object.entries(subError)
+                                        .map(([nestedField, nestedError]: [string, any]) => {
+                                            if (nestedError?.message)
+                                                return `• ${formatFieldName(`${field}.${subField}.${nestedField}`)}: ${nestedError.message}`;
+                                            return null;
+                                        })
+                                        .filter(Boolean)
+                                        .join('\n');
+                                }
+                                return null;
+                            })
+                            .filter(Boolean)
+                            .join('\n');
+                    }
+                    return null;
+                })
+                .filter(Boolean)
+                .join('\n');
+
+            setSubmitError(`Please fix the following validation errors:\n\n${errorMessages}`);
+            return;
+        }
+
+        try {
+            setSubmitError(null);
+            setCurrentAgentKey(agentKey);
+            const formData = form.watch();
+            const { type, agents } = transformFormToGraphQL(formData);
+
+            const agent = agents[agentKey as keyof AgentsConfigInput] as AgentConfigInput;
+
+            const singleResult = await testAgent({
+                variables: { type, agentType: agentTypesMap[agentKey] ?? AgentConfigType.Simple, agent },
+            });
+            setTestResults({ [agentKey]: singleResult.data?.testAgent });
+            setIsTestDialogOpen(true);
+            setCurrentAgentKey(null);
+            return;
+        } catch (error) {
+            console.error('Test error:', error);
+            setSubmitError(error instanceof Error ? error.message : 'An error occurred while testing');
+            setCurrentAgentKey(null);
+        }
+    };
+
+    const handleBack = () => {
+        if (isDirty) {
+            setIsLeaveDialogOpen(true);
+            return;
+        }
+
+        navigate('/settings/providers');
+    };
+
+    const handleConfirmLeave = () => {
+        if (pendingBrowserBack) {
+            allowBrowserLeaveRef.current = true;
+            setPendingBrowserBack(false);
+            // Skip the blocker entry and go to the real previous page
+            window.history.go(-2);
+            return;
+        }
+        navigate('/settings/providers');
+    };
+
+    const handleLeaveDialogOpenChange = (open: boolean) => {
+        if (!open && pendingBrowserBack) {
+            setPendingBrowserBack(false);
+        }
+        setIsLeaveDialogOpen(open);
     };
 
     if (loading) {
@@ -1140,7 +1288,7 @@ const SettingsProvider = () => {
         ? Object.keys(data?.settingsProviders.models).filter((key) => key !== '__typename')
         : [];
 
-    const mutationError = createError || updateError || deleteError || testError || submitError;
+    const mutationError = createError || updateError || deleteError || testError || agentTestError || submitError;
 
     return (
         <>
@@ -1213,8 +1361,36 @@ const SettingsProvider = () => {
                                             key={agentKey}
                                             value={agentKey}
                                         >
-                                            <AccordionTrigger className="text-left">
-                                                {getName(agentKey)}
+                                            <AccordionTrigger className="group text-left hover:no-underline">
+                                                <div className="flex w-full items-center justify-between gap-2">
+                                                    <span className="group-hover:underline">{getName(agentKey)}</span>
+                                                    <span
+                                                        className={cn(
+                                                            'flex items-center gap-1 text-xs mr-2 px-2 py-1 border rounded hover:bg-accent hover:text-accent-foreground',
+                                                            (isTestLoading || isAgentTestLoading) &&
+                                                                'opacity-50 cursor-not-allowed pointer-events-none',
+                                                        )}
+                                                        onClick={(event) => {
+                                                            if (isTestLoading || isAgentTestLoading) {
+                                                                return;
+                                                            }
+
+                                                            event.stopPropagation();
+                                                            handleTestAgent(agentKey);
+                                                        }}
+                                                    >
+                                                        {isAgentTestLoading && currentAgentKey === agentKey ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <Play className="h-4 w-4" />
+                                                        )}
+                                                        <span className="!no-underline hover:!no-underline">
+                                                            {isAgentTestLoading && currentAgentKey === agentKey
+                                                                ? 'Testing...'
+                                                                : 'Test'}
+                                                        </span>
+                                                    </span>
+                                                </div>
                                             </AccordionTrigger>
                                             <AccordionContent className="space-y-4 pt-4">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-[1px]">
@@ -1226,6 +1402,21 @@ const SettingsProvider = () => {
                                                         options={availableModels}
                                                         control={form.control}
                                                         disabled={isLoading}
+                                                        onOptionSelect={(option) => {
+                                                            {
+                                                                /* Update price fields */
+                                                            }
+                                                            const price = option?.price;
+
+                                                            form.setValue(
+                                                                `agents.${agentKey}.price.input` as const,
+                                                                price?.input ?? null,
+                                                            );
+                                                            form.setValue(
+                                                                `agents.${agentKey}.price.output` as const,
+                                                                price?.output ?? null,
+                                                            );
+                                                        }}
                                                     />
 
                                                     {/* Temperature field */}
@@ -1346,8 +1537,12 @@ const SettingsProvider = () => {
                                                                     <FormItem>
                                                                         <FormLabel>Reasoning Effort</FormLabel>
                                                                         <Select
-                                                                            onValueChange={field.onChange}
-                                                                            defaultValue={field.value || undefined}
+                                                                            onValueChange={(value) =>
+                                                                                field.onChange(
+                                                                                    value !== 'none' ? value : null,
+                                                                                )
+                                                                            }
+                                                                            defaultValue={field.value ?? 'none'}
                                                                             disabled={isLoading}
                                                                         >
                                                                             <FormControl>
@@ -1356,6 +1551,9 @@ const SettingsProvider = () => {
                                                                                 </SelectTrigger>
                                                                             </FormControl>
                                                                             <SelectContent>
+                                                                                <SelectItem value="none">
+                                                                                    Not selected
+                                                                                </SelectItem>
                                                                                 <SelectItem value={ReasoningEffort.Low}>
                                                                                     Low
                                                                                 </SelectItem>
@@ -1451,8 +1649,8 @@ const SettingsProvider = () => {
                     <Button
                         type="button"
                         variant="outline"
-                        onClick={handleTest}
-                        disabled={isLoading || isTestLoading}
+                        onClick={() => handleTest()}
+                        disabled={isLoading || isTestLoading || isAgentTestLoading}
                     >
                         {isTestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                         {isTestLoading ? 'Testing...' : 'Test'}
@@ -1463,7 +1661,7 @@ const SettingsProvider = () => {
                     <Button
                         type="button"
                         variant="outline"
-                        onClick={() => navigate('/settings/providers')}
+                        onClick={handleBack}
                         disabled={isLoading}
                     >
                         Cancel
@@ -1494,6 +1692,18 @@ const SettingsProvider = () => {
                 itemType="provider"
                 confirmText="Delete"
                 cancelText="Cancel"
+            />
+
+            <ConfirmationDialog
+                isOpen={isLeaveDialogOpen}
+                handleOpenChange={handleLeaveDialogOpenChange}
+                handleConfirm={handleConfirmLeave}
+                title="Discard changes?"
+                description="You have unsaved changes. Are you sure you want to leave without saving?"
+                cancelText="Stay"
+                confirmText="Leave"
+                confirmVariant="destructive"
+                confirmIcon={null}
             />
         </>
     );

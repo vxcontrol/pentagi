@@ -353,7 +353,7 @@ func (r *mutationResolver) DeleteAssistant(ctx context.Context, flowID int64, as
 }
 
 // TestAgent is the resolver for the testAgent field.
-func (r *mutationResolver) TestAgent(ctx context.Context, typeArg model.ProviderType, agentType model.AgentType, agent model.AgentConfig) (*model.AgentTestResult, error) {
+func (r *mutationResolver) TestAgent(ctx context.Context, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) (*model.AgentTestResult, error) {
 	uid, _, err := validatePermission(ctx, "settings.providers.view")
 	if err != nil {
 		return nil, err

@@ -440,19 +440,19 @@ func ConvertProviderConfigToGqlModel(cfg *pconfig.ProviderConfig) *model.AgentsC
 	}
 
 	return &model.AgentsConfig{
-		Simple:     ConvertAgentConfigToGqlModel(cfg.Simple),
-		SimpleJSON: ConvertAgentConfigToGqlModel(cfg.SimpleJSON),
-		Agent:      ConvertAgentConfigToGqlModel(cfg.PrimaryAgent),
-		Assistant:  ConvertAgentConfigToGqlModel(cfg.Assistant),
-		Generator:  ConvertAgentConfigToGqlModel(cfg.Generator),
-		Refiner:    ConvertAgentConfigToGqlModel(cfg.Refiner),
-		Adviser:    ConvertAgentConfigToGqlModel(cfg.Adviser),
-		Reflector:  ConvertAgentConfigToGqlModel(cfg.Reflector),
-		Searcher:   ConvertAgentConfigToGqlModel(cfg.Searcher),
-		Enricher:   ConvertAgentConfigToGqlModel(cfg.Enricher),
-		Coder:      ConvertAgentConfigToGqlModel(cfg.Coder),
-		Installer:  ConvertAgentConfigToGqlModel(cfg.Installer),
-		Pentester:  ConvertAgentConfigToGqlModel(cfg.Pentester),
+		Simple:       ConvertAgentConfigToGqlModel(cfg.Simple),
+		SimpleJSON:   ConvertAgentConfigToGqlModel(cfg.SimpleJSON),
+		PrimaryAgent: ConvertAgentConfigToGqlModel(cfg.PrimaryAgent),
+		Assistant:    ConvertAgentConfigToGqlModel(cfg.Assistant),
+		Generator:    ConvertAgentConfigToGqlModel(cfg.Generator),
+		Refiner:      ConvertAgentConfigToGqlModel(cfg.Refiner),
+		Adviser:      ConvertAgentConfigToGqlModel(cfg.Adviser),
+		Reflector:    ConvertAgentConfigToGqlModel(cfg.Reflector),
+		Searcher:     ConvertAgentConfigToGqlModel(cfg.Searcher),
+		Enricher:     ConvertAgentConfigToGqlModel(cfg.Enricher),
+		Coder:        ConvertAgentConfigToGqlModel(cfg.Coder),
+		Installer:    ConvertAgentConfigToGqlModel(cfg.Installer),
+		Pentester:    ConvertAgentConfigToGqlModel(cfg.Pentester),
 	}
 }
 
@@ -525,7 +525,7 @@ func ConvertAgentsConfigFromGqlModel(cfg *model.AgentsConfig) *pconfig.ProviderC
 	pc := &pconfig.ProviderConfig{
 		Simple:       ConvertAgentConfigFromGqlModel(cfg.Simple),
 		SimpleJSON:   ConvertAgentConfigFromGqlModel(cfg.SimpleJSON),
-		PrimaryAgent: ConvertAgentConfigFromGqlModel(cfg.Agent),
+		PrimaryAgent: ConvertAgentConfigFromGqlModel(cfg.PrimaryAgent),
 		Assistant:    ConvertAgentConfigFromGqlModel(cfg.Assistant),
 		Generator:    ConvertAgentConfigFromGqlModel(cfg.Generator),
 		Refiner:      ConvertAgentConfigFromGqlModel(cfg.Refiner),
@@ -656,18 +656,18 @@ func ConvertTestResults(results tester.AgentTestResults) *model.AgentTestResult 
 
 func ConvertProviderTestResults(results tester.ProviderTestResults) *model.ProviderTestResult {
 	return &model.ProviderTestResult{
-		Simple:     ConvertTestResults(results.Simple),
-		SimpleJSON: ConvertTestResults(results.SimpleJSON),
-		Agent:      ConvertTestResults(results.PrimaryAgent),
-		Assistant:  ConvertTestResults(results.Assistant),
-		Generator:  ConvertTestResults(results.Generator),
-		Refiner:    ConvertTestResults(results.Refiner),
-		Adviser:    ConvertTestResults(results.Adviser),
-		Reflector:  ConvertTestResults(results.Reflector),
-		Searcher:   ConvertTestResults(results.Searcher),
-		Enricher:   ConvertTestResults(results.Enricher),
-		Coder:      ConvertTestResults(results.Coder),
-		Installer:  ConvertTestResults(results.Installer),
-		Pentester:  ConvertTestResults(results.Pentester),
+		Simple:       ConvertTestResults(results.Simple),
+		SimpleJSON:   ConvertTestResults(results.SimpleJSON),
+		PrimaryAgent: ConvertTestResults(results.PrimaryAgent),
+		Assistant:    ConvertTestResults(results.Assistant),
+		Generator:    ConvertTestResults(results.Generator),
+		Refiner:      ConvertTestResults(results.Refiner),
+		Adviser:      ConvertTestResults(results.Adviser),
+		Reflector:    ConvertTestResults(results.Reflector),
+		Searcher:     ConvertTestResults(results.Searcher),
+		Enricher:     ConvertTestResults(results.Enricher),
+		Coder:        ConvertTestResults(results.Coder),
+		Installer:    ConvertTestResults(results.Installer),
+		Pentester:    ConvertTestResults(results.Pentester),
 	}
 }

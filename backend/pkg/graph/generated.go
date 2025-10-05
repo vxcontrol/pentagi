@@ -91,19 +91,19 @@ type ComplexityRoot struct {
 	}
 
 	AgentsConfig struct {
-		Adviser    func(childComplexity int) int
-		Agent      func(childComplexity int) int
-		Assistant  func(childComplexity int) int
-		Coder      func(childComplexity int) int
-		Enricher   func(childComplexity int) int
-		Generator  func(childComplexity int) int
-		Installer  func(childComplexity int) int
-		Pentester  func(childComplexity int) int
-		Refiner    func(childComplexity int) int
-		Reflector  func(childComplexity int) int
-		Searcher   func(childComplexity int) int
-		Simple     func(childComplexity int) int
-		SimpleJSON func(childComplexity int) int
+		Adviser      func(childComplexity int) int
+		Assistant    func(childComplexity int) int
+		Coder        func(childComplexity int) int
+		Enricher     func(childComplexity int) int
+		Generator    func(childComplexity int) int
+		Installer    func(childComplexity int) int
+		Pentester    func(childComplexity int) int
+		PrimaryAgent func(childComplexity int) int
+		Refiner      func(childComplexity int) int
+		Reflector    func(childComplexity int) int
+		Searcher     func(childComplexity int) int
+		Simple       func(childComplexity int) int
+		SimpleJSON   func(childComplexity int) int
 	}
 
 	AgentsPrompts struct {
@@ -223,7 +223,7 @@ type ComplexityRoot struct {
 		PutUserInput    func(childComplexity int, flowID int64, input string) int
 		StopAssistant   func(childComplexity int, flowID int64, assistantID int64) int
 		StopFlow        func(childComplexity int, flowID int64) int
-		TestAgent       func(childComplexity int, typeArg model.ProviderType, agentType model.AgentType, agent model.AgentConfig) int
+		TestAgent       func(childComplexity int, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) int
 		TestProvider    func(childComplexity int, typeArg model.ProviderType, agents model.AgentsConfig) int
 		UpdatePrompt    func(childComplexity int, promptID int64, template string) int
 		UpdateProvider  func(childComplexity int, providerID int64, name string, agents model.AgentsConfig) int
@@ -258,19 +258,19 @@ type ComplexityRoot struct {
 	}
 
 	ProviderTestResult struct {
-		Adviser    func(childComplexity int) int
-		Agent      func(childComplexity int) int
-		Assistant  func(childComplexity int) int
-		Coder      func(childComplexity int) int
-		Enricher   func(childComplexity int) int
-		Generator  func(childComplexity int) int
-		Installer  func(childComplexity int) int
-		Pentester  func(childComplexity int) int
-		Refiner    func(childComplexity int) int
-		Reflector  func(childComplexity int) int
-		Searcher   func(childComplexity int) int
-		Simple     func(childComplexity int) int
-		SimpleJSON func(childComplexity int) int
+		Adviser      func(childComplexity int) int
+		Assistant    func(childComplexity int) int
+		Coder        func(childComplexity int) int
+		Enricher     func(childComplexity int) int
+		Generator    func(childComplexity int) int
+		Installer    func(childComplexity int) int
+		Pentester    func(childComplexity int) int
+		PrimaryAgent func(childComplexity int) int
+		Refiner      func(childComplexity int) int
+		Reflector    func(childComplexity int) int
+		Searcher     func(childComplexity int) int
+		Simple       func(childComplexity int) int
+		SimpleJSON   func(childComplexity int) int
 	}
 
 	ProvidersConfig struct {
@@ -466,7 +466,7 @@ type MutationResolver interface {
 	CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool) (model.ResultType, error)
 	StopAssistant(ctx context.Context, flowID int64, assistantID int64) (*model.Assistant, error)
 	DeleteAssistant(ctx context.Context, flowID int64, assistantID int64) (model.ResultType, error)
-	TestAgent(ctx context.Context, typeArg model.ProviderType, agentType model.AgentType, agent model.AgentConfig) (*model.AgentTestResult, error)
+	TestAgent(ctx context.Context, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) (*model.AgentTestResult, error)
 	TestProvider(ctx context.Context, typeArg model.ProviderType, agents model.AgentsConfig) (*model.ProviderTestResult, error)
 	CreateProvider(ctx context.Context, name string, typeArg model.ProviderType, agents model.AgentsConfig) (*model.ProviderConfig, error)
 	UpdateProvider(ctx context.Context, providerID int64, name string, agents model.AgentsConfig) (*model.ProviderConfig, error)
@@ -717,13 +717,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.AgentsConfig.Adviser(childComplexity), true
 
-	case "AgentsConfig.agent":
-		if e.complexity.AgentsConfig.Agent == nil {
-			break
-		}
-
-		return e.complexity.AgentsConfig.Agent(childComplexity), true
-
 	case "AgentsConfig.assistant":
 		if e.complexity.AgentsConfig.Assistant == nil {
 			break
@@ -765,6 +758,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AgentsConfig.Pentester(childComplexity), true
+
+	case "AgentsConfig.primaryAgent":
+		if e.complexity.AgentsConfig.PrimaryAgent == nil {
+			break
+		}
+
+		return e.complexity.AgentsConfig.PrimaryAgent(childComplexity), true
 
 	case "AgentsConfig.refiner":
 		if e.complexity.AgentsConfig.Refiner == nil {
@@ -1457,7 +1457,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.TestAgent(childComplexity, args["type"].(model.ProviderType), args["agentType"].(model.AgentType), args["agent"].(model.AgentConfig)), true
+		return e.complexity.Mutation.TestAgent(childComplexity, args["type"].(model.ProviderType), args["agentType"].(model.AgentConfigType), args["agent"].(model.AgentConfig)), true
 
 	case "Mutation.testProvider":
 		if e.complexity.Mutation.TestProvider == nil {
@@ -1619,13 +1619,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ProviderTestResult.Adviser(childComplexity), true
 
-	case "ProviderTestResult.agent":
-		if e.complexity.ProviderTestResult.Agent == nil {
-			break
-		}
-
-		return e.complexity.ProviderTestResult.Agent(childComplexity), true
-
 	case "ProviderTestResult.assistant":
 		if e.complexity.ProviderTestResult.Assistant == nil {
 			break
@@ -1667,6 +1660,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ProviderTestResult.Pentester(childComplexity), true
+
+	case "ProviderTestResult.primaryAgent":
+		if e.complexity.ProviderTestResult.PrimaryAgent == nil {
+			break
+		}
+
+		return e.complexity.ProviderTestResult.PrimaryAgent(childComplexity), true
 
 	case "ProviderTestResult.refiner":
 		if e.complexity.ProviderTestResult.Refiner == nil {
@@ -3697,22 +3697,22 @@ func (ec *executionContext) field_Mutation_testAgent_argsType(
 func (ec *executionContext) field_Mutation_testAgent_argsAgentType(
 	ctx context.Context,
 	rawArgs map[string]interface{},
-) (model.AgentType, error) {
+) (model.AgentConfigType, error) {
 	// We won't call the directive if the argument is null.
 	// Set call_argument_directives_with_null to true to call directives
 	// even if the argument is null.
 	_, ok := rawArgs["agentType"]
 	if !ok {
-		var zeroVal model.AgentType
+		var zeroVal model.AgentConfigType
 		return zeroVal, nil
 	}
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("agentType"))
 	if tmp, ok := rawArgs["agentType"]; ok {
-		return ec.unmarshalNAgentType2pentagiᚋpkgᚋgraphᚋmodelᚐAgentType(ctx, tmp)
+		return ec.unmarshalNAgentConfigType2pentagiᚋpkgᚋgraphᚋmodelᚐAgentConfigType(ctx, tmp)
 	}
 
-	var zeroVal model.AgentType
+	var zeroVal model.AgentConfigType
 	return zeroVal, nil
 }
 
@@ -6153,8 +6153,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_simpleJson(_ context.Conte
 	return fc, nil
 }
 
-func (ec *executionContext) _AgentsConfig_agent(ctx context.Context, field graphql.CollectedField, obj *model.AgentsConfig) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_AgentsConfig_agent(ctx, field)
+func (ec *executionContext) _AgentsConfig_primaryAgent(ctx context.Context, field graphql.CollectedField, obj *model.AgentsConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentsConfig_primaryAgent(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -6167,7 +6167,7 @@ func (ec *executionContext) _AgentsConfig_agent(ctx context.Context, field graph
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Agent, nil
+		return obj.PrimaryAgent, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -6184,7 +6184,7 @@ func (ec *executionContext) _AgentsConfig_agent(ctx context.Context, field graph
 	return ec.marshalNAgentConfig2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐAgentConfig(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_AgentsConfig_agent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_AgentsConfig_primaryAgent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "AgentsConfig",
 		Field:      field,
@@ -10795,7 +10795,7 @@ func (ec *executionContext) _Mutation_testAgent(ctx context.Context, field graph
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().TestAgent(rctx, fc.Args["type"].(model.ProviderType), fc.Args["agentType"].(model.AgentType), fc.Args["agent"].(model.AgentConfig))
+		return ec.resolvers.Mutation().TestAgent(rctx, fc.Args["type"].(model.ProviderType), fc.Args["agentType"].(model.AgentConfigType), fc.Args["agent"].(model.AgentConfig))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -10883,8 +10883,8 @@ func (ec *executionContext) fieldContext_Mutation_testProvider(ctx context.Conte
 				return ec.fieldContext_ProviderTestResult_simple(ctx, field)
 			case "simpleJson":
 				return ec.fieldContext_ProviderTestResult_simpleJson(ctx, field)
-			case "agent":
-				return ec.fieldContext_ProviderTestResult_agent(ctx, field)
+			case "primaryAgent":
+				return ec.fieldContext_ProviderTestResult_primaryAgent(ctx, field)
 			case "assistant":
 				return ec.fieldContext_ProviderTestResult_assistant(ctx, field)
 			case "generator":
@@ -11946,8 +11946,8 @@ func (ec *executionContext) fieldContext_ProviderConfig_agents(_ context.Context
 				return ec.fieldContext_AgentsConfig_simple(ctx, field)
 			case "simpleJson":
 				return ec.fieldContext_AgentsConfig_simpleJson(ctx, field)
-			case "agent":
-				return ec.fieldContext_AgentsConfig_agent(ctx, field)
+			case "primaryAgent":
+				return ec.fieldContext_AgentsConfig_primaryAgent(ctx, field)
 			case "assistant":
 				return ec.fieldContext_AgentsConfig_assistant(ctx, field)
 			case "generator":
@@ -12159,8 +12159,8 @@ func (ec *executionContext) fieldContext_ProviderTestResult_simpleJson(_ context
 	return fc, nil
 }
 
-func (ec *executionContext) _ProviderTestResult_agent(ctx context.Context, field graphql.CollectedField, obj *model.ProviderTestResult) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_ProviderTestResult_agent(ctx, field)
+func (ec *executionContext) _ProviderTestResult_primaryAgent(ctx context.Context, field graphql.CollectedField, obj *model.ProviderTestResult) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ProviderTestResult_primaryAgent(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -12173,7 +12173,7 @@ func (ec *executionContext) _ProviderTestResult_agent(ctx context.Context, field
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Agent, nil
+		return obj.PrimaryAgent, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -12190,7 +12190,7 @@ func (ec *executionContext) _ProviderTestResult_agent(ctx context.Context, field
 	return ec.marshalNAgentTestResult2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐAgentTestResult(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_ProviderTestResult_agent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ProviderTestResult_primaryAgent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ProviderTestResult",
 		Field:      field,
@@ -21743,7 +21743,7 @@ func (ec *executionContext) unmarshalInputAgentsConfigInput(ctx context.Context,
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"simple", "simpleJson", "agent", "assistant", "generator", "refiner", "adviser", "reflector", "searcher", "enricher", "coder", "installer", "pentester"}
+	fieldsInOrder := [...]string{"simple", "simpleJson", "primaryAgent", "assistant", "generator", "refiner", "adviser", "reflector", "searcher", "enricher", "coder", "installer", "pentester"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -21764,13 +21764,13 @@ func (ec *executionContext) unmarshalInputAgentsConfigInput(ctx context.Context,
 				return it, err
 			}
 			it.SimpleJSON = data
-		case "agent":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agent"))
+		case "primaryAgent":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("primaryAgent"))
 			data, err := ec.unmarshalNAgentConfigInput2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐAgentConfig(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Agent = data
+			it.PrimaryAgent = data
 		case "assistant":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("assistant"))
 			data, err := ec.unmarshalNAgentConfigInput2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐAgentConfig(ctx, v)
@@ -22200,8 +22200,8 @@ func (ec *executionContext) _AgentsConfig(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "agent":
-			out.Values[i] = ec._AgentsConfig_agent(ctx, field, obj)
+		case "primaryAgent":
+			out.Values[i] = ec._AgentsConfig_primaryAgent(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -23348,8 +23348,8 @@ func (ec *executionContext) _ProviderTestResult(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "agent":
-			out.Values[i] = ec._ProviderTestResult_agent(ctx, field, obj)
+		case "primaryAgent":
+			out.Values[i] = ec._ProviderTestResult_primaryAgent(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -25129,6 +25129,16 @@ func (ec *executionContext) unmarshalNAgentConfigInput2pentagiᚋpkgᚋgraphᚋm
 func (ec *executionContext) unmarshalNAgentConfigInput2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐAgentConfig(ctx context.Context, v interface{}) (*model.AgentConfig, error) {
 	res, err := ec.unmarshalInputAgentConfigInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNAgentConfigType2pentagiᚋpkgᚋgraphᚋmodelᚐAgentConfigType(ctx context.Context, v interface{}) (model.AgentConfigType, error) {
+	var res model.AgentConfigType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNAgentConfigType2pentagiᚋpkgᚋgraphᚋmodelᚐAgentConfigType(ctx context.Context, sel ast.SelectionSet, v model.AgentConfigType) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNAgentLog2pentagiᚋpkgᚋgraphᚋmodelᚐAgentLog(ctx context.Context, sel ast.SelectionSet, v model.AgentLog) graphql.Marshaler {

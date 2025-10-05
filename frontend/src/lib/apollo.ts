@@ -140,6 +140,17 @@ const providerConfigToProvider = (providerConfig: any) => {
 
 const cache = new InMemoryCache({
     typePolicies: {
+        ProviderConfig: {
+            keyFields: (object) => {
+                // don't normalize default providers with id: 0
+                // they should be stored inline within DefaultProvidersConfig
+                if (object.id === 0 || object.id === '0') {
+                    return false;
+                }
+                // normalize user-defined providers by id
+                return ['id'];
+            },
+        },
         Query: {
             fields: {
                 // Ensure tasks field is properly merged with incoming data
