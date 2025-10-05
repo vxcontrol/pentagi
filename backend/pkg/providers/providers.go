@@ -33,7 +33,7 @@ import (
 
 const deltaCallCounter = 10000
 
-const defaultTestParallelWorkersNumber = 8
+const defaultTestParallelWorkersNumber = 16
 
 const pentestDockerImage = "vxcontrol/kali-linux"
 

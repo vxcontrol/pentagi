@@ -995,6 +995,14 @@ const SettingsProvider = () => {
 
                     return;
                 }
+            } else if (queryType && data?.settingsProviders?.default) {
+                const defaultProvider = data.settingsProviders.default[queryType as keyof typeof data.settingsProviders.default];
+
+                form.reset({
+                    name: undefined,
+                    type: queryType,
+                    agents: defaultProvider?.agents ? (normalizeGraphQLData(defaultProvider.agents) as FormAgents) : {},
+                });
             }
 
             // Default new provider form - but only if selectedType is not set
