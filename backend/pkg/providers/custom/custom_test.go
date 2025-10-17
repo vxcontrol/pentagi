@@ -130,6 +130,11 @@ func TestBuildProviderConfig(t *testing.T) {
 			expectErr:  false,
 		},
 		{
+			name:       "default empty config",
+			configData: pconfig.EmptyProviderConfigRaw,
+			expectErr:  false,
+		},
+		{
 			name: "config with agent settings",
 			configData: `{
 				"simple": {

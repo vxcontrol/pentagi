@@ -583,7 +583,7 @@ func (pc *providerController) GetProviders(
 
 func (pc *providerController) NewProvider(prv database.Provider) (provider.Provider, error) {
 	if len(prv.Config) == 0 {
-		prv.Config = []byte("{}")
+		prv.Config = []byte(pconfig.EmptyProviderConfigRaw)
 	}
 
 	// Check if the provider type is available via check default one
@@ -592,7 +592,6 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 		return nil, fmt.Errorf("provider type '%s' is not available", prv.Type)
 	}
 
-	// TODO: implement loaders for other providers
 	switch providerType {
 	case provider.ProviderOpenAI:
 		openaiConfig, err := openai.BuildProviderConfig(prv.Config)

@@ -104,6 +104,22 @@ type ProviderConfig struct {
 	rawConfig      []byte            `json:"-" yaml:"-"`
 }
 
+const EmptyProviderConfigRaw = `{
+  "simple": {},
+  "simple_json": {},
+  "primary_agent": {},
+  "assistant": {},
+  "generator": {},
+  "refiner": {},
+  "adviser": {},
+  "reflector": {},
+  "searcher": {},
+  "enricher": {},
+  "coder": {},
+  "installer": {},
+  "pentester": {}
+}`
+
 func LoadConfig(configPath string, defaultOptions []llms.CallOption) (*ProviderConfig, error) {
 	if configPath == "" {
 		return nil, nil

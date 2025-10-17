@@ -1019,7 +1019,7 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		var cfg pconfig.ProviderConfig
 
 		if len(prv.Config) == 0 {
-			prv.Config = []byte("{}")
+			prv.Config = []byte(pconfig.EmptyProviderConfigRaw)
 		}
 		if err := json.Unmarshal(prv.Config, &cfg); err != nil {
 			r.Logger.WithError(err).Errorf("failed to unmarshal provider config: %s", prv.Config)

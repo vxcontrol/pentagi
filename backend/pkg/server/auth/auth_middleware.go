@@ -156,6 +156,10 @@ func (p *AuthMiddleware) tryProtoTokenAuthentication(c *gin.Context) (authResult
 func ValidateToken(tokenString, globalSalt string) (*models.ProtoAuthTokenClaims, error) {
 	var claims models.ProtoAuthTokenClaims
 	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
+		// verify signing algorithm to prevent "alg: none"
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return MakeCookieStoreKey(globalSalt)[1], nil
 	})
 	if err != nil {

@@ -456,8 +456,9 @@ The system uses Docker containers for isolation and easy deployment, with separa
 ### System Requirements
 
 - Docker and Docker Compose
+- Minimum 2 vCPU
 - Minimum 4GB RAM
-- 10GB free disk space
+- 20GB free disk space
 - Internet access for downloading images and updates
 
 ### Using Installer (Recommended)

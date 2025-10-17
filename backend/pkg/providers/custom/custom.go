@@ -68,7 +68,7 @@ func BuildProviderConfig(cfg *config.Config, configData []byte) (*pconfig.Provid
 
 func DefaultProviderConfig(cfg *config.Config) (*pconfig.ProviderConfig, error) {
 	if cfg.LLMServerConfig == "" {
-		return BuildProviderConfig(cfg, []byte("{}"))
+		return BuildProviderConfig(cfg, []byte(pconfig.EmptyProviderConfigRaw))
 	}
 
 	configData, err := os.ReadFile(cfg.LLMServerConfig)

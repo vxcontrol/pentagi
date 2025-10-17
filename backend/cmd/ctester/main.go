@@ -140,7 +140,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		return anthropic.New(cfg, providerConfig)
 
 	case "gemini":
-		if cfg.GoogleAPIKey == "" {
+		if cfg.GeminiAPIKey == "" {
 			return nil, fmt.Errorf("Gemini API key is not set")
 		}
 		providerConfig, err := gemini.DefaultProviderConfig()
