@@ -279,7 +279,7 @@ func (fp *flowProvider) getTaskMsgLogsSummary(
 			break
 		}
 
-		msgLogs = msgLogs[l:]
+		msgLogs = msgLogs[len(msgLogs)-l:]
 		message, err = fp.prompter.RenderTemplate(templates.PromptTypeExecutionLogs, map[string]any{
 			"MsgLogs": msgLogs,
 		})
