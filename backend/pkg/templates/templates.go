@@ -14,6 +14,9 @@ import (
 //go:embed prompts/*.tmpl
 var promptTemplates embed.FS
 
+//go:embed graphiti/*.tmpl
+var graphitiTemplates embed.FS
+
 var ErrTemplateNotFound = errors.New("template not found")
 
 type PromptType string
@@ -594,4 +597,13 @@ func RenderPrompt(name, prompt string, params any) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// ReadGraphitiTemplate reads a Graphiti template by name
+func ReadGraphitiTemplate(name string) (string, error) {
+	templateBytes, err := graphitiTemplates.ReadFile(path.Join("graphiti", name))
+	if err != nil {
+		return "", fmt.Errorf("failed to read graphiti template %s: %w", name, err)
+	}
+	return string(templateBytes), nil
 }
