@@ -160,6 +160,11 @@ type Config struct {
 	LangfuseProjectID string `env:"LANGFUSE_PROJECT_ID"`
 	LangfusePublicKey string `env:"LANGFUSE_PUBLIC_KEY"`
 	LangfuseSecretKey string `env:"LANGFUSE_SECRET_KEY"`
+
+	// Graphiti knowledge graph
+	GraphitiEnabled bool   `env:"GRAPHITI_ENABLED" envDefault:"false"`
+	GraphitiURL     string `env:"GRAPHITI_URL" envDefault:"http://localhost:8000"`
+	GraphitiTimeout int    `env:"GRAPHITI_TIMEOUT" envDefault:"30"`
 }
 
 func NewConfig() (*Config, error) {
