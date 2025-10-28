@@ -1439,7 +1439,48 @@ EMBEDDING_STRIP_NEW_LINES=true  # Whether to remove new lines from text before e
 
 # Advanced settings
 PROXY_URL=                      # Optional proxy for all API calls
+
+# SSL/TLS Certificate Configuration (for external communication with LLM backends and tool servers)
+EXTERNAL_SSL_CA_PATH=           # Path to custom CA certificate file (PEM format) inside the container
+                                # Must point to /opt/pentagi/ssl/ directory (e.g., /opt/pentagi/ssl/ca-bundle.pem)
+EXTERNAL_SSL_INSECURE=false     # Skip certificate verification (use only for testing)
 ```
+
+<details>
+<summary><b>How to Add Custom CA Certificates</b> (click to expand)</summary>
+
+If you see this error: `tls: failed to verify certificate: x509: certificate signed by unknown authority`
+
+**Step 1:** Get your CA certificate bundle in PEM format (can contain multiple certificates)
+
+**Step 2:** Place the file in the SSL directory on your host machine:
+```bash
+# Default location (if PENTAGI_SSL_DIR is not set)
+cp ca-bundle.pem ./pentagi-ssl/
+
+# Or custom location (if using PENTAGI_SSL_DIR in docker-compose.yml)
+cp ca-bundle.pem /path/to/your/ssl/dir/
+```
+
+**Step 3:** Set the path in `.env` file (path must be inside the container):
+```bash
+# The volume pentagi-ssl is mounted to /opt/pentagi/ssl inside the container
+EXTERNAL_SSL_CA_PATH=/opt/pentagi/ssl/ca-bundle.pem
+EXTERNAL_SSL_INSECURE=false
+```
+
+**Step 4:** Restart PentAGI:
+```bash
+docker compose restart pentagi
+```
+
+**Notes:**
+- The `pentagi-ssl` volume is mounted to `/opt/pentagi/ssl` inside the container
+- You can change host directory using `PENTAGI_SSL_DIR` variable in docker-compose.yml
+- File supports multiple certificates and intermediate CAs in one PEM file
+- Use `EXTERNAL_SSL_INSECURE=true` only for testing (not recommended for production)
+
+</details>
 
 ### Provider-Specific Limitations
 

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/system"
 
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/openai"
@@ -87,20 +87,14 @@ type customProvider struct {
 }
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
-	httpClient := http.DefaultClient
-	if cfg.ProxyURL != "" {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				Proxy: func(req *http.Request) (*url.URL, error) {
-					return url.Parse(cfg.ProxyURL)
-				},
-			},
-		}
-	}
-
 	baseKey := cfg.LLMServerKey
 	baseURL := cfg.LLMServerURL
 	baseModel := cfg.LLMServerModel
+	httpClient, err := system.GetHTTPClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := []openai.Option{
 		openai.WithToken(baseKey),
 		openai.WithModel(baseModel),

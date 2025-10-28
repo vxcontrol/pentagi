@@ -953,6 +953,12 @@ const (
 	ServerSettingsProxyPassword     = "Proxy Password"
 	ServerSettingsProxyPasswordDesc = "Password for proxy authentication (optional)"
 
+	ServerSettingsExternalSSLCAPath     = "Custom CA Certificate Path"
+	ServerSettingsExternalSSLCAPathDesc = "Path inside container to custom root CA cert (e.g., /opt/pentagi/ssl/ca-bundle.pem)"
+
+	ServerSettingsExternalSSLInsecure     = "Skip SSL Verification"
+	ServerSettingsExternalSSLInsecureDesc = "Disable SSL/TLS certificate validation (use only for testing with self-signed certs)"
+
 	ServerSettingsSSLDir     = "SSL Directory"
 	ServerSettingsSSLDirDesc = "Directory containing server.crt and server.key in PEM format (server.crt may include fullchain)"
 
@@ -963,16 +969,18 @@ const (
 	ServerSettingsCookieSigningSaltDesc = "Secret used to sign cookies (keep private)"
 
 	// Hints for fields overview
-	ServerSettingsLicenseKeyHint    = "License Key"
-	ServerSettingsHostHint          = "Listen IP"
-	ServerSettingsPortHint          = "Listen Port"
-	ServerSettingsPublicURLHint     = "Public URL"
-	ServerSettingsCORSOriginsHint   = "CORS Origins"
-	ServerSettingsProxyURLHint      = "Proxy URL"
-	ServerSettingsProxyUsernameHint = "Proxy Username"
-	ServerSettingsProxyPasswordHint = "Proxy Password"
-	ServerSettingsSSLDirHint        = "SSL Directory"
-	ServerSettingsDataDirHint       = "Data Directory"
+	ServerSettingsLicenseKeyHint          = "License Key"
+	ServerSettingsHostHint                = "Listen IP"
+	ServerSettingsPortHint                = "Listen Port"
+	ServerSettingsPublicURLHint           = "Public URL"
+	ServerSettingsCORSOriginsHint         = "CORS Origins"
+	ServerSettingsProxyURLHint            = "Proxy URL"
+	ServerSettingsProxyUsernameHint       = "Proxy Username"
+	ServerSettingsProxyPasswordHint       = "Proxy Password"
+	ServerSettingsExternalSSLCAPathHint   = "Custom CA Path"
+	ServerSettingsExternalSSLInsecureHint = "Skip SSL Verification"
+	ServerSettingsSSLDirHint              = "SSL Directory"
+	ServerSettingsDataDirHint             = "Data Directory"
 
 	// Help texts per-field
 	ServerSettingsGeneralHelp = `PentAGI exposes its web UI via Docker with configurable host and port.
@@ -1001,6 +1009,22 @@ Examples:
 	ServerSettingsCORSOriginsHelp = `Comma-separated allowed origins for browser access.`
 
 	ServerSettingsProxyURLHelp = `HTTP or HTTPS proxy for outbound requests to LLM providers and external tools. Not used for Docker API communication.`
+
+	ServerSettingsExternalSSLCAPathHelp = `Path to custom CA certificate file (PEM format) inside the container.
+
+Must point to /opt/pentagi/ssl/ directory, which is mounted from pentagi-ssl volume on the host.
+
+Examples:
+• /opt/pentagi/ssl/ca-bundle.pem
+• /opt/pentagi/ssl/corporate-ca.pem
+
+File can contain multiple root and intermediate certificates.`
+
+	ServerSettingsExternalSSLInsecureHelp = `Disable SSL/TLS certificate validation for connections to LLM providers and external services.
+
+⚠ WARNING: Use only for testing with self-signed certificates. Never enable in production.
+
+When enabled, all certificate validation is bypassed, making connections vulnerable to man-in-the-middle attacks.`
 
 	ServerSettingsSSLDirHelp = `Path to directory with server.crt and server.key in PEM format. server.crt may include fullchain. Overrides default generated certificate behavior.`
 
@@ -1890,6 +1914,8 @@ const (
 	EnvDesc_CORS_ORIGINS                   = "PentAGI CORS Origins"
 	EnvDesc_COOKIE_SIGNING_SALT            = "PentAGI Cookie Signing Salt"
 	EnvDesc_PROXY_URL                      = "HTTP/HTTPS Proxy URL"
+	EnvDesc_EXTERNAL_SSL_CA_PATH           = "Custom CA Certificate Path"
+	EnvDesc_EXTERNAL_SSL_INSECURE          = "Skip SSL Verification"
 	EnvDesc_PENTAGI_SSL_DIR                = "PentAGI SSL Directory"
 	EnvDesc_PENTAGI_DATA_DIR               = "PentAGI Data Directory"
 	EnvDesc_PENTAGI_DOCKER_SOCKET          = "Mount Docker Socket Path"

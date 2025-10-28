@@ -3,12 +3,11 @@ package anthropic
 import (
 	"context"
 	"embed"
-	"net/http"
-	"net/url"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/system"
 
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/anthropic"
@@ -62,15 +61,9 @@ type anthropicProvider struct {
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
 	baseURL := cfg.AnthropicServerURL
-	httpClient := http.DefaultClient
-	if cfg.ProxyURL != "" {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				Proxy: func(req *http.Request) (*url.URL, error) {
-					return url.Parse(cfg.ProxyURL)
-				},
-			},
-		}
+	httpClient, err := system.GetHTTPClient(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	models, err := DefaultModels()

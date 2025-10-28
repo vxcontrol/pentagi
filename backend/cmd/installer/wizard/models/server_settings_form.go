@@ -94,6 +94,20 @@ func (m *ServerSettingsFormModel) BuildForm() tea.Cmd {
 		true,
 	))
 
+	// external ssl settings
+	fields = append(fields, m.createTextField("external_ssl_ca_path",
+		locale.ServerSettingsExternalSSLCAPath,
+		locale.ServerSettingsExternalSSLCAPathDesc,
+		config.ExternalSSLCAPath,
+		false,
+	))
+	fields = append(fields, m.createTextField("external_ssl_insecure",
+		locale.ServerSettingsExternalSSLInsecure,
+		locale.ServerSettingsExternalSSLInsecureDesc,
+		config.ExternalSSLInsecure,
+		false,
+	))
+
 	// ssl dir
 	fields = append(fields, m.createTextField("pentagi_ssl_dir",
 		locale.ServerSettingsSSLDir,
@@ -251,6 +265,23 @@ func (m *ServerSettingsFormModel) GetCurrentConfiguration() string {
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsProxyPasswordHint, proxyPassword))
 	}
 
+	if externalSSLCAPath := cfg.ExternalSSLCAPath.Value; externalSSLCAPath != "" {
+		externalSSLCAPath = m.GetStyles().Info.Render(externalSSLCAPath)
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsExternalSSLCAPathHint, externalSSLCAPath))
+	} else {
+		externalSSLCAPath = locale.StatusNotConfigured
+		externalSSLCAPath = m.GetStyles().Muted.Render(externalSSLCAPath)
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsExternalSSLCAPathHint, externalSSLCAPath))
+	}
+
+	if externalSSLInsecure := cfg.ExternalSSLInsecure.Value; externalSSLInsecure == "true" {
+		externalSSLInsecure = m.GetStyles().Warning.Render("Enabled (⚠ Insecure)")
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsExternalSSLInsecureHint, externalSSLInsecure))
+	} else if externalSSLInsecure := cfg.ExternalSSLInsecure.Default; externalSSLInsecure == "false" || externalSSLInsecure == "" {
+		externalSSLInsecure = m.GetStyles().Muted.Render("Disabled")
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsExternalSSLInsecureHint, externalSSLInsecure))
+	}
+
 	if sslDir := cfg.SSLDir.Value; sslDir != "" {
 		sslDir = m.GetStyles().Info.Render(sslDir)
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsSSLDirHint, sslDir))
@@ -303,6 +334,10 @@ func (m *ServerSettingsFormModel) GetHelpContent() string {
 			sections = append(sections, locale.ServerSettingsCORSOriginsHelp)
 		case "proxy_url":
 			sections = append(sections, locale.ServerSettingsProxyURLHelp)
+		case "external_ssl_ca_path":
+			sections = append(sections, locale.ServerSettingsExternalSSLCAPathHelp)
+		case "external_ssl_insecure":
+			sections = append(sections, locale.ServerSettingsExternalSSLInsecureHelp)
 		case "pentagi_ssl_dir":
 			sections = append(sections, locale.ServerSettingsSSLDirHelp)
 		case "pentagi_data_dir":
@@ -322,15 +357,17 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 	fields := m.GetFormFields()
 
 	newCfg := &controller.ServerSettingsConfig{
-		LicenseKey:        cfg.LicenseKey,
-		ListenIP:          cfg.ListenIP,
-		ListenPort:        cfg.ListenPort,
-		CorsOrigins:       cfg.CorsOrigins,
-		CookieSigningSalt: cfg.CookieSigningSalt,
-		ProxyURL:          cfg.ProxyURL,
-		SSLDir:            cfg.SSLDir,
-		DataDir:           cfg.DataDir,
-		PublicURL:         cfg.PublicURL,
+		LicenseKey:          cfg.LicenseKey,
+		ListenIP:            cfg.ListenIP,
+		ListenPort:          cfg.ListenPort,
+		CorsOrigins:         cfg.CorsOrigins,
+		CookieSigningSalt:   cfg.CookieSigningSalt,
+		ProxyURL:            cfg.ProxyURL,
+		ExternalSSLCAPath:   cfg.ExternalSSLCAPath,
+		ExternalSSLInsecure: cfg.ExternalSSLInsecure,
+		SSLDir:              cfg.SSLDir,
+		DataDir:             cfg.DataDir,
+		PublicURL:           cfg.PublicURL,
 	}
 
 	for _, field := range fields {
@@ -365,6 +402,13 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 			newCfg.ProxyUsername = value
 		case "proxy_password":
 			newCfg.ProxyPassword = value
+		case "external_ssl_ca_path":
+			newCfg.ExternalSSLCAPath.Value = value
+		case "external_ssl_insecure":
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid value for skip SSL verification: must be 'true' or 'false'")
+			}
+			newCfg.ExternalSSLInsecure.Value = value
 		case "pentagi_ssl_dir":
 			newCfg.SSLDir.Value = value
 		case "pentagi_data_dir":
