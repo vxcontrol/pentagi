@@ -466,9 +466,9 @@ The system uses Docker containers for isolation and easy deployment, with separa
 PentAGI provides an interactive installer with a terminal-based UI for streamlined configuration and deployment. The installer guides you through system checks, LLM provider setup, search engine configuration, and security hardening.
 
 **Supported Platforms:**
-- **Linux**: amd64 ([download](https://pentagi.com/downloads/linux/amd64/installer-latest.zip)) | arm64 ([download](https://pentagi.com/downloads/linux/arm64/installer-latest.zip))
-- **Windows**: amd64
-- **macOS**: amd64 (Intel) | arm64 (M-series)
+- **Linux**: amd64 [download](https://pentagi.com/downloads/linux/amd64/installer-latest.zip) | arm64 [download](https://pentagi.com/downloads/linux/arm64/installer-latest.zip)
+- **Windows**: amd64 [download](https://pentagi.com/downloads/windows/amd64/installer-latest.zip)
+- **macOS**: amd64 (Intel) [download](https://pentagi.com/downloads/darwin/amd64/installer-latest.zip) | arm64 (M-series) [download](https://pentagi.com/downloads/darwin/arm64/installer-latest.zip)
 
 **Quick Installation (Linux amd64):**
 
