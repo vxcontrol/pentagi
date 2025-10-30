@@ -39,6 +39,7 @@ You can watch the video **PentAGI overview**:
 - 🤖 Fully Autonomous. AI-powered agent that automatically determines and executes penetration testing steps.
 - 🔬 Professional Pentesting Tools. Built-in suite of 20+ professional security tools including nmap, metasploit, sqlmap, and more.
 - 🧠 Smart Memory System. Long-term storage of research results and successful approaches for future use.
+- 📚 Knowledge Graph Integration. Graphiti-powered knowledge graph using Neo4j for semantic relationship tracking and advanced context understanding.
 - 🔍 Web Intelligence. Built-in browser via [scraper](https://hub.docker.com/r/vxcontrol/scraper) for gathering latest information from web sources.
 - 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/), and [Searxng](https://searxng.org) for comprehensive information gathering.
 - 👥 Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks.
@@ -109,6 +110,11 @@ graph TB
         Agent[AI Agents<br/>Multi-Agent System]
     end
 
+    subgraph Knowledge Graph
+        Graphiti[Graphiti<br/>Knowledge Graph API]
+        Neo4j[(Neo4j<br/>Graph Database)]
+    end
+
     subgraph Monitoring
         Grafana[Grafana<br/>Dashboards]
         VictoriaMetrics[VictoriaMetrics<br/>Time-series DB]
@@ -133,8 +139,10 @@ graph TB
     API --> |SQL| DB
     API --> |Events| MQ
     MQ --> |Tasks| Agent
-    Agent --> |Commands| Tools
+    Agent --> |Commands| PenTest
     Agent --> |Queries| DB
+    Agent --> |Knowledge| Graphiti
+    Graphiti --> |Graph| Neo4j
 
     API --> |Telemetry| OTEL
     OTEL --> |Metrics| VictoriaMetrics
@@ -151,11 +159,13 @@ graph TB
     Langfuse --> |Files| MinIO
 
     classDef core fill:#f9f,stroke:#333,stroke-width:2px,color:#000
+    classDef knowledge fill:#ffa,stroke:#333,stroke-width:2px,color:#000
     classDef monitoring fill:#bbf,stroke:#333,stroke-width:2px,color:#000
     classDef analytics fill:#bfb,stroke:#333,stroke-width:2px,color:#000
     classDef tools fill:#fbb,stroke:#333,stroke-width:2px,color:#000
 
     class UI,API,DB,MQ,Agent core
+    class Graphiti,Neo4j knowledge
     class Grafana,VictoriaMetrics,Jaeger,Loki,OTEL monitoring
     class Langfuse,ClickHouse,Redis,MinIO analytics
     class Scraper,PenTest tools
@@ -424,25 +434,30 @@ The architecture of PentAGI is designed to be modular, scalable, and secure. Her
    - Task Queue: Async task processing system for reliable operation
    - AI Agent: Multi-agent system with specialized roles for efficient testing
 
-2. **Monitoring Stack**
+2. **Knowledge Graph**
+   - Graphiti: Knowledge graph API for semantic relationship tracking and contextual understanding
+   - Neo4j: Graph database for storing and querying relationships between entities, actions, and outcomes
+   - Automatic capturing of agent responses and tool executions for building comprehensive knowledge base
+
+3. **Monitoring Stack**
    - OpenTelemetry: Unified observability data collection and correlation
    - Grafana: Real-time visualization and alerting dashboards
    - VictoriaMetrics: High-performance time-series metrics storage
    - Jaeger: End-to-end distributed tracing for debugging
    - Loki: Scalable log aggregation and analysis
 
-3. **Analytics Platform**
+4. **Analytics Platform**
    - Langfuse: Advanced LLM observability and performance analytics
    - ClickHouse: Column-oriented analytics data warehouse
    - Redis: High-speed caching and rate limiting
    - MinIO: S3-compatible object storage for artifacts
 
-4. **Security Tools**
+5. **Security Tools**
    - Web Scraper: Isolated browser environment for safe web interaction
    - Pentesting Tools: Comprehensive suite of 20+ professional security tools
    - Sandboxed Execution: All operations run in isolated containers
 
-5. **Memory Systems**
+6. **Memory Systems**
    - Long-term Memory: Persistent storage of knowledge and experiences
    - Working Memory: Active context and goals for current operations
    - Episodic Memory: Historical actions and success patterns
@@ -553,6 +568,17 @@ SEARXNG_LANGUAGE=
 SEARXNG_SAFESEARCH=0
 SEARXNG_TIME_RANGE=
 
+# Neo4j (Graphiti) settings
+NEO4J_PORT=7687
+NEO4J_URI=neo4j://127.0.0.1:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=devpassword  # Change this to improve security
+
+# Graphiti knowledge graph settings
+GRAPHITI_ENABLED=false  # Set to true to enable knowledge graph integration
+GRAPHITI_URL=http://localhost:8000
+GRAPHITI_TIMEOUT=30
+
 # Assistant configuration
 ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating new assistants
 ```
@@ -573,6 +599,7 @@ ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating
 
 ### Access Credentials
 - `PENTAGI_POSTGRES_USER` and `PENTAGI_POSTGRES_PASSWORD` - PostgreSQL credentials
+- `NEO4J_USER` and `NEO4J_PASSWORD` - Neo4j credentials (for Graphiti knowledge graph)
 
 </details>
 
@@ -969,6 +996,70 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 > alias pentagi-up="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d"
 > alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml down"
 > ```
+
+### Knowledge Graph Integration (Graphiti)
+
+PentAGI integrates with [Graphiti](https://https://github.com/vxcontrol/pentagi-graphiti), a temporal knowledge graph system powered by Neo4j, to provide advanced semantic understanding and relationship tracking for AI agent operations. The vxcontol fork provides custom entity and edge types that are specific to pentesting purposes.
+
+#### What is Graphiti?
+
+Graphiti automatically extracts and stores structured knowledge from agent interactions, building a graph of entities, relationships, and temporal context. This enables:
+
+- **Semantic Memory**: Store and recall relationships between tools, targets, vulnerabilities, and techniques
+- **Contextual Understanding**: Track how different pentesting actions relate to each other over time
+- **Knowledge Reuse**: Learn from past penetration tests and apply insights to new assessments
+- **Advanced Querying**: Search for complex patterns like "What tools were effective against similar targets?"
+
+#### Enabling Graphiti
+
+The Graphiti knowledge graph is **optional** and disabled by default. To enable it:
+
+1. Configure Graphiti environment variables in `.env` file:
+
+```bash
+# Enable Graphiti integration
+GRAPHITI_ENABLED=true
+GRAPHITI_URL=http://graphiti:8000
+GRAPHITI_TIMEOUT=30
+
+# Neo4j configuration (used by Graphiti)
+NEO4J_PORT=7687
+NEO4J_URI=neo4j://neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_secure_password  # Change this!
+
+# OpenAI API key (required by Graphiti for entity extraction)
+OPEN_AI_KEY=your_openai_api_key
+```
+
+2. The Neo4j and Graphiti services are already included in `docker-compose.yml` and will start automatically:
+
+```bash
+docker compose up -d
+```
+
+3. Verify Graphiti is running:
+
+```bash
+# Check service health
+docker compose ps graphiti neo4j
+
+# View Graphiti logs
+docker compose logs -f graphiti
+
+# Access Neo4j Browser (optional)
+# Visit http://localhost:7474 and login with NEO4J_USER/NEO4J_PASSWORD
+```
+
+*Note: you need to build the pentagi-graphiti image.*
+
+#### What Gets Stored
+
+When enabled, PentAGI automatically captures:
+
+- **Agent Responses**: All agent reasoning, analysis, and decisions
+- **Tool Executions**: Commands executed, tools used, and their results
+- **Context Information**: Flow, task, and subtask hierarchy
 
 ### GitHub and Google OAuth Integration
 

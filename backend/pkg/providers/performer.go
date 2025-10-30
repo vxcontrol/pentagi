@@ -12,6 +12,7 @@ import (
 	"pentagi/pkg/cast"
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
+	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/pconfig"
@@ -78,6 +79,9 @@ func (fp *flowProvider) performAgentChain(
 		return fmt.Errorf("failed to get execution context: %w", err)
 	}
 
+	groupID := fmt.Sprintf("flow-%d", fp.flowID)
+	toolTypeMapping := tools.GetToolTypeMapping()
+
 	for {
 		result, err := fp.callWithRetries(ctx, chain, optAgentType, executor)
 		if err != nil {
@@ -92,6 +96,7 @@ func (fp *flowProvider) performAgentChain(
 
 		if len(result.funcCalls) == 0 {
 			if optAgentType == pconfig.OptionsTypeAssistant {
+				fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID)
 				return fp.processAssistantResult(ctx, logger, chainID, chain, result, summarizer, summarizerHandler)
 			} else {
 				result, err = fp.performReflector(
@@ -111,6 +116,8 @@ func (fp *flowProvider) performAgentChain(
 			}
 		}
 
+		fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID)
+
 		msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
 		for _, toolCall := range result.funcCalls {
 			msg.Parts = append(msg.Parts, toolCall)
@@ -129,6 +136,11 @@ func (fp *flowProvider) performAgentChain(
 
 			funcName := toolCall.FunctionCall.Name
 			response, err := fp.execToolCall(ctx, chainID, idx, result, detector, executor)
+
+			if toolTypeMapping[funcName] != tools.AgentToolType {
+				fp.storeToolExecutionToGraphiti(ctx, groupID, optAgentType, toolCall, response, err, executor, taskID, subtaskID)
+			}
+
 			if err != nil {
 				logger.WithError(err).WithFields(logrus.Fields{
 					"func_name": funcName,
@@ -628,4 +640,152 @@ func (fp *flowProvider) updateMsgChainUsage(ctx context.Context, chainID int64, 
 	}
 
 	return nil
+}
+
+// storeToGraphiti stores messages to Graphiti with timeout
+func (fp *flowProvider) storeToGraphiti(
+	ctx context.Context,
+	groupID string,
+	messages []graphiti.Message,
+) {
+	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
+		return
+	}
+
+	storeCtx, cancel := context.WithTimeout(ctx, fp.graphitiClient.GetTimeout())
+	defer cancel()
+
+	err := fp.graphitiClient.AddMessages(storeCtx, graphiti.AddMessagesRequest{
+		GroupID:  groupID,
+		Messages: messages,
+	})
+	if err != nil {
+		logrus.WithError(err).
+			WithField("group_id", groupID).
+			Warn("failed to store messages to graphiti")
+	}
+}
+
+// storeAgentResponseToGraphiti stores agent response to Graphiti
+func (fp *flowProvider) storeAgentResponseToGraphiti(
+	ctx context.Context,
+	groupID string,
+	agentType pconfig.ProviderOptionsType,
+	result *callResult,
+	taskID, subtaskID *int64,
+) {
+	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
+		return
+	}
+
+	if result.content == "" {
+		return
+	}
+
+	tmpl, err := templates.ReadGraphitiTemplate("agent_response.tmpl")
+	if err != nil {
+		logrus.WithError(err).Warn("failed to read agent response template for graphiti")
+		return
+	}
+
+	content, err := templates.RenderPrompt("agent_response", tmpl, map[string]any{
+		"AgentType": string(agentType),
+		"Response":  result.content,
+		"TaskID":    taskID,
+		"SubtaskID": subtaskID,
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("failed to render agent response template for graphiti")
+		return
+	}
+
+	messages := []graphiti.Message{
+		{
+			Content:   content,
+			Author:    fmt.Sprintf("%s Agent", string(agentType)),
+			Timestamp: time.Now(),
+			Name:      "agent_response",
+			SourceDescription: fmt.Sprintf(
+				"Pentagi %s agent execution in flow %d, task %v, subtask %v",
+				agentType, fp.flowID, taskID, subtaskID,
+			),
+		},
+	}
+
+	fp.storeToGraphiti(ctx, groupID, messages)
+}
+
+// storeToolExecutionToGraphiti stores tool execution to Graphiti
+func (fp *flowProvider) storeToolExecutionToGraphiti(
+	ctx context.Context,
+	groupID string,
+	agentType pconfig.ProviderOptionsType,
+	toolCall llms.ToolCall,
+	response string,
+	execErr error,
+	executor tools.ContextToolsExecutor,
+	taskID, subtaskID *int64,
+) {
+	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
+		return
+	}
+
+	if toolCall.FunctionCall == nil {
+		return
+	}
+
+	funcName := toolCall.FunctionCall.Name
+	funcArgs := toolCall.FunctionCall.Arguments
+
+	registryDefs := tools.GetRegistryDefinitions()
+	toolDef, ok := registryDefs[funcName]
+	description := ""
+	if ok {
+		description = toolDef.Description
+	}
+
+	isBarrier := executor.IsBarrierFunction(funcName)
+
+	status := "success"
+	if execErr != nil {
+		status = "failure"
+		response = fmt.Sprintf("Error: %s", execErr.Error())
+	}
+
+	toolExecTmpl, err := templates.ReadGraphitiTemplate("tool_execution.tmpl")
+	if err != nil {
+		logrus.WithError(err).Warn("failed to read tool execution template for graphiti")
+		return
+	}
+
+	toolExecContent, err := templates.RenderPrompt("tool_execution", toolExecTmpl, map[string]any{
+		"ToolName":    funcName,
+		"Description": description,
+		"IsBarrier":   isBarrier,
+		"Arguments":   funcArgs,
+		"AgentType":   string(agentType),
+		"Status":      status,
+		"Result":      response,
+		"TaskID":      taskID,
+		"SubtaskID":   subtaskID,
+	})
+	if err != nil {
+		logrus.WithError(err).Warn("failed to render tool execution template for graphiti")
+		return
+	}
+
+	messages := []graphiti.Message{
+		{
+			Content:   toolExecContent,
+			Author:    fmt.Sprintf("%s Agent", string(agentType)),
+			Timestamp: time.Now(),
+			Name:      fmt.Sprintf("tool_execution_%s", funcName),
+			SourceDescription: fmt.Sprintf(
+				"Pentagi tool execution in flow %d, task %v, subtask %v",
+				fp.flowID, taskID, subtaskID,
+			),
+		},
+	}
+
+	fp.storeToGraphiti(ctx, groupID, messages)
 }
