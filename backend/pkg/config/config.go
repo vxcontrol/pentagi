@@ -148,7 +148,11 @@ type Config struct {
 	// Proxy
 	ProxyURL string `env:"PROXY_URL"`
 
-	// Telemetry
+	// SSL Trusted CA Certificate Path (for external communication with LLM backends)
+	ExternalSSLCAPath   string `env:"EXTERNAL_SSL_CA_PATH" envDefault:""`
+	ExternalSSLInsecure bool   `env:"EXTERNAL_SSL_INSECURE" envDefault:"false"`
+
+	// Telemetry (observability OpenTelemetry collector)
 	TelemetryEndpoint string `env:"OTEL_HOST"`
 
 	// Langfuse

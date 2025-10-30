@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/system"
 
 	"github.com/vxcontrol/langchaingo/embeddings"
 	"github.com/vxcontrol/langchaingo/embeddings/huggingface"
@@ -35,15 +35,9 @@ func (e *embedder) IsAvailable() bool {
 }
 
 func New(cfg *config.Config) (Embedder, error) {
-	httpClient := http.DefaultClient
-	if cfg.ProxyURL != "" {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				Proxy: func(req *http.Request) (*url.URL, error) {
-					return url.Parse(cfg.ProxyURL)
-				},
-			},
-		}
+	httpClient, err := system.GetHTTPClient(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	var f constructor

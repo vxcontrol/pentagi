@@ -1468,15 +1468,17 @@ func (c *controller) ResetDockerConfig() *DockerConfig {
 // ServerSettingsConfig represents PentAGI server settings configuration
 type ServerSettingsConfig struct {
 	// direct form field mappings using loader.EnvVar
-	LicenseKey        loader.EnvVar // LICENSE_KEY
-	ListenIP          loader.EnvVar // PENTAGI_LISTEN_IP
-	ListenPort        loader.EnvVar // PENTAGI_LISTEN_PORT
-	PublicURL         loader.EnvVar // PUBLIC_URL
-	CorsOrigins       loader.EnvVar // CORS_ORIGINS
-	CookieSigningSalt loader.EnvVar // COOKIE_SIGNING_SALT
-	ProxyURL          loader.EnvVar // PROXY_URL
-	SSLDir            loader.EnvVar // PENTAGI_SSL_DIR
-	DataDir           loader.EnvVar // PENTAGI_DATA_DIR
+	LicenseKey          loader.EnvVar // LICENSE_KEY
+	ListenIP            loader.EnvVar // PENTAGI_LISTEN_IP
+	ListenPort          loader.EnvVar // PENTAGI_LISTEN_PORT
+	PublicURL           loader.EnvVar // PUBLIC_URL
+	CorsOrigins         loader.EnvVar // CORS_ORIGINS
+	CookieSigningSalt   loader.EnvVar // COOKIE_SIGNING_SALT
+	ProxyURL            loader.EnvVar // PROXY_URL
+	ExternalSSLCAPath   loader.EnvVar // EXTERNAL_SSL_CA_PATH
+	ExternalSSLInsecure loader.EnvVar // EXTERNAL_SSL_INSECURE
+	SSLDir              loader.EnvVar // PENTAGI_SSL_DIR
+	DataDir             loader.EnvVar // PENTAGI_DATA_DIR
 
 	// parsed credentials for proxy server (extracted from URLs)
 	ProxyUsername string
@@ -1493,18 +1495,21 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		"CORS_ORIGINS",
 		"COOKIE_SIGNING_SALT",
 		"PROXY_URL",
+		"EXTERNAL_SSL_CA_PATH",
+		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
 		"PENTAGI_DATA_DIR",
 	})
 
 	defaults := map[string]string{
-		"LICENSE_KEY":         "",
-		"PENTAGI_LISTEN_IP":   "127.0.0.1",
-		"PENTAGI_LISTEN_PORT": "8443",
-		"PUBLIC_URL":          "https://localhost:8443",
-		"CORS_ORIGINS":        "https://localhost:8443",
-		"PENTAGI_DATA_DIR":    "pentagi-data",
-		"PENTAGI_SSL_DIR":     "pentagi-ssl",
+		"LICENSE_KEY":           "",
+		"PENTAGI_LISTEN_IP":     "127.0.0.1",
+		"PENTAGI_LISTEN_PORT":   "8443",
+		"PUBLIC_URL":            "https://localhost:8443",
+		"CORS_ORIGINS":          "https://localhost:8443",
+		"PENTAGI_DATA_DIR":      "pentagi-data",
+		"PENTAGI_SSL_DIR":       "pentagi-ssl",
+		"EXTERNAL_SSL_INSECURE": "false",
 	}
 
 	for varName, defaultValue := range defaults {
@@ -1515,15 +1520,17 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	}
 
 	cfg := &ServerSettingsConfig{
-		LicenseKey:        vars["LICENSE_KEY"],
-		ListenIP:          vars["PENTAGI_LISTEN_IP"],
-		ListenPort:        vars["PENTAGI_LISTEN_PORT"],
-		PublicURL:         vars["PUBLIC_URL"],
-		CorsOrigins:       vars["CORS_ORIGINS"],
-		CookieSigningSalt: vars["COOKIE_SIGNING_SALT"],
-		ProxyURL:          vars["PROXY_URL"],
-		SSLDir:            vars["PENTAGI_SSL_DIR"],
-		DataDir:           vars["PENTAGI_DATA_DIR"],
+		LicenseKey:          vars["LICENSE_KEY"],
+		ListenIP:            vars["PENTAGI_LISTEN_IP"],
+		ListenPort:          vars["PENTAGI_LISTEN_PORT"],
+		PublicURL:           vars["PUBLIC_URL"],
+		CorsOrigins:         vars["CORS_ORIGINS"],
+		CookieSigningSalt:   vars["COOKIE_SIGNING_SALT"],
+		ProxyURL:            vars["PROXY_URL"],
+		ExternalSSLCAPath:   vars["EXTERNAL_SSL_CA_PATH"],
+		ExternalSSLInsecure: vars["EXTERNAL_SSL_INSECURE"],
+		SSLDir:              vars["PENTAGI_SSL_DIR"],
+		DataDir:             vars["PENTAGI_DATA_DIR"],
 	}
 
 	// split proxy URL into credentials + naked URL for UI
@@ -1551,15 +1558,17 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 	}
 
 	updates := map[string]string{
-		"LICENSE_KEY":         config.LicenseKey.Value,
-		"PENTAGI_LISTEN_IP":   config.ListenIP.Value,
-		"PENTAGI_LISTEN_PORT": config.ListenPort.Value,
-		"PUBLIC_URL":          config.PublicURL.Value,
-		"CORS_ORIGINS":        config.CorsOrigins.Value,
-		"COOKIE_SIGNING_SALT": config.CookieSigningSalt.Value,
-		"PROXY_URL":           proxyURL,
-		"PENTAGI_SSL_DIR":     config.SSLDir.Value,
-		"PENTAGI_DATA_DIR":    config.DataDir.Value,
+		"LICENSE_KEY":           config.LicenseKey.Value,
+		"PENTAGI_LISTEN_IP":     config.ListenIP.Value,
+		"PENTAGI_LISTEN_PORT":   config.ListenPort.Value,
+		"PUBLIC_URL":            config.PublicURL.Value,
+		"CORS_ORIGINS":          config.CorsOrigins.Value,
+		"COOKIE_SIGNING_SALT":   config.CookieSigningSalt.Value,
+		"PROXY_URL":             proxyURL,
+		"EXTERNAL_SSL_CA_PATH":  config.ExternalSSLCAPath.Value,
+		"EXTERNAL_SSL_INSECURE": config.ExternalSSLInsecure.Value,
+		"PENTAGI_SSL_DIR":       config.SSLDir.Value,
+		"PENTAGI_DATA_DIR":      config.DataDir.Value,
 	}
 
 	if err := c.SetVars(updates); err != nil {
@@ -1579,6 +1588,8 @@ func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 		"CORS_ORIGINS",
 		"COOKIE_SIGNING_SALT",
 		"PROXY_URL",
+		"EXTERNAL_SSL_CA_PATH",
+		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
 		"PENTAGI_DATA_DIR",
 	}
@@ -1780,6 +1791,8 @@ func (c *controller) getVariableDescription(varName string) string {
 		"CORS_ORIGINS":                   locale.EnvDesc_CORS_ORIGINS,
 		"COOKIE_SIGNING_SALT":            locale.EnvDesc_COOKIE_SIGNING_SALT,
 		"PROXY_URL":                      locale.EnvDesc_PROXY_URL,
+		"EXTERNAL_SSL_CA_PATH":           locale.EnvDesc_EXTERNAL_SSL_CA_PATH,
+		"EXTERNAL_SSL_INSECURE":          locale.EnvDesc_EXTERNAL_SSL_INSECURE,
 		"PENTAGI_SSL_DIR":                locale.EnvDesc_PENTAGI_SSL_DIR,
 		"PENTAGI_DATA_DIR":               locale.EnvDesc_PENTAGI_DATA_DIR,
 		"PENTAGI_DOCKER_SOCKET":          locale.EnvDesc_PENTAGI_DOCKER_SOCKET,
@@ -1930,23 +1943,25 @@ var criticalVariables = map[string]bool{
 	"OTEL_HOST": true,
 
 	// server settings changes
-	"ASK_USER":            true,
-	"LICENSE_KEY":         true,
-	"PENTAGI_LISTEN_IP":   true,
-	"PENTAGI_LISTEN_PORT": true,
-	"PUBLIC_URL":          true,
-	"CORS_ORIGINS":        true,
-	"COOKIE_SIGNING_SALT": true,
-	"PROXY_URL":           true,
-	"STATIC_DIR":          true,
-	"STATIC_URL":          true,
-	"SERVER_PORT":         true,
-	"SERVER_HOST":         true,
-	"SERVER_SSL_CRT":      true,
-	"SERVER_SSL_KEY":      true,
-	"SERVER_USE_SSL":      true,
-	"PENTAGI_SSL_DIR":     true,
-	"PENTAGI_DATA_DIR":    true,
+	"ASK_USER":              true,
+	"LICENSE_KEY":           true,
+	"PENTAGI_LISTEN_IP":     true,
+	"PENTAGI_LISTEN_PORT":   true,
+	"PUBLIC_URL":            true,
+	"CORS_ORIGINS":          true,
+	"COOKIE_SIGNING_SALT":   true,
+	"PROXY_URL":             true,
+	"EXTERNAL_SSL_CA_PATH":  true,
+	"EXTERNAL_SSL_INSECURE": true,
+	"STATIC_DIR":            true,
+	"STATIC_URL":            true,
+	"SERVER_PORT":           true,
+	"SERVER_HOST":           true,
+	"SERVER_SSL_CRT":        true,
+	"SERVER_SSL_KEY":        true,
+	"SERVER_USE_SSL":        true,
+	"PENTAGI_SSL_DIR":       true,
+	"PENTAGI_DATA_DIR":      true,
 
 	// scraper settings
 	"SCRAPER_PUBLIC_URL":  true,

@@ -3,12 +3,11 @@ package openai
 import (
 	"context"
 	"embed"
-	"net/http"
-	"net/url"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/system"
 
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/openai"
@@ -61,15 +60,9 @@ type openaiProvider struct {
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
 	baseURL := cfg.OpenAIServerURL
-	httpClient := http.DefaultClient
-	if cfg.ProxyURL != "" {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				Proxy: func(req *http.Request) (*url.URL, error) {
-					return url.Parse(cfg.ProxyURL)
-				},
-			},
-		}
+	httpClient, err := system.GetHTTPClient(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	models, err := DefaultModels()

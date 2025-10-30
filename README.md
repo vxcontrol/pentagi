@@ -50,7 +50,7 @@ You can watch the video **PentAGI overview**:
 - 💾 Persistent Storage. All commands and outputs are stored in PostgreSQL with [pgvector](https://hub.docker.com/r/vxcontrol/pgvector) extension.
 - 🎯 Scalable Architecture. Microservices-based design supporting horizontal scaling.
 - 🏠 Self-Hosted Solution. Complete control over your deployment and data.
-- 🔑 Flexible Authentication. Support for various LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Ollama](https://ollama.com/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Google AI/Gemini](https://ai.google.dev/), [Deep Infra](https://deepinfra.com/), [OpenRouter](https://openrouter.ai/), [DeepSeek](https://www.deepseek.com/en)) and custom configurations.
+- 🔑 Flexible Authentication. Support for various LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Ollama](https://ollama.com/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Google AI/Gemini](https://ai.google.dev/), [Deep Infra](https://deepinfra.com/), [OpenRouter](https://openrouter.ai/), [DeepSeek](https://www.deepseek.com/en)), [Moonshot](https://platform.moonshot.ai/) and custom configurations.
 - ⚡ Quick Deployment. Easy setup through [Docker Compose](https://docs.docker.com/compose/) with comprehensive environment configuration.
 
 ## 🏗️ Architecture
@@ -466,9 +466,9 @@ The system uses Docker containers for isolation and easy deployment, with separa
 PentAGI provides an interactive installer with a terminal-based UI for streamlined configuration and deployment. The installer guides you through system checks, LLM provider setup, search engine configuration, and security hardening.
 
 **Supported Platforms:**
-- **Linux**: amd64 ([download](https://pentagi.com/downloads/linux/amd64/installer-latest.zip)) | arm64 ([download](https://pentagi.com/downloads/linux/arm64/installer-latest.zip))
-- **Windows**: amd64
-- **macOS**: amd64 (Intel) | arm64 (M-series)
+- **Linux**: amd64 [download](https://pentagi.com/downloads/linux/amd64/installer-latest.zip) | arm64 [download](https://pentagi.com/downloads/linux/arm64/installer-latest.zip)
+- **Windows**: amd64 [download](https://pentagi.com/downloads/windows/amd64/installer-latest.zip)
+- **macOS**: amd64 (Intel) [download](https://pentagi.com/downloads/darwin/amd64/installer-latest.zip) | arm64 (M-series) [download](https://pentagi.com/downloads/darwin/arm64/installer-latest.zip)
 
 **Quick Installation (Linux amd64):**
 
@@ -1188,7 +1188,7 @@ docker run --rm \
 
 #### Using Pre-configured Providers
 
-The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, DeepInfra, DeepSeek):
+The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, DeepInfra, DeepSeek, Moonshot):
 
 ```bash
 # Test with OpenRouter configuration
@@ -1205,6 +1205,11 @@ docker run --rm \
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepseek.provider.yml
+
+# Test with Moonshot configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/moonshot.provider.yml
 
 # Test with OpenAI configuration
 docker run --rm \
@@ -1250,10 +1255,10 @@ docker run --rm \
 To use these configurations, your `.env` file only needs to contain:
 
 ```
-LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.deepseek.com or https://api.openai.com/v1
+LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.deepseek.com or https://api.openai.com/v1 or https://api.moonshot.ai/v1
 LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
-LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml or moonshot.provider.yml
 LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
 
 # For OpenAI (official API)
@@ -1434,7 +1439,48 @@ EMBEDDING_STRIP_NEW_LINES=true  # Whether to remove new lines from text before e
 
 # Advanced settings
 PROXY_URL=                      # Optional proxy for all API calls
+
+# SSL/TLS Certificate Configuration (for external communication with LLM backends and tool servers)
+EXTERNAL_SSL_CA_PATH=           # Path to custom CA certificate file (PEM format) inside the container
+                                # Must point to /opt/pentagi/ssl/ directory (e.g., /opt/pentagi/ssl/ca-bundle.pem)
+EXTERNAL_SSL_INSECURE=false     # Skip certificate verification (use only for testing)
 ```
+
+<details>
+<summary><b>How to Add Custom CA Certificates</b> (click to expand)</summary>
+
+If you see this error: `tls: failed to verify certificate: x509: certificate signed by unknown authority`
+
+**Step 1:** Get your CA certificate bundle in PEM format (can contain multiple certificates)
+
+**Step 2:** Place the file in the SSL directory on your host machine:
+```bash
+# Default location (if PENTAGI_SSL_DIR is not set)
+cp ca-bundle.pem ./pentagi-ssl/
+
+# Or custom location (if using PENTAGI_SSL_DIR in docker-compose.yml)
+cp ca-bundle.pem /path/to/your/ssl/dir/
+```
+
+**Step 3:** Set the path in `.env` file (path must be inside the container):
+```bash
+# The volume pentagi-ssl is mounted to /opt/pentagi/ssl inside the container
+EXTERNAL_SSL_CA_PATH=/opt/pentagi/ssl/ca-bundle.pem
+EXTERNAL_SSL_INSECURE=false
+```
+
+**Step 4:** Restart PentAGI:
+```bash
+docker compose restart pentagi
+```
+
+**Notes:**
+- The `pentagi-ssl` volume is mounted to `/opt/pentagi/ssl` inside the container
+- You can change host directory using `PENTAGI_SSL_DIR` variable in docker-compose.yml
+- File supports multiple certificates and intermediate CAs in one PEM file
+- Use `EXTERNAL_SSL_INSECURE=true` only for testing (not recommended for production)
+
+</details>
 
 ### Provider-Specific Limitations
 

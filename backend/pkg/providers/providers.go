@@ -159,7 +159,6 @@ func NewProviderController(
 	providers := make(provider.Providers)
 	defaultConfigs := make(provider.ProvidersConfig)
 
-	// TODO: add other providers
 	if config, err := openai.DefaultProviderConfig(); err != nil {
 		return nil, fmt.Errorf("failed to create openai provider config: %w", err)
 	} else {
