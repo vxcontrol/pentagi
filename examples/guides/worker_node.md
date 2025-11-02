@@ -49,7 +49,9 @@ Set the private IP address that will be used throughout this setup:
 export PRIVATE_IP=192.168.10.10  # Replace with your worker node IP
 ```
 
-## Install Host Docker
+## Install Docker on Both Nodes
+
+> **Note:** Docker must be installed on both the **worker node** and the **main node**. Execute the following commands on each node separately.
 
 Install Docker CE following the official Ubuntu installation guide:
 
@@ -72,7 +74,7 @@ sudo apt-get update
 sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-## Configure Host Docker
+## Configure Host Docker on Worker Node
 
 ### Generate TLS Certificates for Host Docker
 
@@ -190,7 +192,7 @@ sudo chmod +x /usr/local/bin/docker-host-tls
 docker-host-tls ps && docker-host-tls info
 ```
 
-## Configure Docker-in-Docker (dind)
+## Configure Docker-in-Docker (dind) on Worker Node
 
 Docker-in-Docker provides an isolated environment for worker containers to execute Docker commands securely.
 
@@ -466,6 +468,29 @@ unzip installer.zip
 # Run the installer (interactive setup)
 ./installer
 ```
+
+**Prerequisites & Permissions:**
+
+The installer requires appropriate privileges to interact with the Docker API for proper operation. By default, it uses the Docker socket (`/var/run/docker.sock`) which requires either:
+
+- **Option 1 (Recommended for production):** Run the installer as root:
+  ```bash
+  sudo ./installer
+  ```
+
+- **Option 2 (Development environments):** Grant your user access to the Docker socket by adding them to the `docker` group:
+  ```bash
+  # Add your user to the docker group
+  sudo usermod -aG docker $USER
+  
+  # Log out and log back in, or activate the group immediately
+  newgrp docker
+  
+  # Verify Docker access (should run without sudo)
+  docker ps
+  ```
+
+  ⚠️ **Security Note:** Adding a user to the `docker` group grants root-equivalent privileges. Only do this for trusted users in controlled environments. For production deployments, consider using rootless Docker mode or running the installer with sudo.
 
 ### Configure Docker Environment
 

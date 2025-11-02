@@ -13,6 +13,10 @@ networks:
     driver: bridge
     external: true
     name: langfuse-network
+  pentagi-network:
+    driver: bridge
+    external: true
+    name: pentagi-network
 
 services:
   langfuse-worker:
@@ -99,6 +103,8 @@ services:
       - ${LANGFUSE_LISTEN_IP:-127.0.0.1}:${LANGFUSE_LISTEN_PORT:-4000}:3000
     environment:
       <<: *langfuse-worker-env
+      HOST: 0.0.0.0
+      PORT: 3000
       NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:4000}
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-mysecret}
       LANGFUSE_LOG_LEVEL: ${LANGFUSE_LOG_LEVEL:-info}
@@ -138,6 +144,7 @@ services:
         max-file: '7'
     networks:
       - langfuse-network
+      - pentagi-network
 
   clickhouse:
     image: clickhouse/clickhouse-server:24

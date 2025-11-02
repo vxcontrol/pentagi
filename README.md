@@ -486,6 +486,29 @@ unzip installer.zip
 ./installer
 ```
 
+**Prerequisites & Permissions:**
+
+The installer requires appropriate privileges to interact with the Docker API for proper operation. By default, it uses the Docker socket (`/var/run/docker.sock`) which requires either:
+
+- **Option 1 (Recommended for production):** Run the installer as root:
+  ```bash
+  sudo ./installer
+  ```
+
+- **Option 2 (Development environments):** Grant your user access to the Docker socket by adding them to the `docker` group:
+  ```bash
+  # Add your user to the docker group
+  sudo usermod -aG docker $USER
+  
+  # Log out and log back in, or activate the group immediately
+  newgrp docker
+  
+  # Verify Docker access (should run without sudo)
+  docker ps
+  ```
+
+  ⚠️ **Security Note:** Adding a user to the `docker` group grants root-equivalent privileges. Only do this for trusted users in controlled environments. For production deployments, consider using rootless Docker mode or running the installer with sudo.
+
 The installer will:
 1. **System Checks**: Verify Docker, network connectivity, and system requirements
 2. **Environment Setup**: Create and configure `.env` file with optimal defaults
