@@ -25,6 +25,19 @@ const (
 	minImgContentSize  = 2048
 )
 
+var localZones = []string{
+	".localdomain",
+	".local",
+	".lan",
+	".dev",
+	".test",
+	".corp",
+	".example",
+	".invalid",
+	".internal",
+	".home.arpa",
+}
+
 type browser struct {
 	flowID   int64
 	dataDir  string
@@ -212,15 +225,26 @@ func (b *browser) resolveUrl(targetURL string) (*url.URL, error) {
 	}
 
 	ip, err := net.ResolveIPAddr("ip", host)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve ip: %w", err)
+	if err == nil {
+		if ip.IP.IsPrivate() {
+			return url.Parse(b.scPrvURL)
+		} else {
+			return url.Parse(b.scPubURL)
+		}
 	}
 
-	if ip.IP.IsPrivate() {
+	lowerHost := strings.ToLower(host)
+	if strings.Contains(lowerHost, "localhost") || !strings.Contains(lowerHost, ".") {
 		return url.Parse(b.scPrvURL)
-	} else {
-		return url.Parse(b.scPubURL)
 	}
+
+	for _, zone := range localZones {
+		if strings.HasSuffix(lowerHost, zone) {
+			return url.Parse(b.scPrvURL)
+		}
+	}
+
+	return url.Parse(b.scPubURL)
 }
 
 func (b *browser) writeScreenshotToFile(screenshot []byte) (string, error) {
