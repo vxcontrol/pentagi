@@ -10,6 +10,7 @@ import (
 	"pentagi/pkg/cast"
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
+	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/embeddings"
@@ -116,7 +117,8 @@ type subtasksInfo struct {
 type flowProvider struct {
 	db database.Querier
 
-	embedder embeddings.Embedder
+	embedder       embeddings.Embedder
+	graphitiClient *graphiti.Client
 
 	flowID   int64
 	publicIP string
