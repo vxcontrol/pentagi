@@ -9,166 +9,427 @@ import (
 	"database/sql"
 )
 
+// Querier defines the interface for all database operations.
+// It provides a type-safe, context-aware API for interacting with the database.
+// All methods accept a context.Context for cancellation and timeout control.
+//
+// The interface is organized by entity type and operation (Create, Get, Update, Delete).
+// This interface is implemented by the Queries struct, which can work with both
+// direct database connections and transactions.
 type Querier interface {
+	// ============================================================================
+	// Agent Log Operations
+	// ============================================================================
+	// CreateAgentLog creates a new agent log entry.
 	CreateAgentLog(ctx context.Context, arg CreateAgentLogParams) (Agentlog, error)
+
+	// ============================================================================
+	// Assistant Operations
+	// ============================================================================
+
+	// CreateAssistant creates a new assistant with the provided parameters.
 	CreateAssistant(ctx context.Context, arg CreateAssistantParams) (Assistant, error)
-	CreateAssistantLog(ctx context.Context, arg CreateAssistantLogParams) (Assistantlog, error)
-	CreateContainer(ctx context.Context, arg CreateContainerParams) (Container, error)
-	CreateFlow(ctx context.Context, arg CreateFlowParams) (Flow, error)
-	CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) (Msgchain, error)
-	CreateMsgLog(ctx context.Context, arg CreateMsgLogParams) (Msglog, error)
-	CreateProvider(ctx context.Context, arg CreateProviderParams) (Provider, error)
-	CreateResultAssistantLog(ctx context.Context, arg CreateResultAssistantLogParams) (Assistantlog, error)
-	CreateResultMsgLog(ctx context.Context, arg CreateResultMsgLogParams) (Msglog, error)
-	CreateScreenshot(ctx context.Context, arg CreateScreenshotParams) (Screenshot, error)
-	CreateSearchLog(ctx context.Context, arg CreateSearchLogParams) (Searchlog, error)
-	CreateSubtask(ctx context.Context, arg CreateSubtaskParams) (Subtask, error)
-	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
-	CreateTermLog(ctx context.Context, arg CreateTermLogParams) (Termlog, error)
-	CreateToolcall(ctx context.Context, arg CreateToolcallParams) (Toolcall, error)
-	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	CreateUserPrompt(ctx context.Context, arg CreateUserPromptParams) (Prompt, error)
-	CreateVectorStoreLog(ctx context.Context, arg CreateVectorStoreLogParams) (Vecstorelog, error)
+	// DeleteAssistant deletes an assistant by ID and returns the deleted record.
 	DeleteAssistant(ctx context.Context, id int64) (Assistant, error)
-	DeleteFlow(ctx context.Context, id int64) (Flow, error)
-	DeletePrompt(ctx context.Context, id int64) error
-	DeleteProvider(ctx context.Context, id int64) (Provider, error)
-	DeleteSubtask(ctx context.Context, id int64) error
-	DeleteSubtasks(ctx context.Context, ids []int64) error
-	DeleteUser(ctx context.Context, id int64) error
-	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
-	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
+	// GetAssistant retrieves an assistant by ID.
 	GetAssistant(ctx context.Context, id int64) (Assistant, error)
+	// GetAssistantUseAgents retrieves the use_agents flag for an assistant.
 	GetAssistantUseAgents(ctx context.Context, id int64) (bool, error)
-	GetCallToolcall(ctx context.Context, callID string) (Toolcall, error)
-	GetContainers(ctx context.Context) ([]Container, error)
-	GetFlow(ctx context.Context, id int64) (Flow, error)
-	GetFlowAgentLog(ctx context.Context, arg GetFlowAgentLogParams) (Agentlog, error)
-	GetFlowAgentLogs(ctx context.Context, flowID int64) ([]Agentlog, error)
+	// GetFlowAssistant retrieves an assistant within a specific flow.
 	GetFlowAssistant(ctx context.Context, arg GetFlowAssistantParams) (Assistant, error)
-	GetFlowAssistantLog(ctx context.Context, id int64) (Assistantlog, error)
-	GetFlowAssistantLogs(ctx context.Context, arg GetFlowAssistantLogsParams) ([]Assistantlog, error)
+	// GetFlowAssistants retrieves all assistants for a specific flow.
 	GetFlowAssistants(ctx context.Context, flowID int64) ([]Assistant, error)
-	GetFlowContainers(ctx context.Context, flowID int64) ([]Container, error)
-	GetFlowMsgChains(ctx context.Context, flowID int64) ([]Msgchain, error)
-	GetFlowMsgLogs(ctx context.Context, flowID int64) ([]Msglog, error)
-	GetFlowPrimaryContainer(ctx context.Context, flowID int64) (Container, error)
-	GetFlowScreenshots(ctx context.Context, flowID int64) ([]Screenshot, error)
-	GetFlowSearchLog(ctx context.Context, arg GetFlowSearchLogParams) (Searchlog, error)
-	GetFlowSearchLogs(ctx context.Context, flowID int64) ([]Searchlog, error)
-	GetFlowSubtask(ctx context.Context, arg GetFlowSubtaskParams) (Subtask, error)
-	GetFlowSubtasks(ctx context.Context, flowID int64) ([]Subtask, error)
-	GetFlowTask(ctx context.Context, arg GetFlowTaskParams) (Task, error)
-	GetFlowTaskSubtasks(ctx context.Context, arg GetFlowTaskSubtasksParams) ([]Subtask, error)
-	GetFlowTaskTypeLastMsgChain(ctx context.Context, arg GetFlowTaskTypeLastMsgChainParams) (Msgchain, error)
-	GetFlowTasks(ctx context.Context, flowID int64) ([]Task, error)
-	GetFlowTermLogs(ctx context.Context, flowID int64) ([]Termlog, error)
-	GetFlowTypeMsgChains(ctx context.Context, arg GetFlowTypeMsgChainsParams) ([]Msgchain, error)
-	GetFlowVectorStoreLog(ctx context.Context, arg GetFlowVectorStoreLogParams) (Vecstorelog, error)
-	GetFlowVectorStoreLogs(ctx context.Context, flowID int64) ([]Vecstorelog, error)
-	GetFlows(ctx context.Context) ([]Flow, error)
-	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
-	GetPrompts(ctx context.Context) ([]Prompt, error)
-	GetProvider(ctx context.Context, id int64) (Provider, error)
-	GetProviders(ctx context.Context) ([]Provider, error)
-	GetProvidersByType(ctx context.Context, type_ ProviderType) ([]Provider, error)
-	GetRole(ctx context.Context, id int64) (GetRoleRow, error)
-	GetRoleByName(ctx context.Context, name string) (GetRoleByNameRow, error)
-	GetRoles(ctx context.Context) ([]GetRolesRow, error)
-	GetRunningContainers(ctx context.Context) ([]Container, error)
-	GetScreenshot(ctx context.Context, id int64) (Screenshot, error)
-	GetSubtask(ctx context.Context, id int64) (Subtask, error)
-	GetSubtaskAgentLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Agentlog, error)
-	GetSubtaskMsgChains(ctx context.Context, subtaskID sql.NullInt64) ([]Msgchain, error)
-	GetSubtaskMsgLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Msglog, error)
-	GetSubtaskPrimaryMsgChains(ctx context.Context, subtaskID sql.NullInt64) ([]Msgchain, error)
-	GetSubtaskSearchLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Searchlog, error)
-	GetSubtaskToolcalls(ctx context.Context, subtaskID sql.NullInt64) ([]Toolcall, error)
-	GetSubtaskTypeMsgChains(ctx context.Context, arg GetSubtaskTypeMsgChainsParams) ([]Msgchain, error)
-	GetSubtaskVectorStoreLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Vecstorelog, error)
-	GetTask(ctx context.Context, id int64) (Task, error)
-	GetTaskAgentLogs(ctx context.Context, taskID sql.NullInt64) ([]Agentlog, error)
-	GetTaskCompletedSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
-	GetTaskMsgChains(ctx context.Context, taskID sql.NullInt64) ([]Msgchain, error)
-	GetTaskMsgLogs(ctx context.Context, taskID sql.NullInt64) ([]Msglog, error)
-	GetTaskPlannedSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
-	GetTaskPrimaryMsgChainIDs(ctx context.Context, taskID sql.NullInt64) ([]GetTaskPrimaryMsgChainIDsRow, error)
-	GetTaskPrimaryMsgChains(ctx context.Context, taskID sql.NullInt64) ([]Msgchain, error)
-	GetTaskSearchLogs(ctx context.Context, taskID sql.NullInt64) ([]Searchlog, error)
-	GetTaskSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
-	GetTaskTypeMsgChains(ctx context.Context, arg GetTaskTypeMsgChainsParams) ([]Msgchain, error)
-	GetTaskVectorStoreLogs(ctx context.Context, taskID sql.NullInt64) ([]Vecstorelog, error)
-	GetTermLog(ctx context.Context, id int64) (Termlog, error)
-	GetUser(ctx context.Context, id int64) (GetUserRow, error)
-	GetUserByHash(ctx context.Context, hash string) (GetUserByHashRow, error)
-	GetUserContainers(ctx context.Context, userID int64) ([]Container, error)
-	GetUserFlow(ctx context.Context, arg GetUserFlowParams) (Flow, error)
-	GetUserFlowAgentLogs(ctx context.Context, arg GetUserFlowAgentLogsParams) ([]Agentlog, error)
+	// GetUserFlowAssistant retrieves an assistant within a user's flow.
 	GetUserFlowAssistant(ctx context.Context, arg GetUserFlowAssistantParams) (Assistant, error)
-	GetUserFlowAssistantLogs(ctx context.Context, arg GetUserFlowAssistantLogsParams) ([]Assistantlog, error)
+	// GetUserFlowAssistants retrieves all assistants for a user's flow.
 	GetUserFlowAssistants(ctx context.Context, arg GetUserFlowAssistantsParams) ([]Assistant, error)
-	GetUserFlowContainers(ctx context.Context, arg GetUserFlowContainersParams) ([]Container, error)
-	GetUserFlowMsgLogs(ctx context.Context, arg GetUserFlowMsgLogsParams) ([]Msglog, error)
-	GetUserFlowScreenshots(ctx context.Context, arg GetUserFlowScreenshotsParams) ([]Screenshot, error)
-	GetUserFlowSearchLogs(ctx context.Context, arg GetUserFlowSearchLogsParams) ([]Searchlog, error)
-	GetUserFlowSubtasks(ctx context.Context, arg GetUserFlowSubtasksParams) ([]Subtask, error)
-	GetUserFlowTask(ctx context.Context, arg GetUserFlowTaskParams) (Task, error)
-	GetUserFlowTaskSubtasks(ctx context.Context, arg GetUserFlowTaskSubtasksParams) ([]Subtask, error)
-	GetUserFlowTasks(ctx context.Context, arg GetUserFlowTasksParams) ([]Task, error)
-	GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLogsParams) ([]Termlog, error)
-	GetUserFlowVectorStoreLogs(ctx context.Context, arg GetUserFlowVectorStoreLogsParams) ([]Vecstorelog, error)
-	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
-	GetUserPrompt(ctx context.Context, arg GetUserPromptParams) (Prompt, error)
-	GetUserPromptByType(ctx context.Context, arg GetUserPromptByTypeParams) (Prompt, error)
-	GetUserPrompts(ctx context.Context, userID int64) ([]Prompt, error)
-	GetUserProvider(ctx context.Context, arg GetUserProviderParams) (Provider, error)
-	GetUserProviderByName(ctx context.Context, arg GetUserProviderByNameParams) (Provider, error)
-	GetUserProviders(ctx context.Context, userID int64) ([]Provider, error)
-	GetUserProvidersByType(ctx context.Context, arg GetUserProvidersByTypeParams) ([]Provider, error)
-	GetUsers(ctx context.Context) ([]GetUsersRow, error)
+	// UpdateAssistant updates an assistant with the provided parameters.
 	UpdateAssistant(ctx context.Context, arg UpdateAssistantParams) (Assistant, error)
+	// UpdateAssistantLanguage updates the language setting for an assistant.
 	UpdateAssistantLanguage(ctx context.Context, arg UpdateAssistantLanguageParams) (Assistant, error)
-	UpdateAssistantLog(ctx context.Context, arg UpdateAssistantLogParams) (Assistantlog, error)
-	UpdateAssistantLogContent(ctx context.Context, arg UpdateAssistantLogContentParams) (Assistantlog, error)
-	UpdateAssistantLogResult(ctx context.Context, arg UpdateAssistantLogResultParams) (Assistantlog, error)
+	// UpdateAssistantModel updates the model configuration for an assistant.
 	UpdateAssistantModel(ctx context.Context, arg UpdateAssistantModelParams) (Assistant, error)
+	// UpdateAssistantStatus updates the status of an assistant.
 	UpdateAssistantStatus(ctx context.Context, arg UpdateAssistantStatusParams) (Assistant, error)
+	// UpdateAssistantTitle updates the title of an assistant.
 	UpdateAssistantTitle(ctx context.Context, arg UpdateAssistantTitleParams) (Assistant, error)
+	// UpdateAssistantUseAgents updates the use_agents flag for an assistant.
 	UpdateAssistantUseAgents(ctx context.Context, arg UpdateAssistantUseAgentsParams) (Assistant, error)
+
+	// ============================================================================
+	// Assistant Log Operations
+	// ============================================================================
+
+	// CreateAssistantLog creates a new assistant log entry.
+	CreateAssistantLog(ctx context.Context, arg CreateAssistantLogParams) (Assistantlog, error)
+	// CreateResultAssistantLog creates a new assistant log entry with result data.
+	CreateResultAssistantLog(ctx context.Context, arg CreateResultAssistantLogParams) (Assistantlog, error)
+	// GetFlowAssistantLog retrieves an assistant log entry by ID within a flow context.
+	GetFlowAssistantLog(ctx context.Context, id int64) (Assistantlog, error)
+	// GetFlowAssistantLogs retrieves all assistant logs for a specific flow.
+	GetFlowAssistantLogs(ctx context.Context, arg GetFlowAssistantLogsParams) ([]Assistantlog, error)
+	// GetUserFlowAssistantLogs retrieves assistant logs for a user's flow.
+	GetUserFlowAssistantLogs(ctx context.Context, arg GetUserFlowAssistantLogsParams) ([]Assistantlog, error)
+	// UpdateAssistantLog updates an assistant log entry.
+	UpdateAssistantLog(ctx context.Context, arg UpdateAssistantLogParams) (Assistantlog, error)
+	// UpdateAssistantLogContent updates the content of an assistant log entry.
+	UpdateAssistantLogContent(ctx context.Context, arg UpdateAssistantLogContentParams) (Assistantlog, error)
+	// UpdateAssistantLogResult updates the result of an assistant log entry.
+	UpdateAssistantLogResult(ctx context.Context, arg UpdateAssistantLogResultParams) (Assistantlog, error)
+
+	// ============================================================================
+	// Container Operations
+	// ============================================================================
+
+	// CreateContainer creates a new container with the provided parameters.
+	CreateContainer(ctx context.Context, arg CreateContainerParams) (Container, error)
+	// GetContainers retrieves all containers.
+	GetContainers(ctx context.Context) ([]Container, error)
+	// GetFlowContainers retrieves all containers for a specific flow.
+	GetFlowContainers(ctx context.Context, flowID int64) ([]Container, error)
+	// GetFlowPrimaryContainer retrieves the primary container for a flow.
+	GetFlowPrimaryContainer(ctx context.Context, flowID int64) (Container, error)
+	// GetRunningContainers retrieves all currently running containers.
+	GetRunningContainers(ctx context.Context) ([]Container, error)
+	// GetUserContainers retrieves all containers for a specific user.
+	GetUserContainers(ctx context.Context, userID int64) ([]Container, error)
+	// GetUserFlowContainers retrieves containers for a user's flow.
+	GetUserFlowContainers(ctx context.Context, arg GetUserFlowContainersParams) ([]Container, error)
+	// UpdateContainerImage updates the Docker image for a container.
 	UpdateContainerImage(ctx context.Context, arg UpdateContainerImageParams) (Container, error)
+	// UpdateContainerLocalDir updates the local directory path for a container.
 	UpdateContainerLocalDir(ctx context.Context, arg UpdateContainerLocalDirParams) (Container, error)
+	// UpdateContainerLocalID updates the local container ID (Docker container ID).
 	UpdateContainerLocalID(ctx context.Context, arg UpdateContainerLocalIDParams) (Container, error)
+	// UpdateContainerStatus updates the status of a container.
 	UpdateContainerStatus(ctx context.Context, arg UpdateContainerStatusParams) (Container, error)
+	// UpdateContainerStatusLocalID updates both status and local ID atomically.
 	UpdateContainerStatusLocalID(ctx context.Context, arg UpdateContainerStatusLocalIDParams) (Container, error)
+
+	// ============================================================================
+	// Flow Operations
+	// ============================================================================
+
+	// CreateFlow creates a new flow with the provided parameters.
+	CreateFlow(ctx context.Context, arg CreateFlowParams) (Flow, error)
+	// DeleteFlow deletes a flow by ID and returns the deleted record.
+	DeleteFlow(ctx context.Context, id int64) (Flow, error)
+	// GetFlow retrieves a flow by ID.
+	GetFlow(ctx context.Context, id int64) (Flow, error)
+	// GetFlows retrieves all flows.
+	GetFlows(ctx context.Context) ([]Flow, error)
+	// GetUserFlow retrieves a flow for a specific user.
+	GetUserFlow(ctx context.Context, arg GetUserFlowParams) (Flow, error)
+	// GetUserFlows retrieves all flows for a specific user.
+	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
+	// UpdateFlow updates a flow with the provided parameters.
 	UpdateFlow(ctx context.Context, arg UpdateFlowParams) (Flow, error)
+	// UpdateFlowLanguage updates the language setting for a flow.
 	UpdateFlowLanguage(ctx context.Context, arg UpdateFlowLanguageParams) (Flow, error)
+	// UpdateFlowStatus updates the status of a flow.
 	UpdateFlowStatus(ctx context.Context, arg UpdateFlowStatusParams) (Flow, error)
+	// UpdateFlowTitle updates the title of a flow.
 	UpdateFlowTitle(ctx context.Context, arg UpdateFlowTitleParams) (Flow, error)
+
+	// ============================================================================
+	// Message Chain Operations
+	// ============================================================================
+
+	// CreateMsgChain creates a new message chain.
+	CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) (Msgchain, error)
+	// GetMsgChain retrieves a message chain by ID.
+	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
+	// GetFlowMsgChains retrieves all message chains for a specific flow.
+	GetFlowMsgChains(ctx context.Context, flowID int64) ([]Msgchain, error)
+	// GetFlowTaskTypeLastMsgChain retrieves the last message chain of a specific type for a flow task.
+	GetFlowTaskTypeLastMsgChain(ctx context.Context, arg GetFlowTaskTypeLastMsgChainParams) (Msgchain, error)
+	// GetFlowTypeMsgChains retrieves message chains of a specific type for a flow.
+	GetFlowTypeMsgChains(ctx context.Context, arg GetFlowTypeMsgChainsParams) ([]Msgchain, error)
+	// GetSubtaskMsgChains retrieves all message chains for a subtask.
+	GetSubtaskMsgChains(ctx context.Context, subtaskID sql.NullInt64) ([]Msgchain, error)
+	// GetSubtaskPrimaryMsgChains retrieves primary message chains for a subtask.
+	GetSubtaskPrimaryMsgChains(ctx context.Context, subtaskID sql.NullInt64) ([]Msgchain, error)
+	// GetSubtaskTypeMsgChains retrieves message chains of a specific type for a subtask.
+	GetSubtaskTypeMsgChains(ctx context.Context, arg GetSubtaskTypeMsgChainsParams) ([]Msgchain, error)
+	// GetTaskMsgChains retrieves all message chains for a task.
+	GetTaskMsgChains(ctx context.Context, taskID sql.NullInt64) ([]Msgchain, error)
+	// GetTaskPrimaryMsgChainIDs retrieves the IDs of primary message chains for a task.
+	GetTaskPrimaryMsgChainIDs(ctx context.Context, taskID sql.NullInt64) ([]GetTaskPrimaryMsgChainIDsRow, error)
+	// GetTaskPrimaryMsgChains retrieves primary message chains for a task.
+	GetTaskPrimaryMsgChains(ctx context.Context, taskID sql.NullInt64) ([]Msgchain, error)
+	// GetTaskTypeMsgChains retrieves message chains of a specific type for a task.
+	GetTaskTypeMsgChains(ctx context.Context, arg GetTaskTypeMsgChainsParams) ([]Msgchain, error)
+	// UpdateMsgChain updates a message chain with the provided parameters.
 	UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error)
+	// UpdateMsgChainUsage updates the usage statistics for a message chain.
 	UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsageParams) (Msgchain, error)
+
+	// ============================================================================
+	// Message Log Operations
+	// ============================================================================
+
+	// CreateMsgLog creates a new message log entry.
+	CreateMsgLog(ctx context.Context, arg CreateMsgLogParams) (Msglog, error)
+	// CreateResultMsgLog creates a new message log entry with result data.
+	CreateResultMsgLog(ctx context.Context, arg CreateResultMsgLogParams) (Msglog, error)
+	// GetFlowMsgLogs retrieves all message logs for a specific flow.
+	GetFlowMsgLogs(ctx context.Context, flowID int64) ([]Msglog, error)
+	// GetSubtaskMsgLogs retrieves all message logs for a subtask.
+	GetSubtaskMsgLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Msglog, error)
+	// GetTaskMsgLogs retrieves all message logs for a task.
+	GetTaskMsgLogs(ctx context.Context, taskID sql.NullInt64) ([]Msglog, error)
+	// GetUserFlowMsgLogs retrieves message logs for a user's flow.
+	GetUserFlowMsgLogs(ctx context.Context, arg GetUserFlowMsgLogsParams) ([]Msglog, error)
+	// UpdateMsgLogResult updates the result of a message log entry.
 	UpdateMsgLogResult(ctx context.Context, arg UpdateMsgLogResultParams) (Msglog, error)
-	UpdatePrompt(ctx context.Context, arg UpdatePromptParams) (Prompt, error)
+
+	// ============================================================================
+	// Provider Operations
+	// ============================================================================
+
+	// CreateProvider creates a new provider with the provided parameters.
+	CreateProvider(ctx context.Context, arg CreateProviderParams) (Provider, error)
+	// DeleteProvider deletes a provider by ID and returns the deleted record.
+	DeleteProvider(ctx context.Context, id int64) (Provider, error)
+	// GetProvider retrieves a provider by ID.
+	GetProvider(ctx context.Context, id int64) (Provider, error)
+	// GetProviders retrieves all providers.
+	GetProviders(ctx context.Context) ([]Provider, error)
+	// GetProvidersByType retrieves all providers of a specific type.
+	GetProvidersByType(ctx context.Context, type_ ProviderType) ([]Provider, error)
+	// GetUserProvider retrieves a provider for a specific user.
+	GetUserProvider(ctx context.Context, arg GetUserProviderParams) (Provider, error)
+	// GetUserProviderByName retrieves a provider by name for a specific user.
+	GetUserProviderByName(ctx context.Context, arg GetUserProviderByNameParams) (Provider, error)
+	// GetUserProviders retrieves all providers for a specific user.
+	GetUserProviders(ctx context.Context, userID int64) ([]Provider, error)
+	// GetUserProvidersByType retrieves providers of a specific type for a user.
+	GetUserProvidersByType(ctx context.Context, arg GetUserProvidersByTypeParams) ([]Provider, error)
+	// UpdateProvider updates a provider with the provided parameters.
 	UpdateProvider(ctx context.Context, arg UpdateProviderParams) (Provider, error)
-	UpdateSubtaskContext(ctx context.Context, arg UpdateSubtaskContextParams) (Subtask, error)
-	UpdateSubtaskFailedResult(ctx context.Context, arg UpdateSubtaskFailedResultParams) (Subtask, error)
-	UpdateSubtaskFinishedResult(ctx context.Context, arg UpdateSubtaskFinishedResultParams) (Subtask, error)
-	UpdateSubtaskResult(ctx context.Context, arg UpdateSubtaskResultParams) (Subtask, error)
-	UpdateSubtaskStatus(ctx context.Context, arg UpdateSubtaskStatusParams) (Subtask, error)
-	UpdateTaskFailedResult(ctx context.Context, arg UpdateTaskFailedResultParams) (Task, error)
-	UpdateTaskFinishedResult(ctx context.Context, arg UpdateTaskFinishedResultParams) (Task, error)
-	UpdateTaskResult(ctx context.Context, arg UpdateTaskResultParams) (Task, error)
-	UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) (Task, error)
-	UpdateToolcallFailedResult(ctx context.Context, arg UpdateToolcallFailedResultParams) (Toolcall, error)
-	UpdateToolcallFinishedResult(ctx context.Context, arg UpdateToolcallFinishedResultParams) (Toolcall, error)
-	UpdateToolcallStatus(ctx context.Context, arg UpdateToolcallStatusParams) (Toolcall, error)
-	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
-	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
-	UpdateUserPasswordChangeRequired(ctx context.Context, arg UpdateUserPasswordChangeRequiredParams) (User, error)
-	UpdateUserPrompt(ctx context.Context, arg UpdateUserPromptParams) (Prompt, error)
-	UpdateUserPromptByType(ctx context.Context, arg UpdateUserPromptByTypeParams) (Prompt, error)
+	// DeleteUserProvider deletes a user's provider and returns the deleted record.
+	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
+	// UpdateUserProvider updates a user's provider with the provided parameters.
 	UpdateUserProvider(ctx context.Context, arg UpdateUserProviderParams) (Provider, error)
+
+	// ============================================================================
+	// Prompt Operations
+	// ============================================================================
+
+	// CreateUserPrompt creates a new user-specific prompt.
+	CreateUserPrompt(ctx context.Context, arg CreateUserPromptParams) (Prompt, error)
+	// DeletePrompt deletes a prompt by ID.
+	DeletePrompt(ctx context.Context, id int64) error
+	// DeleteUserPrompt deletes a user-specific prompt.
+	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
+	// GetPrompts retrieves all prompts.
+	GetPrompts(ctx context.Context) ([]Prompt, error)
+	// GetUserPrompt retrieves a user-specific prompt.
+	GetUserPrompt(ctx context.Context, arg GetUserPromptParams) (Prompt, error)
+	// GetUserPromptByType retrieves a user-specific prompt by type.
+	GetUserPromptByType(ctx context.Context, arg GetUserPromptByTypeParams) (Prompt, error)
+	// GetUserPrompts retrieves all prompts for a specific user.
+	GetUserPrompts(ctx context.Context, userID int64) ([]Prompt, error)
+	// UpdatePrompt updates a prompt with the provided parameters.
+	UpdatePrompt(ctx context.Context, arg UpdatePromptParams) (Prompt, error)
+	// UpdateUserPrompt updates a user-specific prompt.
+	UpdateUserPrompt(ctx context.Context, arg UpdateUserPromptParams) (Prompt, error)
+	// UpdateUserPromptByType updates a user-specific prompt by type.
+	UpdateUserPromptByType(ctx context.Context, arg UpdateUserPromptByTypeParams) (Prompt, error)
+
+	// ============================================================================
+	// Role Operations
+	// ============================================================================
+
+	// GetRole retrieves a role by ID with associated privileges.
+	GetRole(ctx context.Context, id int64) (GetRoleRow, error)
+	// GetRoleByName retrieves a role by name with associated privileges.
+	GetRoleByName(ctx context.Context, name string) (GetRoleByNameRow, error)
+	// GetRoles retrieves all roles with their associated privileges.
+	GetRoles(ctx context.Context) ([]GetRolesRow, error)
+
+	// ============================================================================
+	// Screenshot Operations
+	// ============================================================================
+
+	// CreateScreenshot creates a new screenshot entry.
+	CreateScreenshot(ctx context.Context, arg CreateScreenshotParams) (Screenshot, error)
+	// GetScreenshot retrieves a screenshot by ID.
+	GetScreenshot(ctx context.Context, id int64) (Screenshot, error)
+	// GetFlowScreenshots retrieves all screenshots for a specific flow.
+	GetFlowScreenshots(ctx context.Context, flowID int64) ([]Screenshot, error)
+	// GetUserFlowScreenshots retrieves screenshots for a user's flow.
+	GetUserFlowScreenshots(ctx context.Context, arg GetUserFlowScreenshotsParams) ([]Screenshot, error)
+
+	// ============================================================================
+	// Search Log Operations
+	// ============================================================================
+
+	// CreateSearchLog creates a new search log entry.
+	CreateSearchLog(ctx context.Context, arg CreateSearchLogParams) (Searchlog, error)
+	// GetFlowSearchLog retrieves a search log entry within a flow context.
+	GetFlowSearchLog(ctx context.Context, arg GetFlowSearchLogParams) (Searchlog, error)
+	// GetFlowSearchLogs retrieves all search logs for a specific flow.
+	GetFlowSearchLogs(ctx context.Context, flowID int64) ([]Searchlog, error)
+	// GetSubtaskSearchLogs retrieves all search logs for a subtask.
+	GetSubtaskSearchLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Searchlog, error)
+	// GetTaskSearchLogs retrieves all search logs for a task.
+	GetTaskSearchLogs(ctx context.Context, taskID sql.NullInt64) ([]Searchlog, error)
+	// GetUserFlowSearchLogs retrieves search logs for a user's flow.
+	GetUserFlowSearchLogs(ctx context.Context, arg GetUserFlowSearchLogsParams) ([]Searchlog, error)
+
+	// ============================================================================
+	// Subtask Operations
+	// ============================================================================
+
+	// CreateSubtask creates a new subtask with the provided parameters.
+	CreateSubtask(ctx context.Context, arg CreateSubtaskParams) (Subtask, error)
+	// DeleteSubtask deletes a subtask by ID.
+	DeleteSubtask(ctx context.Context, id int64) error
+	// DeleteSubtasks deletes multiple subtasks by their IDs.
+	DeleteSubtasks(ctx context.Context, ids []int64) error
+	// GetSubtask retrieves a subtask by ID.
+	GetSubtask(ctx context.Context, id int64) (Subtask, error)
+	// GetFlowSubtask retrieves a subtask within a specific flow.
+	GetFlowSubtask(ctx context.Context, arg GetFlowSubtaskParams) (Subtask, error)
+	// GetFlowSubtasks retrieves all subtasks for a specific flow.
+	GetFlowSubtasks(ctx context.Context, flowID int64) ([]Subtask, error)
+	// GetFlowTaskSubtasks retrieves all subtasks for a specific task within a flow.
+	GetFlowTaskSubtasks(ctx context.Context, arg GetFlowTaskSubtasksParams) ([]Subtask, error)
+	// GetTaskCompletedSubtasks retrieves all completed subtasks for a task.
+	GetTaskCompletedSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
+	// GetTaskPlannedSubtasks retrieves all planned subtasks for a task.
+	GetTaskPlannedSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
+	// GetTaskSubtasks retrieves all subtasks for a specific task.
+	GetTaskSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
+	// GetUserFlowSubtasks retrieves subtasks for a user's flow.
+	GetUserFlowSubtasks(ctx context.Context, arg GetUserFlowSubtasksParams) ([]Subtask, error)
+	// GetUserFlowTaskSubtasks retrieves subtasks for a task within a user's flow.
+	GetUserFlowTaskSubtasks(ctx context.Context, arg GetUserFlowTaskSubtasksParams) ([]Subtask, error)
+	// UpdateSubtaskContext updates the context of a subtask.
+	UpdateSubtaskContext(ctx context.Context, arg UpdateSubtaskContextParams) (Subtask, error)
+	// UpdateSubtaskFailedResult updates a subtask with a failed result.
+	UpdateSubtaskFailedResult(ctx context.Context, arg UpdateSubtaskFailedResultParams) (Subtask, error)
+	// UpdateSubtaskFinishedResult updates a subtask with a finished result.
+	UpdateSubtaskFinishedResult(ctx context.Context, arg UpdateSubtaskFinishedResultParams) (Subtask, error)
+	// UpdateSubtaskResult updates the result of a subtask.
+	UpdateSubtaskResult(ctx context.Context, arg UpdateSubtaskResultParams) (Subtask, error)
+	// UpdateSubtaskStatus updates the status of a subtask.
+	UpdateSubtaskStatus(ctx context.Context, arg UpdateSubtaskStatusParams) (Subtask, error)
+
+	// ============================================================================
+	// Task Operations
+	// ============================================================================
+
+	// CreateTask creates a new task with the provided parameters.
+	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
+	// GetTask retrieves a task by ID.
+	GetTask(ctx context.Context, id int64) (Task, error)
+	// GetFlowTask retrieves a task within a specific flow.
+	GetFlowTask(ctx context.Context, arg GetFlowTaskParams) (Task, error)
+	// GetFlowTasks retrieves all tasks for a specific flow.
+	GetFlowTasks(ctx context.Context, flowID int64) ([]Task, error)
+	// GetUserFlowTask retrieves a task within a user's flow.
+	GetUserFlowTask(ctx context.Context, arg GetUserFlowTaskParams) (Task, error)
+	// GetUserFlowTasks retrieves all tasks for a user's flow.
+	GetUserFlowTasks(ctx context.Context, arg GetUserFlowTasksParams) ([]Task, error)
+	// UpdateTaskFailedResult updates a task with a failed result.
+	UpdateTaskFailedResult(ctx context.Context, arg UpdateTaskFailedResultParams) (Task, error)
+	// UpdateTaskFinishedResult updates a task with a finished result.
+	UpdateTaskFinishedResult(ctx context.Context, arg UpdateTaskFinishedResultParams) (Task, error)
+	// UpdateTaskResult updates the result of a task.
+	UpdateTaskResult(ctx context.Context, arg UpdateTaskResultParams) (Task, error)
+	// UpdateTaskStatus updates the status of a task.
+	UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) (Task, error)
+
+	// ============================================================================
+	// Terminal Log Operations
+	// ============================================================================
+
+	// CreateTermLog creates a new terminal log entry.
+	CreateTermLog(ctx context.Context, arg CreateTermLogParams) (Termlog, error)
+	// GetTermLog retrieves a terminal log entry by ID.
+	GetTermLog(ctx context.Context, id int64) (Termlog, error)
+	// GetFlowTermLogs retrieves all terminal logs for a specific flow.
+	GetFlowTermLogs(ctx context.Context, flowID int64) ([]Termlog, error)
+	// GetUserFlowTermLogs retrieves terminal logs for a user's flow.
+	GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLogsParams) ([]Termlog, error)
+
+	// ============================================================================
+	// Toolcall Operations
+	// ============================================================================
+
+	// CreateToolcall creates a new toolcall entry.
+	CreateToolcall(ctx context.Context, arg CreateToolcallParams) (Toolcall, error)
+	// GetCallToolcall retrieves a toolcall by its call ID.
+	GetCallToolcall(ctx context.Context, callID string) (Toolcall, error)
+	// GetSubtaskToolcalls retrieves all toolcalls for a subtask.
+	GetSubtaskToolcalls(ctx context.Context, subtaskID sql.NullInt64) ([]Toolcall, error)
+	// UpdateToolcallFailedResult updates a toolcall with a failed result.
+	UpdateToolcallFailedResult(ctx context.Context, arg UpdateToolcallFailedResultParams) (Toolcall, error)
+	// UpdateToolcallFinishedResult updates a toolcall with a finished result.
+	UpdateToolcallFinishedResult(ctx context.Context, arg UpdateToolcallFinishedResultParams) (Toolcall, error)
+	// UpdateToolcallStatus updates the status of a toolcall.
+	UpdateToolcallStatus(ctx context.Context, arg UpdateToolcallStatusParams) (Toolcall, error)
+
+	// ============================================================================
+	// User Operations
+	// ============================================================================
+
+	// CreateUser creates a new user with the provided parameters.
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// DeleteUser deletes a user by ID.
+	DeleteUser(ctx context.Context, id int64) error
+	// GetUser retrieves a user by ID with associated role and privileges.
+	GetUser(ctx context.Context, id int64) (GetUserRow, error)
+	// GetUserByHash retrieves a user by hash with associated role and privileges.
+	GetUserByHash(ctx context.Context, hash string) (GetUserByHashRow, error)
+	// GetUsers retrieves all users with their associated roles and privileges.
+	GetUsers(ctx context.Context) ([]GetUsersRow, error)
+	// UpdateUserName updates the name of a user.
+	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
+	// UpdateUserPassword updates the password of a user.
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
+	// UpdateUserPasswordChangeRequired updates the password change required flag for a user.
+	UpdateUserPasswordChangeRequired(ctx context.Context, arg UpdateUserPasswordChangeRequiredParams) (User, error)
+	// UpdateUserRole updates the role of a user.
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
+	// UpdateUserStatus updates the status of a user.
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error)
+
+	// ============================================================================
+	// Vector Store Log Operations
+	// ============================================================================
+
+	// CreateVectorStoreLog creates a new vector store log entry.
+	CreateVectorStoreLog(ctx context.Context, arg CreateVectorStoreLogParams) (Vecstorelog, error)
+	// GetFlowVectorStoreLog retrieves a vector store log entry within a flow context.
+	GetFlowVectorStoreLog(ctx context.Context, arg GetFlowVectorStoreLogParams) (Vecstorelog, error)
+	// GetFlowVectorStoreLogs retrieves all vector store logs for a specific flow.
+	GetFlowVectorStoreLogs(ctx context.Context, flowID int64) ([]Vecstorelog, error)
+	// GetSubtaskVectorStoreLogs retrieves all vector store logs for a subtask.
+	GetSubtaskVectorStoreLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Vecstorelog, error)
+	// GetTaskVectorStoreLogs retrieves all vector store logs for a task.
+	GetTaskVectorStoreLogs(ctx context.Context, taskID sql.NullInt64) ([]Vecstorelog, error)
+	// GetUserFlowVectorStoreLogs retrieves vector store logs for a user's flow.
+	GetUserFlowVectorStoreLogs(ctx context.Context, arg GetUserFlowVectorStoreLogsParams) ([]Vecstorelog, error)
+
+	// ============================================================================
+	// Additional Operations
+	// ============================================================================
+
+	// GetFlowAgentLog retrieves an agent log entry within a flow context.
+	GetFlowAgentLog(ctx context.Context, arg GetFlowAgentLogParams) (Agentlog, error)
+	// GetFlowAgentLogs retrieves all agent logs for a specific flow.
+	GetFlowAgentLogs(ctx context.Context, flowID int64) ([]Agentlog, error)
+	// GetSubtaskAgentLogs retrieves all agent logs for a subtask.
+	GetSubtaskAgentLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Agentlog, error)
+	// GetTaskAgentLogs retrieves all agent logs for a task.
+	GetTaskAgentLogs(ctx context.Context, taskID sql.NullInt64) ([]Agentlog, error)
+	// GetUserFlowAgentLogs retrieves agent logs for a user's flow.
+	GetUserFlowAgentLogs(ctx context.Context, arg GetUserFlowAgentLogsParams) ([]Agentlog, error)
 }
 
+// Ensure Queries implements Querier interface at compile time.
+// This provides compile-time type safety and helps catch interface changes.
 var _ Querier = (*Queries)(nil)
