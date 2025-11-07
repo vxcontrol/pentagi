@@ -2835,6 +2835,28 @@ type executionContext struct {
 func (ec *executionContext) processDeferredGroup(dg graphql.DeferredGroup) {
 	atomic.AddInt32(&ec.pendingDeferred, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Send error result to prevent goroutine leak and channel blocking
+				ctx := graphql.WithFreshResponseContext(dg.Context)
+				// Record the panic as an error in the context
+				var panicErr error
+				if err, ok := r.(error); ok {
+					panicErr = err
+				} else {
+					panicErr = fmt.Errorf("panic in deferred group: %v", r)
+				}
+				ec.Error(ctx, panicErr)
+				ds := graphql.DeferredResult{
+					Path:   dg.Path,
+					Label:  dg.Label,
+					Result: graphql.Null,
+					Errors: graphql.GetErrors(ctx),
+				}
+				ec.deferredResults <- ds
+				atomic.AddInt32(&ec.pendingDeferred, -1)
+			}
+		}()
 		ctx := graphql.WithFreshResponseContext(dg.Context)
 		dg.FieldSet.Dispatch(ctx)
 		ds := graphql.DeferredResult{
@@ -2848,6 +2870,7 @@ func (ec *executionContext) processDeferredGroup(dg graphql.DeferredGroup) {
 			ds.Result = graphql.Null
 		}
 		ec.deferredResults <- ds
+		atomic.AddInt32(&ec.pendingDeferred, -1)
 	}()
 }
 
