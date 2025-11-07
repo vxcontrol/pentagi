@@ -148,7 +148,6 @@ type customExecutor struct {
 func (ce *customExecutor) Tools() []llms.Tool {
 	tools := make([]llms.Tool, 0, len(ce.definitions))
 	for idx := range ce.definitions {
-		json.MarshalIndent(ce.definitions[idx], "", "  ")
 		tools = append(tools, llms.Tool{
 			Type:     "function",
 			Function: &ce.definitions[idx],
@@ -530,7 +529,7 @@ func (ce *customExecutor) storeToolResult(ctx context.Context, name, result stri
 	}
 
 	var buffer strings.Builder
-	buffer.WriteString(fmt.Sprintf("### Incomming arguments\n\n```json\n%s\n```\n\n", args))
+	buffer.WriteString(fmt.Sprintf("### Incoming arguments\n\n```json\n%s\n```\n\n", args))
 	buffer.WriteString(fmt.Sprintf("#### Tool result\n\n%s\n\n", result))
 	text := buffer.String()
 
