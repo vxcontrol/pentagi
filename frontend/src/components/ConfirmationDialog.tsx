@@ -9,7 +9,9 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { Trash2 } from 'lucide-react';
-import { type ReactNode, cloneElement, isValidElement } from 'react';
+import { type ReactElement, cloneElement, isValidElement } from 'react';
+
+type ConfirmationDialogIconProps = ReactElement<React.SVGProps<SVGSVGElement>>;
 
 interface ConfirmationDialogProps {
     isOpen: boolean;
@@ -23,8 +25,8 @@ interface ConfirmationDialogProps {
     confirmText?: string;
     cancelVariant?: 'outline' | 'ghost' | 'secondary' | 'default' | 'destructive';
     confirmVariant?: 'outline' | 'ghost' | 'secondary' | 'default' | 'destructive';
-    confirmIcon?: ReactNode;
-    cancelIcon?: ReactNode;
+    confirmIcon?: ConfirmationDialogIconProps;
+    cancelIcon?: ConfirmationDialogIconProps;
 }
 
 const ConfirmationDialog = ({
@@ -50,7 +52,7 @@ const ConfirmationDialog = ({
     );
 
     // Common method to process icons with h-4 w-4 classes
-    const processIcon = (icon: ReactNode) => {
+    const processIcon = (icon?: ConfirmationDialogIconProps): ConfirmationDialogIconProps | null => {
         if (!icon) return null;
 
         if (isValidElement(icon)) {

@@ -5,7 +5,7 @@ import { isAuthenticated } from '@/lib/auth';
 
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
     if (isAuthenticated()) {
-        return <Navigate to="/chat/new" />;
+        return <Navigate to="/flows/new" />;
     }
 
     return children;

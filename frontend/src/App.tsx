@@ -4,6 +4,7 @@ import type { Location, NavigateFunction } from 'react-router-dom';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import AppLayout from '@/components/AppLayout';
+import MainLayout from '@/components/MainLayout';
 import PageLoader from '@/components/PageLoader';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import PublicRoute from '@/components/PublicRoute';
@@ -13,6 +14,7 @@ import client from '@/lib/apollo';
 import { isAuthenticated } from '@/lib/auth';
 import { axios } from '@/lib/axios';
 import Chat from '@/pages/Chat';
+import Flows from '@/pages/Flows';
 import Login from '@/pages/Login';
 import OAuthResult from '@/pages/OAuthResult';
 import Report from '@/pages/Report';
@@ -42,7 +44,7 @@ const App = () => {
                 // Save current path for redirect after login
                 const currentPath = location.pathname;
                 // Only save if it's not the default route
-                const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                const returnParam = currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
                 navigate(`/login${returnParam}`);
                 return;
             }
@@ -53,7 +55,7 @@ const App = () => {
             // Save current path for redirect after login
             const currentPath = location.pathname;
             // Only save if it's not the default route
-            const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+            const returnParam = currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
             navigate(`/login${returnParam}`);
         }
     };
@@ -79,15 +81,17 @@ const App = () => {
                         <Routes>
                             {/* private routes */}
                             <Route element={renderProtectedRoute()}>
-                                <Route
-                                    path="chat"
-                                    element={<Chat />}
-                                />
-
-                                <Route
-                                    path="chat/:flowId"
-                                    element={<Chat />}
-                                />
+                                {/* Main layout for chat pages */}
+                                <Route element={<MainLayout />}>
+                                    <Route
+                                        path="flows"
+                                        element={<Flows />}
+                                    />
+                                    <Route
+                                        path="flows/:flowId"
+                                        element={<Chat />}
+                                    />
+                                </Route>
 
                                 {/* Settings with nested routes */}
                                 <Route
@@ -107,18 +111,6 @@ const App = () => {
                                         path="providers"
                                         element={<SettingsProviders />}
                                     />
-                                    {/* <Route
-                                        path="mcp-servers"
-                                        element={<SettingsMcpServers />}
-                                    />
-                                    <Route
-                                        path="mcp-servers/new"
-                                        element={<SettingsMcpServer />}
-                                    />
-                                    <Route
-                                        path="mcp-servers/:mcpServerId"
-                                        element={<SettingsMcpServer />}
-                                    /> */}
                                     <Route
                                         path="providers/:providerId"
                                         element={<SettingsProvider />}
@@ -131,6 +123,18 @@ const App = () => {
                                         path="prompts/:promptId"
                                         element={<SettingsPrompt />}
                                     />
+                                    {/* <Route
+                                        path="mcp-servers"
+                                        element={<SettingsMcpServers />}
+                                    />
+                                    <Route
+                                        path="mcp-servers/new"
+                                        element={<SettingsMcpServer />}
+                                    />
+                                    <Route
+                                        path="mcp-servers/:mcpServerId"
+                                        element={<SettingsMcpServer />}
+                                    /> */}
                                     {/* Catch-all route for unknown settings paths */}
                                     <Route
                                         path="*"
@@ -146,7 +150,7 @@ const App = () => {
 
                             {/* report routes */}
                             <Route
-                                path="chat/:flowId/report"
+                                path="flows/:flowId/report"
                                 element={
                                     <ProtectedRoute>
                                         <Report />
@@ -168,11 +172,11 @@ const App = () => {
                             {/* other routes */}
                             <Route
                                 path="*"
-                                element={<Navigate to="/chat/new" />}
+                                element={<Navigate to="/flows" />}
                             />
                             <Route
                                 path="/"
-                                element={<Navigate to="/chat/new" />}
+                                element={<Navigate to="/flows" />}
                             />
                         </Routes>
                     </Suspense>

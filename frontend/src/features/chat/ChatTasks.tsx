@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Search, X, NotepadText, Copy, Download, ExternalLink } from 'lucide-react';
 import debounce from 'lodash/debounce';
+import { Copy, Download, ExternalLink, NotepadText, Search, X } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -15,14 +15,9 @@ import {
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { TaskFragmentFragment, FlowFragmentFragment } from '@/graphql/types';
-import { 
-    generateReport, 
-    generateFileName, 
-    downloadTextFile, 
-    copyToClipboard
-} from '@/lib/report';
+import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
 import { Log } from '@/lib/log';
+import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 
 import ChatTask from './ChatTask';
 
@@ -59,10 +54,11 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
 
     // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
-        () => debounce((value: string) => {
-            setDebouncedSearchValue(value);
-        }, 500),
-        []
+        () =>
+            debounce((value: string) => {
+                setDebouncedSearchValue(value);
+            }, 500),
+        [],
     );
 
     // Update debounced search value when input value changes
@@ -97,14 +93,15 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
         }
 
         return tasks.filter((task) => {
-            const taskMatches = containsSearchValue(task.title, search) || 
-                               containsSearchValue(task.result, search);
+            const taskMatches = containsSearchValue(task.title, search) || containsSearchValue(task.result, search);
 
-            const subtaskMatches = task.subtasks?.some(subtask => 
-                containsSearchValue(subtask.title, search) ||
-                containsSearchValue(subtask.description, search) ||
-                containsSearchValue(subtask.result, search)
-            ) || false;
+            const subtaskMatches =
+                task.subtasks?.some(
+                    (subtask) =>
+                        containsSearchValue(subtask.title, search) ||
+                        containsSearchValue(subtask.description, search) ||
+                        containsSearchValue(subtask.result, search),
+                ) || false;
 
             return taskMatches || subtaskMatches;
         });
@@ -112,17 +109,17 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
 
     const sortedTasks = [...(filteredTasks || [])].sort((a, b) => +a.id - +b.id);
     const hasTasks = filteredTasks && filteredTasks.length > 0;
-    
+
     // Check if flow is available for report generation
     const isReportDisabled = !flow || selectedFlowId === 'new' || !selectedFlowId;
 
     // Report export handlers
     const handleCopyToClipboard = async () => {
         if (isReportDisabled) return;
-        
+
         const reportContent = generateReport(tasks || [], flow);
         const success = await copyToClipboard(reportContent);
-        
+
         if (!success) {
             Log.error('Failed to copy report to clipboard');
         }
@@ -130,15 +127,15 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
 
     const handleDownloadMD = () => {
         if (isReportDisabled || !flow) return;
-        
+
         try {
             // Generate report content
             const reportContent = generateReport(tasks || [], flow);
-            
+
             // Generate file name
             const baseFileName = generateFileName(flow);
             const fileName = `${baseFileName}.md`;
-            
+
             // Download file
             downloadTextFile(reportContent, fileName, 'text/markdown; charset=UTF-8');
         } catch (error) {
@@ -148,17 +145,17 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
 
     const handleDownloadPDF = () => {
         if (isReportDisabled || !flow || !selectedFlowId) return;
-        
-        // Open new tab (not popup) with report page and download flag  
-        const url = `/chat/${selectedFlowId}/report?download=true&silent=true`;
+
+        // Open new tab (not popup) with report page and download flag
+        const url = `/flows/${selectedFlowId}/report?download=true&silent=true`;
         window.open(url, '_blank');
     };
 
     const handleOpenWebView = () => {
         if (isReportDisabled || !selectedFlowId) return;
-        
+
         // Open new tab with report page for web viewing
-        const url = `/chat/${selectedFlowId}/report`;
+        const url = `/flows/${selectedFlowId}/report`;
         window.open(url, '_blank');
     };
 

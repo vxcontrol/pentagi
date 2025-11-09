@@ -42,6 +42,7 @@ interface DataTableProps<TData, TValue> {
     initialPageSize?: number;
     filterColumn?: string;
     filterPlaceholder?: string;
+    onRowClick?: (row: TData) => void;
 }
 
 const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
@@ -53,6 +54,7 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
             initialPageSize = 10,
             filterColumn = 'name',
             filterPlaceholder = 'Filter...',
+            onRowClick,
         },
         ref,
     ) => {
@@ -164,7 +166,13 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                                         <TableRow
                                             data-state={row.getIsSelected() && 'selected'}
                                             className="cursor-pointer hover:bg-muted/50"
-                                            onClick={() => row.toggleExpanded()}
+                                            onClick={() => {
+                                                if (onRowClick) {
+                                                    onRowClick(row.original);
+                                                } else {
+                                                    row?.toggleExpanded();
+                                                }
+                                            }}
                                         >
                                             {row.getVisibleCells().map((cell) => (
                                                 <TableCell
@@ -180,7 +188,7 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                                                             : undefined
                                                     }
                                                     onClick={(e) => {
-                                                        // Prevent row expansion when clicking on action buttons
+                                                        // Prevent row click handler when clicking on action buttons
                                                         if (cell.column.id === 'actions') {
                                                             e.stopPropagation();
                                                         }

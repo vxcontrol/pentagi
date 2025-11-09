@@ -20,7 +20,7 @@ import sql from 'highlight.js/lib/languages/sql';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 import { common, createLowlight } from 'lowlight';
-import { useMemo, useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSlug from 'rehype-slug';
@@ -55,10 +55,41 @@ interface MarkdownProps {
 
 // List of all elements that should have text highlighting
 const textElements = [
-    'p', 'span', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'a', 'li', 'ul', 'ol', 'blockquote', 'table', 'thead', 'tbody',
-    'tr', 'td', 'th', 'strong', 'em', 'b', 'i', 'u', 's', 'del',
-    'ins', 'mark', 'small', 'sub', 'sup', 'dl', 'dt', 'dd'
+    'p',
+    'span',
+    'div',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'a',
+    'li',
+    'ul',
+    'ol',
+    'blockquote',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'td',
+    'th',
+    'strong',
+    'em',
+    'b',
+    'i',
+    'u',
+    's',
+    'del',
+    'ins',
+    'mark',
+    'small',
+    'sub',
+    'sup',
+    'dl',
+    'dt',
+    'dd',
 ];
 
 // Function to escape special regex characters
@@ -76,158 +107,176 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
         return {
             trimmed: trimmedSearch,
             escaped: escapeRegExp(trimmedSearch),
-            regex: new RegExp(`(${escapeRegExp(trimmedSearch)})`, 'gi')
+            regex: new RegExp(`(${escapeRegExp(trimmedSearch)})`, 'gi'),
         };
     }, [searchValue]);
 
     // Function to create highlighted text components with subtle highlighting
-    const createHighlightedText = useCallback((text: string) => {
-        if (!processedSearch) {
-            return text;
-        }
-
-        const parts = text.split(processedSearch.regex);
-
-        return parts.map((part, index) => {
-            // Use case-insensitive comparison to match the filtering logic
-            if (part.toLowerCase() === processedSearch.trimmed.toLowerCase()) {
-                return (
-                    <span
-                        key={`highlight-${index}`}
-                        style={{
-                            // Much more subtle highlighting - very pale yellow with slight border
-                            backgroundColor: 'rgba(255, 255, 0, 0.15)',
-                            borderRadius: '2px',
-                            padding: '0px 1px',
-                            boxShadow: 'inset 0 0 0 1px rgba(255, 255, 0, 0.25)',
-                        }}
-                    >
-                        {part}
-                    </span>
-                );
+    const createHighlightedText = useCallback(
+        (text: string) => {
+            if (!processedSearch) {
+                return text;
             }
-            return part;
-        });
-    }, [processedSearch]);
+
+            const parts = text.split(processedSearch.regex);
+
+            return parts.map((part, index) => {
+                // Use case-insensitive comparison to match the filtering logic
+                if (part.toLowerCase() === processedSearch.trimmed.toLowerCase()) {
+                    return (
+                        <span
+                            key={`highlight-${index}`}
+                            style={{
+                                // Much more subtle highlighting - very pale yellow with slight border
+                                backgroundColor: 'rgba(255, 255, 0, 0.15)',
+                                borderRadius: '2px',
+                                padding: '0px 1px',
+                                boxShadow: 'inset 0 0 0 1px rgba(255, 255, 0, 0.25)',
+                            }}
+                        >
+                            {part}
+                        </span>
+                    );
+                }
+                return part;
+            });
+        },
+        [processedSearch],
+    );
 
     // Optimized helper function to process text nodes recursively
-    const processTextNode = useCallback((nodeChildren: any): any => {
-        if (!processedSearch) {
+    const processTextNode = useCallback(
+        (nodeChildren: any): any => {
+            if (!processedSearch) {
+                return nodeChildren;
+            }
+
+            if (typeof nodeChildren === 'string') {
+                return createHighlightedText(nodeChildren);
+            }
+
+            if (Array.isArray(nodeChildren)) {
+                return nodeChildren.map((child, index) => {
+                    if (typeof child === 'string') {
+                        return createHighlightedText(child);
+                    }
+                    // Avoid deep cloning React elements to prevent memory leaks
+                    // Only process if it's a simple object with props
+                    if (
+                        child &&
+                        typeof child === 'object' &&
+                        child.props &&
+                        typeof child.props.children !== 'undefined'
+                    ) {
+                        return {
+                            ...child,
+                            key: child.key || `processed-${index}`,
+                            props: {
+                                ...child.props,
+                                children: processTextNode(child.props.children),
+                            },
+                        };
+                    }
+                    return child;
+                });
+            }
+
+            // Handle React elements safely
+            if (
+                nodeChildren &&
+                typeof nodeChildren === 'object' &&
+                nodeChildren.props &&
+                typeof nodeChildren.props.children !== 'undefined'
+            ) {
+                return {
+                    ...nodeChildren,
+                    props: {
+                        ...nodeChildren.props,
+                        children: processTextNode(nodeChildren.props.children),
+                    },
+                };
+            }
+
             return nodeChildren;
-        }
-
-        if (typeof nodeChildren === 'string') {
-            return createHighlightedText(nodeChildren);
-        }
-
-        if (Array.isArray(nodeChildren)) {
-            return nodeChildren.map((child, index) => {
-                if (typeof child === 'string') {
-                    return createHighlightedText(child);
-                }
-                // Avoid deep cloning React elements to prevent memory leaks
-                // Only process if it's a simple object with props
-                if (child && typeof child === 'object' && child.props && typeof child.props.children !== 'undefined') {
-                    return {
-                        ...child,
-                        key: child.key || `processed-${index}`,
-                        props: {
-                            ...child.props,
-                            children: processTextNode(child.props.children)
-                        }
-                    };
-                }
-                return child;
-            });
-        }
-
-        // Handle React elements safely
-        if (nodeChildren && typeof nodeChildren === 'object' && nodeChildren.props && typeof nodeChildren.props.children !== 'undefined') {
-            return {
-                ...nodeChildren,
-                props: {
-                    ...nodeChildren.props,
-                    children: processTextNode(nodeChildren.props.children)
-                }
-            };
-        }
-
-        return nodeChildren;
-    }, [processedSearch, createHighlightedText]);
+        },
+        [processedSearch, createHighlightedText],
+    );
 
     // Create a simple component renderer factory to avoid recreating functions
-    const createComponentRenderer = useCallback((ComponentName: string) => {
-        return ({ children: nodeChildren, ...props }: any) => {
-            const processedChildren = processTextNode(nodeChildren);
-            const Component = ComponentName as any;
-            return <Component {...props}>{processedChildren}</Component>;
-        };
-    }, [processTextNode]);
+    const createComponentRenderer = useCallback(
+        (ComponentName: string) => {
+            return ({ children: nodeChildren, ...props }: any) => {
+                const processedChildren = processTextNode(nodeChildren);
+                const Component = ComponentName as any;
+                return <Component {...props}>{processedChildren}</Component>;
+            };
+        },
+        [processTextNode],
+    );
 
     // Memoize components to avoid recreating them on every render
     const customComponents = useMemo(() => {
-        if (!processedSearch) {
-            return {};
-        }
-
         const components: Record<string, any> = {};
-        
-        // Create components for all text elements using the factory
-        textElements.forEach(element => {
-            components[element] = createComponentRenderer(element);
-        });
 
-        // Don't highlight inside code blocks and preserve their content
-        components.code = ({ children: nodeChildren, ...props }: any) => {
-            return <code {...props}>{nodeChildren}</code>;
-        };
-        
-        components.pre = ({ children: nodeChildren, ...props }: any) => {
-            return <pre {...props}>{nodeChildren}</pre>;
-        };
+        if (processedSearch) {
+            // Create components for all text elements using the factory
+            textElements.forEach((element) => {
+                components[element] = createComponentRenderer(element);
+            });
+
+            // Don't highlight inside code blocks and preserve their content
+            components.code = ({ children: nodeChildren, ...props }: any) => {
+                return <code {...props}>{nodeChildren}</code>;
+            };
+
+            components.pre = ({ children: nodeChildren, ...props }: any) => {
+                return <pre {...props}>{nodeChildren}</pre>;
+            };
+        }
 
         return components;
     }, [processedSearch, createComponentRenderer]);
 
     return (
-        <ReactMarkdown
-            className={`prose prose-sm max-w-none dark:prose-invert ${className}`}
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[
-                [
-                    rehypeHighlight,
-                    {
-                        languages: {
-                            ...common,
-                            bash,
-                            c,
-                            csharp,
-                            dockerfile,
-                            go,
-                            graphql,
-                            http,
-                            java,
-                            javascript,
-                            json,
-                            kotlin,
-                            lua,
-                            markdown,
-                            nginx,
-                            php,
-                            python,
-                            sql,
-                            xml,
-                            yaml,
+        <div className={`prose prose-sm max-w-none dark:prose-invert ${className || ''}`}>
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[
+                    [
+                        rehypeHighlight,
+                        {
+                            languages: {
+                                ...common,
+                                bash,
+                                c,
+                                csharp,
+                                dockerfile,
+                                go,
+                                graphql,
+                                http,
+                                java,
+                                javascript,
+                                json,
+                                kotlin,
+                                lua,
+                                markdown,
+                                nginx,
+                                php,
+                                python,
+                                sql,
+                                xml,
+                                yaml,
+                            },
+                            detect: true,
                         },
-                        detect: true,
-                    },
-                ],
-                rehypeSlug,
-            ]}
-            components={customComponents}
-        >
-            {children}
-        </ReactMarkdown>
+                    ],
+                    rehypeSlug,
+                ]}
+                components={customComponents}
+            >
+                {children}
+            </ReactMarkdown>
+        </div>
     );
 };
 
