@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, Plug, Server, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, FileText, Plug, Settings as SettingsIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
 
@@ -46,12 +46,12 @@ const menuItems: readonly MenuItem[] = [
         path: '/settings/prompts',
         icon: <FileText className="size-4" />,
     },
-    {
-        id: 'mcp-servers',
-        title: 'MCP Servers',
-        path: '/settings/mcp-servers',
-        icon: <Server className="size-4" />,
-    },
+    // {
+    //     id: 'mcp-servers',
+    //     title: 'MCP Servers',
+    //     path: '/settings/mcp-servers',
+    //     icon: <Server className="size-4" />,
+    // },
 ] as const;
 
 // Individual menu item component to properly use hooks
