@@ -154,9 +154,9 @@ const SettingsSidebar = () => {
             </SidebarContent>
             <SidebarFooter>
                 <SidebarMenuButton asChild>
-                    <NavLink to="/chat/new">
+                    <NavLink to="/flows/new">
                         <ArrowLeft className="size-4" />
-                        Back to Chat
+                        Back to App
                     </NavLink>
                 </SidebarMenuButton>
             </SidebarFooter>

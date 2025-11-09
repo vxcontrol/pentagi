@@ -54,7 +54,8 @@ axios.interceptors.response.use(
                     const currentPath = window.location.pathname;
                     // Only save if it's not the default route
                     if (currentPath !== '/login') {
-                        const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                        const returnParam =
+                            currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
                         window.location.href = `/login${returnParam}`;
                     }
                     break;

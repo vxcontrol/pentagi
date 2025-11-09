@@ -1,6 +1,6 @@
 import { GripVertical, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 
 import {
     Breadcrumb,
@@ -13,9 +13,8 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import ChatCentralTabs from '@/features/chat/ChatCentralTabs';
-import ChatSidebar from '@/features/chat/ChatSidebar';
 import ChatTabs from '@/features/chat/ChatTabs';
 import {
     StatusType,
@@ -31,16 +30,9 @@ import {
     useCreateAssistantMutation,
     useCreateFlowMutation,
     useDeleteAssistantMutation,
-    useDeleteFlowMutation,
-    useFinishFlowMutation,
-    useFlowCreatedSubscription,
-    useFlowDeletedSubscription,
     useFlowQuery,
-    useFlowsQuery,
-    useFlowUpdatedSubscription,
     useMessageLogAddedSubscription,
     useMessageLogUpdatedSubscription,
-    useProvidersQuery,
     usePutUserInputMutation,
     useScreenshotAddedSubscription,
     useSearchLogAddedSubscription,
@@ -53,22 +45,26 @@ import {
 } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { Log } from '@/lib/log';
-import type { User } from '@/models/User';
-import { isProviderValid, findProviderByName, sortProviders, type Provider } from '@/models/Provider';
+import { isProviderValid, type Provider } from '@/models/Provider';
 
-const SELECTED_PROVIDER_KEY = 'selectedProvider';
+interface MainLayoutContext {
+    selectedProvider: Provider | null;
+    sortedProviders: Provider[];
+    selectedFlowId: string | null;
+}
 
 const Chat = () => {
     const { isDesktop } = useBreakpoint();
     const { flowId } = useParams();
     const navigate = useNavigate();
-    const { data: flowsData, refetch: refetchFlows } = useFlowsQuery();
-    const [selectedFlowId, setSelectedFlowId] = useState<string | null>(flowId ?? null);
-    
+
+    // Get data from MainLayout context
+    const { selectedProvider, sortedProviders, selectedFlowId } = useOutletContext<MainLayoutContext>();
+
     // Add debounced flow ID to prevent rapid switching causing database connection issues
     const [debouncedFlowId, setDebouncedFlowId] = useState<string | null>(flowId ?? null);
     const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    
+
     // AbortController to cancel active requests when switching flows
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -87,7 +83,6 @@ const Chat = () => {
         notifyOnNetworkStatusChange: false,
         errorPolicy: 'all',
     });
-    const { data: providersData } = useProvidersQuery();
 
     // Store currently selected assistant ID for each flow
     const [selectedAssistantIds, setSelectedAssistantIds] = useState<Record<string, string | null>>({});
@@ -114,22 +109,8 @@ const Chat = () => {
         nextFetchPolicy: 'cache-first',
     });
 
-    // Create sorted providers list to ensure consistent order
-    const sortedProviders = useMemo(() => {
-        const providers = providersData?.providers || [];
-        return sortProviders(providers);
-    }, [providersData?.providers]);
-
-    const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
-    const [user, setUser] = useState<User | null>(null);
-    const needsProviderUpdateRef = useRef(true);
-    const previousFlowIdRef = useRef(flowId);
-    const userInitialized = useRef(false);
-
     // Store for API mutations
     const [createFlow] = useCreateFlowMutation();
-    const [deleteFlow] = useDeleteFlowMutation();
-    const [finishFlow] = useFinishFlowMutation();
     const [putUserInput] = usePutUserInputMutation();
     const [stopFlow] = useStopFlowMutation();
     const [createAssistant] = useCreateAssistantMutation();
@@ -145,99 +126,6 @@ const Chat = () => {
         nextFetchPolicy: 'cache-first',
     });
 
-    // Check if provider needs initialization or update when:
-    // 1. We have no selected provider yet (first login)
-    // 2. Selected provider is not in available providers list
-    useEffect(() => {
-        // On first load or when providers change
-        if (sortedProviders.length > 0) {
-            if (!selectedProvider) {
-                // Case 1: No provider selected yet (first login)
-                needsProviderUpdateRef.current = true;
-            } else {
-                // Case 2: Check if selected provider is still available
-                if (!isProviderValid(selectedProvider, sortedProviders)) {
-                    needsProviderUpdateRef.current = true;
-                }
-            }
-        }
-    }, [sortedProviders, selectedProvider]);
-
-    // Update provider when needed - separate from detection for ESLint compliance
-    useLayoutEffect(() => {
-        if (needsProviderUpdateRef.current && sortedProviders.length > 0) {
-            needsProviderUpdateRef.current = false;
-
-            // Check if we have a previously saved provider
-            const savedProviderName = localStorage.getItem(SELECTED_PROVIDER_KEY);
-
-            // Case 3: If saved provider exists and is valid, use it
-            if (savedProviderName) {
-                const savedProvider = findProviderByName(savedProviderName, sortedProviders);
-                if (savedProvider) {
-                    setSelectedProvider(savedProvider);
-                    return;
-                }
-            }
-            
-            // If no saved provider or it's invalid, use the first available
-            if (sortedProviders.length > 0 && sortedProviders[0]) {
-                const firstProvider = sortedProviders[0];
-                setSelectedProvider(firstProvider);
-                localStorage.setItem(SELECTED_PROVIDER_KEY, firstProvider.name);
-            }
-        }
-    }, [sortedProviders]);
-
-    useEffect(() => {
-        const auth = localStorage.getItem('auth');
-
-        if (!auth) {
-            // Save current path for redirect after login
-            const currentPath = window.location.pathname;
-            // Only save if it's not the default route
-            const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
-            navigate(`/login${returnParam}`);
-            return;
-        }
-
-        try {
-            const authData = JSON.parse(auth);
-            const user = authData?.user;
-
-            if (!user) {
-                // Save current path for redirect after login
-                const currentPath = window.location.pathname;
-                // Only save if it's not the default route
-                const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
-                navigate(`/login${returnParam}`);
-                return;
-            } else {
-                userInitialized.current = true;
-                const frameId = window.requestAnimationFrame(() => setUser(user));
-                return () => window.cancelAnimationFrame(frameId);
-            }
-        } catch {
-            // If we have a parse error, redirect to login
-            navigate('/login');
-        }
-    }, [navigate]);
-
-    // Handle provider selection changes
-    const handleProviderChange = (provider: Provider) => {
-        setSelectedProvider(provider);
-        localStorage.setItem(SELECTED_PROVIDER_KEY, provider.name);
-    };
-
-    // Check if selected provider is still valid whenever provider list changes
-    useEffect(() => {
-        // Skip initial render and only check when we have providers and a previously selected provider
-        if (sortedProviders.length > 0 && selectedProvider && !isProviderValid(selectedProvider, sortedProviders)) {
-            // If selected provider is no longer valid, mark for update
-            needsProviderUpdateRef.current = true;
-        }
-    }, [sortedProviders, selectedProvider]);
-
     // Debounce selectedFlowId changes to prevent excessive database connections
     // When users rapidly switch between flows, each switch triggers multiple GraphQL queries/subscriptions
     // This can quickly exhaust the database connection pool, causing "too many clients already" errors
@@ -246,7 +134,7 @@ const Chat = () => {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
         }
-        
+
         // Create new AbortController for this flow
         abortControllerRef.current = new AbortController();
 
@@ -284,23 +172,9 @@ const Chat = () => {
         };
     }, []);
 
-    // Sync flowId with selectedFlowId when URL changes
-    useLayoutEffect(() => {
-        if (flowId && flowId !== previousFlowIdRef.current) {
-            previousFlowIdRef.current = flowId;
-            if (flowId !== selectedFlowId) {
-                setSelectedFlowId(flowId);
-            }
-        }
-    }, [flowId, selectedFlowId]);
-
     const variables = useMemo(() => ({ flowId: debouncedFlowId || '' }), [debouncedFlowId]);
     const skip = useMemo(() => !debouncedFlowId || debouncedFlowId === 'new', [debouncedFlowId]);
 
-    // Global flow subscriptions - always active regardless of selected flow
-    useFlowCreatedSubscription();
-    useFlowDeletedSubscription();
-    useFlowUpdatedSubscription();
     // Flow-specific subscriptions that depend on the selected flow
     useTaskCreatedSubscription({ variables, skip });
     useTaskUpdatedSubscription({ variables, skip });
@@ -320,14 +194,17 @@ const Chat = () => {
     useAssistantLogUpdatedSubscription({ variables, skip });
 
     // Handle selecting an assistant
-    const handleSelectAssistant = useCallback((assistantId: string | null) => {
-        if (!selectedFlowId || selectedFlowId === 'new') return;
+    const handleSelectAssistant = useCallback(
+        (assistantId: string | null) => {
+            if (!selectedFlowId || selectedFlowId === 'new') return;
 
-        setSelectedAssistantIds((prev) => ({
-            ...prev,
-            [selectedFlowId]: assistantId,
-        }));
-    }, [selectedFlowId]);
+            setSelectedAssistantIds((prev) => ({
+                ...prev,
+                [selectedFlowId]: assistantId,
+            }));
+        },
+        [selectedFlowId],
+    );
 
     // Function to handle initial assistant selection
     const selectInitialAssistant = useCallback(() => {
@@ -364,7 +241,10 @@ const Chat = () => {
         if (!hasSelectionBeenMade) {
             // No selection has been made yet, auto-select first assistant
             handleSelectAssistant(firstAssistantId);
-        } else if (currentSelectedAssistantId !== null && !assistantsData.assistants.some(assistant => assistant.id === currentSelectedAssistantId)) {
+        } else if (
+            currentSelectedAssistantId !== null &&
+            !assistantsData.assistants.some((assistant) => assistant.id === currentSelectedAssistantId)
+        ) {
             // Selection was made but assistant was deleted, auto-select first assistant
             handleSelectAssistant(firstAssistantId);
         }
@@ -410,8 +290,6 @@ const Chat = () => {
                 const firstAvailableProvider = sortedProviders[0];
                 if (firstAvailableProvider) {
                     providerToUse = firstAvailableProvider.name;
-                    // Mark for update rather than updating directly
-                    needsProviderUpdateRef.current = true;
                 }
             }
 
@@ -432,7 +310,7 @@ const Chat = () => {
                 const newFlowId = data.createFlow.id.toString();
 
                 // Navigate to the new flow page but stay on the automation tab
-                navigate(`/chat/${newFlowId}`);
+                navigate(`/flows/${newFlowId}`);
 
                 // Keep user on the automation tab
                 setActiveCentralTab('automation');
@@ -458,113 +336,63 @@ const Chat = () => {
         }
     };
 
-    const handleChangeSelectedFlowId = (id: string) => {
-        setSelectedFlowId(id);
-        navigate(`/chat/${id}`);
-    };
+    // Handle creating a new assistant
+    const handleCreateAssistant = useCallback(
+        async (message: string, useAgents: boolean) => {
+            if (!message.trim() || !selectedProvider) return;
 
-    const handleDeleteFlow = async (id: string) => {
-        try {
-            // Store current state before deletion
-            const wasCurrentFlow = String(selectedFlowId) === String(id);
+            try {
+                // Backend will create a flow if flowId is 'new' or '0'
+                const flowIdToUse = selectedFlowId === 'new' ? '0' : selectedFlowId || '0';
 
-            const result = await deleteFlow({
-                variables: { flowId: id },
-                refetchQueries: ['flows'],
-                update: (cache) => {
-                    // Remove the flow from Apollo cache
-                    cache.evict({ id: `Flow:${id}` });
-                    cache.gc();
-                },
-            });
-
-            if (result.data?.deleteFlow === 'success') {
-                // Force refresh the flows list
-                await refetchFlows().catch((error) => {
-                    Log.error('Failed to refetch flows:', error);
+                const { data } = await createAssistant({
+                    variables: {
+                        flowId: flowIdToUse,
+                        modelProvider: selectedProvider.name,
+                        input: message.trim(),
+                        useAgents,
+                    },
                 });
 
-                // If we deleted the currently selected flow, redirect to new flow page
-                if (wasCurrentFlow) {
-                    setSelectedFlowId('new');
-                    navigate('/chat/new');
-                }
-            }
-        } catch (error) {
-            Log.error('Error deleting flow:', error);
-        }
-    };
+                if (data?.createAssistant) {
+                    const { flow, assistant } = data.createAssistant;
 
-    const handleFinishFlow = async (id: string) => {
-        try {
-            await finishFlow({ variables: { flowId: id } });
-        } catch {
-            // ignore
-        }
-    };
+                    // If we created a new flow, navigate to it
+                    if (selectedFlowId === 'new' || !selectedFlowId) {
+                        // Navigate to the new flow page
+                        navigate(`/flows/${flow.id}`);
 
-    // Handle creating a new assistant
-    const handleCreateAssistant = useCallback(async (message: string, useAgents: boolean) => {
-        if (!message.trim() || !selectedProvider) return;
+                        // Set Assistant tab as active
+                        setActiveCentralTab('assistant');
+                        if (!isDesktop) {
+                            setActiveTabsTab('assistant');
+                        }
+                    }
 
-        try {
-            // Backend will create a flow if flowId is 'new' or '0'
-            const flowIdToUse = selectedFlowId === 'new' ? '0' : selectedFlowId || '0';
+                    // Select the newly created assistant
+                    if (assistant?.id) {
+                        // Clear any existing timeout to prevent memory leaks
+                        if (assistantCreationTimeoutRef.current) {
+                            clearTimeout(assistantCreationTimeoutRef.current);
+                        }
 
-            const { data } = await createAssistant({
-                variables: {
-                    flowId: flowIdToUse,
-                    modelProvider: selectedProvider.name,
-                    input: message.trim(),
-                    useAgents,
-                },
-            });
-
-            if (data?.createAssistant) {
-                const { flow, assistant } = data.createAssistant;
-
-                // If we created a new flow, navigate to it
-                if (selectedFlowId === 'new' || !selectedFlowId) {
-                    // Navigate to the new flow page
-                    navigate(`/chat/${flow.id}`);
-
-                    // Set Assistant tab as active
-                    setActiveCentralTab('assistant');
-                    if (!isDesktop) {
-                        setActiveTabsTab('assistant');
+                        // Use setTimeout to prevent race conditions with queries
+                        assistantCreationTimeoutRef.current = setTimeout(() => {
+                            setSelectedAssistantIds((prev) => ({
+                                ...prev,
+                                [flow.id]: assistant.id,
+                            }));
+                            assistantCreationTimeoutRef.current = null;
+                        }, 300);
                     }
                 }
-
-                // Select the newly created assistant
-                if (assistant?.id) {
-                    // Clear any existing timeout to prevent memory leaks
-                    if (assistantCreationTimeoutRef.current) {
-                        clearTimeout(assistantCreationTimeoutRef.current);
-                    }
-                    
-                    // Use setTimeout to prevent race conditions with queries
-                    assistantCreationTimeoutRef.current = setTimeout(() => {
-                        setSelectedAssistantIds((prev) => ({
-                            ...prev,
-                            [flow.id]: assistant.id,
-                        }));
-                        assistantCreationTimeoutRef.current = null;
-                    }, 300);
-                }
+            } catch (error) {
+                Log.error('Error creating assistant:', error);
+                throw error;
             }
-        } catch (error) {
-            Log.error('Error creating assistant:', error);
-            throw error;
-        }
-    }, [
-        selectedFlowId,
-        selectedProvider,
-        createAssistant,
-        navigate,
-        isDesktop,
-        setActiveCentralTab,
-        setActiveTabsTab,
-    ]);
+        },
+        [selectedFlowId, selectedProvider, createAssistant, navigate, isDesktop, setActiveCentralTab, setActiveTabsTab],
+    );
 
     // Handle calling an existing assistant
     const handleCallAssistant = async (assistantId: string, message: string, useAgents: boolean): Promise<void> => {
@@ -673,98 +501,85 @@ const Chat = () => {
     );
 
     return (
-        <SidebarProvider>
-            <ChatSidebar
-                user={user}
-                flows={flowsData?.flows ?? []}
-                providers={sortedProviders}
-                selectedProvider={selectedProvider}
-                selectedFlowId={selectedFlowId}
-                onChangeSelectedFlowId={handleChangeSelectedFlowId}
-                onChangeSelectedProvider={handleProviderChange}
-                onDeleteFlow={handleDeleteFlow}
-                onFinishFlow={handleFinishFlow}
-            />
-            <SidebarInset>
-                <header className="fixed top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-                    <div className="flex items-center gap-2 px-4">
-                        <SidebarTrigger className="-ml-1" />
-                        <Separator
-                            orientation="vertical"
-                            className="mr-2 h-4"
-                        />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    {flowData?.flow && (
-                                        <>
-                                            <BreadcrumbStatus status={flowData.flow.status} />
-                                            <BreadcrumbProvider provider={flowData.flow.provider} />
-                                        </>
-                                    )}
-                                    <BreadcrumbPage>
-                                        {flowData?.flow?.title || (selectedFlowId === 'new' ? 'New flow' : 'Select a flow')}
-                                    </BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </header>
-                <div className="relative mt-12 flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
-                    {isFlowLoading && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50">
-                            <Loader2 className="size-16 animate-spin" />
-                        </div>
-                    )}
-                    {isDesktop ? (
-                        <ResizablePanelGroup
-                            direction="horizontal"
-                            className="w-full"
-                        >
-                            <ResizablePanel
-                                defaultSize={50}
-                                minSize={30}
-                            >
-                                <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
-                                    <CardContent className="flex-1 overflow-auto pr-0 pt-4">
-                                        <ChatCentralTabs
-                                            selectedFlowId={selectedFlowId}
-                                            flowData={flowData}
-                                            assistants={assistantsData?.assistants ?? []}
-                                            assistantLogs={assistantLogsData?.assistantLogs ?? []}
-                                            selectedAssistantId={selectedAssistantId}
-                                            selectedProvider={selectedProvider}
-                                            providers={sortedProviders}
-                                            onSelectAssistant={handleSelectAssistant}
-                                            onCreateAssistant={handleInitiateAssistantCreation}
-                                            onDeleteAssistant={handleDeleteAssistant}
-                                            onSubmitAutomationMessage={handleSubmitAutomationMessage}
-                                            onSubmitAssistantMessage={handleCallAssistant}
-                                            onCreateNewAssistant={handleCreateAssistant}
-                                            onStopAutomationFlow={handleStopAutomationFlow}
-                                            onStopAssistant={handleStopAssistant}
-                                            activeTab={activeCentralTab}
-                                            onTabChange={setActiveCentralTab}
-                                        />
-                                    </CardContent>
-                                </Card>
-                            </ResizablePanel>
-                            <ResizableHandle withHandle>
-                                <GripVertical className="size-4" />
-                            </ResizableHandle>
-                            <ResizablePanel
-                                defaultSize={50}
-                                minSize={30}
-                            >
-                                {tabsCard}
-                            </ResizablePanel>
-                        </ResizablePanelGroup>
-                    ) : (
-                        tabsCard
-                    )}
+        <>
+            <header className="fixed top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+                <div className="flex items-center gap-2 px-4">
+                    <SidebarTrigger className="-ml-1" />
+                    <Separator
+                        orientation="vertical"
+                        className="mr-2 h-4"
+                    />
+                    <Breadcrumb>
+                        <BreadcrumbList>
+                            <BreadcrumbItem>
+                                {flowData?.flow && (
+                                    <>
+                                        <BreadcrumbStatus status={flowData.flow.status} />
+                                        <BreadcrumbProvider provider={flowData.flow.provider} />
+                                    </>
+                                )}
+                                <BreadcrumbPage>
+                                    {flowData?.flow?.title || (selectedFlowId === 'new' ? 'New flow' : 'Select a flow')}
+                                </BreadcrumbPage>
+                            </BreadcrumbItem>
+                        </BreadcrumbList>
+                    </Breadcrumb>
                 </div>
-            </SidebarInset>
-        </SidebarProvider>
+            </header>
+            <div className="relative mt-12 flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
+                {isFlowLoading && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50">
+                        <Loader2 className="size-16 animate-spin" />
+                    </div>
+                )}
+                {isDesktop ? (
+                    <ResizablePanelGroup
+                        direction="horizontal"
+                        className="w-full"
+                    >
+                        <ResizablePanel
+                            defaultSize={50}
+                            minSize={30}
+                        >
+                            <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
+                                <CardContent className="flex-1 overflow-auto pr-0 pt-4">
+                                    <ChatCentralTabs
+                                        selectedFlowId={selectedFlowId}
+                                        flowData={flowData}
+                                        assistants={assistantsData?.assistants ?? []}
+                                        assistantLogs={assistantLogsData?.assistantLogs ?? []}
+                                        selectedAssistantId={selectedAssistantId}
+                                        selectedProvider={selectedProvider}
+                                        providers={sortedProviders}
+                                        onSelectAssistant={handleSelectAssistant}
+                                        onCreateAssistant={handleInitiateAssistantCreation}
+                                        onDeleteAssistant={handleDeleteAssistant}
+                                        onSubmitAutomationMessage={handleSubmitAutomationMessage}
+                                        onSubmitAssistantMessage={handleCallAssistant}
+                                        onCreateNewAssistant={handleCreateAssistant}
+                                        onStopAutomationFlow={handleStopAutomationFlow}
+                                        onStopAssistant={handleStopAssistant}
+                                        activeTab={activeCentralTab}
+                                        onTabChange={setActiveCentralTab}
+                                    />
+                                </CardContent>
+                            </Card>
+                        </ResizablePanel>
+                        <ResizableHandle withHandle>
+                            <GripVertical className="size-4" />
+                        </ResizableHandle>
+                        <ResizablePanel
+                            defaultSize={50}
+                            minSize={30}
+                        >
+                            {tabsCard}
+                        </ResizablePanel>
+                    </ResizablePanelGroup>
+                ) : (
+                    tabsCard
+                )}
+            </div>
+        </>
     );
 };
 

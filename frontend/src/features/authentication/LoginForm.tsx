@@ -64,7 +64,7 @@ interface LoginFormProps {
     returnUrl?: string;
 }
 
-const LoginForm = ({ providers, returnUrl = '/chat/new' }: LoginFormProps) => {
+const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {

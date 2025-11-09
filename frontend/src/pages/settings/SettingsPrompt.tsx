@@ -981,7 +981,7 @@ const SettingsPrompt = () => {
                 cancelText="Stay"
                 confirmText="Leave"
                 confirmVariant="destructive"
-                confirmIcon={null}
+                confirmIcon={undefined}
             />
 
             {/* Validation Results Dialog */}
