@@ -4,7 +4,12 @@ import { Navigate } from 'react-router-dom';
 import { useUser } from '@/providers/UserProvider';
 
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-    const { isAuthenticated } = useUser();
+    const { isAuthenticated, isLoading } = useUser();
+
+    // Wait for initial auth check to complete
+    if (isLoading) {
+        return null;
+    }
 
     if (isAuthenticated()) {
         return (

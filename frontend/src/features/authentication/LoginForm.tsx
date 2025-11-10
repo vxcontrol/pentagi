@@ -10,11 +10,7 @@ import Google from '@/components/icons/Google';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { axios } from '@/lib/axios';
-import { baseUrl } from '@/models/Api';
-import type { AuthInfoResponse, AuthLoginResponse } from '@/models/Info';
-import type { User } from '@/models/User';
-import { useUser } from '@/providers/UserProvider';
+import { type OAuthProvider, useUser } from '@/providers/UserProvider';
 
 import { PasswordChangeForm } from './PasswordChangeForm';
 
@@ -35,11 +31,8 @@ const formSchema = z.object({
     }),
 });
 
-const returnOAuthUri = '/oauth/result';
 const errorMessage = 'Invalid login or password';
 const errorProviderMessage = 'Authentication failed';
-
-type OAuthProvider = 'google' | 'github';
 
 interface AuthProviderAction {
     id: OAuthProvider;
@@ -76,40 +69,26 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
-    const [user, setUser] = useState<User | null>(null);
     const navigate = useNavigate();
-    const { setAuth } = useUser();
-
-    const providerLoginCheckInterval = 500;
-    const providerLoginTimeout = 300000;
+    const { authInfo, setAuth, login, loginWithOAuth } = useUser();
 
     const handleSubmit = async (values: z.infer<typeof formSchema>) => {
         setError(null);
         setIsSubmitting(true);
 
         try {
-            const data: AuthLoginResponse = await axios.post('/auth/login', values);
+            const result = await login(values);
 
-            if (data?.status !== 'success') {
-                setError(errorMessage);
+            if (!result.success) {
+                setError(result.error || errorMessage);
                 return;
             }
 
-            const info: AuthInfoResponse = await axios.get('/info');
-
-            if (info?.status !== 'success' || !info.data) {
-                setError(errorMessage);
-                return;
-            }
-
-            // Check if password change is required for local users
-            if (info.data.user?.type === 'local' && info.data.user.password_change_required) {
-                setUser(info.data.user);
+            if (result.passwordChangeRequired) {
                 setPasswordChangeRequired(true);
                 return;
             }
 
-            setAuth(info.data);
             navigate(returnUrl);
         } catch {
             setError(errorMessage);
@@ -118,103 +97,18 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
         }
     };
 
-    const handleProviderLoginPopupOpen = async (provider: OAuthProvider): Promise<AuthInfoResponse> => {
-        const width = 500;
-        const height = 600;
-        const left = window.screenX + (window.outerWidth - width) / 2;
-        const top = window.screenY + (window.outerHeight - height) / 2;
-
-        const popup = window.open(
-            `${baseUrl}/auth/authorize?provider=${provider}&return_uri=${returnOAuthUri}`,
-            `${provider} Sign In`,
-            `width=${width},height=${height},left=${left},top=${top}`,
-        );
-
-        if (!popup) {
-            return {
-                status: 'error',
-                error: 'Popup blocked. Please allow popups for this site.',
-            };
-        }
-
-        return new Promise<AuthInfoResponse>((resolve) => {
-            const messageHandler = async (event: MessageEvent) => {
-                if (event.origin !== window.location.origin || event.data?.type !== 'oauth-result') {
-                    return;
-                }
-
-                window.removeEventListener('message', messageHandler);
-
-                const handlerResolve = (value: AuthInfoResponse) => {
-                    if (popup && !popup.closed) {
-                        popup.close();
-                    }
-
-                    resolve(value);
-                };
-
-                if (event.data.status === 'success') {
-                    try {
-                        const info: AuthInfoResponse = await axios.get('/info');
-
-                        if (info?.status === 'success' && info.data?.type === 'user') {
-                            handlerResolve(info);
-                            return;
-                        }
-                    } catch {
-                        // In case of error, fall through to common handling below
-                        console.error('error during OAuth result handling:', error);
-                    }
-                }
-
-                handlerResolve({
-                    status: 'error',
-                    error: event.data.error || errorProviderMessage,
-                });
-            };
-
-            window.addEventListener('message', messageHandler);
-
-            const popupCheck = setInterval(() => {
-                if (popup?.closed) {
-                    clearInterval(popupCheck);
-                    window.removeEventListener('message', messageHandler);
-                    resolve({
-                        status: 'error',
-                        error: 'Authentication cancelled',
-                    });
-                }
-            }, providerLoginCheckInterval);
-
-            setTimeout(() => {
-                clearInterval(popupCheck);
-                window.removeEventListener('message', messageHandler);
-
-                if (popup && !popup.closed) {
-                    popup.close();
-                }
-
-                resolve({
-                    status: 'error',
-                    error: 'Authentication timeout',
-                });
-            }, providerLoginTimeout);
-        });
-    };
-
     const handleProviderLogin = async (provider: OAuthProvider) => {
         setError(null);
         setIsSubmitting(true);
 
         try {
-            const info = await handleProviderLoginPopupOpen(provider);
+            const result = await loginWithOAuth(provider);
 
-            if (info?.status !== 'success' || !info.data) {
-                setError(info?.error || errorProviderMessage);
+            if (!result.success) {
+                setError(result.error || errorProviderMessage);
                 return;
             }
 
-            setAuth(info.data);
             navigate(returnUrl);
         } catch (error) {
             setError(error instanceof Error ? error.message : errorMessage);
@@ -228,31 +122,14 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     };
 
     const handlePasswordChangeSuccess = () => {
-        if (user) {
-            // Update stored user info with password_change_required set to false
-            const updatedUser = {
-                ...user,
-                password_change_required: false,
-            };
-
-            // Get current auth info from localStorage
-            const storedData = localStorage.getItem('auth');
-            let currentAuthInfo = null;
-            if (storedData) {
-                try {
-                    const parsed = JSON.parse(storedData);
-                    currentAuthInfo = parsed.authInfo;
-                } catch {
-                    // ignore
-                }
-            }
-
-            // Create a full authentication info structure
+        if (authInfo?.user) {
+            // Update auth info with password_change_required set to false
             const updatedAuthData = {
-                type: 'user' as const,
-                user: updatedUser,
-                providers: currentAuthInfo?.providers || [],
-                expires_at: currentAuthInfo?.expires_at,
+                ...authInfo,
+                user: {
+                    ...authInfo.user,
+                    password_change_required: false,
+                },
             };
 
             setAuth(updatedAuthData);
@@ -261,7 +138,7 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     };
 
     // If password change is required, show password change form
-    if (passwordChangeRequired && user?.type === 'local') {
+    if (passwordChangeRequired && authInfo?.user?.type === 'local') {
         return (
             <div className="mx-auto w-[350px] space-y-6">
                 <h1 className="text-center text-3xl font-bold">Update Password</h1>
