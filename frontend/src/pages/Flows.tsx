@@ -317,9 +317,9 @@ const Flows = () => {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4 pt-0">
+                <div className="flex flex-col gap-4 p-4">
                     <StatusCard
-                        icon={<Loader2 className="w-16 h-16 animate-spin text-muted-foreground" />}
+                        icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                         title="Loading flows..."
                         description="Please wait while we fetch your conversation flows"
                     />
@@ -334,7 +334,7 @@ const Flows = () => {
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
                     <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
+                        <AlertCircle className="size-4" />
                         <AlertTitle>Error loading flows</AlertTitle>
                         <AlertDescription>{error?.message}</AlertDescription>
                     </Alert>
@@ -350,7 +350,7 @@ const Flows = () => {
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
                     <StatusCard
-                        icon={<FileText className="h-8 w-8 text-muted-foreground" />}
+                        icon={<FileText className="size-8 text-muted-foreground" />}
                         title="No flows found"
                         description="Get started by creating your first conversation flow"
                         action={
