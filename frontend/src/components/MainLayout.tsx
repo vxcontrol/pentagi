@@ -29,7 +29,7 @@ const MainLayout = () => {
     const [selectedFlowId, setSelectedFlowId] = useState<string | null>(flowId ?? null);
     const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
 
-    const { user, isAuthenticated } = useUser();
+    const { isAuthenticated } = useUser();
 
     const needsProviderUpdateRef = useRef(true);
     const previousFlowIdRef = useRef(flowId);

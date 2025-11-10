@@ -5,7 +5,12 @@ import { useUser } from '@/providers/UserProvider';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const location = useLocation();
-    const { isAuthenticated } = useUser();
+    const { isAuthenticated, isLoading } = useUser();
+
+    // Wait for initial auth check to complete
+    if (isLoading) {
+        return null;
+    }
 
     if (!isAuthenticated()) {
         // Save current path for redirect after login

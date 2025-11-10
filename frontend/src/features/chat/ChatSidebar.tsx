@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback } from '@radix-ui/react-avatar';
 import { Check, ChevronsUpDown, GitFork, KeyRound, LogOut, Moon, Settings, Sun, UserIcon } from 'lucide-react';
 import { useState } from 'react';
-import { useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { useMatch, useNavigate } from 'react-router-dom';
 
 import Logo from '@/components/icons/Logo';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,6 @@ import {
     SidebarRail,
 } from '@/components/ui/sidebar';
 import { PasswordChangeForm } from '@/features/authentication/PasswordChangeForm';
-import { axios } from '@/lib/axios';
 import { cn } from '@/lib/utils';
 import { getProviderDisplayName, getProviderIcon, type Provider } from '@/models/Provider';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -41,27 +40,14 @@ interface ChatSidebarProps {
 
 const ChatSidebar = ({ providers, selectedProvider, onChangeSelectedProvider }: ChatSidebarProps) => {
     const navigate = useNavigate();
-    const location = useLocation();
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const isFlowsActive = useMatch('/flows/*');
     const isSettingsActive = useMatch('/settings/*');
 
-    const { user, clearAuth } = useUser();
+    const { authInfo, logout } = useUser();
+    const user = authInfo?.user;
     const { theme, setTheme } = useTheme();
-
-    const logout = async () => {
-        const currentPath = location.pathname;
-        const returnUrl = currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
-
-        try {
-            await axios.get('/auth/logout');
-        } finally {
-            clearAuth();
-
-            window.location.href = `/login${returnUrl}`;
-        }
-    };
 
     const handlePasswordChangeSuccess = () => {
         setIsPasswordModalOpen(false);
@@ -233,7 +219,7 @@ const ChatSidebar = ({ providers, selectedProvider, onChangeSelectedProvider }: 
                                     </>
                                 )}
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={logout}>
+                                <DropdownMenuItem onClick={() => logout()}>
                                     <LogOut className="mr-2 size-4" />
                                     Log out
                                 </DropdownMenuItem>
