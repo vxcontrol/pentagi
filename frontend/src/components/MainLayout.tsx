@@ -14,7 +14,7 @@ import {
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { findProviderByName, isProviderValid, sortProviders, type Provider } from '@/models/Provider';
-import type { User } from '@/models/User';
+import { useUser } from '@/providers/UserProvider';
 
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
 
@@ -28,7 +28,8 @@ const MainLayout = () => {
 
     const [selectedFlowId, setSelectedFlowId] = useState<string | null>(flowId ?? null);
     const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
-    const [user, setUser] = useState<User | null>(null);
+
+    const { user, isAuthenticated } = useUser();
 
     const needsProviderUpdateRef = useRef(true);
     const previousFlowIdRef = useRef(flowId);
@@ -90,40 +91,20 @@ const MainLayout = () => {
         }
     }, [sortedProviders]);
 
-    // Initialize user from localStorage
+    // Check authentication and redirect if needed
     useEffect(() => {
-        const auth = localStorage.getItem('auth');
+        if (!userInitialized.current) {
+            userInitialized.current = true;
 
-        if (!auth) {
-            // Save current path for redirect after login
-            const currentPath = window.location.pathname;
-            // Only save if it's not the default route
-            const returnParam = currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
-            navigate(`/login${returnParam}`);
-            return;
-        }
-
-        try {
-            const authData = JSON.parse(auth);
-            const user = authData?.user;
-
-            if (!user) {
+            if (!isAuthenticated()) {
                 // Save current path for redirect after login
                 const currentPath = window.location.pathname;
                 // Only save if it's not the default route
                 const returnParam = currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
                 navigate(`/login${returnParam}`);
-                return;
-            } else {
-                userInitialized.current = true;
-                const frameId = window.requestAnimationFrame(() => setUser(user));
-                return () => window.cancelAnimationFrame(frameId);
             }
-        } catch {
-            // If we have a parse error, redirect to login
-            navigate('/login');
         }
-    }, [navigate]);
+    }, [navigate, isAuthenticated]);
 
     // Handle provider selection changes
     const handleProviderChange = useCallback((provider: Provider) => {
@@ -207,22 +188,15 @@ const MainLayout = () => {
     return (
         <SidebarProvider>
             <ChatSidebar
-                user={user}
-                flows={flowsData?.flows ?? []}
                 providers={sortedProviders}
                 selectedProvider={selectedProvider}
-                selectedFlowId={selectedFlowId}
-                onChangeSelectedFlowId={handleChangeSelectedFlowId}
                 onChangeSelectedProvider={handleProviderChange}
-                onDeleteFlow={handleDeleteFlow}
-                onFinishFlow={handleFinishFlow}
             />
             <SidebarInset>
                 <Outlet
                     context={{
                         selectedProvider,
                         sortedProviders,
-                        user,
                         selectedFlowId,
                     }}
                 />

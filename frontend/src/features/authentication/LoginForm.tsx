@@ -14,6 +14,7 @@ import { axios } from '@/lib/axios';
 import { baseUrl } from '@/models/Api';
 import type { AuthInfoResponse, AuthLoginResponse } from '@/models/Info';
 import type { User } from '@/models/User';
+import { useUser } from '@/providers/UserProvider';
 
 import { PasswordChangeForm } from './PasswordChangeForm';
 
@@ -77,6 +78,7 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
     const [user, setUser] = useState<User | null>(null);
     const navigate = useNavigate();
+    const { setAuth } = useUser();
 
     const providerLoginCheckInterval = 500;
     const providerLoginTimeout = 300000;
@@ -95,20 +97,19 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
 
             const info: AuthInfoResponse = await axios.get('/info');
 
-            if (info?.status !== 'success') {
+            if (info?.status !== 'success' || !info.data) {
                 setError(errorMessage);
                 return;
             }
 
-            localStorage.setItem('auth', JSON.stringify(info.data));
-
             // Check if password change is required for local users
-            if (info.data && info.data?.user?.type === 'local' && info.data?.user?.password_change_required) {
-                setUser(info.data?.user as unknown as User);
+            if (info.data.user?.type === 'local' && info.data.user.password_change_required) {
+                setUser(info.data.user);
                 setPasswordChangeRequired(true);
                 return;
             }
 
+            setAuth(info.data);
             navigate(returnUrl);
         } catch {
             setError(errorMessage);
@@ -208,13 +209,12 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
         try {
             const info = await handleProviderLoginPopupOpen(provider);
 
-            if (info?.status !== 'success') {
-                setError(info.error || errorProviderMessage);
+            if (info?.status !== 'success' || !info.data) {
+                setError(info?.error || errorProviderMessage);
                 return;
             }
 
-            localStorage.setItem('auth', JSON.stringify(info.data));
-
+            setAuth(info.data);
             navigate(returnUrl);
         } catch (error) {
             setError(error instanceof Error ? error.message : errorMessage);
@@ -235,24 +235,27 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
                 password_change_required: false,
             };
 
-            // Get current auth data
-            const currentAuth = localStorage.getItem('auth');
-            let authData;
-            try {
-                authData = currentAuth ? JSON.parse(currentAuth) : null;
-            } catch {
-                authData = null;
+            // Get current auth info from localStorage
+            const storedData = localStorage.getItem('auth');
+            let currentAuthInfo = null;
+            if (storedData) {
+                try {
+                    const parsed = JSON.parse(storedData);
+                    currentAuthInfo = parsed.authInfo;
+                } catch {
+                    // ignore
+                }
             }
 
             // Create a full authentication info structure
             const updatedAuthData = {
-                type: 'user',
+                type: 'user' as const,
                 user: updatedUser,
-                providers: authData?.providers || [],
+                providers: currentAuthInfo?.providers || [],
+                expires_at: currentAuthInfo?.expires_at,
             };
 
-            // Always store the complete auth structure
-            localStorage.setItem('auth', JSON.stringify(updatedAuthData));
+            setAuth(updatedAuthData);
             navigate(returnUrl);
         }
     };

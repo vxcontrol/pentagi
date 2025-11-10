@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import Logo from '@/components/icons/Logo';
-import ThemeProvider from '@/providers/ThemeProvider';
 
 const OAuthResult = () => {
     const [statusMessage, setStatusMessage] = useState('Authentication in progress...');
@@ -102,12 +101,10 @@ const OAuthResult = () => {
     }, [successDelay, errorDelay]);
 
     return (
-        <ThemeProvider>
-            <div className="flex h-screen w-full items-center justify-center bg-gradient-to-r from-slate-800 to-slate-950">
-                <Logo className="m-auto size-32 animate-logo-spin text-white delay-10000" />
-                <div className="fixed bottom-4 text-sm text-white">{statusMessage}</div>
-            </div>
-        </ThemeProvider>
+        <div className="flex h-screen w-full items-center justify-center bg-gradient-to-r from-slate-800 to-slate-950">
+            <Logo className="m-auto size-32 animate-logo-spin text-white delay-10000" />
+            <div className="fixed bottom-4 text-sm text-white">{statusMessage}</div>
+        </div>
     );
 };
 

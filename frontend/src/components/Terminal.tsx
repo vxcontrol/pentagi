@@ -8,11 +8,11 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import type { ITerminalOptions, ITheme } from '@xterm/xterm';
 import { Terminal as XTerminal } from '@xterm/xterm';
 import debounce from 'lodash/debounce';
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
-import { useThemeStore } from '@/store/theme-store';
+import { useTheme } from '@/providers/ThemeProvider';
 
 const terminalOptions: ITerminalOptions = {
     convertEol: true,
@@ -115,7 +115,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({ logs, className, sear
     const webglAddonRef = useRef<WebglAddon | null>(null);
     const resizeObserverRef = useRef<ResizeObserver | null>(null);
     const debouncedFitRef = useRef<ReturnType<typeof debounce> | null>(null);
-    const theme = useThemeStore((store) => store.theme);
+    const { theme } = useTheme();
     const [isTerminalOpened, setIsTerminalOpened] = useState(false);
     const [isTerminalReady, setIsTerminalReady] = useState(false);
     const isTerminalReadyRef = useRef(false);
@@ -131,36 +131,40 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({ logs, className, sear
     };
 
     // Expose methods to parent component via ref
-    useImperativeHandle(ref, () => ({
-        findNext: () => {
-            if (searchAddonRef.current && searchValue?.trim()) {
-                try {
-                    searchAddonRef.current.findNext(searchValue.trim(), {
-                        caseSensitive: false,
-                        wholeWord: false,
-                        regex: false,
-                        decorations: getSearchDecorations()
-                    });
-                } catch (error: unknown) {
-                    Log.error('Terminal findNext failed:', error);
+    useImperativeHandle(
+        ref,
+        () => ({
+            findNext: () => {
+                if (searchAddonRef.current && searchValue?.trim()) {
+                    try {
+                        searchAddonRef.current.findNext(searchValue.trim(), {
+                            caseSensitive: false,
+                            wholeWord: false,
+                            regex: false,
+                            decorations: getSearchDecorations(),
+                        });
+                    } catch (error: unknown) {
+                        Log.error('Terminal findNext failed:', error);
+                    }
                 }
-            }
-        },
-        findPrevious: () => {
-            if (searchAddonRef.current && searchValue?.trim()) {
-                try {
-                    searchAddonRef.current.findPrevious(searchValue.trim(), {
-                        caseSensitive: false,
-                        wholeWord: false,
-                        regex: false,
-                        decorations: getSearchDecorations()
-                    });
-                } catch (error: unknown) {
-                    Log.error('Terminal findPrevious failed:', error);
+            },
+            findPrevious: () => {
+                if (searchAddonRef.current && searchValue?.trim()) {
+                    try {
+                        searchAddonRef.current.findPrevious(searchValue.trim(), {
+                            caseSensitive: false,
+                            wholeWord: false,
+                            regex: false,
+                            decorations: getSearchDecorations(),
+                        });
+                    } catch (error: unknown) {
+                        Log.error('Terminal findPrevious failed:', error);
+                    }
                 }
-            }
-        }
-    }), [searchValue, theme]);
+            },
+        }),
+        [searchValue, theme],
+    );
 
     // Safe terminal operations
     const safeTerminalOperation = (operation: () => void) => {
@@ -383,11 +387,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({ logs, className, sear
         try {
             if (searchValue && searchValue.trim()) {
                 // Perform search with theme-appropriate decorations
-                searchAddon.findNext(searchValue.trim(), { 
+                searchAddon.findNext(searchValue.trim(), {
                     caseSensitive: false,
                     wholeWord: false,
                     regex: false,
-                    decorations: getSearchDecorations()
+                    decorations: getSearchDecorations(),
                 });
             } else {
                 // Clear search highlighting when search value is empty
