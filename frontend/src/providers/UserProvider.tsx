@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { axios } from '@/lib/axios';
 import { getReturnUrlParam } from '@/lib/utils/auth';
@@ -101,6 +102,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
         try {
             await axios.get('/auth/logout');
+            toast.success('Successfully logged out');
+        } catch {
+            toast.error('Logout failed, but clearing local session');
         } finally {
             clearAuth();
             window.location.href = `/login${finalReturnUrl}`;
@@ -115,14 +119,18 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             );
 
             if (loginResponse?.status !== 'success') {
-                return { success: false, error: 'Invalid login or password' };
+                const errorMessage = 'Invalid login or password';
+                toast.error(errorMessage);
+                return { success: false, error: errorMessage };
             }
 
             // After login, backend set cookie, so we need to get fresh auth info
             const infoResponse: AuthInfoResponse = await axios.get('/info');
 
             if (infoResponse?.status !== 'success' || !infoResponse.data) {
-                return { success: false, error: 'Failed to load user information' };
+                const errorMessage = 'Failed to load user information';
+                toast.error(errorMessage);
+                return { success: false, error: errorMessage };
             }
 
             // Save auth info
@@ -130,12 +138,16 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
             // Check if password change is required for local users
             if (infoResponse.data.user?.type === 'local' && infoResponse.data.user.password_change_required) {
+                toast.warning('Password change required');
                 return { success: true, passwordChangeRequired: true };
             }
 
+            toast.success('Successfully logged in');
             return { success: true };
         } catch {
-            return { success: false, error: 'Login failed. Please try again.' };
+            const errorMessage = 'Login failed. Please try again.';
+            toast.error(errorMessage);
+            return { success: false, error: errorMessage };
         }
     }, []);
 
@@ -153,9 +165,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         );
 
         if (!popup) {
+            const errorMessage = 'Popup blocked. Please allow popups for this site.';
+            toast.error(errorMessage);
             return {
                 success: false,
-                error: 'Popup blocked. Please allow popups for this site.',
+                error: errorMessage,
             };
         }
 
@@ -180,6 +194,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                         if (info?.status === 'success' && info.data?.type === 'user') {
                             setAuth(info.data);
                             cleanup();
+                            toast.success('Successfully logged in');
                             resolve({ success: true });
                             return;
                         }
@@ -190,9 +205,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 cleanup();
+                const errorMessage = event.data.error || 'Authentication failed';
+                toast.error(errorMessage);
                 resolve({
                     success: false,
-                    error: event.data.error || 'Authentication failed',
+                    error: errorMessage,
                 });
             };
 
@@ -205,9 +222,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 if (popup?.closed) {
                     clearInterval(popupCheck);
                     window.removeEventListener('message', messageHandler);
+                    const errorMessage = 'Authentication cancelled';
+                    toast.info(errorMessage);
                     resolve({
                         success: false,
-                        error: 'Authentication cancelled',
+                        error: errorMessage,
                     });
                 }
             }, popupCheckInterval);
@@ -220,9 +239,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                     popup.close();
                 }
 
+                const errorMessage = 'Authentication timeout';
+                toast.error(errorMessage);
                 resolve({
                     success: false,
-                    error: 'Authentication timeout',
+                    error: errorMessage,
                 });
             }, popupTimeout);
         });
@@ -254,11 +275,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                     setAuth(info.data);
                 } else {
                     clearAuth();
+                    toast.error('Session expired. Please login again.');
                     const returnParam = getReturnUrlParam(location.pathname);
                     navigate(`/login${returnParam}`);
                 }
             } catch {
                 clearAuth();
+                toast.error('Session expired. Please login again.');
                 const returnParam = getReturnUrlParam(location.pathname);
                 navigate(`/login${returnParam}`);
             }

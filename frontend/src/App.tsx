@@ -8,6 +8,7 @@ import SettingsLayout from '@/components/layouts/SettingsLayout';
 import ProtectedRoute from '@/components/routes/ProtectedRoute';
 import PublicRoute from '@/components/routes/PublicRoute';
 import PageLoader from '@/components/shared/PageLoader';
+import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
 import Chat from '@/pages/Chat';
 import Flows from '@/pages/Flows';
@@ -37,6 +38,7 @@ const App = () => {
     return (
         <ApolloProvider client={client}>
             <ThemeProvider>
+                <Toaster />
                 <BrowserRouter>
                     <UserProvider>
                         <Suspense fallback={<PageLoader />}>
