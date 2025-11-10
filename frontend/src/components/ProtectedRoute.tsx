@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
+import { getReturnUrlParam } from '@/lib/utils/auth';
 import { useUser } from '@/providers/UserProvider';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -13,10 +14,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (!isAuthenticated()) {
-        // Save current path for redirect after login
-        const currentPath = location.pathname;
-        // Only save if it's not the default route
-        const returnParam = currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+        const returnParam = getReturnUrlParam(location.pathname);
         return (
             <Navigate
                 to={`/login${returnParam}`}

@@ -1,4 +1,4 @@
-import { GripVertical, Loader2 } from 'lucide-react';
+import { Check, ChevronsUpDown, GripVertical, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 
@@ -10,7 +10,14 @@ import {
     BreadcrumbProvider,
     BreadcrumbStatus,
 } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -45,12 +52,13 @@ import {
 } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { Log } from '@/lib/log';
-import { isProviderValid, type Provider } from '@/models/Provider';
+import { getProviderDisplayName, getProviderIcon, isProviderValid, type Provider } from '@/models/Provider';
 
 interface MainLayoutContext {
     selectedProvider: Provider | null;
     sortedProviders: Provider[];
     selectedFlowId: string | null;
+    onChangeSelectedProvider: (provider: Provider) => void;
 }
 
 const Chat = () => {
@@ -59,7 +67,8 @@ const Chat = () => {
     const navigate = useNavigate();
 
     // Get data from MainLayout context
-    const { selectedProvider, sortedProviders, selectedFlowId } = useOutletContext<MainLayoutContext>();
+    const { selectedProvider, sortedProviders, selectedFlowId, onChangeSelectedProvider } =
+        useOutletContext<MainLayoutContext>();
 
     // Add debounced flow ID to prevent rapid switching causing database connection issues
     const [debouncedFlowId, setDebouncedFlowId] = useState<string | null>(flowId ?? null);
@@ -502,31 +511,78 @@ const Chat = () => {
 
     return (
         <>
-            <header className="fixed top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-                <div className="flex items-center gap-2 px-4">
-                    <SidebarTrigger className="-ml-1" />
-                    <Separator
-                        orientation="vertical"
-                        className="mr-2 h-4"
-                    />
-                    <Breadcrumb>
-                        <BreadcrumbList>
-                            <BreadcrumbItem>
-                                {flowData?.flow && (
-                                    <>
-                                        <BreadcrumbStatus status={flowData.flow.status} />
-                                        <BreadcrumbProvider provider={flowData.flow.provider} />
-                                    </>
-                                )}
-                                <BreadcrumbPage>
-                                    {flowData?.flow?.title || (selectedFlowId === 'new' ? 'New flow' : 'Select a flow')}
-                                </BreadcrumbPage>
-                            </BreadcrumbItem>
-                        </BreadcrumbList>
-                    </Breadcrumb>
+            <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+                <div className="flex w-full items-center justify-between gap-2 px-4">
+                    <div className="flex items-center gap-2">
+                        <SidebarTrigger className="-ml-1" />
+                        <Separator
+                            orientation="vertical"
+                            className="mr-2 h-4"
+                        />
+                        <Breadcrumb>
+                            <BreadcrumbList>
+                                <BreadcrumbItem>
+                                    {flowData?.flow && (
+                                        <>
+                                            <BreadcrumbStatus status={flowData.flow.status} />
+                                            <BreadcrumbProvider provider={flowData.flow.provider} />
+                                        </>
+                                    )}
+                                    <BreadcrumbPage>
+                                        {flowData?.flow?.title ||
+                                            (selectedFlowId === 'new' ? 'New flow' : 'Select a flow')}
+                                    </BreadcrumbPage>
+                                </BreadcrumbItem>
+                            </BreadcrumbList>
+                        </Breadcrumb>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                            >
+                                <span className="truncate max-w-[120px]">
+                                    {selectedProvider ? getProviderDisplayName(selectedProvider) : 'Select Provider'}
+                                </span>
+                                <ChevronsUpDown className="size-4 shrink-0" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            className="min-w-[150px] max-w-[280px] w-fit"
+                            onCloseAutoFocus={(e) => {
+                                e.preventDefault();
+                            }}
+                        >
+                            {sortedProviders.map((provider) => (
+                                <DropdownMenuItem
+                                    key={provider.name}
+                                    onSelect={(e) => {
+                                        e.preventDefault();
+                                        onChangeSelectedProvider(provider);
+                                    }}
+                                    className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                                >
+                                    <div className="flex items-center gap-2 w-full min-w-0">
+                                        <div className="shrink-0">{getProviderIcon(provider, 'h-4 w-4 shrink-0')}</div>
+                                        <span className="flex-1 truncate max-w-[180px]">
+                                            {getProviderDisplayName(provider)}
+                                        </span>
+                                        {selectedProvider?.name === provider.name && (
+                                            <div className="shrink-0">
+                                                <Check className="h-4 w-4 shrink-0" />
+                                            </div>
+                                        )}
+                                    </div>
+                                </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </header>
-            <div className="relative mt-12 flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
+            <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
                 {isFlowLoading && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50">
                         <Loader2 className="size-16 animate-spin" />

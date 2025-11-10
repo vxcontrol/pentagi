@@ -1,7 +1,10 @@
 import type { AxiosError } from 'axios';
 import Axios from 'axios';
 
+import { AUTH_STORAGE_KEY } from '@/providers/UserProvider';
+
 import { Log } from './log';
+import { getReturnUrlParam } from './utils/auth';
 
 const axios = Axios.create({
     baseURL: '/api/v1',
@@ -48,14 +51,12 @@ axios.interceptors.response.use(
                 case 401:
                 case 403: {
                     Log.warn('You do not have permission to execute the api.');
-                    localStorage.removeItem('auth');
+                    localStorage.removeItem(AUTH_STORAGE_KEY);
 
                     // Redirect to login with current URL preserved
                     const currentPath = window.location.pathname;
-                    // Only save if it's not the default route
                     if (currentPath !== '/login') {
-                        const returnParam =
-                            currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                        const returnParam = getReturnUrlParam(currentPath);
                         window.location.href = `/login${returnParam}`;
                     }
                     break;
