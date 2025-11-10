@@ -1,11 +1,18 @@
 import * as React from 'react';
 import { Navigate } from 'react-router-dom';
 
-import { isAuthenticated } from '@/lib/auth';
+import { useUser } from '@/providers/UserProvider';
 
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+    const { isAuthenticated } = useUser();
+
     if (isAuthenticated()) {
-        return <Navigate to="/flows/new" />;
+        return (
+            <Navigate
+                to="/flows/new"
+                replace
+            />
+        );
     }
 
     return children;

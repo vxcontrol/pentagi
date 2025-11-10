@@ -26,16 +26,16 @@ import {
     AlertCircle,
     ArrowDown,
     ArrowUp,
-    Check,
+    CircleCheck,
+    CircleDashed,
+    CircleX,
     Eye,
     FileText,
     GitFork,
     Loader2,
     MoreHorizontal,
-    Pause,
     Plus,
     Trash,
-    X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -49,26 +49,27 @@ const statusConfig: Record<
     [StatusType.Created]: {
         label: 'Created',
         variant: 'outline',
+        icon: <CircleDashed className="h-3 w-3 text-blue-500" />,
     },
     [StatusType.Running]: {
         label: 'Running',
         variant: 'default',
-        icon: <Loader2 className="h-3 w-3 animate-spin" />,
+        icon: <Loader2 className="h-3 w-3 text-purple-500 animate-spin" />,
     },
     [StatusType.Waiting]: {
         label: 'Waiting',
         variant: 'outline',
-        icon: <Pause className="h-3 w-3" />,
+        icon: <CircleDashed className="h-3 w-3 text-yellow-500" />,
     },
     [StatusType.Finished]: {
         label: 'Finished',
         variant: 'secondary',
-        icon: <Check className="h-3 w-3" />,
+        icon: <CircleCheck className="h-3 w-3 text-green-500" />,
     },
     [StatusType.Failed]: {
         label: 'Failed',
         variant: 'destructive',
-        icon: <X className="h-3 w-3" />,
+        icon: <CircleX className="h-3 w-3 text-red-500" />,
     },
 };
 
@@ -248,7 +249,7 @@ const Flows = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <Pause />
+                                                    <CircleDashed />
                                                     Finish
                                                 </>
                                             )}
@@ -316,7 +317,7 @@ const Flows = () => {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4 pt-16">
+                <div className="flex flex-col gap-4 p-4 pt-0">
                     <StatusCard
                         icon={<Loader2 className="w-16 h-16 animate-spin text-muted-foreground" />}
                         title="Loading flows..."
@@ -331,11 +332,11 @@ const Flows = () => {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4 pt-16">
+                <div className="flex flex-col gap-4 p-4">
                     <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertTitle>Error loading flows</AlertTitle>
-                        <AlertDescription>{error.message}</AlertDescription>
+                        <AlertDescription>{error?.message}</AlertDescription>
                     </Alert>
                 </div>
             </>
@@ -347,7 +348,7 @@ const Flows = () => {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4 pt-16">
+                <div className="flex flex-col gap-4 p-4">
                     <StatusCard
                         icon={<FileText className="h-8 w-8 text-muted-foreground" />}
                         title="No flows found"
@@ -358,7 +359,7 @@ const Flows = () => {
                                 variant="secondary"
                             >
                                 <Plus className="h-4 w-4" />
-                                Create Flow
+                                New Flow
                             </Button>
                         }
                     />
@@ -370,7 +371,7 @@ const Flows = () => {
     return (
         <>
             {pageHeader}
-            <div className="flex flex-col gap-4 p-4 pt-16">
+            <div className="flex flex-col gap-4 p-4 pt-0">
                 {/* Delete Error Alert */}
                 {(deleteError || deleteErrorMessage) && (
                     <Alert variant="destructive">
