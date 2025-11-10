@@ -1,6 +1,6 @@
-import { useCallback, useState, useEffect, useMemo, memo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
-import Markdown from '@/components/Markdown';
+import Markdown from '@/components/shared/Markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { VectorStoreLogFragmentFragment } from '@/graphql/types';
 import { VectorStoreAction } from '@/graphql/types';
@@ -67,14 +67,14 @@ const containsSearchValue = (text: string | null | undefined, searchValue: strin
 
 const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
     const { executor, initiator, query, result, action, taskId, subtaskId, createdAt } = log;
-    
+
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
         if (!trimmedSearch) {
             return { hasQueryMatch: false, hasResultMatch: false };
         }
-        
+
         return {
             hasQueryMatch: containsSearchValue(query, trimmedSearch),
             hasResultMatch: containsSearchValue(result, trimmedSearch),
@@ -86,7 +86,7 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
     // Auto-expand details if they contain search matches
     useEffect(() => {
         const trimmedSearch = searchValue.trim();
-        
+
         if (trimmedSearch) {
             // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
@@ -118,7 +118,12 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
                         </span>
                     </div>
 
-                    <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>{query}</Markdown>
+                    <Markdown
+                        className="prose-xs prose-fixed break-words"
+                        searchValue={searchValue}
+                    >
+                        {query}
+                    </Markdown>
                 </div>
                 {result && (
                     <div className="mt-2 text-xs text-muted-foreground">
@@ -131,7 +136,12 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
                         {isDetailsVisible && (
                             <>
                                 <div className="my-2 border-t dark:border-gray-700" />
-                                <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>{result}</Markdown>
+                                <Markdown
+                                    className="prose-xs prose-fixed break-words"
+                                    searchValue={searchValue}
+                                >
+                                    {result}
+                                </Markdown>
                             </>
                         )}
                     </div>
@@ -151,8 +161,8 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
                 </span>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Copy 
-                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors" 
+                        <Copy
+                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors"
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>

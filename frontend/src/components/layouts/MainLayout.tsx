@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 
+import MainSidebar from '@/components/layouts/MainSidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import ChatSidebar from '@/features/chat/ChatSidebar';
 import {
     useFlowCreatedSubscription,
     useFlowDeletedSubscription,
@@ -104,7 +104,7 @@ const MainLayout = () => {
 
     return (
         <SidebarProvider>
-            <ChatSidebar />
+            <MainSidebar />
             <SidebarInset>
                 <Outlet
                     context={{

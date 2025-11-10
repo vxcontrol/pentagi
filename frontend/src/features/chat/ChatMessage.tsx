@@ -1,7 +1,7 @@
-import { memo, useCallback, useState, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
-import Markdown from '@/components/Markdown';
-import Terminal from '@/components/Terminal';
+import Markdown from '@/components/shared/Markdown';
+import Terminal from '@/components/shared/Terminal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AssistantLogFragmentFragment, MessageLogFragmentFragment } from '@/graphql/types';
 import { MessageLogType, ResultFormat } from '@/graphql/types';
@@ -28,14 +28,14 @@ const containsSearchValue = (text: string | null | undefined, searchValue: strin
 const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
     const { type, createdAt, message, thinking, result, resultFormat = ResultFormat.Plain } = log;
     const isReportMessage = type === MessageLogType.Report;
-    
+
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
         if (!trimmedSearch) {
             return { hasThinkingMatch: false, hasResultMatch: false };
         }
-        
+
         return {
             hasThinkingMatch: containsSearchValue(thinking, trimmedSearch),
             hasResultMatch: containsSearchValue(result, trimmedSearch),
@@ -48,7 +48,7 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
     // Auto-expand blocks if they contain search matches
     useEffect(() => {
         const trimmedSearch = searchValue.trim();
-        
+
         if (trimmedSearch) {
             // Expand thinking block only if it contains the search term
             if (searchChecks.hasThinkingMatch) {
@@ -99,12 +99,18 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
             <>
                 <div className="my-2 border-t dark:border-gray-700" />
                 {resultFormat === ResultFormat.Plain && (
-                    <Markdown className="prose-xs prose-fixed break-words text-sm text-accent-foreground" searchValue={searchValue}>
+                    <Markdown
+                        className="prose-xs prose-fixed break-words text-sm text-accent-foreground"
+                        searchValue={searchValue}
+                    >
                         {result}
                     </Markdown>
                 )}
                 {resultFormat === ResultFormat.Markdown && (
-                    <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>
+                    <Markdown
+                        className="prose-xs prose-fixed break-words"
+                        searchValue={searchValue}
+                    >
                         {result}
                     </Markdown>
                 )}
@@ -124,7 +130,10 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
         return (
             <>
                 <div className="mb-3 border-l-2 border-muted pl-3">
-                    <Markdown className="prose-xs prose-fixed break-words text-muted-foreground/80" searchValue={searchValue}>
+                    <Markdown
+                        className="prose-xs prose-fixed break-words text-muted-foreground/80"
+                        searchValue={searchValue}
+                    >
                         {thinking}
                     </Markdown>
                 </div>
@@ -157,7 +166,10 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
 
                 {/* Main message content */}
                 {message && (
-                    <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>
+                    <Markdown
+                        className="prose-xs prose-fixed break-words"
+                        searchValue={searchValue}
+                    >
                         {message}
                     </Markdown>
                 )}
@@ -183,8 +195,8 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
                 <ChatMessageTypeIcon type={type} />
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Copy 
-                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors" 
+                        <Copy
+                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors"
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>

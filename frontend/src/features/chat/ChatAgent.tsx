@@ -1,6 +1,6 @@
-import { useCallback, useState, useEffect, useMemo, memo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
-import Markdown from '@/components/Markdown';
+import Markdown from '@/components/shared/Markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { AgentLogFragmentFragment } from '@/graphql/types';
 import { formatDate } from '@/lib/utils/format';
@@ -26,14 +26,14 @@ const containsSearchValue = (text: string | null | undefined, searchValue: strin
 
 const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
     const { executor, initiator, task, result, taskId, subtaskId, createdAt } = log;
-    
+
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
         if (!trimmedSearch) {
             return { hasTaskMatch: false, hasResultMatch: false };
         }
-        
+
         return {
             hasTaskMatch: containsSearchValue(task, trimmedSearch),
             hasResultMatch: containsSearchValue(result, trimmedSearch),
@@ -45,7 +45,7 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
     // Auto-expand details if they contain search matches
     useEffect(() => {
         const trimmedSearch = searchValue.trim();
-        
+
         if (trimmedSearch) {
             // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
@@ -76,7 +76,10 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
     return (
         <div className="flex flex-col items-start">
             <div className="max-w-full rounded-lg bg-accent p-3 text-accent-foreground">
-                <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>
+                <Markdown
+                    className="prose-xs prose-fixed break-words"
+                    searchValue={searchValue}
+                >
                     {taskToShow}
                 </Markdown>
                 {shouldShowDetailsToggle && (
@@ -90,7 +93,12 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
                         {isDetailsVisible && result && (
                             <>
                                 <div className="my-2 border-t dark:border-gray-700" />
-                                <Markdown className="prose-xs prose-fixed break-words" searchValue={searchValue}>{result}</Markdown>
+                                <Markdown
+                                    className="prose-xs prose-fixed break-words"
+                                    searchValue={searchValue}
+                                >
+                                    {result}
+                                </Markdown>
                             </>
                         )}
                     </div>
@@ -110,8 +118,8 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
                 </span>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                        <Copy 
-                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors" 
+                        <Copy
+                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors"
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>

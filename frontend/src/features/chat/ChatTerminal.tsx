@@ -1,13 +1,13 @@
 import '@xterm/xterm/css/xterm.css';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Search, X, ChevronUp, ChevronDown } from 'lucide-react';
 import debounce from 'lodash/debounce';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import Terminal from '@/components/Terminal';
+import Terminal from '@/components/shared/Terminal';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -38,10 +38,11 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
 
     // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
-        () => debounce((value: string) => {
-            setDebouncedSearchValue(value);
-        }, 500),
-        []
+        () =>
+            debounce((value: string) => {
+                setDebouncedSearchValue(value);
+            }, 500),
+        [],
     );
 
     // Update debounced search value when input value changes
