@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 
-import Markdown from '@/components/Markdown';
+import Markdown from '@/components/shared/Markdown';
 import type { TaskFragmentFragment } from '@/graphql/types';
 
 import ChatSubtask from './ChatSubtask';

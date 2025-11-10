@@ -2,12 +2,12 @@ import { ApolloProvider } from '@apollo/client';
 import { Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
-import AppLayout from '@/components/AppLayout';
-import MainLayout from '@/components/MainLayout';
-import PageLoader from '@/components/PageLoader';
-import ProtectedRoute from '@/components/ProtectedRoute';
-import PublicRoute from '@/components/PublicRoute';
-import SettingsLayout from '@/components/SettingsLayout';
+import AppLayout from '@/components/layouts/AppLayout';
+import MainLayout from '@/components/layouts/MainLayout';
+import SettingsLayout from '@/components/layouts/SettingsLayout';
+import ProtectedRoute from '@/components/routes/ProtectedRoute';
+import PublicRoute from '@/components/routes/PublicRoute';
+import PageLoader from '@/components/shared/PageLoader';
 import client from '@/lib/apollo';
 import Chat from '@/pages/Chat';
 import Flows from '@/pages/Flows';

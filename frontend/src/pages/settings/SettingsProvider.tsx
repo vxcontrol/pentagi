@@ -1,4 +1,4 @@
-import ConfirmationDialog from '@/components/ConfirmationDialog';
+import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -996,7 +996,8 @@ const SettingsProvider = () => {
                     return;
                 }
             } else if (queryType && data?.settingsProviders?.default) {
-                const defaultProvider = data.settingsProviders.default[queryType as keyof typeof data.settingsProviders.default];
+                const defaultProvider =
+                    data.settingsProviders.default[queryType as keyof typeof data.settingsProviders.default];
 
                 form.reset({
                     name: undefined,
@@ -1703,7 +1704,7 @@ const SettingsProvider = () => {
                 cancelText="Stay"
                 confirmText="Leave"
                 confirmVariant="destructive"
-                confirmIcon={null}
+                confirmIcon={undefined}
             />
         </>
     );

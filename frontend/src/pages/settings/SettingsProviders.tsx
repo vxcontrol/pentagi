@@ -1,10 +1,10 @@
-import ConfirmationDialog from '@/components/ConfirmationDialog';
 import Anthropic from '@/components/icons/Anthropic';
 import Bedrock from '@/components/icons/Bedrock';
 import Custom from '@/components/icons/Custom';
 import Gemini from '@/components/icons/Gemini';
 import Ollama from '@/components/icons/Ollama';
 import OpenAi from '@/components/icons/OpenAi';
+import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

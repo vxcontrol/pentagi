@@ -1,7 +1,7 @@
 import { ListCheck, ListTodo } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
-import Markdown from '@/components/Markdown';
+import Markdown from '@/components/shared/Markdown';
 import type { SubtaskFragmentFragment } from '@/graphql/types';
 
 import ChatTaskStatusIcon from './ChatTaskStatusIcon';

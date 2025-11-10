@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/Logo';
-import Markdown from '@/components/Markdown';
-import { generateReport, generatePDFFromMarkdown, generateFileName } from '@/lib/report';
+import Markdown from '@/components/shared/Markdown';
 import { useFlowReportQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
+import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
 type ReportState = 'loading' | 'content' | 'generating' | 'error';
 
@@ -19,10 +19,14 @@ const Report = () => {
     const [error, setError] = useState<string | null>(null);
     const [reportContent, setReportContent] = useState<string>('');
 
-    const { data, loading, error: queryError } = useFlowReportQuery({
+    const {
+        data,
+        loading,
+        error: queryError,
+    } = useFlowReportQuery({
         variables: { id: flowId! },
         skip: !flowId,
-        errorPolicy: 'all'
+        errorPolicy: 'all',
     });
 
     // Reset state when component mounts or flowId changes
@@ -49,7 +53,7 @@ const Report = () => {
             // Download mode - generate PDF and download it
             setState('generating');
             const fileName = `${generateFileName(data.flow)}.pdf`;
-            
+
             generatePDFFromMarkdown(content, fileName)
                 .then(() => {
                     if (silent) {

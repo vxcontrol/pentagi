@@ -29,7 +29,7 @@ import { PasswordChangeForm } from '@/features/authentication/PasswordChangeForm
 import { useTheme } from '@/providers/ThemeProvider';
 import { useUser } from '@/providers/UserProvider';
 
-const ChatSidebar = () => {
+const MainSidebar = () => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const isFlowsActive = useMatch('/flows/*');
@@ -176,4 +176,4 @@ const ChatSidebar = () => {
     );
 };
 
-export default ChatSidebar;
+export default MainSidebar;
