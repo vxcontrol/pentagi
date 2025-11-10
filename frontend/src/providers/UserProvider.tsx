@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { axios } from '@/lib/axios';
+import { getReturnUrlParam } from '@/lib/utils/auth';
 import { baseUrl } from '@/models/Api';
 import type { AuthInfo, AuthInfoResponse } from '@/models/Info';
 
@@ -31,7 +32,7 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-const AUTH_STORAGE_KEY = 'auth';
+export const AUTH_STORAGE_KEY = 'auth';
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
     const navigate = useNavigate();
@@ -96,8 +97,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
     const logout = useCallback(async (returnUrl?: string) => {
         const currentPath = location.pathname;
-        const finalReturnUrl =
-            returnUrl || (currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '');
+        const finalReturnUrl = returnUrl || getReturnUrlParam(currentPath);
 
         try {
             await axios.get('/auth/logout');
@@ -228,20 +228,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         });
     }, []);
 
-    // Sync auth state on route changes
+    // Update auth state on route changes
     useEffect(() => {
-        const syncAuth = async () => {
+        const updateAuth = async () => {
             // Skip for public routes
             const publicRoutes = ['/login', '/oauth/result'];
 
-            // Check authentication status directly using authInfo
-            if (!authInfo?.user || !authInfo?.expires_at) {
-                return;
-            }
-
-            const now = new Date();
-            const expirationDate = new Date(authInfo.expires_at);
-            if (expirationDate <= now) {
+            // Check if user is authenticated
+            if (!isAuthenticated()) {
                 return;
             }
 
@@ -260,25 +254,18 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                     setAuth(info.data);
                 } else {
                     clearAuth();
-                    // Save current path for redirect after login
-                    const currentPath = location.pathname;
-                    // Only save if it's not the default route
-                    const returnParam =
-                        currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                    const returnParam = getReturnUrlParam(location.pathname);
                     navigate(`/login${returnParam}`);
                 }
             } catch {
                 clearAuth();
-                // Save current path for redirect after login
-                const currentPath = location.pathname;
-                // Only save if it's not the default route
-                const returnParam = currentPath !== '/flows/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                const returnParam = getReturnUrlParam(location.pathname);
                 navigate(`/login${returnParam}`);
             }
         };
 
-        syncAuth();
-    }, [location.pathname]);
+        updateAuth();
+    }, [location.pathname, authInfo]);
 
     return (
         <UserContext.Provider

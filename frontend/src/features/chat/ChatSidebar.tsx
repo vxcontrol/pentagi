@@ -1,10 +1,9 @@
 import { Avatar, AvatarFallback } from '@radix-ui/react-avatar';
-import { Check, ChevronsUpDown, GitFork, KeyRound, LogOut, Moon, Settings, Sun, UserIcon } from 'lucide-react';
+import { ChevronsUpDown, GitFork, KeyRound, LogOut, Moon, Settings, Sun, UserIcon } from 'lucide-react';
 import { useState } from 'react';
-import { useMatch, useNavigate } from 'react-router-dom';
+import { Link, useMatch } from 'react-router-dom';
 
 import Logo from '@/components/icons/Logo';
-import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
@@ -27,19 +26,10 @@ import {
     SidebarRail,
 } from '@/components/ui/sidebar';
 import { PasswordChangeForm } from '@/features/authentication/PasswordChangeForm';
-import { cn } from '@/lib/utils';
-import { getProviderDisplayName, getProviderIcon, type Provider } from '@/models/Provider';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useUser } from '@/providers/UserProvider';
 
-interface ChatSidebarProps {
-    providers: Provider[];
-    selectedProvider: Provider | null;
-    onChangeSelectedProvider: (provider: Provider) => void;
-}
-
-const ChatSidebar = ({ providers, selectedProvider, onChangeSelectedProvider }: ChatSidebarProps) => {
-    const navigate = useNavigate();
+const ChatSidebar = () => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const isFlowsActive = useMatch('/flows/*');
@@ -62,54 +52,6 @@ const ChatSidebar = ({ providers, selectedProvider, onChangeSelectedProvider }: 
                             <Logo className="size-6 hover:animate-logo-spin" />
                             <span className="font-semibold">PentAGI</span>
                         </div>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="ml-auto h-8 gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                                >
-                                    <span className="truncate max-w-[90px]">
-                                        {selectedProvider
-                                            ? getProviderDisplayName(selectedProvider)
-                                            : 'Select Provider'}
-                                    </span>
-                                    <ChevronsUpDown className="size-4 shrink-0" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align="end"
-                                className="min-w-[150px] max-w-[280px] w-fit"
-                                onCloseAutoFocus={(e) => {
-                                    e.preventDefault();
-                                }}
-                            >
-                                {providers.map((provider) => (
-                                    <DropdownMenuItem
-                                        key={provider.name}
-                                        onSelect={(e) => {
-                                            e.preventDefault();
-                                            onChangeSelectedProvider(provider);
-                                        }}
-                                        className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
-                                    >
-                                        <div className="flex items-center gap-2 w-full min-w-0">
-                                            <div className="shrink-0">
-                                                {getProviderIcon(provider, 'h-4 w-4 shrink-0')}
-                                            </div>
-                                            <span className="flex-1 truncate max-w-[180px]">
-                                                {getProviderDisplayName(provider)}
-                                            </span>
-                                            {selectedProvider?.name === provider.name && (
-                                                <div className="shrink-0">
-                                                    <Check className="h-4 w-4 shrink-0" />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
@@ -120,19 +62,12 @@ const ChatSidebar = ({ providers, selectedProvider, onChangeSelectedProvider }: 
                             <SidebarMenuItem>
                                 <SidebarMenuButton
                                     asChild
-                                    className={cn(
-                                        'relative cursor-pointer overflow-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                                        {
-                                            'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
-                                                isFlowsActive,
-                                        },
-                                    )}
-                                    onClick={() => navigate('/flows')}
+                                    isActive={!!isFlowsActive}
                                 >
-                                    <div className="flex w-full items-center gap-2">
-                                        <GitFork className="size-4" />
-                                        <span>Flows</span>
-                                    </div>
+                                    <Link to="/flows">
+                                        <GitFork />
+                                        Flows
+                                    </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
                         </SidebarMenu>
@@ -144,19 +79,12 @@ const ChatSidebar = ({ providers, selectedProvider, onChangeSelectedProvider }: 
                     <SidebarMenuItem>
                         <SidebarMenuButton
                             asChild
-                            className={cn(
-                                'relative cursor-pointer overflow-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                                {
-                                    'bg-sidebar-accent text-sidebar-accent-foreground font-medium before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1 before:bg-primary dark:before:bg-primary-foreground':
-                                        isSettingsActive,
-                                },
-                            )}
-                            onClick={() => navigate('/settings')}
+                            isActive={!!isSettingsActive}
                         >
-                            <div className="flex w-full items-center gap-2">
-                                <Settings className="size-4" />
-                                <span>Settings</span>
-                            </div>
+                            <Link to="/settings">
+                                <Settings />
+                                Settings
+                            </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                     <SidebarMenuItem>
