@@ -304,6 +304,7 @@ func getStructTypeForFunction(funcName string) (reflect.Type, error) {
 		tools.StoreAnswerToolName:       &tools.StoreAnswerAction{},
 		tools.SearchCodeToolName:        &tools.SearchCodeAction{},
 		tools.StoreCodeToolName:         &tools.StoreCodeAction{},
+		tools.GraphitiSearchToolName:    &tools.GraphitiSearchAction{},
 		tools.SearchToolName:            &tools.ComplexSearch{},
 		tools.MaintenanceToolName:       &tools.MaintenanceAction{},
 		tools.CoderToolName:             &tools.CoderAction{},

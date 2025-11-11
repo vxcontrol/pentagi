@@ -1170,7 +1170,7 @@ These settings control the integration with Graphiti, a temporal knowledge graph
 | Option | Environment Variable | Default Value | Description |
 |--------|---------------------|---------------|-------------|
 | GraphitiEnabled | `GRAPHITI_ENABLED` | `false` | Enable or disable Graphiti knowledge graph integration |
-| GraphitiURL | `GRAPHITI_URL` | `http://localhost:8000` | Base URL for Graphiti API service |
+| GraphitiURL | `GRAPHITI_URL` | `http://localhost:8001` | Base URL for Graphiti API service |
 | GraphitiTimeout | `GRAPHITI_TIMEOUT` | `30` | Timeout in seconds for Graphiti operations |
 
 ### Usage Details

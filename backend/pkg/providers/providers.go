@@ -76,6 +76,7 @@ type ProviderController interface {
 	) (AssistantProvider, error)
 
 	Embedder() embeddings.Embedder
+	GraphitiClient() *graphiti.Client
 	DefaultProviders() provider.Providers
 	DefaultProvidersConfig() provider.ProvidersConfig
 	GetProvider(
@@ -417,6 +418,10 @@ func (pc *providerController) LoadFlowProvider(
 
 func (pc *providerController) Embedder() embeddings.Embedder {
 	return pc.embedder
+}
+
+func (pc *providerController) GraphitiClient() *graphiti.Client {
+	return pc.graphitiClient
 }
 
 func (pc *providerController) NewAssistantProvider(
