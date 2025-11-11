@@ -9,6 +9,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/terminal"
@@ -35,16 +36,17 @@ func (at *agentTool) IsAvailable() bool {
 
 // toolExecutor holds the necessary data for creating and managing tools
 type toolExecutor struct {
-	flowExecutor tools.FlowToolsExecutor
-	cfg          *config.Config
-	db           database.Querier
-	dockerClient docker.DockerClient
-	handlers     providers.FlowProviderHandlers
-	store        *pgvector.Store
-	proxies      mocks.ProxyProviders
-	flowID       int64
-	taskID       *int64
-	subtaskID    *int64
+	flowExecutor   tools.FlowToolsExecutor
+	cfg            *config.Config
+	db             database.Querier
+	dockerClient   docker.DockerClient
+	handlers       providers.FlowProviderHandlers
+	store          *pgvector.Store
+	graphitiClient *graphiti.Client
+	proxies        mocks.ProxyProviders
+	flowID         int64
+	taskID         *int64
+	subtaskID      *int64
 }
 
 // newToolExecutor creates a new executor with the given parameters
@@ -58,6 +60,7 @@ func newToolExecutor(
 	flowID int64,
 	taskID, subtaskID *int64,
 	embedder embeddings.Embedder,
+	graphitiClient *graphiti.Client,
 ) *toolExecutor {
 	var store *pgvector.Store
 	if embedder.IsAvailable() {
@@ -74,16 +77,17 @@ func newToolExecutor(
 	}
 
 	return &toolExecutor{
-		flowExecutor: flowExecutor,
-		cfg:          cfg,
-		db:           db,
-		dockerClient: dockerClient,
-		handlers:     handlers,
-		store:        store,
-		proxies:      proxies,
-		flowID:       flowID,
-		taskID:       taskID,
-		subtaskID:    subtaskID,
+		flowExecutor:   flowExecutor,
+		cfg:            cfg,
+		db:             db,
+		dockerClient:   dockerClient,
+		handlers:       handlers,
+		store:          store,
+		graphitiClient: graphitiClient,
+		proxies:        proxies,
+		flowID:         flowID,
+		taskID:         taskID,
+		subtaskID:      subtaskID,
 	}
 }
 
@@ -238,6 +242,14 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.subtaskID,
 			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
+		), nil
+
+	case tools.GraphitiSearchToolName:
+		return tools.NewGraphitiSearchTool(
+			te.flowID,
+			te.taskID,
+			te.subtaskID,
+			te.graphitiClient,
 		), nil
 
 	// AI Agent tools

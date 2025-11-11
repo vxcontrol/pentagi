@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"testing"
 
-	"pentagi/pkg/observability/langfuse/api/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"pentagi/pkg/observability/langfuse/api/core"
 )
 
 // TestCase represents a single test case.

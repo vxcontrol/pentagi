@@ -8,6 +8,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
 
@@ -121,14 +122,15 @@ type flowToolsExecutor struct {
 	tlp    TermLogProvider
 	vslp   VectorStoreLogProvider
 
-	db         database.Querier
-	cfg        *config.Config
-	store      *pgvector.Store
-	image      string
-	docker     docker.DockerClient
-	primaryID  int64
-	primaryLID string
-	functions  *Functions
+	db             database.Querier
+	cfg            *config.Config
+	store          *pgvector.Store
+	graphitiClient *graphiti.Client
+	image          string
+	docker         docker.DockerClient
+	primaryID      int64
+	primaryLID     string
+	functions      *Functions
 
 	definitions map[string]llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
@@ -257,6 +259,7 @@ type FlowToolsExecutor interface {
 	SetSearchLogProvider(slp SearchLogProvider)
 	SetTermLogProvider(tlp TermLogProvider)
 	SetVectorStoreLogProvider(vslp VectorStoreLogProvider)
+	SetGraphitiClient(client *graphiti.Client)
 
 	Prepare(ctx context.Context) error
 	Release(ctx context.Context) error
@@ -344,6 +347,10 @@ func (fte *flowToolsExecutor) SetTermLogProvider(tlp TermLogProvider) {
 
 func (fte *flowToolsExecutor) SetVectorStoreLogProvider(vslp VectorStoreLogProvider) {
 	fte.vslp = vslp
+}
+
+func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
+	fte.graphitiClient = client
 }
 
 func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
@@ -726,6 +733,17 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 		ce.barriers[AskUserToolName] = struct{}{}
 	}
 
+	graphitiSearch := NewGraphitiSearchTool(
+		fte.flowID,
+		&cfg.TaskID,
+		&cfg.SubtaskID,
+		fte.graphitiClient,
+	)
+	if graphitiSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
+		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
+	}
+
 	return ce, nil
 }
 
@@ -893,6 +911,17 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		ce.handlers[StoreCodeToolName] = code.Handle
 	}
 
+	graphitiSearch := NewGraphitiSearchTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.graphitiClient,
+	)
+	if graphitiSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
+		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
+	}
+
 	return ce, nil
 }
 
@@ -992,6 +1021,17 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchGuideToolName])
 		ce.handlers[StoreGuideToolName] = guide.Handle
 		ce.handlers[SearchGuideToolName] = guide.Handle
+	}
+
+	graphitiSearch := NewGraphitiSearchTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.graphitiClient,
+	)
+	if graphitiSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
+		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
 	return ce, nil
