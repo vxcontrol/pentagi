@@ -142,7 +142,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 return { success: true, passwordChangeRequired: true };
             }
 
-            toast.success('Successfully logged in');
+            // toast.success('Successfully logged in');
             return { success: true };
         } catch {
             const errorMessage = 'Login failed. Please try again.';
@@ -194,7 +194,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                         if (info?.status === 'success' && info.data?.type === 'user') {
                             setAuth(info.data);
                             cleanup();
-                            toast.success('Successfully logged in');
+                            // toast.success('Successfully logged in');
                             resolve({ success: true });
                             return;
                         }
@@ -288,7 +288,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         };
 
         updateAuth();
-    }, [location.pathname, authInfo]);
+    }, [location.pathname]);
 
     return (
         <UserContext.Provider
