@@ -1,5 +1,4 @@
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -21,9 +20,9 @@ import {
     useFlowsQuery,
     type FlowOverviewFragmentFragment,
 } from '@/graphql/types';
+import { NetworkStatus } from '@apollo/client';
 import { type ColumnDef } from '@tanstack/react-table';
 import {
-    AlertCircle,
     ArrowDown,
     ArrowUp,
     CircleCheck,
@@ -34,11 +33,13 @@ import {
     GitFork,
     Loader2,
     MoreHorizontal,
+    Pause,
     Plus,
     Trash,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 type Flow = FlowOverviewFragmentFragment;
 
@@ -75,12 +76,24 @@ const statusConfig: Record<
 
 const Flows = () => {
     const navigate = useNavigate();
-    const { data, loading: isLoading, error, refetch } = useFlowsQuery();
-    const [deleteFlow, { loading: isDeleteLoading, error: deleteError }] = useDeleteFlowMutation();
-    const [finishFlow, { loading: isFinishLoading }] = useFinishFlowMutation();
-    const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+    const { data, loading, error, networkStatus } = useFlowsQuery({
+        notifyOnNetworkStatusChange: true,
+    });
+    const isLoading = loading && networkStatus === NetworkStatus.loading;
+    const [deleteFlow] = useDeleteFlowMutation();
+    const [finishFlow] = useFinishFlowMutation();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingFlow, setDeletingFlow] = useState<Flow | null>(null);
+    const [finishingFlowIds, setFinishingFlowIds] = useState<Set<string>>(new Set());
+    const [deletingFlowIds, setDeletingFlowIds] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (error) {
+            toast.error('Error loading flows', {
+                description: error.message,
+            });
+        }
+    }, [error]);
 
     const handleFlowOpen = (flowId: string) => {
         navigate(`/flows/${flowId}`);
@@ -96,8 +109,15 @@ const Flows = () => {
             return;
         }
 
+        const flowTitle = deletingFlow?.title || 'Unknown';
+        const flowDescription = `${flowTitle} (ID: ${flowId})`;
+
+        const loadingToastId = toast.loading('Deleting flow...', {
+            description: flowDescription,
+        });
+
         try {
-            setDeleteErrorMessage(null);
+            setDeletingFlowIds((previousIds) => new Set(previousIds).add(flowId));
 
             await deleteFlow({
                 variables: { flowId },
@@ -110,22 +130,59 @@ const Flows = () => {
             });
 
             setDeletingFlow(null);
-            setDeleteErrorMessage(null);
-            await refetch();
+
+            toast.success('Flow deleted successfully', {
+                id: loadingToastId,
+                description: flowDescription,
+            });
         } catch (error) {
-            setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
+            const errorMessage = error instanceof Error ? error.message : 'An error occurred while deleting';
+            toast.error(errorMessage, {
+                id: loadingToastId,
+                description: flowDescription,
+            });
+        } finally {
+            setDeletingFlowIds((previousIds) => {
+                const newIds = new Set(previousIds);
+                newIds.delete(flowId);
+                return newIds;
+            });
         }
     };
 
     const handleFlowFinish = async (flowId: string) => {
+        const flow = data?.flows?.find((f) => f.id === flowId);
+        const flowTitle = flow?.title || 'Unknown';
+        const flowDescription = `${flowTitle} (ID: ${flowId})`;
+
+        const loadingToastId = toast.loading('Finishing flow...', {
+            description: flowDescription,
+        });
+
         try {
+            setFinishingFlowIds((previousIds) => new Set(previousIds).add(flowId));
+
             await finishFlow({
                 variables: { flowId },
                 refetchQueries: ['flows'],
             });
-            await refetch();
+
+            toast.success('Flow finished successfully', {
+                id: loadingToastId,
+                description: flowDescription,
+            });
         } catch (error) {
-            // ignore
+            const errorMessage = error instanceof Error ? error.message : 'An error occurred while finishing';
+            toast.error(errorMessage, {
+                id: loadingToastId,
+                description: flowDescription,
+            });
+        } finally {
+            setFinishingFlowIds((previousIds) => {
+                const newIds = new Set(previousIds);
+                newIds.delete(flowId);
+                return newIds;
+            });
         }
     };
 
@@ -214,7 +271,7 @@ const Flows = () => {
             header: () => null,
             cell: ({ row }) => {
                 const flow = row.original;
-                const isRunning = flow.status === StatusType.Running;
+                const isRunning = ![StatusType.Finished, StatusType.Failed].includes(flow.status);
 
                 return (
                     <div className="flex justify-end">
@@ -236,32 +293,29 @@ const Flows = () => {
                                     View
                                 </DropdownMenuItem>
                                 {isRunning && (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                            onClick={() => handleFlowFinish(flow.id)}
-                                            disabled={isFinishLoading}
-                                        >
-                                            {isFinishLoading ? (
-                                                <>
-                                                    <Loader2 className="animate-spin" />
-                                                    Finishing...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <CircleDashed />
-                                                    Finish
-                                                </>
-                                            )}
-                                        </DropdownMenuItem>
-                                    </>
+                                    <DropdownMenuItem
+                                        onClick={() => handleFlowFinish(flow.id)}
+                                        disabled={finishingFlowIds.has(flow.id)}
+                                    >
+                                        {finishingFlowIds.has(flow.id) ? (
+                                            <>
+                                                <Loader2 className="animate-spin" />
+                                                Finishing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Pause />
+                                                Finish
+                                            </>
+                                        )}
+                                    </DropdownMenuItem>
                                 )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     onClick={() => handleFlowDeleteDialogOpen(flow)}
-                                    disabled={isDeleteLoading && deletingFlow?.id === flow.id}
+                                    disabled={deletingFlowIds.has(flow.id)}
                                 >
-                                    {isDeleteLoading && deletingFlow?.id === flow.id ? (
+                                    {deletingFlowIds.has(flow.id) ? (
                                         <>
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                             Deleting...
@@ -328,21 +382,6 @@ const Flows = () => {
         );
     }
 
-    if (error) {
-        return (
-            <>
-                {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error loading flows</AlertTitle>
-                        <AlertDescription>{error?.message}</AlertDescription>
-                    </Alert>
-                </div>
-            </>
-        );
-    }
-
     // Check if flows list is empty
     if (!flows.length) {
         return (
@@ -372,15 +411,6 @@ const Flows = () => {
         <>
             {pageHeader}
             <div className="flex flex-col gap-4 p-4 pt-0">
-                {/* Delete Error Alert */}
-                {(deleteError || deleteErrorMessage) && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Error deleting flow</AlertTitle>
-                        <AlertDescription>{deleteError?.message || deleteErrorMessage}</AlertDescription>
-                    </Alert>
-                )}
-
                 <DataTable
                     columns={columns}
                     data={flows}

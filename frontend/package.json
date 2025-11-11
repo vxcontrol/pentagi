@@ -54,7 +54,7 @@
         "lucide-react": "^0.553.0",
         "next-themes": "^0.4.6",
         "react": "^19.0.0",
-        "react-diff-viewer-continued": "^3.2.6",
+        "react-diff-viewer-continued": "^4.0.6",
         "react-dom": "^19.0.0",
         "react-hook-form": "^7.56.4",
         "react-markdown": "^10.1.0",

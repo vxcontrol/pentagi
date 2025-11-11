@@ -225,3 +225,27 @@
     padding: 0;
     overflow: visible;
 }
+
+/* Sonner */
+[data-sonner-toast][data-styled='true'] {
+    gap: 8px !important;
+}
+
+[data-sonner-toast][data-styled='true'] [data-icon] {
+    align-self: flex-start;
+    margin: 2px 0;
+}
+
+[data-sonner-toast][data-styled='true'] [data-title] {
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 20px !important;
+}
+
+[data-sonner-toaster][data-sonner-theme='dark'] [data-description],
+[data-sonner-toaster][data-sonner-theme='light'] [data-description] {
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    line-height: 16px !important;
+    color: hsl(var(--muted-foreground)) !important;
+}
