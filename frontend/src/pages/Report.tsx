@@ -7,7 +7,7 @@ import { useFlowReportQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
-type ReportState = 'loading' | 'content' | 'generating' | 'error';
+type ReportState = 'content' | 'error' | 'generating' | 'loading';
 
 const Report = () => {
     const { flowId } = useParams<{ flowId: string }>();
@@ -16,17 +16,17 @@ const Report = () => {
     const silent = searchParams.has('silent');
 
     const [state, setState] = useState<ReportState>('loading');
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<null | string>(null);
     const [reportContent, setReportContent] = useState<string>('');
 
     const {
         data,
-        loading,
         error: queryError,
+        loading,
     } = useFlowReportQuery({
-        variables: { id: flowId! },
-        skip: !flowId,
         errorPolicy: 'all',
+        skip: !flowId,
+        variables: { id: flowId! },
     });
 
     // Reset state when component mounts or flowId changes
@@ -37,11 +37,14 @@ const Report = () => {
     }, [flowId]);
 
     useEffect(() => {
-        if (loading) return;
+        if (loading) {
+            return;
+        }
 
         if (queryError || !data?.flow) {
             setError('Failed to load flow data');
             setState('error');
+
             return;
         }
 
@@ -108,8 +111,8 @@ const Report = () => {
                             {error || 'An unexpected error occurred while loading the report.'}
                         </p>
                         <button
-                            onClick={() => window.close()}
                             className="mt-4 rounded-md bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700"
+                            onClick={() => window.close()}
                         >
                             Close
                         </button>

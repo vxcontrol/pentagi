@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+
 import { HardDrive, HardDriveDownload, HardDriveUpload } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -13,8 +14,8 @@ interface ChatVectorStoreActionIconProps {
 }
 
 const icons: Record<VectorStoreAction, LucideIcon> = {
-    [VectorStoreAction.Store]: HardDriveDownload,
     [VectorStoreAction.Retrieve]: HardDriveUpload,
+    [VectorStoreAction.Store]: HardDriveDownload,
 };
 const defaultIcon = HardDrive;
 

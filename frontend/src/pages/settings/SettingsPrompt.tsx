@@ -19,6 +19,8 @@ import { useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 
+import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
+
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -28,12 +30,6 @@ import { Form, FormControl, FormItem, FormLabel, FormMessage } from '@/component
 import { StatusCard } from '@/components/ui/status-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import type {
-    AgentPrompt,
-    AgentPrompts,
-    DefaultPrompt,
-    PromptType,
-} from '@/graphql/types';
 import {
     useCreatePromptMutation,
     useDeletePromptMutation,
@@ -52,43 +48,43 @@ const humanFormSchema = z.object({
     template: z.string().min(1, 'Human template is required'),
 });
 
-type SystemFormData = z.infer<typeof systemFormSchema>;
-type HumanFormData = z.infer<typeof humanFormSchema>;
+interface BaseFieldProps extends ControllerProps {
+    label?: string;
+}
+interface BaseTextareaProps {
+    className?: string;
+    placeholder?: string;
+}
 
 // Universal field components using useController
 interface ControllerProps {
-    name: string;
     control: any;
     disabled?: boolean;
-}
-
-interface BaseTextareaProps {
-    placeholder?: string;
-    className?: string;
-}
-
-interface BaseFieldProps extends ControllerProps {
-    label?: string;
+    name: string;
 }
 
 interface FormTextareaItemProps extends BaseFieldProps, BaseTextareaProps {
     description?: string;
 }
 
+type HumanFormData = z.infer<typeof humanFormSchema>;
+
+type SystemFormData = z.infer<typeof systemFormSchema>;
+
 const FormTextareaItem: React.FC<FormTextareaItemProps> = ({
-    name,
+    className,
     control,
+    description,
     disabled,
     label,
+    name,
     placeholder,
-    className,
-    description,
 }) => {
     const { field, fieldState } = useController({
-        name,
         control,
         defaultValue: '',
         disabled,
+        name,
     });
 
     return (
@@ -97,9 +93,9 @@ const FormTextareaItem: React.FC<FormTextareaItemProps> = ({
             <FormControl>
                 <Textarea
                     {...field}
-                    placeholder={placeholder}
                     className={cn('!min-h-[640px] font-mono text-sm', className)}
                     disabled={disabled}
+                    placeholder={placeholder}
                 />
             </FormControl>
             {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
@@ -115,13 +111,17 @@ const formatName = (key: string): string => {
 // Helper function to extract used variables from template
 const getUsedVariables = (template: string | undefined): Set<string> => {
     const usedVariables = new Set<string>();
-    if (!template) return usedVariables;
+
+    if (!template) {
+        return usedVariables;
+    }
 
     const variableRegex = /\{\{\.(\w+)\}\}/g;
     let match;
 
     while ((match = variableRegex.exec(template)) !== null) {
         const variable = match[1];
+
         if (variable) {
             usedVariables.add(variable);
         }
@@ -132,13 +132,15 @@ const getUsedVariables = (template: string | undefined): Set<string> => {
 
 // Variables Component
 interface VariablesProps {
-    variables: string[];
     currentTemplate: string;
     onVariableClick: (variable: string) => void;
+    variables: string[];
 }
 
-const Variables: React.FC<VariablesProps> = ({ variables, currentTemplate, onVariableClick }) => {
-    if (variables.length === 0) return null;
+const Variables: React.FC<VariablesProps> = ({ currentTemplate, onVariableClick, variables }) => {
+    if (variables.length === 0) {
+        return null;
+    }
 
     const usedVariables = getUsedVariables(currentTemplate);
 
@@ -148,14 +150,15 @@ const Variables: React.FC<VariablesProps> = ({ variables, currentTemplate, onVar
             <div className="flex flex-wrap gap-1">
                 {variables.map((variable) => {
                     const isUsed = usedVariables.has(variable);
+
                     return (
                         <code
-                            key={variable}
                             className={`cursor-pointer rounded border px-2 py-1 font-mono text-xs transition-colors ${
                                 isUsed
                                     ? 'border-green-300 bg-green-100 text-green-800 hover:bg-green-200'
                                     : 'bg-background text-foreground hover:bg-accent'
                             }`}
+                            key={variable}
                             onClick={() => onVariableClick(variable)}
                         >
                             {`{{.${variable}}}`}
@@ -172,15 +175,15 @@ const SettingsPrompt = () => {
     const navigate = useNavigate();
 
     // GraphQL queries and mutations
-    const { data, loading, error } = useSettingsPromptsQuery();
-    const [createPrompt, { loading: isCreateLoading, error: createError }] = useCreatePromptMutation();
-    const [updatePrompt, { loading: isUpdateLoading, error: updateError }] = useUpdatePromptMutation();
-    const [deletePrompt, { loading: isDeleteLoading, error: deleteError }] = useDeletePromptMutation();
-    const [validatePrompt, { loading: isValidateLoading, error: validateError }] = useValidatePromptMutation();
+    const { data, error, loading } = useSettingsPromptsQuery();
+    const [createPrompt, { error: createError, loading: isCreateLoading }] = useCreatePromptMutation();
+    const [updatePrompt, { error: updateError, loading: isUpdateLoading }] = useUpdatePromptMutation();
+    const [deletePrompt, { error: deleteError, loading: isDeleteLoading }] = useDeletePromptMutation();
+    const [validatePrompt, { error: validateError, loading: isValidateLoading }] = useValidatePromptMutation();
 
     // Local state management
-    const [submitError, setSubmitError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'system' | 'human'>('system');
+    const [submitError, setSubmitError] = useState<null | string>(null);
+    const [activeTab, setActiveTab] = useState<'human' | 'system'>('system');
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
     const [validationResult, setValidationResult] = useState<any>(null);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
@@ -195,6 +198,7 @@ const SettingsPrompt = () => {
     // Helper function to handle variable insertion/selection
     const handleVariableClick = (variable: string, field: any, formId: string) => {
         const textarea = document.querySelector(`#${formId} textarea`) as HTMLTextAreaElement;
+
         if (textarea) {
             const currentValue = field.value || '';
             const variablePattern = `{{.${variable}}}`;
@@ -220,7 +224,8 @@ const SettingsPrompt = () => {
                 // Variable doesn't exist - insert it at cursor position (no scrolling)
                 const start = textarea.selectionStart;
                 const end = textarea.selectionEnd;
-                const newValue = currentValue.slice(0, Math.max(0, start)) + variablePattern + currentValue.slice(Math.max(0, end));
+                const newValue =
+                    currentValue.slice(0, Math.max(0, start)) + variablePattern + currentValue.slice(Math.max(0, end));
                 field.onChange(newValue);
 
                 // Focus and set cursor position after the inserted variable (no scrolling)
@@ -238,22 +243,24 @@ const SettingsPrompt = () => {
     };
 
     const handleConfirmReset = async () => {
-        if (!promptInfo) return;
+        if (!promptInfo) {
+            return;
+        }
 
         try {
             setSubmitError(null);
 
             if (activeTab === 'system' && promptInfo.userSystemPrompt) {
                 await deletePrompt({
-                    variables: { promptId: promptInfo.userSystemPrompt.id },
                     refetchQueries: ['settingsPrompts'],
+                    variables: { promptId: promptInfo.userSystemPrompt.id },
                 });
                 // Reset form to default value
                 systemForm.setValue('template', promptInfo.defaultSystemTemplate);
             } else if (activeTab === 'human' && promptInfo.userHumanPrompt) {
                 await deletePrompt({
-                    variables: { promptId: promptInfo.userHumanPrompt.id },
                     refetchQueries: ['settingsPrompts'],
+                    variables: { promptId: promptInfo.userHumanPrompt.id },
                 });
                 // Reset form to default value
                 humanForm.setValue('template', promptInfo.defaultHumanTemplate);
@@ -270,7 +277,9 @@ const SettingsPrompt = () => {
 
     // Handle validate prompt
     const handleValidate = async () => {
-        if (!promptInfo) return;
+        if (!promptInfo) {
+            return;
+        }
 
         try {
             setSubmitError(null);
@@ -281,12 +290,13 @@ const SettingsPrompt = () => {
 
             if (activeTab === 'system') {
                 if (promptInfo.type === 'agent') {
-                    const agentData = promptInfo.data as AgentPrompts | AgentPrompt;
+                    const agentData = promptInfo.data as AgentPrompt | AgentPrompts;
                     promptType = agentData.system.type;
                 } else {
                     const toolData = promptInfo.data as DefaultPrompt;
                     promptType = toolData.type;
                 }
+
                 currentTemplate = systemTemplate;
             } else {
                 const agentData = promptInfo.data as AgentPrompts;
@@ -296,8 +306,8 @@ const SettingsPrompt = () => {
 
             const result = await validatePrompt({
                 variables: {
-                    type: promptType,
                     template: currentTemplate,
+                    type: promptType,
                 },
             });
 
@@ -311,17 +321,17 @@ const SettingsPrompt = () => {
 
     // Form instances for each tab
     const systemForm = useForm<SystemFormData>({
-        resolver: zodResolver(systemFormSchema),
         defaultValues: {
             template: '',
         },
+        resolver: zodResolver(systemFormSchema),
     });
 
     const humanForm = useForm<HumanFormData>({
-        resolver: zodResolver(humanFormSchema),
         defaultValues: {
             template: '',
         },
+        resolver: zodResolver(humanFormSchema),
     });
 
     // Reactive dirty state across both forms
@@ -340,14 +350,18 @@ const SettingsPrompt = () => {
         }
 
         const { default: defaultPrompts, userDefined } = data.settingsPrompts;
-        if (!defaultPrompts) return null;
+
+        if (!defaultPrompts) {
+            return null;
+        }
 
         const { agents, tools } = defaultPrompts;
 
         // First check if there's a user-defined prompt
         const userPrompt = userDefined?.find((prompt) => {
             // For agents, check if this prompt matches system or human type
-            const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompts | AgentPrompt | undefined;
+            const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompt | AgentPrompts | undefined;
+
             if (agentData) {
                 return (
                     prompt.type === agentData.system.type || prompt.type === (agentData as AgentPrompts)?.human?.type
@@ -356,6 +370,7 @@ const SettingsPrompt = () => {
 
             // For tools, check if this prompt matches tool type
             const toolData = tools?.[promptId as keyof typeof tools] as DefaultPrompt | undefined;
+
             if (toolData) {
                 return prompt.type === toolData.type;
             }
@@ -364,42 +379,44 @@ const SettingsPrompt = () => {
         });
 
         // Check if it's an agent prompt
-        const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompts | AgentPrompt | undefined;
+        const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompt | AgentPrompts | undefined;
+
         if (agentData) {
             // Check if we have user-defined system or human prompts
             const userSystemPrompt = userDefined?.find((p) => p.type === agentData.system.type);
             const userHumanPrompt = userDefined?.find((p) => p.type === (agentData as AgentPrompts)?.human?.type);
 
             return {
-                type: 'agent' as const,
-                displayName: formatName(promptId),
                 data: agentData,
-                hasHuman: !!(agentData as AgentPrompts)?.human,
-                systemTemplate: userSystemPrompt?.template || agentData?.system?.template || '',
-                humanTemplate: userHumanPrompt?.template || (agentData as AgentPrompts)?.human?.template || '',
-                defaultSystemTemplate: agentData?.system?.template || '',
                 defaultHumanTemplate: (agentData as AgentPrompts)?.human?.template || '',
-                userSystemPrompt,
+                defaultSystemTemplate: agentData?.system?.template || '',
+                displayName: formatName(promptId),
+                hasHuman: !!(agentData as AgentPrompts)?.human,
+                humanTemplate: userHumanPrompt?.template || (agentData as AgentPrompts)?.human?.template || '',
+                systemTemplate: userSystemPrompt?.template || agentData?.system?.template || '',
+                type: 'agent' as const,
                 userHumanPrompt,
+                userSystemPrompt,
             };
         }
 
         // Check if it's a tool prompt
         const toolData = tools?.[promptId as keyof typeof tools] as DefaultPrompt | undefined;
+
         if (toolData) {
             const userToolPrompt = userDefined?.find((p) => p.type === toolData.type);
 
             return {
-                type: 'tool' as const,
-                displayName: formatName(promptId),
                 data: toolData,
-                hasHuman: false,
-                systemTemplate: userToolPrompt?.template || toolData?.template || '',
-                humanTemplate: '',
-                defaultSystemTemplate: toolData?.template || '',
                 defaultHumanTemplate: '',
-                userSystemPrompt: userToolPrompt,
+                defaultSystemTemplate: toolData?.template || '',
+                displayName: formatName(promptId),
+                hasHuman: false,
+                humanTemplate: '',
+                systemTemplate: userToolPrompt?.template || toolData?.template || '',
+                type: 'tool' as const,
                 userHumanPrompt: null,
+                userSystemPrompt: userToolPrompt,
             };
         }
 
@@ -408,7 +425,9 @@ const SettingsPrompt = () => {
 
     // Compute variables data based on active tab and prompt info
     const variablesData = useMemo(() => {
-        if (!promptInfo) return null;
+        if (!promptInfo) {
+            return null;
+        }
 
         let variables: string[] = [];
         let formId = '';
@@ -417,7 +436,7 @@ const SettingsPrompt = () => {
         if (activeTab === 'system') {
             variables =
                 promptInfo.type === 'agent'
-                    ? (promptInfo.data as AgentPrompts | AgentPrompt)?.system?.variables || []
+                    ? (promptInfo.data as AgentPrompt | AgentPrompts)?.system?.variables || []
                     : (promptInfo.data as DefaultPrompt)?.variables || [];
             formId = 'system-prompt-form';
             currentTemplate = systemTemplate;
@@ -427,24 +446,26 @@ const SettingsPrompt = () => {
             currentTemplate = humanTemplate;
         }
 
-        return { variables, formId, currentTemplate };
+        return { currentTemplate, formId, variables };
     }, [promptInfo, activeTab, systemTemplate, humanTemplate]);
 
     // Handle variable click with useCallback for better performance
     const handleVariableClickCallback = useCallback(
         (variable: string) => {
-            if (!variablesData) return;
+            if (!variablesData) {
+                return;
+            }
 
             const field =
                 activeTab === 'system'
                     ? {
-                        value: systemTemplate,
-                        onChange: (value: string) => systemForm.setValue('template', value),
-                    }
+                          onChange: (value: string) => systemForm.setValue('template', value),
+                          value: systemTemplate,
+                      }
                     : {
-                        value: humanTemplate,
-                        onChange: (value: string) => humanForm.setValue('template', value),
-                    };
+                          onChange: (value: string) => humanForm.setValue('template', value),
+                          value: humanTemplate,
+                      };
             handleVariableClick(variable, field, variablesData.formId);
         },
         [activeTab, systemTemplate, humanTemplate, variablesData, systemForm, humanForm],
@@ -476,16 +497,20 @@ const SettingsPrompt = () => {
             if (!isDirty) {
                 return;
             }
+
             if (allowBrowserLeaveRef.current) {
                 allowBrowserLeaveRef.current = false;
+
                 return;
             }
+
             setPendingBrowserBack(true);
             setIsLeaveDialogOpen(true);
             window.history.forward();
         };
 
         window.addEventListener('popstate', handlePopState, { capture: true });
+
         return () => {
             window.removeEventListener('popstate', handlePopState, { capture: true } as any);
         };
@@ -494,8 +519,10 @@ const SettingsPrompt = () => {
     const handleBack = () => {
         if (isDirty) {
             setIsLeaveDialogOpen(true);
+
             return;
         }
+
         navigate('/settings/prompts');
     };
 
@@ -504,8 +531,10 @@ const SettingsPrompt = () => {
             allowBrowserLeaveRef.current = true;
             setPendingBrowserBack(false);
             window.history.go(-2);
+
             return;
         }
+
         navigate('/settings/prompts');
     };
 
@@ -513,18 +542,22 @@ const SettingsPrompt = () => {
         if (!open && pendingBrowserBack) {
             setPendingBrowserBack(false);
         }
+
         setIsLeaveDialogOpen(open);
     };
 
     // Form submission handlers
     const handleSystemSubmit = async (formData: SystemFormData) => {
-        if (!promptInfo) return;
+        if (!promptInfo) {
+            return;
+        }
 
         const isUpdate = !!promptInfo.userSystemPrompt;
 
         // For creation, check if the template is identical to the default
         if (!isUpdate && formData.template === promptInfo.defaultSystemTemplate) {
             console.log('Template is identical to default, skipping save');
+
             return;
         }
 
@@ -535,7 +568,7 @@ const SettingsPrompt = () => {
             let promptType: PromptType;
 
             if (promptInfo.type === 'agent') {
-                const agentData = promptInfo.data as AgentPrompts | AgentPrompt;
+                const agentData = promptInfo.data as AgentPrompt | AgentPrompts;
                 promptType = agentData.system.type;
             } else {
                 const toolData = promptInfo.data as DefaultPrompt;
@@ -545,21 +578,21 @@ const SettingsPrompt = () => {
             if (isUpdate) {
                 // Update existing user-defined prompt
                 await updatePrompt({
+                    refetchQueries: ['settingsPrompts'],
                     variables: {
                         promptId: promptInfo.userSystemPrompt!.id,
                         template: formData.template,
                     },
-                    refetchQueries: ['settingsPrompts'],
                 });
                 console.log('System prompt updated successfully');
             } else {
                 // Create new user-defined prompt
                 await createPrompt({
-                    variables: {
-                        type: promptType,
-                        template: formData.template,
-                    },
                     refetchQueries: ['settingsPrompts'],
+                    variables: {
+                        template: formData.template,
+                        type: promptType,
+                    },
                 });
                 console.log('System prompt created successfully');
             }
@@ -570,13 +603,16 @@ const SettingsPrompt = () => {
     };
 
     const handleHumanSubmit = async (formData: HumanFormData) => {
-        if (!promptInfo) return;
+        if (!promptInfo) {
+            return;
+        }
 
         const isUpdate = !!promptInfo.userHumanPrompt;
 
         // For creation, check if the template is identical to the default
         if (!isUpdate && formData.template === promptInfo.defaultHumanTemplate) {
             console.log('Human template is identical to default, skipping save');
+
             return;
         }
 
@@ -589,27 +625,28 @@ const SettingsPrompt = () => {
 
             if (!humanPromptType) {
                 setSubmitError('Human prompt type not found');
+
                 return;
             }
 
             if (isUpdate) {
                 // Update existing user-defined prompt
                 await updatePrompt({
+                    refetchQueries: ['settingsPrompts'],
                     variables: {
                         promptId: promptInfo.userHumanPrompt!.id,
                         template: formData.template,
                     },
-                    refetchQueries: ['settingsPrompts'],
                 });
                 console.log('Human prompt updated successfully');
             } else {
                 // Create new user-defined prompt
                 await createPrompt({
-                    variables: {
-                        type: humanPromptType,
-                        template: formData.template,
-                    },
                     refetchQueries: ['settingsPrompts'],
+                    variables: {
+                        template: formData.template,
+                        type: humanPromptType,
+                    },
                 });
                 console.log('Human prompt created successfully');
             }
@@ -623,9 +660,9 @@ const SettingsPrompt = () => {
     if (loading) {
         return (
             <StatusCard
+                description="Please wait while we fetch prompt information"
                 icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                 title="Loading prompt data..."
-                description="Please wait while we fetch prompt information"
             />
         );
     }
@@ -660,59 +697,11 @@ const SettingsPrompt = () => {
 
     // Styles for ReactDiffViewer aligned with shadcn (Tailwind CSS vars)
     const diffStyles = {
-        variables: {
-            light: {
-                diffViewerBackground: 'hsl(var(--background))',
-                diffViewerColor: 'hsl(var(--foreground))',
-                addedBackground: 'hsl(142 70% 45% / 0.50)',
-                addedColor: 'hsl(var(--foreground))',
-                removedBackground: 'hsl(var(--destructive) / 0.50)',
-                removedColor: 'hsl(var(--foreground))',
-                wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
-                wordRemovedBackground: 'hsl(var(--destructive) / 0.70)',
-                addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
-                removedGutterBackground: 'hsl(var(--destructive) / 0.40)',
-                gutterBackground: 'hsl(var(--muted))',
-                gutterBackgroundDark: 'hsl(var(--muted))',
-                highlightBackground: 'hsl(var(--primary) / 0.20)',
-                highlightGutterBackground: 'hsl(var(--primary) / 0.30)',
-                codeFoldGutterBackground: 'hsl(var(--muted))',
-                codeFoldBackground: 'hsl(var(--muted))',
-                emptyLineBackground: 'hsl(var(--background))',
-                gutterColor: 'hsl(var(--muted-foreground))',
-                addedGutterColor: 'hsl(var(--muted-foreground))',
-                removedGutterColor: 'hsl(var(--muted-foreground))',
-                codeFoldContentColor: 'hsl(var(--muted-foreground))',
-                diffViewerTitleBackground: 'hsl(var(--card))',
-                diffViewerTitleColor: 'hsl(var(--card-foreground))',
-                diffViewerTitleBorderColor: 'hsl(var(--border))',
-            },
-            dark: {
-                diffViewerBackground: 'hsl(var(--background))',
-                diffViewerColor: 'hsl(var(--foreground))',
-                addedBackground: 'hsl(142 70% 45% / 0.50)',
-                addedColor: 'var(--foreground)',
-                removedBackground: 'hsl(var(--destructive) / 0.50)',
-                removedColor: 'var(--foreground)',
-                wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
-                wordRemovedBackground: 'hsl(var(--destructive) / 0.70)',
-                addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
-                removedGutterBackground: 'hsl(var(--destructive) / 0.40)',
-                gutterBackground: 'hsl(var(--muted))',
-                gutterBackgroundDark: 'hsl(var(--muted))',
-                highlightBackground: 'hsl(var(--primary) / 0.20)',
-                highlightGutterBackground: 'hsl(var(--primary) / 0.30)',
-                codeFoldGutterBackground: 'hsl(var(--muted))',
-                codeFoldBackground: 'hsl(var(--muted))',
-                emptyLineBackground: 'hsl(var(--background))',
-                gutterColor: 'hsl(var(--muted-foreground))',
-                addedGutterColor: 'hsl(var(--muted-foreground))',
-                removedGutterColor: 'hsl(var(--muted-foreground))',
-                codeFoldContentColor: 'hsl(var(--muted-foreground))',
-                diffViewerTitleBackground: 'hsl(var(--card))',
-                diffViewerTitleColor: 'hsl(var(--card-foreground))',
-                diffViewerTitleBorderColor: 'hsl(var(--border))',
-            },
+        content: {
+            fontFamily:
+                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+            fontSize: '0.875rem',
+            width: '50%',
         },
         diffContainer: {
             border: '1px solid hsl(var(--border))',
@@ -721,20 +710,68 @@ const SettingsPrompt = () => {
         gutter: {
             borderRight: '1px solid hsl(var(--border))',
         },
-        content: {
-            width: '50%',
-            fontFamily:
-                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-            fontSize: '0.875rem',
-        },
-        splitView: {
-            gap: '0',
-        },
         line: {
             borderBottom: '1px solid hsl(var(--border) / 0.50)',
         },
         lineNumber: {
             color: 'hsl(var(--muted-foreground))',
+        },
+        splitView: {
+            gap: '0',
+        },
+        variables: {
+            dark: {
+                addedBackground: 'hsl(142 70% 45% / 0.50)',
+                addedColor: 'var(--foreground)',
+                addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
+                addedGutterColor: 'hsl(var(--muted-foreground))',
+                codeFoldBackground: 'hsl(var(--muted))',
+                codeFoldContentColor: 'hsl(var(--muted-foreground))',
+                codeFoldGutterBackground: 'hsl(var(--muted))',
+                diffViewerBackground: 'hsl(var(--background))',
+                diffViewerColor: 'hsl(var(--foreground))',
+                diffViewerTitleBackground: 'hsl(var(--card))',
+                diffViewerTitleBorderColor: 'hsl(var(--border))',
+                diffViewerTitleColor: 'hsl(var(--card-foreground))',
+                emptyLineBackground: 'hsl(var(--background))',
+                gutterBackground: 'hsl(var(--muted))',
+                gutterBackgroundDark: 'hsl(var(--muted))',
+                gutterColor: 'hsl(var(--muted-foreground))',
+                highlightBackground: 'hsl(var(--primary) / 0.20)',
+                highlightGutterBackground: 'hsl(var(--primary) / 0.30)',
+                removedBackground: 'hsl(var(--destructive) / 0.50)',
+                removedColor: 'var(--foreground)',
+                removedGutterBackground: 'hsl(var(--destructive) / 0.40)',
+                removedGutterColor: 'hsl(var(--muted-foreground))',
+                wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
+                wordRemovedBackground: 'hsl(var(--destructive) / 0.70)',
+            },
+            light: {
+                addedBackground: 'hsl(142 70% 45% / 0.50)',
+                addedColor: 'hsl(var(--foreground))',
+                addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
+                addedGutterColor: 'hsl(var(--muted-foreground))',
+                codeFoldBackground: 'hsl(var(--muted))',
+                codeFoldContentColor: 'hsl(var(--muted-foreground))',
+                codeFoldGutterBackground: 'hsl(var(--muted))',
+                diffViewerBackground: 'hsl(var(--background))',
+                diffViewerColor: 'hsl(var(--foreground))',
+                diffViewerTitleBackground: 'hsl(var(--card))',
+                diffViewerTitleBorderColor: 'hsl(var(--border))',
+                diffViewerTitleColor: 'hsl(var(--card-foreground))',
+                emptyLineBackground: 'hsl(var(--background))',
+                gutterBackground: 'hsl(var(--muted))',
+                gutterBackgroundDark: 'hsl(var(--muted))',
+                gutterColor: 'hsl(var(--muted-foreground))',
+                highlightBackground: 'hsl(var(--primary) / 0.20)',
+                highlightGutterBackground: 'hsl(var(--primary) / 0.30)',
+                removedBackground: 'hsl(var(--destructive) / 0.50)',
+                removedColor: 'hsl(var(--foreground))',
+                removedGutterBackground: 'hsl(var(--destructive) / 0.40)',
+                removedGutterColor: 'hsl(var(--muted-foreground))',
+                wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
+                wordRemovedBackground: 'hsl(var(--destructive) / 0.70)',
+            },
         },
     };
 
@@ -760,9 +797,9 @@ const SettingsPrompt = () => {
                 </CardHeader>
                 <CardContent>
                     <Tabs
-                        defaultValue="system"
                         className="w-full"
-                        onValueChange={(value) => setActiveTab(value as 'system' | 'human')}
+                        defaultValue="system"
+                        onValueChange={(value) => setActiveTab(value as 'human' | 'system')}
                     >
                         <TabsList>
                             <TabsTrigger value="system">
@@ -782,14 +819,14 @@ const SettingsPrompt = () => {
                         </TabsList>
 
                         <TabsContent
-                            value="system"
                             className="mt-6"
+                            value="system"
                         >
                             <Form {...systemForm}>
                                 <form
+                                    className="space-y-6"
                                     id="system-prompt-form"
                                     onSubmit={systemForm.handleSubmit(handleSystemSubmit)}
-                                    className="space-y-6"
                                 >
                                     {/* Error Alert */}
                                     {mutationError && (
@@ -808,9 +845,9 @@ const SettingsPrompt = () => {
 
                                     {/* System Template Field */}
                                     <FormTextareaItem
-                                        name="template"
                                         control={systemForm.control}
                                         disabled={isLoading}
+                                        name="template"
                                         placeholder={
                                             promptInfo.type === 'tool'
                                                 ? 'Enter the tool template...'
@@ -823,14 +860,14 @@ const SettingsPrompt = () => {
 
                         {promptInfo.type === 'agent' && promptInfo.hasHuman && (
                             <TabsContent
-                                value="human"
                                 className="mt-6"
+                                value="human"
                             >
                                 <Form {...humanForm}>
                                     <form
+                                        className="space-y-6"
                                         id="human-prompt-form"
                                         onSubmit={humanForm.handleSubmit(handleHumanSubmit)}
-                                        className="space-y-6"
                                     >
                                         {/* Error Alert */}
                                         {mutationError && (
@@ -849,9 +886,9 @@ const SettingsPrompt = () => {
 
                                         {/* Human Template Field */}
                                         <FormTextareaItem
-                                            name="template"
                                             control={humanForm.control}
                                             disabled={isLoading}
+                                            name="template"
                                             placeholder="Enter the human prompt template..."
                                         />
                                     </form>
@@ -867,9 +904,9 @@ const SettingsPrompt = () => {
                 {/* Variables */}
                 {variablesData && (
                     <Variables
-                        variables={variablesData.variables}
                         currentTemplate={variablesData.currentTemplate}
                         onVariableClick={handleVariableClickCallback}
+                        variables={variablesData.variables}
                     />
                 )}
 
@@ -881,20 +918,20 @@ const SettingsPrompt = () => {
                             (activeTab === 'human' && promptInfo?.userHumanPrompt)) && (
                             <>
                                 <Button
+                                    disabled={isLoading}
+                                    onClick={handleReset}
                                     type="button"
                                     variant="destructive"
-                                    onClick={handleReset}
-                                    disabled={isLoading}
                                 >
                                     {isDeleteLoading ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw />}
                                     {isDeleteLoading ? 'Resetting...' : 'Reset'}
                                 </Button>
 
                                 <Button
+                                    disabled={isLoading}
+                                    onClick={() => setIsDiffDialogOpen(true)}
                                     type="button"
                                     variant="outline"
-                                    onClick={() => setIsDiffDialogOpen(true)}
-                                    disabled={isLoading}
                                 >
                                     <FileDiff className="size-4" />
                                     Diff
@@ -902,10 +939,10 @@ const SettingsPrompt = () => {
                             </>
                         )}
                         <Button
+                            disabled={isLoading}
+                            onClick={handleValidate}
                             type="button"
                             variant="outline"
-                            onClick={handleValidate}
-                            disabled={isLoading}
                         >
                             {isValidateLoading ? (
                                 <Loader2 className="size-4 animate-spin" />
@@ -918,40 +955,32 @@ const SettingsPrompt = () => {
 
                     <div className="ml-auto flex space-x-2">
                         <Button
+                            disabled={isLoading}
+                            onClick={handleBack}
                             type="button"
                             variant="outline"
-                            onClick={handleBack}
-                            disabled={isLoading}
                         >
                             Cancel
                         </Button>
                         {activeTab === 'system' && (
                             <Button
-                                form="system-prompt-form"
-                                variant="secondary"
-                                type="submit"
                                 disabled={isLoading}
+                                form="system-prompt-form"
+                                type="submit"
+                                variant="secondary"
                             >
-                                {isLoading ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                ) : (
-                                    <Save className="size-4" />
-                                )}
+                                {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                                 {isLoading ? 'Saving...' : 'Save Changes'}
                             </Button>
                         )}
                         {activeTab === 'human' && promptInfo?.type === 'agent' && promptInfo?.hasHuman && (
                             <Button
-                                form="human-prompt-form"
-                                variant="secondary"
-                                type="submit"
                                 disabled={isLoading}
+                                form="human-prompt-form"
+                                type="submit"
+                                variant="secondary"
                             >
-                                {isLoading ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                ) : (
-                                    <Save className="size-4" />
-                                )}
+                                {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                                 {isLoading ? 'Saving...' : 'Save Changes'}
                             </Button>
                         )}
@@ -961,37 +990,37 @@ const SettingsPrompt = () => {
 
             {/* Reset Confirmation Dialog */}
             <ConfirmationDialog
-                isOpen={resetDialogOpen}
-                handleOpenChange={setResetDialogOpen}
-                handleConfirm={handleConfirmReset}
-                title="Reset Prompt"
-                description="Are you sure you want to reset this prompt to its default value? This action cannot be undone."
-                itemName={`${activeTab} prompt`}
-                itemType="template"
-                confirmText="Reset"
                 cancelText="Cancel"
-                confirmVariant="destructive"
                 cancelVariant="outline"
                 confirmIcon={<RotateCcw />}
+                confirmText="Reset"
+                confirmVariant="destructive"
+                description="Are you sure you want to reset this prompt to its default value? This action cannot be undone."
+                handleConfirm={handleConfirmReset}
+                handleOpenChange={setResetDialogOpen}
+                isOpen={resetDialogOpen}
+                itemName={`${activeTab} prompt`}
+                itemType="template"
+                title="Reset Prompt"
             />
 
             {/* Leave Confirmation Dialog */}
             <ConfirmationDialog
-                isOpen={isLeaveDialogOpen}
-                handleOpenChange={handleLeaveDialogOpenChange}
-                handleConfirm={handleConfirmLeave}
-                title="Discard changes?"
-                description="You have unsaved changes. Are you sure you want to leave without saving?"
                 cancelText="Stay"
+                confirmIcon={undefined}
                 confirmText="Leave"
                 confirmVariant="destructive"
-                confirmIcon={undefined}
+                description="You have unsaved changes. Are you sure you want to leave without saving?"
+                handleConfirm={handleConfirmLeave}
+                handleOpenChange={handleLeaveDialogOpenChange}
+                isOpen={isLeaveDialogOpen}
+                title="Discard changes?"
             />
 
             {/* Validation Results Dialog */}
             <Dialog
-                open={validationDialogOpen}
                 onOpenChange={setValidationDialogOpen}
+                open={validationDialogOpen}
             >
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
@@ -1042,8 +1071,8 @@ const SettingsPrompt = () => {
 
             {/* Diff Dialog */}
             <Dialog
-                open={isDiffDialogOpen}
                 onOpenChange={setIsDiffDialogOpen}
+                open={isDiffDialogOpen}
             >
                 <DialogContent className="max-w-7xl">
                     <DialogHeader>
@@ -1055,11 +1084,11 @@ const SettingsPrompt = () => {
                     </DialogHeader>
                     <div className="max-h-[70vh] overflow-auto">
                         <ReactDiffViewer
-                            oldValue={defaultTemplate}
                             newValue={currentTemplate}
+                            oldValue={defaultTemplate}
                             splitView
-                            useDarkTheme
                             styles={diffStyles}
+                            useDarkTheme
                         />
                     </div>
                 </DialogContent>

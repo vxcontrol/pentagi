@@ -7,10 +7,10 @@ interface GeminiProps extends React.SVGProps<SVGSVGElement> {
 const Gemini = ({ className, ...props }: GeminiProps) => {
     return (
         <svg
+            className={cn(className)}
             fill="currentColor"
             fillRule="evenodd"
             viewBox="0 0 16 16"
-            className={cn(className)}
             {...props}
         >
             <title>Gemini</title>

@@ -4,8 +4,9 @@ import html2pdf from 'html2pdf.js';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 
-import Markdown from '@/components/shared/Markdown';
 import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
+
+import Markdown from '@/components/shared/Markdown';
 import { StatusType } from '@/graphql/types';
 
 import { Log } from './log';
@@ -16,18 +17,23 @@ const getStatusEmoji = (status: StatusType): string => {
         case StatusType.Created: {
             return '📝';
         }
+
         case StatusType.Failed: {
             return '❌';
         }
+
         case StatusType.Finished: {
             return '✅';
         }
+
         case StatusType.Running: {
             return '⚡';
         }
+
         case StatusType.Waiting: {
             return '⏳';
         }
+
         default: {
             return '📝';
         }
@@ -40,6 +46,7 @@ const shiftMarkdownHeaders = (text: string, shiftBy: number): string => {
         const currentLevel = hashes.length;
         const newLevel = Math.min(currentLevel + shiftBy, 6); // Max level is 6
         const newHashes = '#'.repeat(newLevel);
+
         return `${newHashes} ${content}`;
     });
 };
@@ -47,6 +54,7 @@ const shiftMarkdownHeaders = (text: string, shiftBy: number): string => {
 // Helper function to create anchor link from text using the same algorithm as rehype-slug
 const createAnchor = (text: string): string => {
     const slugger = new GithubSlugger();
+
     return slugger.slug(text);
 };
 
@@ -96,8 +104,10 @@ export const generateReport = (tasks: TaskFragmentFragment[], flow?: FlowFragmen
     if (!tasks || tasks.length === 0) {
         if (flow) {
             const flowEmoji = getStatusEmoji(flow.status);
+
             return `# ${flowEmoji} ${flow.id}. ${flow.title}\n\nNo tasks available for this flow.`;
         }
+
         return 'No tasks available for this flow.';
     }
 
@@ -211,9 +221,11 @@ export const downloadTextFile = (content: string, fileName: string, mimeType = '
 export const copyToClipboard = async (text: string): Promise<boolean> => {
     try {
         await navigator.clipboard.writeText(text);
+
         return true;
     } catch (error) {
         Log.error('Failed to copy to clipboard:', error);
+
         return false;
     }
 };
@@ -336,7 +348,7 @@ const generatePDF = async (
     content: string,
     options: {
         filename?: string;
-        outputType: 'save' | 'blob';
+        outputType: 'blob' | 'save';
     },
 ): Promise<Blob | void> => {
     try {
@@ -348,22 +360,22 @@ const generatePDF = async (
 
         // Configure html2pdf options for high quality
         const pdfOptions = {
-            margin: [5, 5, 5, 5] as [number, number, number, number], // top, right, bottom, left in mm
             filename: options.filename,
-            image: { type: 'jpeg' as const, quality: 0.98 },
             html2canvas: {
-                scale: 2,
-                useCORS: true,
-                letterRendering: true,
                 allowTaint: false,
                 backgroundColor: '#ffffff',
+                letterRendering: true,
+                scale: 2,
+                useCORS: true,
             },
+            image: { quality: 0.98, type: 'jpeg' as const },
             jsPDF: {
-                unit: 'mm',
+                compress: true,
                 format: 'a4',
                 orientation: 'portrait' as const,
-                compress: true,
+                unit: 'mm',
             },
+            margin: [5, 5, 5, 5] as [number, number, number, number], // top, right, bottom, left in mm
             pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
         };
 

@@ -7,10 +7,10 @@ interface OpenAiProps extends React.SVGProps<SVGSVGElement> {
 const OpenAi = ({ className, ...props }: OpenAiProps) => {
     return (
         <svg
+            className={cn(className)}
             fill="currentColor"
             fillRule="evenodd"
             viewBox="0 0 24 24"
-            className={cn(className)}
             {...props}
         >
             <title>OpenAI</title>

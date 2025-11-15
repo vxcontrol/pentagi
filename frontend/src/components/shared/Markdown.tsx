@@ -1,5 +1,3 @@
-import 'highlight.js/styles/atom-one-dark.css';
-
 import bash from 'highlight.js/lib/languages/bash';
 import c from 'highlight.js/lib/languages/c';
 import csharp from 'highlight.js/lib/languages/csharp';
@@ -19,6 +17,7 @@ import python from 'highlight.js/lib/languages/python';
 import sql from 'highlight.js/lib/languages/sql';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
+import 'highlight.js/styles/atom-one-dark.css';
 import { common, createLowlight } from 'lowlight';
 import { useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -101,13 +100,15 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
     // Memoize the escaped search value to avoid recalculating regex
     const processedSearch = useMemo(() => {
         const trimmedSearch = searchValue?.trim();
+
         if (!trimmedSearch) {
             return null;
         }
+
         return {
-            trimmed: trimmedSearch,
             escaped: escapeRegExp(trimmedSearch),
             regex: new RegExp(`(${escapeRegExp(trimmedSearch)})`, 'gi'),
+            trimmed: trimmedSearch,
         };
     }, [searchValue]);
 
@@ -130,14 +131,15 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                                 // Much more subtle highlighting - very pale yellow with slight border
                                 backgroundColor: 'rgba(255, 255, 0, 0.15)',
                                 borderRadius: '2px',
-                                padding: '0px 1px',
                                 boxShadow: 'inset 0 0 0 1px rgba(255, 255, 0, 0.25)',
+                                padding: '0px 1px',
                             }}
                         >
                             {part}
                         </span>
                     );
                 }
+
                 return part;
             });
         },
@@ -160,14 +162,10 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                     if (typeof child === 'string') {
                         return createHighlightedText(child);
                     }
+
                     // Avoid deep cloning React elements to prevent memory leaks
                     // Only process if it's a simple object with props
-                    if (
-                        child &&
-                        typeof child === 'object' &&
-                        child.props &&
-                        child.props.children !== undefined
-                    ) {
+                    if (child && typeof child === 'object' && child.props && child.props.children !== undefined) {
                         return {
                             ...child,
                             key: child.key || `processed-${index}`,
@@ -177,6 +175,7 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                             },
                         };
                     }
+
                     return child;
                 });
             }
@@ -208,6 +207,7 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
             return ({ children: nodeChildren, ...props }: any) => {
                 const processedChildren = processTextNode(nodeChildren);
                 const Component = ComponentName as any;
+
                 return <Component {...props}>{processedChildren}</Component>;
             };
         },
@@ -240,11 +240,12 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
     return (
         <div className={`prose prose-sm max-w-none dark:prose-invert ${className || ''}`}>
             <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
+                components={customComponents}
                 rehypePlugins={[
                     [
                         rehypeHighlight,
                         {
+                            detect: true,
                             languages: {
                                 ...common,
                                 bash,
@@ -267,12 +268,11 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                                 xml,
                                 yaml,
                             },
-                            detect: true,
                         },
                     ],
                     rehypeSlug,
                 ]}
-                components={customComponents}
+                remarkPlugins={[remarkGfm]}
             >
                 {children}
             </ReactMarkdown>

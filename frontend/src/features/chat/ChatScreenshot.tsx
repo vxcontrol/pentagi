@@ -2,9 +2,10 @@ import { Image } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import type { ScreenshotFragmentFragment } from '@/graphql/types';
+
 import { buttonVariants } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { ScreenshotFragmentFragment } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/format';
 import { baseUrl } from '@/models/Api';
@@ -47,12 +48,12 @@ const ChatScreenshot = ({ screenshot }: ChatScreenshotProps) => {
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Link
-                                    to={screenshot.url}
-                                    target="_blank"
                                     className={cn(
                                         buttonVariants({ variant: 'link' }),
                                         'inline-flex h-auto max-w-full items-center gap-1 p-0',
                                     )}
+                                    target="_blank"
+                                    to={screenshot.url}
                                 >
                                     <Image className="size-4 shrink-0 text-muted-foreground" />
                                     <span className="truncate font-semibold">{screenshot.url}</span>
@@ -63,20 +64,20 @@ const ChatScreenshot = ({ screenshot }: ChatScreenshotProps) => {
                     </div>
 
                     <div
-                        ref={imageRef}
                         className={cn('mt-2 w-full', !isVisible ? 'animate-pulse' : '')}
+                        ref={imageRef}
                     >
                         {isVisible ? (
                             <div className={`${isExpanded ? 'size-full' : 'h-[240px] w-[320px]'}`}>
                                 <img
-                                    src={`${baseUrl}/flows/${screenshot.flowId}/screenshots/${screenshot.id}/file`}
                                     alt={screenshot.name}
-                                    loading="lazy"
                                     className={cn(
                                         'size-full transition-all duration-200',
                                         isExpanded ? 'cursor-zoom-out' : 'cursor-zoom-in object-cover object-top',
                                     )}
+                                    loading="lazy"
                                     onClick={() => setIsExpanded(!isExpanded)}
+                                    src={`${baseUrl}/flows/${screenshot.flowId}/screenshots/${screenshot.id}/file`}
                                 />
                             </div>
                         ) : (

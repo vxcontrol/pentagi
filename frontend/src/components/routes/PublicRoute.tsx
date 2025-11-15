@@ -14,8 +14,8 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
     if (isAuthenticated()) {
         return (
             <Navigate
-                to="/flows/new"
                 replace
+                to="/flows/new"
             />
         );
     }

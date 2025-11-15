@@ -1,4 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
+
 import {
     AlertCircle,
     ArrowDown,
@@ -17,6 +18,8 @@ import {
 import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
+
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -30,32 +33,28 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
-import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
-import {
-    useDeletePromptMutation,
-    useSettingsPromptsQuery,
-} from '@/graphql/types';
+import { useDeletePromptMutation, useSettingsPromptsQuery } from '@/graphql/types';
 
 // Types for table data
 type AgentPromptTableData = {
-    name: string; // Original key (camelCase)
     displayName: string; // Formatted display name
-    hasSystem: boolean;
     hasHuman: boolean;
-    systemTemplate: string;
+    hasSystem: boolean;
+    humanStatus: 'Custom' | 'Default' | 'N/A';
     humanTemplate?: string;
-    systemStatus: 'Default' | 'Custom' | 'N/A';
-    humanStatus: 'Default' | 'Custom' | 'N/A';
-    systemType?: PromptType; // Type for system prompt lookup
     humanType?: PromptType; // Type for human prompt lookup
+    name: string; // Original key (camelCase)
+    systemStatus: 'Custom' | 'Default' | 'N/A';
+    systemTemplate: string;
+    systemType?: PromptType; // Type for system prompt lookup
 };
 
 type ToolPromptTableData = {
-    name: string; // Original key (camelCase)
     displayName: string; // Formatted display name
-    template: string;
-    status: 'Default' | 'Custom' | 'N/A';
+    name: string; // Original key (camelCase)
     promptType?: PromptType; // Type for prompt lookup
+    status: 'Custom' | 'Default' | 'N/A';
+    template: string;
 };
 
 const SettingsPromptsHeader = () => {
@@ -67,17 +66,17 @@ const SettingsPromptsHeader = () => {
 };
 
 const SettingsPrompts = () => {
-    const { data, loading: isLoading, error } = useSettingsPromptsQuery();
+    const { data, error, loading: isLoading } = useSettingsPromptsQuery();
     const [deletePrompt, { loading: isDeleteLoading }] = useDeletePromptMutation();
     const navigate = useNavigate();
 
     // Reset dialog states
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
-    const [resetOperation, setResetOperation] = useState<{
-        type: 'system' | 'human' | 'all' | 'tool';
-        promptName: string;
+    const [resetOperation, setResetOperation] = useState<null | {
         displayName: string;
-    } | null>(null);
+        promptName: string;
+        type: 'all' | 'human' | 'system' | 'tool';
+    }>(null);
 
     // Handler for editing any prompt (agent or tool)
     const handlePromptEdit = (promptName: string) => {
@@ -86,16 +85,18 @@ const SettingsPrompts = () => {
 
     // Reset dialog handlers
     const handleResetDialogOpen = (
-        type: 'system' | 'human' | 'all' | 'tool',
+        type: 'all' | 'human' | 'system' | 'tool',
         promptName: string,
         displayName: string,
     ) => {
-        setResetOperation({ type, promptName, displayName });
+        setResetOperation({ displayName, promptName, type });
         setResetDialogOpen(true);
     };
 
     const handleResetPrompt = async () => {
-        if (!resetOperation || !data?.settingsPrompts?.default) return;
+        if (!resetOperation || !data?.settingsPrompts?.default) {
+            return;
+        }
 
         try {
             const { promptName, type } = resetOperation;
@@ -106,55 +107,63 @@ const SettingsPrompts = () => {
             if (type === 'tool') {
                 // Handle tool prompt reset
                 const toolPrompt = tools?.[promptName as keyof typeof tools];
+
                 if (toolPrompt?.type) {
                     // Find the user-defined prompt with matching type
                     const userPrompt = userDefined.find((p) => p.type === toolPrompt.type);
+
                     if (userPrompt) {
                         await deletePrompt({
-                            variables: { promptId: userPrompt.id },
                             refetchQueries: ['settingsPrompts'],
+                            variables: { promptId: userPrompt.id },
                         });
                     }
                 }
             } else {
                 // Handle agent prompt reset
                 const agentPrompts = agents?.[promptName as keyof typeof agents] as AgentPrompts;
+
                 if (agentPrompts) {
                     const systemType = agentPrompts.system?.type;
                     const humanType = agentPrompts.human?.type;
 
                     if (type === 'system' && systemType) {
                         const userPrompt = userDefined.find((p) => p.type === systemType);
+
                         if (userPrompt) {
                             await deletePrompt({
-                                variables: { promptId: userPrompt.id },
                                 refetchQueries: ['settingsPrompts'],
+                                variables: { promptId: userPrompt.id },
                             });
                         }
                     } else if (type === 'human' && humanType) {
                         const userPrompt = userDefined.find((p) => p.type === humanType);
+
                         if (userPrompt) {
                             await deletePrompt({
-                                variables: { promptId: userPrompt.id },
                                 refetchQueries: ['settingsPrompts'],
+                                variables: { promptId: userPrompt.id },
                             });
                         }
                     } else if (type === 'all') {
                         if (systemType) {
                             const userSystemPrompt = userDefined.find((p) => p.type === systemType);
+
                             if (userSystemPrompt) {
                                 await deletePrompt({
-                                    variables: { promptId: userSystemPrompt.id },
                                     refetchQueries: ['settingsPrompts'],
+                                    variables: { promptId: userSystemPrompt.id },
                                 });
                             }
                         }
+
                         if (humanType) {
                             const userHumanPrompt = userDefined.find((p) => p.type === humanType);
+
                             if (userHumanPrompt) {
                                 await deletePrompt({
-                                    variables: { promptId: userHumanPrompt.id },
                                     refetchQueries: ['settingsPrompts'],
+                                    variables: { promptId: userHumanPrompt.id },
                                 });
                             }
                         }
@@ -169,8 +178,10 @@ const SettingsPrompts = () => {
     };
 
     // Helper function to check if reset is available for specific prompt type
-    const canResetPrompt = (promptName: string, resetType: 'system' | 'human' | 'all' | 'tool'): boolean => {
-        if (!data?.settingsPrompts?.default || !data?.settingsPrompts?.userDefined) return false;
+    const canResetPrompt = (promptName: string, resetType: 'all' | 'human' | 'system' | 'tool'): boolean => {
+        if (!data?.settingsPrompts?.default || !data?.settingsPrompts?.userDefined) {
+            return false;
+        }
 
         const { userDefined } = data.settingsPrompts;
         const { agents } = data.settingsPrompts.default;
@@ -178,35 +189,45 @@ const SettingsPrompts = () => {
 
         if (resetType === 'tool') {
             const toolPrompt = tools?.[promptName as keyof typeof tools];
+
             return toolPrompt?.type ? userDefined.some((p) => p.type === toolPrompt.type) : false;
         } else {
             const agentPrompts = agents?.[promptName as keyof typeof agents] as AgentPrompts;
-            if (!agentPrompts) return false;
+
+            if (!agentPrompts) {
+                return false;
+            }
 
             const systemType = agentPrompts.system?.type;
             const humanType = agentPrompts.human?.type;
 
             switch (resetType) {
-                case 'system': {
-                    return systemType ? userDefined.some((p) => p.type === systemType) : false;
-                }
-                case 'human': {
-                    return humanType ? userDefined.some((p) => p.type === humanType) : false;
-                }
                 case 'all': {
                     const hasCustomSystem = systemType ? userDefined.some((p) => p.type === systemType) : false;
                     const hasCustomHuman = humanType ? userDefined.some((p) => p.type === humanType) : false;
+
                     return hasCustomSystem || hasCustomHuman;
                 }
-            // No default
+
+                case 'human': {
+                    return humanType ? userDefined.some((p) => p.type === humanType) : false;
+                }
+
+                case 'system': {
+                    return systemType ? userDefined.some((p) => p.type === systemType) : false;
+                }
+                // No default
             }
         }
+
         return false;
     };
 
     // Transform agents data for table
     const getAgentPromptsData = (): AgentPromptTableData[] => {
-        if (!data?.settingsPrompts?.default?.agents) return [];
+        if (!data?.settingsPrompts?.default?.agents) {
+            return [];
+        }
 
         const { agents } = data.settingsPrompts.default;
         const userDefined = data.settingsPrompts.userDefined || [];
@@ -219,9 +240,11 @@ const SettingsPrompts = () => {
 
         // Process each agent
         Object.entries(agents).forEach(([key, prompts]) => {
-            if (key === '__typename') return;
+            if (key === '__typename') {
+                return;
+            }
 
-            const systemType = (prompts as AgentPrompts | AgentPrompt)?.system?.type;
+            const systemType = (prompts as AgentPrompt | AgentPrompts)?.system?.type;
             const humanType = (prompts as AgentPrompts)?.human?.type;
 
             // Check if user has custom prompts
@@ -229,20 +252,20 @@ const SettingsPrompts = () => {
             const hasCustomHuman = humanType ? userDefined.some((p) => p.type === humanType) : false;
 
             const agentData: AgentPromptTableData = {
-                name: key,
                 displayName: formatName(key),
-                hasSystem: !!(prompts as AgentPrompts | AgentPrompt)?.system,
                 hasHuman: !!(prompts as AgentPrompts)?.human,
-                systemTemplate: (prompts as AgentPrompts | AgentPrompt)?.system?.template || '',
+                hasSystem: !!(prompts as AgentPrompt | AgentPrompts)?.system,
+                humanStatus: (prompts as AgentPrompts)?.human ? (hasCustomHuman ? 'Custom' : 'Default') : 'N/A',
                 humanTemplate: (prompts as AgentPrompts)?.human?.template,
-                systemStatus: (prompts as AgentPrompts | AgentPrompt)?.system
+                humanType,
+                name: key,
+                systemStatus: (prompts as AgentPrompt | AgentPrompts)?.system
                     ? hasCustomSystem
                         ? 'Custom'
                         : 'Default'
                     : 'N/A',
-                humanStatus: (prompts as AgentPrompts)?.human ? (hasCustomHuman ? 'Custom' : 'Default') : 'N/A',
+                systemTemplate: (prompts as AgentPrompt | AgentPrompts)?.system?.template || '',
                 systemType,
-                humanType,
             };
 
             agentEntries.push(agentData);
@@ -253,7 +276,9 @@ const SettingsPrompts = () => {
 
     // Transform tools data for table
     const getToolPromptsData = (): ToolPromptTableData[] => {
-        if (!data?.settingsPrompts?.default?.tools) return [];
+        if (!data?.settingsPrompts?.default?.tools) {
+            return [];
+        }
 
         const { tools } = data.settingsPrompts.default;
         const userDefined = data.settingsPrompts.userDefined || [];
@@ -266,17 +291,19 @@ const SettingsPrompts = () => {
 
         // Process each tool
         Object.entries(tools).forEach(([key, prompt]) => {
-            if (key === '__typename') return;
+            if (key === '__typename') {
+                return;
+            }
 
             const toolType = (prompt as DefaultPrompt)?.type;
             const hasCustomTool = userDefined.some((p) => p.type === toolType);
 
             const toolData: ToolPromptTableData = {
-                name: key,
                 displayName: formatName(key),
-                template: (prompt as DefaultPrompt)?.template || '',
-                status: (prompt as DefaultPrompt)?.template ? (hasCustomTool ? 'Custom' : 'Default') : 'N/A',
+                name: key,
                 promptType: toolType,
+                status: (prompt as DefaultPrompt)?.template ? (hasCustomTool ? 'Custom' : 'Default') : 'N/A',
+                template: (prompt as DefaultPrompt)?.template || '',
             };
 
             toolEntries.push(toolData);
@@ -289,64 +316,60 @@ const SettingsPrompts = () => {
     const agentColumns: ColumnDef<AgentPromptTableData>[] = [
         {
             accessorKey: 'displayName',
-            size: 200,
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        variant="link"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
-                    >
-                        Agent Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc'
-                            ? (
-                                <ArrowUp className="size-4" />
-                            )
-                            : null}
-                    </Button>
-                );
-            },
             cell: ({ row }) => (
                 <div className="flex items-center gap-2">
                     <span className="font-medium">{row.original.displayName}</span>
                 </div>
             ),
+            header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
+                return (
+                    <Button
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        variant="link"
+                    >
+                        Agent Name
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
+                    </Button>
+                );
+            },
+            size: 200,
         },
         {
             accessorKey: 'systemStatus',
-            size: 100,
-            header: 'System Prompt',
             cell: ({ row }) => {
                 const status = row.getValue('systemStatus') as string;
+
                 return (
                     <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
                         {status}
                     </Badge>
                 );
             },
+            header: 'System Prompt',
+            size: 100,
         },
         {
             accessorKey: 'humanStatus',
-            size: 100,
-            header: 'Human Prompt',
             cell: ({ row }) => {
                 const status = row.getValue('humanStatus') as string;
+
                 return (
                     <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
                         {status}
                     </Badge>
                 );
             },
+            header: 'Human Prompt',
+            size: 100,
         },
         {
-            id: 'actions',
-            size: 48,
-            enableHiding: false,
-            header: () => null,
             cell: ({ row }) => {
                 const agent = row.original;
 
@@ -355,8 +378,8 @@ const SettingsPrompts = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    variant="ghost"
                                     className="size-8 p-0"
+                                    variant="ghost"
                                 >
                                     <span className="sr-only">Open menu</span>
                                     <MoreHorizontal className="size-4" />
@@ -375,68 +398,74 @@ const SettingsPrompts = () => {
                                     canResetPrompt(agent.name, 'all')) && <DropdownMenuSeparator />}
                                 {canResetPrompt(agent.name, 'system') && (
                                     <DropdownMenuItem
-                                        onClick={() => handleResetDialogOpen('system', agent.name, agent.displayName)}
-                                        disabled={isDeleteLoading &&
+                                        disabled={
+                                            isDeleteLoading &&
                                             resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'system'}
+                                            resetOperation?.type === 'system'
+                                        }
+                                        onClick={() => handleResetDialogOpen('system', agent.name, agent.displayName)}
                                     >
                                         {isDeleteLoading &&
-                                            resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'system' ? (
-                                                <>
-                                                    <Loader2 className="size-3 animate-spin" />
-                                                    Resetting...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <RotateCcw className="size-3" />
-                                                    Reset System
-                                                </>
-                                            )}
+                                        resetOperation?.promptName === agent.name &&
+                                        resetOperation?.type === 'system' ? (
+                                            <>
+                                                <Loader2 className="size-3 animate-spin" />
+                                                Resetting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <RotateCcw className="size-3" />
+                                                Reset System
+                                            </>
+                                        )}
                                     </DropdownMenuItem>
                                 )}
                                 {agent.hasHuman && canResetPrompt(agent.name, 'human') && (
                                     <DropdownMenuItem
-                                        onClick={() => handleResetDialogOpen('human', agent.name, agent.displayName)}
-                                        disabled={isDeleteLoading &&
+                                        disabled={
+                                            isDeleteLoading &&
                                             resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'human'}
+                                            resetOperation?.type === 'human'
+                                        }
+                                        onClick={() => handleResetDialogOpen('human', agent.name, agent.displayName)}
                                     >
                                         {isDeleteLoading &&
-                                            resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'human' ? (
-                                                <>
-                                                    <Loader2 className="size-3 animate-spin" />
-                                                    Resetting...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <RotateCcw className="size-3" />
-                                                    Reset Human
-                                                </>
-                                            )}
+                                        resetOperation?.promptName === agent.name &&
+                                        resetOperation?.type === 'human' ? (
+                                            <>
+                                                <Loader2 className="size-3 animate-spin" />
+                                                Resetting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <RotateCcw className="size-3" />
+                                                Reset Human
+                                            </>
+                                        )}
                                     </DropdownMenuItem>
                                 )}
                                 {canResetPrompt(agent.name, 'all') && (
                                     <DropdownMenuItem
-                                        onClick={() => handleResetDialogOpen('all', agent.name, agent.displayName)}
-                                        disabled={isDeleteLoading &&
+                                        disabled={
+                                            isDeleteLoading &&
                                             resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'all'}
+                                            resetOperation?.type === 'all'
+                                        }
+                                        onClick={() => handleResetDialogOpen('all', agent.name, agent.displayName)}
                                     >
                                         {isDeleteLoading &&
-                                            resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'all' ? (
-                                                <>
-                                                    <Loader2 className="size-3 animate-spin" />
-                                                    Resetting...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Trash2 className="size-3" />
-                                                    Reset All
-                                                </>
-                                            )}
+                                        resetOperation?.promptName === agent.name &&
+                                        resetOperation?.type === 'all' ? (
+                                            <>
+                                                <Loader2 className="size-3 animate-spin" />
+                                                Resetting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Trash2 className="size-3" />
+                                                Reset All
+                                            </>
+                                        )}
                                     </DropdownMenuItem>
                                 )}
                             </DropdownMenuContent>
@@ -444,6 +473,10 @@ const SettingsPrompts = () => {
                     </div>
                 );
             },
+            enableHiding: false,
+            header: () => null,
+            id: 'actions',
+            size: 48,
         },
     ];
 
@@ -451,51 +484,46 @@ const SettingsPrompts = () => {
     const toolColumns: ColumnDef<ToolPromptTableData>[] = [
         {
             accessorKey: 'displayName',
-            size: 300,
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        variant="link"
-                        className="flex items-center gap-2 p-0 text-muted-foreground hover:text-primary hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                    >
-                        Tool Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc'
-                            ? (
-                                <ArrowUp className="size-4" />
-                            )
-                            : null}
-                    </Button>
-                );
-            },
             cell: ({ row }) => (
                 <div className="flex items-center gap-2">
                     <span className="font-medium">{row.original.displayName}</span>
                 </div>
             ),
+            header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
+                return (
+                    <Button
+                        className="flex items-center gap-2 p-0 text-muted-foreground hover:text-primary hover:no-underline"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        variant="link"
+                    >
+                        Tool Name
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
+                    </Button>
+                );
+            },
+            size: 300,
         },
         {
             accessorKey: 'status',
-            size: 100,
-            header: 'Prompt',
             cell: ({ row }) => {
                 const status = row.getValue('status') as string;
+
                 return (
                     <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
                         {status}
                     </Badge>
                 );
             },
+            header: 'Prompt',
+            size: 100,
         },
         {
-            id: 'actions',
-            size: 48,
-            enableHiding: false,
-            header: () => null,
             cell: ({ row }) => {
                 const tool = row.original;
 
@@ -504,8 +532,8 @@ const SettingsPrompts = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    variant="ghost"
                                     className="size-8 p-0"
+                                    variant="ghost"
                                 >
                                     <span className="sr-only">Open menu</span>
                                     <MoreHorizontal className="size-4" />
@@ -523,24 +551,26 @@ const SettingsPrompts = () => {
                                     <>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
-                                            onClick={() => handleResetDialogOpen('tool', tool.name, tool.displayName)}
-                                            disabled={isDeleteLoading &&
+                                            disabled={
+                                                isDeleteLoading &&
                                                 resetOperation?.promptName === tool.name &&
-                                                resetOperation?.type === 'tool'}
+                                                resetOperation?.type === 'tool'
+                                            }
+                                            onClick={() => handleResetDialogOpen('tool', tool.name, tool.displayName)}
                                         >
                                             {isDeleteLoading &&
-                                                resetOperation?.promptName === tool.name &&
-                                                resetOperation?.type === 'tool' ? (
-                                                    <>
-                                                        <Loader2 className="size-3 animate-spin" />
-                                                        Resetting...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <RotateCcw className="size-3" />
-                                                        Reset
-                                                    </>
-                                                )}
+                                            resetOperation?.promptName === tool.name &&
+                                            resetOperation?.type === 'tool' ? (
+                                                <>
+                                                    <Loader2 className="size-3 animate-spin" />
+                                                    Resetting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <RotateCcw className="size-3" />
+                                                    Reset
+                                                </>
+                                            )}
                                         </DropdownMenuItem>
                                     </>
                                 )}
@@ -549,6 +579,10 @@ const SettingsPrompts = () => {
                     </div>
                 );
             },
+            enableHiding: false,
+            header: () => null,
+            id: 'actions',
+            size: 48,
         },
     ];
 
@@ -577,8 +611,8 @@ const SettingsPrompts = () => {
                                 System Prompt
                                 {userSystemPrompt && (
                                     <Badge
-                                        variant="secondary"
                                         className="text-xs"
+                                        variant="secondary"
                                     >
                                         Custom
                                     </Badge>
@@ -597,8 +631,8 @@ const SettingsPrompts = () => {
                                 Human Prompt
                                 {userHumanPrompt && (
                                     <Badge
-                                        variant="secondary"
                                         className="text-xs"
+                                        variant="secondary"
                                     >
                                         Custom
                                     </Badge>
@@ -630,8 +664,8 @@ const SettingsPrompts = () => {
                     <h5 className="text-sm font-medium">Template</h5>
                     {userToolPrompt && (
                         <Badge
-                            variant="secondary"
                             className="text-xs"
+                            variant="secondary"
                         >
                             Custom
                         </Badge>
@@ -649,9 +683,9 @@ const SettingsPrompts = () => {
             <div className="space-y-4">
                 <SettingsPromptsHeader />
                 <StatusCard
+                    description="Please wait while we fetch your prompt templates"
                     icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                     title="Loading prompts..."
-                    description="Please wait while we fetch your prompt templates"
                 />
             </div>
         );
@@ -678,9 +712,9 @@ const SettingsPrompts = () => {
             <div className="space-y-4">
                 <SettingsPromptsHeader />
                 <StatusCard
+                    description="Prompt templates could not be loaded"
                     icon={<Settings className="size-8 text-muted-foreground" />}
                     title="No prompts available"
-                    description="Prompt templates could not be loaded"
                 />
             </div>
         );
@@ -703,10 +737,10 @@ const SettingsPrompts = () => {
                         <DataTable
                             columns={agentColumns}
                             data={agentPrompts}
-                            renderSubComponent={renderAgentSubComponent}
-                            initialPageSize={1000}
                             filterColumn="displayName"
                             filterPlaceholder="Filter agent names..."
+                            initialPageSize={1000}
+                            renderSubComponent={renderAgentSubComponent}
                         />
                     </div>
                 )}
@@ -723,34 +757,34 @@ const SettingsPrompts = () => {
                         <DataTable
                             columns={toolColumns}
                             data={toolPrompts}
-                            renderSubComponent={renderToolSubComponent}
-                            initialPageSize={1000}
                             filterColumn="displayName"
                             filterPlaceholder="Filter tool names..."
+                            initialPageSize={1000}
+                            renderSubComponent={renderToolSubComponent}
                         />
                     </div>
                 )}
             </div>
 
             <ConfirmationDialog
-                isOpen={resetDialogOpen}
-                handleOpenChange={setResetDialogOpen}
-                handleConfirm={handleResetPrompt}
-                title={`Reset ${resetOperation?.displayName || 'Prompt'}`}
+                cancelText="Cancel"
+                cancelVariant="outline"
+                confirmIcon={<RotateCcw />}
+                confirmText="Reset"
+                confirmVariant="destructive"
                 description={
                     resetOperation?.type === 'system'
                         ? `Are you sure you want to reset the system prompt for "${resetOperation.displayName}"? This will revert it to the default template and cannot be undone.`
                         : resetOperation?.type === 'human'
-                            ? `Are you sure you want to reset the human prompt for "${resetOperation.displayName}"? This will revert it to the default template and cannot be undone.`
-                            : resetOperation?.type === 'all'
-                                ? `Are you sure you want to reset all prompts for "${resetOperation.displayName}"? This will revert both system and human prompts to their default templates and cannot be undone.`
-                                : `Are you sure you want to reset the prompt for "${resetOperation?.displayName}"? This will revert it to the default template and cannot be undone.`
+                          ? `Are you sure you want to reset the human prompt for "${resetOperation.displayName}"? This will revert it to the default template and cannot be undone.`
+                          : resetOperation?.type === 'all'
+                            ? `Are you sure you want to reset all prompts for "${resetOperation.displayName}"? This will revert both system and human prompts to their default templates and cannot be undone.`
+                            : `Are you sure you want to reset the prompt for "${resetOperation?.displayName}"? This will revert it to the default template and cannot be undone.`
                 }
-                confirmText="Reset"
-                cancelText="Cancel"
-                confirmVariant="destructive"
-                cancelVariant="outline"
-                confirmIcon={<RotateCcw />}
+                handleConfirm={handleResetPrompt}
+                handleOpenChange={setResetDialogOpen}
+                isOpen={resetDialogOpen}
+                title={`Reset ${resetOperation?.displayName || 'Prompt'}`}
             />
         </Fragment>
     );

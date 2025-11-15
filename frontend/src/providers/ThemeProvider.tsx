@@ -1,5 +1,6 @@
-import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import type { ReactNode } from 'react';
+
+import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import { useEffect } from 'react';
 
 const ThemeProvider = ({ children }: { children: ReactNode }) => {
@@ -20,8 +21,8 @@ const ThemeProvider = ({ children }: { children: ReactNode }) => {
         const observer = new MutationObserver(updateDataMode);
 
         observer.observe(document.documentElement, {
-            attributes: true,
             attributeFilter: ['class'],
+            attributes: true,
         });
 
         updateDataMode();
@@ -33,8 +34,8 @@ const ThemeProvider = ({ children }: { children: ReactNode }) => {
         <NextThemesProvider
             attribute="class"
             defaultTheme="dark"
-            enableSystem={false}
             disableTransitionOnChange
+            enableSystem={false}
             storageKey="theme"
         >
             {children}

@@ -15,29 +15,29 @@ const formSchema = z.object({
 });
 
 interface ChatAutomationFormInputProps {
-    selectedFlowId: string | null;
     flowStatus?: StatusType;
     isCreatingFlow?: boolean;
-    onSubmitMessage: (message: string) => Promise<void>;
     onStopFlow?: (flowId: string) => Promise<void>;
+    onSubmitMessage: (message: string) => Promise<void>;
+    selectedFlowId: null | string;
 }
 
 const ChatAutomationFormInput = ({
-    selectedFlowId,
     flowStatus,
     isCreatingFlow = false,
-    onSubmitMessage,
     onStopFlow,
+    onSubmitMessage,
+    selectedFlowId,
 }: ChatAutomationFormInputProps) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
     const textareaId = 'chat-textarea';
 
     const form = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema),
         defaultValues: {
             message: '',
         },
+        resolver: zodResolver(formSchema),
     });
 
     // Reset form when flow ID changes
@@ -60,19 +60,24 @@ const ChatAutomationFormInput = ({
 
         // Flow-specific statuses
         switch (flowStatus) {
-            case StatusType.Waiting: {
-                return 'Provide additional context or instructions...';
-            }
-            case StatusType.Running: {
-                return 'PentAGI is working... Click Stop to interrupt';
-            }
             case StatusType.Created: {
                 return 'The flow is starting...';
             }
-            case StatusType.Finished:
-            case StatusType.Failed: {
+
+            case StatusType.Failed:
+
+            case StatusType.Finished: {
                 return 'This flow has ended. Create a new one to continue.';
             }
+
+            case StatusType.Running: {
+                return 'PentAGI is working... Click Stop to interrupt';
+            }
+
+            case StatusType.Waiting: {
+                return 'Provide additional context or instructions...';
+            }
+
             default: {
                 return 'Type your message...';
             }
@@ -81,6 +86,7 @@ const ChatAutomationFormInput = ({
 
     const handleSubmit = async (values: z.infer<typeof formSchema>) => {
         const message = values.message.trim();
+
         if (!message) {
             return;
         }
@@ -99,7 +105,9 @@ const ChatAutomationFormInput = ({
     };
 
     const handleStopFlow = async () => {
-        if (!selectedFlowId || !onStopFlow) return;
+        if (!selectedFlowId || !onStopFlow) {
+            return;
+        }
 
         try {
             setIsStopping(true);
@@ -139,32 +147,19 @@ const ChatAutomationFormInput = ({
     const isFlowTerminal = flowStatus === StatusType.Finished || flowStatus === StatusType.Failed;
 
     const isInputDisabled =
-        !selectedFlowId ||
-        isSubmitting ||
-        isCreatingFlow ||
-        isRunning ||
-        isCreated ||
-        isFlowTerminal;
+        !selectedFlowId || isSubmitting || isCreatingFlow || isRunning || isCreated || isFlowTerminal;
 
     const isButtonDisabled =
-        !selectedFlowId ||
-        isSubmitting ||
-        isCreatingFlow ||
-        isStopping ||
-        isCreated ||
-        isFlowTerminal;
+        !selectedFlowId || isSubmitting || isCreatingFlow || isStopping || isCreated || isFlowTerminal;
 
     // Auto-focus on textarea when needed
     useEffect(() => {
-        if (
-            !isInputDisabled &&
-            (selectedFlowId === 'new' ||
-                flowStatus === StatusType.Waiting ||
-                !flowStatus)
-        ) {
+        if (!isInputDisabled && (selectedFlowId === 'new' || flowStatus === StatusType.Waiting || !flowStatus)) {
             const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
+
             if (textarea) {
                 const timeoutId = setTimeout(() => textarea.focus(), 0);
+
                 return () => clearTimeout(timeoutId);
             }
         }
@@ -173,8 +168,8 @@ const ChatAutomationFormInput = ({
     return (
         <Form {...form}>
             <form
-                onSubmit={form.handleSubmit(handleSubmit)}
                 className="flex w-full items-center space-x-2"
+                onSubmit={form.handleSubmit(handleSubmit)}
             >
                 <FormField
                     control={form.control}
@@ -183,11 +178,11 @@ const ChatAutomationFormInput = ({
                         <FormControl>
                             <Textarea
                                 {...field}
-                                id={textareaId}
-                                placeholder={getPlaceholderText()}
-                                disabled={isInputDisabled}
-                                onKeyDown={handleKeyDown}
                                 className="resize-none"
+                                disabled={isInputDisabled}
+                                id={textareaId}
+                                onKeyDown={handleKeyDown}
+                                placeholder={getPlaceholderText()}
                             />
                         </FormControl>
                     )}
@@ -195,10 +190,10 @@ const ChatAutomationFormInput = ({
                 {isRunning ? (
                     <Button
                         className="mb-px mt-auto"
-                        type="button"
-                        variant="destructive"
                         disabled={isButtonDisabled || isStopping}
                         onClick={handleStopFlow}
+                        type="button"
+                        variant="destructive"
                     >
                         {isStopping ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-4" />}
                         <span className="sr-only">Stop</span>
@@ -206,10 +201,14 @@ const ChatAutomationFormInput = ({
                 ) : (
                     <Button
                         className="mb-px mt-auto"
-                        type="submit"
                         disabled={isButtonDisabled}
+                        type="submit"
                     >
-                        {isSubmitting || isCreatingFlow ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                        {isSubmitting || isCreatingFlow ? (
+                            <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                            <Send className="size-4" />
+                        )}
                         <span className="sr-only">Send</span>
                     </Button>
                 )}

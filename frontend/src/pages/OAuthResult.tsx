@@ -69,9 +69,9 @@ const OAuthResult = () => {
             try {
                 window.opener.postMessage(
                     {
-                        type: 'oauth-result',
-                        status,
                         error,
+                        status,
+                        type: 'oauth-result',
                     },
                     window.location.origin,
                 );
@@ -94,9 +94,17 @@ const OAuthResult = () => {
         // Cleanup function for useEffect
         return () => {
             // Explicitly clear all timeouts
-            if (redirectTimer) clearTimeout(redirectTimer);
-            if (cleanupTimer) clearTimeout(cleanupTimer);
-            if (closeTimer) clearTimeout(closeTimer);
+            if (redirectTimer) {
+                clearTimeout(redirectTimer);
+            }
+
+            if (cleanupTimer) {
+                clearTimeout(cleanupTimer);
+            }
+
+            if (closeTimer) {
+                clearTimeout(closeTimer);
+            }
         };
     }, [successDelay, errorDelay]);
 

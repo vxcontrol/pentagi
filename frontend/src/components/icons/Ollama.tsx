@@ -7,10 +7,10 @@ interface OllamaProps extends React.SVGProps<SVGSVGElement> {
 const Ollama = ({ className, ...props }: OllamaProps) => {
     return (
         <svg
+            className={cn(className)}
             fill="currentColor"
             fillRule="evenodd"
             viewBox="0 0 24 24"
-            className={cn(className)}
             {...props}
         >
             <title>Ollama</title>

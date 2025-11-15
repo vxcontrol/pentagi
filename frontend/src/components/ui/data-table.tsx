@@ -30,19 +30,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 // Extend ColumnMeta interface from @tanstack/react-table
 declare module '@tanstack/react-table' {
     interface ColumnMeta<TData, TValue> {
-        headerClassName?: string;
         cellClassName?: string;
+        headerClassName?: string;
     }
 }
 
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[];
     data: TData[];
-    renderSubComponent?: (props: { row: any }) => React.ReactElement;
-    initialPageSize?: number;
     filterColumn?: string;
     filterPlaceholder?: string;
+    initialPageSize?: number;
     onRowClick?: (row: TData) => void;
+    renderSubComponent?: (props: { row: any }) => React.ReactElement;
 }
 
 const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
@@ -50,11 +50,11 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
         {
             columns,
             data,
-            renderSubComponent,
-            initialPageSize = 10,
             filterColumn = 'name',
             filterPlaceholder = 'Filter...',
+            initialPageSize = 10,
             onRowClick,
+            renderSubComponent,
         },
         ref,
     ) => {
@@ -65,29 +65,29 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
         const [expanded, setExpanded] = React.useState<ExpandedState>({});
 
         const table = useReactTable({
-            data,
             columns,
-            onSortingChange: setSorting,
-            onColumnFiltersChange: setColumnFilters,
+            data,
             getCoreRowModel: getCoreRowModel(),
+            getExpandedRowModel: getExpandedRowModel(),
+            getFilteredRowModel: getFilteredRowModel(),
             getPaginationRowModel: getPaginationRowModel(),
             getSortedRowModel: getSortedRowModel(),
-            getFilteredRowModel: getFilteredRowModel(),
-            onColumnVisibilityChange: setColumnVisibility,
-            onRowSelectionChange: setRowSelection,
-            onExpandedChange: setExpanded,
-            getExpandedRowModel: getExpandedRowModel(),
             initialState: {
                 pagination: {
                     pageSize: initialPageSize,
                 },
             },
+            onColumnFiltersChange: setColumnFilters,
+            onColumnVisibilityChange: setColumnVisibility,
+            onExpandedChange: setExpanded,
+            onRowSelectionChange: setRowSelection,
+            onSortingChange: setSorting,
             state: {
-                sorting,
                 columnFilters,
                 columnVisibility,
-                rowSelection,
                 expanded,
+                rowSelection,
+                sorting,
             },
         });
 
@@ -96,17 +96,17 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                 <div className="flex items-center gap-4 py-4">
                     {filterColumn && (
                         <Input
+                            className="max-w-sm"
+                            onChange={(event) => table.getColumn(filterColumn)?.setFilterValue(event.target.value)}
                             placeholder={filterPlaceholder}
                             value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ''}
-                            onChange={(event) => table.getColumn(filterColumn)?.setFilterValue(event.target.value)}
-                            className="max-w-sm"
                         />
                     )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
-                                variant="outline"
                                 className="ml-auto"
+                                variant="outline"
                             >
                                 Columns <ChevronDown className="ml-2 h-4 w-4" />
                             </Button>
@@ -118,9 +118,9 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                                 .map((column) => {
                                     return (
                                         <DropdownMenuCheckboxItem
-                                            key={column.id}
-                                            className="capitalize"
                                             checked={column.getIsVisible()}
+                                            className="capitalize"
+                                            key={column.id}
                                             onCheckedChange={(value) => column.toggleVisibility(!!value)}
                                         >
                                             {column.id}
@@ -138,14 +138,14 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                                     {headerGroup.headers.map((header) => {
                                         return (
                                             <TableHead
-                                                key={header.id}
                                                 className={header.column.columnDef.meta?.headerClassName}
+                                                key={header.id}
                                                 style={
                                                     header.column.columnDef.size
                                                         ? {
-                                                              width: header.column.columnDef.size,
-                                                              minWidth: header.column.columnDef.size,
                                                               maxWidth: header.column.columnDef.size,
+                                                              minWidth: header.column.columnDef.size,
+                                                              width: header.column.columnDef.size,
                                                           }
                                                         : undefined
                                                 }
@@ -164,8 +164,8 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                                 table.getRowModel().rows.map((row) => (
                                     <React.Fragment key={row.id}>
                                         <TableRow
-                                            data-state={row.getIsSelected() && 'selected'}
                                             className="cursor-pointer hover:bg-muted/50"
+                                            data-state={row.getIsSelected() && 'selected'}
                                             onClick={() => {
                                                 if (onRowClick) {
                                                     onRowClick(row.original);
@@ -176,33 +176,33 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                                         >
                                             {row.getVisibleCells().map((cell) => (
                                                 <TableCell
-                                                    key={cell.id}
                                                     className={cell.column.columnDef.meta?.cellClassName}
-                                                    style={
-                                                        cell.column.columnDef.size
-                                                            ? {
-                                                                  width: cell.column.columnDef.size,
-                                                                  minWidth: cell.column.columnDef.size,
-                                                                  maxWidth: cell.column.columnDef.size,
-                                                              }
-                                                            : undefined
-                                                    }
+                                                    key={cell.id}
                                                     onClick={(e) => {
                                                         // Prevent row click handler when clicking on action buttons
                                                         if (cell.column.id === 'actions') {
                                                             e.stopPropagation();
                                                         }
                                                     }}
+                                                    style={
+                                                        cell.column.columnDef.size
+                                                            ? {
+                                                                  maxWidth: cell.column.columnDef.size,
+                                                                  minWidth: cell.column.columnDef.size,
+                                                                  width: cell.column.columnDef.size,
+                                                              }
+                                                            : undefined
+                                                    }
                                                 >
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </TableCell>
                                             ))}
                                         </TableRow>
                                         {row.getIsExpanded() && renderSubComponent && (
-                                            <TableRow className="hover:bg-transparent border-0 cursor-default">
+                                            <TableRow className="cursor-default border-0 hover:bg-transparent">
                                                 <TableCell
-                                                    colSpan={row.getVisibleCells().length}
                                                     className="p-0"
+                                                    colSpan={row.getVisibleCells().length}
                                                 >
                                                     {renderSubComponent({ row })}
                                                 </TableCell>
@@ -213,8 +213,8 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                             ) : (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={columns.length}
                                         className="h-24 text-center"
+                                        colSpan={columns.length}
                                     >
                                         No results.
                                     </TableCell>
@@ -233,18 +233,18 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                     {(table.getCanPreviousPage() || table.getCanNextPage()) && (
                         <div className="space-x-2">
                             <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => table.previousPage()}
                                 disabled={!table.getCanPreviousPage()}
+                                onClick={() => table.previousPage()}
+                                size="sm"
+                                variant="outline"
                             >
                                 Previous
                             </Button>
                             <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => table.nextPage()}
                                 disabled={!table.getCanNextPage()}
+                                onClick={() => table.nextPage()}
+                                size="sm"
+                                variant="outline"
                             >
                                 Next
                             </Button>

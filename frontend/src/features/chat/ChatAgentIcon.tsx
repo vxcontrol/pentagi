@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+
 import {
     Bot,
     Brain,
@@ -23,13 +24,14 @@ import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
 
 interface ChatAgentIconProps {
-    type?: AgentType;
     className?: string;
     tooltip?: string;
+    type?: AgentType;
 }
 
 const icons: Record<AgentType, LucideIcon> = {
     [AgentType.Adviser]: HelpCircle,
+    [AgentType.Assistant]: Bot,
     [AgentType.Coder]: Code2,
     [AgentType.Enricher]: HardDriveDownload,
     [AgentType.Generator]: LayoutList,
@@ -43,11 +45,10 @@ const icons: Record<AgentType, LucideIcon> = {
     [AgentType.Searcher]: Search,
     [AgentType.Summarizer]: Sigma,
     [AgentType.ToolCallFixer]: Wrench,
-    [AgentType.Assistant]: Bot,
 };
 const defaultIcon = HelpCircle;
 
-const ChatAgentIcon = ({ type, className, tooltip = type }: ChatAgentIconProps) => {
+const ChatAgentIcon = ({ className, type, tooltip = type }: ChatAgentIconProps) => {
     const Icon = type ? icons[type] || defaultIcon : defaultIcon;
     const iconElement = <Icon className={cn('size-3 shrink-0', tooltip && 'cursor-pointer', className)} />;
 

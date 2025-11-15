@@ -1,4 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
+
 import { AlertCircle, ArrowUpDown, Copy, Loader2, MoreHorizontal, Pencil, Plus, Server, Trash } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -18,37 +19,37 @@ import {
 import { StatusCard } from '@/components/ui/status-card';
 import { Switch } from '@/components/ui/switch';
 
-type McpTransport = 'stdio' | 'sse';
-
-interface McpTool {
-    name: string;
-    description?: string;
-    enabled?: boolean;
+interface McpServerConfigSse {
+    headers?: Record<string, string>;
+    url: string;
 }
 
 interface McpServerConfigStdio {
-    command: string;
     args?: string[];
+    command: string;
     env?: Record<string, string>;
 }
 
-interface McpServerConfigSse {
-    url: string;
-    headers?: Record<string, string>;
-}
-
 interface McpServerItem {
+    config: {
+        sse?: McpServerConfigSse | null;
+        stdio?: McpServerConfigStdio | null;
+    };
+    createdAt: string; // ISO
     id: number;
     name: string;
-    transport: McpTransport;
-    createdAt: string; // ISO
-    updatedAt: string; // ISO
     tools: McpTool[];
-    config: {
-        stdio?: McpServerConfigStdio | null;
-        sse?: McpServerConfigSse | null;
-    };
+    transport: McpTransport;
+    updatedAt: string; // ISO
 }
+
+interface McpTool {
+    description?: string;
+    enabled?: boolean;
+    name: string;
+}
+
+type McpTransport = 'sse' | 'stdio';
 
 const SettingsMcpServersHeader = () => {
     const navigate = useNavigate();
@@ -61,8 +62,8 @@ const SettingsMcpServersHeader = () => {
         <div className="flex items-center justify-between">
             <p className="text-muted-foreground">Manage MCP servers available to the assistant</p>
             <Button
-                variant="secondary"
                 onClick={handleCreate}
+                variant="secondary"
             >
                 Create MCP Server
                 <Plus className="size-4" />
@@ -80,62 +81,62 @@ const SettingsMcpServers = () => {
     const initialData: McpServerItem[] = useMemo(
         () => [
             {
-                id: 1,
-                name: 'Local Filesystem',
-                transport: 'stdio',
-                createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
-                updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
-                tools: [
-                    { name: 'readFile', description: 'Read a file from disk', enabled: true },
-                    { name: 'writeFile', description: 'Write content to a file', enabled: false },
-                    { name: 'listDirectory', description: 'List files in a directory', enabled: true },
-                ],
                 config: {
+                    sse: null,
                     stdio: {
-                        command: '/usr/local/bin/node',
                         args: ['/opt/mcp/filesystem/index.js', '--root', '/Users/sirozha/Projects'],
+                        command: '/usr/local/bin/node',
                         env: { NODE_ENV: 'production' },
                     },
-                    sse: null,
                 },
+                createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+                id: 1,
+                name: 'Local Filesystem',
+                tools: [
+                    { description: 'Read a file from disk', enabled: true, name: 'readFile' },
+                    { description: 'Write content to a file', enabled: false, name: 'writeFile' },
+                    { description: 'List files in a directory', enabled: true, name: 'listDirectory' },
+                ],
+                transport: 'stdio',
+                updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
             },
             {
+                config: {
+                    sse: {
+                        headers: { Authorization: 'Bearer ***' },
+                        url: 'https://mcp.example.com/slack/sse',
+                    },
+                    stdio: null,
+                },
+                createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString(),
                 id: 2,
                 name: 'Slack (Prod)',
-                transport: 'sse',
-                createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString(),
-                updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
                 tools: [
-                    { name: 'postMessage', description: 'Send a message to a channel', enabled: true },
-                    { name: 'listChannels', description: 'Get a list of channels', enabled: true },
-                    { name: 'getUserInfo', description: 'Fetch Slack user info', enabled: false },
+                    { description: 'Send a message to a channel', enabled: true, name: 'postMessage' },
+                    { description: 'Get a list of channels', enabled: true, name: 'listChannels' },
+                    { description: 'Fetch Slack user info', enabled: false, name: 'getUserInfo' },
                 ],
-                config: {
-                    stdio: null,
-                    sse: {
-                        url: 'https://mcp.example.com/slack/sse',
-                        headers: { Authorization: 'Bearer ***' },
-                    },
-                },
+                transport: 'sse',
+                updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
             },
             {
+                config: {
+                    sse: {
+                        headers: { Authorization: 'Bearer ***' },
+                        url: 'https://mcp.example.com/github/sse',
+                    },
+                    stdio: null,
+                },
+                createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
                 id: 3,
                 name: 'GitHub Issues',
-                transport: 'sse',
-                createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
-                updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
                 tools: [
-                    { name: 'createIssue', description: 'Create a new issue', enabled: true },
-                    { name: 'searchIssues', description: 'Search issues by query', enabled: true },
-                    { name: 'addComment', description: 'Add a comment to an issue', enabled: true },
+                    { description: 'Create a new issue', enabled: true, name: 'createIssue' },
+                    { description: 'Search issues by query', enabled: true, name: 'searchIssues' },
+                    { description: 'Add a comment to an issue', enabled: true, name: 'addComment' },
                 ],
-                config: {
-                    stdio: null,
-                    sse: {
-                        url: 'https://mcp.example.com/github/sse',
-                        headers: { Authorization: 'Bearer ***' },
-                    },
-                },
+                transport: 'sse',
+                updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
             },
         ],
         [],
@@ -145,7 +146,7 @@ const SettingsMcpServers = () => {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingServer, setDeletingServer] = useState<McpServerItem | null>(null);
     const [isDeleteLoading, setIsDeleteLoading] = useState(false);
-    const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+    const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
 
     const handleEdit = (serverId: number) => {
         navigate(`/settings/mcp-servers/${serverId}`);
@@ -154,18 +155,23 @@ const SettingsMcpServers = () => {
     const handleClone = (serverId: number) => {
         setServers((prev) => {
             const source = prev.find((s) => s.id === serverId);
-            if (!source) return prev;
+
+            if (!source) {
+                return prev;
+            }
+
             const nextId = (prev.reduce((max, s) => Math.max(max, s.id), 0) || 0) + 1;
             const nowIso = new Date().toISOString();
             const clone: McpServerItem = {
                 ...source,
+                config: JSON.parse(JSON.stringify(source.config)),
+                createdAt: nowIso,
                 id: nextId,
                 name: `${source.name} (Copy)`,
-                createdAt: nowIso,
-                updatedAt: nowIso,
-                config: JSON.parse(JSON.stringify(source.config)),
                 tools: JSON.parse(JSON.stringify(source.tools || [])),
+                updatedAt: nowIso,
             };
+
             return [clone, ...prev];
         });
     };
@@ -176,7 +182,10 @@ const SettingsMcpServers = () => {
     };
 
     const handleDelete = async (serverId?: number) => {
-        if (!serverId) return;
+        if (!serverId) {
+            return;
+        }
+
         try {
             setIsDeleteLoading(true);
             setDeleteErrorMessage(null);
@@ -195,65 +204,68 @@ const SettingsMcpServers = () => {
     const columns: ColumnDef<McpServerItem>[] = [
         {
             accessorKey: 'name',
-            size: 300,
+            cell: ({ row }) => (
+                <div className="flex items-center gap-2 font-medium">{row.getValue('name') as string}</div>
+            ),
             header: ({ column }) => (
                 <Button
-                    variant="ghost"
                     className="-mx-4"
                     onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                    variant="ghost"
                 >
                     Name
                     <ArrowUpDown className="ml-2 size-4" />
                 </Button>
             ),
-            cell: ({ row }) => (
-                <div className="flex items-center gap-2 font-medium">{row.getValue('name') as string}</div>
-            ),
+            size: 300,
         },
         {
             accessorKey: 'transport',
-            size: 120,
-            header: 'Transport',
             cell: ({ row }) => {
                 const t = row.getValue('transport') as McpTransport;
+
                 return <Badge variant="outline">{t.toUpperCase()}</Badge>;
             },
+            header: 'Transport',
+            size: 120,
         },
         {
-            id: 'tools',
-            size: 220,
-            header: 'Tools',
             cell: ({ row }) => {
                 const s = row.original as McpServerItem;
                 const total = (s.tools || []).length;
-                if (total === 0) return <span className="text-sm text-muted-foreground">—</span>;
+
+                if (total === 0) {
+                    return <span className="text-sm text-muted-foreground">—</span>;
+                }
+
                 const enabled = (s.tools || []).filter((t) => t.enabled !== false);
                 const first = enabled.slice(0, 3);
                 const rest = enabled.length - first.length;
                 const disabledCount = total - enabled.length;
+
                 return (
                     <div className="flex w-full flex-wrap items-center gap-1 overflow-hidden">
                         {first.map((t) => (
                             <Badge
+                                className="text-[10px]"
                                 key={t.name}
                                 variant="secondary"
-                                className="text-[10px]"
                             >
                                 {t.name}
                             </Badge>
                         ))}
                         {rest > 0 && (
                             <Badge
-                                variant="outline"
                                 className="text-[10px]"
+                                variant="outline"
                             >
                                 +{rest}
                             </Badge>
                         )}
                         {disabledCount > 0 && (
                             <Badge
-                                variant="outline"
                                 className="ml-1 text-[10px]"
+                                variant="outline"
                             >
                                 {disabledCount} disabled
                             </Badge>
@@ -261,54 +273,58 @@ const SettingsMcpServers = () => {
                     </div>
                 );
             },
+            header: 'Tools',
+            id: 'tools',
+            size: 220,
         },
         {
-            id: 'endpoint',
-            size: 320,
-            header: 'Endpoint',
             cell: ({ row }) => {
                 const s = row.original as McpServerItem;
+
                 if (s.transport === 'sse' && s.config.sse) {
                     return <span className="break-all text-sm text-muted-foreground">{s.config.sse.url}</span>;
                 }
+
                 if (s.transport === 'stdio' && s.config.stdio) {
                     const args = s.config.stdio.args?.join(' ') || '';
+
                     return (
                         <span className="break-all text-sm text-muted-foreground">
                             {s.config.stdio.command} {args}
                         </span>
                     );
                 }
+
                 return <span className="text-sm text-muted-foreground">—</span>;
             },
+            header: 'Endpoint',
+            id: 'endpoint',
+            size: 320,
         },
         {
             accessorKey: 'createdAt',
-            size: 100,
-            header: 'Created',
             cell: ({ row }) => <div className="text-sm">{formatDate(row.getValue('createdAt'))}</div>,
+            header: 'Created',
+            size: 100,
         },
         {
             accessorKey: 'updatedAt',
-            size: 100,
-            header: 'Updated',
             cell: ({ row }) => <div className="text-sm">{formatDate(row.getValue('updatedAt'))}</div>,
+            header: 'Updated',
+            size: 100,
         },
         {
-            id: 'actions',
-            size: 48,
-            enableHiding: false,
-            header: () => null,
             cell: ({ row }) => {
                 const server = row.original as McpServerItem;
+
                 return (
                     <div className="flex justify-end">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    variant="ghost"
                                     className="size-8 p-0"
                                     onClick={(e) => e.stopPropagation()}
+                                    variant="ghost"
                                 >
                                     <span className="sr-only">Open menu</span>
                                     <MoreHorizontal className="size-4" />
@@ -329,8 +345,8 @@ const SettingsMcpServers = () => {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                    onClick={() => handleOpenDeleteDialog(server)}
                                     disabled={isDeleteLoading && deletingServer?.id === server.id}
+                                    onClick={() => handleOpenDeleteDialog(server)}
                                 >
                                     {isDeleteLoading && deletingServer?.id === server.id ? (
                                         <>
@@ -349,6 +365,10 @@ const SettingsMcpServers = () => {
                     </div>
                 );
             },
+            enableHiding: false,
+            header: () => null,
+            id: 'actions',
+            size: 48,
         },
     ];
 
@@ -356,7 +376,10 @@ const SettingsMcpServers = () => {
         const server = row.original as McpServerItem;
 
         const renderKeyValue = (obj?: Record<string, string>) => {
-            if (!obj || Object.keys(obj).length === 0) return <div className="text-sm text-muted-foreground">No data</div>;
+            if (!obj || Object.keys(obj).length === 0) {
+                return <div className="text-sm text-muted-foreground">No data</div>;
+            }
+
             return (
                 <div className="space-y-1 text-sm">
                     {Object.entries(obj)
@@ -383,8 +406,7 @@ const SettingsMcpServers = () => {
                             </div>
                             {!!server.config.stdio.args?.length && (
                                 <div>
-                                    <span className="text-muted-foreground">Args:</span>
-                                    {' '}
+                                    <span className="text-muted-foreground">Args:</span>{' '}
                                     {server.config.stdio.args.join(' ')}
                                 </div>
                             )}
@@ -415,8 +437,8 @@ const SettingsMcpServers = () => {
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                             {server.tools.map((t, idx) => (
                                 <div
-                                    key={`${t.name}-${idx}`}
                                     className="flex items-start justify-between gap-4 rounded-md border p-2"
+                                    key={`${t.name}-${idx}`}
                                 >
                                     <div className="text-sm">
                                         <div className="font-medium">{t.name}</div>
@@ -425,22 +447,22 @@ const SettingsMcpServers = () => {
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs text-muted-foreground">Enabled</span>
                                         <Switch
+                                            aria-label={`Toggle ${t.name}`}
                                             checked={t.enabled !== false}
                                             onCheckedChange={(checked) => {
                                                 setServers((prev) =>
                                                     prev.map((s) =>
                                                         s.id === server.id
                                                             ? {
-                                                                ...s,
-                                                                tools: s.tools.map((orig, i) =>
-                                                                    i === idx ? { ...orig, enabled: checked } : orig,
-                                                                ),
-                                                            }
+                                                                  ...s,
+                                                                  tools: s.tools.map((orig, i) =>
+                                                                      i === idx ? { ...orig, enabled: checked } : orig,
+                                                                  ),
+                                                              }
                                                             : s,
                                                     ),
                                                 );
                                             }}
-                                            aria-label={`Toggle ${t.name}`}
                                         />
                                     </div>
                                 </div>
@@ -459,10 +481,7 @@ const SettingsMcpServers = () => {
             <div className="space-y-4">
                 <SettingsMcpServersHeader />
                 <StatusCard
-                    icon={<Server className="size-8 text-muted-foreground" />}
-                    title="No MCP servers configured"
-                    description="Get started by adding your first MCP server"
-                    action={(
+                    action={
                         <Button
                             onClick={() => navigate('/settings/mcp-servers/new')}
                             variant="secondary"
@@ -470,7 +489,10 @@ const SettingsMcpServers = () => {
                             <Plus className="size-4" />
                             Add MCP Server
                         </Button>
-                    )}
+                    }
+                    description="Get started by adding your first MCP server"
+                    icon={<Server className="size-8 text-muted-foreground" />}
+                    title="No MCP servers configured"
                 />
             </div>
         );
@@ -495,13 +517,13 @@ const SettingsMcpServers = () => {
             />
 
             <ConfirmationDialog
-                isOpen={isDeleteDialogOpen}
-                handleOpenChange={setIsDeleteDialogOpen}
+                cancelText="Cancel"
+                confirmText="Delete"
                 handleConfirm={() => handleDelete(deletingServer?.id)}
+                handleOpenChange={setIsDeleteDialogOpen}
+                isOpen={isDeleteDialogOpen}
                 itemName={deletingServer?.name}
                 itemType="MCP server"
-                confirmText="Delete"
-                cancelText="Cancel"
             />
         </div>
     );

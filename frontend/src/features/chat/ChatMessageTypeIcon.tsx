@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+
 import {
     BotMessageSquare,
     Brain,
@@ -19,27 +20,27 @@ import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
 
 interface MessageTypeIconProps {
-    type?: MessageLogType;
     className?: string;
     tooltip?: string;
+    type?: MessageLogType;
 }
 
 const messageTypeIcons: Record<MessageLogType, LucideIcon> = {
-    [MessageLogType.Input]: UserIcon,
-    [MessageLogType.Browser]: Globe,
-    [MessageLogType.Search]: Search,
-    [MessageLogType.Terminal]: Terminal,
-    [MessageLogType.File]: FileText,
-    [MessageLogType.Ask]: HelpCircle,
-    [MessageLogType.Done]: CheckSquare,
-    [MessageLogType.Thoughts]: Brain,
     [MessageLogType.Advice]: BotMessageSquare,
     [MessageLogType.Answer]: MessageSquareReply,
+    [MessageLogType.Ask]: HelpCircle,
+    [MessageLogType.Browser]: Globe,
+    [MessageLogType.Done]: CheckSquare,
+    [MessageLogType.File]: FileText,
+    [MessageLogType.Input]: UserIcon,
     [MessageLogType.Report]: NotepadText,
+    [MessageLogType.Search]: Search,
+    [MessageLogType.Terminal]: Terminal,
+    [MessageLogType.Thoughts]: Brain,
 };
 const defaultIcon = Brain;
 
-const ChatMessageTypeIcon = ({ type, className, tooltip = type }: MessageTypeIconProps) => {
+const ChatMessageTypeIcon = ({ className, type, tooltip = type }: MessageTypeIconProps) => {
     const Icon = type ? messageTypeIcons[type] || defaultIcon : defaultIcon;
     const iconElement = <Icon className={cn('size-3 shrink-0', tooltip && 'cursor-pointer', className)} />;
 

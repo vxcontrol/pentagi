@@ -5,11 +5,12 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import type { FlowQuery, MessageLogFragmentFragment } from '@/graphql/types';
+
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import ChatAutomationFormInput from '@/features/chat/ChatAutomationFormInput';
-import type { FlowQuery, MessageLogFragmentFragment } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 
@@ -17,12 +18,12 @@ import { useChatScroll } from '../../hooks/use-chat-scroll';
 import ChatMessage from './ChatMessage';
 
 interface ChatAutomationMessagesProps {
-    selectedFlowId: string | null;
-    logs?: MessageLogFragmentFragment[];
     className?: string;
     flowData?: FlowQuery;
-    onSubmitMessage: (message: string) => Promise<void>;
+    logs?: MessageLogFragmentFragment[];
     onStopFlow?: (flowId: string) => Promise<void>;
+    onSubmitMessage: (message: string) => Promise<void>;
+    selectedFlowId: null | string;
 }
 
 const searchFormSchema = z.object({
@@ -30,28 +31,28 @@ const searchFormSchema = z.object({
 });
 
 const ChatAutomationMessages = ({
-    selectedFlowId,
-    logs,
     className,
     flowData,
-    onSubmitMessage,
+    logs,
     onStopFlow,
+    onSubmitMessage,
+    selectedFlowId,
 }: ChatAutomationMessagesProps) => {
     const [isCreatingFlow, setIsCreatingFlow] = useState(false);
 
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
 
-    const { containerRef, endRef, isScrolledToBottom, hasNewMessages, scrollToEnd } = useChatScroll(
+    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(
         useMemo(() => (logs ? [...(logs || [])] : []), [logs]),
         selectedFlowId,
     );
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
-        resolver: zodResolver(searchFormSchema),
         defaultValues: {
             search: '',
         },
+        resolver: zodResolver(searchFormSchema),
     });
 
     const searchValue = form.watch('search');
@@ -66,6 +67,7 @@ const ChatAutomationMessages = ({
 
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
+
         return () => {
             debouncedUpdateSearch.cancel();
         };
@@ -113,6 +115,7 @@ const ChatAutomationMessages = ({
             if (selectedFlowId === 'new') {
                 setIsCreatingFlow(true);
             }
+
             await onSubmitMessage(message);
         } catch (error) {
             Log.error('Error submitting message:', error);
@@ -135,24 +138,24 @@ const ChatAutomationMessages = ({
                                     <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input
                                         {...field}
-                                        type="text"
-                                        placeholder="Search messages..."
-                                        className="px-9"
                                         autoComplete="off"
+                                        className="px-9"
                                         disabled={isCreatingFlow}
+                                        placeholder="Search messages..."
+                                        type="text"
                                     />
                                     {field.value && (
                                         <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
                                             className="absolute right-0 top-1/2 -translate-y-1/2"
+                                            disabled={isCreatingFlow}
                                             onClick={() => {
                                                 form.reset({ search: '' });
                                                 setDebouncedSearchValue('');
                                                 debouncedUpdateSearch.cancel();
                                             }}
-                                            disabled={isCreatingFlow}
+                                            size="icon"
+                                            type="button"
+                                            variant="ghost"
                                         >
                                             <X />
                                         </Button>
@@ -172,54 +175,52 @@ const ChatAutomationMessages = ({
                         <p className="text-xs">This may take some time as Docker images are downloaded</p>
                     </div>
                 </div>
-            ) : filteredLogs.length > 0 || selectedFlowId !== 'new'
-                ? (
-                    <div className="relative h-full overflow-y-hidden pb-4">
-                        <div
-                            ref={containerRef}
-                            className="h-full space-y-4 overflow-y-auto"
-                        >
-                            {filteredLogs.map((log) => (
-                                <ChatMessage
-                                    key={log.id}
-                                    log={log}
-                                    searchValue={debouncedSearchValue}
-                                />
-                            ))}
-                            <div ref={endRef} />
-                        </div>
+            ) : filteredLogs.length > 0 || selectedFlowId !== 'new' ? (
+                <div className="relative h-full overflow-y-hidden pb-4">
+                    <div
+                        className="h-full space-y-4 overflow-y-auto"
+                        ref={containerRef}
+                    >
+                        {filteredLogs.map((log) => (
+                            <ChatMessage
+                                key={log.id}
+                                log={log}
+                                searchValue={debouncedSearchValue}
+                            />
+                        ))}
+                        <div ref={endRef} />
+                    </div>
 
-                        {hasNewMessages && !isScrolledToBottom && (
-                            <Button
-                                type="button"
-                                size="icon"
-                                className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
-                                onClick={() => scrollToEnd()}
-                            >
-                                <ChevronDown />
-                            </Button>
-                        )}
+                    {hasNewMessages && !isScrolledToBottom && (
+                        <Button
+                            className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
+                            onClick={() => scrollToEnd()}
+                            size="icon"
+                            type="button"
+                        >
+                            <ChevronDown />
+                        </Button>
+                    )}
+                </div>
+            ) : (
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <p>No Active Tasks</p>
+                        <p className="text-xs">
+                            Starting a new task may take some time as the PentAGI agent downloads the required Docker
+                            image
+                        </p>
                     </div>
-                )
-                : (
-                    <div className="flex flex-1 items-center justify-center">
-                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                            <p>No Active Tasks</p>
-                            <p className="text-xs">
-                                Starting a new task may take some time as the PentAGI agent downloads the required Docker
-                                image
-                            </p>
-                        </div>
-                    </div>
-                )}
+                </div>
+            )}
 
             <div className="sticky bottom-0 border-t bg-background p-px pt-4">
                 <ChatAutomationFormInput
-                    selectedFlowId={selectedFlowId}
                     flowStatus={flowData?.flow?.status}
-                    onSubmitMessage={handleSubmitMessage}
-                    onStopFlow={onStopFlow}
                     isCreatingFlow={isCreatingFlow}
+                    onStopFlow={onStopFlow}
+                    onSubmitMessage={handleSubmitMessage}
+                    selectedFlowId={selectedFlowId}
                 />
             </div>
         </div>

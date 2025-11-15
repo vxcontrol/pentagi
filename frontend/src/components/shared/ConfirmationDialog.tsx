@@ -1,5 +1,6 @@
-import { Trash2 } from 'lucide-react';
 import type { ReactElement } from 'react';
+
+import { Trash2 } from 'lucide-react';
 import { cloneElement, isValidElement } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -16,53 +17,52 @@ import { cn } from '@/lib/utils';
 type ConfirmationDialogIconProps = ReactElement<React.SVGProps<SVGSVGElement>>;
 
 interface ConfirmationDialogProps {
-    isOpen: boolean;
-    handleOpenChange: (isOpen: boolean) => void;
-    handleConfirm: () => void;
-    title?: string;
+    cancelIcon?: ConfirmationDialogIconProps;
+    cancelText?: string;
+    cancelVariant?: 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
+    confirmIcon?: ConfirmationDialogIconProps;
+    confirmText?: string;
+    confirmVariant?: 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
     description?: string;
+    handleConfirm: () => void;
+    handleOpenChange: (isOpen: boolean) => void;
+    isOpen: boolean;
     itemName?: string;
     itemType?: string;
-    cancelText?: string;
-    confirmText?: string;
-    cancelVariant?: 'outline' | 'ghost' | 'secondary' | 'default' | 'destructive';
-    confirmVariant?: 'outline' | 'ghost' | 'secondary' | 'default' | 'destructive';
-    confirmIcon?: ConfirmationDialogIconProps;
-    cancelIcon?: ConfirmationDialogIconProps;
+    title?: string;
 }
 
 const ConfirmationDialog = ({
-    isOpen,
-    handleOpenChange,
-    handleConfirm,
-    title = 'Confirm Action',
+    cancelIcon,
+    cancelText = 'Cancel',
+    cancelVariant = 'outline',
+    confirmIcon = <Trash2 />,
+    confirmText = 'Confirm',
+    confirmVariant = 'destructive',
     description,
+    handleConfirm,
+    handleOpenChange,
+    isOpen,
     itemName = 'this',
     itemType = 'item',
-    cancelText = 'Cancel',
-    confirmText = 'Confirm',
-    cancelVariant = 'outline',
-    confirmVariant = 'destructive',
-    confirmIcon = <Trash2 />,
-    cancelIcon,
+    title = 'Confirm Action',
 }: ConfirmationDialogProps) => {
     const defaultDescription = description || (
         <>
-            Are you sure you want to perform this action on
-            {' '}
-            <strong className="font-semibold text-foreground">{itemName}</strong>
-            {' '}
-            {itemType}
-            ?
+            Are you sure you want to perform this action on{' '}
+            <strong className="font-semibold text-foreground">{itemName}</strong> {itemType}?
         </>
     );
 
     // Common method to process icons with h-4 w-4 classes
     const processIcon = (icon?: ConfirmationDialogIconProps): ConfirmationDialogIconProps | null => {
-        if (!icon) return null;
+        if (!icon) {
+            return null;
+        }
 
         if (isValidElement(icon)) {
             const { className = '', ...restProps } = icon.props;
+
             return cloneElement(icon, {
                 ...restProps,
                 className: cn('size-4', className),
@@ -74,8 +74,8 @@ const ConfirmationDialog = ({
 
     return (
         <Dialog
-            open={isOpen}
             onOpenChange={handleOpenChange}
+            open={isOpen}
         >
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
@@ -85,18 +85,18 @@ const ConfirmationDialog = ({
 
                 <DialogFooter>
                     <Button
-                        variant={cancelVariant}
                         onClick={() => handleOpenChange(false)}
+                        variant={cancelVariant}
                     >
                         {processIcon(cancelIcon)}
                         {cancelText}
                     </Button>
                     <Button
-                        variant={confirmVariant}
                         onClick={() => {
                             handleConfirm();
                             handleOpenChange(false);
                         }}
+                        variant={confirmVariant}
                     >
                         {processIcon(confirmIcon)}
                         {confirmText}

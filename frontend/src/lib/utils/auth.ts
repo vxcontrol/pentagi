@@ -8,5 +8,6 @@ export const getReturnUrlParam = (currentPath: string): string => {
     if (currentPath === '/flows/new' || currentPath === '/login') {
         return '';
     }
+
     return `?returnUrl=${encodeURIComponent(currentPath)}`;
 };

@@ -20,10 +20,10 @@ const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(({ className, onC
             data-state={props.checked ? 'checked' : 'unchecked'}
         >
             <input
-                type="checkbox"
                 className="sr-only"
-                ref={ref}
                 onChange={handleChange}
+                ref={ref}
+                type="checkbox"
                 {...props}
             />
             <span

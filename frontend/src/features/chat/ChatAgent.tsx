@@ -1,9 +1,10 @@
 import { Copy } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { AgentLogFragmentFragment } from '@/graphql/types';
+
 import Markdown from '@/components/shared/Markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { AgentLogFragmentFragment } from '@/graphql/types';
 import { formatDate } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
 
@@ -17,26 +18,28 @@ interface ChatAgentProps {
 }
 
 // Helper function to check if text contains search value (case-insensitive)
-const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
     }
+
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
 const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
-    const { executor, initiator, task, result, taskId, subtaskId, createdAt } = log;
+    const { createdAt, executor, initiator, result, subtaskId, task, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
+
         if (!trimmedSearch) {
-            return { hasTaskMatch: false, hasResultMatch: false };
+            return { hasResultMatch: false, hasTaskMatch: false };
         }
 
         return {
-            hasTaskMatch: containsSearchValue(task, trimmedSearch),
             hasResultMatch: containsSearchValue(result, trimmedSearch),
+            hasTaskMatch: containsSearchValue(task, trimmedSearch),
         };
     }, [searchValue, task, result]);
 
@@ -85,8 +88,8 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
                 {shouldShowDetailsToggle && (
                     <div className="mt-2 text-xs text-muted-foreground">
                         <div
-                            onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                             className="cursor-pointer"
+                            onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                         >
                             {isDetailsVisible ? 'Hide details' : 'Show details'}
                         </div>
@@ -107,13 +110,13 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
             <div className="mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground">
                 <span className="flex items-center gap-0.5">
                     <ChatAgentIcon
-                        type={initiator}
                         className="text-muted-foreground"
+                        type={initiator}
                     />
                     <span className="text-muted-foreground/50">→</span>
                     <ChatAgentIcon
-                        type={executor}
                         className="text-muted-foreground"
+                        type={executor}
                     />
                 </span>
                 <Tooltip>

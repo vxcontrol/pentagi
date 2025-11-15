@@ -15,12 +15,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusCard } from '@/components/ui/status-card';
 import { Switch } from '@/components/ui/switch';
 
-type McpTransport = 'stdio' | 'sse';
-
 interface KeyValuePair {
     key: string;
     value: string;
 }
+
+type McpTransport = 'sse' | 'stdio';
 
 const keyValueSchema = z.object({
     key: z.string().min(1, 'Key is required'),
@@ -32,29 +32,29 @@ const formSchema = z.object({
         .string({ required_error: 'Name is required' })
         .min(1, 'Name is required')
         .max(50, 'Maximum 50 characters allowed'),
-    transport: z.enum(['stdio', 'sse'], { required_error: 'Transport is required' }),
-    stdio: z
-        .object({
-            command: z.string().min(1, 'Command is required'),
-            args: z.string().optional().nullable(),
-            env: z.array(keyValueSchema).optional().default([]),
-        })
-        .optional(),
     sse: z
         .object({
-            url: z.string().min(1, 'URL is required'),
             headers: z.array(keyValueSchema).optional().default([]),
+            url: z.string().min(1, 'URL is required'),
+        })
+        .optional(),
+    stdio: z
+        .object({
+            args: z.string().optional().nullable(),
+            command: z.string().min(1, 'Command is required'),
+            env: z.array(keyValueSchema).optional().default([]),
         })
         .optional(),
     tools: z
         .array(
             z.object({
-                name: z.string().min(1, 'Tool name is required'),
                 description: z.string().optional(),
                 enabled: z.boolean().optional().default(true),
+                name: z.string().min(1, 'Tool name is required'),
             }),
         )
         .default([]),
+    transport: z.enum(['stdio', 'sse'], { required_error: 'Transport is required' }),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -65,33 +65,34 @@ const getMockServerById = (id: number) => {
         {
             id: 1,
             name: 'Local Filesystem',
-            transport: 'stdio' as McpTransport,
+            sse: undefined,
             stdio: {
-                command: '/usr/local/bin/node',
                 args: '/opt/mcp/filesystem/index.js --root /Users/sirozha/Projects',
+                command: '/usr/local/bin/node',
                 env: [{ key: 'NODE_ENV', value: 'production' }],
             },
-            sse: undefined,
             tools: [
-                { name: 'readFile', description: 'Read a file from disk', enabled: true },
-                { name: 'writeFile', description: 'Write content to a file', enabled: false },
+                { description: 'Read a file from disk', enabled: true, name: 'readFile' },
+                { description: 'Write content to a file', enabled: false, name: 'writeFile' },
             ],
+            transport: 'stdio' as McpTransport,
         },
         {
             id: 2,
             name: 'Slack (Prod)',
-            transport: 'sse' as McpTransport,
             sse: {
-                url: 'https://mcp.example.com/slack/sse',
                 headers: [{ key: 'Authorization', value: 'Bearer ***' }],
+                url: 'https://mcp.example.com/slack/sse',
             },
             stdio: undefined,
             tools: [
-                { name: 'postMessage', description: 'Send a message to a channel', enabled: true },
-                { name: 'getUserInfo', description: 'Fetch Slack user info', enabled: false },
+                { description: 'Send a message to a channel', enabled: true, name: 'postMessage' },
+                { description: 'Fetch Slack user info', enabled: false, name: 'getUserInfo' },
             ],
+            transport: 'sse' as McpTransport,
         },
     ];
+
     return samples.find((s) => s.id === id);
 };
 
@@ -99,42 +100,44 @@ const SettingsMcpServer = () => {
     const navigate = useNavigate();
     const params = useParams();
     const isNew = params.mcpServerId === undefined;
-    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<null | string>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isTestLoading, setIsTestLoading] = useState(false);
-    const [testMessage, setTestMessage] = useState<string | null>(null);
-    const [testError, setTestError] = useState<string | null>(null);
-    const [toolTestLoadingIndex, setToolTestLoadingIndex] = useState<number | null>(null);
-    const [toolTestIndex, setToolTestIndex] = useState<number | null>(null);
-    const [toolTestMessage, setToolTestMessage] = useState<string | null>(null);
-    const [toolTestError, setToolTestError] = useState<string | null>(null);
+    const [testMessage, setTestMessage] = useState<null | string>(null);
+    const [testError, setTestError] = useState<null | string>(null);
+    const [toolTestLoadingIndex, setToolTestLoadingIndex] = useState<null | number>(null);
+    const [toolTestIndex, setToolTestIndex] = useState<null | number>(null);
+    const [toolTestMessage, setToolTestMessage] = useState<null | string>(null);
+    const [toolTestError, setToolTestError] = useState<null | string>(null);
 
     const defaults: FormData = useMemo(() => {
         if (!isNew) {
             const id = Number(params.mcpServerId);
             const found = !Number.isNaN(id) ? getMockServerById(id) : undefined;
+
             if (found) {
                 return {
                     name: found.name,
-                    transport: found.transport,
-                    stdio: found.stdio,
                     sse: found.sse,
+                    stdio: found.stdio,
                     tools: found.tools,
+                    transport: found.transport,
                 } as FormData;
             }
         }
+
         return {
             name: '',
-            transport: 'stdio',
-            stdio: { command: '', args: '', env: [] },
+            stdio: { args: '', command: '', env: [] },
             tools: [],
+            transport: 'stdio',
         } as FormData;
     }, [isNew, params.mcpServerId]);
 
     const form = useForm<FormData>({
-        resolver: zodResolver(formSchema),
         defaultValues: defaults,
         mode: 'onChange',
+        resolver: zodResolver(formSchema),
     });
 
     const transport = form.watch('transport');
@@ -164,7 +167,10 @@ const SettingsMcpServer = () => {
     };
 
     const handleDelete = () => {
-        if (isNew) return;
+        if (isNew) {
+            return;
+        }
+
         setIsDeleteDialogOpen(true);
     };
 
@@ -183,10 +189,13 @@ const SettingsMcpServer = () => {
         setTestError(null);
         // Validate minimal required fields based on transport
         const valid = await form.trigger();
+
         if (!valid) {
             setTestError('Please fix validation errors before testing');
+
             return;
         }
+
         try {
             setIsTestLoading(true);
             // Simulate connectivity test
@@ -204,13 +213,17 @@ const SettingsMcpServer = () => {
         setToolTestLoadingIndex(index);
         setToolTestMessage(null);
         setToolTestError(null);
+
         try {
             // Basic validation: tool must have a name
             const toolName = form.getValues(`tools.${index}.name` as const) as string | undefined;
+
             if (!toolName) {
                 setToolTestError('Tool name is required');
+
                 return;
             }
+
             // Simulate tool invocation
             await new Promise((r) => setTimeout(r, 600));
             setToolTestMessage('Tool test passed');
@@ -224,17 +237,17 @@ const SettingsMcpServer = () => {
     if (!isNew && !getMockServerById(Number(params.mcpServerId))) {
         return (
             <StatusCard
-                icon={<Server className="size-8 text-muted-foreground" />}
-                title="MCP Server not found"
-                description="The requested MCP server could not be located in mock data"
-                action={(
+                action={
                     <Button
-                        variant="secondary"
                         onClick={() => navigate('/settings/mcp-servers')}
+                        variant="secondary"
                     >
                         Back to list
                     </Button>
-                )}
+                }
+                description="The requested MCP server could not be located in mock data"
+                icon={<Server className="size-8 text-muted-foreground" />}
+                title="MCP Server not found"
             />
         );
     }
@@ -250,9 +263,9 @@ const SettingsMcpServer = () => {
                 <CardContent>
                     <Form {...form}>
                         <form
+                            className="space-y-6"
                             id="mcp-server-form"
                             onSubmit={form.handleSubmit(handleSubmit)}
-                            className="space-y-6"
                         >
                             {(submitError || testMessage || testError) && (
                                 <Alert variant="destructive">
@@ -303,22 +316,25 @@ const SettingsMcpServer = () => {
                                         <FormItem>
                                             <FormLabel>Transport</FormLabel>
                                             <Select
+                                                defaultValue={field.value}
                                                 onValueChange={(v: McpTransport) => {
                                                     field.onChange(v);
+
                                                     // Normalize opposite config to avoid stale values
                                                     if (v === 'stdio') {
                                                         form.setValue('sse', undefined);
+
                                                         if (!form.getValues('stdio')) {
-                                                            form.setValue('stdio', { command: '', args: '', env: [] });
+                                                            form.setValue('stdio', { args: '', command: '', env: [] });
                                                         }
                                                     } else {
                                                         form.setValue('stdio', undefined);
+
                                                         if (!form.getValues('sse')) {
-                                                            form.setValue('sse', { url: '', headers: [] });
+                                                            form.setValue('sse', { headers: [], url: '' });
                                                         }
                                                     }
                                                 }}
-                                                defaultValue={field.value}
                                             >
                                                 <FormControl>
                                                     <SelectTrigger>
@@ -369,8 +385,8 @@ const SettingsMcpServer = () => {
                                                     <FormControl>
                                                         <Input
                                                             {...field}
-                                                            value={field.value ?? ''}
                                                             placeholder="/path/to/script.js --flag value"
+                                                            value={field.value ?? ''}
                                                         />
                                                     </FormControl>
                                                     <FormDescription>Space-separated arguments</FormDescription>
@@ -384,10 +400,10 @@ const SettingsMcpServer = () => {
                                         <div className="mb-2 flex items-center justify-between">
                                             <h4 className="text-sm font-medium">Environment Variables</h4>
                                             <Button
+                                                onClick={() => handleAddKeyValue('env')}
+                                                size="sm"
                                                 type="button"
                                                 variant="outline"
-                                                size="sm"
-                                                onClick={() => handleAddKeyValue('env')}
                                             >
                                                 <Plus className="size-3" /> Add
                                             </Button>
@@ -398,8 +414,8 @@ const SettingsMcpServer = () => {
                                             )}
                                             {stdioEnvArray.fields.map((field, index) => (
                                                 <div
-                                                    key={field.id}
                                                     className="grid grid-cols-1 gap-2 md:grid-cols-5"
+                                                    key={field.id}
                                                 >
                                                     <Controller
                                                         control={form.control}
@@ -407,8 +423,8 @@ const SettingsMcpServer = () => {
                                                         render={({ field }) => (
                                                             <Input
                                                                 {...field}
-                                                                placeholder="KEY"
                                                                 className="md:col-span-2"
+                                                                placeholder="KEY"
                                                             />
                                                         )}
                                                     />
@@ -418,16 +434,16 @@ const SettingsMcpServer = () => {
                                                         render={({ field }) => (
                                                             <Input
                                                                 {...field}
-                                                                placeholder="VALUE"
                                                                 className="md:col-span-2"
+                                                                placeholder="VALUE"
                                                             />
                                                         )}
                                                     />
                                                     <Button
-                                                        type="button"
-                                                        variant="ghost"
                                                         className="justify-self-start"
                                                         onClick={() => stdioEnvArray.remove(index)}
+                                                        type="button"
+                                                        variant="ghost"
                                                     >
                                                         <Trash2 className="size-4" />
                                                     </Button>
@@ -463,10 +479,10 @@ const SettingsMcpServer = () => {
                                         <div className="mb-2 flex items-center justify-between">
                                             <h4 className="text-sm font-medium">Headers</h4>
                                             <Button
+                                                onClick={() => handleAddKeyValue('headers')}
+                                                size="sm"
                                                 type="button"
                                                 variant="outline"
-                                                size="sm"
-                                                onClick={() => handleAddKeyValue('headers')}
                                             >
                                                 <Plus className="size-3" /> Add
                                             </Button>
@@ -477,8 +493,8 @@ const SettingsMcpServer = () => {
                                             )}
                                             {sseHeadersArray.fields.map((field, index) => (
                                                 <div
-                                                    key={field.id}
                                                     className="grid grid-cols-1 gap-2 md:grid-cols-5"
+                                                    key={field.id}
                                                 >
                                                     <Controller
                                                         control={form.control}
@@ -486,8 +502,8 @@ const SettingsMcpServer = () => {
                                                         render={({ field }) => (
                                                             <Input
                                                                 {...field}
-                                                                placeholder="Header"
                                                                 className="md:col-span-2"
+                                                                placeholder="Header"
                                                             />
                                                         )}
                                                     />
@@ -497,16 +513,16 @@ const SettingsMcpServer = () => {
                                                         render={({ field }) => (
                                                             <Input
                                                                 {...field}
-                                                                placeholder="Value"
                                                                 className="md:col-span-2"
+                                                                placeholder="Value"
                                                             />
                                                         )}
                                                     />
                                                     <Button
-                                                        type="button"
-                                                        variant="ghost"
                                                         className="justify-self-start"
                                                         onClick={() => sseHeadersArray.remove(index)}
+                                                        type="button"
+                                                        variant="ghost"
                                                     >
                                                         <Trash2 className="size-4" />
                                                     </Button>
@@ -532,8 +548,8 @@ const SettingsMcpServer = () => {
                                         )}
                                         {toolsArray.fields.map((tool, index) => (
                                             <div
-                                                key={tool.id}
                                                 className="flex flex-col gap-2 rounded-md border p-2"
+                                                key={tool.id}
                                             >
                                                 <div className="flex items-start justify-between gap-4">
                                                     <div className="flex-1 text-sm">
@@ -553,18 +569,18 @@ const SettingsMcpServer = () => {
                                                             name={`tools.${index}.enabled` as const}
                                                             render={({ field }) => (
                                                                 <Switch
+                                                                    aria-label={`Toggle ${form.getValues(`tools.${index}.name`) || 'tool'}`}
                                                                     checked={!!field.value}
                                                                     onCheckedChange={field.onChange}
-                                                                    aria-label={`Toggle ${form.getValues(`tools.${index}.name`) || 'tool'}`}
                                                                 />
                                                             )}
                                                         />
                                                         <Button
-                                                            type="button"
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => handleTestTool(index)}
                                                             disabled={toolTestLoadingIndex === index}
+                                                            onClick={() => handleTestTool(index)}
+                                                            size="sm"
+                                                            type="button"
+                                                            variant="outline"
                                                         >
                                                             {toolTestLoadingIndex === index ? (
                                                                 <Loader2 className="size-3 animate-spin" />
@@ -600,19 +616,19 @@ const SettingsMcpServer = () => {
                 <div className="flex space-x-2">
                     {!isNew && (
                         <Button
+                            onClick={handleDelete}
                             type="button"
                             variant="destructive"
-                            onClick={handleDelete}
                         >
                             <Trash2 className="size-4" />
                             Delete
                         </Button>
                     )}
                     <Button
+                        disabled={isTestLoading}
+                        onClick={handleTest}
                         type="button"
                         variant="outline"
-                        onClick={handleTest}
-                        disabled={isTestLoading}
                     >
                         {isTestLoading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                         {isTestLoading ? 'Testing...' : 'Test'}
@@ -620,17 +636,17 @@ const SettingsMcpServer = () => {
                 </div>
                 <div className="ml-auto flex space-x-2">
                     <Button
+                        onClick={() => navigate('/settings/mcp-servers')}
                         type="button"
                         variant="outline"
-                        onClick={() => navigate('/settings/mcp-servers')}
                     >
                         Cancel
                     </Button>
                     <Button
-                        form="mcp-server-form"
-                        variant="secondary"
-                        type="submit"
                         disabled={form.formState.isSubmitting}
+                        form="mcp-server-form"
+                        type="submit"
+                        variant="secondary"
                     >
                         {form.formState.isSubmitting ? (
                             <Loader2 className="size-4 animate-spin" />
@@ -643,13 +659,13 @@ const SettingsMcpServer = () => {
             </div>
 
             <ConfirmationDialog
-                isOpen={isDeleteDialogOpen}
-                handleOpenChange={setIsDeleteDialogOpen}
+                cancelText="Cancel"
+                confirmText="Delete"
                 handleConfirm={handleConfirmDelete}
+                handleOpenChange={setIsDeleteDialogOpen}
+                isOpen={isDeleteDialogOpen}
                 itemName={form.watch('name')}
                 itemType="MCP server"
-                confirmText="Delete"
-                cancelText="Cancel"
             />
         </Fragment>
     );

@@ -1,10 +1,17 @@
 import type { Dispatch, SetStateAction } from 'react';
+
 import { memo, useMemo } from 'react';
+
+import type {
+    AssistantFragmentFragment,
+    AssistantLogFragmentFragment,
+    FlowQuery,
+    MessageLogFragmentFragment,
+} from '@/graphql/types';
+import type { Provider } from '@/models/Provider';
 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery, MessageLogFragmentFragment } from '@/graphql/types';
-import type { Provider } from '@/models/Provider';
 
 import ChatAssistantMessages from './ChatAssistantMessages';
 import ChatAutomationMessages from './ChatAutomationMessages';
@@ -13,43 +20,43 @@ const MemoizedChatAutomationMessages = memo(ChatAutomationMessages);
 const MemoizedChatAssistantMessages = memo(ChatAssistantMessages);
 
 interface ChatCentralTabsProps {
-    selectedFlowId: string | null;
-    flowData?: FlowQuery;
-    assistants: AssistantFragmentFragment[];
-    assistantLogs?: AssistantLogFragmentFragment[];
-    selectedAssistantId?: string | null;
-    selectedProvider: Provider | null;
-    providers: Provider[];
-    onSelectAssistant?: (assistantId: string | null) => void;
-    onCreateAssistant?: () => void;
-    onDeleteAssistant?: (assistantId: string) => void;
-    onSubmitAutomationMessage: (message: string) => Promise<void>;
-    onSubmitAssistantMessage?: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
-    onCreateNewAssistant?: (message: string, useAgents: boolean) => Promise<void>;
-    onStopAutomationFlow?: (flowId: string) => Promise<void>;
-    onStopAssistant?: (assistantId: string) => Promise<void>;
     activeTab: string;
+    assistantLogs?: AssistantLogFragmentFragment[];
+    assistants: AssistantFragmentFragment[];
+    flowData?: FlowQuery;
+    onCreateAssistant?: () => void;
+    onCreateNewAssistant?: (message: string, useAgents: boolean) => Promise<void>;
+    onDeleteAssistant?: (assistantId: string) => void;
+    onSelectAssistant?: (assistantId: null | string) => void;
+    onStopAssistant?: (assistantId: string) => Promise<void>;
+    onStopAutomationFlow?: (flowId: string) => Promise<void>;
+    onSubmitAssistantMessage?: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
+    onSubmitAutomationMessage: (message: string) => Promise<void>;
     onTabChange: Dispatch<SetStateAction<string>>;
+    providers: Provider[];
+    selectedAssistantId?: null | string;
+    selectedFlowId: null | string;
+    selectedProvider: null | Provider;
 }
 
 const ChatCentralTabs = ({
-    selectedFlowId,
-    flowData,
-    assistants,
-    assistantLogs,
-    selectedAssistantId,
-    selectedProvider,
-    providers,
-    onSelectAssistant,
-    onCreateAssistant,
-    onDeleteAssistant,
-    onSubmitAutomationMessage,
-    onSubmitAssistantMessage,
-    onCreateNewAssistant,
-    onStopAutomationFlow,
-    onStopAssistant,
     activeTab,
+    assistantLogs,
+    assistants,
+    flowData,
+    onCreateAssistant,
+    onCreateNewAssistant,
+    onDeleteAssistant,
+    onSelectAssistant,
+    onStopAssistant,
+    onStopAutomationFlow,
+    onSubmitAssistantMessage,
+    onSubmitAutomationMessage,
     onTabChange,
+    providers,
+    selectedAssistantId,
+    selectedFlowId,
+    selectedProvider,
 }: ChatCentralTabsProps) => {
     const messageLogs = useMemo<MessageLogFragmentFragment[]>(
         () => flowData?.messageLogs ?? [],
@@ -58,9 +65,9 @@ const ChatCentralTabs = ({
 
     return (
         <Tabs
-            value={activeTab}
-            onValueChange={onTabChange}
             className="flex size-full flex-col"
+            onValueChange={onTabChange}
+            value={activeTab}
         >
             <div className="max-w-full">
                 <ScrollArea className="w-full pb-2">
@@ -73,34 +80,34 @@ const ChatCentralTabs = ({
             </div>
 
             <TabsContent
-                value="automation"
                 className="mt-2 flex-1 overflow-auto pr-4"
+                value="automation"
             >
                 <MemoizedChatAutomationMessages
-                    logs={messageLogs}
-                    selectedFlowId={selectedFlowId}
                     flowData={flowData}
-                    onSubmitMessage={onSubmitAutomationMessage}
+                    logs={messageLogs}
                     onStopFlow={onStopAutomationFlow}
+                    onSubmitMessage={onSubmitAutomationMessage}
+                    selectedFlowId={selectedFlowId}
                 />
             </TabsContent>
             <TabsContent
-                value="assistant"
                 className="mt-2 flex-1 overflow-auto pr-4"
+                value="assistant"
             >
                 <MemoizedChatAssistantMessages
-                    logs={assistantLogs}
-                    selectedFlowId={selectedFlowId}
                     assistants={assistants}
-                    selectedAssistantId={selectedAssistantId}
-                    selectedProvider={selectedProvider}
-                    providers={providers}
-                    onSelectAssistant={onSelectAssistant}
+                    logs={assistantLogs}
                     onCreateAssistant={onCreateAssistant}
-                    onDeleteAssistant={onDeleteAssistant}
-                    onSubmitMessage={onSubmitAssistantMessage}
                     onCreateNewAssistant={onCreateNewAssistant}
+                    onDeleteAssistant={onDeleteAssistant}
+                    onSelectAssistant={onSelectAssistant}
                     onStopAssistant={onStopAssistant}
+                    onSubmitMessage={onSubmitAssistantMessage}
+                    providers={providers}
+                    selectedAssistantId={selectedAssistantId}
+                    selectedFlowId={selectedFlowId}
+                    selectedProvider={selectedProvider}
                 />
             </TabsContent>
         </Tabs>

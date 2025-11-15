@@ -1,4 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
+
 import {
     AlertCircle,
     ArrowDown,
@@ -14,6 +15,8 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 
 import Anthropic from '@/components/icons/Anthropic';
 import Bedrock from '@/components/icons/Bedrock';
@@ -34,7 +37,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
-import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 import { ProviderType, useDeleteProviderMutation, useSettingsProvidersQuery } from '@/graphql/types';
 
 type Provider = ProviderConfigFragmentFragment;
@@ -49,12 +51,12 @@ const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
 };
 
 const providerTypes = [
-    { type: ProviderType.Anthropic, label: 'Anthropic' },
-    { type: ProviderType.Bedrock, label: 'Bedrock' },
-    { type: ProviderType.Custom, label: 'Custom' },
-    { type: ProviderType.Gemini, label: 'Gemini' },
-    { type: ProviderType.Ollama, label: 'Ollama' },
-    { type: ProviderType.Openai, label: 'OpenAI' },
+    { label: 'Anthropic', type: ProviderType.Anthropic },
+    { label: 'Bedrock', type: ProviderType.Bedrock },
+    { label: 'Custom', type: ProviderType.Custom },
+    { label: 'Gemini', type: ProviderType.Gemini },
+    { label: 'Ollama', type: ProviderType.Ollama },
+    { label: 'OpenAI', type: ProviderType.Openai },
 ];
 
 const SettingsProvidersHeader = () => {
@@ -81,8 +83,9 @@ const SettingsProvidersHeader = () => {
                         width: 'var(--radix-dropdown-menu-trigger-width)',
                     }}
                 >
-                    {providerTypes.map(({ type, label }) => {
+                    {providerTypes.map(({ label, type }) => {
                         const Icon = providerIcons[type];
+
                         return (
                             <DropdownMenuItem
                                 key={type}
@@ -100,11 +103,11 @@ const SettingsProvidersHeader = () => {
 };
 
 const SettingsProviders = () => {
-    const { data, loading: isLoading, error } = useSettingsProvidersQuery();
-    const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
-    const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+    const { data, error, loading: isLoading } = useSettingsProvidersQuery();
+    const [deleteProvider, { error: deleteError, loading: isDeleteLoading }] = useDeleteProviderMutation();
+    const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
+    const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
     const navigate = useNavigate();
 
     const handleProviderEdit = (providerId: string) => {
@@ -129,8 +132,8 @@ const SettingsProviders = () => {
             setDeleteErrorMessage(null);
 
             await deleteProvider({
-                variables: { providerId: providerId.toString() },
                 refetchQueries: ['settingsProviders'],
+                variables: { providerId: providerId.toString() },
             });
 
             setDeletingProvider(null);
@@ -143,55 +146,33 @@ const SettingsProviders = () => {
     const columns: ColumnDef<Provider>[] = [
         {
             accessorKey: 'name',
-            size: 400,
+            cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
             header: ({ column }) => {
                 const sorted = column.getIsSorted();
 
                 return (
                     <Button
-                        variant="link"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        variant="link"
                     >
                         Name
                         {sorted === 'asc' ? (
                             <ArrowDown className="size-4" />
-                        ) : sorted === 'desc'
-                            ? (
-                                <ArrowUp className="size-4" />
-                            )
-                            : null}
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
                     </Button>
                 );
             },
-            cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
+            size: 400,
         },
         {
             accessorKey: 'type',
-            size: 160,
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        variant="link"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
-                    >
-                        Type
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc'
-                            ? (
-                                <ArrowUp className="size-4" />
-                            )
-                            : null}
-                    </Button>
-                );
-            },
             cell: ({ row }) => {
                 const providerType = row.getValue('type') as ProviderType;
                 const Icon = providerIcons[providerType];
+
                 return (
                     <Badge variant="outline">
                         {Icon && <Icon className="mr-1 size-3" />}
@@ -199,68 +180,81 @@ const SettingsProviders = () => {
                     </Badge>
                 );
             },
-        },
-        {
-            accessorKey: 'createdAt',
-            size: 120,
             header: ({ column }) => {
                 const sorted = column.getIsSorted();
 
                 return (
                     <Button
-                        variant="link"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        variant="link"
+                    >
+                        Type
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
+                    </Button>
+                );
+            },
+            size: 160,
+        },
+        {
+            accessorKey: 'createdAt',
+            cell: ({ row }) => {
+                const date = new Date(row.getValue('createdAt'));
+
+                return <div className="text-sm">{date.toLocaleDateString()}</div>;
+            },
+            header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
+                return (
+                    <Button
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        variant="link"
                     >
                         Created
                         {sorted === 'asc' ? (
                             <ArrowDown className="size-4" />
-                        ) : sorted === 'desc'
-                            ? (
-                                <ArrowUp className="size-4" />
-                            )
-                            : null}
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
                     </Button>
                 );
             },
-            cell: ({ row }) => {
-                const date = new Date(row.getValue('createdAt'));
-                return <div className="text-sm">{date.toLocaleDateString()}</div>;
-            },
+            size: 120,
         },
         {
             accessorKey: 'updatedAt',
-            size: 120,
+            cell: ({ row }) => {
+                const date = new Date(row.getValue('updatedAt'));
+
+                return <div className="text-sm">{date.toLocaleDateString()}</div>;
+            },
             header: ({ column }) => {
                 const sorted = column.getIsSorted();
 
                 return (
                     <Button
-                        variant="link"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        variant="link"
                     >
                         Updated
                         {sorted === 'asc' ? (
                             <ArrowDown className="size-4" />
-                        ) : sorted === 'desc'
-                            ? (
-                                <ArrowUp className="size-4" />
-                            )
-                            : null}
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
                     </Button>
                 );
             },
-            cell: ({ row }) => {
-                const date = new Date(row.getValue('updatedAt'));
-                return <div className="text-sm">{date.toLocaleDateString()}</div>;
-            },
+            size: 120,
         },
         {
-            id: 'actions',
-            size: 48,
-            enableHiding: false,
-            header: () => null,
             cell: ({ row }) => {
                 const provider = row.original;
 
@@ -269,8 +263,8 @@ const SettingsProviders = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    variant="ghost"
                                     className="size-8 p-0"
+                                    variant="ghost"
                                 >
                                     <span className="sr-only">Open menu</span>
                                     <MoreHorizontal className="size-4" />
@@ -290,8 +284,8 @@ const SettingsProviders = () => {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                    onClick={() => handleProviderDeleteDialogOpen(provider)}
                                     disabled={isDeleteLoading && deletingProvider?.id === provider.id}
+                                    onClick={() => handleProviderDeleteDialogOpen(provider)}
                                 >
                                     {isDeleteLoading && deletingProvider?.id === provider.id ? (
                                         <>
@@ -310,6 +304,10 @@ const SettingsProviders = () => {
                     </div>
                 );
             },
+            enableHiding: false,
+            header: () => null,
+            id: 'actions',
+            size: 48,
         },
     ];
 
@@ -326,7 +324,7 @@ const SettingsProviders = () => {
             key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
         // Recursively extract all fields from an object, flattening nested objects
-        const getFields = (obj: any, prefix = ''): { label: string; value: number | string | boolean }[] => {
+        const getFields = (obj: any, prefix = ''): { label: string; value: boolean | number | string }[] => {
             if (!obj || typeof obj !== 'object') {
                 return [];
             }
@@ -338,7 +336,7 @@ const SettingsProviders = () => {
 
                     return typeof value === 'object'
                         ? getFields(value, label)
-                        : [{ label, value: value as string | number | boolean }];
+                        : [{ label, value: value as boolean | number | string }];
                 });
         };
 
@@ -346,9 +344,9 @@ const SettingsProviders = () => {
         const agentTypes = Object.entries(agents)
             .filter(([key]) => key !== '__typename')
             .map(([key, data]) => ({
-                name: getName(key),
-                key,
                 data,
+                key,
+                name: getName(key),
             }))
             .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -357,14 +355,14 @@ const SettingsProviders = () => {
                 <h4 className="font-medium">Agent Configurations</h4>
                 <hr className="my-4 border-muted-foreground/20" />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-                    {agentTypes.map(({ name, key, data }) => {
+                    {agentTypes.map(({ data, key, name }) => {
                         // Get all fields from data, including nested objects
                         const fields = data ? getFields(data) : [];
 
                         return (
                             <div
-                                key={key}
                                 className="space-y-2"
+                                key={key}
                             >
                                 <div className="text-sm font-medium">{name}</div>
                                 {fields.length > 0 ? (
@@ -391,9 +389,9 @@ const SettingsProviders = () => {
             <div className="space-y-4">
                 <SettingsProvidersHeader />
                 <StatusCard
+                    description="Please wait while we fetch your provider configurations"
                     icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                     title="Loading providers..."
-                    description="Please wait while we fetch your provider configurations"
                 />
             </div>
         );
@@ -420,10 +418,7 @@ const SettingsProviders = () => {
             <div className="space-y-4">
                 <SettingsProvidersHeader />
                 <StatusCard
-                    icon={<Settings className="size-8 text-muted-foreground" />}
-                    title="No providers configured"
-                    description="Get started by adding your first language model provider"
-                    action={(
+                    action={
                         <Button
                             onClick={() => navigate('/settings/providers/new')}
                             variant="secondary"
@@ -431,7 +426,10 @@ const SettingsProviders = () => {
                             <Plus className="size-4" />
                             Add Provider
                         </Button>
-                    )}
+                    }
+                    description="Get started by adding your first language model provider"
+                    icon={<Settings className="size-8 text-muted-foreground" />}
+                    title="No providers configured"
                 />
             </div>
         );
@@ -453,19 +451,19 @@ const SettingsProviders = () => {
             <DataTable
                 columns={columns}
                 data={providers}
-                renderSubComponent={renderSubComponent}
                 filterColumn="name"
                 filterPlaceholder="Filter provider names..."
+                renderSubComponent={renderSubComponent}
             />
 
             <ConfirmationDialog
-                isOpen={isDeleteDialogOpen}
-                handleOpenChange={setIsDeleteDialogOpen}
+                cancelText="Cancel"
+                confirmText="Delete"
                 handleConfirm={() => handleProviderDelete(deletingProvider?.id)}
+                handleOpenChange={setIsDeleteDialogOpen}
+                isOpen={isDeleteDialogOpen}
                 itemName={deletingProvider?.name}
                 itemType="provider"
-                confirmText="Delete"
-                cancelText="Cancel"
             />
         </div>
     );

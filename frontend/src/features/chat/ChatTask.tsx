@@ -1,31 +1,34 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 
-import Markdown from '@/components/shared/Markdown';
 import type { TaskFragmentFragment } from '@/graphql/types';
+
+import Markdown from '@/components/shared/Markdown';
 
 import ChatSubtask from './ChatSubtask';
 import ChatTaskStatusIcon from './ChatTaskStatusIcon';
 
 interface ChatTaskProps {
-    task: TaskFragmentFragment;
     searchValue?: string;
+    task: TaskFragmentFragment;
 }
 
 // Helper function to check if text contains search value (case-insensitive)
-const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
     }
+
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
-    const { id, status, title, result, subtasks } = task;
+const ChatTask = ({ searchValue = '', task }: ChatTaskProps) => {
+    const { id, result, status, subtasks, title } = task;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
 
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
+
         if (!trimmedSearch) {
             return { hasResultMatch: false };
         }
@@ -57,9 +60,9 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
         <div className="rounded-lg border p-4 shadow-sm">
             <div className="flex gap-2">
                 <ChatTaskStatusIcon
+                    className="mt-px"
                     status={status}
                     tooltip={`Task ID: ${id}`}
-                    className="mt-px"
                 />
                 <div className="font-semibold">
                     <Markdown
@@ -73,8 +76,8 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
             {result && (
                 <div className="ml-6 text-xs text-muted-foreground">
                     <div
-                        onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                         className="cursor-pointer"
+                        onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                     >
                         {isDetailsVisible ? 'Hide details' : 'Show details'}
                     </div>
@@ -96,8 +99,8 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
                     {sortedSubtasks.map((subtask) => (
                         <ChatSubtask
                             key={subtask.id}
-                            subtask={subtask}
                             searchValue={searchValue}
+                            subtask={subtask}
                         />
                     ))}
                 </div>
