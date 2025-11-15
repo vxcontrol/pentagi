@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { createContext, use, useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -54,7 +55,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                         return;
                     }
                 }
-            } catch (error) {
+            } catch {
                 // If parsing fails, clear invalid data
                 localStorage.removeItem(AUTH_STORAGE_KEY);
             }
@@ -291,7 +292,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }, [location.pathname]);
 
     return (
-        <UserContext.Provider
+        <UserContext
             value={{
                 authInfo,
                 isLoading,
@@ -304,12 +305,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             }}
         >
             {children}
-        </UserContext.Provider>
+        </UserContext>
     );
 };
 
 export const useUser = () => {
-    const context = useContext(UserContext);
+    const context = use(UserContext);
     if (context === undefined) {
         throw new Error('useUser must be used within a UserProvider');
     }
