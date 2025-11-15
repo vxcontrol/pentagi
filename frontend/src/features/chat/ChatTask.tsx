@@ -59,11 +59,11 @@ const ChatTask = ({ task, searchValue = '' }: ChatTaskProps) => {
                 <ChatTaskStatusIcon
                     status={status}
                     tooltip={`Task ID: ${id}`}
-                    className="mt-[1px]"
+                    className="mt-px"
                 />
                 <div className="font-semibold">
                     <Markdown
-                        className="prose-sm prose-fixed break-words [&>*]:m-0 [&>p]:leading-tight"
+                        className="prose-fixed prose-sm break-words [&>*]:m-0 [&>p]:leading-tight"
                         searchValue={searchValue}
                     >
                         {title}

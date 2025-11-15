@@ -1,3 +1,4 @@
+import { Copy } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 import Markdown from '@/components/shared/Markdown';
@@ -8,7 +9,6 @@ import { MessageLogType, ResultFormat } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
-import { Copy } from 'lucide-react';
 
 import ChatMessageTypeIcon from './ChatMessageTypeIcon';
 
@@ -196,7 +196,7 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Copy
-                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors"
+                            className="mx-1 size-3 shrink-0 cursor-pointer transition-colors hover:text-foreground"
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>

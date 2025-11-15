@@ -89,7 +89,7 @@ export const useChatScroll = <T extends IdentifiableItem>(
             lastMessageIdRef.current = null;
             return;
         }
-        const lastItem = items[items.length - 1];
+        const lastItem = items.at(-1);
         const lastId = lastItem?.id;
         if (!lastId) {
             lastMessageIdRef.current = null;
@@ -128,7 +128,7 @@ export const useChatScroll = <T extends IdentifiableItem>(
     // Reset indicators on context switch (e.g., another flow or assistant)
     useEffect(() => {
         setHasNewMessages(false);
-        const lastId = items?.[items.length - 1]?.id ?? null;
+        const lastId = items?.at(-1)?.id ?? null;
         lastMessageIdRef.current = lastId ?? null;
     }, [resetKey]);
 

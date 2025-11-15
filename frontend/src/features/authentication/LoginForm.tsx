@@ -10,7 +10,8 @@ import Google from '@/components/icons/Google';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { type OAuthProvider, useUser } from '@/providers/UserProvider';
+import type { OAuthProvider } from '@/providers/UserProvider';
+import { useUser } from '@/providers/UserProvider';
 
 import { PasswordChangeForm } from './PasswordChangeForm';
 

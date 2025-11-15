@@ -1,25 +1,4 @@
-import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { DataTable } from '@/components/ui/data-table';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
-import {
-    useDeletePromptMutation,
-    useSettingsPromptsQuery,
-    type AgentPrompt,
-    type AgentPrompts,
-    type DefaultPrompt,
-    type PromptType,
-} from '@/graphql/types';
-import { type ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
     AlertCircle,
     ArrowDown,
@@ -37,6 +16,25 @@ import {
 } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/data-table';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { StatusCard } from '@/components/ui/status-card';
+import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
+import {
+    useDeletePromptMutation,
+    useSettingsPromptsQuery,
+} from '@/graphql/types';
 
 // Types for table data
 type AgentPromptTableData = {
@@ -101,8 +99,8 @@ const SettingsPrompts = () => {
 
         try {
             const { promptName, type } = resetOperation;
-            const agents = data.settingsPrompts.default.agents;
-            const tools = data.settingsPrompts.default.tools;
+            const { agents } = data.settingsPrompts.default;
+            const { tools } = data.settingsPrompts.default;
             const userDefined = data.settingsPrompts.userDefined || [];
 
             if (type === 'tool') {
@@ -174,9 +172,9 @@ const SettingsPrompts = () => {
     const canResetPrompt = (promptName: string, resetType: 'system' | 'human' | 'all' | 'tool'): boolean => {
         if (!data?.settingsPrompts?.default || !data?.settingsPrompts?.userDefined) return false;
 
-        const userDefined = data.settingsPrompts.userDefined;
-        const agents = data.settingsPrompts.default.agents;
-        const tools = data.settingsPrompts.default.tools;
+        const { userDefined } = data.settingsPrompts;
+        const { agents } = data.settingsPrompts.default;
+        const { tools } = data.settingsPrompts.default;
 
         if (resetType === 'tool') {
             const toolPrompt = tools?.[promptName as keyof typeof tools];
@@ -188,14 +186,19 @@ const SettingsPrompts = () => {
             const systemType = agentPrompts.system?.type;
             const humanType = agentPrompts.human?.type;
 
-            if (resetType === 'system') {
-                return systemType ? userDefined.some((p) => p.type === systemType) : false;
-            } else if (resetType === 'human') {
-                return humanType ? userDefined.some((p) => p.type === humanType) : false;
-            } else if (resetType === 'all') {
-                const hasCustomSystem = systemType ? userDefined.some((p) => p.type === systemType) : false;
-                const hasCustomHuman = humanType ? userDefined.some((p) => p.type === humanType) : false;
-                return hasCustomSystem || hasCustomHuman;
+            switch (resetType) {
+                case 'system': {
+                    return systemType ? userDefined.some((p) => p.type === systemType) : false;
+                }
+                case 'human': {
+                    return humanType ? userDefined.some((p) => p.type === humanType) : false;
+                }
+                case 'all': {
+                    const hasCustomSystem = systemType ? userDefined.some((p) => p.type === systemType) : false;
+                    const hasCustomHuman = humanType ? userDefined.some((p) => p.type === humanType) : false;
+                    return hasCustomSystem || hasCustomHuman;
+                }
+            // No default
             }
         }
         return false;
@@ -205,13 +208,13 @@ const SettingsPrompts = () => {
     const getAgentPromptsData = (): AgentPromptTableData[] => {
         if (!data?.settingsPrompts?.default?.agents) return [];
 
-        const agents = data.settingsPrompts.default.agents;
+        const { agents } = data.settingsPrompts.default;
         const userDefined = data.settingsPrompts.userDefined || [];
         const agentEntries: AgentPromptTableData[] = [];
 
         // Helper function to format agent name
         const formatName = (key: string): string => {
-            return key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+            return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
         };
 
         // Process each agent
@@ -232,12 +235,12 @@ const SettingsPrompts = () => {
                 hasHuman: !!(prompts as AgentPrompts)?.human,
                 systemTemplate: (prompts as AgentPrompts | AgentPrompt)?.system?.template || '',
                 humanTemplate: (prompts as AgentPrompts)?.human?.template,
-                systemStatus: !!(prompts as AgentPrompts | AgentPrompt)?.system
+                systemStatus: (prompts as AgentPrompts | AgentPrompt)?.system
                     ? hasCustomSystem
                         ? 'Custom'
                         : 'Default'
                     : 'N/A',
-                humanStatus: !!(prompts as AgentPrompts)?.human ? (hasCustomHuman ? 'Custom' : 'Default') : 'N/A',
+                humanStatus: (prompts as AgentPrompts)?.human ? (hasCustomHuman ? 'Custom' : 'Default') : 'N/A',
                 systemType,
                 humanType,
             };
@@ -252,13 +255,13 @@ const SettingsPrompts = () => {
     const getToolPromptsData = (): ToolPromptTableData[] => {
         if (!data?.settingsPrompts?.default?.tools) return [];
 
-        const tools = data.settingsPrompts.default.tools;
+        const { tools } = data.settingsPrompts.default;
         const userDefined = data.settingsPrompts.userDefined || [];
         const toolEntries: ToolPromptTableData[] = [];
 
         // Helper function to format tool name
         const formatName = (key: string): string => {
-            return key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+            return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
         };
 
         // Process each tool
@@ -294,14 +297,16 @@ const SettingsPrompts = () => {
                     <Button
                         variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
                     >
                         Agent Name
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
@@ -351,18 +356,18 @@ const SettingsPrompts = () => {
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    className="h-8 w-8 p-0"
+                                    className="size-8 p-0"
                                 >
                                     <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
+                                    <MoreHorizontal className="size-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                                 align="end"
-                                className="min-w-[6rem]"
+                                className="min-w-24"
                             >
                                 <DropdownMenuItem onClick={() => handlePromptEdit(agent.name)}>
-                                    <Pencil className="h-3 w-3" />
+                                    <Pencil className="size-3" />
                                     Edit
                                 </DropdownMenuItem>
                                 {(canResetPrompt(agent.name, 'system') ||
@@ -371,73 +376,67 @@ const SettingsPrompts = () => {
                                 {canResetPrompt(agent.name, 'system') && (
                                     <DropdownMenuItem
                                         onClick={() => handleResetDialogOpen('system', agent.name, agent.displayName)}
-                                        disabled={
-                                            isDeleteLoading &&
+                                        disabled={isDeleteLoading &&
                                             resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'system'
-                                        }
+                                            resetOperation?.type === 'system'}
                                     >
                                         {isDeleteLoading &&
-                                        resetOperation?.promptName === agent.name &&
-                                        resetOperation?.type === 'system' ? (
-                                            <>
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                Resetting...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <RotateCcw className="h-3 w-3" />
-                                                Reset System
-                                            </>
-                                        )}
+                                            resetOperation?.promptName === agent.name &&
+                                            resetOperation?.type === 'system' ? (
+                                                <>
+                                                    <Loader2 className="size-3 animate-spin" />
+                                                    Resetting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <RotateCcw className="size-3" />
+                                                    Reset System
+                                                </>
+                                            )}
                                     </DropdownMenuItem>
                                 )}
                                 {agent.hasHuman && canResetPrompt(agent.name, 'human') && (
                                     <DropdownMenuItem
                                         onClick={() => handleResetDialogOpen('human', agent.name, agent.displayName)}
-                                        disabled={
-                                            isDeleteLoading &&
+                                        disabled={isDeleteLoading &&
                                             resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'human'
-                                        }
+                                            resetOperation?.type === 'human'}
                                     >
                                         {isDeleteLoading &&
-                                        resetOperation?.promptName === agent.name &&
-                                        resetOperation?.type === 'human' ? (
-                                            <>
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                Resetting...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <RotateCcw className="h-3 w-3" />
-                                                Reset Human
-                                            </>
-                                        )}
+                                            resetOperation?.promptName === agent.name &&
+                                            resetOperation?.type === 'human' ? (
+                                                <>
+                                                    <Loader2 className="size-3 animate-spin" />
+                                                    Resetting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <RotateCcw className="size-3" />
+                                                    Reset Human
+                                                </>
+                                            )}
                                     </DropdownMenuItem>
                                 )}
                                 {canResetPrompt(agent.name, 'all') && (
                                     <DropdownMenuItem
                                         onClick={() => handleResetDialogOpen('all', agent.name, agent.displayName)}
-                                        disabled={
-                                            isDeleteLoading &&
+                                        disabled={isDeleteLoading &&
                                             resetOperation?.promptName === agent.name &&
-                                            resetOperation?.type === 'all'
-                                        }
+                                            resetOperation?.type === 'all'}
                                     >
                                         {isDeleteLoading &&
-                                        resetOperation?.promptName === agent.name &&
-                                        resetOperation?.type === 'all' ? (
-                                            <>
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                Resetting...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Trash2 className="h-3 w-3" />
-                                                Reset All
-                                            </>
-                                        )}
+                                            resetOperation?.promptName === agent.name &&
+                                            resetOperation?.type === 'all' ? (
+                                                <>
+                                                    <Loader2 className="size-3 animate-spin" />
+                                                    Resetting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Trash2 className="size-3" />
+                                                    Reset All
+                                                </>
+                                            )}
                                     </DropdownMenuItem>
                                 )}
                             </DropdownMenuContent>
@@ -459,15 +458,17 @@ const SettingsPrompts = () => {
                 return (
                     <Button
                         variant="link"
-                        className="flex items-center gap-2 p-0 hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground hover:text-primary hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                     >
                         Tool Name
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
@@ -504,18 +505,18 @@ const SettingsPrompts = () => {
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    className="h-8 w-8 p-0"
+                                    className="size-8 p-0"
                                 >
                                     <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
+                                    <MoreHorizontal className="size-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                                 align="end"
-                                className="min-w-[6rem]"
+                                className="min-w-24"
                             >
                                 <DropdownMenuItem onClick={() => handlePromptEdit(tool.name)}>
-                                    <Pencil className="h-3 w-3" />
+                                    <Pencil className="size-3" />
                                     Edit
                                 </DropdownMenuItem>
                                 {canResetPrompt(tool.name, 'tool') && (
@@ -523,25 +524,23 @@ const SettingsPrompts = () => {
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                             onClick={() => handleResetDialogOpen('tool', tool.name, tool.displayName)}
-                                            disabled={
-                                                isDeleteLoading &&
+                                            disabled={isDeleteLoading &&
                                                 resetOperation?.promptName === tool.name &&
-                                                resetOperation?.type === 'tool'
-                                            }
+                                                resetOperation?.type === 'tool'}
                                         >
                                             {isDeleteLoading &&
-                                            resetOperation?.promptName === tool.name &&
-                                            resetOperation?.type === 'tool' ? (
-                                                <>
-                                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                                    Resetting...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <RotateCcw className="h-3 w-3" />
-                                                    Reset
-                                                </>
-                                            )}
+                                                resetOperation?.promptName === tool.name &&
+                                                resetOperation?.type === 'tool' ? (
+                                                    <>
+                                                        <Loader2 className="size-3 animate-spin" />
+                                                        Resetting...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <RotateCcw className="size-3" />
+                                                        Reset
+                                                    </>
+                                                )}
                                         </DropdownMenuItem>
                                     </>
                                 )}
@@ -566,15 +565,15 @@ const SettingsPrompts = () => {
         const humanTemplate = userHumanPrompt?.template || agent.humanTemplate;
 
         return (
-            <div className="p-4 bg-muted/20 border-t space-y-4">
+            <div className="space-y-4 border-t bg-muted/20 p-4">
                 <h4 className="font-medium">Prompt Templates</h4>
                 <hr className="border-muted-foreground/20" />
 
                 <div className="space-y-4">
                     {agent.hasSystem && (
                         <div>
-                            <h5 className="font-medium text-sm mb-2 flex items-center gap-2">
-                                <Code className="h-3 w-3" />
+                            <h5 className="mb-2 flex items-center gap-2 text-sm font-medium">
+                                <Code className="size-3" />
                                 System Prompt
                                 {userSystemPrompt && (
                                     <Badge
@@ -585,7 +584,7 @@ const SettingsPrompts = () => {
                                     </Badge>
                                 )}
                             </h5>
-                            <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-64 whitespace-pre-wrap">
+                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
                                 {systemTemplate}
                             </pre>
                         </div>
@@ -593,8 +592,8 @@ const SettingsPrompts = () => {
 
                     {agent.hasHuman && humanTemplate && (
                         <div>
-                            <h5 className="font-medium text-sm mb-2 flex items-center gap-2">
-                                <User className="h-3 w-3" />
+                            <h5 className="mb-2 flex items-center gap-2 text-sm font-medium">
+                                <User className="size-3" />
                                 Human Prompt
                                 {userHumanPrompt && (
                                     <Badge
@@ -605,7 +604,7 @@ const SettingsPrompts = () => {
                                     </Badge>
                                 )}
                             </h5>
-                            <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-64 whitespace-pre-wrap">
+                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
                                 {humanTemplate}
                             </pre>
                         </div>
@@ -626,9 +625,9 @@ const SettingsPrompts = () => {
         const template = userToolPrompt?.template || tool.template;
 
         return (
-            <div className="p-4 bg-muted/20 border-t">
+            <div className="border-t bg-muted/20 p-4">
                 <div className="mb-2 flex items-center gap-2">
-                    <h5 className="font-medium text-sm">Template</h5>
+                    <h5 className="text-sm font-medium">Template</h5>
                     {userToolPrompt && (
                         <Badge
                             variant="secondary"
@@ -638,7 +637,7 @@ const SettingsPrompts = () => {
                         </Badge>
                     )}
                 </div>
-                <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-64 whitespace-pre-wrap">
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
                     {template}
                 </pre>
             </div>
@@ -650,7 +649,7 @@ const SettingsPrompts = () => {
             <div className="space-y-4">
                 <SettingsPromptsHeader />
                 <StatusCard
-                    icon={<Loader2 className="w-16 h-16 animate-spin text-muted-foreground" />}
+                    icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                     title="Loading prompts..."
                     description="Please wait while we fetch your prompt templates"
                 />
@@ -663,7 +662,7 @@ const SettingsPrompts = () => {
             <div className="space-y-4">
                 <SettingsPromptsHeader />
                 <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
+                    <AlertCircle className="size-4" />
                     <AlertTitle>Error loading prompts</AlertTitle>
                     <AlertDescription>{error.message}</AlertDescription>
                 </Alert>
@@ -674,12 +673,12 @@ const SettingsPrompts = () => {
     const agentPrompts = getAgentPromptsData();
     const toolPrompts = getToolPromptsData();
 
-    if (!agentPrompts.length && !toolPrompts.length) {
+    if (agentPrompts.length === 0 && toolPrompts.length === 0) {
         return (
             <div className="space-y-4">
                 <SettingsPromptsHeader />
                 <StatusCard
-                    icon={<Settings className="h-8 w-8 text-muted-foreground" />}
+                    icon={<Settings className="size-8 text-muted-foreground" />}
                     title="No prompts available"
                     description="Prompt templates could not be loaded"
                 />
@@ -696,7 +695,7 @@ const SettingsPrompts = () => {
                 {agentPrompts.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                            <Bot className="h-5 w-5 text-muted-foreground" />
+                            <Bot className="size-5 text-muted-foreground" />
                             <h2 className="text-lg font-semibold">Agent Prompts</h2>
                             <Badge variant="secondary">{agentPrompts.length}</Badge>
                         </div>
@@ -716,7 +715,7 @@ const SettingsPrompts = () => {
                 {toolPrompts.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                            <Wrench className="h-5 w-5 text-muted-foreground" />
+                            <Wrench className="size-5 text-muted-foreground" />
                             <h2 className="text-lg font-semibold">Tool Prompts</h2>
                             <Badge variant="secondary">{toolPrompts.length}</Badge>
                         </div>
@@ -742,10 +741,10 @@ const SettingsPrompts = () => {
                     resetOperation?.type === 'system'
                         ? `Are you sure you want to reset the system prompt for "${resetOperation.displayName}"? This will revert it to the default template and cannot be undone.`
                         : resetOperation?.type === 'human'
-                          ? `Are you sure you want to reset the human prompt for "${resetOperation.displayName}"? This will revert it to the default template and cannot be undone.`
-                          : resetOperation?.type === 'all'
-                            ? `Are you sure you want to reset all prompts for "${resetOperation.displayName}"? This will revert both system and human prompts to their default templates and cannot be undone.`
-                            : `Are you sure you want to reset the prompt for "${resetOperation?.displayName}"? This will revert it to the default template and cannot be undone.`
+                            ? `Are you sure you want to reset the human prompt for "${resetOperation.displayName}"? This will revert it to the default template and cannot be undone.`
+                            : resetOperation?.type === 'all'
+                                ? `Are you sure you want to reset all prompts for "${resetOperation.displayName}"? This will revert both system and human prompts to their default templates and cannot be undone.`
+                                : `Are you sure you want to reset the prompt for "${resetOperation?.displayName}"? This will revert it to the default template and cannot be undone.`
                 }
                 confirmText="Reset"
                 cancelText="Cancel"

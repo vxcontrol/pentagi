@@ -1,3 +1,4 @@
+import { Copy } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 import Markdown from '@/components/shared/Markdown';
@@ -5,7 +6,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { AgentLogFragmentFragment } from '@/graphql/types';
 import { formatDate } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
-import { Copy } from 'lucide-react';
 
 import ChatAgentIcon from './ChatAgentIcon';
 
@@ -60,7 +60,7 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
     // Determine if we should show full task or preview
     // Show full task if: search found in task OR details are manually visible OR task is short
     const shouldShowFullTask = searchChecks.hasTaskMatch || isDetailsVisible || task.length <= taskPreviewLength;
-    const taskToShow = shouldShowFullTask ? task : task.slice(0, taskPreviewLength) + '...';
+    const taskToShow = shouldShowFullTask ? task : `${task.slice(0, taskPreviewLength)}...`;
 
     // Determine if we should show details toggle
     // Show toggle if: result exists OR task is longer than preview length
@@ -119,7 +119,7 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Copy
-                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors"
+                            className="mx-1 size-3 shrink-0 cursor-pointer transition-colors hover:text-foreground"
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>

@@ -173,7 +173,7 @@ const SettingsLayout = () => {
                 <SidebarInset className="flex flex-1 flex-col">
                     <SettingsHeader />
                     {/* Content area for nested routes */}
-                    <main className="flex-1 overflow-auto p-4 min-h-0">
+                    <main className="min-h-0 flex-1 overflow-auto p-4">
                         <Outlet />
                     </main>
                 </SidebarInset>

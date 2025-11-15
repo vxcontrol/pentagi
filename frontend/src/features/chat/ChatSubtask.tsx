@@ -58,11 +58,11 @@ const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
                 <ChatTaskStatusIcon
                     status={status}
                     tooltip={`Subtask ID: ${id}`}
-                    className="mt-[1px]"
+                    className="mt-px"
                 />
                 <div className="text-sm">
                     <Markdown
-                        className="prose-sm prose-fixed break-words [&>*]:m-0 [&>p]:leading-tight"
+                        className="prose-fixed prose-sm break-words [&>*]:m-0 [&>p]:leading-tight"
                         searchValue={searchValue}
                     >
                         {title}

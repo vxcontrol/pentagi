@@ -94,7 +94,7 @@ const textElements = [
 
 // Function to escape special regex characters
 const escapeRegExp = (string: string): string => {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return string.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
 const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
@@ -166,7 +166,7 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                         child &&
                         typeof child === 'object' &&
                         child.props &&
-                        typeof child.props.children !== 'undefined'
+                        child.props.children !== undefined
                     ) {
                         return {
                             ...child,
@@ -186,7 +186,7 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                 nodeChildren &&
                 typeof nodeChildren === 'object' &&
                 nodeChildren.props &&
-                typeof nodeChildren.props.children !== 'undefined'
+                nodeChildren.props.children !== undefined
             ) {
                 return {
                     ...nodeChildren,

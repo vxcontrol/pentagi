@@ -1,4 +1,5 @@
 import { Terminal as XTerminal } from '@xterm/xterm';
+
 import { ResultFormat } from '@/graphql/types';
 
 /**
@@ -48,7 +49,7 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
             // Remove DOM element
             if (hiddenDiv && hiddenDiv.parentNode) {
                 try {
-                    document.body.removeChild(hiddenDiv);
+                    hiddenDiv.remove();
                 } catch {
                     // Ignore removal errors
                 }
@@ -87,11 +88,11 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
             hiddenDiv.style.left = '-9999px';
             hiddenDiv.style.top = '-9999px';
             hiddenDiv.style.visibility = 'hidden';
-            document.body.appendChild(hiddenDiv);
+            document.body.append(hiddenDiv);
 
             // Open terminal and write content
             hiddenTerminal.open(hiddenDiv);
-            
+
             // Write the terminal content
             hiddenTerminal.write(terminalContent);
 
@@ -110,19 +111,19 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                     // Extract clean text from terminal buffer
                     let cleanText = '';
                     const buffer = hiddenTerminal.buffer.active;
-                    
+
                     for (let i = 0; i < buffer.length; i++) {
                         const line = buffer.getLine(i);
                         if (line) {
                             const lineText = line.translateToString(true).trimEnd();
                             if (lineText || cleanText) { // Include empty lines only if we have content
-                                cleanText += lineText + '\n';
+                                cleanText += `${lineText}\n`;
                             }
                         }
                     }
 
-                    safeResolve('```bash\n' + cleanText.trimEnd() + '\n```');
-                } catch (error) {
+                    safeResolve(`\`\`\`bash\n${cleanText.trimEnd()}\n\`\`\``);
+                } catch {
                     // Fallback to original content
                     safeResolve(terminalContent);
                 }
@@ -135,8 +136,7 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                     safeResolve(terminalContent);
                 }
             }, 1000);
-
-        } catch (error) {
+        } catch {
             // Fallback to original content on any initialization error
             safeResolve(terminalContent);
         }
@@ -149,25 +149,25 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
 export const formatMessageForClipboard = async (messageData: CopyableMessage): Promise<string> => {
     const { thinking, message, result, resultFormat = ResultFormat.Plain } = messageData;
     let content = '';
-    
+
     // Add thinking if present
     if (thinking && thinking.trim()) {
         content += `<details>\n<summary>Thinking</summary>\n\n${thinking.trim()}\n\n</details>\n\n`;
     }
-    
+
     // Add main message
     if (message && message.trim()) {
         content += message.trim();
     }
-    
+
     // Add result if present
     if (result && result.trim()) {
         if (content) {
             content += '\n\n';
         }
-        
+
         let resultContent = result.trim();
-        
+
         // Handle terminal format specially to get clean text
         if (resultFormat === ResultFormat.Terminal) {
             try {
@@ -177,10 +177,10 @@ export const formatMessageForClipboard = async (messageData: CopyableMessage): P
                 resultContent = result.trim();
             }
         }
-        
+
         content += `<details>\n<summary>Result</summary>\n\n${resultContent}\n\n</details>`;
     }
-    
+
     return content;
 };
 

@@ -1,24 +1,3 @@
-import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { StatusCard } from '@/components/ui/status-card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
-import {
-    PromptType,
-    useCreatePromptMutation,
-    useDeletePromptMutation,
-    useSettingsPromptsQuery,
-    useUpdatePromptMutation,
-    useValidatePromptMutation,
-    type AgentPrompt,
-    type AgentPrompts,
-    type DefaultPrompt,
-} from '@/graphql/types';
-import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
     AlertCircle,
@@ -33,11 +12,36 @@ import {
     Wrench,
     XCircle,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
+
+import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Form, FormControl, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { StatusCard } from '@/components/ui/status-card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import type {
+    AgentPrompt,
+    AgentPrompts,
+    DefaultPrompt,
+    PromptType,
+} from '@/graphql/types';
+import {
+    useCreatePromptMutation,
+    useDeletePromptMutation,
+    useSettingsPromptsQuery,
+    useUpdatePromptMutation,
+    useValidatePromptMutation,
+} from '@/graphql/types';
+import { cn } from '@/lib/utils';
 
 // Form schemas for each tab
 const systemFormSchema = z.object({
@@ -105,7 +109,7 @@ const FormTextareaItem: React.FC<FormTextareaItemProps> = ({
 
 // Helper function to format display name
 const formatName = (key: string): string => {
-    return key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+    return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
 };
 
 // Helper function to extract used variables from template
@@ -139,17 +143,17 @@ const Variables: React.FC<VariablesProps> = ({ variables, currentTemplate, onVar
     const usedVariables = getUsedVariables(currentTemplate);
 
     return (
-        <div className="mb-4 p-3 bg-muted/50 rounded-md border">
-            <h4 className="text-sm font-medium text-muted-foreground mb-2">Available Variables:</h4>
+        <div className="mb-4 rounded-md border bg-muted/50 p-3">
+            <h4 className="mb-2 text-sm font-medium text-muted-foreground">Available Variables:</h4>
             <div className="flex flex-wrap gap-1">
                 {variables.map((variable) => {
                     const isUsed = usedVariables.has(variable);
                     return (
                         <code
                             key={variable}
-                            className={`px-2 py-1 border rounded text-xs font-mono cursor-pointer transition-colors ${
+                            className={`cursor-pointer rounded border px-2 py-1 font-mono text-xs transition-colors ${
                                 isUsed
-                                    ? 'bg-green-100 border-green-300 text-green-800 hover:bg-green-200'
+                                    ? 'border-green-300 bg-green-100 text-green-800 hover:bg-green-200'
                                     : 'bg-background text-foreground hover:bg-accent'
                             }`}
                             onClick={() => onVariableClick(variable)}
@@ -205,7 +209,7 @@ const SettingsPrompt = () => {
 
                 // Scroll to center the selection
                 const lineHeight = 20; // Approximate line height
-                const textBeforeSelection = currentValue.substring(0, variableIndex);
+                const textBeforeSelection = currentValue.slice(0, Math.max(0, variableIndex));
                 const linesBeforeSelection = textBeforeSelection.split('\n').length - 1;
                 const selectionTop = linesBeforeSelection * lineHeight;
                 const textareaHeight = textarea.clientHeight;
@@ -216,7 +220,7 @@ const SettingsPrompt = () => {
                 // Variable doesn't exist - insert it at cursor position (no scrolling)
                 const start = textarea.selectionStart;
                 const end = textarea.selectionEnd;
-                const newValue = currentValue.substring(0, start) + variablePattern + currentValue.substring(end);
+                const newValue = currentValue.slice(0, Math.max(0, start)) + variablePattern + currentValue.slice(Math.max(0, end));
                 field.onChange(newValue);
 
                 // Focus and set cursor position after the inserted variable (no scrolling)
@@ -434,13 +438,13 @@ const SettingsPrompt = () => {
             const field =
                 activeTab === 'system'
                     ? {
-                          value: systemTemplate,
-                          onChange: (value: string) => systemForm.setValue('template', value),
-                      }
+                        value: systemTemplate,
+                        onChange: (value: string) => systemForm.setValue('template', value),
+                    }
                     : {
-                          value: humanTemplate,
-                          onChange: (value: string) => humanForm.setValue('template', value),
-                      };
+                        value: humanTemplate,
+                        onChange: (value: string) => humanForm.setValue('template', value),
+                    };
             handleVariableClick(variable, field, variablesData.formId);
         },
         [activeTab, systemTemplate, humanTemplate, variablesData, systemForm, humanForm],
@@ -619,7 +623,7 @@ const SettingsPrompt = () => {
     if (loading) {
         return (
             <StatusCard
-                icon={<Loader2 className="w-16 h-16 animate-spin text-muted-foreground" />}
+                icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                 title="Loading prompt data..."
                 description="Please wait while we fetch prompt information"
             />
@@ -630,7 +634,7 @@ const SettingsPrompt = () => {
     if (error) {
         return (
             <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
+                <AlertCircle className="size-4" />
                 <AlertTitle>Error loading prompt data</AlertTitle>
                 <AlertDescription>{error.message}</AlertDescription>
             </Alert>
@@ -641,7 +645,7 @@ const SettingsPrompt = () => {
     if (!promptInfo) {
         return (
             <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
+                <AlertCircle className="size-4" />
                 <AlertTitle>Prompt not found</AlertTitle>
                 <AlertDescription>
                     The prompt "{promptId}" could not be found or is not supported for editing.
@@ -742,9 +746,9 @@ const SettingsPrompt = () => {
                 <CardHeader>
                     <div className="flex items-center gap-2">
                         {promptInfo.type === 'agent' ? (
-                            <Bot className="h-5 w-5 text-muted-foreground" />
+                            <Bot className="size-5 text-muted-foreground" />
                         ) : (
-                            <Wrench className="h-5 w-5 text-muted-foreground" />
+                            <Wrench className="size-5 text-muted-foreground" />
                         )}
                         <CardTitle>{promptInfo.displayName}</CardTitle>
                     </div>
@@ -763,14 +767,14 @@ const SettingsPrompt = () => {
                         <TabsList>
                             <TabsTrigger value="system">
                                 <div className="flex items-center gap-2">
-                                    <Code className="h-4 w-4" />
+                                    <Code className="size-4" />
                                     System Prompt
                                 </div>
                             </TabsTrigger>
                             {promptInfo.type === 'agent' && promptInfo.hasHuman && (
                                 <TabsTrigger value="human">
                                     <div className="flex items-center gap-2">
-                                        <User className="h-4 w-4" />
+                                        <User className="size-4" />
                                         Human Prompt
                                     </div>
                                 </TabsTrigger>
@@ -790,7 +794,7 @@ const SettingsPrompt = () => {
                                     {/* Error Alert */}
                                     {mutationError && (
                                         <Alert variant="destructive">
-                                            <AlertCircle className="h-4 w-4" />
+                                            <AlertCircle className="size-4" />
                                             <AlertTitle>Error</AlertTitle>
                                             <AlertDescription>
                                                 {mutationError instanceof Error ? (
@@ -831,7 +835,7 @@ const SettingsPrompt = () => {
                                         {/* Error Alert */}
                                         {mutationError && (
                                             <Alert variant="destructive">
-                                                <AlertCircle className="h-4 w-4" />
+                                                <AlertCircle className="size-4" />
                                                 <AlertTitle>Error</AlertTitle>
                                                 <AlertDescription>
                                                     {mutationError instanceof Error ? (
@@ -859,7 +863,7 @@ const SettingsPrompt = () => {
             </Card>
 
             {/* Sticky footer with variables and buttons */}
-            <div className="sticky -bottom-4 bg-background border-t mt-4 -mx-4 -mb-4 p-4 shadow-lg">
+            <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 border-t bg-background p-4 shadow-lg">
                 {/* Variables */}
                 {variablesData && (
                     <Variables
@@ -882,7 +886,7 @@ const SettingsPrompt = () => {
                                     onClick={handleReset}
                                     disabled={isLoading}
                                 >
-                                    {isDeleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw />}
+                                    {isDeleteLoading ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw />}
                                     {isDeleteLoading ? 'Resetting...' : 'Reset'}
                                 </Button>
 
@@ -892,7 +896,7 @@ const SettingsPrompt = () => {
                                     onClick={() => setIsDiffDialogOpen(true)}
                                     disabled={isLoading}
                                 >
-                                    <FileDiff className="h-4 w-4" />
+                                    <FileDiff className="size-4" />
                                     Diff
                                 </Button>
                             </>
@@ -904,15 +908,15 @@ const SettingsPrompt = () => {
                             disabled={isLoading}
                         >
                             {isValidateLoading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="size-4 animate-spin" />
                             ) : (
-                                <CheckCircle className="h-4 w-4" />
+                                <CheckCircle className="size-4" />
                             )}
                             {isValidateLoading ? 'Validating...' : 'Validate'}
                         </Button>
                     </div>
 
-                    <div className="flex space-x-2 ml-auto">
+                    <div className="ml-auto flex space-x-2">
                         <Button
                             type="button"
                             variant="outline"
@@ -929,9 +933,9 @@ const SettingsPrompt = () => {
                                 disabled={isLoading}
                             >
                                 {isLoading ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <Loader2 className="size-4 animate-spin" />
                                 ) : (
-                                    <Save className="h-4 w-4" />
+                                    <Save className="size-4" />
                                 )}
                                 {isLoading ? 'Saving...' : 'Save Changes'}
                             </Button>
@@ -944,9 +948,9 @@ const SettingsPrompt = () => {
                                 disabled={isLoading}
                             >
                                 {isLoading ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <Loader2 className="size-4 animate-spin" />
                                 ) : (
-                                    <Save className="h-4 w-4" />
+                                    <Save className="size-4" />
                                 )}
                                 {isLoading ? 'Saving...' : 'Save Changes'}
                             </Button>
@@ -992,7 +996,7 @@ const SettingsPrompt = () => {
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <AlertCircle className="h-5 w-5" />
+                            <AlertCircle className="size-5" />
                             Validation Results
                         </DialogTitle>
                         <DialogDescription>
@@ -1004,9 +1008,9 @@ const SettingsPrompt = () => {
                         <div className="space-y-4">
                             <Alert variant={validationResult.result ? 'default' : 'destructive'}>
                                 {validationResult.result === 'success' ? (
-                                    <CheckCircle className="h-4 w-4 !text-green-500" />
+                                    <CheckCircle className="size-4 !text-green-500" />
                                 ) : (
-                                    <XCircle className="h-4 w-4 !text-red-500" />
+                                    <XCircle className="size-4 !text-red-500" />
                                 )}
                                 <AlertTitle>
                                     {validationResult.result === 'success' ? 'Valid Template' : 'Validation Error'}
@@ -1044,7 +1048,7 @@ const SettingsPrompt = () => {
                 <DialogContent className="max-w-7xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <FileDiff className="h-5 w-5" />
+                            <FileDiff className="size-5" />
                             Diff
                         </DialogTitle>
                         <DialogDescription>Changes between current value and default template.</DialogDescription>

@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Search, X } from 'lucide-react';
 import debounce from 'lodash/debounce';
+import { Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -39,7 +39,7 @@ const ChatScreenshots = ({ screenshots, selectedFlowId }: ChatScreenshotsProps) 
         () => debounce((value: string) => {
             setDebouncedSearchValue(value);
         }, 500),
-        []
+        [],
     );
 
     // Update debounced search value when input value changes

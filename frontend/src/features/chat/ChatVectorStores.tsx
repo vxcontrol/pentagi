@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Search, X } from 'lucide-react';
 import debounce from 'lodash/debounce';
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -23,7 +23,7 @@ const searchFormSchema = z.object({
 
 const ChatVectorStores = ({ logs, selectedFlowId }: ChatVectorStoresProps) => {
     const vectorStoresEndRef = useRef<HTMLDivElement>(null);
-    
+
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
 
@@ -45,7 +45,7 @@ const ChatVectorStores = ({ logs, selectedFlowId }: ChatVectorStoresProps) => {
         () => debounce((value: string) => {
             setDebouncedSearchValue(value);
         }, 500),
-        []
+        [],
     );
 
     // Update debounced search value when input value changes

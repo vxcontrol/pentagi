@@ -1,3 +1,7 @@
+import { Trash2 } from 'lucide-react';
+import type { ReactElement } from 'react';
+import { cloneElement, isValidElement } from 'react';
+
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -8,8 +12,6 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { Trash2 } from 'lucide-react';
-import { type ReactElement, cloneElement, isValidElement } from 'react';
 
 type ConfirmationDialogIconProps = ReactElement<React.SVGProps<SVGSVGElement>>;
 
@@ -46,8 +48,12 @@ const ConfirmationDialog = ({
 }: ConfirmationDialogProps) => {
     const defaultDescription = description || (
         <>
-            Are you sure you want to perform this action on{' '}
-            <strong className="font-semibold text-foreground">{itemName}</strong> {itemType}?
+            Are you sure you want to perform this action on
+            {' '}
+            <strong className="font-semibold text-foreground">{itemName}</strong>
+            {' '}
+            {itemType}
+            ?
         </>
     );
 
@@ -59,7 +65,7 @@ const ConfirmationDialog = ({
             const { className = '', ...restProps } = icon.props;
             return cloneElement(icon, {
                 ...restProps,
-                className: cn('h-4 w-4', className),
+                className: cn('size-4', className),
             });
         }
 

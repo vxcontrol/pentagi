@@ -21,7 +21,8 @@ import type { AssistantFragmentFragment, AssistantLogFragmentFragment } from '@/
 import { useSettingsQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
-import { isProviderValid, type Provider } from '@/models/Provider';
+import type { Provider } from '@/models/Provider';
+import { isProviderValid } from '@/models/Provider';
 
 import { useChatScroll } from '../../hooks/use-chat-scroll';
 import ChatMessage from './ChatMessage';
@@ -382,7 +383,7 @@ const ChatAssistantMessages = ({
                 </div>
             ) : selectedAssistantId ? (
                 // Show messages for selected assistant
-                <div className="relative pb-4 h-full overflow-y-hidden">
+                <div className="relative h-full overflow-y-hidden pb-4">
                     <div
                         ref={containerRef}
                         className="h-full space-y-4 overflow-y-auto"
@@ -401,7 +402,7 @@ const ChatAssistantMessages = ({
                         <Button
                             type="button"
                             size="icon"
-                            className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-full shadow-md hover:shadow-lg"
+                            className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
                             onClick={() => scrollToEnd()}
                         >
                             <ChevronDown />

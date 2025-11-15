@@ -8,7 +8,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import type { ITerminalOptions, ITheme } from '@xterm/xterm';
 import { Terminal as XTerminal } from '@xterm/xterm';
 import debounce from 'lodash/debounce';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
@@ -106,7 +106,7 @@ interface TerminalRef {
     findPrevious: () => void;
 }
 
-const Terminal = forwardRef<TerminalRef, TerminalProps>(({ logs, className, searchValue }, ref) => {
+const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?: React.RefObject<TerminalRef | null> }) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<XTerminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
@@ -481,7 +481,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({ logs, className, sear
             className={cn('overflow-hidden', className)}
         />
     );
-});
+};
 
 Terminal.displayName = 'Terminal';
 

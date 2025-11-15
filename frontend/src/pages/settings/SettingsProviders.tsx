@@ -1,3 +1,20 @@
+import type { ColumnDef } from '@tanstack/react-table';
+import {
+    AlertCircle,
+    ArrowDown,
+    ArrowUp,
+    ChevronDown,
+    Copy,
+    Loader2,
+    MoreHorizontal,
+    Pencil,
+    Plus,
+    Settings,
+    Trash,
+} from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import Anthropic from '@/components/icons/Anthropic';
 import Bedrock from '@/components/icons/Bedrock';
 import Custom from '@/components/icons/Custom';
@@ -17,28 +34,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
-import {
-    ProviderType,
-    useDeleteProviderMutation,
-    useSettingsProvidersQuery,
-    type ProviderConfigFragmentFragment,
-} from '@/graphql/types';
-import { type ColumnDef } from '@tanstack/react-table';
-import {
-    AlertCircle,
-    ArrowDown,
-    ArrowUp,
-    ChevronDown,
-    Copy,
-    Loader2,
-    MoreHorizontal,
-    Pencil,
-    Plus,
-    Settings,
-    Trash,
-} from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import type { ProviderConfigFragmentFragment } from '@/graphql/types';
+import { ProviderType, useDeleteProviderMutation, useSettingsProvidersQuery } from '@/graphql/types';
 
 type Provider = ProviderConfigFragmentFragment;
 
@@ -75,7 +72,7 @@ const SettingsProvidersHeader = () => {
                 <DropdownMenuTrigger asChild>
                     <Button variant="secondary">
                         Create Provider
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="size-4" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -91,7 +88,7 @@ const SettingsProvidersHeader = () => {
                                 key={type}
                                 onClick={() => handleProviderCreate(type)}
                             >
-                                {Icon && <Icon className="h-4 w-4" />}
+                                {Icon && <Icon className="size-4" />}
                                 {label}
                             </DropdownMenuItem>
                         );
@@ -154,14 +151,16 @@ const SettingsProviders = () => {
                     <Button
                         variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
                     >
                         Name
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
@@ -177,14 +176,16 @@ const SettingsProviders = () => {
                     <Button
                         variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
                     >
                         Type
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
@@ -193,7 +194,7 @@ const SettingsProviders = () => {
                 const Icon = providerIcons[providerType];
                 return (
                     <Badge variant="outline">
-                        {Icon && <Icon className="h-3 w-3 mr-1" />}
+                        {Icon && <Icon className="mr-1 size-3" />}
                         {providerTypes.find((p) => p.type === providerType)?.label || providerType}
                     </Badge>
                 );
@@ -209,14 +210,16 @@ const SettingsProviders = () => {
                     <Button
                         variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
                     >
                         Created
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
@@ -235,14 +238,16 @@ const SettingsProviders = () => {
                     <Button
                         variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
                     >
                         Updated
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
@@ -265,22 +270,22 @@ const SettingsProviders = () => {
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    className="h-8 w-8 p-0"
+                                    className="size-8 p-0"
                                 >
                                     <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
+                                    <MoreHorizontal className="size-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                                 align="end"
-                                className="min-w-[6rem]"
+                                className="min-w-24"
                             >
                                 <DropdownMenuItem onClick={() => handleProviderEdit(provider.id)}>
-                                    <Pencil className="h-3 w-3" />
+                                    <Pencil className="size-3" />
                                     Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleProviderClone(provider.id)}>
-                                    <Copy className="h-4 w-4" />
+                                    <Copy className="size-4" />
                                     Clone
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
@@ -290,12 +295,12 @@ const SettingsProviders = () => {
                                 >
                                     {isDeleteLoading && deletingProvider?.id === provider.id ? (
                                         <>
-                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <Loader2 className="size-4 animate-spin" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="h-4 w-4" />
+                                            <Trash className="size-4" />
                                             Delete
                                         </>
                                     )}
@@ -310,7 +315,7 @@ const SettingsProviders = () => {
 
     const renderSubComponent = ({ row }: { row: any }) => {
         const provider = row.original as Provider;
-        const agents = provider.agents;
+        const { agents } = provider;
 
         if (!agents) {
             return <div className="p-4 text-sm text-muted-foreground">No agent configuration available</div>;
@@ -318,7 +323,7 @@ const SettingsProviders = () => {
 
         // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
         const getName = (key: string): string =>
-            key.replace(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
+            key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
         // Recursively extract all fields from an object, flattening nested objects
         const getFields = (obj: any, prefix = ''): { label: string; value: number | string | boolean }[] => {
@@ -348,10 +353,10 @@ const SettingsProviders = () => {
             .sort((a, b) => a.name.localeCompare(b.name));
 
         return (
-            <div className="p-4 bg-muted/20 border-t">
+            <div className="border-t bg-muted/20 p-4">
                 <h4 className="font-medium">Agent Configurations</h4>
                 <hr className="my-4 border-muted-foreground/20" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
                     {agentTypes.map(({ name, key, data }) => {
                         // Get all fields from data, including nested objects
                         const fields = data ? getFields(data) : [];
@@ -361,8 +366,8 @@ const SettingsProviders = () => {
                                 key={key}
                                 className="space-y-2"
                             >
-                                <div className="font-medium text-sm">{name}</div>
-                                {!!fields.length ? (
+                                <div className="text-sm font-medium">{name}</div>
+                                {fields.length > 0 ? (
                                     <div className="space-y-1 text-sm">
                                         {fields.map(({ label, value }) => (
                                             <div key={label}>
@@ -386,7 +391,7 @@ const SettingsProviders = () => {
             <div className="space-y-4">
                 <SettingsProvidersHeader />
                 <StatusCard
-                    icon={<Loader2 className="w-16 h-16 animate-spin text-muted-foreground" />}
+                    icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                     title="Loading providers..."
                     description="Please wait while we fetch your provider configurations"
                 />
@@ -399,7 +404,7 @@ const SettingsProviders = () => {
             <div className="space-y-4">
                 <SettingsProvidersHeader />
                 <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
+                    <AlertCircle className="size-4" />
                     <AlertTitle>Error loading providers</AlertTitle>
                     <AlertDescription>{error.message}</AlertDescription>
                 </Alert>
@@ -410,23 +415,23 @@ const SettingsProviders = () => {
     const providers = data?.settingsProviders?.userDefined || [];
 
     // Check if providers list is empty
-    if (!providers.length) {
+    if (providers.length === 0) {
         return (
             <div className="space-y-4">
                 <SettingsProvidersHeader />
                 <StatusCard
-                    icon={<Settings className="h-8 w-8 text-muted-foreground" />}
+                    icon={<Settings className="size-8 text-muted-foreground" />}
                     title="No providers configured"
                     description="Get started by adding your first language model provider"
-                    action={
+                    action={(
                         <Button
                             onClick={() => navigate('/settings/providers/new')}
                             variant="secondary"
                         >
-                            <Plus className="h-4 w-4" />
+                            <Plus className="size-4" />
                             Add Provider
                         </Button>
-                    }
+                    )}
                 />
             </div>
         );
@@ -439,7 +444,7 @@ const SettingsProviders = () => {
             {/* Delete Error Alert */}
             {(deleteError || deleteErrorMessage) && (
                 <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
+                    <AlertCircle className="size-4" />
                     <AlertTitle>Error deleting provider</AlertTitle>
                     <AlertDescription>{deleteError?.message || deleteErrorMessage}</AlertDescription>
                 </Alert>
