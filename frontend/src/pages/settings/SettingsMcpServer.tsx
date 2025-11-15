@@ -1,3 +1,10 @@
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2, Play, Plus, Save, Server, Trash2 } from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
+import { Controller, useFieldArray, useForm } from 'react-hook-form';
+import { useNavigate, useParams } from 'react-router-dom';
+import { z } from 'zod';
+
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -7,12 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusCard } from '@/components/ui/status-card';
 import { Switch } from '@/components/ui/switch';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Play, Plus, Save, Server, Trash2 } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
-import { Controller, useFieldArray, useForm } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router-dom';
-import { z } from 'zod';
 
 type McpTransport = 'stdio' | 'sse';
 
@@ -157,7 +158,7 @@ const SettingsMcpServer = () => {
             // Simulate request
             await new Promise((r) => setTimeout(r, 400));
             navigate('/settings/mcp-servers');
-        } catch (e) {
+        } catch {
             setSubmitError('Failed to save MCP server');
         }
     };
@@ -172,7 +173,7 @@ const SettingsMcpServer = () => {
             // Simulate delete
             await new Promise((r) => setTimeout(r, 300));
             navigate('/settings/mcp-servers');
-        } catch (_) {
+        } catch {
             setSubmitError('Failed to delete MCP server');
         }
     };
@@ -191,7 +192,7 @@ const SettingsMcpServer = () => {
             // Simulate connectivity test
             await new Promise((r) => setTimeout(r, 600));
             setTestMessage('Connection successful');
-        } catch (_) {
+        } catch {
             setTestError('Connection failed');
         } finally {
             setIsTestLoading(false);
@@ -213,7 +214,7 @@ const SettingsMcpServer = () => {
             // Simulate tool invocation
             await new Promise((r) => setTimeout(r, 600));
             setToolTestMessage('Tool test passed');
-        } catch (_) {
+        } catch {
             setToolTestError('Tool test failed');
         } finally {
             setToolTestLoadingIndex(null);
@@ -223,17 +224,17 @@ const SettingsMcpServer = () => {
     if (!isNew && !getMockServerById(Number(params.mcpServerId))) {
         return (
             <StatusCard
-                icon={<Server className="h-8 w-8 text-muted-foreground" />}
+                icon={<Server className="size-8 text-muted-foreground" />}
                 title="MCP Server not found"
                 description="The requested MCP server could not be located in mock data"
-                action={
+                action={(
                     <Button
                         variant="secondary"
                         onClick={() => navigate('/settings/mcp-servers')}
                     >
                         Back to list
                     </Button>
-                }
+                )}
             />
         );
     }
@@ -276,7 +277,7 @@ const SettingsMcpServer = () => {
                                 </Alert>
                             )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <FormField
                                     control={form.control}
                                     name="name"
@@ -342,7 +343,7 @@ const SettingsMcpServer = () => {
                             {transport === 'stdio' && (
                                 <div className="space-y-4">
                                     <h3 className="text-lg font-medium">STDIO Configuration</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                         <FormField
                                             control={form.control}
                                             name="stdio.command"
@@ -380,7 +381,7 @@ const SettingsMcpServer = () => {
                                     </div>
 
                                     <div>
-                                        <div className="flex items-center justify-between mb-2">
+                                        <div className="mb-2 flex items-center justify-between">
                                             <h4 className="text-sm font-medium">Environment Variables</h4>
                                             <Button
                                                 type="button"
@@ -388,7 +389,7 @@ const SettingsMcpServer = () => {
                                                 size="sm"
                                                 onClick={() => handleAddKeyValue('env')}
                                             >
-                                                <Plus className="h-3 w-3" /> Add
+                                                <Plus className="size-3" /> Add
                                             </Button>
                                         </div>
                                         <div className="space-y-2">
@@ -398,7 +399,7 @@ const SettingsMcpServer = () => {
                                             {stdioEnvArray.fields.map((field, index) => (
                                                 <div
                                                     key={field.id}
-                                                    className="grid grid-cols-1 md:grid-cols-5 gap-2"
+                                                    className="grid grid-cols-1 gap-2 md:grid-cols-5"
                                                 >
                                                     <Controller
                                                         control={form.control}
@@ -428,7 +429,7 @@ const SettingsMcpServer = () => {
                                                         className="justify-self-start"
                                                         onClick={() => stdioEnvArray.remove(index)}
                                                     >
-                                                        <Trash2 className="h-4 w-4" />
+                                                        <Trash2 className="size-4" />
                                                     </Button>
                                                 </div>
                                             ))}
@@ -459,7 +460,7 @@ const SettingsMcpServer = () => {
                                     />
 
                                     <div>
-                                        <div className="flex items-center justify-between mb-2">
+                                        <div className="mb-2 flex items-center justify-between">
                                             <h4 className="text-sm font-medium">Headers</h4>
                                             <Button
                                                 type="button"
@@ -467,7 +468,7 @@ const SettingsMcpServer = () => {
                                                 size="sm"
                                                 onClick={() => handleAddKeyValue('headers')}
                                             >
-                                                <Plus className="h-3 w-3" /> Add
+                                                <Plus className="size-3" /> Add
                                             </Button>
                                         </div>
                                         <div className="space-y-2">
@@ -477,7 +478,7 @@ const SettingsMcpServer = () => {
                                             {sseHeadersArray.fields.map((field, index) => (
                                                 <div
                                                     key={field.id}
-                                                    className="grid grid-cols-1 md:grid-cols-5 gap-2"
+                                                    className="grid grid-cols-1 gap-2 md:grid-cols-5"
                                                 >
                                                     <Controller
                                                         control={form.control}
@@ -507,7 +508,7 @@ const SettingsMcpServer = () => {
                                                         className="justify-self-start"
                                                         onClick={() => sseHeadersArray.remove(index)}
                                                     >
-                                                        <Trash2 className="h-4 w-4" />
+                                                        <Trash2 className="size-4" />
                                                     </Button>
                                                 </div>
                                             ))}
@@ -525,7 +526,7 @@ const SettingsMcpServer = () => {
                                             Enable or disable available tools
                                         </p>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                                         {toolsArray.fields.length === 0 && (
                                             <div className="text-sm text-muted-foreground">No tools</div>
                                         )}
@@ -536,7 +537,7 @@ const SettingsMcpServer = () => {
                                             >
                                                 <div className="flex items-start justify-between gap-4">
                                                     <div className="flex-1 text-sm">
-                                                        <div className="font-medium truncate">
+                                                        <div className="truncate font-medium">
                                                             {form.watch(`tools.${index}.name`) || 'tool'}
                                                         </div>
                                                         {form.watch(`tools.${index}.description`) && (
@@ -566,16 +567,16 @@ const SettingsMcpServer = () => {
                                                             disabled={toolTestLoadingIndex === index}
                                                         >
                                                             {toolTestLoadingIndex === index ? (
-                                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                                <Loader2 className="size-3 animate-spin" />
                                                             ) : (
-                                                                <Play className="h-3 w-3" />
+                                                                <Play className="size-3" />
                                                             )}
                                                             {toolTestLoadingIndex === index ? 'Testing...' : 'Test'}
                                                         </Button>
                                                     </div>
                                                 </div>
                                                 {toolTestIndex === index && (toolTestMessage || toolTestError) && (
-                                                    <div className="text-xs mt-1">
+                                                    <div className="mt-1 text-xs">
                                                         {toolTestMessage && (
                                                             <span className="text-green-600">{toolTestMessage}</span>
                                                         )}
@@ -595,7 +596,7 @@ const SettingsMcpServer = () => {
             </Card>
 
             {/* Sticky buttons */}
-            <div className="flex items-center sticky -bottom-4 bg-background border-t mt-4 -mx-4 -mb-4 p-4 shadow-lg">
+            <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 flex items-center border-t bg-background p-4 shadow-lg">
                 <div className="flex space-x-2">
                     {!isNew && (
                         <Button
@@ -603,7 +604,7 @@ const SettingsMcpServer = () => {
                             variant="destructive"
                             onClick={handleDelete}
                         >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="size-4" />
                             Delete
                         </Button>
                     )}
@@ -613,11 +614,11 @@ const SettingsMcpServer = () => {
                         onClick={handleTest}
                         disabled={isTestLoading}
                     >
-                        {isTestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                        {isTestLoading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                         {isTestLoading ? 'Testing...' : 'Test'}
                     </Button>
                 </div>
-                <div className="flex space-x-2 ml-auto">
+                <div className="ml-auto flex space-x-2">
                     <Button
                         type="button"
                         variant="outline"
@@ -632,9 +633,9 @@ const SettingsMcpServer = () => {
                         disabled={form.formState.isSubmitting}
                     >
                         {form.formState.isSubmitting ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="size-4 animate-spin" />
                         ) : (
-                            <Save className="h-4 w-4" />
+                            <Save className="size-4" />
                         )}
                         {form.formState.isSubmitting ? 'Saving...' : isNew ? 'Create MCP Server' : 'Update MCP Server'}
                     </Button>

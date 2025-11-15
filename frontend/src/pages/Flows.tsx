@@ -1,27 +1,5 @@
-import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
-import { Badge } from '@/components/ui/badge';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
-import { Button } from '@/components/ui/button';
-import { DataTable } from '@/components/ui/data-table';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import { StatusCard } from '@/components/ui/status-card';
-import {
-    StatusType,
-    useDeleteFlowMutation,
-    useFinishFlowMutation,
-    useFlowsQuery,
-    type FlowOverviewFragmentFragment,
-} from '@/graphql/types';
 import { NetworkStatus } from '@apollo/client';
-import { type ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
     ArrowDown,
     ArrowUp,
@@ -41,6 +19,29 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
+import { Badge } from '@/components/ui/badge';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/data-table';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Separator } from '@/components/ui/separator';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { StatusCard } from '@/components/ui/status-card';
+import type { FlowOverviewFragmentFragment } from '@/graphql/types';
+import {
+    StatusType,
+    useDeleteFlowMutation,
+    useFinishFlowMutation,
+    useFlowsQuery,
+} from '@/graphql/types';
+
 type Flow = FlowOverviewFragmentFragment;
 
 const statusConfig: Record<
@@ -50,27 +51,27 @@ const statusConfig: Record<
     [StatusType.Created]: {
         label: 'Created',
         variant: 'outline',
-        icon: <CircleDashed className="h-3 w-3 text-blue-500" />,
+        icon: <CircleDashed className="size-3 text-blue-500" />,
     },
     [StatusType.Running]: {
         label: 'Running',
         variant: 'default',
-        icon: <Loader2 className="h-3 w-3 text-purple-500 animate-spin" />,
+        icon: <Loader2 className="size-3 animate-spin text-purple-500" />,
     },
     [StatusType.Waiting]: {
         label: 'Waiting',
         variant: 'outline',
-        icon: <CircleDashed className="h-3 w-3 text-yellow-500" />,
+        icon: <CircleDashed className="size-3 text-yellow-500" />,
     },
     [StatusType.Finished]: {
         label: 'Finished',
         variant: 'secondary',
-        icon: <CircleCheck className="h-3 w-3 text-green-500" />,
+        icon: <CircleCheck className="size-3 text-green-500" />,
     },
     [StatusType.Failed]: {
         label: 'Failed',
         variant: 'destructive',
-        icon: <CircleX className="h-3 w-3 text-red-500" />,
+        icon: <CircleX className="size-3 text-red-500" />,
     },
 };
 
@@ -197,18 +198,20 @@ const Flows = () => {
                     <Button
                         variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
                     >
                         ID
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
-            cell: ({ row }) => <div className="text-sm font-mono">{row.getValue('id')}</div>,
+            cell: ({ row }) => <div className="font-mono text-sm">{row.getValue('id')}</div>,
         },
         {
             accessorKey: 'title',
@@ -219,14 +222,16 @@ const Flows = () => {
                     <Button
                         variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
                     >
                         Title
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
@@ -242,14 +247,16 @@ const Flows = () => {
                     <Button
                         variant="link"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        className="flex items-center gap-2 p-0 no-underline hover:no-underline text-muted-foreground hover:text-primary"
+                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
                     >
                         Status
                         {sorted === 'asc' ? (
-                            <ArrowDown className="h-4 w-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="h-4 w-4" />
-                        ) : null}
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc'
+                            ? (
+                                <ArrowUp className="size-4" />
+                            )
+                            : null}
                     </Button>
                 );
             },
@@ -279,14 +286,14 @@ const Flows = () => {
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    className="h-8 w-8 p-0"
+                                    className="size-8 p-0"
                                 >
                                     <MoreHorizontal />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                                 align="end"
-                                className="min-w-[6rem]"
+                                className="min-w-24"
                             >
                                 <DropdownMenuItem onClick={() => handleFlowOpen(flow.id)}>
                                     <Eye />
@@ -317,12 +324,12 @@ const Flows = () => {
                                 >
                                     {deletingFlowIds.has(flow.id) ? (
                                         <>
-                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <Loader2 className="size-4 animate-spin" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="h-4 w-4" />
+                                            <Trash className="size-4" />
                                             Delete
                                         </>
                                     )}
@@ -383,7 +390,7 @@ const Flows = () => {
     }
 
     // Check if flows list is empty
-    if (!flows.length) {
+    if (flows.length === 0) {
         return (
             <>
                 {pageHeader}
@@ -392,15 +399,15 @@ const Flows = () => {
                         icon={<FileText className="size-8 text-muted-foreground" />}
                         title="No flows found"
                         description="Get started by creating your first conversation flow"
-                        action={
+                        action={(
                             <Button
                                 onClick={() => navigate('/flows/new')}
                                 variant="secondary"
                             >
-                                <Plus className="h-4 w-4" />
+                                <Plus className="size-4" />
                                 New Flow
                             </Button>
-                        }
+                        )}
                     />
                 </div>
             </>

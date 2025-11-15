@@ -92,7 +92,7 @@ const addProviderSorted = (existing: any[], incoming: any, cache: any) => {
 
     // Find the correct position to insert (sorted by name in lexicographic order)
     const insertIndex = existing.findIndex((item) => item.name > incomingName);
-    
+
     if (insertIndex === -1) {
         return [...existing, incoming];
     } else {
@@ -100,7 +100,7 @@ const addProviderSorted = (existing: any[], incoming: any, cache: any) => {
         return [
             ...existing.slice(0, insertIndex),
             incoming,
-            ...existing.slice(insertIndex)
+            ...existing.slice(insertIndex),
         ];
     }
 };
@@ -255,21 +255,21 @@ const cache = new InMemoryCache({
                             fields: {
                                 providers: (existing = []) => {
                                     // Check if provider exists in the list
-                                    const existingProvider = existing.find((item: any) => 
-                                        item.name === provider.name && item.type === provider.type
+                                    const existingProvider = existing.find((item: any) =>
+                                        item.name === provider.name && item.type === provider.type,
                                     );
-                                    
+
                                     if (!existingProvider) {
                                         // Provider not found, invalidate cache to refetch
                                         cache.evict({ fieldName: 'providers' });
                                         return existing;
                                     }
-                                    
+
                                     // Update existing provider (only name can change, type cannot)
-                                    return existing.map((item: any) => 
-                                        item.name === provider.name && item.type === provider.type 
-                                            ? provider 
-                                            : item
+                                    return existing.map((item: any) =>
+                                        item.name === provider.name && item.type === provider.type
+                                            ? provider
+                                            : item,
                                     );
                                 },
                             },
@@ -566,21 +566,21 @@ const cache = new InMemoryCache({
                             fields: {
                                 providers: (existing = []) => {
                                     // Check if provider exists in the list
-                                    const existingProvider = existing.find((item: any) => 
-                                        item.name === provider.name && item.type === provider.type
+                                    const existingProvider = existing.find((item: any) =>
+                                        item.name === provider.name && item.type === provider.type,
                                     );
-                                    
+
                                     if (!existingProvider) {
                                         // Provider not found, invalidate cache to refetch
                                         cache.evict({ fieldName: 'providers' });
                                         return existing;
                                     }
-                                    
+
                                     // Update existing provider (only name can change, type cannot)
-                                    return existing.map((item: any) => 
-                                        item.name === provider.name && item.type === provider.type 
-                                            ? provider 
-                                            : item
+                                    return existing.map((item: any) =>
+                                        item.name === provider.name && item.type === provider.type
+                                            ? provider
+                                            : item,
                                     );
                                 },
                             },
@@ -610,8 +610,8 @@ const cache = new InMemoryCache({
                             fields: {
                                 providers: (existing = []) => {
                                     // Filter out by name+type since Provider doesn't have id
-                                    return existing.filter((item: any) => 
-                                        !(item.name === provider.name && item.type === provider.type)
+                                    return existing.filter((item: any) =>
+                                        !(item.name === provider.name && item.type === provider.type),
                                     );
                                 },
                             },

@@ -9,7 +9,8 @@ import {
     useFlowUpdatedSubscription,
     useProvidersQuery,
 } from '@/graphql/types';
-import { findProviderByName, isProviderValid, sortProviders, type Provider } from '@/models/Provider';
+import type { Provider } from '@/models/Provider';
+import { findProviderByName, isProviderValid, sortProviders } from '@/models/Provider';
 
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
 

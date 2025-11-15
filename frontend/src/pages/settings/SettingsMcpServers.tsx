@@ -1,3 +1,8 @@
+import type { ColumnDef } from '@tanstack/react-table';
+import { AlertCircle, ArrowUpDown, Copy, Loader2, MoreHorizontal, Pencil, Plus, Server, Trash } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -12,10 +17,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
 import { Switch } from '@/components/ui/switch';
-import { type ColumnDef } from '@tanstack/react-table';
-import { AlertCircle, ArrowUpDown, Copy, Loader2, MoreHorizontal, Pencil, Plus, Server, Trash } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 type McpTransport = 'stdio' | 'sse';
 
@@ -64,7 +65,7 @@ const SettingsMcpServersHeader = () => {
                 onClick={handleCreate}
             >
                 Create MCP Server
-                <Plus className="h-4 w-4" />
+                <Plus className="size-4" />
             </Button>
         </div>
     );
@@ -184,7 +185,7 @@ const SettingsMcpServers = () => {
             setServers((prev) => prev.filter((s) => s.id !== serverId));
             setDeletingServer(null);
             setIsDeleteDialogOpen(false);
-        } catch (e) {
+        } catch {
             setDeleteErrorMessage('Failed to delete MCP server');
         } finally {
             setIsDeleteLoading(false);
@@ -202,7 +203,7 @@ const SettingsMcpServers = () => {
                     onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                 >
                     Name
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                    <ArrowUpDown className="ml-2 size-4" />
                 </Button>
             ),
             cell: ({ row }) => (
@@ -231,7 +232,7 @@ const SettingsMcpServers = () => {
                 const rest = enabled.length - first.length;
                 const disabledCount = total - enabled.length;
                 return (
-                    <div className="flex items-center gap-1 flex-wrap w-full overflow-hidden">
+                    <div className="flex w-full flex-wrap items-center gap-1 overflow-hidden">
                         {first.map((t) => (
                             <Badge
                                 key={t.name}
@@ -252,7 +253,7 @@ const SettingsMcpServers = () => {
                         {disabledCount > 0 && (
                             <Badge
                                 variant="outline"
-                                className="text-[10px] ml-1"
+                                className="ml-1 text-[10px]"
                             >
                                 {disabledCount} disabled
                             </Badge>
@@ -268,12 +269,12 @@ const SettingsMcpServers = () => {
             cell: ({ row }) => {
                 const s = row.original as McpServerItem;
                 if (s.transport === 'sse' && s.config.sse) {
-                    return <span className="text-sm text-muted-foreground break-all">{s.config.sse.url}</span>;
+                    return <span className="break-all text-sm text-muted-foreground">{s.config.sse.url}</span>;
                 }
                 if (s.transport === 'stdio' && s.config.stdio) {
                     const args = s.config.stdio.args?.join(' ') || '';
                     return (
-                        <span className="text-sm text-muted-foreground break-all">
+                        <span className="break-all text-sm text-muted-foreground">
                             {s.config.stdio.command} {args}
                         </span>
                     );
@@ -306,24 +307,24 @@ const SettingsMcpServers = () => {
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    className="h-8 w-8 p-0"
+                                    className="size-8 p-0"
                                     onClick={(e) => e.stopPropagation()}
                                 >
                                     <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
+                                    <MoreHorizontal className="size-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
                                 align="end"
-                                className="min-w-[6rem]"
+                                className="min-w-24"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <DropdownMenuItem onClick={() => handleEdit(server.id)}>
-                                    <Pencil className="h-3 w-3" />
+                                    <Pencil className="size-3" />
                                     Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleClone(server.id)}>
-                                    <Copy className="h-4 w-4" />
+                                    <Copy className="size-4" />
                                     Clone
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
@@ -333,12 +334,12 @@ const SettingsMcpServers = () => {
                                 >
                                     {isDeleteLoading && deletingServer?.id === server.id ? (
                                         <>
-                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            <Loader2 className="size-4 animate-spin" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="h-4 w-4" />
+                                            <Trash className="size-4" />
                                             Delete
                                         </>
                                     )}
@@ -355,7 +356,7 @@ const SettingsMcpServers = () => {
         const server = row.original as McpServerItem;
 
         const renderKeyValue = (obj?: Record<string, string>) => {
-            if (!obj || !Object.keys(obj).length) return <div className="text-sm text-muted-foreground">No data</div>;
+            if (!obj || Object.keys(obj).length === 0) return <div className="text-sm text-muted-foreground">No data</div>;
             return (
                 <div className="space-y-1 text-sm">
                     {Object.entries(obj)
@@ -370,7 +371,7 @@ const SettingsMcpServers = () => {
         };
 
         return (
-            <div className="p-4 bg-muted/20 border-t space-y-4">
+            <div className="space-y-4 border-t bg-muted/20 p-4">
                 <h4 className="font-medium">Configuration</h4>
                 <hr className="border-muted-foreground/20" />
                 {server.transport === 'stdio' && server.config.stdio && (
@@ -382,7 +383,8 @@ const SettingsMcpServers = () => {
                             </div>
                             {!!server.config.stdio.args?.length && (
                                 <div>
-                                    <span className="text-muted-foreground">Args:</span>{' '}
+                                    <span className="text-muted-foreground">Args:</span>
+                                    {' '}
                                     {server.config.stdio.args.join(' ')}
                                 </div>
                             )}
@@ -410,7 +412,7 @@ const SettingsMcpServers = () => {
                 <div className="space-y-2">
                     <div className="text-sm font-medium">Tools</div>
                     {server.tools?.length ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                             {server.tools.map((t, idx) => (
                                 <div
                                     key={`${t.name}-${idx}`}
@@ -429,11 +431,11 @@ const SettingsMcpServers = () => {
                                                     prev.map((s) =>
                                                         s.id === server.id
                                                             ? {
-                                                                  ...s,
-                                                                  tools: s.tools.map((orig, i) =>
-                                                                      i === idx ? { ...orig, enabled: checked } : orig,
-                                                                  ),
-                                                              }
+                                                                ...s,
+                                                                tools: s.tools.map((orig, i) =>
+                                                                    i === idx ? { ...orig, enabled: checked } : orig,
+                                                                ),
+                                                            }
                                                             : s,
                                                     ),
                                                 );
@@ -452,23 +454,23 @@ const SettingsMcpServers = () => {
         );
     };
 
-    if (!servers.length) {
+    if (servers.length === 0) {
         return (
             <div className="space-y-4">
                 <SettingsMcpServersHeader />
                 <StatusCard
-                    icon={<Server className="h-8 w-8 text-muted-foreground" />}
+                    icon={<Server className="size-8 text-muted-foreground" />}
                     title="No MCP servers configured"
                     description="Get started by adding your first MCP server"
-                    action={
+                    action={(
                         <Button
                             onClick={() => navigate('/settings/mcp-servers/new')}
                             variant="secondary"
                         >
-                            <Plus className="h-4 w-4" />
+                            <Plus className="size-4" />
                             Add MCP Server
                         </Button>
-                    }
+                    )}
                 />
             </div>
         );
@@ -480,7 +482,7 @@ const SettingsMcpServers = () => {
 
             {deleteErrorMessage && (
                 <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
+                    <AlertCircle className="size-4" />
                     <AlertTitle>Error deleting MCP server</AlertTitle>
                     <AlertDescription>{deleteErrorMessage}</AlertDescription>
                 </Alert>

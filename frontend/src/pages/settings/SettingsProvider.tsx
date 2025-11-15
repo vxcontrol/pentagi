@@ -1,30 +1,3 @@
-import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatusCard } from '@/components/ui/status-card';
-import {
-    AgentConfigType,
-    ProviderType,
-    ReasoningEffort,
-    useCreateProviderMutation,
-    useDeleteProviderMutation,
-    useSettingsProvidersQuery,
-    useTestAgentMutation,
-    useTestProviderMutation,
-    useUpdateProviderMutation,
-    type AgentConfigInput,
-    type AgentsConfigInput,
-    type ProviderConfigFragmentFragment,
-} from '@/graphql/types';
-import { cn } from '@/lib/utils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
     AlertCircle,
@@ -43,6 +16,36 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
+
+import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { StatusCard } from '@/components/ui/status-card';
+import type {
+    AgentConfigInput,
+    AgentsConfigInput,
+    ProviderConfigFragmentFragment,
+    ProviderType,
+} from '@/graphql/types';
+import {
+    AgentConfigType,
+    ReasoningEffort,
+    useCreateProviderMutation,
+    useDeleteProviderMutation,
+    useSettingsProvidersQuery,
+    useTestAgentMutation,
+    useTestProviderMutation,
+    useUpdateProviderMutation,
+} from '@/graphql/types';
+import { cn } from '@/lib/utils';
 
 type Provider = ProviderConfigFragmentFragment;
 
@@ -133,7 +136,7 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
             return null;
         }
 
-        return valueType === 'float' ? parseFloat(value) : parseInt(value);
+        return valueType === 'float' ? Number.parseFloat(value) : Number.parseInt(value);
     };
 
     const inputProps = {
@@ -153,7 +156,7 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
                     {...inputProps}
                     value={field.value ?? ''}
                     onChange={(event) => {
-                        const value = event.target.value;
+                        const { value } = event.target;
                         field.onChange(parseValue(value));
                     }}
                 />
@@ -234,7 +237,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                             />
                             <CommandList>
                                 <CommandEmpty>
-                                    <div className="text-center py-2">
+                                    <div className="py-2 text-center">
                                         <p className="text-sm text-muted-foreground">No {label.toLowerCase()} found.</p>
                                         {search && allowCustom && (
                                             <Button
@@ -363,11 +366,11 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                 disabled={disabled}
                                 type="button"
                             >
-                                <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                                <ChevronsUpDown className="size-4 opacity-50" />
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent
-                            className={cn(contentClass, 'p-0 w-80 sm:w-[480px] md:w-[640px]')}
+                            className={cn(contentClass, 'w-80 p-0 sm:w-[480px] md:w-[640px]')}
                             align="end"
                         >
                             <Command>
@@ -379,7 +382,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                 />
                                 <CommandList>
                                     <CommandEmpty>
-                                        <div className="text-center py-2">
+                                        <div className="py-2 text-center">
                                             <p className="text-sm text-muted-foreground">
                                                 No {label.toLowerCase()} found.
                                             </p>
@@ -411,14 +414,14 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                                     setSearch('');
                                                 }}
                                             >
-                                                <div className="flex items-center justify-between w-full min-w-0 gap-2">
-                                                    <div className="flex items-center gap-2 min-w-0">
+                                                <div className="flex w-full min-w-0 items-center justify-between gap-2">
+                                                    <div className="flex min-w-0 items-center gap-2">
                                                         <span className="truncate">{option.name}</span>
                                                         {option.thinking && (
-                                                            <Lightbulb className="h-3 w-3 text-muted-foreground" />
+                                                            <Lightbulb className="size-3 text-muted-foreground" />
                                                         )}
                                                     </div>
-                                                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                                                    <span className="flex-shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                                                         {formatPrice(option.price)}
                                                     </span>
                                                 </div>
@@ -528,21 +531,25 @@ type FormData = z.infer<typeof formSchema>;
 type FormAgents = FormData['agents'];
 
 // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
-const getName = (key: string): string => key.replace(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
+const getName = (key: string): string => key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
 // Helper function to convert string to ReasoningEffort enum
 const getReasoningEffort = (effort: string | null | undefined): ReasoningEffort | null => {
     if (!effort) return null;
 
     switch (effort.toLowerCase()) {
-        case 'low':
+        case 'low': {
             return ReasoningEffort.Low;
-        case 'medium':
+        }
+        case 'medium': {
             return ReasoningEffort.Medium;
-        case 'high':
+        }
+        case 'high': {
             return ReasoningEffort.High;
-        default:
+        }
+        default: {
             return null;
+        }
     }
 };
 
@@ -570,9 +577,9 @@ const transformFormToGraphQL = (
                 presencePenalty: data?.presencePenalty ?? null,
                 reasoning: data?.reasoning
                     ? {
-                          effort: getReasoningEffort(data?.reasoning.effort),
-                          maxTokens: data?.reasoning.maxTokens ?? null,
-                      }
+                        effort: getReasoningEffort(data?.reasoning.effort),
+                        maxTokens: data?.reasoning.maxTokens ?? null,
+                    }
                     : null,
                 price:
                     data?.price &&
@@ -581,9 +588,9 @@ const transformFormToGraphQL = (
                     typeof data?.price.input === 'number' &&
                     typeof data?.price.output === 'number'
                         ? {
-                              input: data?.price.input,
-                              output: data?.price.output,
-                          }
+                            input: data?.price.input,
+                            output: data?.price.output,
+                        }
                         : null,
             };
 
@@ -638,11 +645,11 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
 
     const getStatusIcon = (result: boolean) => {
         if (result === true) {
-            return <CheckCircle className="h-4 w-4 text-green-500" />;
+            return <CheckCircle className="size-4 text-green-500" />;
         } else if (result === false) {
-            return <XCircle className="h-4 w-4 text-red-500" />;
+            return <XCircle className="size-4 text-red-500" />;
         } else {
-            return <Clock className="h-4 w-4 text-yellow-500" />;
+            return <Clock className="size-4 text-yellow-500" />;
         }
     };
 
@@ -661,11 +668,11 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
             open={isOpen}
             onOpenChange={handleOpenChange}
         >
-            <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+            <DialogContent className="flex max-h-[80vh] max-w-4xl flex-col">
                 <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Provider Test Results</DialogTitle>
                 </DialogHeader>
-                <div className="flex-1 overflow-y-auto space-y-6">
+                <div className="flex-1 space-y-6 overflow-y-auto">
                     <Accordion
                         type="multiple"
                         className="w-full"
@@ -680,7 +687,7 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
                                     value={agentType}
                                 >
                                     <AccordionTrigger className="text-left">
-                                        <div className="flex items-center justify-between w-full mr-4">
+                                        <div className="mr-4 flex w-full items-center justify-between">
                                             <span className="text-lg font-semibold capitalize">{agentType}</span>
                                             <span className="text-sm text-muted-foreground">
                                                 {successTestsCount}/{testsCount} tests passed
@@ -692,9 +699,9 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
                                             {tests.map((test: any, index: number) => (
                                                 <div
                                                     key={index}
-                                                    className="border rounded-lg p-3"
+                                                    className="rounded-lg border p-3"
                                                 >
-                                                    <div className="flex items-start justify-between mb-2">
+                                                    <div className="mb-2 flex items-start justify-between">
                                                         <div className="flex items-center gap-2">
                                                             {getStatusIcon(test.result)}
                                                             <span className="font-medium">{test.name}</span>
@@ -717,22 +724,23 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
                                                     <div
                                                         className={`text-sm font-medium ${getStatusColor(test.result)}`}
                                                     >
-                                                        Result:{' '}
+                                                        Result:
+                                                        {' '}
                                                         {test.result === true
                                                             ? 'Success'
                                                             : test.result === false
-                                                              ? 'Failed'
-                                                              : 'Unknown'}
+                                                                ? 'Failed'
+                                                                : 'Unknown'}
                                                     </div>
                                                     {test.error && (
-                                                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                                                        <div className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
                                                             <strong>Error:</strong> {test.error}
                                                         </div>
                                                     )}
                                                 </div>
                                             ))}
                                             {tests.length === 0 && (
-                                                <div className="text-center py-4 text-muted-foreground">
+                                                <div className="py-4 text-center text-muted-foreground">
                                                     No tests available for this agent
                                                 </div>
                                             )}
@@ -883,7 +891,7 @@ const SettingsProvider = () => {
         }
 
         // Filter models by selected provider type
-        const models = data.settingsProviders.models;
+        const { models } = data.settingsProviders;
         const providerModels = models[selectedType as keyof typeof models];
         if (!providerModels?.length) {
             return [];
@@ -901,7 +909,7 @@ const SettingsProvider = () => {
 
     // Fill agents when provider type is selected (only for new providers)
     useEffect(() => {
-        if (!isNew || !selectedType || !data?.settingsProviders?.default || !availableModels.length) {
+        if (!isNew || !selectedType || !data?.settingsProviders?.default || availableModels.length === 0) {
             return;
         }
 
@@ -936,7 +944,7 @@ const SettingsProvider = () => {
     useEffect(() => {
         if (!isNew) {
             // Clear query parameters for existing providers
-            if (searchParams.size) {
+            if (searchParams.size > 0) {
                 setSearchParams({});
             }
 
@@ -1098,7 +1106,7 @@ const SettingsProvider = () => {
         const isValid = await form.trigger();
 
         if (!isValid) {
-            const errors = form.formState.errors;
+            const { errors } = form.formState;
 
             // Helper function to format field names for display
             const formatFieldName = (fieldPath: string): string => {
@@ -1106,7 +1114,7 @@ const SettingsProvider = () => {
                     .split('.')
                     .map((part) => {
                         // Capitalize first letter and add spaces before uppercase letters
-                        return part.charAt(0).toUpperCase() + part.slice(1).replace(/([A-Z])/g, ' $1');
+                        return part.charAt(0).toUpperCase() + part.slice(1).replaceAll(/([A-Z])/g, ' $1');
                     })
                     .join(' → ');
             };
@@ -1177,11 +1185,11 @@ const SettingsProvider = () => {
         const isValid = await form.trigger();
 
         if (!isValid) {
-            const errors = form.formState.errors;
+            const { errors } = form.formState;
             const formatFieldName = (fieldPath: string): string =>
                 fieldPath
                     .split('.')
-                    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).replace(/([A-Z])/g, ' $1'))
+                    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).replaceAll(/([A-Z])/g, ' $1'))
                     .join(' → ');
 
             const errorMessages = Object.entries(errors)
@@ -1190,13 +1198,11 @@ const SettingsProvider = () => {
                     if (error && typeof error === 'object') {
                         return Object.entries(error)
                             .map(([subField, subError]: [string, any]) => {
-                                if (subError?.message)
-                                    return `• ${formatFieldName(`${field}.${subField}`)}: ${subError.message}`;
+                                if (subError?.message) { return `• ${formatFieldName(`${field}.${subField}`)}: ${subError.message}`; }
                                 if (subError && typeof subError === 'object') {
                                     return Object.entries(subError)
                                         .map(([nestedField, nestedError]: [string, any]) => {
-                                            if (nestedError?.message)
-                                                return `• ${formatFieldName(`${field}.${subField}.${nestedField}`)}: ${nestedError.message}`;
+                                            if (nestedError?.message) { return `• ${formatFieldName(`${field}.${subField}.${nestedField}`)}: ${nestedError.message}`; }
                                             return null;
                                         })
                                         .filter(Boolean)
@@ -1268,7 +1274,7 @@ const SettingsProvider = () => {
     if (loading) {
         return (
             <StatusCard
-                icon={<Loader2 className="w-16 h-16 animate-spin text-muted-foreground" />}
+                icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                 title="Loading provider data..."
                 description="Please wait while we fetch provider configuration"
             />
@@ -1278,7 +1284,7 @@ const SettingsProvider = () => {
     if (error) {
         return (
             <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
+                <AlertCircle className="size-4" />
                 <AlertTitle>Error loading provider data</AlertTitle>
                 <AlertDescription>{error.message}</AlertDescription>
             </Alert>
@@ -1311,7 +1317,7 @@ const SettingsProvider = () => {
                             {/* Error Alert */}
                             {mutationError && (
                                 <Alert variant="destructive">
-                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertCircle className="size-4" />
                                     <AlertTitle>Error</AlertTitle>
                                     <AlertDescription>
                                         {mutationError instanceof Error ? (
@@ -1367,9 +1373,9 @@ const SettingsProvider = () => {
                                                     <span className="group-hover:underline">{getName(agentKey)}</span>
                                                     <span
                                                         className={cn(
-                                                            'flex items-center gap-1 text-xs mr-2 px-2 py-1 border rounded hover:bg-accent hover:text-accent-foreground',
+                                                            'mr-2 flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground',
                                                             (isTestLoading || isAgentTestLoading) &&
-                                                                'opacity-50 cursor-not-allowed pointer-events-none',
+                                                            'pointer-events-none cursor-not-allowed opacity-50',
                                                         )}
                                                         onClick={(event) => {
                                                             if (isTestLoading || isAgentTestLoading) {
@@ -1381,9 +1387,9 @@ const SettingsProvider = () => {
                                                         }}
                                                     >
                                                         {isAgentTestLoading && currentAgentKey === agentKey ? (
-                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                            <Loader2 className="size-4 animate-spin" />
                                                         ) : (
-                                                            <Play className="h-4 w-4" />
+                                                            <Play className="size-4" />
                                                         )}
                                                         <span className="!no-underline hover:!no-underline">
                                                             {isAgentTestLoading && currentAgentKey === agentKey
@@ -1394,7 +1400,7 @@ const SettingsProvider = () => {
                                                 </div>
                                             </AccordionTrigger>
                                             <AccordionContent className="space-y-4 pt-4">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-[1px]">
+                                                <div className="grid grid-cols-1 gap-4 p-px md:grid-cols-2">
                                                     {/* Model field */}
                                                     <FormModelComboboxItem
                                                         name={`agents.${agentKey}.model`}
@@ -1526,10 +1532,10 @@ const SettingsProvider = () => {
                                                 </div>
 
                                                 {/* Reasoning Configuration */}
-                                                <div className="col-span-full p-[1px]">
+                                                <div className="col-span-full p-px">
                                                     <div className="mt-6 space-y-4">
                                                         <h4 className="text-sm font-medium">Reasoning Configuration</h4>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                             {/* Reasoning Effort field */}
                                                             <FormField
                                                                 control={form.control}
@@ -1541,8 +1547,7 @@ const SettingsProvider = () => {
                                                                             onValueChange={(value) =>
                                                                                 field.onChange(
                                                                                     value !== 'none' ? value : null,
-                                                                                )
-                                                                            }
+                                                                                )}
                                                                             defaultValue={field.value ?? 'none'}
                                                                             disabled={isLoading}
                                                                         >
@@ -1590,10 +1595,10 @@ const SettingsProvider = () => {
                                                 </div>
 
                                                 {/* Price Configuration */}
-                                                <div className="col-span-full p-[1px]">
+                                                <div className="col-span-full p-px">
                                                     <div className="mt-6 space-y-4">
                                                         <h4 className="text-sm font-medium">Price Configuration</h4>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                             {/* Price Input field */}
                                                             <FormInputNumberItem
                                                                 name={`agents.${agentKey}.price.input`}
@@ -1629,7 +1634,7 @@ const SettingsProvider = () => {
             </Card>
 
             {/* Sticky buttons at bottom */}
-            <div className="flex items-center sticky -bottom-4 bg-background border-t mt-4 -mx-4 -mb-4 p-4 shadow-lg">
+            <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 flex items-center border-t bg-background p-4 shadow-lg">
                 <div className="flex space-x-2">
                     {/* Delete button - only show when editing existing provider */}
                     {!isNew && (
@@ -1640,9 +1645,9 @@ const SettingsProvider = () => {
                             disabled={isLoading}
                         >
                             {isDeleteLoading ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="size-4 animate-spin" />
                             ) : (
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="size-4" />
                             )}
                             {isDeleteLoading ? 'Deleting...' : 'Delete'}
                         </Button>
@@ -1653,12 +1658,12 @@ const SettingsProvider = () => {
                         onClick={() => handleTest()}
                         disabled={isLoading || isTestLoading || isAgentTestLoading}
                     >
-                        {isTestLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                        {isTestLoading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                         {isTestLoading ? 'Testing...' : 'Test'}
                     </Button>
                 </div>
 
-                <div className="flex space-x-2 ml-auto">
+                <div className="ml-auto flex space-x-2">
                     <Button
                         type="button"
                         variant="outline"
@@ -1673,7 +1678,7 @@ const SettingsProvider = () => {
                         type="submit"
                         disabled={isLoading}
                     >
-                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                         {isLoading ? 'Saving...' : isNew ? 'Create Provider' : 'Update Provider'}
                     </Button>
                 </div>

@@ -122,7 +122,7 @@ const ChatTool = ({ log, searchValue = '' }: ChatToolProps) => {
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Copy
-                            className="size-3 shrink-0 cursor-pointer hover:text-foreground ml-1 mr-1 transition-colors"
+                            className="mx-1 size-3 shrink-0 cursor-pointer transition-colors hover:text-foreground"
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>

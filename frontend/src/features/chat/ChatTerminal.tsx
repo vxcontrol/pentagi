@@ -117,14 +117,14 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
                                         className="px-9 pr-24"
                                         autoComplete="off"
                                     />
-                                    <div className="absolute right-px top-1/2 -translate-y-1/2 flex">
+                                    <div className="absolute right-px top-1/2 flex -translate-y-1/2">
                                         {hasSearchValue && (
                                             <>
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-8 w-8"
+                                                    className="size-8"
                                                     onClick={handleFindPrevious}
                                                     title="Previous match"
                                                 >
@@ -134,7 +134,7 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-8 w-8"
+                                                    className="size-8"
                                                     onClick={handleFindNext}
                                                     title="Next match"
                                                 >
@@ -147,7 +147,7 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-8 w-8"
+                                                className="size-8"
                                                 onClick={handleClearSearch}
                                                 title="Clear search"
                                             >

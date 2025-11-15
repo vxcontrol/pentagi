@@ -172,44 +172,46 @@ const ChatAutomationMessages = ({
                         <p className="text-xs">This may take some time as Docker images are downloaded</p>
                     </div>
                 </div>
-            ) : filteredLogs.length > 0 || selectedFlowId !== 'new' ? (
-                <div className="relative pb-4 h-full overflow-y-hidden">
-                    <div
-                        ref={containerRef}
-                        className="h-full space-y-4 overflow-y-auto"
-                    >
-                        {filteredLogs.map((log) => (
-                            <ChatMessage
-                                key={log.id}
-                                log={log}
-                                searchValue={debouncedSearchValue}
-                            />
-                        ))}
-                        <div ref={endRef} />
-                    </div>
-
-                    {hasNewMessages && !isScrolledToBottom && (
-                        <Button
-                            type="button"
-                            size="icon"
-                            className="absolute bottom-4 right-4 z-10 h-9 w-9 rounded-full shadow-md hover:shadow-lg"
-                            onClick={() => scrollToEnd()}
+            ) : filteredLogs.length > 0 || selectedFlowId !== 'new'
+                ? (
+                    <div className="relative h-full overflow-y-hidden pb-4">
+                        <div
+                            ref={containerRef}
+                            className="h-full space-y-4 overflow-y-auto"
                         >
-                            <ChevronDown />
-                        </Button>
-                    )}
-                </div>
-            ) : (
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <p>No Active Tasks</p>
-                        <p className="text-xs">
-                            Starting a new task may take some time as the PentAGI agent downloads the required Docker
-                            image
-                        </p>
+                            {filteredLogs.map((log) => (
+                                <ChatMessage
+                                    key={log.id}
+                                    log={log}
+                                    searchValue={debouncedSearchValue}
+                                />
+                            ))}
+                            <div ref={endRef} />
+                        </div>
+
+                        {hasNewMessages && !isScrolledToBottom && (
+                            <Button
+                                type="button"
+                                size="icon"
+                                className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
+                                onClick={() => scrollToEnd()}
+                            >
+                                <ChevronDown />
+                            </Button>
+                        )}
                     </div>
-                </div>
-            )}
+                )
+                : (
+                    <div className="flex flex-1 items-center justify-center">
+                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <p>No Active Tasks</p>
+                            <p className="text-xs">
+                                Starting a new task may take some time as the PentAGI agent downloads the required Docker
+                                image
+                            </p>
+                        </div>
+                    </div>
+                )}
 
             <div className="sticky bottom-0 border-t bg-background p-px pt-4">
                 <ChatAutomationFormInput

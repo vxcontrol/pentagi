@@ -1,5 +1,6 @@
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
-import { useEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { useEffect } from 'react';
 
 const ThemeProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {

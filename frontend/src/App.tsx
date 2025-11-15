@@ -64,12 +64,12 @@ const App = () => {
                                     >
                                         <Route
                                             index
-                                            element={
+                                            element={(
                                                 <Navigate
                                                     to="providers"
                                                     replace
                                                 />
-                                            }
+                                            )}
                                         />
                                         <Route
                                             path="providers"
@@ -102,12 +102,12 @@ const App = () => {
                                         {/* Catch-all route for unknown settings paths */}
                                         <Route
                                             path="*"
-                                            element={
+                                            element={(
                                                 <Navigate
                                                     to="/settings/providers"
                                                     replace
                                                 />
-                                            }
+                                            )}
                                         />
                                     </Route>
                                 </Route>
@@ -115,11 +115,11 @@ const App = () => {
                                 {/* report routes */}
                                 <Route
                                     path="flows/:flowId/report"
-                                    element={
+                                    element={(
                                         <ProtectedRoute>
                                             <Report />
                                         </ProtectedRoute>
-                                    }
+                                    )}
                                 />
 
                                 {/* public routes */}

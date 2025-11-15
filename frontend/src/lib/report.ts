@@ -1,35 +1,42 @@
-import { createElement } from 'react';
-import { renderToString } from 'react-dom/server';
 // @ts-ignore - html2pdf.js doesn't have types
 import GithubSlugger from 'github-slugger';
 import html2pdf from 'html2pdf.js';
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 
 import Markdown from '@/components/shared/Markdown';
 import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
 import { StatusType } from '@/graphql/types';
+
 import { Log } from './log';
 
 // Helper function to get emoji for status
 const getStatusEmoji = (status: StatusType): string => {
     switch (status) {
-        case StatusType.Created:
+        case StatusType.Created: {
             return '📝';
-        case StatusType.Failed:
+        }
+        case StatusType.Failed: {
             return '❌';
-        case StatusType.Finished:
+        }
+        case StatusType.Finished: {
             return '✅';
-        case StatusType.Running:
+        }
+        case StatusType.Running: {
             return '⚡';
-        case StatusType.Waiting:
+        }
+        case StatusType.Waiting: {
             return '⏳';
-        default:
+        }
+        default: {
             return '📝';
+        }
     }
 };
 
 // Helper function to shift markdown headers by specified levels
 const shiftMarkdownHeaders = (text: string, shiftBy: number): string => {
-    return text.replace(/^(#{1,6})\s+(.+)$/gm, (match, hashes, content) => {
+    return text.replaceAll(/^(#{1,6})\s+(.+)$/gm, (match, hashes, content) => {
         const currentLevel = hashes.length;
         const newLevel = Math.min(currentLevel + shiftBy, 6); // Max level is 6
         const newHashes = '#'.repeat(newLevel);
@@ -81,7 +88,7 @@ const generateTableOfContents = (tasks: TaskFragmentFragment[], flow?: FlowFragm
         }
     });
 
-    return toc + '\n---\n\n';
+    return `${toc}\n---\n\n`;
 };
 
 // Helper function to generate report content
@@ -146,15 +153,15 @@ export const generateReport = (tasks: TaskFragmentFragment[], flow?: FlowFragmen
 
 export const generateFileName = (flow: FlowFragmentFragment): string => {
     const flowId = flow.id;
-    let flowTitle = flow.title
+    const flowTitle = flow.title
         // Replace any invalid file name characters and whitespace with underscore
-        .replace(/[^\w\s.-]/g, '_')
+        .replaceAll(/[^\w\s.-]/g, '_')
         // Replace spaces, non-breaking spaces, and line breaks with underscore
-        .replace(/[\s\u00A0\u2000-\u200B\u2028\u2029\n\r\t]+/g, '_')
+        .replaceAll(/[\s\u2000-\u200B]+/g, '_')
         // Convert to lowercase
         .toLowerCase()
         // Trim to 150 characters
-        .substring(0, 150)
+        .slice(0, 150)
         // Remove trailing underscores
         .replace(/_+$/, '');
 
@@ -173,7 +180,7 @@ export const generateFileName = (flow: FlowFragmentFragment): string => {
 };
 
 // Helper function to download text content as file
-export const downloadTextFile = (content: string, fileName: string, mimeType: string = 'text/plain'): void => {
+export const downloadTextFile = (content: string, fileName: string, mimeType = 'text/plain'): void => {
     try {
         // Create blob with content
         const blob = new Blob([content], { type: mimeType });
@@ -188,9 +195,9 @@ export const downloadTextFile = (content: string, fileName: string, mimeType: st
         link.style.display = 'none';
 
         // Add to DOM, click, and remove
-        document.body.appendChild(link);
+        document.body.append(link);
         link.click();
-        document.body.removeChild(link);
+        link.remove();
 
         // Clean up URL
         URL.revokeObjectURL(url);
@@ -236,7 +243,7 @@ const getApplicationStyles = (): string => {
             try {
                 if (styleSheet.cssRules) {
                     Array.from(styleSheet.cssRules).forEach((rule) => {
-                        allStyles += rule.cssText + '\n';
+                        allStyles += `${rule.cssText}\n`;
                     });
                 }
             } catch (e) {
