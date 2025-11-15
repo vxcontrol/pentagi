@@ -52,7 +52,8 @@ import {
 } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { Log } from '@/lib/log';
-import { getProviderDisplayName, getProviderIcon, isProviderValid, type Provider } from '@/models/Provider';
+import type { Provider } from '@/models/Provider';
+import { getProviderDisplayName, getProviderIcon, isProviderValid } from '@/models/Provider';
 
 interface MainLayoutContext {
     selectedProvider: Provider | null;
@@ -96,20 +97,6 @@ const Chat = () => {
     // Store currently selected assistant ID for each flow
     const [selectedAssistantIds, setSelectedAssistantIds] = useState<Record<string, string | null>>({});
 
-    // Create a ref to track current selectedAssistantIds without triggering re-renders
-    const selectedAssistantIdsRef = useRef<Record<string, string | null>>({});
-
-    // Keep the ref updated with the latest state
-    useEffect(() => {
-        selectedAssistantIdsRef.current = selectedAssistantIds;
-    }, [selectedAssistantIds]);
-
-    // Currently selected assistant for this flow
-    const selectedAssistantId = useMemo(() => {
-        if (!selectedFlowId || selectedFlowId === 'new') return null;
-        return selectedAssistantIds[selectedFlowId] || null;
-    }, [selectedFlowId, selectedAssistantIds]);
-
     // Get assistants for the current flow
     const { data: assistantsData } = useAssistantsQuery({
         variables: { flowId: debouncedFlowId ?? '' },
@@ -117,6 +104,30 @@ const Chat = () => {
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-first',
     });
+
+    // Currently selected assistant for this flow (with auto-selection logic)
+    const selectedAssistantId = useMemo(() => {
+        if (!selectedFlowId || selectedFlowId === 'new') return null;
+
+        // If we have an explicit selection for this flow, use it
+        if (selectedFlowId in selectedAssistantIds) {
+            const explicitSelection = selectedAssistantIds[selectedFlowId];
+
+            // If explicit selection is null, user wants to create new assistant
+            if (explicitSelection === null) return null;
+
+            // If explicit selection still exists in assistants list, use it
+            if (assistantsData?.assistants?.some((assistant) => assistant.id === explicitSelection)) {
+                return explicitSelection;
+            }
+
+            // Explicit selection was deleted, fall through to auto-select
+        }
+
+        // Auto-select first (newest) assistant if available
+        const firstAssistantId = assistantsData?.assistants?.[0]?.id;
+        return firstAssistantId || null;
+    }, [selectedFlowId, selectedAssistantIds, assistantsData?.assistants]);
 
     // Store for API mutations
     const [createFlow] = useCreateFlowMutation();
@@ -214,56 +225,6 @@ const Chat = () => {
         },
         [selectedFlowId],
     );
-
-    // Function to handle initial assistant selection
-    const selectInitialAssistant = useCallback(() => {
-        if (!selectedFlowId || selectedFlowId === 'new' || !assistantsData?.assistants?.length) {
-            return;
-        }
-
-        // Check if we've already made a selection for this flow (including null)
-        // This prevents auto-selection after intentional deselection
-        if (selectedFlowId in selectedAssistantIdsRef.current) {
-            return;
-        }
-
-        // Select the first assistant (newest) instead of the last one (oldest)
-        const firstAssistantId = assistantsData.assistants[0]?.id;
-        if (firstAssistantId) {
-            handleSelectAssistant(firstAssistantId);
-        }
-    }, [selectedFlowId, assistantsData?.assistants, handleSelectAssistant]);
-
-    // Auto-select the last (newest) assistant when flow changes or assistants data updates
-    useEffect(() => {
-        if (!selectedFlowId || selectedFlowId === 'new' || !assistantsData?.assistants?.length) {
-            return;
-        }
-
-        const firstAssistantId = assistantsData.assistants[0]?.id;
-        if (!firstAssistantId) return;
-
-        // Check if we have made a selection for this flow yet
-        const hasSelectionBeenMade = selectedFlowId in selectedAssistantIds;
-        const currentSelectedAssistantId = selectedAssistantIds[selectedFlowId];
-
-        if (!hasSelectionBeenMade) {
-            // No selection has been made yet, auto-select first assistant
-            handleSelectAssistant(firstAssistantId);
-        } else if (
-            currentSelectedAssistantId !== null &&
-            !assistantsData.assistants.some((assistant) => assistant.id === currentSelectedAssistantId)
-        ) {
-            // Selection was made but assistant was deleted, auto-select first assistant
-            handleSelectAssistant(firstAssistantId);
-        }
-        // If currentSelectedAssistantId === null, it means user intentionally chose to create new assistant, so don't auto-select
-    }, [selectedFlowId, assistantsData?.assistants, selectedAssistantIds, handleSelectAssistant]);
-
-    // Trigger initial assistant selection when data changes (legacy support)
-    useEffect(() => {
-        selectInitialAssistant();
-    }, [selectInitialAssistant]);
 
     // Set selectedAssistantId to null to initiate assistant creation
     const handleInitiateAssistantCreation = () => {
@@ -543,7 +504,7 @@ const Chat = () => {
                                 size="sm"
                                 className="h-8 gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                             >
-                                <span className="truncate max-w-[120px]">
+                                <span className="max-w-[120px] truncate">
                                     {selectedProvider ? getProviderDisplayName(selectedProvider) : 'Select Provider'}
                                 </span>
                                 <ChevronsUpDown className="size-4 shrink-0" />
@@ -551,7 +512,7 @@ const Chat = () => {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                             align="end"
-                            className="min-w-[150px] max-w-[280px] w-fit"
+                            className="w-fit min-w-[150px] max-w-[280px]"
                             onCloseAutoFocus={(e) => {
                                 e.preventDefault();
                             }}
@@ -565,14 +526,14 @@ const Chat = () => {
                                     }}
                                     className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                 >
-                                    <div className="flex items-center gap-2 w-full min-w-0">
+                                    <div className="flex w-full min-w-0 items-center gap-2">
                                         <div className="shrink-0">{getProviderIcon(provider, 'h-4 w-4 shrink-0')}</div>
-                                        <span className="flex-1 truncate max-w-[180px]">
+                                        <span className="max-w-[180px] flex-1 truncate">
                                             {getProviderDisplayName(provider)}
                                         </span>
                                         {selectedProvider?.name === provider.name && (
                                             <div className="shrink-0">
-                                                <Check className="h-4 w-4 shrink-0" />
+                                                <Check className="size-4 shrink-0" />
                                             </div>
                                         )}
                                     </div>
