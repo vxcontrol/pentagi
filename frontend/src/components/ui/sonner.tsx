@@ -9,26 +9,26 @@ const Toaster = ({ ...props }: ToasterProps) => {
 
     return (
         <Sonner
-            theme={theme as ToasterProps['theme']}
             className="toaster group"
             icons={{
-                success: <CircleCheckIcon className="size-4" />,
-                info: <InfoIcon className="size-4" />,
-                warning: <TriangleAlertIcon className="size-4" />,
                 error: <OctagonXIcon className="size-4" />,
+                info: <InfoIcon className="size-4" />,
                 loading: <Loader2Icon className="size-4 animate-spin" />,
+                success: <CircleCheckIcon className="size-4" />,
+                warning: <TriangleAlertIcon className="size-4" />,
             }}
             style={
                 {
-                    '--normal-bg': 'hsl(var(--popover))',
-                    '--normal-text': 'hsl(var(--popover-foreground))',
-                    '--normal-border': 'hsl(var(--border))',
                     '--border-radius': 'var(--radius)',
-                    '--width': '320px',
-                    '--toast-icon-margin-start': '0px',
+                    '--normal-bg': 'hsl(var(--popover))',
+                    '--normal-border': 'hsl(var(--border))',
+                    '--normal-text': 'hsl(var(--popover-foreground))',
                     '--toast-icon-margin-end': '0px',
+                    '--toast-icon-margin-start': '0px',
+                    '--width': '320px',
                 } as React.CSSProperties
             }
+            theme={theme as ToasterProps['theme']}
             {...props}
         />
     );

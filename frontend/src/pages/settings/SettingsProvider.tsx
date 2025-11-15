@@ -17,6 +17,13 @@ import { useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
+import type {
+    AgentConfigInput,
+    AgentsConfigInput,
+    ProviderConfigFragmentFragment,
+    ProviderType,
+} from '@/graphql/types';
+
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -29,12 +36,6 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusCard } from '@/components/ui/status-card';
-import type {
-    AgentConfigInput,
-    AgentsConfigInput,
-    ProviderConfigFragmentFragment,
-    ProviderType,
-} from '@/graphql/types';
 import {
     AgentConfigType,
     ReasoningEffort,
@@ -47,51 +48,51 @@ import {
 } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 
-type Provider = ProviderConfigFragmentFragment;
-
-// Universal field components using useController
-interface ControllerProps {
-    name: string;
-    control: any;
-    disabled?: boolean;
+interface BaseFieldProps extends ControllerProps {
+    label: string;
 }
 
 interface BaseInputProps {
     placeholder?: string;
 }
 
-interface NumberInputProps extends BaseInputProps {
-    step?: string;
-    min?: string;
-    max?: string;
+// Universal field components using useController
+interface ControllerProps {
+    control: any;
+    disabled?: boolean;
+    name: string;
 }
 
-interface BaseFieldProps extends ControllerProps {
-    label: string;
+interface FormInputNumberItemProps extends BaseFieldProps, NumberInputProps {
+    description?: string;
+    valueType?: 'float' | 'integer';
 }
 
 interface FormInputStringItemProps extends BaseFieldProps, BaseInputProps {
     description?: string;
 }
 
-interface FormInputNumberItemProps extends BaseFieldProps, NumberInputProps {
-    valueType?: 'float' | 'integer';
-    description?: string;
+interface NumberInputProps extends BaseInputProps {
+    max?: string;
+    min?: string;
+    step?: string;
 }
 
+type Provider = ProviderConfigFragmentFragment;
+
 const FormInputStringItem: React.FC<FormInputStringItemProps> = ({
-    name,
     control,
+    description,
     disabled,
     label,
+    name,
     placeholder,
-    description,
 }) => {
     const { field, fieldState } = useController({
-        name,
         control,
         defaultValue: undefined,
         disabled,
+        name,
     });
 
     const inputProps = { placeholder };
@@ -113,22 +114,22 @@ const FormInputStringItem: React.FC<FormInputStringItemProps> = ({
 };
 
 const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
-    name,
     control,
+    description,
     disabled,
     label,
+    max,
+    min,
+    name,
     placeholder,
     step,
-    min,
-    max,
     valueType = 'float',
-    description,
 }) => {
     const { field, fieldState } = useController({
-        name,
         control,
         defaultValue: undefined,
         disabled,
+        name,
     });
 
     const parseValue = (value: string) => {
@@ -140,11 +141,11 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
     };
 
     const inputProps = {
-        type: 'number' as const,
-        step,
-        min,
         max,
+        min,
         placeholder,
+        step,
+        type: 'number' as const,
     };
 
     return (
@@ -154,11 +155,11 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
                 <Input
                     {...field}
                     {...inputProps}
-                    value={field.value ?? ''}
                     onChange={(event) => {
                         const { value } = event.target;
                         field.onChange(parseValue(value));
                     }}
+                    value={field.value ?? ''}
                 />
             </FormControl>
             {description && <FormDescription>{description}</FormDescription>}
@@ -168,28 +169,28 @@ const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
 };
 
 interface FormComboboxItemProps extends BaseFieldProps, BaseInputProps {
-    options: string[];
     allowCustom?: boolean;
     contentClass?: string;
     description?: string;
+    options: string[];
 }
 
 const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
-    name,
-    control,
-    disabled,
-    label,
-    placeholder,
-    options,
     allowCustom = true,
     contentClass,
+    control,
     description,
+    disabled,
+    label,
+    name,
+    options,
+    placeholder,
 }) => {
     const { field, fieldState } = useController({
-        name,
         control,
         defaultValue: undefined,
         disabled,
+        name,
     });
 
     const [open, setOpen] = useState(false);
@@ -205,35 +206,35 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
             <FormLabel>{label}</FormLabel>
             <FormControl>
                 <Popover
-                    open={open}
                     onOpenChange={setOpen}
+                    open={open}
                 >
                     <PopoverTrigger asChild>
                         <Button
-                            variant="outline"
-                            role="combobox"
                             aria-expanded={open}
                             className={cn('w-full justify-between', !displayValue && 'text-muted-foreground')}
                             disabled={disabled}
+                            role="combobox"
+                            variant="outline"
                         >
                             {displayValue || placeholder}
                             <ChevronsUpDown className="opacity-50" />
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                        className={cn(contentClass, 'p-0')}
                         align="start"
+                        className={cn(contentClass, 'p-0')}
                         style={{
-                            width: 'var(--radix-popover-trigger-width)',
                             maxHeight: 'var(--radix-popover-content-available-height)',
+                            width: 'var(--radix-popover-trigger-width)',
                         }}
                     >
                         <Command>
                             <CommandInput
-                                placeholder={`Search ${label.toLowerCase()}...`}
                                 className="h-9"
-                                value={search}
                                 onValueChange={setSearch}
+                                placeholder={`Search ${label.toLowerCase()}...`}
+                                value={search}
                             />
                             <CommandList>
                                 <CommandEmpty>
@@ -241,14 +242,14 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                                         <p className="text-sm text-muted-foreground">No {label.toLowerCase()} found.</p>
                                         {search && allowCustom && (
                                             <Button
-                                                variant="ghost"
-                                                size="sm"
                                                 className="mt-2"
                                                 onClick={() => {
                                                     field.onChange(search);
                                                     setOpen(false);
                                                     setSearch('');
                                                 }}
+                                                size="sm"
+                                                variant="ghost"
                                             >
                                                 Use "{search}" as custom {label.toLowerCase()}
                                             </Button>
@@ -259,12 +260,12 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                                     {filteredOptions.map((option) => (
                                         <CommandItem
                                             key={option}
-                                            value={option}
                                             onSelect={() => {
                                                 field.onChange(option);
                                                 setOpen(false);
                                                 setSearch('');
                                             }}
+                                            value={option}
                                         >
                                             {option}
                                             <Check
@@ -287,37 +288,37 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
     );
 };
 
-interface ModelOption {
-    name: string;
-    thinking?: boolean;
-    price?: { input: number; output: number } | null;
-}
-
 interface FormModelComboboxItemProps extends BaseFieldProps, BaseInputProps {
-    options: ModelOption[];
     allowCustom?: boolean;
     contentClass?: string;
     description?: string;
     onOptionSelect?: (option: ModelOption) => void;
+    options: ModelOption[];
+}
+
+interface ModelOption {
+    name: string;
+    price?: null | { input: number; output: number };
+    thinking?: boolean;
 }
 
 const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
-    name,
-    control,
-    disabled,
-    label,
-    placeholder,
-    options,
     allowCustom = true,
     contentClass,
+    control,
     description,
+    disabled,
+    label,
+    name,
     onOptionSelect,
+    options,
+    placeholder,
 }) => {
     const { field, fieldState } = useController({
-        name,
         control,
         defaultValue: undefined,
         disabled,
+        name,
     });
 
     const [open, setOpen] = useState(false);
@@ -329,7 +330,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
     const displayValue = field.value ?? '';
 
     // Format price for display
-    const formatPrice = (price?: { input: number; output: number } | null): string => {
+    const formatPrice = (price?: null | { input: number; output: number }): string => {
         if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
             return 'free';
         }
@@ -346,39 +347,39 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
             <FormLabel>{label}</FormLabel>
             <FormControl>
                 <Popover
-                    open={open}
                     onOpenChange={setOpen}
+                    open={open}
                 >
                     <div className="flex w-full">
                         {/* Input field - main control */}
                         <Input
-                            value={displayValue}
+                            className="rounded-r-none border-r-0 focus-visible:z-10"
+                            disabled={disabled}
                             onChange={(event) => field.onChange(event.target.value)}
                             placeholder={placeholder}
-                            disabled={disabled}
-                            className="rounded-r-none border-r-0 focus-visible:z-10"
+                            value={displayValue}
                         />
                         {/* Dropdown trigger button */}
                         <PopoverTrigger asChild>
                             <Button
-                                variant="outline"
                                 className="rounded-l-none border-l-0 px-3 hover:z-10"
                                 disabled={disabled}
                                 type="button"
+                                variant="outline"
                             >
                                 <ChevronsUpDown className="size-4 opacity-50" />
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent
-                            className={cn(contentClass, 'w-80 p-0 sm:w-[480px] md:w-[640px]')}
                             align="end"
+                            className={cn(contentClass, 'w-80 p-0 sm:w-[480px] md:w-[640px]')}
                         >
                             <Command>
                                 <CommandInput
-                                    placeholder={`Search ${label.toLowerCase()}...`}
                                     className="h-9"
-                                    value={search}
                                     onValueChange={setSearch}
+                                    placeholder={`Search ${label.toLowerCase()}...`}
+                                    value={search}
                                 />
                                 <CommandList>
                                     <CommandEmpty>
@@ -388,14 +389,14 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                             </p>
                                             {search && allowCustom && (
                                                 <Button
-                                                    variant="ghost"
-                                                    size="sm"
                                                     className="mt-2"
                                                     onClick={() => {
                                                         field.onChange(search);
                                                         setOpen(false);
                                                         setSearch('');
                                                     }}
+                                                    size="sm"
+                                                    variant="ghost"
                                                 >
                                                     Use "{search}" as custom {label.toLowerCase()}
                                                 </Button>
@@ -406,13 +407,13 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                         {filteredOptions.map((option) => (
                                             <CommandItem
                                                 key={option.name}
-                                                value={option.name}
                                                 onSelect={() => {
                                                     field.onChange(option.name);
                                                     onOptionSelect?.(option);
                                                     setOpen(false);
                                                     setSearch('');
                                                 }}
+                                                value={option.name}
                                             >
                                                 <div className="flex w-full min-w-0 items-center justify-between gap-2">
                                                     <div className="flex min-w-0 items-center gap-2">
@@ -449,24 +450,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
 // Define agent configuration schema
 const agentConfigSchema = z
     .object({
-        model: z.preprocess((value) => value || '', z.string().min(1, 'Model is required')),
-        temperature: z.preprocess(
-            (value) => (value === '' || value === undefined ? null : value),
-            z.number().nullable().optional(),
-        ),
-        maxTokens: z.preprocess(
-            (value) => (value === '' || value === undefined ? null : value),
-            z.number().nullable().optional(),
-        ),
-        topK: z.preprocess(
-            (value) => (value === '' || value === undefined ? null : value),
-            z.number().nullable().optional(),
-        ),
-        topP: z.preprocess(
-            (value) => (value === '' || value === undefined ? null : value),
-            z.number().nullable().optional(),
-        ),
-        minLength: z.preprocess(
+        frequencyPenalty: z.preprocess(
             (value) => (value === '' || value === undefined ? null : value),
             z.number().nullable().optional(),
         ),
@@ -474,31 +458,19 @@ const agentConfigSchema = z
             (value) => (value === '' || value === undefined ? null : value),
             z.number().nullable().optional(),
         ),
-        repetitionPenalty: z.preprocess(
+        maxTokens: z.preprocess(
             (value) => (value === '' || value === undefined ? null : value),
             z.number().nullable().optional(),
         ),
-        frequencyPenalty: z.preprocess(
+        minLength: z.preprocess(
             (value) => (value === '' || value === undefined ? null : value),
             z.number().nullable().optional(),
         ),
+        model: z.preprocess((value) => value || '', z.string().min(1, 'Model is required')),
         presencePenalty: z.preprocess(
             (value) => (value === '' || value === undefined ? null : value),
             z.number().nullable().optional(),
         ),
-        reasoning: z
-            .object({
-                effort: z.preprocess(
-                    (value) => (value === '' || value === undefined ? null : value),
-                    z.string().nullable().optional(),
-                ),
-                maxTokens: z.preprocess(
-                    (value) => (value === '' || value === undefined ? null : value),
-                    z.number().nullable().optional(),
-                ),
-            })
-            .nullable()
-            .optional(),
         price: z
             .object({
                 input: z.preprocess(
@@ -512,41 +484,75 @@ const agentConfigSchema = z
             })
             .nullable()
             .optional(),
+        reasoning: z
+            .object({
+                effort: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.string().nullable().optional(),
+                ),
+                maxTokens: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.number().nullable().optional(),
+                ),
+            })
+            .nullable()
+            .optional(),
+        repetitionPenalty: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        temperature: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        topK: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
+        topP: z.preprocess(
+            (value) => (value === '' || value === undefined ? null : value),
+            z.number().nullable().optional(),
+        ),
     })
     .optional();
 
 // Define form schema
 const formSchema = z.object({
-    type: z.preprocess((value) => value || '', z.string().min(1, 'Provider type is required')),
+    agents: z.record(z.string(), agentConfigSchema).optional(),
     name: z.preprocess(
         (value) => value || '',
         z.string().min(1, 'Provider name is required').max(50, 'Maximum 50 characters allowed'),
     ),
-    agents: z.record(z.string(), agentConfigSchema).optional(),
+    type: z.preprocess((value) => value || '', z.string().min(1, 'Provider type is required')),
 });
-
-type FormData = z.infer<typeof formSchema>;
 
 // Type for agents field in form
 type FormAgents = FormData['agents'];
+
+type FormData = z.infer<typeof formSchema>;
 
 // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
 const getName = (key: string): string => key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
 // Helper function to convert string to ReasoningEffort enum
-const getReasoningEffort = (effort: string | null | undefined): ReasoningEffort | null => {
-    if (!effort) return null;
+const getReasoningEffort = (effort: null | string | undefined): null | ReasoningEffort => {
+    if (!effort) {
+        return null;
+    }
 
     switch (effort.toLowerCase()) {
-        case 'low': {
-            return ReasoningEffort.Low;
-        }
-        case 'medium': {
-            return ReasoningEffort.Medium;
-        }
         case 'high': {
             return ReasoningEffort.High;
         }
+
+        case 'low': {
+            return ReasoningEffort.Low;
+        }
+
+        case 'medium': {
+            return ReasoningEffort.Medium;
+        }
+
         default: {
             return null;
         }
@@ -557,30 +563,20 @@ const getReasoningEffort = (effort: string | null | undefined): ReasoningEffort 
 const transformFormToGraphQL = (
     formData: FormData,
 ): {
+    agents: AgentsConfigInput;
     name: string;
     type: ProviderType;
-    agents: AgentsConfigInput;
 } => {
     const agents = Object.entries(formData.agents || {})
         .filter(([key, data]) => key !== '__typename' && data?.model)
         .reduce((configs, [key, data]) => {
             const config: AgentConfigInput = {
-                model: data!.model, // After filter, data and model are guaranteed to exist
-                temperature: data?.temperature ?? null,
-                maxTokens: data?.maxTokens ?? null,
-                topK: data?.topK ?? null,
-                topP: data?.topP ?? null,
-                minLength: data?.minLength ?? null,
-                maxLength: data?.maxLength ?? null,
-                repetitionPenalty: data?.repetitionPenalty ?? null,
                 frequencyPenalty: data?.frequencyPenalty ?? null,
+                maxLength: data?.maxLength ?? null,
+                maxTokens: data?.maxTokens ?? null,
+                minLength: data?.minLength ?? null,
+                model: data!.model, // After filter, data and model are guaranteed to exist
                 presencePenalty: data?.presencePenalty ?? null,
-                reasoning: data?.reasoning
-                    ? {
-                        effort: getReasoningEffort(data?.reasoning.effort),
-                        maxTokens: data?.reasoning.maxTokens ?? null,
-                    }
-                    : null,
                 price:
                     data?.price &&
                     data?.price.input !== null &&
@@ -588,19 +584,29 @@ const transformFormToGraphQL = (
                     typeof data?.price.input === 'number' &&
                     typeof data?.price.output === 'number'
                         ? {
-                            input: data?.price.input,
-                            output: data?.price.output,
-                        }
+                              input: data?.price.input,
+                              output: data?.price.output,
+                          }
                         : null,
+                reasoning: data?.reasoning
+                    ? {
+                          effort: getReasoningEffort(data?.reasoning.effort),
+                          maxTokens: data?.reasoning.maxTokens ?? null,
+                      }
+                    : null,
+                repetitionPenalty: data?.repetitionPenalty ?? null,
+                temperature: data?.temperature ?? null,
+                topK: data?.topK ?? null,
+                topP: data?.topP ?? null,
             };
 
             return { ...configs, [key]: config };
         }, {} as AgentsConfigInput);
 
     return {
+        agents,
         name: formData.name,
         type: formData.type as ProviderType,
-        agents,
     };
 };
 
@@ -626,14 +632,16 @@ const normalizeGraphQLData = (obj: unknown): unknown => {
 };
 
 interface TestResultsDialogProps {
-    isOpen: boolean;
     handleOpenChange: (isOpen: boolean) => void;
+    isOpen: boolean;
     results: any;
 }
 
 // Component to render test results dialog
-const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDialogProps) => {
-    if (!results) return null;
+const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDialogProps) => {
+    if (!results) {
+        return null;
+    }
 
     // Transform results object to array, removing __typename
     const agentResults = Object.entries(results)
@@ -665,8 +673,8 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
 
     return (
         <Dialog
-            open={isOpen}
             onOpenChange={handleOpenChange}
+            open={isOpen}
         >
             <DialogContent className="flex max-h-[80vh] max-w-4xl flex-col">
                 <DialogHeader className="flex-shrink-0">
@@ -674,8 +682,8 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
                 </DialogHeader>
                 <div className="flex-1 space-y-6 overflow-y-auto">
                     <Accordion
-                        type="multiple"
                         className="w-full"
+                        type="multiple"
                     >
                         {agentResults.map(({ agentType, tests }) => {
                             const testsCount = tests.length;
@@ -698,8 +706,8 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
                                         <div className="space-y-3 pt-2">
                                             {tests.map((test: any, index: number) => (
                                                 <div
-                                                    key={index}
                                                     className="rounded-lg border p-3"
+                                                    key={index}
                                                 >
                                                     <div className="mb-2 flex items-start justify-between">
                                                         <div className="flex items-center gap-2">
@@ -724,13 +732,12 @@ const TestResultsDialog = ({ isOpen, handleOpenChange, results }: TestResultsDia
                                                     <div
                                                         className={`text-sm font-medium ${getStatusColor(test.result)}`}
                                                     >
-                                                        Result:
-                                                        {' '}
+                                                        Result:{' '}
                                                         {test.result === true
                                                             ? 'Success'
                                                             : test.result === false
-                                                                ? 'Failed'
-                                                                : 'Unknown'}
+                                                              ? 'Failed'
+                                                              : 'Unknown'}
                                                     </div>
                                                     {test.error && (
                                                         <div className="mt-2 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
@@ -760,14 +767,14 @@ const SettingsProvider = () => {
     const { providerId } = useParams<{ providerId: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { data, loading, error } = useSettingsProvidersQuery();
-    const [createProvider, { loading: isCreateLoading, error: createError }] = useCreateProviderMutation();
-    const [updateProvider, { loading: isUpdateLoading, error: updateError }] = useUpdateProviderMutation();
-    const [deleteProvider, { loading: isDeleteLoading, error: deleteError }] = useDeleteProviderMutation();
-    const [testProvider, { loading: isTestLoading, error: testError }] = useTestProviderMutation();
-    const [testAgent, { loading: isAgentTestLoading, error: agentTestError }] = useTestAgentMutation();
-    const [currentAgentKey, setCurrentAgentKey] = useState<string | null>(null);
-    const [submitError, setSubmitError] = useState<string | null>(null);
+    const { data, error, loading } = useSettingsProvidersQuery();
+    const [createProvider, { error: createError, loading: isCreateLoading }] = useCreateProviderMutation();
+    const [updateProvider, { error: updateError, loading: isUpdateLoading }] = useUpdateProviderMutation();
+    const [deleteProvider, { error: deleteError, loading: isDeleteLoading }] = useDeleteProviderMutation();
+    const [testProvider, { error: testError, loading: isTestLoading }] = useTestProviderMutation();
+    const [testAgent, { error: agentTestError, loading: isAgentTestLoading }] = useTestAgentMutation();
+    const [currentAgentKey, setCurrentAgentKey] = useState<null | string>(null);
+    const [submitError, setSubmitError] = useState<null | string>(null);
     const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
     const [testResults, setTestResults] = useState<any>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -780,12 +787,12 @@ const SettingsProvider = () => {
     const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading;
 
     const form = useForm<FormData>({
-        resolver: zodResolver(formSchema),
         defaultValues: {
+            agents: {},
             name: undefined,
             type: undefined,
-            agents: {},
         },
+        resolver: zodResolver(formSchema),
     });
 
     const { isDirty } = useFormState({ control: form.control });
@@ -804,11 +811,14 @@ const SettingsProvider = () => {
             if (!isDirty) {
                 return;
             }
+
             if (allowBrowserLeaveRef.current) {
                 // Allow single leave without blocking
                 allowBrowserLeaveRef.current = false;
+
                 return;
             }
+
             // User navigated back off the blocker entry to the previous one; go forward to stay
             setPendingBrowserBack(true);
             setIsLeaveDialogOpen(true);
@@ -817,6 +827,7 @@ const SettingsProvider = () => {
         };
 
         window.addEventListener('popstate', handlePopState, { capture: true });
+
         return () => {
             window.removeEventListener('popstate', handlePopState, { capture: true } as any);
         };
@@ -828,21 +839,21 @@ const SettingsProvider = () => {
     // Read query parameters for form initialization (stable)
     const formQueryParams = useMemo(
         () => ({
-            type: searchParams.get('type'),
             id: searchParams.get('id'),
+            type: searchParams.get('type'),
         }),
         [searchParams],
     );
 
     const agentTypesMap: Record<string, AgentConfigType> = {
         adviser: AgentConfigType.Adviser,
-        primaryAgent: AgentConfigType.PrimaryAgent,
         assistant: AgentConfigType.Assistant,
         coder: AgentConfigType.Coder,
         enricher: AgentConfigType.Enricher,
         generator: AgentConfigType.Generator,
         installer: AgentConfigType.Installer,
         pentester: AgentConfigType.Pentester,
+        primaryAgent: AgentConfigType.PrimaryAgent,
         refiner: AgentConfigType.Refiner,
         reflector: AgentConfigType.Reflector,
         searcher: AgentConfigType.Searcher,
@@ -893,6 +904,7 @@ const SettingsProvider = () => {
         // Filter models by selected provider type
         const { models } = data.settingsProviders;
         const providerModels = models[selectedType as keyof typeof models];
+
         if (!providerModels?.length) {
             return [];
         }
@@ -900,8 +912,8 @@ const SettingsProvider = () => {
         return providerModels
             .map((model: any) => ({
                 name: model.name,
-                thinking: model.thinking,
                 price: model.price,
+                thinking: model.thinking,
             }))
             .filter((model) => model.name) // Remove any models without names
             .sort((a, b) => a.name.localeCompare(b.name));
@@ -953,12 +965,14 @@ const SettingsProvider = () => {
 
         // Don't update query params if we're copying from existing provider
         const queryId = searchParams.get('id');
+
         if (queryId) {
             return;
         }
 
         // Don't update query params on initial load if we're reading from query params
         const queryType = searchParams.get('type');
+
         if (!selectedType && queryType) {
             return;
         }
@@ -966,11 +980,13 @@ const SettingsProvider = () => {
         // Update query parameter based on selected type
         setSearchParams((prev) => {
             const params = new URLSearchParams(prev);
+
             if (selectedType) {
                 params.set('type', selectedType);
             } else {
                 params.delete('type');
             }
+
             return params;
         });
     }, [selectedType, setSearchParams, isNew, searchParams]); // Include searchParams since we read from it
@@ -993,12 +1009,12 @@ const SettingsProvider = () => {
                 const sourceProvider = data.settingsProviders.userDefined.find((p: Provider) => p.id == queryId);
 
                 if (sourceProvider) {
-                    const { name, type: sourceType, agents } = sourceProvider;
+                    const { agents, name, type: sourceType } = sourceProvider;
 
                     form.reset({
+                        agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
                         name: `${name} (Copy)`,
                         type: sourceType ?? undefined,
-                        agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
                     });
 
                     return;
@@ -1008,9 +1024,9 @@ const SettingsProvider = () => {
                     data.settingsProviders.default[queryType as keyof typeof data.settingsProviders.default];
 
                 form.reset({
+                    agents: defaultProvider?.agents ? (normalizeGraphQLData(defaultProvider.agents) as FormAgents) : {},
                     name: undefined,
                     type: queryType,
-                    agents: defaultProvider?.agents ? (normalizeGraphQLData(defaultProvider.agents) as FormAgents) : {},
                 });
             }
 
@@ -1018,11 +1034,12 @@ const SettingsProvider = () => {
             // to avoid conflicts with agent filling useEffect
             if (!selectedType) {
                 form.reset({
+                    agents: {},
                     name: undefined,
                     type: queryType,
-                    agents: {},
                 });
             }
+
             return;
         }
 
@@ -1030,15 +1047,16 @@ const SettingsProvider = () => {
 
         if (!provider) {
             navigate('/settings/providers');
+
             return;
         }
 
-        const { name, type, agents } = provider;
+        const { agents, name, type } = provider;
 
         form.reset({
+            agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
             name: name || undefined,
             type: type || undefined,
-            agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
         });
     }, [data, isNew, providerId, form, formQueryParams, selectedType]);
 
@@ -1054,17 +1072,17 @@ const SettingsProvider = () => {
             if (isNew) {
                 // Create new provider
                 await createProvider({
-                    variables: mutationData,
                     refetchQueries: ['settingsProviders'],
+                    variables: mutationData,
                 });
             } else {
                 // Update existing provider
                 await updateProvider({
+                    refetchQueries: ['settingsProviders'],
                     variables: {
                         ...mutationData,
                         providerId: providerId!,
                     },
-                    refetchQueries: ['settingsProviders'],
                 });
             }
 
@@ -1077,19 +1095,24 @@ const SettingsProvider = () => {
     };
 
     const handleDelete = () => {
-        if (isNew || !providerId) return;
+        if (isNew || !providerId) {
+            return;
+        }
+
         setIsDeleteDialogOpen(true);
     };
 
     const handleConfirmDelete = async () => {
-        if (isNew || !providerId) return;
+        if (isNew || !providerId) {
+            return;
+        }
 
         try {
             setSubmitError(null);
 
             await deleteProvider({
-                variables: { providerId },
                 refetchQueries: ['settingsProviders'],
+                variables: { providerId },
             });
 
             // Navigate back to providers list on success
@@ -1125,6 +1148,7 @@ const SettingsProvider = () => {
                     if (error?.message) {
                         return `• ${formatFieldName(field)}: ${error.message}`;
                     }
+
                     if (error && typeof error === 'object') {
                         // Handle nested errors (like agents.simple.model)
                         return Object.entries(error)
@@ -1132,22 +1156,26 @@ const SettingsProvider = () => {
                                 if (subError?.message) {
                                     return `• ${formatFieldName(`${field}.${subField}`)}: ${subError.message}`;
                                 }
+
                                 if (subError && typeof subError === 'object') {
                                     return Object.entries(subError)
                                         .map(([nestedField, nestedError]: [string, any]) => {
                                             if (nestedError?.message) {
                                                 return `• ${formatFieldName(`${field}.${subField}.${nestedField}`)}: ${nestedError.message}`;
                                             }
+
                                             return null;
                                         })
                                         .filter(Boolean)
                                         .join('\n');
                                 }
+
                                 return null;
                             })
                             .filter(Boolean)
                             .join('\n');
                     }
+
                     return null;
                 })
                 .filter(Boolean)
@@ -1163,11 +1191,11 @@ const SettingsProvider = () => {
 
             // Get form data and transform it - including disabled fields
             const formData = form.watch();
-            const { type, agents } = transformFormToGraphQL(formData);
+            const { agents, type } = transformFormToGraphQL(formData);
             const result = await testProvider({
                 variables: {
-                    type,
                     agents,
+                    type,
                 },
             });
 
@@ -1194,31 +1222,43 @@ const SettingsProvider = () => {
 
             const errorMessages = Object.entries(errors)
                 .map(([field, error]: [string, any]) => {
-                    if (error?.message) return `• ${formatFieldName(field)}: ${error.message}`;
+                    if (error?.message) {
+                        return `• ${formatFieldName(field)}: ${error.message}`;
+                    }
+
                     if (error && typeof error === 'object') {
                         return Object.entries(error)
                             .map(([subField, subError]: [string, any]) => {
-                                if (subError?.message) { return `• ${formatFieldName(`${field}.${subField}`)}: ${subError.message}`; }
+                                if (subError?.message) {
+                                    return `• ${formatFieldName(`${field}.${subField}`)}: ${subError.message}`;
+                                }
+
                                 if (subError && typeof subError === 'object') {
                                     return Object.entries(subError)
                                         .map(([nestedField, nestedError]: [string, any]) => {
-                                            if (nestedError?.message) { return `• ${formatFieldName(`${field}.${subField}.${nestedField}`)}: ${nestedError.message}`; }
+                                            if (nestedError?.message) {
+                                                return `• ${formatFieldName(`${field}.${subField}.${nestedField}`)}: ${nestedError.message}`;
+                                            }
+
                                             return null;
                                         })
                                         .filter(Boolean)
                                         .join('\n');
                                 }
+
                                 return null;
                             })
                             .filter(Boolean)
                             .join('\n');
                     }
+
                     return null;
                 })
                 .filter(Boolean)
                 .join('\n');
 
             setSubmitError(`Please fix the following validation errors:\n\n${errorMessages}`);
+
             return;
         }
 
@@ -1226,16 +1266,17 @@ const SettingsProvider = () => {
             setSubmitError(null);
             setCurrentAgentKey(agentKey);
             const formData = form.watch();
-            const { type, agents } = transformFormToGraphQL(formData);
+            const { agents, type } = transformFormToGraphQL(formData);
 
             const agent = agents[agentKey as keyof AgentsConfigInput] as AgentConfigInput;
 
             const singleResult = await testAgent({
-                variables: { type, agentType: agentTypesMap[agentKey] ?? AgentConfigType.Simple, agent },
+                variables: { agent, agentType: agentTypesMap[agentKey] ?? AgentConfigType.Simple, type },
             });
             setTestResults({ [agentKey]: singleResult.data?.testAgent });
             setIsTestDialogOpen(true);
             setCurrentAgentKey(null);
+
             return;
         } catch (error) {
             console.error('Test error:', error);
@@ -1247,6 +1288,7 @@ const SettingsProvider = () => {
     const handleBack = () => {
         if (isDirty) {
             setIsLeaveDialogOpen(true);
+
             return;
         }
 
@@ -1259,8 +1301,10 @@ const SettingsProvider = () => {
             setPendingBrowserBack(false);
             // Skip the blocker entry and go to the real previous page
             window.history.go(-2);
+
             return;
         }
+
         navigate('/settings/providers');
     };
 
@@ -1268,15 +1312,16 @@ const SettingsProvider = () => {
         if (!open && pendingBrowserBack) {
             setPendingBrowserBack(false);
         }
+
         setIsLeaveDialogOpen(open);
     };
 
     if (loading) {
         return (
             <StatusCard
+                description="Please wait while we fetch provider configuration"
                 icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
                 title="Loading provider data..."
-                description="Please wait while we fetch provider configuration"
             />
         );
     }
@@ -1310,9 +1355,9 @@ const SettingsProvider = () => {
                 <CardContent>
                     <Form {...form}>
                         <form
+                            className="space-y-6"
                             id="provider-form"
                             onSubmit={form.handleSubmit(handleSubmit)}
-                            className="space-y-6"
                         >
                             {/* Error Alert */}
                             {mutationError && (
@@ -1331,23 +1376,23 @@ const SettingsProvider = () => {
 
                             {/* Form fields */}
                             <FormComboboxItem
-                                name="type"
-                                label="Type"
-                                placeholder="Select provider"
-                                options={providers}
-                                control={form.control}
-                                disabled={isLoading || !!selectedType}
                                 allowCustom={false}
+                                control={form.control}
                                 description="The type of language model provider"
+                                disabled={isLoading || !!selectedType}
+                                label="Type"
+                                name="type"
+                                options={providers}
+                                placeholder="Select provider"
                             />
 
                             <FormInputStringItem
-                                name="name"
-                                label="Name"
-                                placeholder="Enter provider name"
                                 control={form.control}
-                                disabled={isLoading}
                                 description="A unique name for your provider configuration"
+                                disabled={isLoading}
+                                label="Name"
+                                name="name"
+                                placeholder="Enter provider name"
                             />
 
                             {/* Agents Configuration Section */}
@@ -1360,8 +1405,8 @@ const SettingsProvider = () => {
                                 </div>
 
                                 <Accordion
-                                    type="multiple"
                                     className="w-full"
+                                    type="multiple"
                                 >
                                     {agentTypes.map((agentKey, index) => (
                                         <AccordionItem
@@ -1375,7 +1420,7 @@ const SettingsProvider = () => {
                                                         className={cn(
                                                             'mr-2 flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground',
                                                             (isTestLoading || isAgentTestLoading) &&
-                                                            'pointer-events-none cursor-not-allowed opacity-50',
+                                                                'pointer-events-none cursor-not-allowed opacity-50',
                                                         )}
                                                         onClick={(event) => {
                                                             if (isTestLoading || isAgentTestLoading) {
@@ -1403,16 +1448,15 @@ const SettingsProvider = () => {
                                                 <div className="grid grid-cols-1 gap-4 p-px md:grid-cols-2">
                                                     {/* Model field */}
                                                     <FormModelComboboxItem
-                                                        name={`agents.${agentKey}.model`}
-                                                        label="Model"
-                                                        placeholder="Select or enter model name"
-                                                        options={availableModels}
                                                         control={form.control}
                                                         disabled={isLoading}
+                                                        label="Model"
+                                                        name={`agents.${agentKey}.model`}
                                                         onOptionSelect={(option) => {
                                                             {
                                                                 /* Update price fields */
                                                             }
+
                                                             const price = option?.price;
 
                                                             form.setValue(
@@ -1424,110 +1468,112 @@ const SettingsProvider = () => {
                                                                 price?.output ?? null,
                                                             );
                                                         }}
+                                                        options={availableModels}
+                                                        placeholder="Select or enter model name"
                                                     />
 
                                                     {/* Temperature field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.temperature`}
-                                                        label="Temperature"
-                                                        placeholder="0.7"
                                                         control={form.control}
                                                         disabled={isLoading}
-                                                        step="0.1"
-                                                        min="0"
+                                                        label="Temperature"
                                                         max="2"
+                                                        min="0"
+                                                        name={`agents.${agentKey}.temperature`}
+                                                        placeholder="0.7"
+                                                        step="0.1"
                                                     />
 
                                                     {/* Max Tokens field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.maxTokens`}
-                                                        label="Max Tokens"
-                                                        placeholder="1000"
                                                         control={form.control}
                                                         disabled={isLoading}
+                                                        label="Max Tokens"
                                                         min="1"
+                                                        name={`agents.${agentKey}.maxTokens`}
+                                                        placeholder="1000"
                                                         valueType="integer"
                                                     />
 
                                                     {/* Top P field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.topP`}
-                                                        label="Top P"
-                                                        placeholder="0.9"
                                                         control={form.control}
                                                         disabled={isLoading}
-                                                        step="0.01"
-                                                        min="0"
+                                                        label="Top P"
                                                         max="1"
+                                                        min="0"
+                                                        name={`agents.${agentKey}.topP`}
+                                                        placeholder="0.9"
+                                                        step="0.01"
                                                     />
 
                                                     {/* Top K field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.topK`}
-                                                        label="Top K"
-                                                        placeholder="40"
                                                         control={form.control}
                                                         disabled={isLoading}
+                                                        label="Top K"
                                                         min="1"
+                                                        name={`agents.${agentKey}.topK`}
+                                                        placeholder="40"
                                                         valueType="integer"
                                                     />
 
                                                     {/* Min Length field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.minLength`}
-                                                        label="Min Length"
-                                                        placeholder="0"
                                                         control={form.control}
                                                         disabled={isLoading}
+                                                        label="Min Length"
                                                         min="0"
+                                                        name={`agents.${agentKey}.minLength`}
+                                                        placeholder="0"
                                                         valueType="integer"
                                                     />
 
                                                     {/* Max Length field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.maxLength`}
-                                                        label="Max Length"
-                                                        placeholder="2000"
                                                         control={form.control}
                                                         disabled={isLoading}
+                                                        label="Max Length"
                                                         min="1"
+                                                        name={`agents.${agentKey}.maxLength`}
+                                                        placeholder="2000"
                                                         valueType="integer"
                                                     />
 
                                                     {/* Repetition Penalty field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.repetitionPenalty`}
-                                                        label="Repetition Penalty"
-                                                        placeholder="1.0"
                                                         control={form.control}
                                                         disabled={isLoading}
-                                                        step="0.01"
-                                                        min="0"
+                                                        label="Repetition Penalty"
                                                         max="2"
+                                                        min="0"
+                                                        name={`agents.${agentKey}.repetitionPenalty`}
+                                                        placeholder="1.0"
+                                                        step="0.01"
                                                     />
 
                                                     {/* Frequency Penalty field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.frequencyPenalty`}
-                                                        label="Frequency Penalty"
-                                                        placeholder="0.0"
                                                         control={form.control}
                                                         disabled={isLoading}
-                                                        step="0.01"
-                                                        min="0"
+                                                        label="Frequency Penalty"
                                                         max="2"
+                                                        min="0"
+                                                        name={`agents.${agentKey}.frequencyPenalty`}
+                                                        placeholder="0.0"
+                                                        step="0.01"
                                                     />
 
                                                     {/* Presence Penalty field */}
                                                     <FormInputNumberItem
-                                                        name={`agents.${agentKey}.presencePenalty`}
-                                                        label="Presence Penalty"
-                                                        placeholder="0.0"
                                                         control={form.control}
                                                         disabled={isLoading}
-                                                        step="0.01"
-                                                        min="0"
+                                                        label="Presence Penalty"
                                                         max="2"
+                                                        min="0"
+                                                        name={`agents.${agentKey}.presencePenalty`}
+                                                        placeholder="0.0"
+                                                        step="0.01"
                                                     />
                                                 </div>
 
@@ -1544,12 +1590,13 @@ const SettingsProvider = () => {
                                                                     <FormItem>
                                                                         <FormLabel>Reasoning Effort</FormLabel>
                                                                         <Select
+                                                                            defaultValue={field.value ?? 'none'}
+                                                                            disabled={isLoading}
                                                                             onValueChange={(value) =>
                                                                                 field.onChange(
                                                                                     value !== 'none' ? value : null,
-                                                                                )}
-                                                                            defaultValue={field.value ?? 'none'}
-                                                                            disabled={isLoading}
+                                                                                )
+                                                                            }
                                                                         >
                                                                             <FormControl>
                                                                                 <SelectTrigger>
@@ -1582,12 +1629,12 @@ const SettingsProvider = () => {
 
                                                             {/* Reasoning Max Tokens field */}
                                                             <FormInputNumberItem
-                                                                name={`agents.${agentKey}.reasoning.maxTokens`}
-                                                                label="Reasoning Max Tokens"
-                                                                placeholder="1000"
                                                                 control={form.control}
                                                                 disabled={isLoading}
+                                                                label="Reasoning Max Tokens"
                                                                 min="1"
+                                                                name={`agents.${agentKey}.reasoning.maxTokens`}
+                                                                placeholder="1000"
                                                                 valueType="integer"
                                                             />
                                                         </div>
@@ -1601,24 +1648,24 @@ const SettingsProvider = () => {
                                                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                             {/* Price Input field */}
                                                             <FormInputNumberItem
-                                                                name={`agents.${agentKey}.price.input`}
-                                                                label="Input Price"
-                                                                placeholder="0.001"
                                                                 control={form.control}
                                                                 disabled={isLoading}
-                                                                step="0.000001"
+                                                                label="Input Price"
                                                                 min="0"
+                                                                name={`agents.${agentKey}.price.input`}
+                                                                placeholder="0.001"
+                                                                step="0.000001"
                                                             />
 
                                                             {/* Price Output field */}
                                                             <FormInputNumberItem
-                                                                name={`agents.${agentKey}.price.output`}
-                                                                label="Output Price"
-                                                                placeholder="0.002"
                                                                 control={form.control}
                                                                 disabled={isLoading}
-                                                                step="0.000001"
+                                                                label="Output Price"
                                                                 min="0"
+                                                                name={`agents.${agentKey}.price.output`}
+                                                                placeholder="0.002"
+                                                                step="0.000001"
                                                             />
                                                         </div>
                                                     </div>
@@ -1639,10 +1686,10 @@ const SettingsProvider = () => {
                     {/* Delete button - only show when editing existing provider */}
                     {!isNew && (
                         <Button
+                            disabled={isLoading}
+                            onClick={handleDelete}
                             type="button"
                             variant="destructive"
-                            onClick={handleDelete}
-                            disabled={isLoading}
                         >
                             {isDeleteLoading ? (
                                 <Loader2 className="size-4 animate-spin" />
@@ -1653,10 +1700,10 @@ const SettingsProvider = () => {
                         </Button>
                     )}
                     <Button
+                        disabled={isLoading || isTestLoading || isAgentTestLoading}
+                        onClick={() => handleTest()}
                         type="button"
                         variant="outline"
-                        onClick={() => handleTest()}
-                        disabled={isLoading || isTestLoading || isAgentTestLoading}
                     >
                         {isTestLoading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
                         {isTestLoading ? 'Testing...' : 'Test'}
@@ -1665,18 +1712,18 @@ const SettingsProvider = () => {
 
                 <div className="ml-auto flex space-x-2">
                     <Button
+                        disabled={isLoading}
+                        onClick={handleBack}
                         type="button"
                         variant="outline"
-                        onClick={handleBack}
-                        disabled={isLoading}
                     >
                         Cancel
                     </Button>
                     <Button
-                        form="provider-form"
-                        variant="secondary"
-                        type="submit"
                         disabled={isLoading}
+                        form="provider-form"
+                        type="submit"
+                        variant="secondary"
                     >
                         {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                         {isLoading ? 'Saving...' : isNew ? 'Create Provider' : 'Update Provider'}
@@ -1685,31 +1732,31 @@ const SettingsProvider = () => {
             </div>
 
             <TestResultsDialog
-                isOpen={isTestDialogOpen}
                 handleOpenChange={setIsTestDialogOpen}
+                isOpen={isTestDialogOpen}
                 results={testResults}
             />
 
             <ConfirmationDialog
-                isOpen={isDeleteDialogOpen}
-                handleOpenChange={setIsDeleteDialogOpen}
+                cancelText="Cancel"
+                confirmText="Delete"
                 handleConfirm={handleConfirmDelete}
+                handleOpenChange={setIsDeleteDialogOpen}
+                isOpen={isDeleteDialogOpen}
                 itemName={form.watch('name')}
                 itemType="provider"
-                confirmText="Delete"
-                cancelText="Cancel"
             />
 
             <ConfirmationDialog
-                isOpen={isLeaveDialogOpen}
-                handleOpenChange={handleLeaveDialogOpenChange}
-                handleConfirm={handleConfirmLeave}
-                title="Discard changes?"
-                description="You have unsaved changes. Are you sure you want to leave without saving?"
                 cancelText="Stay"
+                confirmIcon={undefined}
                 confirmText="Leave"
                 confirmVariant="destructive"
-                confirmIcon={undefined}
+                description="You have unsaved changes. Are you sure you want to leave without saving?"
+                handleConfirm={handleConfirmLeave}
+                handleOpenChange={handleLeaveDialogOpenChange}
+                isOpen={isLeaveDialogOpen}
+                title="Discard changes?"
             />
         </>
     );

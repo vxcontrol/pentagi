@@ -2,6 +2,8 @@ import { Check, ChevronsUpDown, GripVertical, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 
+import type { Provider } from '@/models/Provider';
+
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -52,14 +54,13 @@ import {
 } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { Log } from '@/lib/log';
-import type { Provider } from '@/models/Provider';
 import { getProviderDisplayName, getProviderIcon, isProviderValid } from '@/models/Provider';
 
 interface MainLayoutContext {
-    selectedProvider: Provider | null;
-    sortedProviders: Provider[];
-    selectedFlowId: string | null;
     onChangeSelectedProvider: (provider: Provider) => void;
+    selectedFlowId: null | string;
+    selectedProvider: null | Provider;
+    sortedProviders: Provider[];
 }
 
 const Chat = () => {
@@ -68,11 +69,11 @@ const Chat = () => {
     const navigate = useNavigate();
 
     // Get data from MainLayout context
-    const { selectedProvider, sortedProviders, selectedFlowId, onChangeSelectedProvider } =
+    const { onChangeSelectedProvider, selectedFlowId, selectedProvider, sortedProviders } =
         useOutletContext<MainLayoutContext>();
 
     // Add debounced flow ID to prevent rapid switching causing database connection issues
-    const [debouncedFlowId, setDebouncedFlowId] = useState<string | null>(flowId ?? null);
+    const [debouncedFlowId, setDebouncedFlowId] = useState<null | string>(flowId ?? null);
     const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // AbortController to cancel active requests when switching flows
@@ -86,35 +87,39 @@ const Chat = () => {
     const [activeTabsTab, setActiveTabsTab] = useState<string>(!isDesktop ? 'automation' : 'terminal');
 
     const { data: flowData, loading: isFlowLoading } = useFlowQuery({
-        variables: { id: debouncedFlowId ?? '' },
-        skip: !debouncedFlowId || debouncedFlowId === 'new',
+        errorPolicy: 'all',
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: false,
-        errorPolicy: 'all',
+        skip: !debouncedFlowId || debouncedFlowId === 'new',
+        variables: { id: debouncedFlowId ?? '' },
     });
 
     // Store currently selected assistant ID for each flow
-    const [selectedAssistantIds, setSelectedAssistantIds] = useState<Record<string, string | null>>({});
+    const [selectedAssistantIds, setSelectedAssistantIds] = useState<Record<string, null | string>>({});
 
     // Get assistants for the current flow
     const { data: assistantsData } = useAssistantsQuery({
-        variables: { flowId: debouncedFlowId ?? '' },
-        skip: !debouncedFlowId || debouncedFlowId === 'new',
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-first',
+        skip: !debouncedFlowId || debouncedFlowId === 'new',
+        variables: { flowId: debouncedFlowId ?? '' },
     });
 
     // Currently selected assistant for this flow (with auto-selection logic)
     const selectedAssistantId = useMemo(() => {
-        if (!selectedFlowId || selectedFlowId === 'new') return null;
+        if (!selectedFlowId || selectedFlowId === 'new') {
+            return null;
+        }
 
         // If we have an explicit selection for this flow, use it
         if (selectedFlowId in selectedAssistantIds) {
             const explicitSelection = selectedAssistantIds[selectedFlowId];
 
             // If explicit selection is null, user wants to create new assistant
-            if (explicitSelection === null) return null;
+            if (explicitSelection === null) {
+                return null;
+            }
 
             // If explicit selection still exists in assistants list, use it
             if (assistantsData?.assistants?.some((assistant) => assistant.id === explicitSelection)) {
@@ -126,6 +131,7 @@ const Chat = () => {
 
         // Auto-select first (newest) assistant if available
         const firstAssistantId = assistantsData?.assistants?.[0]?.id;
+
         return firstAssistantId || null;
     }, [selectedFlowId, selectedAssistantIds, assistantsData?.assistants]);
 
@@ -140,10 +146,10 @@ const Chat = () => {
 
     // Fetch assistant logs if an assistant is selected
     const { data: assistantLogsData, refetch: refetchAssistantLogs } = useAssistantLogsQuery({
-        variables: { flowId: debouncedFlowId ?? '', assistantId: selectedAssistantId ?? '' },
-        skip: !debouncedFlowId || !selectedAssistantId || debouncedFlowId === 'new' || selectedAssistantId === '',
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-first',
+        skip: !debouncedFlowId || !selectedAssistantId || debouncedFlowId === 'new' || selectedAssistantId === '',
+        variables: { assistantId: selectedAssistantId ?? '', flowId: debouncedFlowId ?? '' },
     });
 
     // Debounce selectedFlowId changes to prevent excessive database connections
@@ -175,6 +181,7 @@ const Chat = () => {
                 clearTimeout(debounceTimeoutRef.current);
                 debounceTimeoutRef.current = null;
             }
+
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
                 abortControllerRef.current = null;
@@ -196,27 +203,29 @@ const Chat = () => {
     const skip = useMemo(() => !debouncedFlowId || debouncedFlowId === 'new', [debouncedFlowId]);
 
     // Flow-specific subscriptions that depend on the selected flow
-    useTaskCreatedSubscription({ variables, skip });
-    useTaskUpdatedSubscription({ variables, skip });
-    useScreenshotAddedSubscription({ variables, skip });
-    useTerminalLogAddedSubscription({ variables, skip });
-    useMessageLogUpdatedSubscription({ variables, skip });
-    useMessageLogAddedSubscription({ variables, skip });
-    useAgentLogAddedSubscription({ variables, skip });
-    useSearchLogAddedSubscription({ variables, skip });
-    useVectorStoreLogAddedSubscription({ variables, skip });
+    useTaskCreatedSubscription({ skip, variables });
+    useTaskUpdatedSubscription({ skip, variables });
+    useScreenshotAddedSubscription({ skip, variables });
+    useTerminalLogAddedSubscription({ skip, variables });
+    useMessageLogUpdatedSubscription({ skip, variables });
+    useMessageLogAddedSubscription({ skip, variables });
+    useAgentLogAddedSubscription({ skip, variables });
+    useSearchLogAddedSubscription({ skip, variables });
+    useVectorStoreLogAddedSubscription({ skip, variables });
 
     // Assistant-specific subscriptions
-    useAssistantCreatedSubscription({ variables, skip });
-    useAssistantUpdatedSubscription({ variables, skip });
-    useAssistantDeletedSubscription({ variables, skip });
-    useAssistantLogAddedSubscription({ variables, skip });
-    useAssistantLogUpdatedSubscription({ variables, skip });
+    useAssistantCreatedSubscription({ skip, variables });
+    useAssistantUpdatedSubscription({ skip, variables });
+    useAssistantDeletedSubscription({ skip, variables });
+    useAssistantLogAddedSubscription({ skip, variables });
+    useAssistantLogUpdatedSubscription({ skip, variables });
 
     // Handle selecting an assistant
     const handleSelectAssistant = useCallback(
-        (assistantId: string | null) => {
-            if (!selectedFlowId || selectedFlowId === 'new') return;
+        (assistantId: null | string) => {
+            if (!selectedFlowId || selectedFlowId === 'new') {
+                return;
+            }
 
             setSelectedAssistantIds((prev) => ({
                 ...prev,
@@ -228,7 +237,9 @@ const Chat = () => {
 
     // Set selectedAssistantId to null to initiate assistant creation
     const handleInitiateAssistantCreation = () => {
-        if (!selectedFlowId || selectedFlowId === 'new') return;
+        if (!selectedFlowId || selectedFlowId === 'new') {
+            return;
+        }
 
         handleSelectAssistant(null);
     };
@@ -246,6 +257,7 @@ const Chat = () => {
                         input: message,
                     },
                 });
+
                 return;
             }
 
@@ -258,6 +270,7 @@ const Chat = () => {
             } else if (sortedProviders.length > 0) {
                 // If no provider is selected or it's invalid, try to use the first available
                 const firstAvailableProvider = sortedProviders[0];
+
                 if (firstAvailableProvider) {
                     providerToUse = firstAvailableProvider.name;
                 }
@@ -266,13 +279,14 @@ const Chat = () => {
             // Fail early if we still don't have a provider
             if (!providerToUse) {
                 Log.error('No valid provider available for creating a flow');
+
                 return;
             }
 
             const { data } = await createFlow({
                 variables: {
-                    modelProvider: providerToUse,
                     input: message,
+                    modelProvider: providerToUse,
                 },
             });
 
@@ -284,6 +298,7 @@ const Chat = () => {
 
                 // Keep user on the automation tab
                 setActiveCentralTab('automation');
+
                 if (!isDesktop) {
                     setActiveTabsTab('automation');
                 }
@@ -309,7 +324,9 @@ const Chat = () => {
     // Handle creating a new assistant
     const handleCreateAssistant = useCallback(
         async (message: string, useAgents: boolean) => {
-            if (!message.trim() || !selectedProvider) return;
+            if (!message.trim() || !selectedProvider) {
+                return;
+            }
 
             try {
                 // Backend will create a flow if flowId is 'new' or '0'
@@ -318,14 +335,14 @@ const Chat = () => {
                 const { data } = await createAssistant({
                     variables: {
                         flowId: flowIdToUse,
-                        modelProvider: selectedProvider.name,
                         input: message.trim(),
+                        modelProvider: selectedProvider.name,
                         useAgents,
                     },
                 });
 
                 if (data?.createAssistant) {
-                    const { flow, assistant } = data.createAssistant;
+                    const { assistant, flow } = data.createAssistant;
 
                     // If we created a new flow, navigate to it
                     if (selectedFlowId === 'new' || !selectedFlowId) {
@@ -334,6 +351,7 @@ const Chat = () => {
 
                         // Set Assistant tab as active
                         setActiveCentralTab('assistant');
+
                         if (!isDesktop) {
                             setActiveTabsTab('assistant');
                         }
@@ -366,13 +384,15 @@ const Chat = () => {
 
     // Handle calling an existing assistant
     const handleCallAssistant = async (assistantId: string, message: string, useAgents: boolean): Promise<void> => {
-        if (!selectedFlowId || selectedFlowId === 'new' || !assistantId || !message.trim()) return;
+        if (!selectedFlowId || selectedFlowId === 'new' || !assistantId || !message.trim()) {
+            return;
+        }
 
         try {
             await callAssistant({
                 variables: {
-                    flowId: selectedFlowId,
                     assistantId,
+                    flowId: selectedFlowId,
                     input: message.trim(),
                     useAgents,
                 },
@@ -390,13 +410,15 @@ const Chat = () => {
 
     // Handle stopping an assistant
     const handleStopAssistant = async (assistantId: string) => {
-        if (!selectedFlowId || selectedFlowId === 'new' || !assistantId) return;
+        if (!selectedFlowId || selectedFlowId === 'new' || !assistantId) {
+            return;
+        }
 
         try {
             await stopAssistant({
                 variables: {
-                    flowId: selectedFlowId,
                     assistantId,
+                    flowId: selectedFlowId,
                 },
             });
 
@@ -412,21 +434,23 @@ const Chat = () => {
 
     // Handle deleting an assistant
     const handleDeleteAssistant = async (assistantId: string) => {
-        if (!selectedFlowId || selectedFlowId === 'new' || !assistantId) return;
+        if (!selectedFlowId || selectedFlowId === 'new' || !assistantId) {
+            return;
+        }
 
         try {
             // Remember if this was the currently selected assistant
             const wasSelected = selectedAssistantId === assistantId;
 
             await deleteAssistant({
-                variables: {
-                    flowId: selectedFlowId,
-                    assistantId,
-                },
                 update: (cache) => {
                     // Remove the assistant from Apollo cache
                     cache.evict({ id: `Assistant:${assistantId}` });
                     cache.gc();
+                },
+                variables: {
+                    assistantId,
+                    flowId: selectedFlowId,
                 },
             });
 
@@ -435,6 +459,7 @@ const Chat = () => {
                 setSelectedAssistantIds((prev) => {
                     const updatedState = { ...prev };
                     updatedState[selectedFlowId] = null;
+
                     return updatedState;
                 });
             }
@@ -448,23 +473,23 @@ const Chat = () => {
         <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
             <CardContent className="flex-1 overflow-auto pr-0 pt-4">
                 <ChatTabs
-                    flowData={flowData}
-                    selectedFlowId={selectedFlowId}
-                    onSubmitAutomationMessage={handleSubmitAutomationMessage}
-                    onStopAutomationFlow={handleStopAutomationFlow}
-                    assistants={assistantsData?.assistants ?? []}
-                    assistantLogs={assistantLogsData?.assistantLogs ?? []}
-                    selectedAssistantId={selectedAssistantId}
-                    selectedProvider={selectedProvider}
-                    providers={sortedProviders}
-                    onSelectAssistant={handleSelectAssistant}
-                    onCreateAssistant={handleInitiateAssistantCreation}
-                    onDeleteAssistant={handleDeleteAssistant}
-                    onSubmitAssistantMessage={handleCallAssistant}
-                    onCreateNewAssistant={handleCreateAssistant}
-                    onStopAssistant={handleStopAssistant}
                     activeTab={activeTabsTab}
+                    assistantLogs={assistantLogsData?.assistantLogs ?? []}
+                    assistants={assistantsData?.assistants ?? []}
+                    flowData={flowData}
+                    onCreateAssistant={handleInitiateAssistantCreation}
+                    onCreateNewAssistant={handleCreateAssistant}
+                    onDeleteAssistant={handleDeleteAssistant}
+                    onSelectAssistant={handleSelectAssistant}
+                    onStopAssistant={handleStopAssistant}
+                    onStopAutomationFlow={handleStopAutomationFlow}
+                    onSubmitAssistantMessage={handleCallAssistant}
+                    onSubmitAutomationMessage={handleSubmitAutomationMessage}
                     onTabChange={setActiveTabsTab}
+                    providers={sortedProviders}
+                    selectedAssistantId={selectedAssistantId}
+                    selectedFlowId={selectedFlowId}
+                    selectedProvider={selectedProvider}
                 />
             </CardContent>
         </Card>
@@ -477,8 +502,8 @@ const Chat = () => {
                     <div className="flex items-center gap-2">
                         <SidebarTrigger className="-ml-1" />
                         <Separator
-                            orientation="vertical"
                             className="mr-2 h-4"
+                            orientation="vertical"
                         />
                         <Breadcrumb>
                             <BreadcrumbList>
@@ -500,9 +525,9 @@ const Chat = () => {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
-                                variant="ghost"
-                                size="sm"
                                 className="h-8 gap-1 focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                                size="sm"
+                                variant="ghost"
                             >
                                 <span className="max-w-[120px] truncate">
                                     {selectedProvider ? getProviderDisplayName(selectedProvider) : 'Select Provider'}
@@ -519,12 +544,12 @@ const Chat = () => {
                         >
                             {sortedProviders.map((provider) => (
                                 <DropdownMenuItem
+                                    className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                     key={provider.name}
                                     onSelect={(e) => {
                                         e.preventDefault();
                                         onChangeSelectedProvider(provider);
                                     }}
-                                    className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                 >
                                     <div className="flex w-full min-w-0 items-center gap-2">
                                         <div className="shrink-0">{getProviderIcon(provider, 'h-4 w-4 shrink-0')}</div>
@@ -551,8 +576,8 @@ const Chat = () => {
                 )}
                 {isDesktop ? (
                     <ResizablePanelGroup
-                        direction="horizontal"
                         className="w-full"
+                        direction="horizontal"
                     >
                         <ResizablePanel
                             defaultSize={50}
@@ -561,23 +586,23 @@ const Chat = () => {
                             <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
                                 <CardContent className="flex-1 overflow-auto pr-0 pt-4">
                                     <ChatCentralTabs
-                                        selectedFlowId={selectedFlowId}
-                                        flowData={flowData}
-                                        assistants={assistantsData?.assistants ?? []}
-                                        assistantLogs={assistantLogsData?.assistantLogs ?? []}
-                                        selectedAssistantId={selectedAssistantId}
-                                        selectedProvider={selectedProvider}
-                                        providers={sortedProviders}
-                                        onSelectAssistant={handleSelectAssistant}
-                                        onCreateAssistant={handleInitiateAssistantCreation}
-                                        onDeleteAssistant={handleDeleteAssistant}
-                                        onSubmitAutomationMessage={handleSubmitAutomationMessage}
-                                        onSubmitAssistantMessage={handleCallAssistant}
-                                        onCreateNewAssistant={handleCreateAssistant}
-                                        onStopAutomationFlow={handleStopAutomationFlow}
-                                        onStopAssistant={handleStopAssistant}
                                         activeTab={activeCentralTab}
+                                        assistantLogs={assistantLogsData?.assistantLogs ?? []}
+                                        assistants={assistantsData?.assistants ?? []}
+                                        flowData={flowData}
+                                        onCreateAssistant={handleInitiateAssistantCreation}
+                                        onCreateNewAssistant={handleCreateAssistant}
+                                        onDeleteAssistant={handleDeleteAssistant}
+                                        onSelectAssistant={handleSelectAssistant}
+                                        onStopAssistant={handleStopAssistant}
+                                        onStopAutomationFlow={handleStopAutomationFlow}
+                                        onSubmitAssistantMessage={handleCallAssistant}
+                                        onSubmitAutomationMessage={handleSubmitAutomationMessage}
                                         onTabChange={setActiveCentralTab}
+                                        providers={sortedProviders}
+                                        selectedAssistantId={selectedAssistantId}
+                                        selectedFlowId={selectedFlowId}
+                                        selectedProvider={selectedProvider}
                                     />
                                 </CardContent>
                             </Card>

@@ -5,16 +5,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import type { VectorStoreLogFragmentFragment } from '@/graphql/types';
+
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import type { VectorStoreLogFragmentFragment } from '@/graphql/types';
 
 import ChatVectorStore from './ChatVectorStore';
 
 interface ChatVectorStoresProps {
     logs?: VectorStoreLogFragmentFragment[];
-    selectedFlowId?: string | null;
+    selectedFlowId?: null | string;
 }
 
 const searchFormSchema = z.object({
@@ -32,25 +33,27 @@ const ChatVectorStores = ({ logs, selectedFlowId }: ChatVectorStoresProps) => {
     };
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
-        resolver: zodResolver(searchFormSchema),
         defaultValues: {
             search: '',
         },
+        resolver: zodResolver(searchFormSchema),
     });
 
     const searchValue = form.watch('search');
 
     // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
-        () => debounce((value: string) => {
-            setDebouncedSearchValue(value);
-        }, 500),
+        () =>
+            debounce((value: string) => {
+                setDebouncedSearchValue(value);
+            }, 500),
         [],
     );
 
     // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
+
         return () => {
             debouncedUpdateSearch.cancel();
         };
@@ -113,22 +116,22 @@ const ChatVectorStores = ({ logs, selectedFlowId }: ChatVectorStoresProps) => {
                                     <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input
                                         {...field}
-                                        type="text"
-                                        placeholder="Search vector store logs..."
-                                        className="px-9"
                                         autoComplete="off"
+                                        className="px-9"
+                                        placeholder="Search vector store logs..."
+                                        type="text"
                                     />
                                     {field.value && (
                                         <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
                                             className="absolute right-0 top-1/2 -translate-y-1/2"
                                             onClick={() => {
                                                 form.reset({ search: '' });
                                                 setDebouncedSearchValue('');
                                                 debouncedUpdateSearch.cancel();
                                             }}
+                                            size="icon"
+                                            type="button"
+                                            variant="ghost"
                                         >
                                             <X />
                                         </Button>
@@ -154,7 +157,9 @@ const ChatVectorStores = ({ logs, selectedFlowId }: ChatVectorStoresProps) => {
                 <div className="flex flex-1 items-center justify-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <p>No vector store logs available</p>
-                        <p className="text-xs">Vector store logs will appear here when the agent uses knowledge database</p>
+                        <p className="text-xs">
+                            Vector store logs will appear here when the agent uses knowledge database
+                        </p>
                     </div>
                 </div>
             )}

@@ -17,23 +17,23 @@ const formSchema = z.object({
 });
 
 interface ChatAssistantFormInputProps {
-    selectedFlowId: string | null;
     assistantStatus?: StatusType;
-    isUseAgentsDefault?: boolean;
-    isProviderAvailable?: boolean;
     isCreatingAssistant?: boolean;
-    onSubmitMessage: (message: string, useAgents: boolean) => Promise<void>;
+    isProviderAvailable?: boolean;
+    isUseAgentsDefault?: boolean;
     onStopFlow?: (flowId: string) => Promise<void>;
+    onSubmitMessage: (message: string, useAgents: boolean) => Promise<void>;
+    selectedFlowId: null | string;
 }
 
 const ChatAssistantFormInput = ({
-    selectedFlowId,
     assistantStatus,
-    isUseAgentsDefault = false,
-    isProviderAvailable = true,
     isCreatingAssistant = false,
-    onSubmitMessage,
+    isProviderAvailable = true,
+    isUseAgentsDefault = false,
     onStopFlow,
+    onSubmitMessage,
+    selectedFlowId,
 }: ChatAssistantFormInputProps) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
@@ -69,11 +69,11 @@ const ChatAssistantFormInput = ({
         isAssistantTerminal;
 
     const form = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema),
         defaultValues: {
             message: '',
             useAgents,
         },
+        resolver: zodResolver(formSchema),
     });
 
     // Reset form when flow ID changes
@@ -120,19 +120,24 @@ const ChatAssistantFormInput = ({
 
         // Assistant-specific statuses
         switch (assistantStatus) {
-            case StatusType.Waiting: {
-                return 'Continue the conversation...';
-            }
-            case StatusType.Running: {
-                return 'Assistant is running... Click Stop to interrupt';
-            }
             case StatusType.Created: {
                 return 'Assistant is starting...';
             }
-            case StatusType.Finished:
-            case StatusType.Failed: {
+
+            case StatusType.Failed:
+
+            case StatusType.Finished: {
                 return 'This assistant session has ended. Create a new one to continue.';
             }
+
+            case StatusType.Running: {
+                return 'Assistant is running... Click Stop to interrupt';
+            }
+
+            case StatusType.Waiting: {
+                return 'Continue the conversation...';
+            }
+
             default: {
                 return 'Type your message...';
             }
@@ -142,6 +147,7 @@ const ChatAssistantFormInput = ({
     const handleSubmit = async (values: z.infer<typeof formSchema>) => {
         // Make sure we have a non-empty message
         const message = values.message.trim();
+
         if (!message) {
             return;
         }
@@ -160,7 +166,9 @@ const ChatAssistantFormInput = ({
     };
 
     const handleStopFlow = async () => {
-        if (!selectedFlowId || !onStopFlow) return;
+        if (!selectedFlowId || !onStopFlow) {
+            return;
+        }
 
         try {
             setIsStopping(true);
@@ -200,13 +208,13 @@ const ChatAssistantFormInput = ({
     useEffect(() => {
         if (
             !isInputDisabled &&
-            (selectedFlowId === 'new' ||
-                assistantStatus === StatusType.Waiting ||
-                !assistantStatus)
+            (selectedFlowId === 'new' || assistantStatus === StatusType.Waiting || !assistantStatus)
         ) {
             const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
+
             if (textarea) {
                 const timeoutId = setTimeout(() => textarea.focus(), 100);
+
                 return () => clearTimeout(timeoutId);
             }
         }
@@ -215,27 +223,25 @@ const ChatAssistantFormInput = ({
     return (
         <Form {...form}>
             <form
-                onSubmit={form.handleSubmit(handleSubmit)}
                 className="flex w-full items-center space-x-2"
+                onSubmit={form.handleSubmit(handleSubmit)}
             >
                 <TooltipProvider>
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button
-                                type="button"
-                                variant={useAgents ? 'default' : 'outline'}
-                                size="icon"
                                 className="mb-px mt-auto"
                                 disabled={isInputDisabled}
                                 onClick={() => setUseAgents(!useAgents)}
+                                size="icon"
+                                type="button"
+                                variant={useAgents ? 'default' : 'outline'}
                             >
                                 <Users className="size-4" />
                                 <span className="sr-only">{useAgents ? 'Disable agents' : 'Enable agents'}</span>
                             </Button>
                         </TooltipTrigger>
-                        <TooltipContent>
-                            {useAgents ? 'Disable agents' : 'Enable agents'}
-                        </TooltipContent>
+                        <TooltipContent>{useAgents ? 'Disable agents' : 'Enable agents'}</TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
                 <FormField
@@ -245,11 +251,11 @@ const ChatAssistantFormInput = ({
                         <FormControl>
                             <Textarea
                                 {...field}
-                                id={textareaId}
-                                placeholder={getPlaceholderText()}
-                                disabled={isInputDisabled}
-                                onKeyDown={handleKeyDown}
                                 className="resize-none"
+                                disabled={isInputDisabled}
+                                id={textareaId}
+                                onKeyDown={handleKeyDown}
+                                placeholder={getPlaceholderText()}
                             />
                         </FormControl>
                     )}
@@ -257,10 +263,10 @@ const ChatAssistantFormInput = ({
                 {isRunning ? (
                     <Button
                         className="mb-px mt-auto"
-                        type="button"
-                        variant="destructive"
                         disabled={isButtonDisabled || isStopping}
                         onClick={handleStopFlow}
+                        type="button"
+                        variant="destructive"
                     >
                         {isStopping ? <Loader2 className="size-4 animate-spin" /> : <Square className="size-4" />}
                         <span className="sr-only">Stop</span>
@@ -268,10 +274,14 @@ const ChatAssistantFormInput = ({
                 ) : (
                     <Button
                         className="mb-px mt-auto"
-                        type="submit"
                         disabled={isButtonDisabled}
+                        type="submit"
                     >
-                        {isSubmitting || isCreatingAssistant ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                        {isSubmitting || isCreatingAssistant ? (
+                            <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                            <Send className="size-4" />
+                        )}
                         <span className="sr-only">Send</span>
                     </Button>
                 )}

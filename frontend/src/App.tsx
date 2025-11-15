@@ -48,44 +48,44 @@ const App = () => {
                                     {/* Main layout for chat pages */}
                                     <Route element={<MainLayout />}>
                                         <Route
-                                            path="flows"
                                             element={<Flows />}
+                                            path="flows"
                                         />
                                         <Route
-                                            path="flows/:flowId"
                                             element={<Chat />}
+                                            path="flows/:flowId"
                                         />
                                     </Route>
 
                                     {/* Settings with nested routes */}
                                     <Route
-                                        path="settings"
                                         element={<SettingsLayout />}
+                                        path="settings"
                                     >
                                         <Route
-                                            index
-                                            element={(
+                                            element={
                                                 <Navigate
-                                                    to="providers"
                                                     replace
+                                                    to="providers"
                                                 />
-                                            )}
+                                            }
+                                            index
                                         />
                                         <Route
-                                            path="providers"
                                             element={<SettingsProviders />}
+                                            path="providers"
                                         />
                                         <Route
-                                            path="providers/:providerId"
                                             element={<SettingsProvider />}
+                                            path="providers/:providerId"
                                         />
                                         <Route
-                                            path="prompts"
                                             element={<SettingsPrompts />}
+                                            path="prompts"
                                         />
                                         <Route
-                                            path="prompts/:promptId"
                                             element={<SettingsPrompt />}
+                                            path="prompts/:promptId"
                                         />
                                         {/* <Route
                                         path="mcp-servers"
@@ -101,46 +101,46 @@ const App = () => {
                                     /> */}
                                         {/* Catch-all route for unknown settings paths */}
                                         <Route
-                                            path="*"
-                                            element={(
+                                            element={
                                                 <Navigate
-                                                    to="/settings/providers"
                                                     replace
+                                                    to="/settings/providers"
                                                 />
-                                            )}
+                                            }
+                                            path="*"
                                         />
                                     </Route>
                                 </Route>
 
                                 {/* report routes */}
                                 <Route
-                                    path="flows/:flowId/report"
-                                    element={(
+                                    element={
                                         <ProtectedRoute>
                                             <Report />
                                         </ProtectedRoute>
-                                    )}
+                                    }
+                                    path="flows/:flowId/report"
                                 />
 
                                 {/* public routes */}
                                 <Route
-                                    path="login"
                                     element={renderPublicRoute()}
+                                    path="login"
                                 />
 
                                 <Route
-                                    path="oauth/result"
                                     element={<OAuthResult />}
+                                    path="oauth/result"
                                 />
 
                                 {/* other routes */}
                                 <Route
-                                    path="/"
                                     element={<Navigate to="/flows" />}
+                                    path="/"
                                 />
                                 <Route
-                                    path="*"
                                     element={<Navigate to="/flows" />}
+                                    path="*"
                                 />
                             </Routes>
                         </Suspense>

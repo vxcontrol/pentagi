@@ -5,6 +5,8 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
+
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -15,16 +17,15 @@ import {
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 
 import ChatTask from './ChatTask';
 
 interface ChatTasksProps {
-    tasks: TaskFragmentFragment[];
-    selectedFlowId?: string | null;
     flow?: FlowFragmentFragment | null;
+    selectedFlowId?: null | string;
+    tasks: TaskFragmentFragment[];
 }
 
 const searchFormSchema = z.object({
@@ -32,22 +33,23 @@ const searchFormSchema = z.object({
 });
 
 // Helper function to check if text contains search value (case-insensitive)
-const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
     }
+
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
+const ChatTasks = ({ flow, selectedFlowId, tasks }: ChatTasksProps) => {
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
-        resolver: zodResolver(searchFormSchema),
         defaultValues: {
             search: '',
         },
+        resolver: zodResolver(searchFormSchema),
     });
 
     const searchValue = form.watch('search');
@@ -64,6 +66,7 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
     // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
+
         return () => {
             debouncedUpdateSearch.cancel();
         };
@@ -115,7 +118,9 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
 
     // Report export handlers
     const handleCopyToClipboard = async () => {
-        if (isReportDisabled) return;
+        if (isReportDisabled) {
+            return;
+        }
 
         const reportContent = generateReport(tasks || [], flow);
         const success = await copyToClipboard(reportContent);
@@ -126,7 +131,9 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
     };
 
     const handleDownloadMD = () => {
-        if (isReportDisabled || !flow) return;
+        if (isReportDisabled || !flow) {
+            return;
+        }
 
         try {
             // Generate report content
@@ -144,7 +151,9 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
     };
 
     const handleDownloadPDF = () => {
-        if (isReportDisabled || !flow || !selectedFlowId) return;
+        if (isReportDisabled || !flow || !selectedFlowId) {
+            return;
+        }
 
         // Open new tab (not popup) with report page and download flag
         const url = `/flows/${selectedFlowId}/report?download=true&silent=true`;
@@ -152,7 +161,9 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
     };
 
     const handleOpenWebView = () => {
-        if (isReportDisabled || !selectedFlowId) return;
+        if (isReportDisabled || !selectedFlowId) {
+            return;
+        }
 
         // Open new tab with report page for web viewing
         const url = `/flows/${selectedFlowId}/report`;
@@ -170,11 +181,11 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="shrink-0"
                                             aria-label="Export Report"
+                                            className="shrink-0"
                                             disabled={isReportDisabled}
+                                            size="icon"
+                                            variant="outline"
                                         >
                                             <NotepadText className="size-4" />
                                         </Button>
@@ -188,32 +199,32 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
                         <DropdownMenuContent align="start">
                             <DropdownMenuItem
                                 className="flex items-center gap-2"
-                                onClick={handleOpenWebView}
                                 disabled={isReportDisabled}
+                                onClick={handleOpenWebView}
                             >
                                 <ExternalLink className="size-4" />
                                 Open web view
                             </DropdownMenuItem>
                             <DropdownMenuItem
                                 className="flex items-center gap-2"
-                                onClick={handleCopyToClipboard}
                                 disabled={isReportDisabled}
+                                onClick={handleCopyToClipboard}
                             >
                                 <Copy className="size-4" />
                                 Copy to clipboard
                             </DropdownMenuItem>
                             <DropdownMenuItem
                                 className="flex items-center gap-2"
-                                onClick={handleDownloadMD}
                                 disabled={isReportDisabled}
+                                onClick={handleDownloadMD}
                             >
                                 <Download className="size-4" />
                                 Download MD
                             </DropdownMenuItem>
                             <DropdownMenuItem
                                 className="flex items-center gap-2"
-                                onClick={handleDownloadPDF}
                                 disabled={isReportDisabled}
+                                onClick={handleDownloadPDF}
                             >
                                 <Download className="size-4" />
                                 Download PDF
@@ -233,22 +244,22 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
                                             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                             <Input
                                                 {...field}
-                                                type="text"
-                                                placeholder="Search tasks and subtasks..."
-                                                className="px-9"
                                                 autoComplete="off"
+                                                className="px-9"
+                                                placeholder="Search tasks and subtasks..."
+                                                type="text"
                                             />
                                             {field.value && (
                                                 <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
                                                     className="absolute right-0 top-1/2 -translate-y-1/2"
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');
                                                         debouncedUpdateSearch.cancel();
                                                     }}
+                                                    size="icon"
+                                                    type="button"
+                                                    variant="ghost"
                                                 >
                                                     <X />
                                                 </Button>
@@ -267,8 +278,8 @@ const ChatTasks = ({ tasks, selectedFlowId, flow }: ChatTasksProps) => {
                     {sortedTasks.map((task) => (
                         <ChatTask
                             key={task.id}
-                            task={task}
                             searchValue={debouncedSearchValue}
+                            task={task}
                         />
                     ))}
                 </div>

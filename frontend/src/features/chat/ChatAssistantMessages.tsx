@@ -5,6 +5,9 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import type { AssistantFragmentFragment, AssistantLogFragmentFragment } from '@/graphql/types';
+import type { Provider } from '@/models/Provider';
+
 import { BreadcrumbProvider } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,30 +20,28 @@ import {
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import ChatAssistantFormInput from '@/features/chat/ChatAssistantFormInput';
-import type { AssistantFragmentFragment, AssistantLogFragmentFragment } from '@/graphql/types';
 import { useSettingsQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
-import type { Provider } from '@/models/Provider';
 import { isProviderValid } from '@/models/Provider';
 
 import { useChatScroll } from '../../hooks/use-chat-scroll';
 import ChatMessage from './ChatMessage';
 
 interface ChatAssistantMessagesProps {
-    selectedFlowId: string | null;
-    logs?: AssistantLogFragmentFragment[];
-    className?: string;
     assistants: AssistantFragmentFragment[];
-    selectedAssistantId?: string | null;
-    selectedProvider: Provider | null;
-    providers: Provider[];
-    onSelectAssistant?: (assistantId: string | null) => void;
+    className?: string;
+    logs?: AssistantLogFragmentFragment[];
     onCreateAssistant?: () => void;
-    onDeleteAssistant?: (assistantId: string) => void;
-    onSubmitMessage?: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
     onCreateNewAssistant?: (message: string, useAgents: boolean) => Promise<void>;
+    onDeleteAssistant?: (assistantId: string) => void;
+    onSelectAssistant?: (assistantId: null | string) => void;
     onStopAssistant?: (assistantId: string) => Promise<void>;
+    onSubmitMessage?: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
+    providers: Provider[];
+    selectedAssistantId?: null | string;
+    selectedFlowId: null | string;
+    selectedProvider: null | Provider;
 }
 
 const searchFormSchema = z.object({
@@ -48,19 +49,19 @@ const searchFormSchema = z.object({
 });
 
 const ChatAssistantMessages = ({
-    selectedFlowId,
-    logs,
-    className,
     assistants,
-    selectedAssistantId,
-    selectedProvider,
-    providers,
-    onSelectAssistant,
+    className,
+    logs,
     onCreateAssistant,
-    onDeleteAssistant,
-    onSubmitMessage,
     onCreateNewAssistant,
+    onDeleteAssistant,
+    onSelectAssistant,
     onStopAssistant,
+    onSubmitMessage,
+    providers,
+    selectedAssistantId,
+    selectedFlowId,
+    selectedProvider,
 }: ChatAssistantMessagesProps) => {
     const [isCreatingAssistant, setIsCreatingAssistant] = useState(false);
 
@@ -69,7 +70,7 @@ const ChatAssistantMessages = ({
 
     const textareaId = 'chat-textarea';
 
-    const { containerRef, endRef, isScrolledToBottom, hasNewMessages, scrollToEnd } = useChatScroll(
+    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(
         useMemo(() => (logs ? [...(logs || [])] : []), [logs]),
         selectedAssistantId ?? null,
     );
@@ -78,10 +79,10 @@ const ChatAssistantMessages = ({
     const { data: settingsData } = useSettingsQuery();
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
-        resolver: zodResolver(searchFormSchema),
         defaultValues: {
             search: '',
         },
+        resolver: zodResolver(searchFormSchema),
     });
 
     const searchValue = form.watch('search');
@@ -98,6 +99,7 @@ const ChatAssistantMessages = ({
     // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
+
         return () => {
             debouncedUpdateSearch.cancel();
         };
@@ -119,26 +121,39 @@ const ChatAssistantMessages = ({
 
     // Get the current selected assistant
     const selectedAssistant = useMemo(() => {
-        if (!selectedAssistantId || !assistants) return null;
+        if (!selectedAssistantId || !assistants) {
+            return null;
+        }
+
         return assistants.find((assistant) => assistant.id === selectedAssistantId) || null;
     }, [assistants, selectedAssistantId]);
 
     // Get the current selected assistant index (1-based, reversed)
     const selectedAssistantIndex = useMemo(() => {
-        if (!selectedAssistantId || !assistants) return null;
+        if (!selectedAssistantId || !assistants) {
+            return null;
+        }
+
         const index = assistants.findIndex((assistant) => assistant.id === selectedAssistantId);
+
         return index !== -1 ? assistants.length - index : null;
     }, [assistants, selectedAssistantId]);
 
     // Check if selected provider is available
     const isProviderAvailable = useMemo(() => {
-        if (!selectedProvider) return false;
+        if (!selectedProvider) {
+            return false;
+        }
+
         return isProviderValid(selectedProvider, providers);
     }, [providers, selectedProvider]);
 
     // Check if the assistant's provider is available
     const isAssistantProviderAvailable = useMemo(() => {
-        if (!selectedAssistant) return true; // If no assistant is selected, consider provider available
+        if (!selectedAssistant) {
+            return true;
+        } // If no assistant is selected, consider provider available
+
         return isProviderValid(selectedAssistant.provider, providers);
     }, [providers, selectedAssistant]);
 
@@ -148,6 +163,7 @@ const ChatAssistantMessages = ({
         if (isCreatingAssistant || !selectedAssistant) {
             return settingsData?.settings?.assistantUseAgents ?? false;
         }
+
         // If assistant is selected and not creating new, use its useAgents setting
         return selectedAssistant.useAgents;
     }, [selectedAssistant, settingsData?.settings?.assistantUseAgents, isCreatingAssistant]);
@@ -161,6 +177,7 @@ const ChatAssistantMessages = ({
 
         // First filter by selected assistant
         let assistantFilteredLogs = logs;
+
         if (selectedAssistantId) {
             assistantFilteredLogs = logs.filter((log) => log.assistantId === selectedAssistantId);
         } else {
@@ -170,6 +187,7 @@ const ChatAssistantMessages = ({
 
         // Then filter by search query if present
         const search = debouncedSearchValue.toLowerCase().trim();
+
         if (!search) {
             return assistantFilteredLogs;
         }
@@ -198,6 +216,7 @@ const ChatAssistantMessages = ({
             if (!selectedAssistantId) {
                 // If no assistant is selected, create a new one
                 setIsCreatingAssistant(true);
+
                 if (onCreateNewAssistant) {
                     await onCreateNewAssistant(message, useAgents);
                 }
@@ -233,6 +252,7 @@ const ChatAssistantMessages = ({
 
     const focusTextarea = useCallback(() => {
         const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
+
         if (textarea && !textarea.disabled) {
             textarea.focus();
         }
@@ -247,13 +267,13 @@ const ChatAssistantMessages = ({
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="relative w-12 shrink-0"
                                     aria-label="Select Assistant"
+                                    className="relative w-12 shrink-0"
                                     disabled={isCreatingAssistant}
-                                    tabIndex={-1}
                                     onFocus={(e) => e.preventDefault()}
+                                    size="icon"
+                                    tabIndex={-1}
+                                    variant="outline"
                                 >
                                     {isCreatingAssistant ? (
                                         <Loader2 className="size-4 animate-spin" />
@@ -288,12 +308,12 @@ const ChatAssistantMessages = ({
                                 {assistants.length > 0 && <DropdownMenuSeparator />}
                                 {assistants.map((assistant, index) => (
                                     <DropdownMenuItem
-                                        key={assistant.id}
                                         className={cn(
                                             'flex items-center justify-between gap-2',
                                             selectedAssistantId === assistant.id && 'bg-accent font-medium',
                                             !isProviderValid(assistant.provider, providers) && 'opacity-50',
                                         )}
+                                        key={assistant.id}
                                         tabIndex={-1}
                                     >
                                         <div
@@ -316,13 +336,13 @@ const ChatAssistantMessages = ({
                                             </div>
                                         </div>
                                         <Button
-                                            variant="ghost"
-                                            size="icon"
                                             className="ml-auto size-6"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleDeleteAssistant(assistant.id);
                                             }}
+                                            size="icon"
+                                            variant="ghost"
                                         >
                                             <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
                                         </Button>
@@ -343,24 +363,24 @@ const ChatAssistantMessages = ({
                                             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                             <Input
                                                 {...field}
-                                                type="text"
-                                                placeholder="Search messages..."
-                                                className="px-9"
                                                 autoComplete="off"
+                                                className="px-9"
                                                 disabled={isCreatingAssistant}
+                                                placeholder="Search messages..."
+                                                type="text"
                                             />
                                             {field.value && (
                                                 <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
                                                     className="absolute right-0 top-1/2 -translate-y-1/2"
+                                                    disabled={isCreatingAssistant}
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');
                                                         debouncedUpdateSearch.cancel();
                                                     }}
-                                                    disabled={isCreatingAssistant}
+                                                    size="icon"
+                                                    type="button"
+                                                    variant="ghost"
                                                 >
                                                     <X />
                                                 </Button>
@@ -385,8 +405,8 @@ const ChatAssistantMessages = ({
                 // Show messages for selected assistant
                 <div className="relative h-full overflow-y-hidden pb-4">
                     <div
-                        ref={containerRef}
                         className="h-full space-y-4 overflow-y-auto"
+                        ref={containerRef}
                     >
                         {filteredLogs.map((log) => (
                             <ChatMessage
@@ -400,10 +420,10 @@ const ChatAssistantMessages = ({
 
                     {hasNewMessages && !isScrolledToBottom && (
                         <Button
-                            type="button"
-                            size="icon"
                             className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
                             onClick={() => scrollToEnd()}
+                            size="icon"
+                            type="button"
                         >
                             <ChevronDown />
                         </Button>
@@ -429,13 +449,13 @@ const ChatAssistantMessages = ({
 
             <div className="sticky bottom-0 border-t bg-background p-px pt-4">
                 <ChatAssistantFormInput
-                    selectedFlowId={selectedFlowId}
                     assistantStatus={selectedAssistant?.status}
-                    isUseAgentsDefault={isUseAgentsDefault}
-                    isProviderAvailable={isProviderAvailable && isAssistantProviderAvailable}
-                    onSubmitMessage={handleSubmitMessage}
-                    onStopFlow={handleStopAssistant}
                     isCreatingAssistant={isCreatingAssistant}
+                    isProviderAvailable={isProviderAvailable && isAssistantProviderAvailable}
+                    isUseAgentsDefault={isUseAgentsDefault}
+                    onStopFlow={handleStopAssistant}
+                    onSubmitMessage={handleSubmitMessage}
+                    selectedFlowId={selectedFlowId}
                 />
             </div>
         </div>

@@ -5,16 +5,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import type { ScreenshotFragmentFragment } from '@/graphql/types';
+
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import type { ScreenshotFragmentFragment } from '@/graphql/types';
 
 import ChatScreenshot from './ChatScreenshot';
 
 interface ChatScreenshotsProps {
     screenshots: ScreenshotFragmentFragment[];
-    selectedFlowId?: string | null;
+    selectedFlowId?: null | string;
 }
 
 const searchFormSchema = z.object({
@@ -26,25 +27,27 @@ const ChatScreenshots = ({ screenshots, selectedFlowId }: ChatScreenshotsProps) 
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
-        resolver: zodResolver(searchFormSchema),
         defaultValues: {
             search: '',
         },
+        resolver: zodResolver(searchFormSchema),
     });
 
     const searchValue = form.watch('search');
 
     // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
-        () => debounce((value: string) => {
-            setDebouncedSearchValue(value);
-        }, 500),
+        () =>
+            debounce((value: string) => {
+                setDebouncedSearchValue(value);
+            }, 500),
         [],
     );
 
     // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
+
         return () => {
             debouncedUpdateSearch.cancel();
         };
@@ -93,22 +96,22 @@ const ChatScreenshots = ({ screenshots, selectedFlowId }: ChatScreenshotsProps) 
                                     <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input
                                         {...field}
-                                        type="text"
-                                        placeholder="Search screenshots..."
-                                        className="px-9"
                                         autoComplete="off"
+                                        className="px-9"
+                                        placeholder="Search screenshots..."
+                                        type="text"
                                     />
                                     {field.value && (
                                         <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
                                             className="absolute right-0 top-1/2 -translate-y-1/2"
                                             onClick={() => {
                                                 form.reset({ search: '' });
                                                 setDebouncedSearchValue('');
                                                 debouncedUpdateSearch.cancel();
                                             }}
+                                            size="icon"
+                                            type="button"
+                                            variant="ghost"
                                         >
                                             <X />
                                         </Button>

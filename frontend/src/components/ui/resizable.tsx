@@ -13,8 +13,8 @@ const ResizablePanelGroup = ({ className, ...props }: React.ComponentProps<typeo
 const ResizablePanel = ResizablePrimitive.Panel;
 
 const ResizableHandle = ({
-    withHandle,
     className,
+    withHandle,
     ...props
 }: React.ComponentProps<typeof ResizablePrimitive.PanelResizeHandle> & {
     withHandle?: boolean;

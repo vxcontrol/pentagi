@@ -21,11 +21,11 @@ import {
 
 // Types
 export interface MenuItem {
-    id: string;
-    title: string;
-    path: string;
     icon?: React.ReactNode;
+    id: string;
     isActive?: boolean;
+    path: string;
+    title: string;
 }
 
 interface SettingsSidebarMenuItemProps {
@@ -35,16 +35,16 @@ interface SettingsSidebarMenuItemProps {
 // Settings menu items definition
 const menuItems: readonly MenuItem[] = [
     {
-        id: 'providers',
-        title: 'Providers',
-        path: '/settings/providers',
         icon: <Plug className="size-4" />,
+        id: 'providers',
+        path: '/settings/providers',
+        title: 'Providers',
     },
     {
-        id: 'prompts',
-        title: 'Prompts',
-        path: '/settings/prompts',
         icon: <FileText className="size-4" />,
+        id: 'prompts',
+        path: '/settings/prompts',
+        title: 'Prompts',
     },
     // {
     //     id: 'mcp-servers',
@@ -119,8 +119,8 @@ const SettingsHeader = () => {
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator
-                orientation="vertical"
                 className="mr-2 h-4"
+                orientation="vertical"
             />
             <h1 className="text-lg font-semibold">{title}</h1>
         </header>
@@ -144,8 +144,8 @@ const SettingsSidebar = () => {
                         <SidebarMenu>
                             {menuItems.map((item) => (
                                 <SettingsSidebarMenuItem
-                                    key={item.id}
                                     item={item}
+                                    key={item.id}
                                 />
                             ))}
                         </SidebarMenu>

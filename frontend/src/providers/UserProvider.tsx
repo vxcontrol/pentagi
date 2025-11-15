@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
+
 import { createContext, use, useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import type { AuthInfo, AuthInfoResponse } from '@/models/Info';
+
 import { axios } from '@/lib/axios';
 import { getReturnUrlParam } from '@/lib/utils/auth';
 import { baseUrl } from '@/models/Api';
-import type { AuthInfo, AuthInfoResponse } from '@/models/Info';
 
 export interface LoginCredentials {
     mail: string;
@@ -14,25 +16,25 @@ export interface LoginCredentials {
 }
 
 export interface LoginResult {
-    success: boolean;
     error?: string;
     passwordChangeRequired?: boolean;
+    success: boolean;
 }
 
-export type OAuthProvider = 'google' | 'github';
+export type OAuthProvider = 'github' | 'google';
 
 interface UserContextType {
     authInfo: AuthInfo | null;
-    isLoading: boolean;
-    setAuth: (authInfo: AuthInfo) => void;
     clearAuth: () => void;
     isAuthenticated: () => boolean;
-    logout: (returnUrl?: string) => Promise<void>;
+    isLoading: boolean;
     login: (credentials: LoginCredentials) => Promise<LoginResult>;
     loginWithOAuth: (provider: OAuthProvider) => Promise<LoginResult>;
+    logout: (returnUrl?: string) => Promise<void>;
+    setAuth: (authInfo: AuthInfo) => void;
 }
 
-const UserContext = createContext<UserContextType | undefined>(undefined);
+const UserContext = createContext<undefined | UserContextType>(undefined);
 
 export const AUTH_STORAGE_KEY = 'auth';
 
@@ -47,11 +49,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         const initializeAuth = async () => {
             try {
                 const storedData = localStorage.getItem(AUTH_STORAGE_KEY);
+
                 if (storedData) {
                     const parsedAuthInfo: AuthInfo = JSON.parse(storedData);
+
                     if (parsedAuthInfo) {
                         setAuthInfo(parsedAuthInfo);
                         setIsLoading(false);
+
                         return;
                     }
                 }
@@ -63,6 +68,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             // If no auth data in localStorage, load from API (for guest with providers list)
             try {
                 const info: AuthInfoResponse = await axios.get('/info');
+
                 if (info?.status === 'success' && info.data) {
                     // Set authInfo even for guest (contains providers list)
                     setAuthInfo(info.data);
@@ -92,8 +98,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if (!authInfo?.user || !authInfo?.expires_at) {
             return false;
         }
+
         const now = new Date();
         const expirationDate = new Date(authInfo.expires_at);
+
         return expirationDate > now;
     }, [authInfo]);
 
@@ -114,7 +122,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
     const login = useCallback(async (credentials: LoginCredentials): Promise<LoginResult> => {
         try {
-            const loginResponse = await axios.post<unknown, { status: string; data?: unknown; error?: string }>(
+            const loginResponse = await axios.post<unknown, { data?: unknown; error?: string; status: string }>(
                 '/auth/login',
                 credentials,
             );
@@ -122,7 +130,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             if (loginResponse?.status !== 'success') {
                 const errorMessage = 'Invalid login or password';
                 toast.error(errorMessage);
-                return { success: false, error: errorMessage };
+
+                return { error: errorMessage, success: false };
             }
 
             // After login, backend set cookie, so we need to get fresh auth info
@@ -131,7 +140,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             if (infoResponse?.status !== 'success' || !infoResponse.data) {
                 const errorMessage = 'Failed to load user information';
                 toast.error(errorMessage);
-                return { success: false, error: errorMessage };
+
+                return { error: errorMessage, success: false };
             }
 
             // Save auth info
@@ -140,7 +150,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             // Check if password change is required for local users
             if (infoResponse.data.user?.type === 'local' && infoResponse.data.user.password_change_required) {
                 toast.warning('Password change required');
-                return { success: true, passwordChangeRequired: true };
+
+                return { passwordChangeRequired: true, success: true };
             }
 
             // toast.success('Successfully logged in');
@@ -148,7 +159,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         } catch {
             const errorMessage = 'Login failed. Please try again.';
             toast.error(errorMessage);
-            return { success: false, error: errorMessage };
+
+            return { error: errorMessage, success: false };
         }
     }, []);
 
@@ -168,9 +180,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if (!popup) {
             const errorMessage = 'Popup blocked. Please allow popups for this site.';
             toast.error(errorMessage);
+
             return {
-                success: false,
                 error: errorMessage,
+                success: false,
             };
         }
 
@@ -197,6 +210,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                             cleanup();
                             // toast.success('Successfully logged in');
                             resolve({ success: true });
+
                             return;
                         }
                     } catch (error) {
@@ -209,8 +223,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 const errorMessage = event.data.error || 'Authentication failed';
                 toast.error(errorMessage);
                 resolve({
-                    success: false,
                     error: errorMessage,
+                    success: false,
                 });
             };
 
@@ -226,8 +240,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                     const errorMessage = 'Authentication cancelled';
                     toast.info(errorMessage);
                     resolve({
-                        success: false,
                         error: errorMessage,
+                        success: false,
                     });
                 }
             }, popupCheckInterval);
@@ -243,8 +257,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 const errorMessage = 'Authentication timeout';
                 toast.error(errorMessage);
                 resolve({
-                    success: false,
                     error: errorMessage,
+                    success: false,
                 });
             }, popupTimeout);
         });
@@ -295,13 +309,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         <UserContext
             value={{
                 authInfo,
-                isLoading,
-                setAuth,
                 clearAuth,
                 isAuthenticated,
-                logout,
+                isLoading,
                 login,
                 loginWithOAuth,
+                logout,
+                setAuth,
             }}
         >
             {children}
@@ -311,8 +325,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
 export const useUser = () => {
     const context = use(UserContext);
+
     if (context === undefined) {
         throw new Error('useUser must be used within a UserProvider');
     }
+
     return context;
 };

@@ -5,53 +5,48 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
-import {
-    Form,
-    FormControl,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { axios } from '@/lib/axios';
 
-const passwordChangeSchema = z.object({
-    currentPassword: z.string().min(1, { message: 'Current password is required' }),
-    newPassword: z.string().min(8, { message: 'Password must be at least 8 characters' }),
-    confirmPassword: z.string().min(1, { message: 'Confirm your password' }),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
-});
+const passwordChangeSchema = z
+    .object({
+        confirmPassword: z.string().min(1, { message: 'Confirm your password' }),
+        currentPassword: z.string().min(1, { message: 'Current password is required' }),
+        newPassword: z.string().min(8, { message: 'Password must be at least 8 characters' }),
+    })
+    .refine((data) => data.newPassword === data.confirmPassword, {
+        message: "Passwords don't match",
+        path: ['confirmPassword'],
+    });
+
+interface PasswordChangeFormProps {
+    isModal?: boolean;
+    onCancel?: () => void;
+    onSkip?: () => void;
+    onSuccess?: () => void;
+    showSkip?: boolean;
+}
 
 type PasswordChangeFormValues = z.infer<typeof passwordChangeSchema>;
 
-interface PasswordChangeFormProps {
-    onSuccess?: () => void;
-    onCancel?: () => void;
-    showSkip?: boolean;
-    onSkip?: () => void;
-    isModal?: boolean;
-}
-
 export function PasswordChangeForm({
-    onSuccess,
-    onCancel,
-    showSkip = false,
-    onSkip,
     isModal = true,
+    onCancel,
+    onSkip,
+    onSuccess,
+    showSkip = false,
 }: PasswordChangeFormProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<null | string>(null);
 
     const form = useForm<PasswordChangeFormValues>({
-        resolver: zodResolver(passwordChangeSchema),
         defaultValues: {
+            confirmPassword: '',
             currentPassword: '',
             newPassword: '',
-            confirmPassword: '',
         },
+        resolver: zodResolver(passwordChangeSchema),
     });
 
     const handleSubmit = async (values: PasswordChangeFormValues) => {
@@ -60,9 +55,9 @@ export function PasswordChangeForm({
 
         try {
             await axios.put('/user/password', {
+                confirm_password: values.confirmPassword,
                 current_password: values.currentPassword,
                 password: values.newPassword,
-                confirm_password: values.confirmPassword,
             });
 
             if (onSuccess) {
@@ -77,7 +72,10 @@ export function PasswordChangeForm({
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            <form
+                className="space-y-4"
+                onSubmit={form.handleSubmit(handleSubmit)}
+            >
                 <FormField
                     control={form.control}
                     name="currentPassword"
@@ -87,8 +85,8 @@ export function PasswordChangeForm({
                             <FormControl>
                                 <Input
                                     {...field}
-                                    type="password"
                                     placeholder="Enter your current password"
+                                    type="password"
                                 />
                             </FormControl>
                             <FormMessage />
@@ -105,8 +103,8 @@ export function PasswordChangeForm({
                             <FormControl>
                                 <Input
                                     {...field}
-                                    type="password"
                                     placeholder="Enter new password"
+                                    type="password"
                                 />
                             </FormControl>
                             <FormMessage />
@@ -123,8 +121,8 @@ export function PasswordChangeForm({
                             <FormControl>
                                 <Input
                                     {...field}
-                                    type="password"
                                     placeholder="Confirm new password"
+                                    type="password"
                                 />
                             </FormControl>
                             <FormMessage />
@@ -137,26 +135,26 @@ export function PasswordChangeForm({
                 <div className="flex justify-end gap-2 pt-2">
                     {showSkip && (
                         <Button
+                            className="text-muted-foreground"
+                            onClick={onSkip}
                             type="button"
                             variant="ghost"
-                            onClick={onSkip}
-                            className="text-muted-foreground"
                         >
                             Skip for now
                         </Button>
                     )}
                     {isModal && (
                         <Button
+                            onClick={onCancel}
                             type="button"
                             variant="outline"
-                            onClick={onCancel}
                         >
                             Cancel
                         </Button>
                     )}
                     <Button
-                        type="submit"
                         disabled={isSubmitting || (!form.formState.isValid && form.formState.isSubmitted)}
+                        type="submit"
                     >
                         {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
                         <span>Update Password</span>

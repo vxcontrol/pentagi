@@ -1,10 +1,11 @@
 import { Copy } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { AssistantLogFragmentFragment, MessageLogFragmentFragment } from '@/graphql/types';
+
 import Markdown from '@/components/shared/Markdown';
 import Terminal from '@/components/shared/Terminal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { AssistantLogFragmentFragment, MessageLogFragmentFragment } from '@/graphql/types';
 import { MessageLogType, ResultFormat } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/format';
@@ -13,32 +14,34 @@ import { copyMessageToClipboard } from '@/lib/сlipboard';
 import ChatMessageTypeIcon from './ChatMessageTypeIcon';
 
 interface ChatMessageProps {
-    log: MessageLogFragmentFragment | AssistantLogFragmentFragment;
+    log: AssistantLogFragmentFragment | MessageLogFragmentFragment;
     searchValue?: string;
 }
 
 // Helper function to check if text contains search value (case-insensitive)
-const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
     }
+
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
 const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
-    const { type, createdAt, message, thinking, result, resultFormat = ResultFormat.Plain } = log;
+    const { createdAt, message, result, resultFormat = ResultFormat.Plain, thinking, type } = log;
     const isReportMessage = type === MessageLogType.Report;
 
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
+
         if (!trimmedSearch) {
-            return { hasThinkingMatch: false, hasResultMatch: false };
+            return { hasResultMatch: false, hasThinkingMatch: false };
         }
 
         return {
-            hasThinkingMatch: containsSearchValue(thinking, trimmedSearch),
             hasResultMatch: containsSearchValue(result, trimmedSearch),
+            hasThinkingMatch: containsSearchValue(thinking, trimmedSearch),
         };
     }, [searchValue, thinking, result]);
 
@@ -54,6 +57,7 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
             if (searchChecks.hasThinkingMatch) {
                 setIsThinkingVisible(true);
             }
+
             // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
                 setIsDetailsVisible(true);
@@ -76,10 +80,10 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
 
     const handleCopy = useCallback(async () => {
         await copyMessageToClipboard({
-            thinking,
             message,
             result,
             resultFormat,
+            thinking,
         });
     }, [thinking, message, result, resultFormat]);
 
@@ -93,7 +97,9 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
 
     // Only render details content when it's visible to reduce DOM nodes
     const renderDetailsContent = () => {
-        if (!isDetailsVisible) return null;
+        if (!isDetailsVisible) {
+            return null;
+        }
 
         return (
             <>
@@ -116,8 +122,8 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
                 )}
                 {resultFormat === ResultFormat.Terminal && (
                     <Terminal
-                        logs={[result as string]}
                         className="h-[240px] w-full bg-card py-1 pl-1"
+                        logs={[result as string]}
                     />
                 )}
             </>
@@ -125,7 +131,9 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
     };
 
     const renderThinkingContent = () => {
-        if (!shouldShowThinking) return null;
+        if (!shouldShowThinking) {
+            return null;
+        }
 
         return (
             <>
@@ -153,8 +161,8 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
                 {shouldShowThinkingToggle && (
                     <div className="mb-2 text-xs text-muted-foreground">
                         <div
-                            onClick={toggleThinking}
                             className="cursor-pointer"
+                            onClick={toggleThinking}
                         >
                             {isThinkingVisible ? 'Hide thinking' : 'Show thinking'}
                         </div>
@@ -178,8 +186,8 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
                 {result && (
                     <div className="mt-2 text-xs text-muted-foreground">
                         <div
-                            onClick={toggleDetails}
                             className="cursor-pointer"
+                            onClick={toggleDetails}
                         >
                             {isDetailsVisible ? 'Hide details' : 'Show details'}
                         </div>

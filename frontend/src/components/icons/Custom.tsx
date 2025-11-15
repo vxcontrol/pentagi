@@ -7,10 +7,10 @@ interface CustomProps extends React.SVGProps<SVGSVGElement> {
 const Custom = ({ className, ...props }: CustomProps) => {
     return (
         <svg
+            className={cn(className)}
             fill="currentColor"
             fillRule="evenodd"
             viewBox="0 0 24 24"
-            className={cn(className)}
             {...props}
         >
             <title>Custom</title>

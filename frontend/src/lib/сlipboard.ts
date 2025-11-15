@@ -6,10 +6,10 @@ import { ResultFormat } from '@/graphql/types';
  * Interface for message data that can be copied to clipboard
  */
 export interface CopyableMessage {
-    thinking?: string | null;
-    message?: string | null;
-    result?: string | null;
+    message?: null | string;
+    result?: null | string;
     resultFormat?: ResultFormat;
+    thinking?: null | string;
 }
 
 /**
@@ -18,7 +18,7 @@ export interface CopyableMessage {
  */
 export const getCleanTerminalText = (terminalContent: string): Promise<string> => {
     return new Promise((resolve, reject) => {
-        let hiddenTerminal: XTerminal | null = null;
+        let hiddenTerminal: null | XTerminal = null;
         let hiddenDiv: HTMLDivElement | null = null;
         let timeoutId: NodeJS.Timeout | null = null;
         let safetyTimeoutId: NodeJS.Timeout | null = null;
@@ -43,6 +43,7 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                 } catch {
                     // Ignore disposal errors
                 }
+
                 hiddenTerminal = null;
             }
 
@@ -53,6 +54,7 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                 } catch {
                     // Ignore removal errors
                 }
+
                 hiddenDiv = null;
             }
         };
@@ -76,10 +78,10 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
         try {
             // Create a hidden terminal instance
             hiddenTerminal = new XTerminal({
+                cols: 120,
                 convertEol: true,
                 disableStdin: true,
                 rows: 50,
-                cols: 120,
             });
 
             // Create a hidden div to mount the terminal
@@ -105,6 +107,7 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
 
                     if (!hiddenTerminal) {
                         safeResolve(terminalContent);
+
                         return;
                     }
 
@@ -114,9 +117,12 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
 
                     for (let i = 0; i < buffer.length; i++) {
                         const line = buffer.getLine(i);
+
                         if (line) {
                             const lineText = line.translateToString(true).trimEnd();
-                            if (lineText || cleanText) { // Include empty lines only if we have content
+
+                            if (lineText || cleanText) {
+                                // Include empty lines only if we have content
                                 cleanText += `${lineText}\n`;
                             }
                         }
@@ -147,7 +153,7 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
  * Formats message content for copying to clipboard as markdown with collapsible sections
  */
 export const formatMessageForClipboard = async (messageData: CopyableMessage): Promise<string> => {
-    const { thinking, message, result, resultFormat = ResultFormat.Plain } = messageData;
+    const { message, result, resultFormat = ResultFormat.Plain, thinking } = messageData;
     let content = '';
 
     // Add thinking if present

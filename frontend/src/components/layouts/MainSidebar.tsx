@@ -37,7 +37,7 @@ const MainSidebar = () => {
 
     const { authInfo, logout } = useUser();
     const user = authInfo?.user;
-    const { theme, setTheme } = useTheme();
+    const { setTheme, theme } = useTheme();
 
     const handlePasswordChangeSuccess = () => {
         setIsPasswordModalOpen(false);
@@ -91,8 +91,8 @@ const MainSidebar = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <SidebarMenuButton
-                                    size="lg"
                                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                                    size="lg"
                                 >
                                     <Avatar className="flex size-8 items-center justify-center rounded-lg bg-muted">
                                         <AvatarFallback className="flex items-center justify-center rounded-lg">
@@ -107,9 +107,9 @@ const MainSidebar = () => {
                                 </SidebarMenuButton>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
+                                align="end"
                                 className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
                                 side="bottom"
-                                align="end"
                                 sideOffset={4}
                             >
                                 <DropdownMenuLabel className="p-0 font-normal">
@@ -159,16 +159,16 @@ const MainSidebar = () => {
             <SidebarRail />
 
             <Dialog
-                open={isPasswordModalOpen}
                 onOpenChange={(open) => setIsPasswordModalOpen(open)}
+                open={isPasswordModalOpen}
             >
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Change Password</DialogTitle>
                     </DialogHeader>
                     <PasswordChangeForm
-                        onSuccess={handlePasswordChangeSuccess}
                         onCancel={() => setIsPasswordModalOpen(false)}
+                        onSuccess={handlePasswordChangeSuccess}
                     />
                 </DialogContent>
             </Dialog>

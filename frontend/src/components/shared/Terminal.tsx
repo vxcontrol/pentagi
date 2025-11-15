@@ -1,11 +1,12 @@
 import '@xterm/xterm/css/xterm.css';
 
+import type { ITerminalOptions, ITheme } from '@xterm/xterm';
+
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
-import type { ITerminalOptions, ITheme } from '@xterm/xterm';
 import { Terminal as XTerminal } from '@xterm/xterm';
 import debounce from 'lodash/debounce';
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
@@ -15,89 +16,89 @@ import { cn } from '@/lib/utils';
 import { useTheme } from '@/providers/ThemeProvider';
 
 const terminalOptions: ITerminalOptions = {
+    allowProposedApi: true,
+    allowTransparency: true,
     convertEol: true,
+    cursorBlink: false,
+    customGlyphs: true,
+    disableStdin: true,
+    fastScrollModifier: 'alt',
+    fastScrollSensitivity: 10,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
     fontSize: 12,
     fontWeight: 600,
-    allowTransparency: true,
-    cursorBlink: false,
-    disableStdin: true,
-    allowProposedApi: true,
-    customGlyphs: true,
-    scrollback: 2500,
     screenReaderMode: false,
-    fastScrollSensitivity: 10,
-    fastScrollModifier: 'alt',
+    scrollback: 2500,
     smoothScrollDuration: 0, // Disable smooth scrolling
 } as const;
 
 // Search decoration styles for dark theme - using HEX format as required
 const darkSearchDecorations = {
-    matchBackground: '#666666',
-    matchOverviewRuler: '#000000',
     activeMatchBackground: '#AAAAAA',
     activeMatchColorOverviewRuler: '#000000',
+    matchBackground: '#666666',
+    matchOverviewRuler: '#000000',
 } as const;
 
 // Search decoration styles for light theme - using HEX format as required
 const lightSearchDecorations = {
-    matchBackground: '#000000',
-    matchOverviewRuler: '#000000',
     activeMatchBackground: '#555555',
     activeMatchColorOverviewRuler: '#000000',
+    matchBackground: '#000000',
+    matchOverviewRuler: '#000000',
 } as const;
 
 const darkTheme: ITheme = {
     background: '#020817',
-    foreground: '#f4f4f5',
+    black: '#f4f4f5',
+    blue: '#60a5fa',
+    brightBlack: '#e4e4e7',
+    brightBlue: '#93c5fd',
+    brightCyan: '#67e8f9',
+    brightGreen: '#86efac',
+    brightMagenta: '#d8b4fe',
+    brightRed: '#fca5a5',
+    brightWhite: '#71717a',
+    brightYellow: '#fde047',
     cursor: '#f4f4f5',
     cursorAccent: '#f4f4f5',
-    selectionBackground: 'rgba(96, 165, 250, 0.2)',
-    black: '#f4f4f5',
-    red: '#f87171',
-    green: '#4ade80',
-    yellow: '#facc15',
-    blue: '#60a5fa',
-    magenta: '#c084fc',
     cyan: '#22d3ee',
+    foreground: '#f4f4f5',
+    green: '#4ade80',
+    magenta: '#c084fc',
+    red: '#f87171',
+    selectionBackground: 'rgba(96, 165, 250, 0.2)',
     white: '#020817',
-    brightBlack: '#e4e4e7',
-    brightRed: '#fca5a5',
-    brightGreen: '#86efac',
-    brightYellow: '#fde047',
-    brightBlue: '#93c5fd',
-    brightMagenta: '#d8b4fe',
-    brightCyan: '#67e8f9',
-    brightWhite: '#71717a',
+    yellow: '#facc15',
 } as const;
 
 const lightTheme: ITheme = {
     background: '#ffffff',
-    foreground: '#020817',
+    black: '#020817',
+    blue: '#3b82f6',
+    brightBlack: '#64748b',
+    brightBlue: '#60a5fa',
+    brightCyan: '#22d3ee',
+    brightGreen: '#4ade80',
+    brightMagenta: '#c084fc',
+    brightRed: '#f87171',
+    brightWhite: '#f1f5f9',
+    brightYellow: '#facc15',
     cursor: '#020817',
     cursorAccent: '#020817',
-    selectionBackground: 'rgba(59, 130, 246, 0.1)',
-    black: '#020817',
-    red: '#ef4444',
-    green: '#22c55e',
-    yellow: '#eab308',
-    blue: '#3b82f6',
-    magenta: '#a855f7',
     cyan: '#06b6d4',
+    foreground: '#020817',
+    green: '#22c55e',
+    magenta: '#a855f7',
+    red: '#ef4444',
+    selectionBackground: 'rgba(59, 130, 246, 0.1)',
     white: '#e2e8f0',
-    brightBlack: '#64748b',
-    brightRed: '#f87171',
-    brightGreen: '#4ade80',
-    brightYellow: '#facc15',
-    brightBlue: '#60a5fa',
-    brightMagenta: '#c084fc',
-    brightCyan: '#22d3ee',
-    brightWhite: '#f1f5f9',
+    yellow: '#eab308',
 } as const;
 
 interface TerminalProps {
-    logs: string[];
     className?: string;
+    logs: string[];
     searchValue?: string;
 }
 
@@ -106,15 +107,20 @@ interface TerminalRef {
     findPrevious: () => void;
 }
 
-const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?: React.RefObject<TerminalRef | null> }) => {
+const Terminal = ({
+    className,
+    logs,
+    ref,
+    searchValue,
+}: TerminalProps & { ref?: React.RefObject<null | TerminalRef> }) => {
     const terminalRef = useRef<HTMLDivElement>(null);
-    const xtermRef = useRef<XTerminal | null>(null);
+    const xtermRef = useRef<null | XTerminal>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
-    const searchAddonRef = useRef<SearchAddon | null>(null);
+    const searchAddonRef = useRef<null | SearchAddon>(null);
     const lastLogIndexRef = useRef<number>(0);
-    const webglAddonRef = useRef<WebglAddon | null>(null);
-    const resizeObserverRef = useRef<ResizeObserver | null>(null);
-    const debouncedFitRef = useRef<ReturnType<typeof debounce> | null>(null);
+    const webglAddonRef = useRef<null | WebglAddon>(null);
+    const resizeObserverRef = useRef<null | ResizeObserver>(null);
+    const debouncedFitRef = useRef<null | ReturnType<typeof debounce>>(null);
     const { theme } = useTheme();
     const [isTerminalOpened, setIsTerminalOpened] = useState(false);
     const [isTerminalReady, setIsTerminalReady] = useState(false);
@@ -139,9 +145,9 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
                     try {
                         searchAddonRef.current.findNext(searchValue.trim(), {
                             caseSensitive: false,
-                            wholeWord: false,
-                            regex: false,
                             decorations: getSearchDecorations(),
+                            regex: false,
+                            wholeWord: false,
                         });
                     } catch (error: unknown) {
                         Log.error('Terminal findNext failed:', error);
@@ -153,9 +159,9 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
                     try {
                         searchAddonRef.current.findPrevious(searchValue.trim(), {
                             caseSensitive: false,
-                            wholeWord: false,
-                            regex: false,
                             decorations: getSearchDecorations(),
+                            regex: false,
+                            wholeWord: false,
                         });
                     } catch (error: unknown) {
                         Log.error('Terminal findPrevious failed:', error);
@@ -200,6 +206,7 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
             clearTimeout(initTimeoutRef.current);
             initTimeoutRef.current = null;
         }
+
         if (fitTimeoutRef.current) {
             clearTimeout(fitTimeoutRef.current);
             fitTimeoutRef.current = null;
@@ -312,8 +319,14 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
 
             return () => {
                 // Cleanup on unmount
-                if (initTimeoutRef.current) clearTimeout(initTimeoutRef.current);
-                if (fitTimeoutRef.current) clearTimeout(fitTimeoutRef.current);
+                if (initTimeoutRef.current) {
+                    clearTimeout(initTimeoutRef.current);
+                }
+
+                if (fitTimeoutRef.current) {
+                    clearTimeout(fitTimeoutRef.current);
+                }
+
                 clearAllTimeouts();
 
                 if (resizeObserverRef.current) {
@@ -332,6 +345,7 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
                     } catch {
                         // Ignore errors during disposal
                     }
+
                     searchAddonRef.current = null;
                 }
 
@@ -341,6 +355,7 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
                     } catch {
                         // Ignore errors during disposal
                     }
+
                     webglAddonRef.current = null;
                 }
 
@@ -350,6 +365,7 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
                     } catch {
                         // Ignore errors during disposal
                     }
+
                     fitAddonRef.current = null;
                 }
 
@@ -359,6 +375,7 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
                     } catch {
                         // Ignore errors during disposal
                     }
+
                     xtermRef.current = null;
                 }
 
@@ -372,6 +389,7 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
         } catch (error: unknown) {
             Log.error('Terminal initialization failed:', error);
             terminalInitializedRef.current = false;
+
             return;
         }
     }, [theme]);
@@ -389,9 +407,9 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
                 // Perform search with theme-appropriate decorations
                 searchAddon.findNext(searchValue.trim(), {
                     caseSensitive: false,
-                    wholeWord: false,
-                    regex: false,
                     decorations: getSearchDecorations(),
+                    regex: false,
+                    wholeWord: false,
                 });
             } else {
                 // Clear search highlighting when search value is empty
@@ -426,6 +444,7 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
                 });
                 lastLogIndexRef.current = 0;
                 prevLogsLengthRef.current = 0;
+
                 return;
             }
 
@@ -477,8 +496,8 @@ const Terminal = ({ ref, logs, className, searchValue }: TerminalProps & { ref?:
 
     return (
         <div
-            ref={terminalRef}
             className={cn('overflow-hidden', className)}
+            ref={terminalRef}
         />
     );
 };

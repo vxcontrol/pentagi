@@ -1,9 +1,10 @@
 import { Copy } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { VectorStoreLogFragmentFragment } from '@/graphql/types';
+
 import Markdown from '@/components/shared/Markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { VectorStoreLogFragmentFragment } from '@/graphql/types';
 import { VectorStoreAction } from '@/graphql/types';
 import { formatDate } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
@@ -14,11 +15,11 @@ import ChatVectorStoreActionIcon from './ChatVectorStoreActionIcon';
 const getDescription = (log: VectorStoreLogFragmentFragment) => {
     const { action, filter } = log;
     const {
-        doc_type: docType,
-        code_lang: codeLang,
-        tool_name: toolName,
-        guide_type: guideType,
         answer_type: answerType,
+        code_lang: codeLang,
+        doc_type: docType,
+        guide_type: guideType,
+        tool_name: toolName,
     } = JSON.parse(filter) || {};
 
     let description = '';
@@ -58,19 +59,21 @@ interface ChatVectorStoreProps {
 }
 
 // Helper function to check if text contains search value (case-insensitive)
-const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
     }
+
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
 const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
-    const { executor, initiator, query, result, action, taskId, subtaskId, createdAt } = log;
+    const { action, createdAt, executor, initiator, query, result, subtaskId, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
+
         if (!trimmedSearch) {
             return { hasQueryMatch: false, hasResultMatch: false };
         }
@@ -128,8 +131,8 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
                 {result && (
                     <div className="mt-2 text-xs text-muted-foreground">
                         <div
-                            onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                             className="cursor-pointer"
+                            onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                         >
                             {isDetailsVisible ? 'Hide details' : 'Show details'}
                         </div>
@@ -150,13 +153,13 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
             <div className="mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground">
                 <span className="flex items-center gap-0.5">
                     <ChatAgentIcon
-                        type={initiator}
                         className="text-muted-foreground"
+                        type={initiator}
                     />
                     <span className="text-muted-foreground/50">→</span>
                     <ChatAgentIcon
-                        type={executor}
                         className="text-muted-foreground"
+                        type={executor}
                     />
                 </span>
                 <Tooltip>

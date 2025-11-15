@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 
+import type { Provider } from '@/models/Provider';
+
 import MainSidebar from '@/components/layouts/MainSidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import {
@@ -9,7 +11,6 @@ import {
     useFlowUpdatedSubscription,
     useProvidersQuery,
 } from '@/graphql/types';
-import type { Provider } from '@/models/Provider';
 import { findProviderByName, isProviderValid, sortProviders } from '@/models/Provider';
 
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
@@ -20,8 +21,8 @@ const MainLayout = () => {
 
     const { data: providersData } = useProvidersQuery();
 
-    const [selectedFlowId, setSelectedFlowId] = useState<string | null>(flowId ?? null);
-    const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
+    const [selectedFlowId, setSelectedFlowId] = useState<null | string>(flowId ?? null);
+    const [selectedProvider, setSelectedProvider] = useState<null | Provider>(null);
 
     const needsProviderUpdateRef = useRef(true);
     const previousFlowIdRef = useRef(flowId);
@@ -63,8 +64,10 @@ const MainLayout = () => {
             // Case 3: If saved provider exists and is valid, use it
             if (savedProviderName) {
                 const savedProvider = findProviderByName(savedProviderName, sortedProviders);
+
                 if (savedProvider) {
                     setSelectedProvider(savedProvider);
+
                     return;
                 }
             }
@@ -97,6 +100,7 @@ const MainLayout = () => {
     useLayoutEffect(() => {
         if (flowId && flowId !== previousFlowIdRef.current) {
             previousFlowIdRef.current = flowId;
+
             if (flowId !== selectedFlowId) {
                 setSelectedFlowId(flowId);
             }
@@ -109,10 +113,10 @@ const MainLayout = () => {
             <SidebarInset>
                 <Outlet
                     context={{
+                        onChangeSelectedProvider: handleProviderChange,
+                        selectedFlowId,
                         selectedProvider,
                         sortedProviders,
-                        selectedFlowId,
-                        onChangeSelectedProvider: handleProviderChange,
                     }}
                 />
             </SidebarInset>

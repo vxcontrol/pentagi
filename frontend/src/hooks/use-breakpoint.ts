@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export enum BreakpointName {
+    desktop = 'desktop',
     mobile = 'mobile',
     tablet = 'tablet',
-    desktop = 'desktop',
 }
 
 export const breakpoints = {
+    [BreakpointName.desktop]: Infinity,
     [BreakpointName.mobile]: 768,
     [BreakpointName.tablet]: 1200,
-    [BreakpointName.desktop]: Infinity,
 } as const;
 
-const breakpointRules: { name: BreakpointName; maxWidth: number }[] = [
-    { name: BreakpointName.mobile, maxWidth: breakpoints.mobile },
-    { name: BreakpointName.tablet, maxWidth: breakpoints.tablet },
-    { name: BreakpointName.desktop, maxWidth: breakpoints.desktop },
+const breakpointRules: { maxWidth: number; name: BreakpointName }[] = [
+    { maxWidth: breakpoints.mobile, name: BreakpointName.mobile },
+    { maxWidth: breakpoints.tablet, name: BreakpointName.tablet },
+    { maxWidth: breakpoints.desktop, name: BreakpointName.desktop },
 ];
 
 const getBreakpoint = (width: number): BreakpointName => {
@@ -67,8 +67,8 @@ export const useBreakpoint = () => {
 
     return {
         breakpoint,
+        isDesktop: breakpoint === BreakpointName.desktop,
         isMobile: breakpoint === BreakpointName.mobile,
         isTablet: breakpoint === BreakpointName.tablet,
-        isDesktop: breakpoint === BreakpointName.desktop,
     };
 };

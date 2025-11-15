@@ -1,12 +1,12 @@
 export interface User {
+    created_at: string;
+    hash: string;
     id: number;
     mail: string;
     name: string;
-    created_at: string;
-    hash: string;
     password_change_required: boolean;
     provide: string;
     role_id: number;
-    status: 'created' | 'active' | 'blocked';
+    status: 'active' | 'blocked' | 'created';
     type: 'local' | 'oauth';
 }

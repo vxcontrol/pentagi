@@ -1,14 +1,7 @@
 import { ChevronRightIcon, DotsHorizontalIcon } from '@radix-ui/react-icons';
 import { Slot } from '@radix-ui/react-slot';
+import { CircleCheck, CircleDashed, CircleOff, CircleX, Loader2 } from 'lucide-react';
 import * as React from 'react';
-import {
-    Brain,
-    CircleCheck,
-    CircleDashed,
-    CircleOff,
-    CircleX,
-    Loader2
-} from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -21,8 +14,8 @@ const Breadcrumb = React.forwardRef<
     }
 >(({ ...props }, ref) => (
     <nav
-        ref={ref}
         aria-label="breadcrumb"
+        ref={ref}
         {...props}
     />
 ));
@@ -31,11 +24,11 @@ Breadcrumb.displayName = 'Breadcrumb';
 const BreadcrumbList = React.forwardRef<HTMLOListElement, React.ComponentPropsWithoutRef<'ol'>>(
     ({ className, ...props }, ref) => (
         <ol
-            ref={ref}
             className={cn(
                 'flex flex-wrap items-center gap-1.5 break-words text-sm text-muted-foreground sm:gap-2.5',
                 className,
             )}
+            ref={ref}
             {...props}
         />
     ),
@@ -45,8 +38,8 @@ BreadcrumbList.displayName = 'BreadcrumbList';
 const BreadcrumbItem = React.forwardRef<HTMLLIElement, React.ComponentPropsWithoutRef<'li'>>(
     ({ className, ...props }, ref) => (
         <li
-            ref={ref}
             className={cn('inline-flex items-center gap-1.5', className)}
+            ref={ref}
             {...props}
         />
     ),
@@ -63,8 +56,8 @@ const BreadcrumbLink = React.forwardRef<
 
     return (
         <Comp
-            ref={ref}
             className={cn('transition-colors hover:text-foreground', className)}
+            ref={ref}
             {...props}
         />
     );
@@ -74,32 +67,64 @@ BreadcrumbLink.displayName = 'BreadcrumbLink';
 const BreadcrumbStatus = React.forwardRef<
     HTMLSpanElement,
     React.ComponentPropsWithoutRef<'span'> & {
-        status?: string | null;
+        status?: null | string;
     }
->(({ status, className, ...props }, ref) => {
+>(({ className, status, ...props }, ref) => {
     const renderStatusIcon = () => {
-        if (!status) return null;
-        
+        if (!status) {
+            return null;
+        }
+
         switch (status) {
-            case 'failed':
-                return <CircleX className="h-4 w-4 text-red-500" aria-label="failed" />;
-            case 'finished':
-                return <CircleCheck className="h-4 w-4 text-green-500" aria-label="finished" />;
-            case 'running':
-                return <Loader2 className="h-4 w-4 text-purple-500 animate-spin" aria-label="running" />;
             case 'created':
-                return <CircleDashed className="h-4 w-4 text-blue-500" aria-label="created" />;
+                return (
+                    <CircleDashed
+                        aria-label="created"
+                        className="h-4 w-4 text-blue-500"
+                    />
+                );
+            case 'failed':
+                return (
+                    <CircleX
+                        aria-label="failed"
+                        className="h-4 w-4 text-red-500"
+                    />
+                );
+            case 'finished':
+                return (
+                    <CircleCheck
+                        aria-label="finished"
+                        className="h-4 w-4 text-green-500"
+                    />
+                );
+            case 'running':
+                return (
+                    <Loader2
+                        aria-label="running"
+                        className="h-4 w-4 animate-spin text-purple-500"
+                    />
+                );
             case 'waiting':
-                return <CircleDashed className="h-4 w-4 text-yellow-500" aria-label="waiting" />;
+                return (
+                    <CircleDashed
+                        aria-label="waiting"
+                        className="h-4 w-4 text-yellow-500"
+                    />
+                );
             default:
-                return <CircleOff className="h-4 w-4 text-muted-foreground" aria-label="unknown status" />;
+                return (
+                    <CircleOff
+                        aria-label="unknown status"
+                        className="h-4 w-4 text-muted-foreground"
+                    />
+                );
         }
     };
 
     const iconElement = (
         <span
+            className={cn('mr-2 inline-flex cursor-pointer items-center', className)}
             ref={ref}
-            className={cn('inline-flex items-center mr-2 cursor-pointer', className)}
             {...props}
         >
             {renderStatusIcon()}
@@ -122,15 +147,15 @@ BreadcrumbStatus.displayName = 'BreadcrumbStatus';
 const BreadcrumbProvider = React.forwardRef<
     HTMLSpanElement,
     React.ComponentPropsWithoutRef<'span'> & {
-        provider?: Provider | null;
+        provider?: null | Provider;
     }
->(({ provider, className, ...props }, ref) => {
+>(({ className, provider, ...props }, ref) => {
     const actualProvider = provider;
 
     const iconElement = (
         <span
+            className={cn('mr-2 inline-flex cursor-pointer items-center', className)}
             ref={ref}
-            className={cn('inline-flex items-center mr-2 cursor-pointer', className)}
             {...props}
         >
             {actualProvider && getProviderIcon(actualProvider)}
@@ -153,11 +178,11 @@ BreadcrumbProvider.displayName = 'BreadcrumbProvider';
 const BreadcrumbPage = React.forwardRef<HTMLSpanElement, React.ComponentPropsWithoutRef<'span'>>(
     ({ className, ...props }, ref) => (
         <span
+            aria-current="page"
+            aria-disabled="true"
+            className={cn('font-normal text-foreground', className)}
             ref={ref}
             role="link"
-            aria-disabled="true"
-            aria-current="page"
-            className={cn('font-normal text-foreground', className)}
             {...props}
         />
     ),
@@ -166,9 +191,9 @@ BreadcrumbPage.displayName = 'BreadcrumbPage';
 
 const BreadcrumbSeparator = ({ children, className, ...props }: React.ComponentProps<'li'>) => (
     <li
-        role="presentation"
         aria-hidden="true"
         className={cn('[&>svg]:h-3.5 [&>svg]:w-3.5', className)}
+        role="presentation"
         {...props}
     >
         {children ?? <ChevronRightIcon />}
@@ -178,9 +203,9 @@ BreadcrumbSeparator.displayName = 'BreadcrumbSeparator';
 
 const BreadcrumbEllipsis = ({ className, ...props }: React.ComponentProps<'span'>) => (
     <span
-        role="presentation"
         aria-hidden="true"
         className={cn('flex h-9 w-9 items-center justify-center', className)}
+        role="presentation"
         {...props}
     >
         <DotsHorizontalIcon className="h-4 w-4" />

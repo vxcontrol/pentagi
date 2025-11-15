@@ -1,17 +1,17 @@
-import '@xterm/xterm/css/xterm.css';
-
 import { zodResolver } from '@hookform/resolvers/zod';
+import '@xterm/xterm/css/xterm.css';
 import debounce from 'lodash/debounce';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import type { TerminalLogFragmentFragment } from '@/graphql/types';
+
 import Terminal from '@/components/shared/Terminal';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import type { TerminalLogFragmentFragment } from '@/graphql/types';
 
 const searchFormSchema = z.object({
     search: z.string(),
@@ -19,19 +19,19 @@ const searchFormSchema = z.object({
 
 interface ChatTerminalProps {
     logs: TerminalLogFragmentFragment[];
-    selectedFlowId?: string | null;
+    selectedFlowId?: null | string;
 }
 
 const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) => {
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
-    const terminalRef = useRef<{ findNext: () => void; findPrevious: () => void } | null>(null);
+    const terminalRef = useRef<null | { findNext: () => void; findPrevious: () => void }>(null);
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
-        resolver: zodResolver(searchFormSchema),
         defaultValues: {
             search: '',
         },
+        resolver: zodResolver(searchFormSchema),
     });
 
     const searchValue = form.watch('search');
@@ -48,6 +48,7 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
     // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
+
         return () => {
             debouncedUpdateSearch.cancel();
         };
@@ -112,31 +113,31 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
                                     <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input
                                         {...field}
-                                        type="text"
-                                        placeholder="Search terminal logs..."
-                                        className="px-9 pr-24"
                                         autoComplete="off"
+                                        className="px-9 pr-24"
+                                        placeholder="Search terminal logs..."
+                                        type="text"
                                     />
                                     <div className="absolute right-px top-1/2 flex -translate-y-1/2">
                                         {hasSearchValue && (
                                             <>
                                                 <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
                                                     className="size-8"
                                                     onClick={handleFindPrevious}
+                                                    size="icon"
                                                     title="Previous match"
+                                                    type="button"
+                                                    variant="ghost"
                                                 >
                                                     <ChevronUp className="size-4" />
                                                 </Button>
                                                 <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
                                                     className="size-8"
                                                     onClick={handleFindNext}
+                                                    size="icon"
                                                     title="Next match"
+                                                    type="button"
+                                                    variant="ghost"
                                                 >
                                                     <ChevronDown className="size-4" />
                                                 </Button>
@@ -144,12 +145,12 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
                                         )}
                                         {field.value && (
                                             <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
                                                 className="size-8"
                                                 onClick={handleClearSearch}
+                                                size="icon"
                                                 title="Clear search"
+                                                type="button"
+                                                variant="ghost"
                                             >
                                                 <X className="size-4" />
                                             </Button>
@@ -162,10 +163,10 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
                 </Form>
             </div>
             <Terminal
-                ref={terminalRef}
-                logs={filteredLogs}
-                searchValue={debouncedSearchValue}
                 className="w-full grow"
+                logs={filteredLogs}
+                ref={terminalRef}
+                searchValue={debouncedSearchValue}
             />
         </div>
     );

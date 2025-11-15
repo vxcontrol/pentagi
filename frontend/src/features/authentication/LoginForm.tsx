@@ -5,12 +5,13 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
+import type { OAuthProvider } from '@/providers/UserProvider';
+
 import Github from '@/components/icons/Github';
 import Google from '@/components/icons/Google';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import type { OAuthProvider } from '@/providers/UserProvider';
 import { useUser } from '@/providers/UserProvider';
 
 import { PasswordChangeForm } from './PasswordChangeForm';
@@ -36,21 +37,21 @@ const errorMessage = 'Invalid login or password';
 const errorProviderMessage = 'Authentication failed';
 
 interface AuthProviderAction {
+    icon: React.ReactNode;
     id: OAuthProvider;
     name: string;
-    icon: React.ReactNode;
 }
 
 const providerActions: AuthProviderAction[] = [
     {
+        icon: <Google className="size-5" />,
         id: 'google',
         name: 'Continue with Google',
-        icon: <Google className="size-5" />,
     },
     {
+        icon: <Github className="size-5" />,
         id: 'github',
         name: 'Continue with GitHub',
-        icon: <Github className="size-5" />,
     },
 ];
 
@@ -61,17 +62,17 @@ interface LoginFormProps {
 
 const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     const form = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema),
         defaultValues: {
             mail: '',
             password: '',
         },
+        resolver: zodResolver(formSchema),
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<null | string>(null);
     const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
     const navigate = useNavigate();
-    const { authInfo, setAuth, login, loginWithOAuth } = useUser();
+    const { authInfo, login, loginWithOAuth, setAuth } = useUser();
 
     const handleSubmit = async (values: z.infer<typeof formSchema>) => {
         setError(null);
@@ -82,11 +83,13 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
 
             if (!result.success) {
                 setError(result.error || errorMessage);
+
                 return;
             }
 
             if (result.passwordChangeRequired) {
                 setPasswordChangeRequired(true);
+
                 return;
             }
 
@@ -107,6 +110,7 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
 
             if (!result.success) {
                 setError(result.error || errorProviderMessage);
+
                 return;
             }
 
@@ -147,10 +151,10 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
                     You need to change your password before continuing.
                 </p>
                 <PasswordChangeForm
+                    isModal={false}
+                    onSkip={handleSkipPasswordChange}
                     onSuccess={handlePasswordChangeSuccess}
                     showSkip={true}
-                    onSkip={handleSkipPasswordChange}
-                    isModal={false}
                 />
             </div>
         );
@@ -159,8 +163,8 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     return (
         <Form {...form}>
             <form
-                onSubmit={form.handleSubmit(handleSubmit)}
                 className="mx-auto grid w-[350px] gap-8"
+                onSubmit={form.handleSubmit(handleSubmit)}
             >
                 <h1 className="text-center text-3xl font-bold">PentAGI</h1>
 
@@ -171,11 +175,11 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
                                 .filter((provider) => providers.includes(provider.id))
                                 .map((provider) => (
                                     <Button
+                                        disabled={isSubmitting}
                                         key={provider.id}
+                                        onClick={() => handleProviderLogin(provider.id)}
                                         type="button"
                                         variant="secondary"
-                                        onClick={() => handleProviderLogin(provider.id)}
-                                        disabled={isSubmitting}
                                     >
                                         {provider.icon}
                                         {provider.name}
@@ -204,8 +208,8 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
                                 <FormControl>
                                     <Input
                                         {...field}
-                                        placeholder="Enter your email"
                                         autoFocus
+                                        placeholder="Enter your email"
                                     />
                                 </FormControl>
                                 <FormMessage />
@@ -222,8 +226,8 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
                                 <FormControl>
                                     <Input
                                         {...field}
-                                        type="password"
                                         placeholder="Enter your password"
+                                        type="password"
                                     />
                                 </FormControl>
                                 <FormMessage />
@@ -232,9 +236,9 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
                     />
 
                     <Button
-                        type="submit"
                         className="w-full"
                         disabled={isSubmitting || (!form.formState.isValid && form.formState.isSubmitted)}
+                        type="submit"
                     >
                         {isSubmitting && <Loader2 className="animate-spin" />}
                         <span>Sign in</span>

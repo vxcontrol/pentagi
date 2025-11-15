@@ -1,9 +1,10 @@
 import { Copy, Hammer } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { SearchLogFragmentFragment } from '@/graphql/types';
+
 import Markdown from '@/components/shared/Markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { SearchLogFragmentFragment } from '@/graphql/types';
 import { formatDate, formatName } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
 
@@ -15,19 +16,21 @@ interface ChatToolProps {
 }
 
 // Helper function to check if text contains search value (case-insensitive)
-const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
     }
+
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
 const ChatTool = ({ log, searchValue = '' }: ChatToolProps) => {
-    const { executor, initiator, query, result, engine, taskId, subtaskId, createdAt } = log;
+    const { createdAt, engine, executor, initiator, query, result, subtaskId, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
+
         if (!trimmedSearch) {
             return { hasQueryMatch: false, hasResultMatch: false };
         }
@@ -88,8 +91,8 @@ const ChatTool = ({ log, searchValue = '' }: ChatToolProps) => {
                 {result && (
                     <div className="mt-2 text-xs text-muted-foreground">
                         <div
-                            onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                             className="cursor-pointer"
+                            onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                         >
                             {isDetailsVisible ? 'Hide details' : 'Show details'}
                         </div>
@@ -110,13 +113,13 @@ const ChatTool = ({ log, searchValue = '' }: ChatToolProps) => {
             <div className="mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground">
                 <span className="flex items-center gap-0.5">
                     <ChatAgentIcon
-                        type={initiator}
                         className="text-muted-foreground"
+                        type={initiator}
                     />
                     <span className="text-muted-foreground/50">→</span>
                     <ChatAgentIcon
-                        type={executor}
                         className="text-muted-foreground"
+                        type={executor}
                     />
                 </span>
                 <Tooltip>

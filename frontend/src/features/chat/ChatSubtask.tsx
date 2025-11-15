@@ -1,32 +1,35 @@
 import { ListCheck, ListTodo } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
-import Markdown from '@/components/shared/Markdown';
 import type { SubtaskFragmentFragment } from '@/graphql/types';
+
+import Markdown from '@/components/shared/Markdown';
 
 import ChatTaskStatusIcon from './ChatTaskStatusIcon';
 
 interface ChatSubtaskProps {
-    subtask: SubtaskFragmentFragment;
     searchValue?: string;
+    subtask: SubtaskFragmentFragment;
 }
 
 // Helper function to check if text contains search value (case-insensitive)
-const containsSearchValue = (text: string | null | undefined, searchValue: string): boolean => {
+const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
     }
+
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
-    const { id, status, title, description, result } = subtask;
+const ChatSubtask = ({ searchValue = '', subtask }: ChatSubtaskProps) => {
+    const { description, id, result, status, title } = subtask;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
     const hasDetails = description || result;
 
     // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
+
         if (!trimmedSearch) {
             return { hasDescriptionMatch: false, hasResultMatch: false };
         }
@@ -56,9 +59,9 @@ const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
         <div className="border-l pl-4">
             <div className="flex gap-2">
                 <ChatTaskStatusIcon
+                    className="mt-px"
                     status={status}
                     tooltip={`Subtask ID: ${id}`}
-                    className="mt-px"
                 />
                 <div className="text-sm">
                     <Markdown
@@ -72,8 +75,8 @@ const ChatSubtask = ({ subtask, searchValue = '' }: ChatSubtaskProps) => {
             {hasDetails && (
                 <div className="ml-6 text-xs text-muted-foreground">
                     <div
-                        onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                         className="cursor-pointer hover:underline"
+                        onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                     >
                         {isDetailsVisible ? 'Hide details' : 'Show details'}
                     </div>

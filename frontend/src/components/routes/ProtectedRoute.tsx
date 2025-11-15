@@ -15,10 +15,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
     if (!isAuthenticated()) {
         const returnParam = getReturnUrlParam(location.pathname);
+
         return (
             <Navigate
-                to={`/login${returnParam}`}
                 replace
+                to={`/login${returnParam}`}
             />
         );
     }
