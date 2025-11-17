@@ -69,7 +69,7 @@ const Chat = () => {
     const { selectedFlowId } = useOutletContext<MainLayoutContext>();
 
     // Get providers data from ProvidersProvider
-    const { onChangeSelectedProvider, providers, selectedProvider } = useProviders();
+    const { providers, selectedProvider, setSelectedProvider } = useProviders();
 
     // Add debounced flow ID to prevent rapid switching causing database connection issues
     const [debouncedFlowId, setDebouncedFlowId] = useState<null | string>(flowId ?? null);
@@ -544,17 +544,13 @@ const Chat = () => {
                         <DropdownMenuContent
                             align="end"
                             className="w-fit min-w-[150px] max-w-[280px]"
-                            onCloseAutoFocus={(e) => {
-                                e.preventDefault();
-                            }}
                         >
                             {providers.map((provider) => (
                                 <DropdownMenuItem
                                     className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                     key={provider.name}
-                                    onSelect={(e) => {
-                                        e.preventDefault();
-                                        onChangeSelectedProvider(provider);
+                                    onSelect={() => {
+                                        setSelectedProvider(provider);
                                     }}
                                 >
                                     <div className="flex w-full min-w-0 items-center gap-2">
