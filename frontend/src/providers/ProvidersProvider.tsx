@@ -8,9 +8,9 @@ import { findProviderByName, sortProviders } from '@/models/Provider';
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
 
 interface ProvidersContextValue {
-    onChangeSelectedProvider: (provider: Provider) => void;
     providers: Provider[];
     selectedProvider: null | Provider;
+    setSelectedProvider: (provider: Provider) => void;
 }
 
 const ProvidersContext = createContext<ProvidersContextValue | undefined>(undefined);
@@ -56,15 +56,14 @@ export const ProvidersProvider = ({ children }: ProvidersProviderProps) => {
         }
     }, [selectedProvider]);
 
-    // Handle provider selection changes
-    const handleProviderChange = (provider: Provider) => {
+    const setSelectedProvider = (provider: Provider) => {
         setSelectedProviderName(provider.name);
     };
 
     const value = {
-        onChangeSelectedProvider: handleProviderChange,
         providers,
         selectedProvider,
+        setSelectedProvider,
     };
 
     return <ProvidersContext.Provider value={value}>{children}</ProvidersContext.Provider>;
