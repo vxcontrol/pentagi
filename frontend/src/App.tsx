@@ -11,22 +11,25 @@ import PageLoader from '@/components/shared/PageLoader';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
 import Chat from '@/pages/Chat';
-import NewFlow from '@/pages/NewFlow';
 import Flows from '@/pages/Flows';
 import Login from '@/pages/Login';
+import NewFlow from '@/pages/NewFlow';
 import OAuthResult from '@/pages/OAuthResult';
 import Report from '@/pages/Report';
 import SettingsPrompt from '@/pages/settings/SettingsPrompt';
 import SettingsPrompts from '@/pages/settings/SettingsPrompts';
 import SettingsProvider from '@/pages/settings/SettingsProvider';
 import SettingsProviders from '@/pages/settings/SettingsProviders';
+import { ProvidersProvider } from '@/providers/ProvidersProvider';
 import ThemeProvider from '@/providers/ThemeProvider';
 import { UserProvider } from '@/providers/UserProvider';
 
 const App = () => {
     const renderProtectedRoute = () => (
         <ProtectedRoute>
-            <AppLayout />
+            <ProvidersProvider>
+                <AppLayout />
+            </ProvidersProvider>
         </ProtectedRoute>
     );
 

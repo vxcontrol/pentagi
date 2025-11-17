@@ -1,8 +1,7 @@
 import { Check, ChevronsUpDown, GripVertical, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-
-import type { Provider } from '@/models/Provider';
+import { toast } from 'sonner';
 
 import {
     Breadcrumb,
@@ -54,13 +53,11 @@ import {
 } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { Log } from '@/lib/log';
-import { getProviderDisplayName, getProviderIcon, isProviderValid } from '@/models/Provider';
+import { getProviderDisplayName, getProviderIcon } from '@/models/Provider';
+import { useProviders } from '@/providers/ProvidersProvider';
 
 interface MainLayoutContext {
-    onChangeSelectedProvider: (provider: Provider) => void;
     selectedFlowId: null | string;
-    selectedProvider: null | Provider;
-    sortedProviders: Provider[];
 }
 
 const Chat = () => {
@@ -69,8 +66,10 @@ const Chat = () => {
     const navigate = useNavigate();
 
     // Get data from MainLayout context
-    const { onChangeSelectedProvider, selectedFlowId, selectedProvider, sortedProviders } =
-        useOutletContext<MainLayoutContext>();
+    const { selectedFlowId } = useOutletContext<MainLayoutContext>();
+
+    // Get providers data from ProvidersProvider
+    const { onChangeSelectedProvider, providers, selectedProvider } = useProviders();
 
     // Add debounced flow ID to prevent rapid switching causing database connection issues
     const [debouncedFlowId, setDebouncedFlowId] = useState<null | string>(flowId ?? null);
@@ -261,24 +260,11 @@ const Chat = () => {
                 return;
             }
 
-            // Double check that we have a valid provider before creating a flow
-            let providerToUse = '';
-
-            // First try to use the selected provider if it's valid
-            if (selectedProvider && isProviderValid(selectedProvider, sortedProviders)) {
-                providerToUse = selectedProvider.name;
-            } else if (sortedProviders.length > 0) {
-                // If no provider is selected or it's invalid, try to use the first available
-                const firstAvailableProvider = sortedProviders[0];
-
-                if (firstAvailableProvider) {
-                    providerToUse = firstAvailableProvider.name;
-                }
-            }
-
-            // Fail early if we still don't have a provider
-            if (!providerToUse) {
-                Log.error('No valid provider available for creating a flow');
+            // Check that we have a valid provider before creating a flow
+            if (!selectedProvider) {
+                toast.error('No provider selected', {
+                    description: 'Please select a provider before creating a flow',
+                });
 
                 return;
             }
@@ -286,7 +272,7 @@ const Chat = () => {
             const { data } = await createFlow({
                 variables: {
                     input: message,
-                    modelProvider: providerToUse,
+                    modelProvider: selectedProvider.name,
                 },
             });
 
@@ -304,8 +290,11 @@ const Chat = () => {
                 }
             }
         } catch (error) {
+            const description = error instanceof Error ? error.message : 'An error occurred while submitting message';
+            toast.error('Failed to create flow', {
+                description,
+            });
             Log.error('Error submitting message:', error);
-            throw error;
         }
     };
 
@@ -317,6 +306,10 @@ const Chat = () => {
                 },
             });
         } catch (error) {
+            const description = error instanceof Error ? error.message : 'An error occurred while stopping flow';
+            toast.error('Failed to stop flow', {
+                description,
+            });
             Log.error('Error stopping flow:', error);
         }
     };
@@ -375,8 +368,12 @@ const Chat = () => {
                     }
                 }
             } catch (error) {
+                const description =
+                    error instanceof Error ? error.message : 'An error occurred while creating assistant';
+                toast.error('Failed to create assistant', {
+                    description,
+                });
                 Log.error('Error creating assistant:', error);
-                throw error;
             }
         },
         [selectedFlowId, selectedProvider, createAssistant, navigate, isDesktop, setActiveCentralTab, setActiveTabsTab],
@@ -403,8 +400,11 @@ const Chat = () => {
                 refetchAssistantLogs();
             }
         } catch (error) {
+            const description = error instanceof Error ? error.message : 'An error occurred while calling assistant';
+            toast.error('Failed to call assistant', {
+                description,
+            });
             Log.error('Error calling assistant:', error);
-            throw error;
         }
     };
 
@@ -427,8 +427,11 @@ const Chat = () => {
                 refetchAssistantLogs();
             }
         } catch (error) {
+            const description = error instanceof Error ? error.message : 'An error occurred while stopping assistant';
+            toast.error('Failed to stop assistant', {
+                description,
+            });
             Log.error('Error stopping assistant:', error);
-            throw error;
         }
     };
 
@@ -464,8 +467,11 @@ const Chat = () => {
                 });
             }
         } catch (error) {
+            const description = error instanceof Error ? error.message : 'An error occurred while deleting assistant';
+            toast.error('Failed to delete assistant', {
+                description,
+            });
             Log.error('Error deleting assistant:', error);
-            throw error;
         }
     };
 
@@ -486,7 +492,7 @@ const Chat = () => {
                     onSubmitAssistantMessage={handleCallAssistant}
                     onSubmitAutomationMessage={handleSubmitAutomationMessage}
                     onTabChange={setActiveTabsTab}
-                    providers={sortedProviders}
+                    providers={providers}
                     selectedAssistantId={selectedAssistantId}
                     selectedFlowId={selectedFlowId}
                     selectedProvider={selectedProvider}
@@ -542,7 +548,7 @@ const Chat = () => {
                                 e.preventDefault();
                             }}
                         >
-                            {sortedProviders.map((provider) => (
+                            {providers.map((provider) => (
                                 <DropdownMenuItem
                                     className="focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                                     key={provider.name}
@@ -599,7 +605,7 @@ const Chat = () => {
                                         onSubmitAssistantMessage={handleCallAssistant}
                                         onSubmitAutomationMessage={handleSubmitAutomationMessage}
                                         onTabChange={setActiveCentralTab}
-                                        providers={sortedProviders}
+                                        providers={providers}
                                         selectedAssistantId={selectedAssistantId}
                                         selectedFlowId={selectedFlowId}
                                         selectedProvider={selectedProvider}
