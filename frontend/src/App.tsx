@@ -11,6 +11,7 @@ import PageLoader from '@/components/shared/PageLoader';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
 import Chat from '@/pages/Chat';
+import NewFlow from '@/pages/NewFlow';
 import Flows from '@/pages/Flows';
 import Login from '@/pages/Login';
 import OAuthResult from '@/pages/OAuthResult';
@@ -50,6 +51,10 @@ const App = () => {
                                         <Route
                                             element={<Flows />}
                                             path="flows"
+                                        />
+                                        <Route
+                                            element={<NewFlow />}
+                                            path="flows/new"
                                         />
                                         <Route
                                             element={<Chat />}
