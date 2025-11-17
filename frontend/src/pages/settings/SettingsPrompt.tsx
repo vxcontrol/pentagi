@@ -13,7 +13,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import * as React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -74,7 +74,6 @@ type SystemFormData = z.infer<typeof systemFormSchema>;
 const FormTextareaItem: React.FC<FormTextareaItemProps> = ({
     className,
     control,
-    description,
     disabled,
     label,
     name,
@@ -344,7 +343,7 @@ const SettingsPrompt = () => {
     const humanTemplate = humanForm.watch('template');
 
     // Determine prompt type and get prompt data
-    const promptInfo = useMemo(() => {
+    const promptInfo = (() => {
         if (!promptId || !data?.settingsPrompts) {
             return null;
         }
@@ -356,27 +355,6 @@ const SettingsPrompt = () => {
         }
 
         const { agents, tools } = defaultPrompts;
-
-        // First check if there's a user-defined prompt
-        const userPrompt = userDefined?.find((prompt) => {
-            // For agents, check if this prompt matches system or human type
-            const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompt | AgentPrompts | undefined;
-
-            if (agentData) {
-                return (
-                    prompt.type === agentData.system.type || prompt.type === (agentData as AgentPrompts)?.human?.type
-                );
-            }
-
-            // For tools, check if this prompt matches tool type
-            const toolData = tools?.[promptId as keyof typeof tools] as DefaultPrompt | undefined;
-
-            if (toolData) {
-                return prompt.type === toolData.type;
-            }
-
-            return false;
-        });
 
         // Check if it's an agent prompt
         const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompt | AgentPrompts | undefined;
@@ -421,10 +399,10 @@ const SettingsPrompt = () => {
         }
 
         return null;
-    }, [promptId, data]);
+    })();
 
     // Compute variables data based on active tab and prompt info
-    const variablesData = useMemo(() => {
+    const variablesData = (() => {
         if (!promptInfo) {
             return null;
         }
@@ -447,7 +425,7 @@ const SettingsPrompt = () => {
         }
 
         return { currentTemplate, formId, variables };
-    }, [promptInfo, activeTab, systemTemplate, humanTemplate]);
+    })();
 
     // Handle variable click with useCallback for better performance
     const handleVariableClickCallback = useCallback(
@@ -493,7 +471,7 @@ const SettingsPrompt = () => {
 
     // Intercept browser back to show confirmation dialog
     useEffect(() => {
-        const handlePopState = (event: PopStateEvent) => {
+        const handlePopState = () => {
             if (!isDirty) {
                 return;
             }

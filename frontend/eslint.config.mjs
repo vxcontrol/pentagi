@@ -26,6 +26,7 @@ const eslintConfig = [
     }),
     {
         rules: {
+            '@typescript-eslint/no-explicit-any': 'warn',
             '@typescript-eslint/no-unused-vars': [
                 'error',
                 {
@@ -33,7 +34,6 @@ const eslintConfig = [
                     varsIgnorePattern: '^_',
                 },
             ],
-            '@typescript-eslint/no-explicit-any': 'warn',
             curly: ['error', 'all'],
             'padding-line-between-statements': [
                 'error',
@@ -63,6 +63,8 @@ const eslintConfig = [
                     prev: 'do',
                 },
             ],
+            'react/no-unescaped-entities': 'off', // Allow quotes in JSX
+            'react/prop-types': 'off', // TypeScript provides type checking
         },
     },
     perfectionist.configs['recommended-natural'],

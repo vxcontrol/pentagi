@@ -13,7 +13,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useController, useForm, useFormState } from 'react-hook-form';
+import { useController, useForm, useFormState, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -763,6 +763,37 @@ const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDia
     );
 };
 
+// Static mapping of agent keys to GraphQL enum types
+const agentTypesMap: Record<string, AgentConfigType> = {
+    adviser: AgentConfigType.Adviser,
+    assistant: AgentConfigType.Assistant,
+    coder: AgentConfigType.Coder,
+    enricher: AgentConfigType.Enricher,
+    generator: AgentConfigType.Generator,
+    installer: AgentConfigType.Installer,
+    pentester: AgentConfigType.Pentester,
+    primaryAgent: AgentConfigType.PrimaryAgent,
+    refiner: AgentConfigType.Refiner,
+    reflector: AgentConfigType.Reflector,
+    searcher: AgentConfigType.Searcher,
+    simple: AgentConfigType.Simple,
+    simpleJson: AgentConfigType.SimpleJson,
+};
+
+// Helper function to extract agent types from agents object
+const extractAgentTypes = (agents: unknown): null | string[] => {
+    if (!agents || typeof agents !== 'object') {
+        return null;
+    }
+
+    const types = Object.entries(agents)
+        .filter(([key, data]) => key !== '__typename' && data)
+        .map(([key]) => key)
+        .sort();
+
+    return types.length > 0 ? types : null;
+};
+
 const SettingsProvider = () => {
     const { providerId } = useParams<{ providerId: string }>();
     const navigate = useNavigate();
@@ -795,7 +826,9 @@ const SettingsProvider = () => {
         resolver: zodResolver(formSchema),
     });
 
-    const { isDirty } = useFormState({ control: form.control });
+    const { control, formState, handleSubmit: handleFormSubmit, reset, setValue, trigger, watch } = form;
+
+    const { isDirty } = useFormState({ control });
 
     // Maintain a blocker state at the top of history when form is dirty
     useEffect(() => {
@@ -807,7 +840,7 @@ const SettingsProvider = () => {
 
     // Intercept browser back using popstate when form is dirty
     useEffect(() => {
-        const handlePopState = (event: PopStateEvent) => {
+        const handlePopState = () => {
             if (!isDirty) {
                 return;
             }
@@ -829,12 +862,15 @@ const SettingsProvider = () => {
         window.addEventListener('popstate', handlePopState, { capture: true });
 
         return () => {
-            window.removeEventListener('popstate', handlePopState, { capture: true } as any);
+            window.removeEventListener('popstate', handlePopState, { capture: true });
         };
     }, [isDirty]);
 
     // Watch selected type
-    const selectedType = form.watch('type');
+    const selectedType = useWatch({ control, name: 'type' });
+
+    // Watch provider name for delete confirmation dialog
+    const providerName = useWatch({ control, name: 'name' });
 
     // Read query parameters for form initialization (stable)
     const formQueryParams = useMemo(
@@ -845,55 +881,29 @@ const SettingsProvider = () => {
         [searchParams],
     );
 
-    const agentTypesMap: Record<string, AgentConfigType> = {
-        adviser: AgentConfigType.Adviser,
-        assistant: AgentConfigType.Assistant,
-        coder: AgentConfigType.Coder,
-        enricher: AgentConfigType.Enricher,
-        generator: AgentConfigType.Generator,
-        installer: AgentConfigType.Installer,
-        pentester: AgentConfigType.Pentester,
-        primaryAgent: AgentConfigType.PrimaryAgent,
-        refiner: AgentConfigType.Refiner,
-        reflector: AgentConfigType.Reflector,
-        searcher: AgentConfigType.Searcher,
-        simple: AgentConfigType.Simple,
-        simpleJson: AgentConfigType.SimpleJson,
+    // Get dynamic agent types from data
+    const getAgentTypes = () => {
+        // Try to get agents from specific sources in priority order
+        const agentsSource =
+            // For new providers, use default provider for selected type
+            (isNew &&
+                selectedType &&
+                data?.settingsProviders?.default?.[selectedType as keyof typeof data.settingsProviders.default]
+                    ?.agents) ||
+            // For existing providers, use current provider's agents
+            (!isNew &&
+                providerId &&
+                data?.settingsProviders?.userDefined?.find((p: Provider) => p.id == providerId)?.agents) ||
+            // Fallback to any available default provider
+            (data?.settingsProviders?.default &&
+                Object.values(data.settingsProviders.default).find((provider) => provider?.agents)?.agents) ||
+            null;
+
+        // Extract and return agent types, or fallback to hardcoded list
+        return extractAgentTypes(agentsSource) ?? Object.keys(agentTypesMap);
     };
 
-    // Get dynamic agent types from data
-    const agentTypes = useMemo(() => {
-        let agentsSource = null;
-
-        if (isNew && selectedType && data?.settingsProviders?.default) {
-            // For new providers, use default provider for selected type
-            agentsSource =
-                data.settingsProviders.default?.[selectedType as keyof typeof data.settingsProviders.default]?.agents;
-        } else if (!isNew && providerId && data?.settingsProviders?.userDefined) {
-            // For existing providers, use current provider's agents
-            const provider = data.settingsProviders.userDefined.find((p: Provider) => p.id == providerId);
-            agentsSource = provider?.agents;
-        }
-
-        // If no specific source, try to get from any available default provider
-        if (!agentsSource && data?.settingsProviders?.default) {
-            const defaultProviders = data.settingsProviders.default;
-            // Try to find first available default provider with agents
-            const firstDefaultProvider = Object.values(defaultProviders).find((provider) => provider?.agents);
-            agentsSource = firstDefaultProvider?.agents;
-        }
-
-        // Extract agent types from the source
-        if (agentsSource) {
-            return Object.entries(agentsSource)
-                .filter(([key, data]) => key !== '__typename' && data)
-                .map(([key]) => key)
-                .sort();
-        }
-
-        // Fallback to hardcoded list if no data available
-        return Object.keys(agentTypesMap);
-    }, [isNew, selectedType, providerId, data]);
+    const agentTypes = getAgentTypes();
 
     // Get available models filtered by selected provider type
     const availableModels = useMemo(() => {
@@ -948,9 +958,9 @@ const SettingsProvider = () => {
                     }),
             );
 
-            form.setValue('agents', normalizeGraphQLData(agents) as FormAgents);
+            setValue('agents', normalizeGraphQLData(agents) as FormAgents);
         }
-    }, [selectedType, isNew, data, form, availableModels]);
+    }, [availableModels, data, isNew, selectedType, setValue]);
 
     // Update query parameter when type changes (only for new providers)
     useEffect(() => {
@@ -1011,7 +1021,7 @@ const SettingsProvider = () => {
                 if (sourceProvider) {
                     const { agents, name, type: sourceType } = sourceProvider;
 
-                    form.reset({
+                    reset({
                         agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
                         name: `${name} (Copy)`,
                         type: sourceType ?? undefined,
@@ -1023,7 +1033,7 @@ const SettingsProvider = () => {
                 const defaultProvider =
                     data.settingsProviders.default[queryType as keyof typeof data.settingsProviders.default];
 
-                form.reset({
+                reset({
                     agents: defaultProvider?.agents ? (normalizeGraphQLData(defaultProvider.agents) as FormAgents) : {},
                     name: undefined,
                     type: queryType,
@@ -1033,7 +1043,7 @@ const SettingsProvider = () => {
             // Default new provider form - but only if selectedType is not set
             // to avoid conflicts with agent filling useEffect
             if (!selectedType) {
-                form.reset({
+                reset({
                     agents: {},
                     name: undefined,
                     type: queryType,
@@ -1053,16 +1063,17 @@ const SettingsProvider = () => {
 
         const { agents, name, type } = provider;
 
-        form.reset({
+        reset({
             agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
             name: name || undefined,
             type: type || undefined,
         });
-    }, [data, isNew, providerId, form, formQueryParams, selectedType]);
+    }, [data, formQueryParams, isNew, navigate, providerId, reset, selectedType]);
 
     const handleSubmit = async () => {
         // Get all form data including disabled fields
-        const formData = form.watch();
+        // Note: getValues() excludes disabled fields, watch() includes them
+        const formData = watch();
 
         try {
             setSubmitError(null);
@@ -1126,10 +1137,10 @@ const SettingsProvider = () => {
     // Test entire provider (all agents)
     const handleTest = async () => {
         // Trigger form validation
-        const isValid = await form.trigger();
+        const isValid = await trigger();
 
         if (!isValid) {
-            const { errors } = form.formState;
+            const { errors } = formState;
 
             // Helper function to format field names for display
             const formatFieldName = (fieldPath: string): string => {
@@ -1190,7 +1201,7 @@ const SettingsProvider = () => {
             setSubmitError(null);
 
             // Get form data and transform it - including disabled fields
-            const formData = form.watch();
+            const formData = watch();
             const { agents, type } = transformFormToGraphQL(formData);
             const result = await testProvider({
                 variables: {
@@ -1210,10 +1221,10 @@ const SettingsProvider = () => {
     // Test a single agent (uses testAgent where supported, otherwise falls back to filtered provider test)
     const handleTestAgent = async (agentKey: string) => {
         // Validate only fields for this agent and general required fields
-        const isValid = await form.trigger();
+        const isValid = await trigger();
 
         if (!isValid) {
-            const { errors } = form.formState;
+            const { errors } = formState;
             const formatFieldName = (fieldPath: string): string =>
                 fieldPath
                     .split('.')
@@ -1265,7 +1276,8 @@ const SettingsProvider = () => {
         try {
             setSubmitError(null);
             setCurrentAgentKey(agentKey);
-            const formData = form.watch();
+            // Note: getValues() excludes disabled fields, watch() includes them
+            const formData = watch();
             const { agents, type } = transformFormToGraphQL(formData);
 
             const agent = agents[agentKey as keyof AgentsConfigInput] as AgentConfigInput;
@@ -1357,7 +1369,7 @@ const SettingsProvider = () => {
                         <form
                             className="space-y-6"
                             id="provider-form"
-                            onSubmit={form.handleSubmit(handleSubmit)}
+                            onSubmit={handleFormSubmit(handleSubmit)}
                         >
                             {/* Error Alert */}
                             {mutationError && (
@@ -1377,7 +1389,7 @@ const SettingsProvider = () => {
                             {/* Form fields */}
                             <FormComboboxItem
                                 allowCustom={false}
-                                control={form.control}
+                                control={control}
                                 description="The type of language model provider"
                                 disabled={isLoading || !!selectedType}
                                 label="Type"
@@ -1387,7 +1399,7 @@ const SettingsProvider = () => {
                             />
 
                             <FormInputStringItem
-                                control={form.control}
+                                control={control}
                                 description="A unique name for your provider configuration"
                                 disabled={isLoading}
                                 label="Name"
@@ -1408,7 +1420,7 @@ const SettingsProvider = () => {
                                     className="w-full"
                                     type="multiple"
                                 >
-                                    {agentTypes.map((agentKey, index) => (
+                                    {agentTypes.map((agentKey) => (
                                         <AccordionItem
                                             key={agentKey}
                                             value={agentKey}
@@ -1448,7 +1460,7 @@ const SettingsProvider = () => {
                                                 <div className="grid grid-cols-1 gap-4 p-px md:grid-cols-2">
                                                     {/* Model field */}
                                                     <FormModelComboboxItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Model"
                                                         name={`agents.${agentKey}.model`}
@@ -1459,11 +1471,11 @@ const SettingsProvider = () => {
 
                                                             const price = option?.price;
 
-                                                            form.setValue(
+                                                            setValue(
                                                                 `agents.${agentKey}.price.input` as const,
                                                                 price?.input ?? null,
                                                             );
-                                                            form.setValue(
+                                                            setValue(
                                                                 `agents.${agentKey}.price.output` as const,
                                                                 price?.output ?? null,
                                                             );
@@ -1474,7 +1486,7 @@ const SettingsProvider = () => {
 
                                                     {/* Temperature field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Temperature"
                                                         max="2"
@@ -1486,7 +1498,7 @@ const SettingsProvider = () => {
 
                                                     {/* Max Tokens field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Max Tokens"
                                                         min="1"
@@ -1497,7 +1509,7 @@ const SettingsProvider = () => {
 
                                                     {/* Top P field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Top P"
                                                         max="1"
@@ -1509,7 +1521,7 @@ const SettingsProvider = () => {
 
                                                     {/* Top K field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Top K"
                                                         min="1"
@@ -1520,7 +1532,7 @@ const SettingsProvider = () => {
 
                                                     {/* Min Length field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Min Length"
                                                         min="0"
@@ -1531,7 +1543,7 @@ const SettingsProvider = () => {
 
                                                     {/* Max Length field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Max Length"
                                                         min="1"
@@ -1542,7 +1554,7 @@ const SettingsProvider = () => {
 
                                                     {/* Repetition Penalty field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Repetition Penalty"
                                                         max="2"
@@ -1554,7 +1566,7 @@ const SettingsProvider = () => {
 
                                                     {/* Frequency Penalty field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Frequency Penalty"
                                                         max="2"
@@ -1566,7 +1578,7 @@ const SettingsProvider = () => {
 
                                                     {/* Presence Penalty field */}
                                                     <FormInputNumberItem
-                                                        control={form.control}
+                                                        control={control}
                                                         disabled={isLoading}
                                                         label="Presence Penalty"
                                                         max="2"
@@ -1584,7 +1596,7 @@ const SettingsProvider = () => {
                                                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                             {/* Reasoning Effort field */}
                                                             <FormField
-                                                                control={form.control}
+                                                                control={control}
                                                                 name={`agents.${agentKey}.reasoning.effort`}
                                                                 render={({ field }) => (
                                                                     <FormItem>
@@ -1629,7 +1641,7 @@ const SettingsProvider = () => {
 
                                                             {/* Reasoning Max Tokens field */}
                                                             <FormInputNumberItem
-                                                                control={form.control}
+                                                                control={control}
                                                                 disabled={isLoading}
                                                                 label="Reasoning Max Tokens"
                                                                 min="1"
@@ -1648,7 +1660,7 @@ const SettingsProvider = () => {
                                                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                             {/* Price Input field */}
                                                             <FormInputNumberItem
-                                                                control={form.control}
+                                                                control={control}
                                                                 disabled={isLoading}
                                                                 label="Input Price"
                                                                 min="0"
@@ -1659,7 +1671,7 @@ const SettingsProvider = () => {
 
                                                             {/* Price Output field */}
                                                             <FormInputNumberItem
-                                                                control={form.control}
+                                                                control={control}
                                                                 disabled={isLoading}
                                                                 label="Output Price"
                                                                 min="0"
@@ -1743,7 +1755,7 @@ const SettingsProvider = () => {
                 handleConfirm={handleConfirmDelete}
                 handleOpenChange={setIsDeleteDialogOpen}
                 isOpen={isDeleteDialogOpen}
-                itemName={form.watch('name')}
+                itemName={providerName}
                 itemType="provider"
             />
 
