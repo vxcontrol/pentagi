@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUpIcon, Check, ChevronsUpDown, X } from 'lucide-react';
+import { ArrowUpIcon, Check, ChevronDown, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -151,16 +151,13 @@ export const FlowForm = ({ defaultValues, flowType, handleSubmit: onSubmit, isLo
                                                             disabled={isLoading}
                                                             variant="ghost"
                                                         >
-                                                            <span className="flex items-center gap-2">
-                                                                {currentProvider &&
-                                                                    getProviderIcon(currentProvider, 'size-4 shrink-0')}
-                                                                <span className="max-w-40 truncate">
-                                                                    {currentProvider
-                                                                        ? getProviderDisplayName(currentProvider)
-                                                                        : 'Select Provider'}
-                                                                </span>
-                                                                <ChevronsUpDown className="size-3 shrink-0" />
+                                                            {currentProvider && getProviderIcon(currentProvider)}
+                                                            <span className="max-w-40 truncate">
+                                                                {currentProvider
+                                                                    ? getProviderDisplayName(currentProvider)
+                                                                    : 'Select Provider'}
                                                             </span>
+                                                            <ChevronDown />
                                                         </InputGroupButton>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent

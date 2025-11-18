@@ -64,7 +64,7 @@ export const sortProviders = (providers: Provider[]): Provider[] => {
 /**
  * Gets the icon component for a provider based on its type
  */
-export const getProviderIcon = (provider: Provider, className = 'h-4 w-4') => {
+export const getProviderIcon = (provider: Provider, className = 'size-4') => {
     if (!provider || !provider.type) {
         return null;
     }
