@@ -10,10 +10,10 @@ import PublicRoute from '@/components/routes/PublicRoute';
 import PageLoader from '@/components/shared/PageLoader';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
-import Chat from '@/pages/Chat';
-import Flows from '@/pages/Flows';
+import Flow from '@/pages/flows/Flow';
+import Flows from '@/pages/flows/Flows';
+import NewFlow from '@/pages/flows/NewFlow';
 import Login from '@/pages/Login';
-import NewFlow from '@/pages/NewFlow';
 import OAuthResult from '@/pages/OAuthResult';
 import Report from '@/pages/Report';
 import SettingsPrompt from '@/pages/settings/SettingsPrompt';
@@ -60,7 +60,7 @@ const App = () => {
                                             path="flows/new"
                                         />
                                         <Route
-                                            element={<Chat />}
+                                            element={<Flow />}
                                             path="flows/:flowId"
                                         />
                                     </Route>
@@ -98,15 +98,15 @@ const App = () => {
                                         {/* <Route
                                         path="mcp-servers"
                                         element={<SettingsMcpServers />}
-                                    />
-                                    <Route
-                                        path="mcp-servers/new"
-                                        element={<SettingsMcpServer />}
-                                    />
-                                    <Route
-                                        path="mcp-servers/:mcpServerId"
-                                        element={<SettingsMcpServer />}
-                                    /> */}
+                                        />
+                                        <Route
+                                            path="mcp-servers/new"
+                                            element={<SettingsMcpServer />}
+                                        />
+                                        <Route
+                                            path="mcp-servers/:mcpServerId"
+                                            element={<SettingsMcpServer />}
+                                        /> */}
                                         {/* Catch-all route for unknown settings paths */}
                                         <Route
                                             element={
