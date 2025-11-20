@@ -13,6 +13,8 @@ import type { Provider } from '@/models/Provider';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import type { FlowFormValues } from '../flows/FlowForm';
+
 import ChatAssistantMessages from './ChatAssistantMessages';
 import ChatAutomationMessages from './ChatAutomationMessages';
 
@@ -31,7 +33,7 @@ interface ChatCentralTabsProps {
     onStopAssistant?: (assistantId: string) => Promise<void>;
     onStopAutomationFlow?: (flowId: string) => Promise<void>;
     onSubmitAssistantMessage?: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
-    onSubmitAutomationMessage: (message: string) => Promise<void>;
+    onSubmitAutomationMessage: (values: FlowFormValues) => Promise<void>;
     onTabChange: Dispatch<SetStateAction<string>>;
     providers: Provider[];
     selectedAssistantId?: null | string;

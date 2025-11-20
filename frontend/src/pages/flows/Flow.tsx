@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import type { FlowFormValues } from '@/features/flows/FlowForm';
+
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -183,10 +185,12 @@ const Flow = () => {
         handleSelectAssistant(null);
     };
 
-    const handleSubmitAutomationMessage = async (message: string) => {
+    const handleSubmitAutomationMessage = async (values: FlowFormValues) => {
         if (!flowId || flowData?.flow?.status === StatusType.Finished) {
             return;
         }
+
+        const { message } = values;
 
         try {
             await putUserInput({

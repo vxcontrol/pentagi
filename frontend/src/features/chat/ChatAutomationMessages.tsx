@@ -10,11 +10,11 @@ import type { FlowQuery, MessageLogFragmentFragment } from '@/graphql/types';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import ChatAutomationFormInput from '@/features/chat/ChatAutomationFormInput';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 
 import { useChatScroll } from '../../hooks/use-chat-scroll';
+import { FlowForm, type FlowFormValues } from '../flows/FlowForm';
 import ChatMessage from './ChatMessage';
 
 interface ChatAutomationMessagesProps {
@@ -22,7 +22,7 @@ interface ChatAutomationMessagesProps {
     flowData?: FlowQuery;
     logs?: MessageLogFragmentFragment[];
     onStopFlow?: (flowId: string) => Promise<void>;
-    onSubmitMessage: (message: string) => Promise<void>;
+    onSubmitMessage: (values: FlowFormValues) => Promise<void>;
     selectedFlowId: null | string;
 }
 
@@ -105,18 +105,18 @@ const ChatAutomationMessages = ({
     }, [logs, debouncedSearchValue]);
 
     // Message submission handler with flow creation state management
-    const handleSubmitMessage = async (message: string) => {
-        if (!message.trim()) {
-            return;
-        }
+    const handleSubmitMessage = async (values: FlowFormValues) => {
+        // if (!message.trim()) {
+        //     return;
+        // }
 
         try {
             // Show loading indicator if a new flow is being created
-            if (selectedFlowId === 'new') {
-                setIsCreatingFlow(true);
-            }
+            // if (selectedFlowId === 'new') {
+            //     setIsCreatingFlow(true);
+            // }
 
-            await onSubmitMessage(message);
+            await onSubmitMessage(values);
         } catch (error) {
             Log.error('Error submitting message:', error);
             throw error;
@@ -215,12 +215,21 @@ const ChatAutomationMessages = ({
             )}
 
             <div className="sticky bottom-0 border-t bg-background p-px pt-4">
-                <ChatAutomationFormInput
+                {/* <ChatAutomationFormInput
                     flowStatus={flowData?.flow?.status}
                     isCreatingFlow={isCreatingFlow}
                     onStopFlow={onStopFlow}
                     onSubmitMessage={handleSubmitMessage}
                     selectedFlowId={selectedFlowId}
+                /> */}
+                <FlowForm
+                    defaultValues={{
+                        providerName: flowData?.flow?.provider?.name ?? '',
+                    }}
+                    isSubmitting={false}
+                    onCancel={() => onStopFlow?.(selectedFlowId ?? '')}
+                    onSubmit={handleSubmitMessage}
+                    type={'automation'}
                 />
             </div>
         </div>
