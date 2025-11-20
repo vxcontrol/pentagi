@@ -207,6 +207,7 @@ func NewFlowWorker(
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
 	flowCtx := &FlowContext{
 		DB:         fwc.db,
@@ -353,6 +354,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
 	flowCtx := &FlowContext{
 		DB:         fwc.db,

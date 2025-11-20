@@ -398,6 +398,132 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		resultObj = "code sample stored successfully"
 
+	case tools.GraphitiSearchToolName:
+		var searchArgs tools.GraphitiSearchAction
+		if err := json.Unmarshal(args, &searchArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling graphiti search arguments: %w", err)
+		}
+
+		terminal.PrintMock("Graphiti Search:")
+		terminal.PrintKeyValue("Search Type", searchArgs.SearchType)
+		terminal.PrintKeyValue("Query", searchArgs.Query)
+
+		var builder strings.Builder
+
+		switch searchArgs.SearchType {
+		case "recent_context":
+			builder.WriteString("# Recent Context\n\n")
+			builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", searchArgs.Query))
+			builder.WriteString("**Time Window:** 2025-01-19T10:00:00Z to 2025-01-19T18:00:00Z\n\n")
+			builder.WriteString("## Recently Discovered Entities\n\n")
+			builder.WriteString("1. **Target Server** (score: 0.95)\n")
+			builder.WriteString("   - Labels: [IP_ADDRESS, TARGET]\n")
+			builder.WriteString("   - Summary: Mock target server discovered during reconnaissance\n\n")
+			builder.WriteString("## Recent Facts\n\n")
+			builder.WriteString("- **Port Discovery** (score: 0.92): Target Server HAS_PORT 80 (HTTP)\n")
+			builder.WriteString("- **Service Identification** (score: 0.88): Port 80 RUNS_SERVICE Apache 2.4.41\n\n")
+			builder.WriteString("## Recent Activity\n\n")
+			builder.WriteString("- **pentester_agent** (score: 0.94): Executed nmap scan on target\n")
+
+		case "successful_tools":
+			builder.WriteString("# Successful Tools & Techniques\n\n")
+			builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", searchArgs.Query))
+			builder.WriteString("## Successful Executions\n\n")
+			builder.WriteString("1. **pentester_agent** (score: 0.96)\n")
+			builder.WriteString("   - Description: Executed nmap scan\n")
+			builder.WriteString("   - Command/Output:\n```\nnmap -sV -p 80,443 192.168.1.100\n\nPORT   STATE SERVICE VERSION\n80/tcp open  http    Apache/2.4.41\n443/tcp open  https   Apache/2.4.41\n```\n\n")
+			builder.WriteString("2. **pentester_agent** (score: 0.92)\n")
+			builder.WriteString("   - Description: Successful vulnerability scan\n")
+			builder.WriteString("   - Command/Output:\n```\nnikto -h http://192.168.1.100\n\nFound: Outdated Apache version\nFound: Accessible .git directory\n```\n\n")
+
+		case "episode_context":
+			builder.WriteString("# Episode Context Results\n\n")
+			builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", searchArgs.Query))
+			builder.WriteString("## Relevant Agent Activity\n\n")
+			builder.WriteString("1. **pentester_agent** (relevance: 0.94)\n")
+			builder.WriteString("   - Time: 2025-01-19T14:30:00Z\n")
+			builder.WriteString("   - Description: Analyzed web application vulnerabilities\n")
+			builder.WriteString("   - Content:\n```\nI have completed the reconnaissance phase and identified the following:\n- Apache web server version 2.4.41 (outdated, has known vulnerabilities)\n- Exposed .git directory at /.git/\n- Directory listing enabled on /backup/\n- Potential SQL injection in login form\n\nRecommendation: Proceed with exploitation of the .git directory first.\n```\n\n")
+			builder.WriteString("## Mentioned Entities\n\n")
+			builder.WriteString("- **192.168.1.100** (relevance: 0.96): Target IP address\n")
+			builder.WriteString("- **Apache 2.4.41** (relevance: 0.91): Identified web server\n")
+
+		case "entity_relationships":
+			builder.WriteString("# Entity Relationship Search Results\n\n")
+			builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", searchArgs.Query))
+			builder.WriteString("## Center Node: Target Server\n")
+			builder.WriteString("- UUID: mock-uuid-center-123\n")
+			builder.WriteString("- Summary: Main target system identified during reconnaissance\n\n")
+			builder.WriteString("## Related Facts & Relationships\n\n")
+			builder.WriteString("1. **Port Relationship** (distance: 0.15)\n")
+			builder.WriteString("   - Fact: Target Server HAS_PORT 80\n")
+			builder.WriteString("   - Source: mock-uuid-center-123\n")
+			builder.WriteString("   - Target: mock-uuid-port-80\n\n")
+			builder.WriteString("2. **Service Relationship** (distance: 0.25)\n")
+			builder.WriteString("   - Fact: Port 80 RUNS_SERVICE Apache\n")
+			builder.WriteString("   - Source: mock-uuid-port-80\n")
+			builder.WriteString("   - Target: mock-uuid-apache\n\n")
+			builder.WriteString("## Related Entities\n\n")
+			builder.WriteString("1. **HTTP Service** (distance: 0.20)\n")
+			builder.WriteString("   - UUID: mock-uuid-http-service\n")
+			builder.WriteString("   - Labels: [SERVICE, HTTP]\n")
+			builder.WriteString("   - Summary: Web service running on port 80\n\n")
+
+		case "temporal_window":
+			builder.WriteString("# Temporal Search Results\n\n")
+			builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", searchArgs.Query))
+			builder.WriteString(fmt.Sprintf("**Time Window:** %s to %s\n\n", searchArgs.TimeStart, searchArgs.TimeEnd))
+			builder.WriteString("## Facts & Relationships\n\n")
+			builder.WriteString("1. **Vulnerability Discovery** (score: 0.93)\n")
+			builder.WriteString("   - Fact: Target System HAS_VULNERABILITY CVE-2021-41773\n")
+			builder.WriteString("   - Created: 2025-01-19T15:00:00Z\n\n")
+			builder.WriteString("## Entities\n\n")
+			builder.WriteString("1. **CVE-2021-41773** (score: 0.95)\n")
+			builder.WriteString("   - UUID: mock-uuid-cve\n")
+			builder.WriteString("   - Labels: [VULNERABILITY, CVE]\n")
+			builder.WriteString("   - Summary: Apache HTTP Server path traversal vulnerability\n\n")
+			builder.WriteString("## Agent Responses & Tool Executions\n\n")
+			builder.WriteString("1. **pentester_agent** (score: 0.92)\n")
+			builder.WriteString("   - Description: Vulnerability assessment completed\n")
+			builder.WriteString("   - Created: 2025-01-19T15:30:00Z\n")
+			builder.WriteString("   - Content:\n```\nConfirmed CVE-2021-41773 vulnerability present on target.\nSuccessfully exploited to read /etc/passwd\n```\n\n")
+
+		case "diverse_results":
+			builder.WriteString("# Diverse Search Results\n\n")
+			builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", searchArgs.Query))
+			builder.WriteString("## Communities (Context Clusters)\n\n")
+			builder.WriteString("1. **Reconnaissance Phase** (MMR score: 0.94)\n")
+			builder.WriteString("   - Summary: All activities related to initial reconnaissance and scanning\n\n")
+			builder.WriteString("2. **Exploitation Phase** (MMR score: 0.88)\n")
+			builder.WriteString("   - Summary: Activities related to vulnerability exploitation\n\n")
+			builder.WriteString("## Diverse Facts\n\n")
+			builder.WriteString("1. **Network Discovery** (MMR score: 0.91)\n")
+			builder.WriteString("   - Fact: Nmap scan revealed 5 open ports on target\n\n")
+			builder.WriteString("2. **Web Application Analysis** (MMR score: 0.85)\n")
+			builder.WriteString("   - Fact: Web app uses outdated framework with known XSS vulnerabilities\n\n")
+
+		case "entity_by_label":
+			builder.WriteString("# Entity Inventory Search\n\n")
+			builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", searchArgs.Query))
+			builder.WriteString("## Matching Entities\n\n")
+			builder.WriteString("1. **SQL Injection Vulnerability** (score: 0.96)\n")
+			builder.WriteString("   - UUID: mock-uuid-sqli\n")
+			builder.WriteString("   - Labels: [VULNERABILITY, SQL_INJECTION]\n")
+			builder.WriteString("   - Summary: SQL injection found in login form\n\n")
+			builder.WriteString("2. **XSS Vulnerability** (score: 0.92)\n")
+			builder.WriteString("   - UUID: mock-uuid-xss\n")
+			builder.WriteString("   - Labels: [VULNERABILITY, XSS]\n")
+			builder.WriteString("   - Summary: Reflected XSS in search parameter\n\n")
+			builder.WriteString("## Associated Facts\n\n")
+			builder.WriteString("- **Exploit Success** (score: 0.94): SQL Injection was successfully exploited to dump database\n")
+
+		default:
+			builder.WriteString(fmt.Sprintf("# Mock Graphiti Search Results\n\nSearch type '%s' mock not fully implemented.\n", searchArgs.SearchType))
+			builder.WriteString(fmt.Sprintf("Query: %s\n\nThis would return relevant results from the temporal knowledge graph.", searchArgs.Query))
+		}
+
+		resultObj = builder.String()
+
 	default:
 		terminal.PrintMock("Generic mock response:")
 		terminal.PrintKeyValue("Function", funcName)

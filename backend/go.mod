@@ -227,3 +227,5 @@ require (
 	gotest.tools/v3 v3.5.1 // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
 )
+
+replace github.com/vxcontrol/graphiti-go-client => ../../graphiti-go-client

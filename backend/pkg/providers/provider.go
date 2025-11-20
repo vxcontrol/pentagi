@@ -516,6 +516,7 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 		"AdviceToolName":          tools.AdviceToolName,
 		"MemoristToolName":        tools.MemoristToolName,
 		"MaintenanceToolName":     tools.MaintenanceToolName,
+		"GraphitiSearchToolName":  tools.GraphitiSearchToolName,
 		"SummarizationToolName":   cast.SummarizationToolName,
 		"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 		"ExecutionContext":        executionContext,
