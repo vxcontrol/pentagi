@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUpIcon, Check, ChevronDown, X } from 'lucide-react';
+import { ArrowUpIcon, Check, ChevronDown, Square, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -34,14 +34,25 @@ const formSchema = z.object({
 
 export interface FlowFormProps {
     defaultValues?: Partial<FlowFormValues>;
-    flowType: 'assistant' | 'automation';
-    handleSubmit: (values: FlowFormValues) => Promise<void> | void;
+    isCanceling?: boolean;
     isLoading?: boolean;
+    isSubmitting?: boolean;
+    onCancel?: () => Promise<void> | void;
+    onSubmit: (values: FlowFormValues) => Promise<void> | void;
+    type: 'assistant' | 'automation';
 }
 
 export type FlowFormValues = z.infer<typeof formSchema>;
 
-export const FlowForm = ({ defaultValues, flowType, handleSubmit: onSubmit, isLoading = false }: FlowFormProps) => {
+export const FlowForm = ({
+    defaultValues,
+    isCanceling = false,
+    isLoading = false,
+    isSubmitting = false,
+    onCancel,
+    onSubmit,
+    type,
+}: FlowFormProps) => {
     const { providers, setSelectedProvider } = useProviders();
     const [providerSearch, setProviderSearch] = useState('');
 
@@ -117,6 +128,8 @@ export const FlowForm = ({ defaultValues, flowType, handleSubmit: onSubmit, isLo
         handleFormSubmit(onSubmit)();
     };
 
+    const isDisabled = isLoading || isSubmitting || isCanceling;
+
     return (
         <Form {...form}>
             <form onSubmit={handleFormSubmit(onSubmit)}>
@@ -128,8 +141,9 @@ export const FlowForm = ({ defaultValues, flowType, handleSubmit: onSubmit, isLo
                             <InputGroup className="block">
                                 <InputGroupTextareaAutosize
                                     {...field}
+                                    autoFocus
                                     className="min-h-0"
-                                    disabled={isLoading}
+                                    disabled={isDisabled}
                                     maxRows={9}
                                     minRows={1}
                                     onKeyDown={handleKeyDown}
@@ -148,7 +162,7 @@ export const FlowForm = ({ defaultValues, flowType, handleSubmit: onSubmit, isLo
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <InputGroupButton
-                                                            disabled={isLoading}
+                                                            disabled={isDisabled}
                                                             variant="ghost"
                                                         >
                                                             {currentProvider && getProviderIcon(currentProvider)}
@@ -232,7 +246,7 @@ export const FlowForm = ({ defaultValues, flowType, handleSubmit: onSubmit, isLo
                                             );
                                         }}
                                     />
-                                    {flowType === 'assistant' && (
+                                    {type === 'assistant' && (
                                         <FormField
                                             control={control}
                                             name="useAgents"
@@ -244,7 +258,7 @@ export const FlowForm = ({ defaultValues, flowType, handleSubmit: onSubmit, isLo
                                                                 <FormControl>
                                                                     <Switch
                                                                         checked={useAgentsField.value}
-                                                                        disabled={isLoading}
+                                                                        disabled={isDisabled}
                                                                         onCheckedChange={useAgentsField.onChange}
                                                                     />
                                                                 </FormControl>
@@ -268,15 +282,28 @@ export const FlowForm = ({ defaultValues, flowType, handleSubmit: onSubmit, isLo
                                             )}
                                         />
                                     )}
-                                    <InputGroupButton
-                                        className="ml-auto"
-                                        disabled={isLoading || !isValid}
-                                        size="icon-xs"
-                                        type="submit"
-                                        variant="default"
-                                    >
-                                        {isLoading ? <Spinner variant="circle" /> : <ArrowUpIcon />}
-                                    </InputGroupButton>
+                                    {!isLoading || isSubmitting ? (
+                                        <InputGroupButton
+                                            className="ml-auto"
+                                            disabled={isSubmitting || !isValid}
+                                            size="icon-xs"
+                                            type="submit"
+                                            variant="default"
+                                        >
+                                            {isSubmitting ? <Spinner variant="circle" /> : <ArrowUpIcon />}
+                                        </InputGroupButton>
+                                    ) : (
+                                        <InputGroupButton
+                                            className="ml-auto"
+                                            disabled={isCanceling || !onCancel}
+                                            onClick={() => onCancel?.()}
+                                            size="icon-xs"
+                                            type="button"
+                                            variant="destructive"
+                                        >
+                                            {isCanceling ? <Spinner variant="circle" /> : <Square />}
+                                        </InputGroupButton>
+                                    )}
                                 </InputGroupAddon>
                             </InputGroup>
                         </FormControl>

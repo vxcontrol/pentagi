@@ -76,26 +76,22 @@ const NewFlow = () => {
 
     return (
         <>
-            <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
-                <div className="flex w-full items-center justify-between gap-2 px-4">
-                    <div className="flex items-center gap-2">
-                        <SidebarTrigger className="-ml-1" />
-                        <Separator
-                            className="mr-2 h-4"
-                            orientation="vertical"
-                        />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage>New flow</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                </div>
+            <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b bg-background px-4">
+                <SidebarTrigger className="-ml-1" />
+                <Separator
+                    className="mr-2 h-4"
+                    orientation="vertical"
+                />
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbPage>New flow</BreadcrumbPage>
+                        </BreadcrumbItem>
+                    </BreadcrumbList>
+                </Breadcrumb>
             </header>
-            <div className="flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1 items-center justify-center">
-                <Card className="mx-4 w-full max-w-2xl">
+            <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center p-4">
+                <Card className="w-full max-w-2xl">
                     <CardContent className="flex flex-col gap-4 pt-6">
                         <div className="text-center">
                             <h1 className="text-2xl font-semibold">Create a new flow</h1>
@@ -124,9 +120,9 @@ const NewFlow = () => {
                             defaultValues={{
                                 providerName: selectedProvider?.name ?? '',
                             }}
-                            flowType={flowType}
-                            handleSubmit={handleSubmit}
-                            isLoading={isLoading}
+                            isSubmitting={isLoading}
+                            onSubmit={handleSubmit}
+                            type={flowType}
                         />
                     </CardContent>
                 </Card>
