@@ -5,24 +5,21 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import type { SearchLogFragmentFragment } from '@/graphql/types';
-
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useFlow } from '@/providers/FlowProvider';
 
 import ChatTool from './ChatTool';
-
-interface ChatToolsProps {
-    logs?: SearchLogFragmentFragment[];
-    selectedFlowId?: null | string;
-}
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatTools = ({ logs, selectedFlowId }: ChatToolsProps) => {
+const ChatTools = () => {
+    const { flowData, flowId } = useFlow();
+
+    const logs = useMemo(() => flowData?.searchLogs ?? [], [flowData?.searchLogs]);
     const searchesEndRef = useRef<HTMLDivElement>(null);
 
     // Separate state for immediate input value and debounced search value
@@ -71,7 +68,7 @@ const ChatTools = ({ logs, selectedFlowId }: ChatToolsProps) => {
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
-    }, [selectedFlowId, form, debouncedUpdateSearch]);
+    }, [flowId, form, debouncedUpdateSearch]);
 
     // Memoize filtered logs to avoid recomputing on every render
     // Use debouncedSearchValue for filtering to improve performance

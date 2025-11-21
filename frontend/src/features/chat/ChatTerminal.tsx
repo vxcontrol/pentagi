@@ -6,23 +6,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import type { TerminalLogFragmentFragment } from '@/graphql/types';
-
 import Terminal from '@/components/shared/Terminal';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useFlow } from '@/providers/FlowProvider';
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-interface ChatTerminalProps {
-    logs: TerminalLogFragmentFragment[];
-    selectedFlowId?: null | string;
-}
+const ChatTerminal = () => {
+    const { flowData, flowId } = useFlow();
 
-const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) => {
+    const terminalLogs = useMemo(() => flowData?.terminalLogs ?? [], [flowData?.terminalLogs]);
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
     const terminalRef = useRef<null | { findNext: () => void; findPrevious: () => void }>(null);
@@ -66,19 +63,19 @@ const ChatTerminal = ({ logs: terminalLog, selectedFlowId }: ChatTerminalProps) 
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
-    }, [selectedFlowId, form, debouncedUpdateSearch]);
+    }, [flowId, form, debouncedUpdateSearch]);
 
     // Filter logs based on debounced search value for better performance
     const filteredLogs = useMemo(() => {
         const search = debouncedSearchValue.toLowerCase().trim();
-        const logs = terminalLog.map((log) => log.text);
+        const logs = terminalLogs.map((log) => log.text);
 
         if (!search) {
             return logs;
         }
 
         return logs.filter((log) => log.toLowerCase().includes(search));
-    }, [terminalLog, debouncedSearchValue]);
+    }, [terminalLogs, debouncedSearchValue]);
 
     const handleFindNext = () => {
         if (terminalRef.current && debouncedSearchValue.trim()) {

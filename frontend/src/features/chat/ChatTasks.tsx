@@ -1,11 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
 import { Copy, Download, ExternalLink, NotepadText, Search, X } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-
-import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -19,14 +17,9 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Log } from '@/lib/log';
 import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
+import { useFlow } from '@/providers/FlowProvider';
 
 import ChatTask from './ChatTask';
-
-interface ChatTasksProps {
-    flow?: FlowFragmentFragment | null;
-    selectedFlowId?: null | string;
-    tasks: TaskFragmentFragment[];
-}
 
 const searchFormSchema = z.object({
     search: z.string(),
@@ -41,7 +34,11 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatTasks = ({ flow, selectedFlowId, tasks }: ChatTasksProps) => {
+const ChatTasks = () => {
+    const { flowData, flowId } = useFlow();
+
+    const flow = flowData?.flow;
+    const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
 
@@ -84,7 +81,7 @@ const ChatTasks = ({ flow, selectedFlowId, tasks }: ChatTasksProps) => {
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
-    }, [selectedFlowId, form, debouncedUpdateSearch]);
+    }, [flowId, form, debouncedUpdateSearch]);
 
     // Memoize filtered tasks to avoid recomputing on every render
     // Use debouncedSearchValue for filtering to improve performance
@@ -114,7 +111,7 @@ const ChatTasks = ({ flow, selectedFlowId, tasks }: ChatTasksProps) => {
     const hasTasks = filteredTasks && filteredTasks.length > 0;
 
     // Check if flow is available for report generation
-    const isReportDisabled = !flow || selectedFlowId === 'new' || !selectedFlowId;
+    const isReportDisabled = !flow || flowId === 'new' || !flowId;
 
     // Report export handlers
     const handleCopyToClipboard = async () => {
@@ -151,22 +148,22 @@ const ChatTasks = ({ flow, selectedFlowId, tasks }: ChatTasksProps) => {
     };
 
     const handleDownloadPDF = () => {
-        if (isReportDisabled || !flow || !selectedFlowId) {
+        if (isReportDisabled || !flow || !flowId) {
             return;
         }
 
         // Open new tab (not popup) with report page and download flag
-        const url = `/flows/${selectedFlowId}/report?download=true&silent=true`;
+        const url = `/flows/${flowId}/report?download=true&silent=true`;
         window.open(url, '_blank');
     };
 
     const handleOpenWebView = () => {
-        if (isReportDisabled || !selectedFlowId) {
+        if (isReportDisabled || !flowId) {
             return;
         }
 
         // Open new tab with report page for web viewing
-        const url = `/flows/${selectedFlowId}/report`;
+        const url = `/flows/${flowId}/report`;
         window.open(url, '_blank');
     };
 
@@ -295,4 +292,4 @@ const ChatTasks = ({ flow, selectedFlowId, tasks }: ChatTasksProps) => {
     );
 };
 
-export default memo(ChatTasks);
+export default ChatTasks;

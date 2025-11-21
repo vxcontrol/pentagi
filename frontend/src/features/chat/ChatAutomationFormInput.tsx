@@ -9,6 +9,7 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { StatusType } from '@/graphql/types';
 import { Log } from '@/lib/log';
+import { useFlow } from '@/providers/FlowProvider';
 
 const formSchema = z.object({
     message: z.string().min(1, { message: 'Message cannot be empty' }),
@@ -19,7 +20,6 @@ interface ChatAutomationFormInputProps {
     isCreatingFlow?: boolean;
     onStopFlow?: (flowId: string) => Promise<void>;
     onSubmitMessage: (message: string) => Promise<void>;
-    selectedFlowId: null | string;
 }
 
 const ChatAutomationFormInput = ({
@@ -27,8 +27,8 @@ const ChatAutomationFormInput = ({
     isCreatingFlow = false,
     onStopFlow,
     onSubmitMessage,
-    selectedFlowId,
 }: ChatAutomationFormInputProps) => {
+    const { flowId } = useFlow();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
     const textareaId = 'chat-textarea';
@@ -43,10 +43,10 @@ const ChatAutomationFormInput = ({
     // Reset form when flow ID changes
     useEffect(() => {
         form.reset();
-    }, [selectedFlowId, form]);
+    }, [flowId, form]);
 
     const getPlaceholderText = () => {
-        if (!selectedFlowId) {
+        if (!flowId) {
             return 'Select a flow...';
         }
 
@@ -54,7 +54,7 @@ const ChatAutomationFormInput = ({
             return 'Creating a new flow...';
         }
 
-        if (selectedFlowId === 'new') {
+        if (flowId === 'new') {
             return 'Describe what you would like PentAGI to test...';
         }
 
@@ -66,6 +66,7 @@ const ChatAutomationFormInput = ({
 
             case StatusType.Failed:
 
+            // eslint-disable-next-line no-fallthrough
             case StatusType.Finished: {
                 return 'This flow has ended. Create a new one to continue.';
             }
@@ -105,13 +106,13 @@ const ChatAutomationFormInput = ({
     };
 
     const handleStopFlow = async () => {
-        if (!selectedFlowId || !onStopFlow) {
+        if (!flowId || !onStopFlow) {
             return;
         }
 
         try {
             setIsStopping(true);
-            await onStopFlow(selectedFlowId);
+            await onStopFlow(flowId);
         } catch (error) {
             Log.error('Error stopping flow:', error);
         } finally {
@@ -146,15 +147,13 @@ const ChatAutomationFormInput = ({
     const isCreated = flowStatus === StatusType.Created;
     const isFlowTerminal = flowStatus === StatusType.Finished || flowStatus === StatusType.Failed;
 
-    const isInputDisabled =
-        !selectedFlowId || isSubmitting || isCreatingFlow || isRunning || isCreated || isFlowTerminal;
+    const isInputDisabled = !flowId || isSubmitting || isCreatingFlow || isRunning || isCreated || isFlowTerminal;
 
-    const isButtonDisabled =
-        !selectedFlowId || isSubmitting || isCreatingFlow || isStopping || isCreated || isFlowTerminal;
+    const isButtonDisabled = !flowId || isSubmitting || isCreatingFlow || isStopping || isCreated || isFlowTerminal;
 
     // Auto-focus on textarea when needed
     useEffect(() => {
-        if (!isInputDisabled && (selectedFlowId === 'new' || flowStatus === StatusType.Waiting || !flowStatus)) {
+        if (!isInputDisabled && (flowId === 'new' || flowStatus === StatusType.Waiting || !flowStatus)) {
             const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
 
             if (textarea) {
@@ -163,7 +162,7 @@ const ChatAutomationFormInput = ({
                 return () => clearTimeout(timeoutId);
             }
         }
-    }, [selectedFlowId, flowStatus, isInputDisabled]);
+    }, [flowId, flowStatus, isInputDisabled]);
 
     return (
         <Form {...form}>
