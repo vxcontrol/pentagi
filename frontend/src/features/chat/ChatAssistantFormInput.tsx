@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusType } from '@/graphql/types';
 import { Log } from '@/lib/log';
+import { useFlow } from '@/providers/FlowProvider';
 
 const formSchema = z.object({
     message: z.string().min(1, { message: 'Message cannot be empty' }),
@@ -23,7 +24,6 @@ interface ChatAssistantFormInputProps {
     isUseAgentsDefault?: boolean;
     onStopFlow?: (flowId: string) => Promise<void>;
     onSubmitMessage: (message: string, useAgents: boolean) => Promise<void>;
-    selectedFlowId: null | string;
 }
 
 const ChatAssistantFormInput = ({
@@ -33,8 +33,8 @@ const ChatAssistantFormInput = ({
     isUseAgentsDefault = false,
     onStopFlow,
     onSubmitMessage,
-    selectedFlowId,
 }: ChatAssistantFormInputProps) => {
+    const { flowId } = useFlow();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isStopping, setIsStopping] = useState(false);
     const [useAgents, setUseAgents] = useState(isUseAgentsDefault || false);
@@ -51,7 +51,7 @@ const ChatAssistantFormInput = ({
     const isAssistantTerminal = assistantStatus === StatusType.Finished || assistantStatus === StatusType.Failed;
 
     const isInputDisabled =
-        !selectedFlowId ||
+        !flowId ||
         isSubmitting ||
         isCreatingAssistant ||
         isRunning ||
@@ -60,7 +60,7 @@ const ChatAssistantFormInput = ({
         isAssistantTerminal;
 
     const isButtonDisabled =
-        !selectedFlowId ||
+        !flowId ||
         isSubmitting ||
         isCreatingAssistant ||
         isStopping ||
@@ -82,7 +82,7 @@ const ChatAssistantFormInput = ({
             message: '',
             useAgents: isUseAgentsDefault,
         });
-    }, [selectedFlowId, form, isUseAgentsDefault]);
+    }, [flowId, form, isUseAgentsDefault]);
 
     // Update local useAgents state when isUseAgentsDefault changes
     useEffect(() => {
@@ -95,11 +95,11 @@ const ChatAssistantFormInput = ({
     }, [useAgents, form]);
 
     const getPlaceholderText = () => {
-        if (!selectedFlowId) {
+        if (!flowId) {
             return 'Select a flow...';
         }
 
-        if (selectedFlowId === 'new') {
+        if (flowId === 'new') {
             return 'What would you like me to help you with?';
         }
 
@@ -126,6 +126,7 @@ const ChatAssistantFormInput = ({
 
             case StatusType.Failed:
 
+            // eslint-disable-next-line no-fallthrough
             case StatusType.Finished: {
                 return 'This assistant session has ended. Create a new one to continue.';
             }
@@ -166,13 +167,13 @@ const ChatAssistantFormInput = ({
     };
 
     const handleStopFlow = async () => {
-        if (!selectedFlowId || !onStopFlow) {
+        if (!flowId || !onStopFlow) {
             return;
         }
 
         try {
             setIsStopping(true);
-            await onStopFlow(selectedFlowId);
+            await onStopFlow(flowId);
         } catch (error) {
             Log.error('Error stopping flow:', error);
             // TODO: Add error notification UI
@@ -206,10 +207,7 @@ const ChatAssistantFormInput = ({
 
     // Auto-focus on textarea when needed
     useEffect(() => {
-        if (
-            !isInputDisabled &&
-            (selectedFlowId === 'new' || assistantStatus === StatusType.Waiting || !assistantStatus)
-        ) {
+        if (!isInputDisabled && (flowId === 'new' || assistantStatus === StatusType.Waiting || !assistantStatus)) {
             const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
 
             if (textarea) {
@@ -218,7 +216,7 @@ const ChatAssistantFormInput = ({
                 return () => clearTimeout(timeoutId);
             }
         }
-    }, [selectedFlowId, assistantStatus, isInputDisabled]);
+    }, [flowId, assistantStatus, isInputDisabled]);
 
     return (
         <Form {...form}>

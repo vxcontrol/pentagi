@@ -5,24 +5,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import type { ScreenshotFragmentFragment } from '@/graphql/types';
-
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useFlow } from '@/providers/FlowProvider';
 
 import ChatScreenshot from './ChatScreenshot';
-
-interface ChatScreenshotsProps {
-    screenshots: ScreenshotFragmentFragment[];
-    selectedFlowId?: null | string;
-}
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatScreenshots = ({ screenshots, selectedFlowId }: ChatScreenshotsProps) => {
+const ChatScreenshots = () => {
+    const { flowData, flowId } = useFlow();
+
+    const screenshots = useMemo(() => flowData?.screenshots ?? [], [flowData?.screenshots]);
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
 
@@ -65,7 +62,7 @@ const ChatScreenshots = ({ screenshots, selectedFlowId }: ChatScreenshotsProps) 
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
-    }, [selectedFlowId, form, debouncedUpdateSearch]);
+    }, [flowId, form, debouncedUpdateSearch]);
 
     // Memoize filtered screenshots to avoid recomputing on every render
     // Use debouncedSearchValue for filtering to improve performance

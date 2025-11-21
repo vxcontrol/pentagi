@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
 import { ChevronDown, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -18,7 +18,6 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import ChatAssistantFormInput from '@/features/chat/ChatAssistantFormInput';
 import { useSettingsQuery } from '@/graphql/types';
-import { useFlowMutations } from '@/hooks/use-flow-mutations';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 import { isProviderValid } from '@/models/Provider';
@@ -37,29 +36,20 @@ const searchFormSchema = z.object({
 });
 
 const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
-    const { flowId: selectedFlowId } = useFlow();
     const { providers, selectedProvider } = useProviders();
 
     const {
         assistantLogs: logs,
         assistants,
-        handleInitiateAssistantCreation: onCreateAssistant,
-        handleSelectAssistant: onSelectAssistant,
-        refetchAssistantLogs,
+        callAssistant: onSubmitMessage,
+        createAssistant: onCreateNewAssistant,
+        deleteAssistant: onDeleteAssistant,
+        flowId,
+        initiateAssistantCreation: onCreateAssistant,
+        selectAssistant: onSelectAssistant,
         selectedAssistantId,
+        stopAssistant: onStopAssistant,
     } = useFlow();
-
-    const {
-        handleCallAssistant: onSubmitMessage,
-        handleCreateAssistant: onCreateNewAssistant,
-        handleDeleteAssistant: onDeleteAssistant,
-        handleStopAssistant: onStopAssistant,
-    } = useFlowMutations({
-        handleSelectAssistant: onSelectAssistant,
-        refetchAssistantLogs,
-        selectedAssistantId: selectedAssistantId ?? null,
-        selectedProvider,
-    });
 
     const [isCreatingAssistant, setIsCreatingAssistant] = useState(false);
 
@@ -115,7 +105,7 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
-    }, [selectedFlowId, form, debouncedUpdateSearch]);
+    }, [flowId, form, debouncedUpdateSearch]);
 
     // Get the current selected assistant
     const selectedAssistant = useMemo(() => {
@@ -261,7 +251,7 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
             <div className="sticky top-0 z-10 bg-background pb-4">
                 <div className="flex gap-2 p-px">
                     {/* Assistant Selector Dropdown */}
-                    {selectedFlowId && selectedFlowId !== 'new' && (
+                    {flowId && flowId !== 'new' && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -427,7 +417,7 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
                         </Button>
                     )}
                 </div>
-            ) : selectedFlowId === 'new' ? (
+            ) : flowId === 'new' ? (
                 // Show placeholder for new flow
                 <div className="flex flex-1 items-center justify-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -453,11 +443,10 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
                     isUseAgentsDefault={isUseAgentsDefault}
                     onStopFlow={handleStopAssistant}
                     onSubmitMessage={handleSubmitMessage}
-                    selectedFlowId={selectedFlowId}
                 />
             </div>
         </div>
     );
 };
 
-export default memo(ChatAssistantMessages);
+export default ChatAssistantMessages;

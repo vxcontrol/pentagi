@@ -1,36 +1,18 @@
-import type { Dispatch, SetStateAction } from 'react';
-
-import { memo, useMemo } from 'react';
-
-import type { MessageLogFragmentFragment } from '@/graphql/types';
+import { useState } from 'react';
 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useFlow } from '@/providers/FlowProvider';
 
 import ChatAssistantMessages from './ChatAssistantMessages';
 import ChatAutomationMessages from './ChatAutomationMessages';
 
-const MemoizedChatAutomationMessages = memo(ChatAutomationMessages);
-const MemoizedChatAssistantMessages = memo(ChatAssistantMessages);
-
-interface ChatCentralTabsProps {
-    activeTab: string;
-    onTabChange: Dispatch<SetStateAction<string>>;
-}
-
-const ChatCentralTabs = ({ activeTab, onTabChange }: ChatCentralTabsProps) => {
-    const { flowData } = useFlow();
-
-    const messageLogs = useMemo<MessageLogFragmentFragment[]>(
-        () => flowData?.messageLogs ?? [],
-        [flowData?.messageLogs],
-    );
+const ChatCentralTabs = () => {
+    const [activeTab, setActiveTab] = useState<string>('automation');
 
     return (
         <Tabs
             className="flex size-full flex-col"
-            onValueChange={onTabChange}
+            onValueChange={setActiveTab}
             value={activeTab}
         >
             <div className="max-w-full">
@@ -47,16 +29,16 @@ const ChatCentralTabs = ({ activeTab, onTabChange }: ChatCentralTabsProps) => {
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="automation"
             >
-                <MemoizedChatAutomationMessages logs={messageLogs} />
+                <ChatAutomationMessages />
             </TabsContent>
             <TabsContent
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="assistant"
             >
-                <MemoizedChatAssistantMessages />
+                <ChatAssistantMessages />
             </TabsContent>
         </Tabs>
     );
 };
 
-export default memo(ChatCentralTabs);
+export default ChatCentralTabs;

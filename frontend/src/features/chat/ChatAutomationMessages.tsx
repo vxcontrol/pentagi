@@ -1,20 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
 import { ChevronDown, Loader2, Search, X } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-
-import type { MessageLogFragmentFragment } from '@/graphql/types';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useFlowMutations } from '@/hooks/use-flow-mutations';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/FlowProvider';
-import { useProviders } from '@/providers/ProvidersProvider';
 
 import { useChatScroll } from '../../hooks/use-chat-scroll';
 import { FlowForm, type FlowFormValues } from '../flows/FlowForm';
@@ -22,29 +18,16 @@ import ChatMessage from './ChatMessage';
 
 interface ChatAutomationMessagesProps {
     className?: string;
-    logs?: MessageLogFragmentFragment[];
 }
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps) => {
-    const {
-        flowData,
-        flowId: selectedFlowId,
-        handleSelectAssistant,
-        refetchAssistantLogs,
-        selectedAssistantId,
-    } = useFlow();
-    const { selectedProvider } = useProviders();
+const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
+    const { flowData, flowId, stopAutomationFlow, submitAutomationMessage } = useFlow();
 
-    const { handleStopAutomationFlow, handleSubmitAutomationMessage } = useFlowMutations({
-        handleSelectAssistant,
-        refetchAssistantLogs,
-        selectedAssistantId: selectedAssistantId ?? null,
-        selectedProvider,
-    });
+    const logs = useMemo(() => flowData?.messageLogs ?? [], [flowData?.messageLogs]);
 
     const [isCreatingFlow, setIsCreatingFlow] = useState(false);
 
@@ -53,7 +36,7 @@ const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps
 
     const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(
         useMemo(() => (logs ? [...(logs || [])] : []), [logs]),
-        selectedFlowId,
+        flowId,
     );
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
@@ -93,7 +76,7 @@ const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
-    }, [selectedFlowId, form, debouncedUpdateSearch]);
+    }, [flowId, form, debouncedUpdateSearch]);
 
     // Memoize filtered logs to avoid recomputing on every render
     // Use debouncedSearchValue for filtering to improve performance
@@ -120,11 +103,8 @@ const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps
 
         try {
             // Show loading indicator if a new flow is being created
-            // if (selectedFlowId === 'new') {
-            //     setIsCreatingFlow(true);
-            // }
 
-            await handleSubmitAutomationMessage(values);
+            await submitAutomationMessage(values);
         } catch (error) {
             Log.error('Error submitting message:', error);
             throw error;
@@ -183,7 +163,7 @@ const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps
                         <p className="text-xs">This may take some time as Docker images are downloaded</p>
                     </div>
                 </div>
-            ) : filteredLogs.length > 0 || selectedFlowId !== 'new' ? (
+            ) : filteredLogs.length > 0 || flowId !== 'new' ? (
                 <div className="relative h-full overflow-y-hidden pb-4">
                     <div
                         className="h-full space-y-4 overflow-y-auto"
@@ -223,19 +203,12 @@ const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps
             )}
 
             <div className="sticky bottom-0 border-t bg-background p-px pt-4">
-                {/* <ChatAutomationFormInput
-                    flowStatus={flowData?.flow?.status}
-                    isCreatingFlow={isCreatingFlow}
-                    onStopFlow={onStopFlow}
-                    onSubmitMessage={handleSubmitMessage}
-                    selectedFlowId={selectedFlowId}
-                /> */}
                 <FlowForm
                     defaultValues={{
                         providerName: flowData?.flow?.provider?.name ?? '',
                     }}
                     isSubmitting={false}
-                    onCancel={() => handleStopAutomationFlow(selectedFlowId ?? '')}
+                    onCancel={() => stopAutomationFlow(flowId ?? '')}
                     onSubmit={handleSubmitMessage}
                     type={'automation'}
                 />
@@ -244,4 +217,4 @@ const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps
     );
 };
 
-export default memo(ChatAutomationMessages);
+export default ChatAutomationMessages;

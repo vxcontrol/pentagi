@@ -41,7 +41,6 @@ const Flow = () => {
     const { flowData, flowId, isLoading: isFlowLoading } = useFlow();
 
     // State for preserving active tabs when switching flows
-    const [activeCentralTab, setActiveCentralTab] = useState<string>('automation');
     const [activeTabsTab, setActiveTabsTab] = useState<string>(!isDesktop ? 'automation' : 'terminal');
 
     const variables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
@@ -119,10 +118,7 @@ const Flow = () => {
                         >
                             <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
                                 <CardContent className="flex-1 overflow-auto pr-0 pt-4">
-                                    <ChatCentralTabs
-                                        activeTab={activeCentralTab}
-                                        onTabChange={setActiveCentralTab}
-                                    />
+                                    <ChatCentralTabs />
                                 </CardContent>
                             </Card>
                         </ResizablePanel>
