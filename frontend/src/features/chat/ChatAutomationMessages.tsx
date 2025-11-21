@@ -10,7 +10,6 @@ import type { MessageLogFragmentFragment } from '@/graphql/types';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useFlowAssistants } from '@/hooks/use-flow-assistants';
 import { useFlowMutations } from '@/hooks/use-flow-mutations';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
@@ -31,14 +30,16 @@ const searchFormSchema = z.object({
 });
 
 const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps) => {
-    const { flowData, flowId: selectedFlowId } = useFlow();
+    const {
+        flowData,
+        flowId: selectedFlowId,
+        handleSelectAssistant,
+        refetchAssistantLogs,
+        selectedAssistantId,
+    } = useFlow();
     const { selectedProvider } = useProviders();
 
-    const { assistantCreationTimeoutRef, handleSelectAssistant, refetchAssistantLogs, selectedAssistantId } =
-        useFlowAssistants();
-
     const { handleStopAutomationFlow, handleSubmitAutomationMessage } = useFlowMutations({
-        assistantCreationTimeoutRef,
         handleSelectAssistant,
         refetchAssistantLogs,
         selectedAssistantId: selectedAssistantId ?? null,

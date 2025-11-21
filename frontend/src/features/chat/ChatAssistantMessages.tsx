@@ -18,7 +18,6 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import ChatAssistantFormInput from '@/features/chat/ChatAssistantFormInput';
 import { useSettingsQuery } from '@/graphql/types';
-import { useFlowAssistants } from '@/hooks/use-flow-assistants';
 import { useFlowMutations } from '@/hooks/use-flow-mutations';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
@@ -42,14 +41,13 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
     const { providers, selectedProvider } = useProviders();
 
     const {
-        assistantCreationTimeoutRef,
         assistantLogs: logs,
         assistants,
         handleInitiateAssistantCreation: onCreateAssistant,
         handleSelectAssistant: onSelectAssistant,
         refetchAssistantLogs,
         selectedAssistantId,
-    } = useFlowAssistants();
+    } = useFlow();
 
     const {
         handleCallAssistant: onSubmitMessage,
@@ -57,7 +55,6 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
         handleDeleteAssistant: onDeleteAssistant,
         handleStopAssistant: onStopAssistant,
     } = useFlowMutations({
-        assistantCreationTimeoutRef,
         handleSelectAssistant: onSelectAssistant,
         refetchAssistantLogs,
         selectedAssistantId: selectedAssistantId ?? null,
