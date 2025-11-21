@@ -20,6 +20,7 @@ import SettingsPrompt from '@/pages/settings/SettingsPrompt';
 import SettingsPrompts from '@/pages/settings/SettingsPrompts';
 import SettingsProvider from '@/pages/settings/SettingsProvider';
 import SettingsProviders from '@/pages/settings/SettingsProviders';
+import { FlowProvider } from '@/providers/FlowProvider';
 import { ProvidersProvider } from '@/providers/ProvidersProvider';
 import ThemeProvider from '@/providers/ThemeProvider';
 import { UserProvider } from '@/providers/UserProvider';
@@ -60,7 +61,11 @@ const App = () => {
                                             path="flows/new"
                                         />
                                         <Route
-                                            element={<Flow />}
+                                            element={
+                                                <FlowProvider>
+                                                    <Flow />
+                                                </FlowProvider>
+                                            }
                                             path="flows/:flowId"
                                         />
                                     </Route>
