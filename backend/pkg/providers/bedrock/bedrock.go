@@ -70,7 +70,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		bconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			cfg.BedrockAccessKey,
 			cfg.BedrockSecretKey,
-			"",
+			cfg.BedrockSessionToken,
 		)),
 	}
 
