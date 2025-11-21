@@ -17,7 +17,6 @@ import { Log } from '@/lib/log';
 import { useFlow } from '@/providers/FlowProvider';
 
 interface UseFlowMutationsOptions {
-    assistantCreationTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
     handleSelectAssistant: (assistantId: null | string) => void;
     refetchAssistantLogs?: () => void;
     selectedAssistantId: null | string;
@@ -25,7 +24,6 @@ interface UseFlowMutationsOptions {
 }
 
 export const useFlowMutations = ({
-    assistantCreationTimeoutRef,
     handleSelectAssistant,
     refetchAssistantLogs,
     selectedAssistantId,
@@ -106,14 +104,7 @@ export const useFlowMutations = ({
                     const { assistant } = data.createAssistant;
 
                     if (assistant?.id) {
-                        if (assistantCreationTimeoutRef.current) {
-                            clearTimeout(assistantCreationTimeoutRef.current);
-                        }
-
-                        assistantCreationTimeoutRef.current = setTimeout(() => {
-                            handleSelectAssistant(assistant.id);
-                            assistantCreationTimeoutRef.current = null;
-                        }, 300);
+                        handleSelectAssistant(assistant.id);
                     }
                 }
             } catch (error) {
@@ -125,7 +116,7 @@ export const useFlowMutations = ({
                 Log.error('Error creating assistant:', error);
             }
         },
-        [flowId, selectedProvider, createAssistant, assistantCreationTimeoutRef, handleSelectAssistant],
+        [flowId, selectedProvider, createAssistant, handleSelectAssistant],
     );
 
     const handleCallAssistant = useCallback(

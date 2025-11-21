@@ -1,11 +1,13 @@
-import typographyPlugin from '@tailwindcss/typography';
 import type { Config } from 'tailwindcss';
+
+import typographyPlugin from '@tailwindcss/typography';
 import animatePlugin from 'tailwindcss-animate';
 
 /** @type {Config} */
 export default {
-    darkMode: ['class'],
     content: ['./index.html', './src/**/*.{ts,tsx}'],
+    darkMode: ['class'],
+    plugins: [animatePlugin, typographyPlugin],
     prefix: '',
     theme: {
         container: {
@@ -16,39 +18,27 @@ export default {
             },
         },
         extend: {
-            fontFamily: {
-                inter: ['Inter', 'sans-serif'],
+            animation: {
+                'accordion-down': 'accordion-down 0.2s ease-out',
+                'accordion-up': 'accordion-up 0.2s ease-out',
+                'caret-blink': 'caret-blink 1.25s ease-out infinite',
+                'logo-spin': 'logo-spin 10s cubic-bezier(0.5, -0.5, 0.5, 1.25) infinite',
+                'roll-reveal': 'roll-reveal 0.4s cubic-bezier(.22,1.28,.54,.99)',
+                'slide-left': 'slide-left 0.3s ease-out',
+                'slide-top': 'slide-top 0.3s ease-out',
+            },
+            borderRadius: {
+                lg: 'var(--radius)',
+                md: 'calc(var(--radius) - 2px)',
+                sm: 'calc(var(--radius) - 4px)',
             },
             colors: {
-                border: 'hsl(var(--border))',
-                input: 'hsl(var(--input))',
-                ring: 'hsl(var(--ring))',
-                background: 'hsl(var(--background))',
-                foreground: 'hsl(var(--foreground))',
-                primary: {
-                    DEFAULT: 'hsl(var(--primary))',
-                    foreground: 'hsl(var(--primary-foreground))',
-                },
-                secondary: {
-                    DEFAULT: 'hsl(var(--secondary))',
-                    foreground: 'hsl(var(--secondary-foreground))',
-                },
-                destructive: {
-                    DEFAULT: 'hsl(var(--destructive))',
-                    foreground: 'hsl(var(--destructive-foreground))',
-                },
-                muted: {
-                    DEFAULT: 'hsl(var(--muted))',
-                    foreground: 'hsl(var(--muted-foreground))',
-                },
                 accent: {
                     DEFAULT: 'hsl(var(--accent))',
                     foreground: 'hsl(var(--accent-foreground))',
                 },
-                popover: {
-                    DEFAULT: 'hsl(var(--popover))',
-                    foreground: 'hsl(var(--popover-foreground))',
-                },
+                background: 'hsl(var(--background))',
+                border: 'hsl(var(--border))',
                 card: {
                     DEFAULT: 'hsl(var(--card))',
                     foreground: 'hsl(var(--card-foreground))',
@@ -60,21 +50,42 @@ export default {
                     '4': 'hsl(var(--chart-4))',
                     '5': 'hsl(var(--chart-5))',
                 },
+                destructive: {
+                    DEFAULT: 'hsl(var(--destructive))',
+                    foreground: 'hsl(var(--destructive-foreground))',
+                },
+                foreground: 'hsl(var(--foreground))',
+                input: 'hsl(var(--input))',
+                muted: {
+                    DEFAULT: 'hsl(var(--muted))',
+                    foreground: 'hsl(var(--muted-foreground))',
+                },
+                popover: {
+                    DEFAULT: 'hsl(var(--popover))',
+                    foreground: 'hsl(var(--popover-foreground))',
+                },
+                primary: {
+                    DEFAULT: 'hsl(var(--primary))',
+                    foreground: 'hsl(var(--primary-foreground))',
+                },
+                ring: 'hsl(var(--ring))',
+                secondary: {
+                    DEFAULT: 'hsl(var(--secondary))',
+                    foreground: 'hsl(var(--secondary-foreground))',
+                },
                 sidebar: {
+                    accent: 'hsl(var(--sidebar-accent))',
+                    'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+                    border: 'hsl(var(--sidebar-border))',
                     DEFAULT: 'hsl(var(--sidebar-background))',
                     foreground: 'hsl(var(--sidebar-foreground))',
                     primary: 'hsl(var(--sidebar-primary))',
                     'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-                    accent: 'hsl(var(--sidebar-accent))',
-                    'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-                    border: 'hsl(var(--sidebar-border))',
                     ring: 'hsl(var(--sidebar-ring))',
                 },
             },
-            borderRadius: {
-                lg: 'var(--radius)',
-                md: 'calc(var(--radius) - 2px)',
-                sm: 'calc(var(--radius) - 4px)',
+            fontFamily: {
+                inter: ['Inter', 'sans-serif'],
             },
             keyframes: {
                 'accordion-down': {
@@ -101,36 +112,6 @@ export default {
                         opacity: '0',
                     },
                 },
-                'roll-reveal': {
-                    from: {
-                        transform: 'rotate(12deg) scale(0)',
-                        opacity: '0',
-                    },
-                    to: {
-                        transform: 'rotate(0deg) scale(1)',
-                        opacity: '1',
-                    },
-                },
-                'slide-left': {
-                    from: {
-                        transform: 'translateX(20px)',
-                        opacity: '0',
-                    },
-                    to: {
-                        transform: 'translateX(0px)',
-                        opacity: '1',
-                    },
-                },
-                'slide-top': {
-                    from: {
-                        transform: 'translateY(20px)',
-                        opacity: '0',
-                    },
-                    to: {
-                        transform: 'translateY(0px)',
-                        opacity: '1',
-                    },
-                },
                 'logo-spin': {
                     '0%': {
                         transform: 'rotate(0deg)',
@@ -142,20 +123,40 @@ export default {
                         transform: 'rotate(360deg)',
                     },
                 },
-            },
-            animation: {
-                'accordion-down': 'accordion-down 0.2s ease-out',
-                'accordion-up': 'accordion-up 0.2s ease-out',
-                'caret-blink': 'caret-blink 1.25s ease-out infinite',
-                'roll-reveal': 'roll-reveal 0.4s cubic-bezier(.22,1.28,.54,.99)',
-                'slide-left': 'slide-left 0.3s ease-out',
-                'slide-top': 'slide-top 0.3s ease-out',
-                'logo-spin': 'logo-spin 10s cubic-bezier(0.5, -0.5, 0.5, 1.25) infinite',
+                'roll-reveal': {
+                    from: {
+                        opacity: '0',
+                        transform: 'rotate(12deg) scale(0)',
+                    },
+                    to: {
+                        opacity: '1',
+                        transform: 'rotate(0deg) scale(1)',
+                    },
+                },
+                'slide-left': {
+                    from: {
+                        opacity: '0',
+                        transform: 'translateX(20px)',
+                    },
+                    to: {
+                        opacity: '1',
+                        transform: 'translateX(0px)',
+                    },
+                },
+                'slide-top': {
+                    from: {
+                        opacity: '0',
+                        transform: 'translateY(20px)',
+                    },
+                    to: {
+                        opacity: '1',
+                        transform: 'translateY(0px)',
+                    },
+                },
             },
             transitionDelay: {
                 '10000': '10000ms',
             },
         },
     },
-    plugins: [animatePlugin, typographyPlugin, require('tailwindcss-animate')],
 } satisfies Config;
