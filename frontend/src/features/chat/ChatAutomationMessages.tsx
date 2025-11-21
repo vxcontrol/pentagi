@@ -5,13 +5,17 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import type { FlowQuery, MessageLogFragmentFragment } from '@/graphql/types';
+import type { MessageLogFragmentFragment } from '@/graphql/types';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useFlowAssistants } from '@/hooks/use-flow-assistants';
+import { useFlowMutations } from '@/hooks/use-flow-mutations';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
+import { useFlow } from '@/providers/FlowProvider';
+import { useProviders } from '@/providers/ProvidersProvider';
 
 import { useChatScroll } from '../../hooks/use-chat-scroll';
 import { FlowForm, type FlowFormValues } from '../flows/FlowForm';
@@ -19,25 +23,28 @@ import ChatMessage from './ChatMessage';
 
 interface ChatAutomationMessagesProps {
     className?: string;
-    flowData?: FlowQuery;
     logs?: MessageLogFragmentFragment[];
-    onStopFlow?: (flowId: string) => Promise<void>;
-    onSubmitMessage: (values: FlowFormValues) => Promise<void>;
-    selectedFlowId: null | string;
 }
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatAutomationMessages = ({
-    className,
-    flowData,
-    logs,
-    onStopFlow,
-    onSubmitMessage,
-    selectedFlowId,
-}: ChatAutomationMessagesProps) => {
+const ChatAutomationMessages = ({ className, logs }: ChatAutomationMessagesProps) => {
+    const { flowData, flowId: selectedFlowId } = useFlow();
+    const { selectedProvider } = useProviders();
+
+    const { assistantCreationTimeoutRef, handleSelectAssistant, refetchAssistantLogs, selectedAssistantId } =
+        useFlowAssistants();
+
+    const { handleStopAutomationFlow, handleSubmitAutomationMessage } = useFlowMutations({
+        assistantCreationTimeoutRef,
+        handleSelectAssistant,
+        refetchAssistantLogs,
+        selectedAssistantId: selectedAssistantId ?? null,
+        selectedProvider,
+    });
+
     const [isCreatingFlow, setIsCreatingFlow] = useState(false);
 
     // Separate state for immediate input value and debounced search value
@@ -116,7 +123,7 @@ const ChatAutomationMessages = ({
             //     setIsCreatingFlow(true);
             // }
 
-            await onSubmitMessage(values);
+            await handleSubmitAutomationMessage(values);
         } catch (error) {
             Log.error('Error submitting message:', error);
             throw error;
@@ -227,7 +234,7 @@ const ChatAutomationMessages = ({
                         providerName: flowData?.flow?.provider?.name ?? '',
                     }}
                     isSubmitting={false}
-                    onCancel={() => onStopFlow?.(selectedFlowId ?? '')}
+                    onCancel={() => handleStopAutomationFlow(selectedFlowId ?? '')}
                     onSubmit={handleSubmitMessage}
                     type={'automation'}
                 />

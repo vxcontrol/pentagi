@@ -2,14 +2,10 @@ import type { Dispatch, SetStateAction } from 'react';
 
 import { memo, useEffect, useMemo, useRef } from 'react';
 
-import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery } from '@/graphql/types';
-import type { Provider } from '@/models/Provider';
-
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-
-import type { FlowFormValues } from '../flows/FlowForm';
+import { useFlow } from '@/providers/FlowProvider';
 
 import ChatAgents from './ChatAgents';
 import ChatAssistantMessages from './ChatAssistantMessages';
@@ -32,44 +28,13 @@ const MemoizedChatAssistantMessages = memo(ChatAssistantMessages);
 
 interface ChatTabsProps {
     activeTab: string;
-    assistantLogs?: AssistantLogFragmentFragment[];
-    assistants: AssistantFragmentFragment[];
-    flowData: FlowQuery | undefined;
-    onCreateAssistant?: () => void;
-    onCreateNewAssistant?: (message: string, useAgents: boolean) => Promise<void>;
-    onDeleteAssistant?: (assistantId: string) => void;
-    onSelectAssistant?: (assistantId: null | string) => void;
-    onStopAssistant?: (assistantId: string) => Promise<void>;
-    onStopAutomationFlow?: (flowId: string) => Promise<void>;
-    onSubmitAssistantMessage?: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
-    onSubmitAutomationMessage: (values: FlowFormValues) => Promise<void>;
     onTabChange: Dispatch<SetStateAction<string>>;
-    providers: Provider[];
-    selectedAssistantId?: null | string;
-    selectedFlowId: null | string;
-    selectedProvider: null | Provider;
 }
 
-const ChatTabs = ({
-    activeTab,
-    assistantLogs,
-    assistants,
-    flowData,
-    onCreateAssistant,
-    onCreateNewAssistant,
-    onDeleteAssistant,
-    onSelectAssistant,
-    onStopAssistant,
-    onStopAutomationFlow,
-    onSubmitAssistantMessage,
-    onSubmitAutomationMessage,
-    onTabChange,
-    providers,
-    selectedAssistantId,
-    selectedFlowId,
-    selectedProvider,
-}: ChatTabsProps) => {
+const ChatTabs = ({ activeTab, onTabChange }: ChatTabsProps) => {
     const { isDesktop } = useBreakpoint();
+    const { flowData, flowId: selectedFlowId } = useFlow();
+
     const previousActiveTabRef = useRef<string>(activeTab);
 
     useEffect(() => {
@@ -120,11 +85,7 @@ const ChatTabs = ({
                 >
                     <MemoizedChatAutomationMessages
                         className="pr-4"
-                        flowData={flowData}
                         logs={messageLogs}
-                        onStopFlow={onStopAutomationFlow}
-                        onSubmitMessage={onSubmitAutomationMessage}
-                        selectedFlowId={selectedFlowId}
                     />
                 </TabsContent>
             )}
@@ -133,21 +94,7 @@ const ChatTabs = ({
                     className="mt-2 flex-1 overflow-auto"
                     value="assistant"
                 >
-                    <MemoizedChatAssistantMessages
-                        assistants={assistants}
-                        className="pr-4"
-                        logs={assistantLogs}
-                        onCreateAssistant={onCreateAssistant}
-                        onCreateNewAssistant={onCreateNewAssistant}
-                        onDeleteAssistant={onDeleteAssistant}
-                        onSelectAssistant={onSelectAssistant}
-                        onStopAssistant={onStopAssistant}
-                        onSubmitMessage={onSubmitAssistantMessage}
-                        providers={providers}
-                        selectedAssistantId={selectedAssistantId}
-                        selectedFlowId={selectedFlowId}
-                        selectedProvider={selectedProvider}
-                    />
+                    <MemoizedChatAssistantMessages className="pr-4" />
                 </TabsContent>
             )}
 

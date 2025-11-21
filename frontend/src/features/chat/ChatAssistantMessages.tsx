@@ -5,9 +5,6 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import type { AssistantFragmentFragment, AssistantLogFragmentFragment } from '@/graphql/types';
-import type { Provider } from '@/models/Provider';
-
 import { BreadcrumbProvider } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,48 +18,52 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import ChatAssistantFormInput from '@/features/chat/ChatAssistantFormInput';
 import { useSettingsQuery } from '@/graphql/types';
+import { useFlowAssistants } from '@/hooks/use-flow-assistants';
+import { useFlowMutations } from '@/hooks/use-flow-mutations';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 import { isProviderValid } from '@/models/Provider';
+import { useFlow } from '@/providers/FlowProvider';
+import { useProviders } from '@/providers/ProvidersProvider';
 
 import { useChatScroll } from '../../hooks/use-chat-scroll';
 import ChatMessage from './ChatMessage';
 
 interface ChatAssistantMessagesProps {
-    assistants: AssistantFragmentFragment[];
     className?: string;
-    logs?: AssistantLogFragmentFragment[];
-    onCreateAssistant?: () => void;
-    onCreateNewAssistant?: (message: string, useAgents: boolean) => Promise<void>;
-    onDeleteAssistant?: (assistantId: string) => void;
-    onSelectAssistant?: (assistantId: null | string) => void;
-    onStopAssistant?: (assistantId: string) => Promise<void>;
-    onSubmitMessage?: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
-    providers: Provider[];
-    selectedAssistantId?: null | string;
-    selectedFlowId: null | string;
-    selectedProvider: null | Provider;
 }
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatAssistantMessages = ({
-    assistants,
-    className,
-    logs,
-    onCreateAssistant,
-    onCreateNewAssistant,
-    onDeleteAssistant,
-    onSelectAssistant,
-    onStopAssistant,
-    onSubmitMessage,
-    providers,
-    selectedAssistantId,
-    selectedFlowId,
-    selectedProvider,
-}: ChatAssistantMessagesProps) => {
+const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
+    const { flowId: selectedFlowId } = useFlow();
+    const { providers, selectedProvider } = useProviders();
+
+    const {
+        assistantCreationTimeoutRef,
+        assistantLogs: logs,
+        assistants,
+        handleInitiateAssistantCreation: onCreateAssistant,
+        handleSelectAssistant: onSelectAssistant,
+        refetchAssistantLogs,
+        selectedAssistantId,
+    } = useFlowAssistants();
+
+    const {
+        handleCallAssistant: onSubmitMessage,
+        handleCreateAssistant: onCreateNewAssistant,
+        handleDeleteAssistant: onDeleteAssistant,
+        handleStopAssistant: onStopAssistant,
+    } = useFlowMutations({
+        assistantCreationTimeoutRef,
+        handleSelectAssistant: onSelectAssistant,
+        refetchAssistantLogs,
+        selectedAssistantId: selectedAssistantId ?? null,
+        selectedProvider,
+    });
+
     const [isCreatingAssistant, setIsCreatingAssistant] = useState(false);
 
     // Separate state for immediate input value and debounced search value
