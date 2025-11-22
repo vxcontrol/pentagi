@@ -1,14 +1,10 @@
 import { GripVertical, Loader2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbProvider,
-    BreadcrumbStatus,
-} from '@/components/ui/breadcrumb';
+import { FlowStatusIcon } from '@/components/icons/FlowStatusIcon';
+import { ProviderIcon } from '@/components/icons/ProviderIcon';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Card, CardContent } from '@/components/ui/card';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
@@ -36,9 +32,17 @@ import { useFlow } from '@/providers/FlowProvider';
 
 const Flow = () => {
     const { isDesktop } = useBreakpoint();
+    const navigate = useNavigate();
 
     // Get flow data from FlowProvider
-    const { flowData, flowId, isLoading: isFlowLoading } = useFlow();
+    const { flowData, flowError, flowId, isLoading: isFlowLoading } = useFlow();
+
+    // Redirect to flows list if there's an error loading flow data or flow not found
+    useEffect(() => {
+        if (flowError || (!isFlowLoading && !flowData?.flow)) {
+            navigate('/flows', { replace: true });
+        }
+    }, [flowError, flowData, isFlowLoading, navigate]);
 
     // State for preserving active tabs when switching flows
     const [activeTabsTab, setActiveTabsTab] = useState<string>(!isDesktop ? 'automation' : 'terminal');
@@ -87,11 +91,18 @@ const Flow = () => {
                         />
                         <Breadcrumb>
                             <BreadcrumbList>
-                                <BreadcrumbItem>
+                                <BreadcrumbItem className="gap-2">
                                     {flowData?.flow && (
                                         <>
-                                            <BreadcrumbStatus status={flowData.flow.status} />
-                                            <BreadcrumbProvider provider={flowData.flow.provider} />
+                                            <FlowStatusIcon
+                                                hasTooltip
+                                                status={flowData.flow.status}
+                                            />
+
+                                            <ProviderIcon
+                                                hasTooltip
+                                                provider={flowData.flow.provider}
+                                            />
                                         </>
                                     )}
                                     <BreadcrumbPage>{flowData?.flow?.title || 'Select a flow'}</BreadcrumbPage>

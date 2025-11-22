@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { ProviderIcon } from '@/components/icons/ProviderIcon';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -23,7 +24,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { getProviderDisplayName, getProviderIcon } from '@/models/Provider';
+import { getProviderDisplayName } from '@/models/Provider';
 import { useProviders } from '@/providers/ProvidersProvider';
 
 const formSchema = z.object({
@@ -35,7 +36,9 @@ const formSchema = z.object({
 export interface FlowFormProps {
     defaultValues?: Partial<FlowFormValues>;
     isCanceling?: boolean;
+    isDisabled?: boolean;
     isLoading?: boolean;
+    isProviderDisabled?: boolean;
     isSubmitting?: boolean;
     onCancel?: () => Promise<void> | void;
     onSubmit: (values: FlowFormValues) => Promise<void> | void;
@@ -47,9 +50,11 @@ export type FlowFormValues = z.infer<typeof formSchema>;
 
 export const FlowForm = ({
     defaultValues,
-    isCanceling = false,
-    isLoading = false,
-    isSubmitting = false,
+    isCanceling,
+    isDisabled,
+    isLoading,
+    isProviderDisabled,
+    isSubmitting,
     onCancel,
     onSubmit,
     placeholder = 'Describe what you would like PentAGI to test...',
@@ -115,6 +120,8 @@ export const FlowForm = ({
             });
     }, [defaultValues, dirtyFields, setValue, getValues]);
 
+    const isFormDisabled = isDisabled || isLoading || isSubmitting || isCanceling;
+
     const handleKeyDown = ({
         ctrlKey,
         key,
@@ -122,15 +129,13 @@ export const FlowForm = ({
         preventDefault,
         shiftKey,
     }: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (isLoading || key !== 'Enter' || shiftKey || ctrlKey || metaKey) {
+        if (isFormDisabled || key !== 'Enter' || shiftKey || ctrlKey || metaKey) {
             return;
         }
 
         preventDefault();
         handleFormSubmit(onSubmit)();
     };
-
-    const isDisabled = isLoading || isSubmitting || isCanceling;
 
     return (
         <Form {...form}>
@@ -145,11 +150,11 @@ export const FlowForm = ({
                                     {...field}
                                     autoFocus
                                     className="min-h-0"
-                                    disabled={isDisabled}
+                                    disabled={isFormDisabled}
                                     maxRows={9}
                                     minRows={1}
                                     onKeyDown={handleKeyDown}
-                                    placeholder="Describe your testing scenario..."
+                                    placeholder={placeholder}
                                 />
                                 <InputGroupAddon align="block-end">
                                     <FormField
@@ -164,10 +169,12 @@ export const FlowForm = ({
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <InputGroupButton
-                                                            disabled={isDisabled}
+                                                            disabled={isFormDisabled || isProviderDisabled}
                                                             variant="ghost"
                                                         >
-                                                            {currentProvider && getProviderIcon(currentProvider)}
+                                                            {currentProvider && (
+                                                                <ProviderIcon provider={currentProvider} />
+                                                            )}
                                                             <span className="max-w-40 truncate">
                                                                 {currentProvider
                                                                     ? getProviderDisplayName(currentProvider)
@@ -221,16 +228,20 @@ export const FlowForm = ({
                                                                     <DropdownMenuItem
                                                                         key={provider.name}
                                                                         onSelect={() => {
+                                                                            if (isFormDisabled || isProviderDisabled) {
+                                                                                return;
+                                                                            }
+
                                                                             providerField.onChange(provider.name);
                                                                             setSelectedProvider(provider);
                                                                             setProviderSearch('');
                                                                         }}
                                                                     >
                                                                         <div className="flex w-full min-w-0 items-center gap-2">
-                                                                            {getProviderIcon(
-                                                                                provider,
-                                                                                'size-4 shrink-0',
-                                                                            )}
+                                                                            <ProviderIcon
+                                                                                className="size-4 shrink-0"
+                                                                                provider={provider}
+                                                                            />
 
                                                                             <span className="flex-1 truncate">
                                                                                 {getProviderDisplayName(provider)}
@@ -260,7 +271,7 @@ export const FlowForm = ({
                                                                 <FormControl>
                                                                     <Switch
                                                                         checked={useAgentsField.value}
-                                                                        disabled={isDisabled}
+                                                                        disabled={isFormDisabled}
                                                                         onCheckedChange={useAgentsField.onChange}
                                                                     />
                                                                 </FormControl>

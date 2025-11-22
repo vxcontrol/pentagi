@@ -123,9 +123,11 @@ const NewFlow = () => {
                             isSubmitting={isLoading}
                             onSubmit={handleSubmit}
                             placeholder={
-                                flowType === 'automation'
-                                    ? 'Describe what you would like PentAGI to test...'
-                                    : 'What would you like me to help you with?'
+                                !isLoading
+                                    ? flowType === 'automation'
+                                        ? 'Describe what you would like PentAGI to test...'
+                                        : 'What would you like me to help you with?'
+                                    : 'Creating a new flow...'
                             }
                             type={flowType}
                         />
