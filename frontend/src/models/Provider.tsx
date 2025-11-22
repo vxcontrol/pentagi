@@ -1,9 +1,3 @@
-import Anthropic from '@/components/icons/Anthropic';
-import Bedrock from '@/components/icons/Bedrock';
-import Custom from '@/components/icons/Custom';
-import Gemini from '@/components/icons/Gemini';
-import Ollama from '@/components/icons/Ollama';
-import OpenAi from '@/components/icons/OpenAi';
 import { ProviderType } from '@/graphql/types';
 
 export interface Provider {
@@ -18,19 +12,6 @@ export interface Provider {
  */
 export const getProviderDisplayName = (provider: Provider): string => {
     return provider.name;
-};
-
-/**
- * Generates a tooltip for a provider
- * If the name matches the type, only the name is returned
- * Otherwise, returns "name - type"
- */
-export const getProviderTooltip = (provider: Provider): string => {
-    if (provider.name === provider.type) {
-        return provider.name;
-    }
-
-    return `${provider.name} - ${provider.type}`;
 };
 
 /**
@@ -59,69 +40,4 @@ export const findProviderByName = (providerName: string, providers: Provider[]):
  */
 export const sortProviders = (providers: Provider[]): Provider[] => {
     return [...providers].sort((a, b) => a.name.localeCompare(b.name));
-};
-
-/**
- * Gets the icon component for a provider based on its type
- */
-export const getProviderIcon = (provider: Provider, className = 'size-4') => {
-    if (!provider || !provider.type) {
-        return null;
-    }
-
-    switch (provider.type) {
-        case ProviderType.Anthropic: {
-            return (
-                <Anthropic
-                    aria-label="Anthropic"
-                    className={`${className} text-purple-500`}
-                />
-            );
-        }
-
-        case ProviderType.Bedrock: {
-            return (
-                <Bedrock
-                    aria-label="Bedrock"
-                    className={`${className} text-blue-500`}
-                />
-            );
-        }
-
-        case ProviderType.Gemini: {
-            return (
-                <Gemini
-                    aria-label="Gemini"
-                    className={`${className} text-blue-500`}
-                />
-            );
-        }
-
-        case ProviderType.Ollama: {
-            return (
-                <Ollama
-                    aria-label="Ollama"
-                    className={`${className} text-blue-500`}
-                />
-            );
-        }
-
-        case ProviderType.Openai: {
-            return (
-                <OpenAi
-                    aria-label="OpenAI"
-                    className={`${className} text-blue-500`}
-                />
-            );
-        }
-
-        default: {
-            return (
-                <Custom
-                    aria-label="Custom provider"
-                    className={`${className} text-blue-500`}
-                />
-            );
-        }
-    }
 };

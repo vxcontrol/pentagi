@@ -49,6 +49,11 @@ const eslintConfig = [
                     prev: '*',
                 },
                 {
+                    blankLine: 'any',
+                    next: 'block-like',
+                    prev: 'case',
+                },
+                {
                     blankLine: 'always',
                     next: '*',
                     prev: 'block-like',

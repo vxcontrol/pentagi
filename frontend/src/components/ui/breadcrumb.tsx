@@ -1,11 +1,8 @@
 import { ChevronRightIcon, DotsHorizontalIcon } from '@radix-ui/react-icons';
 import { Slot } from '@radix-ui/react-slot';
-import { CircleCheck, CircleDashed, CircleOff, CircleX, Loader2 } from 'lucide-react';
 import * as React from 'react';
 
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { getProviderIcon, getProviderTooltip, type Provider } from '@/models/Provider';
 
 const Breadcrumb = React.forwardRef<
     HTMLElement,
@@ -64,117 +61,6 @@ const BreadcrumbLink = React.forwardRef<
 });
 BreadcrumbLink.displayName = 'BreadcrumbLink';
 
-const BreadcrumbStatus = React.forwardRef<
-    HTMLSpanElement,
-    React.ComponentPropsWithoutRef<'span'> & {
-        status?: null | string;
-    }
->(({ className, status, ...props }, ref) => {
-    const renderStatusIcon = () => {
-        if (!status) {
-            return null;
-        }
-
-        switch (status) {
-            case 'created':
-                return (
-                    <CircleDashed
-                        aria-label="created"
-                        className="h-4 w-4 text-blue-500"
-                    />
-                );
-            case 'failed':
-                return (
-                    <CircleX
-                        aria-label="failed"
-                        className="h-4 w-4 text-red-500"
-                    />
-                );
-            case 'finished':
-                return (
-                    <CircleCheck
-                        aria-label="finished"
-                        className="h-4 w-4 text-green-500"
-                    />
-                );
-            case 'running':
-                return (
-                    <Loader2
-                        aria-label="running"
-                        className="h-4 w-4 animate-spin text-purple-500"
-                    />
-                );
-            case 'waiting':
-                return (
-                    <CircleDashed
-                        aria-label="waiting"
-                        className="h-4 w-4 text-yellow-500"
-                    />
-                );
-            default:
-                return (
-                    <CircleOff
-                        aria-label="unknown status"
-                        className="h-4 w-4 text-muted-foreground"
-                    />
-                );
-        }
-    };
-
-    const iconElement = (
-        <span
-            className={cn('mr-2 inline-flex cursor-pointer items-center', className)}
-            ref={ref}
-            {...props}
-        >
-            {renderStatusIcon()}
-        </span>
-    );
-
-    if (!status) {
-        return null;
-    }
-
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
-            <TooltipContent>{status?.toLowerCase()}</TooltipContent>
-        </Tooltip>
-    );
-});
-BreadcrumbStatus.displayName = 'BreadcrumbStatus';
-
-const BreadcrumbProvider = React.forwardRef<
-    HTMLSpanElement,
-    React.ComponentPropsWithoutRef<'span'> & {
-        provider?: null | Provider;
-    }
->(({ className, provider, ...props }, ref) => {
-    const actualProvider = provider;
-
-    const iconElement = (
-        <span
-            className={cn('mr-2 inline-flex cursor-pointer items-center', className)}
-            ref={ref}
-            {...props}
-        >
-            {actualProvider && getProviderIcon(actualProvider)}
-        </span>
-    );
-
-    if (!actualProvider) {
-        return null;
-    }
-
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
-            <TooltipContent>{getProviderTooltip(actualProvider)}</TooltipContent>
-        </Tooltip>
-    );
-});
-BreadcrumbProvider.displayName = 'BreadcrumbProvider';
-
 const BreadcrumbPage = React.forwardRef<HTMLSpanElement, React.ComponentPropsWithoutRef<'span'>>(
     ({ className, ...props }, ref) => (
         <span
@@ -221,7 +107,5 @@ export {
     BreadcrumbLink,
     BreadcrumbList,
     BreadcrumbPage,
-    BreadcrumbProvider,
     BreadcrumbSeparator,
-    BreadcrumbStatus,
 };

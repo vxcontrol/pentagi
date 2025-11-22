@@ -1,11 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
 import { ChevronDown, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { BreadcrumbProvider } from '@/components/ui/breadcrumb';
+import { ProviderIcon } from '@/components/icons/ProviderIcon';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -16,8 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import ChatAssistantFormInput from '@/features/chat/ChatAssistantFormInput';
-import { useSettingsQuery } from '@/graphql/types';
+import { StatusType, useSettingsQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 import { isProviderValid } from '@/models/Provider';
@@ -25,6 +24,7 @@ import { useFlow } from '@/providers/FlowProvider';
 import { useProviders } from '@/providers/ProvidersProvider';
 
 import { useChatScroll } from '../../hooks/use-chat-scroll';
+import { FlowForm, type FlowFormValues } from '../flows/FlowForm';
 import ChatMessage from './ChatMessage';
 
 interface ChatAssistantMessagesProps {
@@ -36,27 +36,27 @@ const searchFormSchema = z.object({
 });
 
 const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
-    const { providers, selectedProvider } = useProviders();
+    const { providers } = useProviders();
 
     const {
         assistantLogs: logs,
         assistants,
-        callAssistant: onSubmitMessage,
-        createAssistant: onCreateNewAssistant,
-        deleteAssistant: onDeleteAssistant,
+        callAssistant,
+        createAssistant,
+        deleteAssistant,
         flowId,
-        initiateAssistantCreation: onCreateAssistant,
-        selectAssistant: onSelectAssistant,
+        initiateAssistantCreation,
+        selectAssistant,
         selectedAssistantId,
-        stopAssistant: onStopAssistant,
+        stopAssistant,
     } = useFlow();
 
     const [isCreatingAssistant, setIsCreatingAssistant] = useState(false);
 
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
-
-    const textareaId = 'chat-textarea';
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCanceling, setIsCanceling] = useState(false);
 
     const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(
         useMemo(() => (logs ? [...(logs || [])] : []), [logs]),
@@ -127,24 +127,6 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
         return index !== -1 ? assistants.length - index : null;
     }, [assistants, selectedAssistantId]);
 
-    // Check if selected provider is available
-    const isProviderAvailable = useMemo(() => {
-        if (!selectedProvider) {
-            return false;
-        }
-
-        return isProviderValid(selectedProvider, providers);
-    }, [providers, selectedProvider]);
-
-    // Check if the assistant's provider is available
-    const isAssistantProviderAvailable = useMemo(() => {
-        if (!selectedAssistant) {
-            return true;
-        } // If no assistant is selected, consider provider available
-
-        return isProviderValid(selectedAssistant.provider, providers);
-    }, [providers, selectedAssistant]);
-
     // Calculate default useAgents value
     const isUseAgentsDefault = useMemo(() => {
         // If creating a new assistant, use system setting
@@ -190,61 +172,111 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
 
     // Handlers for interacting with assistant
     const handleDeleteAssistant = (assistantId: string) => {
-        if (onDeleteAssistant) {
-            onDeleteAssistant(assistantId);
+        if (deleteAssistant) {
+            deleteAssistant(assistantId);
         }
     };
 
-    const handleSubmitMessage = async (message: string, useAgents: boolean) => {
+    // Message submission handler
+    const handleSubmitMessage = async (values: FlowFormValues) => {
+        const { message, useAgents } = values;
+
         if (!message.trim()) {
             return;
         }
+
+        setIsSubmitting(true);
 
         try {
             if (!selectedAssistantId) {
                 // If no assistant is selected, create a new one
                 setIsCreatingAssistant(true);
 
-                if (onCreateNewAssistant) {
-                    await onCreateNewAssistant(message, useAgents);
+                if (createAssistant) {
+                    await createAssistant(message, useAgents);
                 }
-            } else if (onSubmitMessage) {
+            } else if (callAssistant) {
                 // Otherwise call the existing assistant
-                await onSubmitMessage(selectedAssistantId, message, useAgents);
+                await callAssistant(selectedAssistantId, message, useAgents);
             }
         } catch (error) {
             Log.error('Error submitting message:', error);
             throw error;
         } finally {
+            setIsSubmitting(false);
             setIsCreatingAssistant(false);
         }
     };
 
+    // Stop assistant handler
     const handleStopAssistant = async () => {
-        if (selectedAssistantId && onStopAssistant) {
-            try {
-                await onStopAssistant(selectedAssistantId);
-            } catch (error) {
-                Log.error('Error stopping assistant:', error);
-                throw error;
-            }
+        if (!selectedAssistantId || !stopAssistant) {
+            return;
+        }
+
+        setIsCanceling(true);
+
+        try {
+            await stopAssistant(selectedAssistantId);
+        } catch (error) {
+            Log.error('Error stopping assistant:', error);
+            throw error;
+        } finally {
+            setIsCanceling(false);
         }
     };
 
     // Handle click on Create Assistant option in dropdown
     const handleCreateAssistantClick = () => {
-        if (onCreateAssistant) {
-            onCreateAssistant();
+        if (initiateAssistantCreation) {
+            initiateAssistantCreation();
         }
     };
 
-    const focusTextarea = useCallback(() => {
-        const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
-
-        if (textarea && !textarea.disabled) {
-            textarea.focus();
+    // Get placeholder text based on assistant status
+    const placeholder = useMemo(() => {
+        if (!flowId) {
+            return 'Select a flow...';
         }
-    }, [textareaId]);
+
+        // Show creating assistant message while in creation mode
+        if (isCreatingAssistant) {
+            return 'Creating assistant...';
+        }
+
+        // No assistant selected - prompt to create one
+        if (!selectedAssistant?.status) {
+            return 'Type a message to create a new assistant...';
+        }
+
+        // Assistant-specific statuses
+        switch (selectedAssistant.status) {
+            case StatusType.Created: {
+                return 'Assistant is starting...';
+            }
+
+            case StatusType.Failed:
+            case StatusType.Finished: {
+                return 'This assistant session has ended. Create a new one to continue.';
+            }
+
+            case StatusType.Running: {
+                return 'Assistant is running... Click Stop to interrupt';
+            }
+
+            case StatusType.Waiting: {
+                return 'Continue the conversation...';
+            }
+
+            default: {
+                return 'Type your message...';
+            }
+        }
+    }, [flowId, isCreatingAssistant, selectedAssistant?.status]);
+
+    const assistantStatus = selectedAssistant?.status;
+    const isFormDisabled = assistantStatus === StatusType.Finished || assistantStatus === StatusType.Failed;
+    const isFormLoading = assistantStatus === StatusType.Created || assistantStatus === StatusType.Running;
 
     return (
         <div className={cn('flex h-full flex-col', className)}>
@@ -280,10 +312,6 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
                             <DropdownMenuContent
                                 align="start"
                                 className="max-h-[300px] w-[100] overflow-y-auto"
-                                onCloseAutoFocus={(e) => {
-                                    e.preventDefault();
-                                    focusTextarea();
-                                }}
                             >
                                 <DropdownMenuItem
                                     className="flex items-center gap-2 font-medium"
@@ -307,13 +335,13 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
                                         <div
                                             className="flex grow cursor-pointer items-center gap-2"
                                             onClick={() => {
-                                                onSelectAssistant?.(assistant.id);
+                                                selectAssistant?.(assistant.id);
                                             }}
                                         >
                                             <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
                                                 {assistants.length - index}
                                             </span>
-                                            <BreadcrumbProvider provider={assistant.provider} />
+                                            <ProviderIcon provider={assistant.provider} />
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm">{assistant.title}</span>
@@ -428,13 +456,20 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
             )}
 
             <div className="sticky bottom-0 border-t bg-background p-px pt-4">
-                <ChatAssistantFormInput
-                    assistantStatus={selectedAssistant?.status}
-                    isCreatingAssistant={isCreatingAssistant}
-                    isProviderAvailable={isProviderAvailable && isAssistantProviderAvailable}
-                    isUseAgentsDefault={isUseAgentsDefault}
-                    onStopFlow={handleStopAssistant}
-                    onSubmitMessage={handleSubmitMessage}
+                <FlowForm
+                    defaultValues={{
+                        providerName: selectedAssistant?.provider?.name ?? '',
+                        useAgents: isUseAgentsDefault,
+                    }}
+                    isCanceling={isCanceling}
+                    isDisabled={isFormDisabled}
+                    isLoading={isFormLoading}
+                    isProviderDisabled={!!selectedAssistant}
+                    isSubmitting={isSubmitting}
+                    onCancel={handleStopAssistant}
+                    onSubmit={handleSubmitMessage}
+                    placeholder={placeholder}
+                    type={'assistant'}
                 />
             </div>
         </div>

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -27,7 +27,9 @@ interface FlowContextValue {
     createAssistant: (message: string, useAgents: boolean) => Promise<void>;
     deleteAssistant: (assistantId: string) => Promise<void>;
     flowData: FlowQuery | undefined;
+    flowError: Error | undefined;
     flowId: null | string;
+    flowStatus: StatusType | undefined;
     initiateAssistantCreation: () => void;
     isAssistantsLoading: boolean;
     isLoading: boolean;
@@ -35,7 +37,7 @@ interface FlowContextValue {
     selectAssistant: (assistantId: null | string) => void;
     selectedAssistantId: null | string;
     stopAssistant: (assistantId: string) => Promise<void>;
-    stopAutomationFlow: (flowIdToStop: string) => Promise<void>;
+    stopAutomation: () => Promise<void>;
     submitAutomationMessage: (values: FlowFormValues) => Promise<void>;
 }
 
@@ -51,7 +53,11 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
 
     const [selectedAssistantIds, setSelectedAssistantIds] = useState<Record<string, null | string>>({});
 
-    const { data: flowData, loading: isLoading } = useFlowQuery({
+    const {
+        data: flowData,
+        error: flowError,
+        loading: isLoading,
+    } = useFlowQuery({
         errorPolicy: 'all',
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-first',
@@ -133,6 +139,17 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
     const selectedProviderName = useMemo(() => selectedProvider?.name ?? null, [selectedProvider?.name]);
 
+    // Show toast notification when flow loading error occurs
+    useEffect(() => {
+        if (flowError) {
+            const description = flowError.message || 'An error occurred while loading flow';
+            toast.error('Failed to load flow', {
+                description,
+            });
+            Log.error('Error loading flow:', flowError);
+        }
+    }, [flowError]);
+
     // Helper function to refetch assistant logs if needed
     const handleRefetchAssistantLogs = useCallback(() => {
         if (selectedAssistantId && refetchAssistantLogs) {
@@ -146,13 +163,13 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 return;
             }
 
-            const { message } = values;
+            const { message: input } = values;
 
             try {
                 await putUserInput({
                     variables: {
                         flowId,
-                        input: message,
+                        input,
                     },
                 });
             } catch (error) {
@@ -167,24 +184,25 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         [flowId, flowStatus, putUserInput],
     );
 
-    const stopAutomationFlow = useCallback(
-        async (flowIdToStop: string) => {
-            try {
-                await stopFlowMutation({
-                    variables: {
-                        flowId: flowIdToStop,
-                    },
-                });
-            } catch (error) {
-                const description = error instanceof Error ? error.message : 'An error occurred while stopping flow';
-                toast.error('Failed to stop flow', {
-                    description,
-                });
-                Log.error('Error stopping flow:', error);
-            }
-        },
-        [stopFlowMutation],
-    );
+    const stopAutomation = useCallback(async () => {
+        if (!flowId) {
+            return;
+        }
+
+        try {
+            await stopFlowMutation({
+                variables: {
+                    flowId,
+                },
+            });
+        } catch (error) {
+            const description = error instanceof Error ? error.message : 'An error occurred while stopping flow';
+            toast.error('Failed to stop flow', {
+                description,
+            });
+            Log.error('Error stopping flow:', error);
+        }
+    }, [flowId, stopFlowMutation]);
 
     const createAssistant = useCallback(
         async (message: string, useAgents: boolean) => {
@@ -320,7 +338,9 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             createAssistant,
             deleteAssistant,
             flowData,
+            flowError,
             flowId: flowId ?? null,
+            flowStatus,
             initiateAssistantCreation,
             isAssistantsLoading,
             isLoading,
@@ -328,7 +348,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             selectAssistant,
             selectedAssistantId,
             stopAssistant,
-            stopAutomationFlow,
+            stopAutomation,
             submitAutomationMessage,
         }),
         [
@@ -338,7 +358,9 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             createAssistant,
             deleteAssistant,
             flowData,
+            flowError,
             flowId,
+            flowStatus,
             initiateAssistantCreation,
             isAssistantsLoading,
             isLoading,
@@ -346,7 +368,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             selectAssistant,
             selectedAssistantId,
             stopAssistant,
-            stopAutomationFlow,
+            stopAutomation,
             submitAutomationMessage,
         ],
     );

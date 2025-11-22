@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { ChevronDown, Loader2, Search, X } from 'lucide-react';
+import { ChevronDown, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Log } from '@/lib/log';
+import { StatusType } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/FlowProvider';
 
@@ -25,14 +25,14 @@ const searchFormSchema = z.object({
 });
 
 const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
-    const { flowData, flowId, stopAutomationFlow, submitAutomationMessage } = useFlow();
+    const { flowData, flowId, flowStatus, stopAutomation, submitAutomationMessage } = useFlow();
 
     const logs = useMemo(() => flowData?.messageLogs ?? [], [flowData?.messageLogs]);
 
-    const [isCreatingFlow, setIsCreatingFlow] = useState(false);
-
     // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isCanceling, setIsCanceling] = useState(false);
 
     const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(
         useMemo(() => (logs ? [...(logs || [])] : []), [logs]),
@@ -95,23 +95,61 @@ const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
         );
     }, [logs, debouncedSearchValue]);
 
-    // Message submission handler with flow creation state management
+    // Get placeholder text based on flow status
+    const placeholder = useMemo(() => {
+        if (!flowId) {
+            return 'Select a flow...';
+        }
+
+        // Flow-specific statuses
+        switch (flowStatus) {
+            case StatusType.Created: {
+                return 'The flow is starting...';
+            }
+
+            case StatusType.Failed:
+            case StatusType.Finished: {
+                return 'This flow has ended. Create a new one to continue.';
+            }
+
+            case StatusType.Running: {
+                return 'PentAGI is working... Click Stop to interrupt';
+            }
+
+            case StatusType.Waiting: {
+                return 'Provide additional context or instructions...';
+            }
+
+            default: {
+                return 'Type your message...';
+            }
+        }
+    }, [flowId, flowStatus]);
+
+    // Message submission handler
     const handleSubmitMessage = async (values: FlowFormValues) => {
-        // if (!message.trim()) {
-        //     return;
-        // }
+        setIsSubmitting(true);
 
         try {
-            // Show loading indicator if a new flow is being created
-
             await submitAutomationMessage(values);
-        } catch (error) {
-            Log.error('Error submitting message:', error);
-            throw error;
         } finally {
-            setIsCreatingFlow(false);
+            setIsSubmitting(false);
         }
     };
+
+    // Stop automation handler
+    const handleStopAutomation = async () => {
+        setIsCanceling(true);
+
+        try {
+            await stopAutomation();
+        } finally {
+            setIsCanceling(false);
+        }
+    };
+
+    const isFormDisabled = flowStatus === StatusType.Finished || flowStatus === StatusType.Failed;
+    const isFormLoading = flowStatus === StatusType.Created || flowStatus === StatusType.Running;
 
     return (
         <div className={cn('flex h-full flex-col', className)}>
@@ -128,14 +166,12 @@ const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
                                         {...field}
                                         autoComplete="off"
                                         className="px-9"
-                                        disabled={isCreatingFlow}
                                         placeholder="Search messages..."
                                         type="text"
                                     />
                                     {field.value && (
                                         <Button
                                             className="absolute right-0 top-1/2 -translate-y-1/2"
-                                            disabled={isCreatingFlow}
                                             onClick={() => {
                                                 form.reset({ search: '' });
                                                 setDebouncedSearchValue('');
@@ -155,15 +191,7 @@ const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
                 </Form>
             </div>
 
-            {isCreatingFlow ? (
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                        <Loader2 className="size-12 animate-spin" />
-                        <p>Creating flow...</p>
-                        <p className="text-xs">This may take some time as Docker images are downloaded</p>
-                    </div>
-                </div>
-            ) : filteredLogs.length > 0 ? (
+            {filteredLogs.length > 0 ? (
                 <div className="relative h-full overflow-y-hidden pb-4">
                     <div
                         className="h-full space-y-4 overflow-y-auto"
@@ -207,9 +235,14 @@ const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
                     defaultValues={{
                         providerName: flowData?.flow?.provider?.name ?? '',
                     }}
-                    isSubmitting={false}
-                    onCancel={() => stopAutomationFlow(flowId ?? '')}
+                    isCanceling={isCanceling}
+                    isDisabled={isFormDisabled}
+                    isLoading={isFormLoading}
+                    isProviderDisabled={true}
+                    isSubmitting={isSubmitting}
+                    onCancel={handleStopAutomation}
                     onSubmit={handleSubmitMessage}
+                    placeholder={placeholder}
                     type={'automation'}
                 />
             </div>

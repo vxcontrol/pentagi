@@ -1,27 +1,14 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { NetworkStatus } from '@apollo/client';
-import {
-    ArrowDown,
-    ArrowUp,
-    CircleCheck,
-    CircleDashed,
-    CircleX,
-    Eye,
-    FileText,
-    GitFork,
-    Loader2,
-    MoreHorizontal,
-    Pause,
-    Plus,
-    Trash,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, FileText, GitFork, Loader2, MoreHorizontal, Pause, Plus, Trash } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { FlowOverviewFragmentFragment } from '@/graphql/types';
 
+import { FlowStatusIcon } from '@/components/icons/FlowStatusIcon';
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
@@ -43,30 +30,25 @@ type Flow = FlowOverviewFragmentFragment;
 
 const statusConfig: Record<
     StatusType,
-    { icon?: React.ReactNode; label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' }
+    { label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' }
 > = {
     [StatusType.Created]: {
-        icon: <CircleDashed className="size-3 text-blue-500" />,
         label: 'Created',
         variant: 'outline',
     },
     [StatusType.Failed]: {
-        icon: <CircleX className="size-3 text-red-500" />,
         label: 'Failed',
         variant: 'destructive',
     },
     [StatusType.Finished]: {
-        icon: <CircleCheck className="size-3 text-green-500" />,
         label: 'Finished',
         variant: 'secondary',
     },
     [StatusType.Running]: {
-        icon: <Loader2 className="size-3 animate-spin text-purple-500" />,
         label: 'Running',
         variant: 'default',
     },
     [StatusType.Waiting]: {
-        icon: <CircleDashed className="size-3 text-yellow-500" />,
         label: 'Waiting',
         variant: 'outline',
     },
@@ -240,7 +222,10 @@ const Flows = () => {
 
                 return (
                     <Badge variant={config.variant}>
-                        {config.icon}
+                        <FlowStatusIcon
+                            className="size-3"
+                            status={status}
+                        />
                         {config.label}
                     </Badge>
                 );
