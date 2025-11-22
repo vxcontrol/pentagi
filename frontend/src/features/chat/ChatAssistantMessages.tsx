@@ -251,7 +251,7 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
             <div className="sticky top-0 z-10 bg-background pb-4">
                 <div className="flex gap-2 p-px">
                     {/* Assistant Selector Dropdown */}
-                    {flowId && flowId !== 'new' && (
+                    {flowId && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -417,16 +417,8 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
                         </Button>
                     )}
                 </div>
-            ) : flowId === 'new' ? (
-                // Show placeholder for new flow
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <p>No Active Assistants</p>
-                        <p className="text-xs">Start by typing a message to create a new assistant</p>
-                    </div>
-                </div>
             ) : (
-                // Show placeholder when no assistant is selected in existing flow
+                // Show placeholder when no assistant is selected
                 <div className="flex flex-1 items-center justify-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <p>No Assistant Selected</p>

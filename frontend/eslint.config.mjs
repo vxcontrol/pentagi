@@ -35,6 +35,7 @@ const eslintConfig = [
                 },
             ],
             curly: ['error', 'all'],
+            'no-fallthrough': 'off',
             'padding-line-between-statements': [
                 'error',
                 {
