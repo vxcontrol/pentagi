@@ -99,10 +99,6 @@ const ChatAssistantFormInput = ({
             return 'Select a flow...';
         }
 
-        if (flowId === 'new') {
-            return 'What would you like me to help you with?';
-        }
-
         // Show creating assistant message while in creation mode
         if (isCreatingAssistant) {
             return 'Creating assistant...';
@@ -126,7 +122,6 @@ const ChatAssistantFormInput = ({
 
             case StatusType.Failed:
 
-            // eslint-disable-next-line no-fallthrough
             case StatusType.Finished: {
                 return 'This assistant session has ended. Create a new one to continue.';
             }
@@ -207,7 +202,7 @@ const ChatAssistantFormInput = ({
 
     // Auto-focus on textarea when needed
     useEffect(() => {
-        if (!isInputDisabled && (flowId === 'new' || assistantStatus === StatusType.Waiting || !assistantStatus)) {
+        if (!isInputDisabled && (assistantStatus === StatusType.Waiting || !assistantStatus)) {
             const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
 
             if (textarea) {
@@ -216,7 +211,7 @@ const ChatAssistantFormInput = ({
                 return () => clearTimeout(timeoutId);
             }
         }
-    }, [flowId, assistantStatus, isInputDisabled]);
+    }, [assistantStatus, isInputDisabled]);
 
     return (
         <Form {...form}>

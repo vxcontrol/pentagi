@@ -163,7 +163,7 @@ const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
                         <p className="text-xs">This may take some time as Docker images are downloaded</p>
                     </div>
                 </div>
-            ) : filteredLogs.length > 0 || flowId !== 'new' ? (
+            ) : filteredLogs.length > 0 ? (
                 <div className="relative h-full overflow-y-hidden pb-4">
                     <div
                         className="h-full space-y-4 overflow-y-auto"

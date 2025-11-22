@@ -111,7 +111,7 @@ const ChatTasks = () => {
     const hasTasks = filteredTasks && filteredTasks.length > 0;
 
     // Check if flow is available for report generation
-    const isReportDisabled = !flow || flowId === 'new' || !flowId;
+    const isReportDisabled = !flow || !flowId;
 
     // Report export handlers
     const handleCopyToClipboard = async () => {

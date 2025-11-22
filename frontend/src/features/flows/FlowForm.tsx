@@ -39,6 +39,7 @@ export interface FlowFormProps {
     isSubmitting?: boolean;
     onCancel?: () => Promise<void> | void;
     onSubmit: (values: FlowFormValues) => Promise<void> | void;
+    placeholder?: string;
     type: 'assistant' | 'automation';
 }
 
@@ -51,6 +52,7 @@ export const FlowForm = ({
     isSubmitting = false,
     onCancel,
     onSubmit,
+    placeholder = 'Describe what you would like PentAGI to test...',
     type,
 }: FlowFormProps) => {
     const { providers, setSelectedProvider } = useProviders();

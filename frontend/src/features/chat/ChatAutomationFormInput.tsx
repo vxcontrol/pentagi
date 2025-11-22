@@ -54,10 +54,6 @@ const ChatAutomationFormInput = ({
             return 'Creating a new flow...';
         }
 
-        if (flowId === 'new') {
-            return 'Describe what you would like PentAGI to test...';
-        }
-
         // Flow-specific statuses
         switch (flowStatus) {
             case StatusType.Created: {
@@ -66,7 +62,6 @@ const ChatAutomationFormInput = ({
 
             case StatusType.Failed:
 
-            // eslint-disable-next-line no-fallthrough
             case StatusType.Finished: {
                 return 'This flow has ended. Create a new one to continue.';
             }
@@ -153,7 +148,7 @@ const ChatAutomationFormInput = ({
 
     // Auto-focus on textarea when needed
     useEffect(() => {
-        if (!isInputDisabled && (flowId === 'new' || flowStatus === StatusType.Waiting || !flowStatus)) {
+        if (!isInputDisabled && (flowStatus === StatusType.Waiting || !flowStatus)) {
             const textarea = document.querySelector(`#${textareaId}`) as HTMLTextAreaElement;
 
             if (textarea) {
@@ -162,7 +157,7 @@ const ChatAutomationFormInput = ({
                 return () => clearTimeout(timeoutId);
             }
         }
-    }, [flowId, flowStatus, isInputDisabled]);
+    }, [flowStatus, isInputDisabled]);
 
     return (
         <Form {...form}>
