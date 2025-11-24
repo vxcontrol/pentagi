@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useMemo } from 'react';
+import { NetworkStatus } from '@apollo/client';
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 
 import type { FlowFormValues } from '@/features/flows/FlowForm';
-import type { FlowOverviewFragmentFragment } from '@/graphql/types';
+import type { FlowOverviewFragmentFragment, FlowsQuery } from '@/graphql/types';
 
 import {
     useCreateAssistantMutation,
@@ -11,6 +12,7 @@ import {
     useFinishFlowMutation,
     useFlowCreatedSubscription,
     useFlowDeletedSubscription,
+    useFlowsQuery,
     useFlowUpdatedSubscription,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
@@ -20,6 +22,10 @@ interface FlowsContextValue {
     createFlowWithAssistant: (values: FlowFormValues) => Promise<null | string>;
     deleteFlow: (flow: FlowOverviewFragmentFragment) => Promise<boolean>;
     finishFlow: (flow: FlowOverviewFragmentFragment) => Promise<boolean>;
+    flows: Array<FlowOverviewFragmentFragment>;
+    flowsData: FlowsQuery | undefined;
+    flowsError: Error | undefined;
+    isLoading: boolean;
 }
 
 const FlowsContext = createContext<FlowsContextValue | undefined>(undefined);
@@ -29,11 +35,34 @@ interface FlowsProviderProps {
 }
 
 export const FlowsProvider = ({ children }: FlowsProviderProps) => {
+    // Query for flows list
+    const {
+        data: flowsData,
+        error: flowsError,
+        loading,
+        networkStatus,
+    } = useFlowsQuery({
+        notifyOnNetworkStatusChange: true,
+    });
+
+    const isLoading = loading && networkStatus === NetworkStatus.loading;
+    const flows = useMemo(() => flowsData?.flows ?? [], [flowsData?.flows]);
+
     // Global flow subscriptions - always active regardless of selected flow
     // These subscriptions do not require flowId and listen to ALL flows in the system
     useFlowCreatedSubscription();
     useFlowDeletedSubscription();
     useFlowUpdatedSubscription();
+
+    // Show toast notification when flows loading error occurs
+    useEffect(() => {
+        if (flowsError) {
+            toast.error('Error loading flows', {
+                description: flowsError.message,
+            });
+            Log.error('Error loading flows:', flowsError);
+        }
+    }, [flowsError]);
 
     // Mutations
     const [createFlowMutation] = useCreateFlowMutation();
@@ -209,8 +238,12 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
             createFlowWithAssistant,
             deleteFlow,
             finishFlow,
+            flows,
+            flowsData,
+            flowsError,
+            isLoading,
         }),
-        [createFlow, createFlowWithAssistant, deleteFlow, finishFlow],
+        [createFlow, createFlowWithAssistant, deleteFlow, finishFlow, flows, flowsData, flowsError, isLoading],
     );
 
     return <FlowsContext.Provider value={value}>{children}</FlowsContext.Provider>;
