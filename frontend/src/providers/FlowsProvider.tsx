@@ -17,12 +17,14 @@ import {
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 
+export type Flow = FlowOverviewFragmentFragment;
+
 interface FlowsContextValue {
     createFlow: (values: FlowFormValues) => Promise<null | string>;
     createFlowWithAssistant: (values: FlowFormValues) => Promise<null | string>;
-    deleteFlow: (flow: FlowOverviewFragmentFragment) => Promise<boolean>;
-    finishFlow: (flow: FlowOverviewFragmentFragment) => Promise<boolean>;
-    flows: Array<FlowOverviewFragmentFragment>;
+    deleteFlow: (flow: Flow) => Promise<boolean>;
+    finishFlow: (flow: Flow) => Promise<boolean>;
+    flows: Array<Flow>;
     flowsData: FlowsQuery | undefined;
     flowsError: Error | undefined;
     isLoading: boolean;
@@ -148,7 +150,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
     );
 
     const deleteFlow = useCallback(
-        async (flow: FlowOverviewFragmentFragment) => {
+        async (flow: Flow) => {
             const { id: flowId, title } = flow;
 
             if (!flowId) {
@@ -193,7 +195,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
     );
 
     const finishFlow = useCallback(
-        async (flow: FlowOverviewFragmentFragment) => {
+        async (flow: Flow) => {
             const { id: flowId, title } = flow;
 
             if (!flowId) {
