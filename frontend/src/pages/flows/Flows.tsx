@@ -1,10 +1,8 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { NetworkStatus } from '@apollo/client';
 import { ArrowDown, ArrowUp, Eye, FileText, GitFork, Loader2, MoreHorizontal, Pause, Plus, Trash } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
 import type { FlowOverviewFragmentFragment } from '@/graphql/types';
 
@@ -24,7 +22,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
-import { StatusType, useFlowsQuery } from '@/graphql/types';
+import { StatusType } from '@/graphql/types';
 import { useFlows } from '@/providers/FlowsProvider';
 
 type Flow = FlowOverviewFragmentFragment;
@@ -57,23 +55,11 @@ const statusConfig: Record<
 
 const Flows = () => {
     const navigate = useNavigate();
-    const { deleteFlow, finishFlow } = useFlows();
-    const { data, error, loading, networkStatus } = useFlowsQuery({
-        notifyOnNetworkStatusChange: true,
-    });
-    const isLoading = loading && networkStatus === NetworkStatus.loading;
+    const { deleteFlow, finishFlow, flows, isLoading } = useFlows();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingFlow, setDeletingFlow] = useState<Flow | null>(null);
     const [finishingFlowIds, setFinishingFlowIds] = useState<Set<string>>(new Set());
     const [deletingFlowIds, setDeletingFlowIds] = useState<Set<string>>(new Set());
-
-    useEffect(() => {
-        if (error) {
-            toast.error('Error loading flows', {
-                description: error.message,
-            });
-        }
-    }, [error]);
 
     const handleFlowOpen = (flowId: string) => {
         navigate(`/flows/${flowId}`);
@@ -274,8 +260,6 @@ const Flows = () => {
             size: 48,
         },
     ];
-
-    const flows = data?.flows || [];
 
     const pageHeader = (
         <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
