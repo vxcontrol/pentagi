@@ -4,8 +4,6 @@ import { ArrowDown, ArrowUp, Eye, FileText, GitFork, Loader2, MoreHorizontal, Pa
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import type { FlowOverviewFragmentFragment } from '@/graphql/types';
-
 import { FlowStatusIcon } from '@/components/icons/FlowStatusIcon';
 import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
 import { Badge } from '@/components/ui/badge';
@@ -23,9 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { StatusType } from '@/graphql/types';
-import { useFlows } from '@/providers/FlowsProvider';
-
-type Flow = FlowOverviewFragmentFragment;
+import { type Flow, useFlows } from '@/providers/FlowsProvider';
 
 const statusConfig: Record<
     StatusType,
