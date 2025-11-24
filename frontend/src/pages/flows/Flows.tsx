@@ -24,7 +24,8 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
-import { StatusType, useDeleteFlowMutation, useFinishFlowMutation, useFlowsQuery } from '@/graphql/types';
+import { StatusType, useFlowsQuery } from '@/graphql/types';
+import { useFlows } from '@/providers/FlowsProvider';
 
 type Flow = FlowOverviewFragmentFragment;
 
@@ -56,12 +57,11 @@ const statusConfig: Record<
 
 const Flows = () => {
     const navigate = useNavigate();
+    const { deleteFlow, finishFlow } = useFlows();
     const { data, error, loading, networkStatus } = useFlowsQuery({
         notifyOnNetworkStatusChange: true,
     });
     const isLoading = loading && networkStatus === NetworkStatus.loading;
-    const [deleteFlow] = useDeleteFlowMutation();
-    const [finishFlow] = useFinishFlowMutation();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingFlow, setDeletingFlow] = useState<Flow | null>(null);
     const [finishingFlowIds, setFinishingFlowIds] = useState<Set<string>>(new Set());
@@ -84,84 +84,38 @@ const Flows = () => {
         setIsDeleteDialogOpen(true);
     };
 
-    const handleFlowDelete = async (flowId: string | undefined) => {
-        if (!flowId) {
+    const handleFlowDelete = async () => {
+        if (!deletingFlow) {
             return;
         }
 
-        const flowTitle = deletingFlow?.title || 'Unknown';
-        const flowDescription = `${flowTitle} (ID: ${flowId})`;
-
-        const loadingToastId = toast.loading('Deleting flow...', {
-            description: flowDescription,
-        });
+        setDeletingFlowIds((previousIds) => new Set(previousIds).add(deletingFlow.id));
 
         try {
-            setDeletingFlowIds((previousIds) => new Set(previousIds).add(flowId));
+            const success = await deleteFlow(deletingFlow);
 
-            await deleteFlow({
-                refetchQueries: ['flows'],
-                update: (cache) => {
-                    // Remove the flow from Apollo cache
-                    cache.evict({ id: `Flow:${flowId}` });
-                    cache.gc();
-                },
-                variables: { flowId },
-            });
-
-            setDeletingFlow(null);
-
-            toast.success('Flow deleted successfully', {
-                description: flowDescription,
-                id: loadingToastId,
-            });
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'An error occurred while deleting';
-            toast.error(errorMessage, {
-                description: flowDescription,
-                id: loadingToastId,
-            });
+            if (success) {
+                setDeletingFlow(null);
+            }
         } finally {
             setDeletingFlowIds((previousIds) => {
                 const newIds = new Set(previousIds);
-                newIds.delete(flowId);
+                newIds.delete(deletingFlow.id);
 
                 return newIds;
             });
         }
     };
 
-    const handleFlowFinish = async (flowId: string) => {
-        const flow = data?.flows?.find((f) => f.id === flowId);
-        const flowTitle = flow?.title || 'Unknown';
-        const flowDescription = `${flowTitle} (ID: ${flowId})`;
-
-        const loadingToastId = toast.loading('Finishing flow...', {
-            description: flowDescription,
-        });
+    const handleFlowFinish = async (flow: Flow) => {
+        setFinishingFlowIds((previousIds) => new Set(previousIds).add(flow.id));
 
         try {
-            setFinishingFlowIds((previousIds) => new Set(previousIds).add(flowId));
-
-            await finishFlow({
-                refetchQueries: ['flows'],
-                variables: { flowId },
-            });
-
-            toast.success('Flow finished successfully', {
-                description: flowDescription,
-                id: loadingToastId,
-            });
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'An error occurred while finishing';
-            toast.error(errorMessage, {
-                description: flowDescription,
-                id: loadingToastId,
-            });
+            await finishFlow(flow);
         } finally {
             setFinishingFlowIds((previousIds) => {
                 const newIds = new Set(previousIds);
-                newIds.delete(flowId);
+                newIds.delete(flow.id);
 
                 return newIds;
             });
@@ -277,7 +231,7 @@ const Flows = () => {
                                 {isRunning && (
                                     <DropdownMenuItem
                                         disabled={finishingFlowIds.has(flow.id)}
-                                        onClick={() => handleFlowFinish(flow.id)}
+                                        onClick={() => handleFlowFinish(flow)}
                                     >
                                         {finishingFlowIds.has(flow.id) ? (
                                             <>
@@ -408,7 +362,7 @@ const Flows = () => {
                 <ConfirmationDialog
                     cancelText="Cancel"
                     confirmText="Delete"
-                    handleConfirm={() => handleFlowDelete(deletingFlow?.id)}
+                    handleConfirm={handleFlowDelete}
                     handleOpenChange={setIsDeleteDialogOpen}
                     isOpen={isDeleteDialogOpen}
                     itemName={deletingFlow?.title}

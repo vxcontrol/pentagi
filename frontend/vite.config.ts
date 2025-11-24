@@ -1,7 +1,6 @@
+import react from '@vitejs/plugin-react-swc';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-
-import react from '@vitejs/plugin-react-swc';
 import { defineConfig, loadEnv } from 'vite';
 import { createHtmlPlugin } from 'vite-plugin-html';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -22,8 +21,8 @@ export default defineConfig(({ mode }) => {
     const sslCertPath = viteEnv.VITE_SSL_CERT_PATH || 'ssl/server.crt';
 
     if (useHttps && (!existsSync(sslKeyPath) || !existsSync(sslCertPath))) {
-        // eslint-disable-next-line no-console
         console.log('SSL certificates not found. Attempting to generate them...');
+
         try {
             generateCertificates();
         } catch {
@@ -33,56 +32,56 @@ export default defineConfig(({ mode }) => {
     }
 
     const serverConfig = {
+        host: viteHost,
+        port: vitePort,
         proxy: {
             '/api/v1': {
-                target: `${useHttps ? 'https' : 'http'}://${viteEnv.VITE_API_URL}`,
                 changeOrigin: true,
                 secure: false,
+                target: `${useHttps ? 'https' : 'http'}://${viteEnv.VITE_API_URL}`,
             },
             '/api/v1/graphql': {
-                target: `${useHttps ? 'wss' : 'ws'}://${viteEnv.VITE_API_URL}`,
                 changeOrigin: true,
-                wss: `${useHttps}`,
                 secure: false,
+                target: `${useHttps ? 'wss' : 'ws'}://${viteEnv.VITE_API_URL}`,
+                wss: `${useHttps}`,
             },
         },
-        port: vitePort,
-        host: viteHost,
         ...(useHttps && {
             https: {
-                key: readFileSync(sslKeyPath),
                 cert: readFileSync(sslCertPath),
+                key: readFileSync(sslKeyPath),
             },
         }),
     };
 
     return {
+        define: {
+            APP_DEV_CWD: JSON.stringify(process.cwd()),
+            APP_NAME: JSON.stringify(pkg.name),
+            APP_VERSION: JSON.stringify(pkg.version),
+            dependencies: JSON.stringify(pkg.dependencies),
+            devDependencies: JSON.stringify(pkg.devDependencies),
+            GIT_COMMIT_SHA: JSON.stringify(getGitHash()),
+            pkg: JSON.stringify(pkg),
+            README: JSON.stringify(readme),
+        },
         plugins: [
             tsconfigPaths(),
             react(),
             createHtmlPlugin({
-                template: 'index.html',
                 inject: {
                     data: {
                         title: viteEnv.VITE_APP_NAME,
                     },
                 },
+                template: 'index.html',
             }),
         ],
         resolve: {
             alias: {
                 '@': path.resolve(__dirname, './src'),
             },
-        },
-        define: {
-            APP_VERSION: JSON.stringify(pkg.version),
-            APP_NAME: JSON.stringify(pkg.name),
-            APP_DEV_CWD: JSON.stringify(process.cwd()),
-            GIT_COMMIT_SHA: JSON.stringify(getGitHash()),
-            dependencies: JSON.stringify(pkg.dependencies),
-            devDependencies: JSON.stringify(pkg.devDependencies),
-            README: JSON.stringify(readme),
-            pkg: JSON.stringify(pkg),
         },
         server: serverConfig,
     };

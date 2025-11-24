@@ -1,5 +1,5 @@
 import { GripVertical, Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { FlowStatusIcon } from '@/components/icons/FlowStatusIcon';
@@ -11,22 +11,6 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import ChatCentralTabs from '@/features/chat/ChatCentralTabs';
 import ChatTabs from '@/features/chat/ChatTabs';
-import {
-    useAgentLogAddedSubscription,
-    useAssistantCreatedSubscription,
-    useAssistantDeletedSubscription,
-    useAssistantLogAddedSubscription,
-    useAssistantLogUpdatedSubscription,
-    useAssistantUpdatedSubscription,
-    useMessageLogAddedSubscription,
-    useMessageLogUpdatedSubscription,
-    useScreenshotAddedSubscription,
-    useSearchLogAddedSubscription,
-    useTaskCreatedSubscription,
-    useTaskUpdatedSubscription,
-    useTerminalLogAddedSubscription,
-    useVectorStoreLogAddedSubscription,
-} from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useFlow } from '@/providers/FlowProvider';
 
@@ -35,7 +19,7 @@ const Flow = () => {
     const navigate = useNavigate();
 
     // Get flow data from FlowProvider
-    const { flowData, flowError, flowId, isLoading: isFlowLoading } = useFlow();
+    const { flowData, flowError, isLoading: isFlowLoading } = useFlow();
 
     // Redirect to flows list if there's an error loading flow data or flow not found
     useEffect(() => {
@@ -46,27 +30,6 @@ const Flow = () => {
 
     // State for preserving active tabs when switching flows
     const [activeTabsTab, setActiveTabsTab] = useState<string>(!isDesktop ? 'automation' : 'terminal');
-
-    const variables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
-    const skip = useMemo(() => !flowId, [flowId]);
-
-    // Flow-specific subscriptions that depend on the selected flow
-    useTaskCreatedSubscription({ skip, variables });
-    useTaskUpdatedSubscription({ skip, variables });
-    useScreenshotAddedSubscription({ skip, variables });
-    useTerminalLogAddedSubscription({ skip, variables });
-    useMessageLogUpdatedSubscription({ skip, variables });
-    useMessageLogAddedSubscription({ skip, variables });
-    useAgentLogAddedSubscription({ skip, variables });
-    useSearchLogAddedSubscription({ skip, variables });
-    useVectorStoreLogAddedSubscription({ skip, variables });
-
-    // Assistant-specific subscriptions
-    useAssistantCreatedSubscription({ skip, variables });
-    useAssistantUpdatedSubscription({ skip, variables });
-    useAssistantDeletedSubscription({ skip, variables });
-    useAssistantLogAddedSubscription({ skip, variables });
-    useAssistantLogUpdatedSubscription({ skip, variables });
 
     const tabsCard = (
         <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">

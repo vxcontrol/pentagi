@@ -7,15 +7,29 @@ import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery
 
 import {
     StatusType,
+    useAgentLogAddedSubscription,
+    useAssistantCreatedSubscription,
+    useAssistantDeletedSubscription,
+    useAssistantLogAddedSubscription,
     useAssistantLogsQuery,
+    useAssistantLogUpdatedSubscription,
     useAssistantsQuery,
+    useAssistantUpdatedSubscription,
     useCallAssistantMutation,
     useCreateAssistantMutation,
     useDeleteAssistantMutation,
     useFlowQuery,
+    useMessageLogAddedSubscription,
+    useMessageLogUpdatedSubscription,
     usePutUserInputMutation,
+    useScreenshotAddedSubscription,
+    useSearchLogAddedSubscription,
     useStopAssistantMutation,
     useStopFlowMutation,
+    useTaskCreatedSubscription,
+    useTaskUpdatedSubscription,
+    useTerminalLogAddedSubscription,
+    useVectorStoreLogAddedSubscription,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { useProviders } from '@/providers/ProvidersProvider';
@@ -105,6 +119,28 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         skip: !flowId || !selectedAssistantId || selectedAssistantId === '',
         variables: { assistantId: selectedAssistantId ?? '', flowId: flowId ?? '' },
     });
+
+    // Subscriptions
+    const subscriptionVariables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
+    const subscriptionSkip = useMemo(() => !flowId, [flowId]);
+
+    // Flow-specific subscriptions that depend on the selected flow
+    useTaskCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useTaskUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useScreenshotAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useTerminalLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useMessageLogUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useMessageLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useAgentLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useSearchLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useVectorStoreLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+
+    // Assistant-specific subscriptions
+    useAssistantCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useAssistantUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useAssistantDeletedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useAssistantLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useAssistantLogUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
 
     const selectAssistant = useCallback(
         (assistantId: null | string) => {

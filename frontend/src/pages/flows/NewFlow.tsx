@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,67 +7,32 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FlowForm, type FlowFormValues } from '@/features/flows/FlowForm';
-import { useCreateAssistantMutation, useCreateFlowMutation } from '@/graphql/types';
-import { Log } from '@/lib/log';
+import { useFlows } from '@/providers/FlowsProvider';
 import { useProviders } from '@/providers/ProvidersProvider';
 
 const NewFlow = () => {
     const navigate = useNavigate();
 
     const { selectedProvider } = useProviders();
+    const { createFlow, createFlowWithAssistant } = useFlows();
 
-    const [createFlow] = useCreateFlowMutation();
-    const [createAssistant] = useCreateAssistantMutation();
     const [isLoading, setIsLoading] = useState(false);
     const [flowType, setFlowType] = useState<'assistant' | 'automation'>('automation');
 
     const handleSubmit = async (values: FlowFormValues) => {
-        const { message, providerName, useAgents } = values;
-
-        const input = message.trim();
-        const modelProvider = providerName.trim();
-
-        if (!input || !modelProvider || isLoading) {
+        if (isLoading) {
             return;
         }
 
+        setIsLoading(true);
+
         try {
-            setIsLoading(true);
+            const flowId = flowType === 'automation' ? await createFlow(values) : await createFlowWithAssistant(values);
 
-            if (flowType === 'automation') {
-                const { data } = await createFlow({
-                    variables: {
-                        input,
-                        modelProvider,
-                    },
-                });
-
-                if (data?.createFlow) {
-                    // Navigate to the new flow page
-                    navigate(`/flows/${data.createFlow.id}`);
-                }
-            } else {
-                const { data } = await createAssistant({
-                    variables: {
-                        flowId: '0',
-                        input,
-                        modelProvider,
-                        useAgents,
-                    },
-                });
-
-                if (data?.createAssistant?.flow) {
-                    // Navigate to the new flow page
-                    navigate(`/flows/${data.createAssistant.flow.id}`);
-                }
+            if (flowId) {
+                // Navigate to the new flow page
+                navigate(`/flows/${flowId}`);
             }
-        } catch (error) {
-            const title = flowType === 'automation' ? 'Failed to create flow' : 'Failed to create assistant';
-            const description = error instanceof Error ? error.message : 'An error occurred while creating the flow';
-            toast.error(title, {
-                description,
-            });
-            Log.error(`Error creating ${flowType}:`, error);
         } finally {
             setIsLoading(false);
         }
