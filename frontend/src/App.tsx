@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import AppLayout from '@/components/layouts/AppLayout';
+import FlowsLayout from '@/components/layouts/FlowsLayout';
 import MainLayout from '@/components/layouts/MainLayout';
 import SettingsLayout from '@/components/layouts/SettingsLayout';
 import ProtectedRoute from '@/components/routes/ProtectedRoute';
@@ -52,22 +53,27 @@ const App = () => {
                                 <Route element={renderProtectedRoute()}>
                                     {/* Main layout for chat pages */}
                                     <Route element={<MainLayout />}>
-                                        <Route
-                                            element={<Flows />}
-                                            path="flows"
-                                        />
-                                        <Route
-                                            element={<NewFlow />}
-                                            path="flows/new"
-                                        />
-                                        <Route
-                                            element={
-                                                <FlowProvider>
-                                                    <Flow />
-                                                </FlowProvider>
-                                            }
-                                            path="flows/:flowId"
-                                        />
+                                        {/* Flows section with FlowsProvider */}
+                                        <Route element={<FlowsLayout />}>
+                                            <Route
+                                                element={<Flows />}
+                                                path="flows"
+                                            />
+                                            <Route
+                                                element={<NewFlow />}
+                                                path="flows/new"
+                                            />
+                                            <Route
+                                                element={
+                                                    <FlowProvider>
+                                                        <Flow />
+                                                    </FlowProvider>
+                                                }
+                                                path="flows/:flowId"
+                                            />
+                                        </Route>
+
+                                        {/* Other pages can be added here without FlowsProvider */}
                                     </Route>
 
                                     {/* Settings with nested routes */}
