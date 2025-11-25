@@ -6,7 +6,7 @@ import { renderToString } from 'react-dom/server';
 
 import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
 
-import Markdown from '@/components/shared/Markdown';
+import Markdown from '@/components/shared/markdown';
 import { StatusType } from '@/graphql/types';
 
 import { Log } from './log';
