@@ -10,7 +10,7 @@ import type { AssistantLogFragmentFragment } from '@/graphql/types';
 
 import { AssistantLogFragmentFragmentDoc } from '@/graphql/types';
 import { Log } from '@/lib/log';
-import { baseUrl } from '@/models/Api';
+import { baseUrl } from '@/models/api';
 
 // Local cache for accumulating assistant log streaming parts during real-time updates.
 // We use LRUCache to store each log record by its unique logId, because Apollo cache

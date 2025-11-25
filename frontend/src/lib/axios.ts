@@ -2,7 +2,7 @@ import type { AxiosError } from 'axios';
 
 import Axios from 'axios';
 
-import { AUTH_STORAGE_KEY } from '@/providers/UserProvider';
+import { AUTH_STORAGE_KEY } from '@/providers/user-provider';
 
 import { Log } from './log';
 import { getReturnUrlParam } from './utils/auth';
