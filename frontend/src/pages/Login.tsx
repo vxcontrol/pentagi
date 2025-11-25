@@ -8,7 +8,7 @@ import { useUser } from '@/providers/UserProvider';
 const Login = () => {
     const [searchParams] = useSearchParams();
     const location = useLocation();
-    const { authInfo } = useUser();
+    const { authInfo, isLoading } = useUser();
     const authProviders = authInfo?.providers || [];
 
     // Extract the return URL from either location state or query parameters
@@ -18,13 +18,13 @@ const Login = () => {
         <div className="flex h-dvh w-full items-center justify-center">
             <div className="h-dvh w-full lg:grid lg:grid-cols-2">
                 <div className="flex items-center justify-center px-4 py-12">
-                    {authProviders.length > 0 ? (
+                    {isLoading ? (
+                        <Loader2 className="size-16 animate-spin" />
+                    ) : (
                         <LoginForm
                             providers={authProviders}
                             returnUrl={returnUrl}
                         />
-                    ) : (
-                        <Loader2 className="size-16 animate-spin" />
                     )}
                 </div>
                 <div className="hidden bg-gradient-to-r from-slate-800 to-slate-950 lg:flex">

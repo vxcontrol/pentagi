@@ -92,6 +92,7 @@ export const FlowForm = ({
         formState: { dirtyFields, isValid },
         getValues,
         handleSubmit: handleFormSubmit,
+        resetField,
         setValue,
     } = form;
 
@@ -122,6 +123,11 @@ export const FlowForm = ({
 
     const isFormDisabled = isDisabled || isLoading || isSubmitting || isCanceling;
 
+    const handleSubmit = async (values: FlowFormValues) => {
+        await onSubmit(values);
+        resetField('message');
+    };
+
     const handleKeyDown = ({
         ctrlKey,
         key,
@@ -134,12 +140,12 @@ export const FlowForm = ({
         }
 
         preventDefault();
-        handleFormSubmit(onSubmit)();
+        handleFormSubmit(handleSubmit)();
     };
 
     return (
         <Form {...form}>
-            <form onSubmit={handleFormSubmit(onSubmit)}>
+            <form onSubmit={handleFormSubmit(handleSubmit)}>
                 <FormField
                     control={control}
                     name="message"

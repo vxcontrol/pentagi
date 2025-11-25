@@ -7,7 +7,7 @@ import { VectorStoreAction } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
 
-interface ChatVectorStoreActionIconProps {
+interface FlowVectorStoreActionIconProps {
     action?: VectorStoreAction;
     className?: string;
     tooltip?: string;
@@ -19,7 +19,7 @@ const icons: Record<VectorStoreAction, LucideIcon> = {
 };
 const defaultIcon = HardDrive;
 
-const ChatVectorStoreActionIcon = ({ action, className, tooltip = action }: ChatVectorStoreActionIconProps) => {
+const FlowVectorStoreActionIcon = ({ action, className, tooltip = action }: FlowVectorStoreActionIconProps) => {
     const Icon = action ? icons[action] || defaultIcon : defaultIcon;
     const iconElement = <Icon className={cn('size-3 shrink-0', tooltip && 'cursor-pointer', className)} />;
 
@@ -35,4 +35,5 @@ const ChatVectorStoreActionIcon = ({ action, className, tooltip = action }: Chat
     );
 };
 
-export default ChatVectorStoreActionIcon;
+export default FlowVectorStoreActionIcon;
+

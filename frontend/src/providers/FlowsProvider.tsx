@@ -6,6 +6,7 @@ import type { FlowFormValues } from '@/features/flows/FlowForm';
 import type { FlowOverviewFragmentFragment, FlowsQuery } from '@/graphql/types';
 
 import {
+    ResultType,
     useCreateAssistantMutation,
     useCreateFlowMutation,
     useDeleteFlowMutation,
@@ -165,7 +166,9 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
 
             try {
                 await deleteFlowMutation({
-                    refetchQueries: ['flows'],
+                    optimisticResponse: {
+                        deleteFlow: ResultType.Success,
+                    },
                     update: (cache) => {
                         // Remove the flow from Apollo cache
                         cache.evict({ id: `Flow:${flowId}` });
@@ -173,6 +176,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
                     },
                     variables: { flowId },
                 });
+                // List will be automatically updated via mutation policy and flowDeleted subscription
 
                 toast.success('Flow deleted successfully', {
                     description: flowDescription,
@@ -210,9 +214,9 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
 
             try {
                 await finishFlowMutation({
-                    refetchQueries: ['flows'],
                     variables: { flowId },
                 });
+                // Cache will be automatically updated via mutation policy and flowUpdated subscription
 
                 toast.success('Flow finished successfully', {
                     description: flowDescription,

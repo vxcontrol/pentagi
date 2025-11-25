@@ -145,6 +145,18 @@ const cache = new InMemoryCache({
     typePolicies: {
         Mutation: {
             fields: {
+                callAssistant: {
+                    merge(_, incoming, { cache }) {
+                        // Update the assistant in the list after calling
+                        if (incoming?.assistant) {
+                            cache.modify({
+                                fields: {
+                                    assistants: (existing = []) => updateIncoming(existing, incoming.assistant, cache),
+                                },
+                            });
+                        }
+                    },
+                },
                 createAssistant: {
                     merge(_, incoming, { cache }) {
                         // Update the flow
@@ -220,13 +232,52 @@ const cache = new InMemoryCache({
                         });
                     },
                 },
+                deleteAssistant: {
+                    merge(_, incoming, { cache }) {
+                        // Remove the assistant from the list
+                        if (incoming?.assistant) {
+                            cache.modify({
+                                fields: {
+                                    assistants: (existing = []) => deleteIncoming(existing, incoming.assistant, cache),
+                                },
+                            });
+                        }
+                    },
+                },
+                deleteFlow: {
+                    merge(_, incoming, { cache }) {
+                        // Remove the flow from the list
+                        if (incoming) {
+                            cache.modify({
+                                fields: {
+                                    flows: (existing = []) => deleteIncoming(existing, incoming, cache),
+                                },
+                            });
+                        }
+                    },
+                },
+                finishFlow: {
+                    merge(_, incoming, { cache }) {
+                        // Update the flow in the list after finishing
+                        if (incoming) {
+                            cache.modify({
+                                fields: {
+                                    flows: (existing = []) => updateIncoming(existing, incoming, cache),
+                                },
+                            });
+                        }
+                    },
+                },
                 stopAssistant: {
                     merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                assistants: (existing = []) => updateIncoming(existing, incoming, cache),
-                            },
-                        });
+                        // Update the assistant in the list after stopping
+                        if (incoming?.assistant) {
+                            cache.modify({
+                                fields: {
+                                    assistants: (existing = []) => updateIncoming(existing, incoming.assistant, cache),
+                                },
+                            });
+                        }
                     },
                 },
                 updatePrompt: {

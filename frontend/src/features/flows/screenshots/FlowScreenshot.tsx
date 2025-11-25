@@ -10,11 +10,11 @@ import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/format';
 import { baseUrl } from '@/models/Api';
 
-interface ChatScreenshotProps {
+interface FlowScreenshotProps {
     screenshot: ScreenshotFragmentFragment;
 }
 
-const ChatScreenshot = ({ screenshot }: ChatScreenshotProps) => {
+const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
     const imageRef = useRef<HTMLDivElement>(null);
@@ -93,4 +93,5 @@ const ChatScreenshot = ({ screenshot }: ChatScreenshotProps) => {
     );
 };
 
-export default memo(ChatScreenshot);
+export default memo(FlowScreenshot);
+

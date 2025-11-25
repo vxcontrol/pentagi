@@ -11,9 +11,9 @@ import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
 
-import ChatMessageTypeIcon from './ChatMessageTypeIcon';
+import FlowMessageTypeIcon from './FlowMessageTypeIcon';
 
-interface ChatMessageProps {
+interface FlowMessageProps {
     log: AssistantLogFragmentFragment | MessageLogFragmentFragment;
     searchValue?: string;
 }
@@ -27,7 +27,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
+const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
     const { createdAt, message, result, resultFormat = ResultFormat.Plain, thinking, type } = log;
     const isReportMessage = type === MessageLogType.Report;
 
@@ -200,7 +200,7 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
                     type === MessageLogType.Input ? 'flex-row-reverse' : 'flex-row'
                 }`}
             >
-                <ChatMessageTypeIcon type={type} />
+                <FlowMessageTypeIcon type={type} />
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Copy
@@ -216,4 +216,5 @@ const ChatMessage = ({ log, searchValue = '' }: ChatMessageProps) => {
     );
 };
 
-export default memo(ChatMessage);
+export default memo(FlowMessage);
+

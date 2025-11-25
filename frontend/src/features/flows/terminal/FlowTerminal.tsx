@@ -16,7 +16,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatTerminal = () => {
+const FlowTerminal = () => {
     const { flowData, flowId } = useFlow();
 
     const terminalLogs = useMemo(() => flowData?.terminalLogs ?? [], [flowData?.terminalLogs]);
@@ -169,4 +169,5 @@ const ChatTerminal = () => {
     );
 };
 
-export default ChatTerminal;
+export default FlowTerminal;
+

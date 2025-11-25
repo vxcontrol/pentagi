@@ -9,9 +9,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import ChatCentralTabs from '@/features/chat/ChatCentralTabs';
-import ChatTabs from '@/features/chat/ChatTabs';
+import FlowCentralTabs from '@/features/flows/FlowCentralTabs';
+import FlowTabs from '@/features/flows/FlowTabs';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { formatName } from '@/lib/utils/format';
 import { useFlow } from '@/providers/FlowProvider';
 
 const Flow = () => {
@@ -34,7 +35,7 @@ const Flow = () => {
     const tabsCard = (
         <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
             <CardContent className="flex-1 overflow-auto pr-0 pt-4">
-                <ChatTabs
+                <FlowTabs
                     activeTab={activeTabsTab}
                     onTabChange={setActiveTabsTab}
                 />
@@ -58,13 +59,13 @@ const Flow = () => {
                                     {flowData?.flow && (
                                         <>
                                             <FlowStatusIcon
-                                                hasTooltip
                                                 status={flowData.flow.status}
+                                                tooltip={formatName(flowData.flow.status)}
                                             />
 
                                             <ProviderIcon
-                                                hasTooltip
                                                 provider={flowData.flow.provider}
+                                                tooltip={formatName(flowData.flow.provider.name)}
                                             />
                                         </>
                                     )}
@@ -92,7 +93,7 @@ const Flow = () => {
                         >
                             <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
                                 <CardContent className="flex-1 overflow-auto pr-0 pt-4">
-                                    <ChatCentralTabs />
+                                    <FlowCentralTabs />
                                 </CardContent>
                             </Card>
                         </ResizablePanel>

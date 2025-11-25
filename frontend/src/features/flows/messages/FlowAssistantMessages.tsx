@@ -16,18 +16,19 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { StatusType, useSettingsQuery } from '@/graphql/types';
+import { StatusType } from '@/graphql/types';
+import { useChatScroll } from '@/hooks/use-chat-scroll';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 import { isProviderValid } from '@/models/Provider';
 import { useFlow } from '@/providers/FlowProvider';
 import { useProviders } from '@/providers/ProvidersProvider';
+import { useSystemSettings } from '@/providers/SystemSettingsProvider';
 
-import { useChatScroll } from '../../hooks/use-chat-scroll';
-import { FlowForm, type FlowFormValues } from '../flows/FlowForm';
-import ChatMessage from './ChatMessage';
+import { FlowForm, type FlowFormValues } from '../FlowForm';
+import FlowMessage from './FlowMessage';
 
-interface ChatAssistantMessagesProps {
+interface FlowAssistantMessagesProps {
     className?: string;
 }
 
@@ -35,7 +36,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
+const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
     const { providers } = useProviders();
 
     const {
@@ -64,7 +65,7 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
     );
 
     // Get system settings
-    const { data: settingsData } = useSettingsQuery();
+    const { settings } = useSystemSettings();
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         defaultValues: {
@@ -131,12 +132,12 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
     const isUseAgentsDefault = useMemo(() => {
         // If creating a new assistant, use system setting
         if (isCreatingAssistant || !selectedAssistant) {
-            return settingsData?.settings?.assistantUseAgents ?? false;
+            return settings?.assistantUseAgents ?? false;
         }
 
         // If assistant is selected and not creating new, use its useAgents setting
         return selectedAssistant.useAgents;
-    }, [selectedAssistant, settingsData?.settings?.assistantUseAgents, isCreatingAssistant]);
+    }, [selectedAssistant, settings?.assistantUseAgents, isCreatingAssistant]);
 
     // Memoize filtered logs to avoid recomputing on every render
     // Use debouncedSearchValue for filtering to improve performance
@@ -425,7 +426,7 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
                         ref={containerRef}
                     >
                         {filteredLogs.map((log) => (
-                            <ChatMessage
+                            <FlowMessage
                                 key={log.id}
                                 log={log}
                                 searchValue={debouncedSearchValue}
@@ -476,4 +477,4 @@ const ChatAssistantMessages = ({ className }: ChatAssistantMessagesProps) => {
     );
 };
 
-export default ChatAssistantMessages;
+export default FlowAssistantMessages;

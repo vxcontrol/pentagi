@@ -2,11 +2,10 @@ import { useState } from 'react';
 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import FlowAssistantMessages from '@/features/flows/messages/FlowAssistantMessages';
+import FlowAutomationMessages from '@/features/flows/messages/FlowAutomationMessages';
 
-import ChatAssistantMessages from './ChatAssistantMessages';
-import ChatAutomationMessages from './ChatAutomationMessages';
-
-const ChatCentralTabs = () => {
+const FlowCentralTabs = () => {
     const [activeTab, setActiveTab] = useState<string>('automation');
 
     return (
@@ -29,16 +28,17 @@ const ChatCentralTabs = () => {
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="automation"
             >
-                <ChatAutomationMessages />
+                <FlowAutomationMessages />
             </TabsContent>
             <TabsContent
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="assistant"
             >
-                <ChatAssistantMessages />
+                <FlowAssistantMessages />
             </TabsContent>
         </Tabs>
     );
 };
 
-export default ChatCentralTabs;
+export default FlowCentralTabs;
+

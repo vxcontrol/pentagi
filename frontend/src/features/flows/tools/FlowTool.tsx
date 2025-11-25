@@ -5,12 +5,11 @@ import type { SearchLogFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/Markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import FlowAgentIcon from '@/features/flows/agents/FlowAgentIcon';
 import { formatDate, formatName } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
 
-import ChatAgentIcon from './ChatAgentIcon';
-
-interface ChatToolProps {
+interface FlowToolProps {
     log: SearchLogFragmentFragment;
     searchValue?: string;
 }
@@ -24,7 +23,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatTool = ({ log, searchValue = '' }: ChatToolProps) => {
+const FlowTool = ({ log, searchValue = '' }: FlowToolProps) => {
     const { createdAt, engine, executor, initiator, query, result, subtaskId, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
@@ -112,12 +111,12 @@ const ChatTool = ({ log, searchValue = '' }: ChatToolProps) => {
             </div>
             <div className="mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground">
                 <span className="flex items-center gap-0.5">
-                    <ChatAgentIcon
+                    <FlowAgentIcon
                         className="text-muted-foreground"
                         type={initiator}
                     />
                     <span className="text-muted-foreground/50">→</span>
-                    <ChatAgentIcon
+                    <FlowAgentIcon
                         className="text-muted-foreground"
                         type={executor}
                     />
@@ -149,4 +148,4 @@ const ChatTool = ({ log, searchValue = '' }: ChatToolProps) => {
     );
 };
 
-export default memo(ChatTool);
+export default memo(FlowTool);

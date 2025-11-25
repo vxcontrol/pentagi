@@ -19,7 +19,7 @@ import { Log } from '@/lib/log';
 import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 import { useFlow } from '@/providers/FlowProvider';
 
-import ChatTask from './ChatTask';
+import FlowTask from './FlowTask';
 
 const searchFormSchema = z.object({
     search: z.string(),
@@ -34,7 +34,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatTasks = () => {
+const FlowTasks = () => {
     const { flowData, flowId } = useFlow();
 
     const flow = flowData?.flow;
@@ -273,7 +273,7 @@ const ChatTasks = () => {
             {hasTasks ? (
                 <div className="flex-1 space-y-4 overflow-auto pb-4">
                     {sortedTasks.map((task) => (
-                        <ChatTask
+                        <FlowTask
                             key={task.id}
                             searchValue={debouncedSearchValue}
                             task={task}
@@ -292,4 +292,5 @@ const ChatTasks = () => {
     );
 };
 
-export default ChatTasks;
+export default FlowTasks;
+

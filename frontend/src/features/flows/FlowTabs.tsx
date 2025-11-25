@@ -4,23 +4,22 @@ import { useEffect, useRef } from 'react';
 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import FlowAgents from '@/features/flows/agents/FlowAgents';
+import FlowAssistantMessages from '@/features/flows/messages/FlowAssistantMessages';
+import FlowAutomationMessages from '@/features/flows/messages/FlowAutomationMessages';
+import FlowScreenshots from '@/features/flows/screenshots/FlowScreenshots';
+import FlowTasks from '@/features/flows/tasks/FlowTasks';
+import FlowTerminal from '@/features/flows/terminal/FlowTerminal';
+import FlowTools from '@/features/flows/tools/FlowTools';
+import FlowVectorStores from '@/features/flows/vector-stores/FlowVectorStores';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 
-import ChatAgents from './ChatAgents';
-import ChatAssistantMessages from './ChatAssistantMessages';
-import ChatAutomationMessages from './ChatAutomationMessages';
-import ChatScreenshots from './ChatScreenshots';
-import ChatTasks from './ChatTasks';
-import ChatTerminal from './ChatTerminal';
-import ChatTools from './ChatTools';
-import ChatVectorStores from './ChatVectorStores';
-
-interface ChatTabsProps {
+interface FlowTabsProps {
     activeTab: string;
     onTabChange: Dispatch<SetStateAction<string>>;
 }
 
-const ChatTabs = ({ activeTab, onTabChange }: ChatTabsProps) => {
+const FlowTabs = ({ activeTab, onTabChange }: FlowTabsProps) => {
     const { isDesktop } = useBreakpoint();
 
     const previousActiveTabRef = useRef<string>(activeTab);
@@ -62,7 +61,7 @@ const ChatTabs = ({ activeTab, onTabChange }: ChatTabsProps) => {
                     className="mt-2 flex-1 overflow-auto"
                     value="automation"
                 >
-                    <ChatAutomationMessages className="pr-4" />
+                    <FlowAutomationMessages className="pr-4" />
                 </TabsContent>
             )}
             {!isDesktop && (
@@ -70,7 +69,7 @@ const ChatTabs = ({ activeTab, onTabChange }: ChatTabsProps) => {
                     className="mt-2 flex-1 overflow-auto"
                     value="assistant"
                 >
-                    <ChatAssistantMessages className="pr-4" />
+                    <FlowAssistantMessages className="pr-4" />
                 </TabsContent>
             )}
 
@@ -79,45 +78,46 @@ const ChatTabs = ({ activeTab, onTabChange }: ChatTabsProps) => {
                 className="mt-2 flex-1 overflow-auto"
                 value="terminal"
             >
-                <ChatTerminal />
+                <FlowTerminal />
             </TabsContent>
 
             <TabsContent
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="tasks"
             >
-                <ChatTasks />
+                <FlowTasks />
             </TabsContent>
 
             <TabsContent
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="agents"
             >
-                <ChatAgents />
+                <FlowAgents />
             </TabsContent>
 
             <TabsContent
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="tools"
             >
-                <ChatTools />
+                <FlowTools />
             </TabsContent>
 
             <TabsContent
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="vectorStores"
             >
-                <ChatVectorStores />
+                <FlowVectorStores />
             </TabsContent>
 
             <TabsContent
                 className="mt-2 flex-1 overflow-auto pr-4"
                 value="screenshots"
             >
-                <ChatScreenshots />
+                <FlowScreenshots />
             </TabsContent>
         </Tabs>
     );
 };
 
-export default ChatTabs;
+export default FlowTabs;
+

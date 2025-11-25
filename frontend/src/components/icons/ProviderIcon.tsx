@@ -1,3 +1,5 @@
+import type { ComponentType } from 'react';
+
 import type { Provider } from '@/models/Provider';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -11,88 +13,43 @@ import Gemini from './Gemini';
 import Ollama from './Ollama';
 import OpenAi from './OpenAi';
 
-interface ProviderIconProps {
-    className?: string;
-    hasTooltip?: boolean;
-    provider: null | Provider | undefined;
+interface ProviderIconConfig {
+    className: string;
+    icon: ComponentType<{ className?: string }>;
 }
 
-export const ProviderIcon = ({ className = 'size-4', hasTooltip = false, provider }: ProviderIconProps) => {
-    if (!provider || !provider.type) {
+interface ProviderIconProps {
+    className?: string;
+    provider: null | Provider | undefined;
+    tooltip?: string;
+}
+
+const providerIcons: Record<ProviderType, ProviderIconConfig> = {
+    [ProviderType.Anthropic]: { className: 'text-purple-500', icon: Anthropic },
+    [ProviderType.Bedrock]: { className: 'text-blue-500', icon: Bedrock },
+    [ProviderType.Custom]: { className: 'text-blue-500', icon: Custom },
+    [ProviderType.Gemini]: { className: 'text-blue-500', icon: Gemini },
+    [ProviderType.Ollama]: { className: 'text-blue-500', icon: Ollama },
+    [ProviderType.Openai]: { className: 'text-blue-500', icon: OpenAi },
+};
+const defaultProviderIcon: ProviderIconConfig = { className: 'text-blue-500', icon: Custom };
+
+export const ProviderIcon = ({ className = 'size-4', provider, tooltip }: ProviderIconProps) => {
+    if (!provider?.type) {
         return null;
     }
 
-    const iconClassName = cn(className, hasTooltip ? 'cursor-pointer' : '');
-    const tooltip = provider.name === provider.type ? provider.name : `${provider.name} - ${provider.type}`;
+    const { className: defaultClassName, icon: Icon } = providerIcons[provider.type] || defaultProviderIcon;
+    const iconElement = <Icon className={cn('shrink-0', defaultClassName, className, tooltip && 'cursor-pointer')} />;
 
-    const renderIcon = () => {
-        switch (provider.type) {
-            case ProviderType.Anthropic: {
-                return (
-                    <Anthropic
-                        aria-label="Anthropic"
-                        className={cn(iconClassName, 'text-purple-500')}
-                    />
-                );
-            }
-
-            case ProviderType.Bedrock: {
-                return (
-                    <Bedrock
-                        aria-label="Bedrock"
-                        className={cn(iconClassName, 'text-blue-500')}
-                    />
-                );
-            }
-
-            case ProviderType.Gemini: {
-                return (
-                    <Gemini
-                        aria-label="Gemini"
-                        className={cn(iconClassName, 'text-blue-500')}
-                    />
-                );
-            }
-
-            case ProviderType.Ollama: {
-                return (
-                    <Ollama
-                        aria-label="Ollama"
-                        className={cn(iconClassName, 'text-blue-500')}
-                    />
-                );
-            }
-
-            case ProviderType.Openai: {
-                return (
-                    <OpenAi
-                        aria-label="OpenAI"
-                        className={cn(iconClassName, 'text-blue-500')}
-                    />
-                );
-            }
-
-            default: {
-                return (
-                    <Custom
-                        aria-label="Custom provider"
-                        className={cn(iconClassName, 'text-blue-500')}
-                    />
-                );
-            }
-        }
-    };
-
-    const icon = renderIcon();
-
-    if (hasTooltip) {
-        return (
-            <Tooltip>
-                <TooltipTrigger asChild>{icon}</TooltipTrigger>
-                <TooltipContent>{tooltip}</TooltipContent>
-            </Tooltip>
-        );
+    if (!tooltip) {
+        return iconElement;
     }
 
-    return icon;
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
+            <TooltipContent>{tooltip}</TooltipContent>
+        </Tooltip>
+    );
 };
