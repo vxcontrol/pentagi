@@ -23,15 +23,18 @@ import SettingsProvider from '@/pages/settings/SettingsProvider';
 import SettingsProviders from '@/pages/settings/SettingsProviders';
 import { FlowProvider } from '@/providers/FlowProvider';
 import { ProvidersProvider } from '@/providers/ProvidersProvider';
+import { SystemSettingsProvider } from '@/providers/SystemSettingsProvider';
 import ThemeProvider from '@/providers/ThemeProvider';
 import { UserProvider } from '@/providers/UserProvider';
 
 const App = () => {
     const renderProtectedRoute = () => (
         <ProtectedRoute>
-            <ProvidersProvider>
-                <AppLayout />
-            </ProvidersProvider>
+            <SystemSettingsProvider>
+                <ProvidersProvider>
+                    <AppLayout />
+                </ProvidersProvider>
+            </SystemSettingsProvider>
         </ProtectedRoute>
     );
 
@@ -135,7 +138,9 @@ const App = () => {
                                 <Route
                                     element={
                                         <ProtectedRoute>
-                                            <Report />
+                                            <SystemSettingsProvider>
+                                                <Report />
+                                            </SystemSettingsProvider>
                                         </ProtectedRoute>
                                     }
                                     path="flows/:flowId/report"

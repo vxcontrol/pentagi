@@ -5,9 +5,9 @@ import type { SubtaskFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/Markdown';
 
-import ChatTaskStatusIcon from './ChatTaskStatusIcon';
+import FlowTaskStatusIcon from './FlowTaskStatusIcon';
 
-interface ChatSubtaskProps {
+interface FlowSubtaskProps {
     searchValue?: string;
     subtask: SubtaskFragmentFragment;
 }
@@ -21,7 +21,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatSubtask = ({ searchValue = '', subtask }: ChatSubtaskProps) => {
+const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
     const { description, id, result, status, title } = subtask;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
     const hasDetails = description || result;
@@ -58,7 +58,7 @@ const ChatSubtask = ({ searchValue = '', subtask }: ChatSubtaskProps) => {
     return (
         <div className="border-l pl-4">
             <div className="flex gap-2">
-                <ChatTaskStatusIcon
+                <FlowTaskStatusIcon
                     className="mt-px"
                     status={status}
                     tooltip={`Subtask ID: ${id}`}
@@ -120,4 +120,5 @@ const ChatSubtask = ({ searchValue = '', subtask }: ChatSubtaskProps) => {
     );
 };
 
-export default memo(ChatSubtask);
+export default memo(FlowSubtask);
+

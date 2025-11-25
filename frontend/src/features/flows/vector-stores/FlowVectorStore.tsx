@@ -5,12 +5,12 @@ import type { VectorStoreLogFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/Markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import FlowAgentIcon from '@/features/flows/agents/FlowAgentIcon';
 import { VectorStoreAction } from '@/graphql/types';
 import { formatDate } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
 
-import ChatAgentIcon from './ChatAgentIcon';
-import ChatVectorStoreActionIcon from './ChatVectorStoreActionIcon';
+import FlowVectorStoreActionIcon from './FlowVectorStoreActionIcon';
 
 const getDescription = (log: VectorStoreLogFragmentFragment) => {
     const { action, filter } = log;
@@ -53,7 +53,7 @@ const getDescription = (log: VectorStoreLogFragmentFragment) => {
     return description;
 };
 
-interface ChatVectorStoreProps {
+interface FlowVectorStoreProps {
     log: VectorStoreLogFragmentFragment;
     searchValue?: string;
 }
@@ -67,7 +67,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
+const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
     const { action, createdAt, executor, initiator, query, result, subtaskId, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
@@ -116,7 +116,7 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
                 <div className="flex flex-col">
                     <div className="cursor-pointer text-sm font-semibold">
                         <span className="inline-flex items-center gap-1">
-                            <ChatVectorStoreActionIcon action={action} />
+                            <FlowVectorStoreActionIcon action={action} />
                             <span>{description}</span>
                         </span>
                     </div>
@@ -152,12 +152,12 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
             </div>
             <div className="mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground">
                 <span className="flex items-center gap-0.5">
-                    <ChatAgentIcon
+                    <FlowAgentIcon
                         className="text-muted-foreground"
                         type={initiator}
                     />
                     <span className="text-muted-foreground/50">→</span>
-                    <ChatAgentIcon
+                    <FlowAgentIcon
                         className="text-muted-foreground"
                         type={executor}
                     />
@@ -189,4 +189,5 @@ const ChatVectorStore = ({ log, searchValue = '' }: ChatVectorStoreProps) => {
     );
 };
 
-export default memo(ChatVectorStore);
+export default memo(FlowVectorStore);
+

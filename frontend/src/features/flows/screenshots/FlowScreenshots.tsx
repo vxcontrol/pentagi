@@ -10,13 +10,13 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useFlow } from '@/providers/FlowProvider';
 
-import ChatScreenshot from './ChatScreenshot';
+import FlowScreenshot from './FlowScreenshot';
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatScreenshots = () => {
+const FlowScreenshots = () => {
     const { flowData, flowId } = useFlow();
 
     const screenshots = useMemo(() => flowData?.screenshots ?? [], [flowData?.screenshots]);
@@ -123,7 +123,7 @@ const ChatScreenshots = () => {
             {hasScreenshots ? (
                 <div className="flex-1 space-y-4 overflow-auto pb-4">
                     {filteredScreenshots.map((screenshot) => (
-                        <ChatScreenshot
+                        <FlowScreenshot
                             key={screenshot.id}
                             screenshot={screenshot}
                         />
@@ -141,4 +141,5 @@ const ChatScreenshots = () => {
     );
 };
 
-export default ChatScreenshots;
+export default FlowScreenshots;
+

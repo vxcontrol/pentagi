@@ -105,164 +105,173 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         return expirationDate > now;
     }, [authInfo]);
 
-    const logout = useCallback(async (returnUrl?: string) => {
-        const currentPath = location.pathname;
-        const finalReturnUrl = returnUrl || getReturnUrlParam(currentPath);
+    const logout = useCallback(
+        async (returnUrl?: string) => {
+            const currentPath = location.pathname;
+            const finalReturnUrl = returnUrl || getReturnUrlParam(currentPath);
 
-        try {
-            await axios.get('/auth/logout');
-            toast.success('Successfully logged out');
-        } catch {
-            toast.error('Logout failed, but clearing local session');
-        } finally {
-            clearAuth();
-            window.location.href = `/login${finalReturnUrl}`;
-        }
-    }, []);
+            try {
+                await axios.get('/auth/logout');
+                toast.success('Successfully logged out');
+            } catch {
+                toast.error('Logout failed, but clearing local session');
+            } finally {
+                clearAuth();
+                window.location.href = `/login${finalReturnUrl}`;
+            }
+        },
+        [clearAuth, location.pathname],
+    );
 
-    const login = useCallback(async (credentials: LoginCredentials): Promise<LoginResult> => {
-        try {
-            const loginResponse = await axios.post<unknown, { data?: unknown; error?: string; status: string }>(
-                '/auth/login',
-                credentials,
+    const login = useCallback(
+        async (credentials: LoginCredentials): Promise<LoginResult> => {
+            try {
+                const loginResponse = await axios.post<unknown, { data?: unknown; error?: string; status: string }>(
+                    '/auth/login',
+                    credentials,
+                );
+
+                if (loginResponse?.status !== 'success') {
+                    const errorMessage = 'Invalid login or password';
+                    toast.error(errorMessage);
+
+                    return { error: errorMessage, success: false };
+                }
+
+                // After login, backend set cookie, so we need to get fresh auth info
+                const infoResponse: AuthInfoResponse = await axios.get('/info');
+
+                if (infoResponse?.status !== 'success' || !infoResponse.data) {
+                    const errorMessage = 'Failed to load user information';
+                    toast.error(errorMessage);
+
+                    return { error: errorMessage, success: false };
+                }
+
+                // Save auth info
+                setAuth(infoResponse.data);
+
+                // Check if password change is required for local users
+                if (infoResponse.data.user?.type === 'local' && infoResponse.data.user.password_change_required) {
+                    toast.warning('Password change required');
+
+                    return { passwordChangeRequired: true, success: true };
+                }
+
+                // toast.success('Successfully logged in');
+                return { success: true };
+            } catch {
+                const errorMessage = 'Login failed. Please try again.';
+                toast.error(errorMessage);
+
+                return { error: errorMessage, success: false };
+            }
+        },
+        [setAuth],
+    );
+
+    const loginWithOAuth = useCallback(
+        async (provider: OAuthProvider): Promise<LoginResult> => {
+            const returnOAuthUri = '/oauth/result';
+            const width = 500;
+            const height = 600;
+            const left = window.screenX + (window.outerWidth - width) / 2;
+            const top = window.screenY + (window.outerHeight - height) / 2;
+
+            const popup = window.open(
+                `${baseUrl}/auth/authorize?provider=${provider}&return_uri=${returnOAuthUri}`,
+                `${provider} Sign In`,
+                `width=${width},height=${height},left=${left},top=${top}`,
             );
 
-            if (loginResponse?.status !== 'success') {
-                const errorMessage = 'Invalid login or password';
+            if (!popup) {
+                const errorMessage = 'Popup blocked. Please allow popups for this site.';
                 toast.error(errorMessage);
 
-                return { error: errorMessage, success: false };
-            }
-
-            // After login, backend set cookie, so we need to get fresh auth info
-            const infoResponse: AuthInfoResponse = await axios.get('/info');
-
-            if (infoResponse?.status !== 'success' || !infoResponse.data) {
-                const errorMessage = 'Failed to load user information';
-                toast.error(errorMessage);
-
-                return { error: errorMessage, success: false };
-            }
-
-            // Save auth info
-            setAuth(infoResponse.data);
-
-            // Check if password change is required for local users
-            if (infoResponse.data.user?.type === 'local' && infoResponse.data.user.password_change_required) {
-                toast.warning('Password change required');
-
-                return { passwordChangeRequired: true, success: true };
-            }
-
-            // toast.success('Successfully logged in');
-            return { success: true };
-        } catch {
-            const errorMessage = 'Login failed. Please try again.';
-            toast.error(errorMessage);
-
-            return { error: errorMessage, success: false };
-        }
-    }, []);
-
-    const loginWithOAuth = useCallback(async (provider: OAuthProvider): Promise<LoginResult> => {
-        const returnOAuthUri = '/oauth/result';
-        const width = 500;
-        const height = 600;
-        const left = window.screenX + (window.outerWidth - width) / 2;
-        const top = window.screenY + (window.outerHeight - height) / 2;
-
-        const popup = window.open(
-            `${baseUrl}/auth/authorize?provider=${provider}&return_uri=${returnOAuthUri}`,
-            `${provider} Sign In`,
-            `width=${width},height=${height},left=${left},top=${top}`,
-        );
-
-        if (!popup) {
-            const errorMessage = 'Popup blocked. Please allow popups for this site.';
-            toast.error(errorMessage);
-
-            return {
-                error: errorMessage,
-                success: false,
-            };
-        }
-
-        return new Promise<LoginResult>((resolve) => {
-            const messageHandler = async (event: MessageEvent) => {
-                if (event.origin !== window.location.origin || event.data?.type !== 'oauth-result') {
-                    return;
-                }
-
-                window.removeEventListener('message', messageHandler);
-
-                const cleanup = () => {
-                    if (popup && !popup.closed) {
-                        popup.close();
-                    }
-                };
-
-                if (event.data.status === 'success') {
-                    try {
-                        const info: AuthInfoResponse = await axios.get('/info');
-
-                        if (info?.status === 'success' && info.data?.type === 'user') {
-                            setAuth(info.data);
-                            cleanup();
-                            // toast.success('Successfully logged in');
-                            resolve({ success: true });
-
-                            return;
-                        }
-                    } catch (error) {
-                        // In case of error, fall through to common handling below
-                        console.error('Error during OAuth result handling:', error);
-                    }
-                }
-
-                cleanup();
-                const errorMessage = event.data.error || 'Authentication failed';
-                toast.error(errorMessage);
-                resolve({
+                return {
                     error: errorMessage,
                     success: false,
-                });
-            };
+                };
+            }
 
-            window.addEventListener('message', messageHandler);
+            return new Promise<LoginResult>((resolve) => {
+                const messageHandler = async (event: MessageEvent) => {
+                    if (event.origin !== window.location.origin || event.data?.type !== 'oauth-result') {
+                        return;
+                    }
 
-            const popupCheckInterval = 500;
-            const popupTimeout = 300000;
-
-            const popupCheck = setInterval(() => {
-                if (popup?.closed) {
-                    clearInterval(popupCheck);
                     window.removeEventListener('message', messageHandler);
-                    const errorMessage = 'Authentication cancelled';
-                    toast.info(errorMessage);
+
+                    const cleanup = () => {
+                        if (popup && !popup.closed) {
+                            popup.close();
+                        }
+                    };
+
+                    if (event.data.status === 'success') {
+                        try {
+                            const info: AuthInfoResponse = await axios.get('/info');
+
+                            if (info?.status === 'success' && info.data?.type === 'user') {
+                                setAuth(info.data);
+                                cleanup();
+                                // toast.success('Successfully logged in');
+                                resolve({ success: true });
+
+                                return;
+                            }
+                        } catch (error) {
+                            // In case of error, fall through to common handling below
+                            console.error('Error during OAuth result handling:', error);
+                        }
+                    }
+
+                    cleanup();
+                    const errorMessage = event.data.error || 'Authentication failed';
+                    toast.error(errorMessage);
                     resolve({
                         error: errorMessage,
                         success: false,
                     });
-                }
-            }, popupCheckInterval);
+                };
 
-            setTimeout(() => {
-                clearInterval(popupCheck);
-                window.removeEventListener('message', messageHandler);
+                window.addEventListener('message', messageHandler);
 
-                if (popup && !popup.closed) {
-                    popup.close();
-                }
+                const popupCheckInterval = 500;
+                const popupTimeout = 300000;
 
-                const errorMessage = 'Authentication timeout';
-                toast.error(errorMessage);
-                resolve({
-                    error: errorMessage,
-                    success: false,
-                });
-            }, popupTimeout);
-        });
-    }, []);
+                const popupCheck = setInterval(() => {
+                    if (popup?.closed) {
+                        clearInterval(popupCheck);
+                        window.removeEventListener('message', messageHandler);
+                        const errorMessage = 'Authentication cancelled';
+                        toast.info(errorMessage);
+                        resolve({
+                            error: errorMessage,
+                            success: false,
+                        });
+                    }
+                }, popupCheckInterval);
+
+                setTimeout(() => {
+                    clearInterval(popupCheck);
+                    window.removeEventListener('message', messageHandler);
+
+                    if (popup && !popup.closed) {
+                        popup.close();
+                    }
+
+                    const errorMessage = 'Authentication timeout';
+                    toast.error(errorMessage);
+                    resolve({
+                        error: errorMessage,
+                        success: false,
+                    });
+                }, popupTimeout);
+            });
+        },
+        [setAuth],
+    );
 
     // Update auth state on route changes
     useEffect(() => {

@@ -8,11 +8,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { formatDate } from '@/lib/utils/format';
 import { copyMessageToClipboard } from '@/lib/сlipboard';
 
-import ChatAgentIcon from './ChatAgentIcon';
+import FlowAgentIcon from './FlowAgentIcon';
 
 const taskPreviewLength = 500;
 
-interface ChatAgentProps {
+interface FlowAgentProps {
     log: AgentLogFragmentFragment;
     searchValue?: string;
 }
@@ -26,7 +26,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
+const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
     const { createdAt, executor, initiator, result, subtaskId, task, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
@@ -109,12 +109,12 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
             </div>
             <div className="mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground">
                 <span className="flex items-center gap-0.5">
-                    <ChatAgentIcon
+                    <FlowAgentIcon
                         className="text-muted-foreground"
                         type={initiator}
                     />
                     <span className="text-muted-foreground/50">→</span>
-                    <ChatAgentIcon
+                    <FlowAgentIcon
                         className="text-muted-foreground"
                         type={executor}
                     />
@@ -146,4 +146,4 @@ const ChatAgent = ({ log, searchValue = '' }: ChatAgentProps) => {
     );
 };
 
-export default memo(ChatAgent);
+export default memo(FlowAgent);

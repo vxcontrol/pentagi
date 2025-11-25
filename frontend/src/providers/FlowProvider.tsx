@@ -6,6 +6,7 @@ import type { FlowFormValues } from '@/features/flows/FlowForm';
 import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery } from '@/graphql/types';
 
 import {
+    ResultType,
     StatusType,
     useAgentLogAddedSubscription,
     useAssistantCreatedSubscription,
@@ -47,7 +48,6 @@ interface FlowContextValue {
     initiateAssistantCreation: () => void;
     isAssistantsLoading: boolean;
     isLoading: boolean;
-    refetchAssistantLogs: () => void;
     selectAssistant: (assistantId: null | string) => void;
     selectedAssistantId: null | string;
     stopAssistant: (assistantId: string) => Promise<void>;
@@ -113,7 +113,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         return assistants?.[0]?.id ?? null;
     }, [flowId, selectedAssistantIds, assistants]);
 
-    const { data: assistantLogsData, refetch: refetchAssistantLogs } = useAssistantLogsQuery({
+    const { data: assistantLogsData } = useAssistantLogsQuery({
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-first',
         skip: !flowId || !selectedAssistantId || selectedAssistantId === '',
@@ -185,13 +185,6 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             Log.error('Error loading flow:', flowError);
         }
     }, [flowError]);
-
-    // Helper function to refetch assistant logs if needed
-    const handleRefetchAssistantLogs = useCallback(() => {
-        if (selectedAssistantId && refetchAssistantLogs) {
-            refetchAssistantLogs();
-        }
-    }, [selectedAssistantId, refetchAssistantLogs]);
 
     const submitAutomationMessage = useCallback(
         async (values: FlowFormValues) => {
@@ -290,8 +283,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         useAgents,
                     },
                 });
-
-                handleRefetchAssistantLogs();
+                // Cache will be automatically updated via subscriptions
             } catch (error) {
                 const description =
                     error instanceof Error ? error.message : 'An error occurred while calling assistant';
@@ -301,7 +293,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 Log.error('Error calling assistant:', error);
             }
         },
-        [flowId, callAssistantMutation, handleRefetchAssistantLogs],
+        [flowId, callAssistantMutation],
     );
 
     const stopAssistant = useCallback(
@@ -317,8 +309,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         flowId,
                     },
                 });
-
-                handleRefetchAssistantLogs();
+                // Cache will be automatically updated via mutation policy and subscriptions
             } catch (error) {
                 const description =
                     error instanceof Error ? error.message : 'An error occurred while stopping assistant';
@@ -328,7 +319,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 Log.error('Error stopping assistant:', error);
             }
         },
-        [flowId, stopAssistantMutation, handleRefetchAssistantLogs],
+        [flowId, stopAssistantMutation],
     );
 
     const deleteAssistant = useCallback(
@@ -341,7 +332,11 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 const wasSelected = selectedAssistantId === assistantId;
 
                 await deleteAssistantMutation({
+                    optimisticResponse: {
+                        deleteAssistant: ResultType.Success,
+                    },
                     update: (cache) => {
+                        // Remove the assistant from Apollo cache
                         cache.evict({ id: `Assistant:${assistantId}` });
                         cache.gc();
                     },
@@ -350,6 +345,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         flowId,
                     },
                 });
+                // List will be automatically updated via mutation policy and assistantDeleted subscription
 
                 if (wasSelected) {
                     selectAssistant(null);
@@ -380,7 +376,6 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             initiateAssistantCreation,
             isAssistantsLoading,
             isLoading,
-            refetchAssistantLogs,
             selectAssistant,
             selectedAssistantId,
             stopAssistant,
@@ -400,7 +395,6 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             initiateAssistantCreation,
             isAssistantsLoading,
             isLoading,
-            refetchAssistantLogs,
             selectAssistant,
             selectedAssistantId,
             stopAssistant,

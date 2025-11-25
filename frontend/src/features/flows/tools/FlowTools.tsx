@@ -10,13 +10,13 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useFlow } from '@/providers/FlowProvider';
 
-import ChatTool from './ChatTool';
+import FlowTool from './FlowTool';
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatTools = () => {
+const FlowTools = () => {
     const { flowData, flowId } = useFlow();
 
     const logs = useMemo(() => flowData?.searchLogs ?? [], [flowData?.searchLogs]);
@@ -141,7 +141,7 @@ const ChatTools = () => {
             {hasLogs ? (
                 <div className="flex-1 space-y-4 overflow-auto pb-4">
                     {filteredLogs.map((log) => (
-                        <ChatTool
+                        <FlowTool
                             key={log.id}
                             log={log}
                             searchValue={debouncedSearchValue}
@@ -161,4 +161,4 @@ const ChatTools = () => {
     );
 };
 
-export default ChatTools;
+export default FlowTools;

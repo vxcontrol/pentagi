@@ -4,10 +4,10 @@ import type { TaskFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/Markdown';
 
-import ChatSubtask from './ChatSubtask';
-import ChatTaskStatusIcon from './ChatTaskStatusIcon';
+import FlowSubtask from './FlowSubtask';
+import FlowTaskStatusIcon from './FlowTaskStatusIcon';
 
-interface ChatTaskProps {
+interface FlowTaskProps {
     searchValue?: string;
     task: TaskFragmentFragment;
 }
@@ -21,7 +21,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const ChatTask = ({ searchValue = '', task }: ChatTaskProps) => {
+const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
     const { id, result, status, subtasks, title } = task;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
 
@@ -59,7 +59,7 @@ const ChatTask = ({ searchValue = '', task }: ChatTaskProps) => {
     return (
         <div className="rounded-lg border p-4 shadow-sm">
             <div className="flex gap-2">
-                <ChatTaskStatusIcon
+                <FlowTaskStatusIcon
                     className="mt-px"
                     status={status}
                     tooltip={`Task ID: ${id}`}
@@ -97,7 +97,7 @@ const ChatTask = ({ searchValue = '', task }: ChatTaskProps) => {
             {hasSubtasks ? (
                 <div className="mt-2 space-y-2">
                     {sortedSubtasks.map((subtask) => (
-                        <ChatSubtask
+                        <FlowSubtask
                             key={subtask.id}
                             searchValue={searchValue}
                             subtask={subtask}
@@ -111,4 +111,5 @@ const ChatTask = ({ searchValue = '', task }: ChatTaskProps) => {
     );
 };
 
-export default memo(ChatTask);
+export default memo(FlowTask);
+

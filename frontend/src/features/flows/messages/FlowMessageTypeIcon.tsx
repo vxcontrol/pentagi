@@ -40,7 +40,7 @@ const messageTypeIcons: Record<MessageLogType, LucideIcon> = {
 };
 const defaultIcon = Brain;
 
-const ChatMessageTypeIcon = ({ className, type, tooltip = type }: MessageTypeIconProps) => {
+const FlowMessageTypeIcon = ({ className, type, tooltip = type }: MessageTypeIconProps) => {
     const Icon = type ? messageTypeIcons[type] || defaultIcon : defaultIcon;
     const iconElement = <Icon className={cn('size-3 shrink-0', tooltip && 'cursor-pointer', className)} />;
 
@@ -56,4 +56,5 @@ const ChatMessageTypeIcon = ({ className, type, tooltip = type }: MessageTypeIco
     );
 };
 
-export default ChatMessageTypeIcon;
+export default FlowMessageTypeIcon;
+

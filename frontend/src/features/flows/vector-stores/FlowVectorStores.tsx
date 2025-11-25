@@ -10,13 +10,13 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useFlow } from '@/providers/FlowProvider';
 
-import ChatVectorStore from './ChatVectorStore';
+import FlowVectorStore from './FlowVectorStore';
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatVectorStores = () => {
+const FlowVectorStores = () => {
     const { flowData, flowId } = useFlow();
 
     const logs = useMemo(() => flowData?.vectorStoreLogs ?? [], [flowData?.vectorStoreLogs]);
@@ -142,7 +142,7 @@ const ChatVectorStores = () => {
             {hasLogs ? (
                 <div className="flex-1 space-y-4 overflow-auto pb-4">
                     {filteredLogs.map((log) => (
-                        <ChatVectorStore
+                        <FlowVectorStore
                             key={log.id}
                             log={log}
                             searchValue={debouncedSearchValue}
@@ -164,4 +164,5 @@ const ChatVectorStores = () => {
     );
 };
 
-export default ChatVectorStores;
+export default FlowVectorStores;
+

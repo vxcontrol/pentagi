@@ -23,7 +23,7 @@ import { AgentType } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
 
-interface ChatAgentIconProps {
+interface FlowAgentIconProps {
     className?: string;
     tooltip?: string;
     type?: AgentType;
@@ -48,7 +48,7 @@ const icons: Record<AgentType, LucideIcon> = {
 };
 const defaultIcon = HelpCircle;
 
-const ChatAgentIcon = ({ className, type, tooltip = type }: ChatAgentIconProps) => {
+const FlowAgentIcon = ({ className, type, tooltip = type }: FlowAgentIconProps) => {
     const Icon = type ? icons[type] || defaultIcon : defaultIcon;
     const iconElement = <Icon className={cn('size-3 shrink-0', tooltip && 'cursor-pointer', className)} />;
 
@@ -64,4 +64,4 @@ const ChatAgentIcon = ({ className, type, tooltip = type }: ChatAgentIconProps) 
     );
 };
 
-export default ChatAgentIcon;
+export default FlowAgentIcon;

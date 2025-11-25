@@ -7,7 +7,7 @@ import { StatusType } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
 
-interface ChatTaskStatusIconProps {
+interface FlowTaskStatusIconProps {
     className?: string;
     status?: StatusType;
     tooltip?: string;
@@ -22,7 +22,7 @@ const statusIcons: Record<StatusType, { className: string; icon: LucideIcon }> =
 };
 const defaultIcon = { className: 'text-muted-foreground', icon: CircleDashed };
 
-const ChatTaskStatusIcon = ({ className, status, tooltip }: ChatTaskStatusIconProps) => {
+const FlowTaskStatusIcon = ({ className, status, tooltip }: FlowTaskStatusIconProps) => {
     const { className: defaultClassName, icon: Icon } = status ? statusIcons[status] || defaultIcon : defaultIcon;
     const iconElement = (
         <Icon className={cn('size-4 shrink-0', defaultClassName, tooltip && 'cursor-pointer', className)} />
@@ -40,4 +40,5 @@ const ChatTaskStatusIcon = ({ className, status, tooltip }: ChatTaskStatusIconPr
     );
 };
 
-export default ChatTaskStatusIcon;
+export default FlowTaskStatusIcon;
+

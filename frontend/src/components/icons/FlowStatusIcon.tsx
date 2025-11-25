@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react';
+
 import { CircleCheck, CircleDashed, CircleOff, CircleX, Loader2 } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -6,86 +8,35 @@ import { cn } from '@/lib/utils';
 
 interface FlowStatusIconProps {
     className?: string;
-    hasTooltip?: boolean;
     status?: null | StatusType | undefined;
+    tooltip?: string;
 }
 
-export const FlowStatusIcon = ({ className = 'size-4', hasTooltip = false, status }: FlowStatusIconProps) => {
+const statusIcons: Record<StatusType, { className: string; icon: LucideIcon }> = {
+    [StatusType.Created]: { className: 'text-blue-500', icon: CircleDashed },
+    [StatusType.Failed]: { className: 'text-red-500', icon: CircleX },
+    [StatusType.Finished]: { className: 'text-green-500', icon: CircleCheck },
+    [StatusType.Running]: { className: 'animate-spin text-purple-500', icon: Loader2 },
+    [StatusType.Waiting]: { className: 'text-yellow-500', icon: CircleDashed },
+};
+const defaultIcon = { className: 'text-muted-foreground', icon: CircleOff };
+
+export const FlowStatusIcon = ({ className = 'size-4', status, tooltip }: FlowStatusIconProps) => {
     if (!status) {
         return null;
     }
 
-    const iconClassName = cn(className, hasTooltip ? 'cursor-pointer' : '');
-    const tooltip = status;
+    const { className: defaultClassName, icon: Icon } = statusIcons[status] || defaultIcon;
+    const iconElement = <Icon className={cn('shrink-0', defaultClassName, className, tooltip && 'cursor-pointer')} />;
 
-    const renderIcon = () => {
-        switch (status) {
-            case StatusType.Created: {
-                return (
-                    <CircleDashed
-                        aria-label="created"
-                        className={cn(iconClassName, 'text-blue-500')}
-                    />
-                );
-            }
-
-            case StatusType.Failed: {
-                return (
-                    <CircleX
-                        aria-label="failed"
-                        className={cn(iconClassName, 'text-red-500')}
-                    />
-                );
-            }
-
-            case StatusType.Finished: {
-                return (
-                    <CircleCheck
-                        aria-label="finished"
-                        className={cn(iconClassName, 'text-green-500')}
-                    />
-                );
-            }
-
-            case StatusType.Running: {
-                return (
-                    <Loader2
-                        aria-label="running"
-                        className={cn(iconClassName, 'animate-spin text-purple-500')}
-                    />
-                );
-            }
-
-            case StatusType.Waiting: {
-                return (
-                    <CircleDashed
-                        aria-label="waiting"
-                        className={cn(iconClassName, 'text-yellow-500')}
-                    />
-                );
-            }
-
-            default: {
-                return (
-                    <CircleOff
-                        aria-label="unknown status"
-                        className={cn(iconClassName, 'text-muted-foreground')}
-                    />
-                );
-            }
-        }
-    };
-
-    const icon = renderIcon();
-
-    if (hasTooltip) {
-        return (
-            <Tooltip>
-                <TooltipTrigger asChild>{icon}</TooltipTrigger>
-                <TooltipContent>{tooltip}</TooltipContent>
-            </Tooltip>
-        );
+    if (!tooltip) {
+        return iconElement;
     }
 
-    return icon;
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
+            <TooltipContent>{tooltip}</TooltipContent>
+        </Tooltip>
+    );
 };

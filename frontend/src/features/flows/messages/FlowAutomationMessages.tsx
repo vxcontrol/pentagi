@@ -9,14 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { StatusType } from '@/graphql/types';
+import { useChatScroll } from '@/hooks/use-chat-scroll';
 import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/FlowProvider';
 
-import { useChatScroll } from '../../hooks/use-chat-scroll';
-import { FlowForm, type FlowFormValues } from '../flows/FlowForm';
-import ChatMessage from './ChatMessage';
+import { FlowForm, type FlowFormValues } from '../FlowForm';
+import FlowMessage from './FlowMessage';
 
-interface ChatAutomationMessagesProps {
+interface FlowAutomationMessagesProps {
     className?: string;
 }
 
@@ -24,7 +24,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
+const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
     const { flowData, flowId, flowStatus, stopAutomation, submitAutomationMessage } = useFlow();
 
     const logs = useMemo(() => flowData?.messageLogs ?? [], [flowData?.messageLogs]);
@@ -198,7 +198,7 @@ const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
                         ref={containerRef}
                     >
                         {filteredLogs.map((log) => (
-                            <ChatMessage
+                            <FlowMessage
                                 key={log.id}
                                 log={log}
                                 searchValue={debouncedSearchValue}
@@ -250,4 +250,4 @@ const ChatAutomationMessages = ({ className }: ChatAutomationMessagesProps) => {
     );
 };
 
-export default ChatAutomationMessages;
+export default FlowAutomationMessages;
