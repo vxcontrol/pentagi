@@ -4,8 +4,8 @@ import { ArrowDown, ArrowUp, Eye, FileText, GitFork, Loader2, MoreHorizontal, Pa
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { FlowStatusIcon } from '@/components/icons/FlowStatusIcon';
-import ConfirmationDialog from '@/components/shared/ConfirmationDialog';
+import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { StatusType } from '@/graphql/types';
-import { type Flow, useFlows } from '@/providers/FlowsProvider';
+import { type Flow, useFlows } from '@/providers/flows-provider';
 
 const statusConfig: Record<
     StatusType,
