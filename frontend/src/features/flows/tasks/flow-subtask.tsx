@@ -5,7 +5,7 @@ import type { SubtaskFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/markdown';
 
-import FlowTaskStatusIcon from './FlowTaskStatusIcon';
+import FlowTaskStatusIcon from './flow-task-status-icon';
 
 interface FlowSubtaskProps {
     searchValue?: string;
@@ -121,4 +121,3 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
 };
 
 export default memo(FlowSubtask);
-

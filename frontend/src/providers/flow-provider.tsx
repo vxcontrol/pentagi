@@ -335,17 +335,11 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                     optimisticResponse: {
                         deleteAssistant: ResultType.Success,
                     },
-                    update: (cache) => {
-                        // Remove the assistant from Apollo cache
-                        cache.evict({ id: `Assistant:${assistantId}` });
-                        cache.gc();
-                    },
                     variables: {
                         assistantId,
                         flowId,
                     },
                 });
-                // List will be automatically updated via mutation policy and assistantDeleted subscription
 
                 if (wasSelected) {
                     selectAssistant(null);

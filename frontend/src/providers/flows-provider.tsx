@@ -51,8 +51,6 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
     const isLoading = loading && networkStatus === NetworkStatus.loading;
     const flows = useMemo(() => flowsData?.flows ?? [], [flowsData?.flows]);
 
-    // Global flow subscriptions - always active regardless of selected flow
-    // These subscriptions do not require flowId and listen to ALL flows in the system
     useFlowCreatedSubscription();
     useFlowDeletedSubscription();
     useFlowUpdatedSubscription();
@@ -169,14 +167,8 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
                     optimisticResponse: {
                         deleteFlow: ResultType.Success,
                     },
-                    update: (cache) => {
-                        // Remove the flow from Apollo cache
-                        cache.evict({ id: `Flow:${flowId}` });
-                        cache.gc();
-                    },
                     variables: { flowId },
                 });
-                // List will be automatically updated via mutation policy and flowDeleted subscription
 
                 toast.success('Flow deleted successfully', {
                     description: flowDescription,
