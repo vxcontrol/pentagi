@@ -14,7 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { useUser } from '@/providers/user-provider';
 
-import { PasswordChangeForm } from './PasswordChangeForm';
+import { PasswordChangeForm } from './password-change-form';
 
 const formSchema = z.object({
     mail: z
