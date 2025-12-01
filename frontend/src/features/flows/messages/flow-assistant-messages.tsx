@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { Check, ChevronDown, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ListFilter, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -12,9 +12,9 @@ import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { StatusType } from '@/graphql/types';
 import { useChatScroll } from '@/hooks/use-chat-scroll';
@@ -382,6 +382,11 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         return selectedAssistant.useAgents;
     }, [selectedAssistant, settings?.assistantUseAgents, isAssistantCreating]);
 
+    // Check if search filter is active
+    const hasActiveFilters = useMemo(() => {
+        return !!searchValue.trim();
+    }, [searchValue]);
+
     // Memoize filtered logs to avoid recomputing on every render
     // Use debouncedSearchValue for filtering to improve performance
     const filteredLogs = useMemo(() => {
@@ -475,6 +480,13 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         }
     };
 
+    // Reset filters handler
+    const handleResetFilters = () => {
+        form.reset({ search: '' });
+        setDebouncedSearchValue('');
+        debouncedUpdateSearch.cancel();
+    };
+
     // Get placeholder text based on assistant status
     const placeholder = useMemo(() => {
         if (!flowId) {
@@ -549,33 +561,33 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
                                 name="search"
                                 render={({ field }) => (
                                     <FormControl>
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                                            <Input
+                                        <InputGroup>
+                                            <InputGroupAddon>
+                                                <Search />
+                                            </InputGroupAddon>
+                                            <InputGroupInput
                                                 {...field}
                                                 autoComplete="off"
-                                                className="px-9"
                                                 disabled={isAssistantCreating}
                                                 placeholder="Search messages..."
                                                 type="text"
                                             />
                                             {field.value && (
-                                                <Button
-                                                    className="absolute right-0 top-1/2 -translate-y-1/2"
-                                                    disabled={isAssistantCreating}
-                                                    onClick={() => {
-                                                        form.reset({ search: '' });
-                                                        setDebouncedSearchValue('');
-                                                        debouncedUpdateSearch.cancel();
-                                                    }}
-                                                    size="icon"
-                                                    type="button"
-                                                    variant="ghost"
-                                                >
-                                                    <X />
-                                                </Button>
+                                                <InputGroupAddon align="inline-end">
+                                                    <InputGroupButton
+                                                        disabled={isAssistantCreating}
+                                                        onClick={() => {
+                                                            form.reset({ search: '' });
+                                                            setDebouncedSearchValue('');
+                                                            debouncedUpdateSearch.cancel();
+                                                        }}
+                                                        type="button"
+                                                    >
+                                                        <X />
+                                                    </InputGroupButton>
+                                                </InputGroupAddon>
                                             )}
-                                        </div>
+                                        </InputGroup>
                                     </FormControl>
                                 )}
                             />
@@ -595,33 +607,64 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
                     </EmptyHeader>
                 </Empty>
             ) : selectedAssistantId ? (
-                // Show messages for selected assistant
-                <div className="relative h-full overflow-y-hidden pb-4">
-                    <div
-                        className="h-full space-y-4 overflow-y-auto"
-                        ref={containerRef}
-                    >
-                        {filteredLogs.map((log) => (
-                            <FlowMessage
-                                key={log.id}
-                                log={log}
-                                searchValue={debouncedSearchValue}
-                            />
-                        ))}
-                        <div ref={endRef} />
-                    </div>
-
-                    {hasNewMessages && !isScrolledToBottom && (
-                        <Button
-                            className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
-                            onClick={() => scrollToEnd()}
-                            size="icon"
-                            type="button"
+                filteredLogs.length > 0 ? (
+                    // Show messages for selected assistant
+                    <div className="relative h-full overflow-y-hidden pb-4">
+                        <div
+                            className="h-full space-y-4 overflow-y-auto"
+                            ref={containerRef}
                         >
-                            <ChevronDown />
-                        </Button>
-                    )}
-                </div>
+                            {filteredLogs.map((log) => (
+                                <FlowMessage
+                                    key={log.id}
+                                    log={log}
+                                    searchValue={debouncedSearchValue}
+                                />
+                            ))}
+                            <div ref={endRef} />
+                        </div>
+
+                        {hasNewMessages && !isScrolledToBottom && (
+                            <Button
+                                className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
+                                onClick={() => scrollToEnd()}
+                                size="icon"
+                                type="button"
+                            >
+                                <ChevronDown />
+                            </Button>
+                        )}
+                    </div>
+                ) : hasActiveFilters ? (
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <ListFilter />
+                            </EmptyMedia>
+                            <EmptyTitle>No messages found</EmptyTitle>
+                            <EmptyDescription>Try adjusting your search or filter parameters</EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
+                            <Button
+                                onClick={handleResetFilters}
+                                variant="outline"
+                            >
+                                <X />
+                                Reset filters
+                            </Button>
+                        </EmptyContent>
+                    </Empty>
+                ) : (
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Plus />
+                            </EmptyMedia>
+                            <EmptyTitle>No messages</EmptyTitle>
+                            <EmptyDescription>No messages found for this assistant</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
+                )
             ) : (
                 // Show placeholder when no assistant is selected
                 <Empty>
