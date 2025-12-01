@@ -7,9 +7,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import Terminal from '@/components/shared/terminal';
-import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { useFlow } from '@/providers/flow-provider';
 
 const searchFormSchema = z.object({
@@ -101,62 +100,59 @@ const FlowTerminal = () => {
         <div className="flex size-full flex-col gap-4">
             <div className="sticky top-0 z-10 bg-background pr-4">
                 <Form {...form}>
-                    <FormField
-                        control={form.control}
-                        name="search"
-                        render={({ field }) => (
-                            <FormControl>
-                                <div className="relative p-px">
-                                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                                    <Input
-                                        {...field}
-                                        autoComplete="off"
-                                        className="px-9 pr-24"
-                                        placeholder="Search terminal logs..."
-                                        type="text"
-                                    />
-                                    <div className="absolute right-px top-1/2 flex -translate-y-1/2">
-                                        {hasSearchValue && (
-                                            <>
-                                                <Button
-                                                    className="size-8"
-                                                    onClick={handleFindPrevious}
-                                                    size="icon"
-                                                    title="Previous match"
+                    <div className="p-px">
+                        <FormField
+                            control={form.control}
+                            name="search"
+                            render={({ field }) => (
+                                <FormControl>
+                                    <InputGroup>
+                                        <InputGroupAddon>
+                                            <Search />
+                                        </InputGroupAddon>
+                                        <InputGroupInput
+                                            {...field}
+                                            autoComplete="off"
+                                            placeholder="Search terminal logs..."
+                                            type="text"
+                                        />
+                                        <InputGroupAddon align="inline-end">
+                                            {hasSearchValue && (
+                                                <>
+                                                    <InputGroupButton
+                                                        onClick={handleFindPrevious}
+                                                        size="icon-xs"
+                                                        title="Previous match"
+                                                        type="button"
+                                                    >
+                                                        <ChevronUp className="size-4" />
+                                                    </InputGroupButton>
+                                                    <InputGroupButton
+                                                        onClick={handleFindNext}
+                                                        size="icon-xs"
+                                                        title="Next match"
+                                                        type="button"
+                                                    >
+                                                        <ChevronDown className="size-4" />
+                                                    </InputGroupButton>
+                                                </>
+                                            )}
+                                            {field.value && (
+                                                <InputGroupButton
+                                                    onClick={handleClearSearch}
+                                                    size="icon-xs"
+                                                    title="Clear search"
                                                     type="button"
-                                                    variant="ghost"
                                                 >
-                                                    <ChevronUp className="size-4" />
-                                                </Button>
-                                                <Button
-                                                    className="size-8"
-                                                    onClick={handleFindNext}
-                                                    size="icon"
-                                                    title="Next match"
-                                                    type="button"
-                                                    variant="ghost"
-                                                >
-                                                    <ChevronDown className="size-4" />
-                                                </Button>
-                                            </>
-                                        )}
-                                        {field.value && (
-                                            <Button
-                                                className="size-8"
-                                                onClick={handleClearSearch}
-                                                size="icon"
-                                                title="Clear search"
-                                                type="button"
-                                                variant="ghost"
-                                            >
-                                                <X className="size-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            </FormControl>
-                        )}
-                    />
+                                                    <X className="size-4" />
+                                                </InputGroupButton>
+                                            )}
+                                        </InputGroupAddon>
+                                    </InputGroup>
+                                </FormControl>
+                            )}
+                        />
+                    </div>
                 </Form>
             </div>
             <Terminal
@@ -170,4 +166,3 @@ const FlowTerminal = () => {
 };
 
 export default FlowTerminal;
-

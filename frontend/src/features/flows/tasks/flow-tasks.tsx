@@ -5,10 +5,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { useFlow } from '@/providers/flow-provider';
 
 import FlowTask from './flow-task';
@@ -105,43 +104,43 @@ const FlowTasks = () => {
         <div className="flex h-full flex-col">
             <div className="sticky top-0 z-10 bg-background pb-4">
                 {/* Search Input */}
-                <div className="p-px">
-                    <Form {...form}>
+                <Form {...form}>
+                    <div className="p-px">
                         <FormField
                             control={form.control}
                             name="search"
                             render={({ field }) => (
                                 <FormControl>
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                                        <Input
+                                    <InputGroup>
+                                        <InputGroupAddon>
+                                            <Search />
+                                        </InputGroupAddon>
+                                        <InputGroupInput
                                             {...field}
                                             autoComplete="off"
-                                            className="px-9"
                                             placeholder="Search tasks and subtasks..."
                                             type="text"
                                         />
                                         {field.value && (
-                                            <Button
-                                                className="absolute right-0 top-1/2 -translate-y-1/2"
-                                                onClick={() => {
-                                                    form.reset({ search: '' });
-                                                    setDebouncedSearchValue('');
-                                                    debouncedUpdateSearch.cancel();
-                                                }}
-                                                size="icon"
-                                                type="button"
-                                                variant="ghost"
-                                            >
-                                                <X />
-                                            </Button>
+                                            <InputGroupAddon align="inline-end">
+                                                <InputGroupButton
+                                                    onClick={() => {
+                                                        form.reset({ search: '' });
+                                                        setDebouncedSearchValue('');
+                                                        debouncedUpdateSearch.cancel();
+                                                    }}
+                                                    type="button"
+                                                >
+                                                    <X />
+                                                </InputGroupButton>
+                                            </InputGroupAddon>
                                         )}
-                                    </div>
+                                    </InputGroup>
                                 </FormControl>
                             )}
                         />
-                    </Form>
-                </div>
+                    </div>
+                </Form>
             </div>
 
             {hasTasks ? (
