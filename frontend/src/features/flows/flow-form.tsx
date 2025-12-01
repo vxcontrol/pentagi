@@ -128,18 +128,14 @@ export const FlowForm = ({
         resetField('message');
     };
 
-    const handleKeyDown = ({
-        ctrlKey,
-        key,
-        metaKey,
-        preventDefault,
-        shiftKey,
-    }: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        const { ctrlKey, key, metaKey, shiftKey } = event;
+
         if (isFormDisabled || key !== 'Enter' || shiftKey || ctrlKey || metaKey) {
             return;
         }
 
-        preventDefault();
+        event.preventDefault();
         handleFormSubmit(handleSubmit)();
     };
 

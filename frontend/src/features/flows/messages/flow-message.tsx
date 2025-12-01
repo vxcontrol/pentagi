@@ -211,10 +211,10 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
                     <TooltipContent>Copy</TooltipContent>
                 </Tooltip>
                 <span className="text-muted-foreground/50">{formatDate(new Date(createdAt))}</span>
+                <span className="text-muted-foreground/50">{log.id}</span>
             </div>
         </div>
     );
 };
 
 export default memo(FlowMessage);
-

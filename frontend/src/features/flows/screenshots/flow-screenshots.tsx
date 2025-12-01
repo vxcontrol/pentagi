@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { Search, X } from 'lucide-react';
+import { Camera, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useFlow } from '@/providers/flow-provider';
@@ -130,16 +131,18 @@ const FlowScreenshots = () => {
                     ))}
                 </div>
             ) : (
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <p>No screenshots available</p>
-                        <p className="text-xs">Screenshots will appear here once the agent captures them</p>
-                    </div>
-                </div>
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                            <Camera />
+                        </EmptyMedia>
+                        <EmptyTitle>No screenshots available</EmptyTitle>
+                        <EmptyDescription>Screenshots will appear here once the agent captures them</EmptyDescription>
+                    </EmptyHeader>
+                </Empty>
             )}
         </div>
     );
 };
 
 export default FlowScreenshots;
-

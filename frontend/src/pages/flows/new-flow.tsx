@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
@@ -9,15 +9,22 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FlowForm, type FlowFormValues } from '@/features/flows/flow-form';
 import { useFlows } from '@/providers/flows-provider';
 import { useProviders } from '@/providers/providers-provider';
+import { useSystemSettings } from '@/providers/system-settings-provider';
 
 const NewFlow = () => {
     const navigate = useNavigate();
 
     const { selectedProvider } = useProviders();
     const { createFlow, createFlowWithAssistant } = useFlows();
+    const { settings } = useSystemSettings();
 
     const [isLoading, setIsLoading] = useState(false);
     const [flowType, setFlowType] = useState<'assistant' | 'automation'>('automation');
+
+    // Calculate default useAgents value (only for assistant type)
+    const shouldUseAgents = useMemo(() => {
+        return settings?.assistantUseAgents ?? false;
+    }, [settings?.assistantUseAgents]);
 
     const handleSubmit = async (values: FlowFormValues) => {
         if (isLoading) {
@@ -83,6 +90,7 @@ const NewFlow = () => {
                         <FlowForm
                             defaultValues={{
                                 providerName: selectedProvider?.name ?? '',
+                                useAgents: shouldUseAgents,
                             }}
                             isSubmitting={isLoading}
                             onSubmit={handleSubmit}

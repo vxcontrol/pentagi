@@ -134,12 +134,72 @@ const streamingLink = new ApolloLink((operation: Operation, forward) => {
 const subscriptionToCacheFieldMap: Record<string, string> = {
     agentLogAdded: 'agentLogs',
     assistantLogAdded: 'assistantLogs',
+    assistantLogUpdated: 'assistantLogs',
     messageLogAdded: 'messageLogs',
+    messageLogUpdated: 'messageLogs',
     screenshotAdded: 'screenshots',
     searchLogAdded: 'searchLogs',
     taskCreated: 'tasks',
     terminalLogAdded: 'terminalLogs',
     vectorStoreLogAdded: 'vectorStoreLogs',
+};
+
+// Helper function to find item index in cache array
+const findItemIndex = (
+    array: readonly Reference[],
+    itemId: number | string,
+    readField: (fieldName: string, ref: Reference) => unknown,
+): number => array.findIndex((ref) => readField('id', ref as Reference) === itemId);
+
+// Helper function to handle cache field update for a single subscription
+const handleCacheFieldUpdate = (
+    subscriptionName: string,
+    existing: unknown,
+    newItem: { id: number | string },
+    readField: (fieldName: string, ref: Reference) => unknown,
+    toReference: unknown,
+): readonly Reference[] => {
+    const existingArray = (existing ?? []) as readonly Reference[];
+    const toReferenceFunc = toReference as (item: unknown) => Reference | undefined;
+    const newRef = toReferenceFunc(newItem);
+
+    if (!newRef) {
+        return existingArray;
+    }
+
+    const existingItemIndex = findItemIndex(existingArray, newItem.id, readField);
+    const itemExists = existingItemIndex !== -1;
+
+    // If item exists, keep existing array (Apollo auto-updates normalized entities)
+    if (itemExists) {
+        return existingArray;
+    }
+
+    // Item doesn't exist - add it to the end
+    return [...existingArray, newRef];
+};
+
+// Helper function to process a single subscription update
+const processSubscriptionUpdate = (
+    cache: InMemoryCache,
+    subscriptionName: string,
+    cacheField: string,
+    newItem: undefined | { id: number | string },
+): void => {
+    if (!newItem?.id) {
+        return;
+    }
+
+    try {
+        cache.modify({
+            fields: {
+                [cacheField]: (existing, { readField, toReference }) =>
+                    handleCacheFieldUpdate(subscriptionName, existing, newItem, readField, toReference),
+            },
+        });
+    } catch (error) {
+        Log.error(`Error updating cache for ${subscriptionName}:`, error);
+    }
 };
 
 // Link to automatically update cache when "Added" subscriptions fire
@@ -151,43 +211,18 @@ const createSubscriptionCacheLink = (cache: InMemoryCache) => {
                 complete: observer.complete.bind(observer),
                 error: observer.error.bind(observer),
                 next: (result: FetchResult) => {
-                    // Check each subscription type and update cache
+                    // Process each subscription type and update cache
                     if (result.data) {
-                        Object.entries(subscriptionToCacheFieldMap).forEach(([subscriptionName, cacheField]) => {
-                            const newItem = result.data?.[subscriptionName];
-
-                            if (newItem && newItem.id) {
-                                try {
-                                    // Add the new item to the cache array
-                                    cache.modify({
-                                        fields: {
-                                            [cacheField]: (existing, { readField, toReference }) => {
-                                                const existingArray = (existing || []) as readonly Reference[];
-                                                const newRef = toReference(newItem);
-
-                                                if (!newRef) {
-                                                    return existing;
-                                                }
-
-                                                // Check if already exists to avoid duplicates
-                                                const exists = existingArray.some(
-                                                    (ref) => readField('id', ref as Reference) === newItem.id,
-                                                );
-
-                                                if (exists) {
-                                                    return existing;
-                                                }
-
-                                                // Add to the end of the array
-                                                return [...existingArray, newRef];
-                                            },
-                                        },
-                                    });
-                                } catch (error) {
-                                    Log.error(`Error updating cache for ${subscriptionName}:`, error);
-                                }
-                            }
-                        });
+                        Object.entries(subscriptionToCacheFieldMap)
+                            .map(([subscriptionName, cacheField]) => ({
+                                cacheField,
+                                newItem: result.data?.[subscriptionName],
+                                subscriptionName,
+                            }))
+                            .filter(({ newItem }) => newItem?.id)
+                            .forEach(({ cacheField, newItem, subscriptionName }) => {
+                                processSubscriptionUpdate(cache, subscriptionName, cacheField, newItem);
+                            });
                     }
 
                     // Process the result after cache update

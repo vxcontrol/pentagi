@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { ChevronDown, Search, X } from 'lucide-react';
+import { ChevronDown, Inbox, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { StatusType } from '@/graphql/types';
@@ -34,10 +35,7 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCanceling, setIsCanceling] = useState(false);
 
-    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(
-        useMemo(() => (logs ? [...(logs || [])] : []), [logs]),
-        flowId,
-    );
+    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(logs, flowId);
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         defaultValues: {
@@ -219,15 +217,18 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
                     )}
                 </div>
             ) : (
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <p>No Active Tasks</p>
-                        <p className="text-xs">
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                            <Inbox />
+                        </EmptyMedia>
+                        <EmptyTitle>No Active Tasks</EmptyTitle>
+                        <EmptyDescription>
                             Starting a new task may take some time as the PentAGI agent downloads the required Docker
                             image
-                        </p>
-                    </div>
-                </div>
+                        </EmptyDescription>
+                    </EmptyHeader>
+                </Empty>
             )}
 
             <div className="sticky bottom-0 border-t bg-background p-px pt-4">
