@@ -89,9 +89,6 @@ const FlowAgents = () => {
         debouncedUpdateSearch.cancel();
     }, [flowId, form, debouncedUpdateSearch]);
 
-    // Get tasks from flowData
-    const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
-
     // Check if any filters are active
     const hasActiveFilters = useMemo(() => {
         const hasSearch = !!searchValue.trim();
@@ -206,7 +203,6 @@ const FlowAgents = () => {
                                 <FormControl>
                                     <FlowTasksDropdown
                                         onChange={field.onChange}
-                                        tasks={tasks}
                                         value={field.value}
                                     />
                                 </FormControl>
