@@ -1,12 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { Check, ChevronDown, ChevronsUpDown, Loader2, Plus, Search, Trash2, X, XCircle } from 'lucide-react';
+import { Check, ChevronDown, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { AssistantFragmentFragment, ProviderFragmentFragment } from '@/graphql/types';
 
+import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import { StatusType } from '@/graphql/types';
 import { useChatScroll } from '@/hooks/use-chat-scroll';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
+import { formatName } from '@/lib/utils/format';
 import { isProviderValid } from '@/models/provider';
 import { useFlow } from '@/providers/flow-provider';
 import { useProviders } from '@/providers/providers-provider';
@@ -27,9 +29,10 @@ import { useSystemSettings } from '@/providers/system-settings-provider';
 import { FlowForm, type FlowFormValues } from '../flow-form';
 import FlowMessage from './flow-message';
 
-interface AssistantDropdownProps {
+interface AssistantsDropdownProps {
     assistants: AssistantFragmentFragment[];
     isAssistantCreating: boolean;
+    isDisabled: boolean;
     onAssistantCreate: () => void;
     onAssistantDelete: (assistantId: string) => void;
     onAssistantSelect: (assistantId: string) => void;
@@ -37,18 +40,19 @@ interface AssistantDropdownProps {
     selectedAssistantId: null | string;
 }
 
-const AssistantDropdown = ({
+const AssistantsDropdown = ({
     assistants,
     isAssistantCreating,
+    isDisabled,
     onAssistantCreate,
     onAssistantDelete,
     onAssistantSelect,
     providers,
     selectedAssistantId,
-}: AssistantDropdownProps) => {
-    const [open, setOpen] = useState(false);
+}: AssistantsDropdownProps) => {
+    const [isOpen, setIsOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [assistantToDelete, setAssistantToDelete] = useState<AssistantFragmentFragment | null>(null);
+    const [currentAssistant, setCurrentAssistant] = useState<AssistantFragmentFragment | null>(null);
 
     // Get the current selected assistant
     const selectedAssistant = useMemo(() => {
@@ -70,68 +74,57 @@ const AssistantDropdown = ({
         return index !== -1 ? assistants.length - index : null;
     }, [assistants, selectedAssistantId]);
 
-    // Group assistants by status
-    const groupedAssistants = useMemo(() => {
-        const active: AssistantFragmentFragment[] = [];
-        const finished: AssistantFragmentFragment[] = [];
-        const failed: AssistantFragmentFragment[] = [];
+    // Group assistants by status with pre-calculated indices
+    const assistantsGroup = useMemo(() => {
+        type AssistantItem = { assistant: AssistantFragmentFragment; index: number };
 
-        assistants.forEach((assistant) => {
-            if (assistant.status === StatusType.Running || assistant.status === StatusType.Waiting) {
-                active.push(assistant);
-            } else if (assistant.status === StatusType.Finished) {
-                finished.push(assistant);
-            } else if (assistant.status === StatusType.Failed) {
-                failed.push(assistant);
-            }
-        });
+        return assistants.reduce<{
+            active: AssistantItem[];
+            failed: AssistantItem[];
+            finished: AssistantItem[];
+        }>(
+            (accumulator, assistant, originalIndex) => {
+                const index = assistants.length - originalIndex;
+                const item = { assistant, index };
 
-        return { active, failed, finished };
+                return {
+                    ...accumulator,
+                    active:
+                        assistant.status === StatusType.Running || assistant.status === StatusType.Waiting
+                            ? [...accumulator.active, item]
+                            : accumulator.active,
+                    failed: assistant.status === StatusType.Failed ? [...accumulator.failed, item] : accumulator.failed,
+                    finished:
+                        assistant.status === StatusType.Finished
+                            ? [...accumulator.finished, item]
+                            : accumulator.finished,
+                };
+            },
+            { active: [], failed: [], finished: [] },
+        );
     }, [assistants]);
-
-    // Get status indicator
-    const getStatusIndicator = (status: StatusType) => {
-        switch (status) {
-            case StatusType.Failed: {
-                return <XCircle className="size-3 text-red-500" />;
-            }
-
-            case StatusType.Finished: {
-                return <Check className="size-3 text-gray-500" />;
-            }
-
-            case StatusType.Running: {
-                return <Loader2 className="size-3 animate-spin text-blue-500" />;
-            }
-
-            case StatusType.Waiting: {
-                return <div className="size-2 rounded-full bg-green-500" />;
-            }
-
-            default: {
-                return null;
-            }
-        }
-    };
 
     // Handle assistant selection
     const handleAssistantSelect = (assistantId: string) => {
         onAssistantSelect(assistantId);
-        setOpen(false);
+        setIsOpen(false);
     };
 
     // Handle delete click
-    const handleDeleteClick = (assistant: AssistantFragmentFragment, event: React.MouseEvent) => {
-        event.stopPropagation();
-        setAssistantToDelete(assistant);
+    const handleDeleteClick = (assistant: AssistantFragmentFragment) => {
+        if (isDisabled) {
+            return;
+        }
+
+        setCurrentAssistant(assistant);
         setDeleteDialogOpen(true);
     };
 
     // Confirm delete
     const handleConfirmDelete = () => {
-        if (assistantToDelete) {
-            onAssistantDelete(assistantToDelete.id);
-            setAssistantToDelete(null);
+        if (currentAssistant) {
+            onAssistantDelete(currentAssistant.id);
+            setCurrentAssistant(null);
         }
     };
 
@@ -139,40 +132,53 @@ const AssistantDropdown = ({
     const renderAssistantItem = (assistant: AssistantFragmentFragment, index: number) => {
         const isSelected = selectedAssistantId === assistant.id;
         const isValid = isProviderValid(assistant.provider, providers);
-        const displayNumber = assistants.length - index;
 
         return (
             <CommandItem
-                className={cn('group flex items-center justify-between gap-2', !isValid && 'opacity-50')}
+                className={cn('group', !isValid && 'opacity-50')}
                 key={assistant.id}
                 onSelect={() => handleAssistantSelect(assistant.id)}
                 value={`${assistant.id}-${assistant.title}`}
             >
+                <FlowStatusIcon
+                    status={assistant.status}
+                    tooltip={formatName(assistant.status)}
+                />
+
+                <ProviderIcon
+                    className="shrink-0"
+                    provider={assistant.provider}
+                />
+
+                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
+                    {index}
+                </span>
+
                 <div className="flex flex-1 items-center gap-2 overflow-hidden">
-                    {getStatusIndicator(assistant.status)}
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
-                        {displayNumber}
-                    </span>
-                    <ProviderIcon
-                        className="size-4 shrink-0"
-                        provider={assistant.provider}
-                    />
-                    <div className="flex flex-1 flex-col overflow-hidden">
-                        <div className="flex items-center gap-2">
-                            <span className="truncate text-sm">{assistant.title}</span>
-                            {!isValid && <span className="shrink-0 text-xs text-destructive">(unavailable)</span>}
-                        </div>
-                    </div>
-                    {isSelected && <Check className="ml-auto size-4 shrink-0 text-primary" />}
+                    <span className="truncate text-sm">{assistant.title}</span>
+                    {!isValid && <span className="shrink-0 text-xs text-destructive">(unavailable)</span>}
                 </div>
-                <Button
-                    className="size-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={(e) => handleDeleteClick(assistant, e)}
-                    size="icon"
-                    variant="ghost"
-                >
-                    <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
-                </Button>
+
+                <Check
+                    className={cn(
+                        'ml-auto size-4 shrink-0 text-primary transition-opacity group-hover:opacity-0',
+                        isSelected ? 'opacity-100' : 'opacity-0',
+                    )}
+                />
+
+                {!isDisabled && (
+                    <Button
+                        className="absolute right-0.5 top-1/2 shrink-0 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteClick(assistant);
+                        }}
+                        size="icon-xs"
+                        variant="ghost"
+                    >
+                        <Trash2 />
+                    </Button>
+                )}
             </CommandItem>
         );
     };
@@ -180,41 +186,32 @@ const AssistantDropdown = ({
     return (
         <>
             <Popover
-                onOpenChange={setOpen}
-                open={open}
+                onOpenChange={setIsOpen}
+                open={isOpen}
             >
                 <PopoverTrigger asChild>
                     <Button
-                        aria-expanded={open}
-                        aria-label="Select Assistant"
-                        className="w-full justify-between"
+                        className="px-2"
                         disabled={isAssistantCreating}
-                        role="combobox"
                         variant="outline"
                     >
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                            {isAssistantCreating ? (
-                                <>
-                                    <Loader2 className="size-4 shrink-0 animate-spin" />
-                                    <span className="truncate">Creating assistant...</span>
-                                </>
-                            ) : selectedAssistant ? (
-                                <>
-                                    {getStatusIndicator(selectedAssistant.status)}
-                                    <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
-                                        {selectedAssistantIndex}
-                                    </span>
-                                    <ProviderIcon
-                                        className="size-4 shrink-0"
-                                        provider={selectedAssistant.provider}
-                                    />
-                                    <span className="truncate">{selectedAssistant.title}</span>
-                                </>
-                            ) : (
-                                <span className="text-muted-foreground">Select assistant...</span>
-                            )}
-                        </div>
-                        <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                        {selectedAssistant ? (
+                            <>
+                                <FlowStatusIcon
+                                    status={selectedAssistant.status}
+                                    tooltip={formatName(selectedAssistant.status)}
+                                />
+                                <ProviderIcon provider={selectedAssistant.provider} />
+                                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
+                                    {selectedAssistantIndex}
+                                </span>
+                            </>
+                        ) : (
+                            <span className="flex h-5 shrink-0 items-center justify-center rounded bg-muted px-1 text-xs font-medium text-muted-foreground">
+                                New
+                            </span>
+                        )}
+                        <ChevronDown className="opacity-50" />
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent
@@ -226,47 +223,43 @@ const AssistantDropdown = ({
                         <CommandList>
                             <CommandEmpty>No assistants found.</CommandEmpty>
 
-                            <CommandGroup>
-                                <CommandItem
-                                    className="flex items-center gap-2 font-medium"
-                                    onSelect={() => {
-                                        onAssistantCreate();
-                                        setOpen(false);
-                                    }}
-                                    value="create-new-assistant"
-                                >
-                                    <Plus className="size-4" />
-                                    Create new assistant
-                                </CommandItem>
-                            </CommandGroup>
-
-                            {groupedAssistants.active.length > 0 && (
-                                <CommandGroup heading={`Active (${groupedAssistants.active.length})`}>
-                                    {groupedAssistants.active.map((assistant) => {
-                                        const globalIndex = assistants.findIndex((a) => a.id === assistant.id);
-
-                                        return renderAssistantItem(assistant, globalIndex);
-                                    })}
+                            {!isDisabled && (
+                                <CommandGroup>
+                                    <CommandItem
+                                        className="font-medium"
+                                        onSelect={() => {
+                                            onAssistantCreate();
+                                            setIsOpen(false);
+                                        }}
+                                        value="create-new-assistant"
+                                    >
+                                        <Plus />
+                                        Create new assistant
+                                    </CommandItem>
                                 </CommandGroup>
                             )}
 
-                            {groupedAssistants.finished.length > 0 && (
-                                <CommandGroup heading={`Finished (${groupedAssistants.finished.length})`}>
-                                    {groupedAssistants.finished.map((assistant) => {
-                                        const globalIndex = assistants.findIndex((a) => a.id === assistant.id);
-
-                                        return renderAssistantItem(assistant, globalIndex);
-                                    })}
+                            {assistantsGroup.active.length > 0 && (
+                                <CommandGroup heading={`Active (${assistantsGroup.active.length})`}>
+                                    {assistantsGroup.active.map(({ assistant, index }) =>
+                                        renderAssistantItem(assistant, index),
+                                    )}
                                 </CommandGroup>
                             )}
 
-                            {groupedAssistants.failed.length > 0 && (
-                                <CommandGroup heading={`Failed (${groupedAssistants.failed.length})`}>
-                                    {groupedAssistants.failed.map((assistant) => {
-                                        const globalIndex = assistants.findIndex((a) => a.id === assistant.id);
+                            {assistantsGroup.finished.length > 0 && (
+                                <CommandGroup heading={`Finished (${assistantsGroup.finished.length})`}>
+                                    {assistantsGroup.finished.map(({ assistant, index }) =>
+                                        renderAssistantItem(assistant, index),
+                                    )}
+                                </CommandGroup>
+                            )}
 
-                                        return renderAssistantItem(assistant, globalIndex);
-                                    })}
+                            {assistantsGroup.failed.length > 0 && (
+                                <CommandGroup heading={`Failed (${assistantsGroup.failed.length})`}>
+                                    {assistantsGroup.failed.map(({ assistant, index }) =>
+                                        renderAssistantItem(assistant, index),
+                                    )}
                                 </CommandGroup>
                             )}
                         </CommandList>
@@ -280,7 +273,7 @@ const AssistantDropdown = ({
                 handleConfirm={handleConfirmDelete}
                 handleOpenChange={setDeleteDialogOpen}
                 isOpen={deleteDialogOpen}
-                itemName={assistantToDelete?.title}
+                itemName={currentAssistant?.title}
                 itemType="assistant"
                 title="Delete Assistant"
             />
@@ -534,12 +527,13 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
     return (
         <div className={cn('flex h-full flex-col', className)}>
             <div className="sticky top-0 z-10 bg-background pb-4">
-                <div className="flex flex-col gap-2 p-px">
+                <div className="flex gap-2 p-px">
                     {/* Assistant Dropdown */}
                     {flowId && (
-                        <AssistantDropdown
+                        <AssistantsDropdown
                             assistants={assistants}
                             isAssistantCreating={isAssistantCreating}
+                            isDisabled={isFormDisabled}
                             onAssistantCreate={handleAssistantCreate}
                             onAssistantDelete={handleAssistantDelete}
                             onAssistantSelect={(assistantId) => selectAssistant?.(assistantId)}

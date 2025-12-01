@@ -100,7 +100,7 @@ const FlowReportDropdown = () => {
                 >
                     <NotepadText />
                     Report
-                    <ChevronDown />
+                    <ChevronDown className="opacity-50" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

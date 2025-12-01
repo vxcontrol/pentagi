@@ -193,7 +193,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
         name,
     });
 
-    const [open, setOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
 
     // Filter options based on search
@@ -206,15 +206,13 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
             <FormLabel>{label}</FormLabel>
             <FormControl>
                 <Popover
-                    onOpenChange={setOpen}
-                    open={open}
+                    onOpenChange={setIsOpen}
+                    open={isOpen}
                 >
                     <PopoverTrigger asChild>
                         <Button
-                            aria-expanded={open}
                             className={cn('w-full justify-between', !displayValue && 'text-muted-foreground')}
                             disabled={disabled}
-                            role="combobox"
                             variant="outline"
                         >
                             {displayValue || placeholder}
@@ -245,7 +243,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                                                 className="mt-2"
                                                 onClick={() => {
                                                     field.onChange(search);
-                                                    setOpen(false);
+                                                    setIsOpen(false);
                                                     setSearch('');
                                                 }}
                                                 size="sm"
@@ -262,7 +260,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                                             key={option}
                                             onSelect={() => {
                                                 field.onChange(option);
-                                                setOpen(false);
+                                                setIsOpen(false);
                                                 setSearch('');
                                             }}
                                             value={option}
@@ -321,7 +319,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
         name,
     });
 
-    const [open, setOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
 
     // Filter options based on search
@@ -347,8 +345,8 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
             <FormLabel>{label}</FormLabel>
             <FormControl>
                 <Popover
-                    onOpenChange={setOpen}
-                    open={open}
+                    onOpenChange={setIsOpen}
+                    open={isOpen}
                 >
                     <div className="flex w-full">
                         {/* Input field - main control */}
@@ -392,7 +390,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                                     className="mt-2"
                                                     onClick={() => {
                                                         field.onChange(search);
-                                                        setOpen(false);
+                                                        setIsOpen(false);
                                                         setSearch('');
                                                     }}
                                                     size="sm"
@@ -410,7 +408,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                                 onSelect={() => {
                                                     field.onChange(option.name);
                                                     onOptionSelect?.(option);
-                                                    setOpen(false);
+                                                    setIsOpen(false);
                                                     setSearch('');
                                                 }}
                                                 value={option.name}

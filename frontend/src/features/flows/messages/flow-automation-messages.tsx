@@ -1,12 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { ChevronDown, Inbox, Search, X } from 'lucide-react';
+import { ChevronDown, Inbox, ListFilter, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { StatusType } from '@/graphql/types';
@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/flow-provider';
 
 import { FlowForm, type FlowFormValues } from '../flow-form';
+import FlowTasksDropdown from '../flow-tasks-dropdown';
 import FlowMessage from './flow-message';
 
 interface FlowAutomationMessagesProps {
@@ -22,6 +23,12 @@ interface FlowAutomationMessagesProps {
 }
 
 const searchFormSchema = z.object({
+    filter: z
+        .object({
+            subtaskIds: z.array(z.string()),
+            taskIds: z.array(z.string()),
+        })
+        .optional(),
     search: z.string(),
 });
 
@@ -39,12 +46,17 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         defaultValues: {
+            filter: {
+                subtaskIds: [],
+                taskIds: [],
+            },
             search: '',
         },
         resolver: zodResolver(searchFormSchema),
     });
 
     const searchValue = form.watch('search');
+    const filter = form.watch('filter');
 
     const debouncedUpdateSearch = useMemo(
         () =>
@@ -71,27 +83,65 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
 
     // Clear search when flow changes to prevent stale search state
     useEffect(() => {
-        form.reset({ search: '' });
+        form.reset({
+            filter: {
+                subtaskIds: [],
+                taskIds: [],
+            },
+            search: '',
+        });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
     }, [flowId, form, debouncedUpdateSearch]);
+
+    // Get tasks from flowData
+    const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
+
+    // Check if any filters are active
+    const hasActiveFilters = useMemo(() => {
+        const hasSearch = !!searchValue.trim();
+        const hasTaskFilters = !!(filter?.taskIds?.length || filter?.subtaskIds?.length);
+
+        return hasSearch || hasTaskFilters;
+    }, [searchValue, filter]);
 
     // Memoize filtered logs to avoid recomputing on every render
     // Use debouncedSearchValue for filtering to improve performance
     const filteredLogs = useMemo(() => {
         const search = debouncedSearchValue.toLowerCase().trim();
 
-        if (!search || !logs) {
-            return logs || [];
+        let filtered = logs || [];
+
+        // Filter by search
+        if (search) {
+            filtered = filtered.filter(
+                (log) =>
+                    log.message.toLowerCase().includes(search) ||
+                    (log.result && log.result.toLowerCase().includes(search)) ||
+                    (log.thinking && log.thinking.toLowerCase().includes(search)),
+            );
         }
 
-        return logs.filter(
-            (log) =>
-                log.message.toLowerCase().includes(search) ||
-                (log.result && log.result.toLowerCase().includes(search)) ||
-                (log.thinking && log.thinking.toLowerCase().includes(search)),
-        );
-    }, [logs, debouncedSearchValue]);
+        // Filter by selected tasks and subtasks
+        if (filter?.taskIds?.length || filter?.subtaskIds?.length) {
+            const selectedTaskIds = new Set(filter.taskIds ?? []);
+            const selectedSubtaskIds = new Set(filter.subtaskIds ?? []);
+
+            filtered = filtered.filter((log) => {
+                if (log.taskId && selectedTaskIds.has(log.taskId)) {
+                    return true;
+                }
+
+                if (log.subtaskId && selectedSubtaskIds.has(log.subtaskId)) {
+                    return true;
+                }
+
+                return false;
+            });
+        }
+
+        return filtered;
+    }, [logs, debouncedSearchValue, filter]);
 
     // Get placeholder text based on flow status
     const placeholder = useMemo(() => {
@@ -146,6 +196,19 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
         }
     };
 
+    // Reset filters handler
+    const handleResetFilters = () => {
+        form.reset({
+            filter: {
+                subtaskIds: [],
+                taskIds: [],
+            },
+            search: '',
+        });
+        setDebouncedSearchValue('');
+        debouncedUpdateSearch.cancel();
+    };
+
     const isFormDisabled = flowStatus === StatusType.Finished || flowStatus === StatusType.Failed;
     const isFormLoading = flowStatus === StatusType.Created || flowStatus === StatusType.Running;
 
@@ -153,39 +216,54 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
         <div className={cn('flex h-full flex-col', className)}>
             <div className="sticky top-0 z-10 bg-background pb-4">
                 <Form {...form}>
-                    <FormField
-                        control={form.control}
-                        name="search"
-                        render={({ field }) => (
-                            <FormControl>
-                                <div className="relative p-px">
-                                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                                    <Input
-                                        {...field}
-                                        autoComplete="off"
-                                        className="px-9"
-                                        placeholder="Search messages..."
-                                        type="text"
+                    <div className="flex gap-2 p-px">
+                        <FormField
+                            control={form.control}
+                            name="search"
+                            render={({ field }) => (
+                                <FormControl>
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            {...field}
+                                            autoComplete="off"
+                                            className="px-9"
+                                            placeholder="Search messages..."
+                                            type="text"
+                                        />
+                                        {field.value && (
+                                            <Button
+                                                className="absolute right-0 top-1/2 -translate-y-1/2"
+                                                onClick={() => {
+                                                    form.reset({ search: '' });
+                                                    setDebouncedSearchValue('');
+                                                    debouncedUpdateSearch.cancel();
+                                                }}
+                                                size="icon"
+                                                type="button"
+                                                variant="ghost"
+                                            >
+                                                <X />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </FormControl>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="filter"
+                            render={({ field }) => (
+                                <FormControl>
+                                    <FlowTasksDropdown
+                                        onChange={field.onChange}
+                                        tasks={tasks}
+                                        value={field.value}
                                     />
-                                    {field.value && (
-                                        <Button
-                                            className="absolute right-0 top-1/2 -translate-y-1/2"
-                                            onClick={() => {
-                                                form.reset({ search: '' });
-                                                setDebouncedSearchValue('');
-                                                debouncedUpdateSearch.cancel();
-                                            }}
-                                            size="icon"
-                                            type="button"
-                                            variant="ghost"
-                                        >
-                                            <X />
-                                        </Button>
-                                    )}
-                                </div>
-                            </FormControl>
-                        )}
-                    />
+                                </FormControl>
+                            )}
+                        />
+                    </div>
                 </Form>
             </div>
 
@@ -216,13 +294,32 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
                         </Button>
                     )}
                 </div>
+            ) : hasActiveFilters ? (
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                            <ListFilter />
+                        </EmptyMedia>
+                        <EmptyTitle>No messages found</EmptyTitle>
+                        <EmptyDescription>Try adjusting your search or filter parameters</EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                        <Button
+                            onClick={handleResetFilters}
+                            variant="outline"
+                        >
+                            <X />
+                            Reset filters
+                        </Button>
+                    </EmptyContent>
+                </Empty>
             ) : (
                 <Empty>
                     <EmptyHeader>
                         <EmptyMedia variant="icon">
                             <Inbox />
                         </EmptyMedia>
-                        <EmptyTitle>No Active Tasks</EmptyTitle>
+                        <EmptyTitle>No active tasks</EmptyTitle>
                         <EmptyDescription>
                             Starting a new task may take some time as the PentAGI agent downloads the required Docker
                             image
