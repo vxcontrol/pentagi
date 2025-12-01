@@ -1,8 +1,6 @@
 import { Check, ChevronRight, ListFilter, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import type { TaskFragmentFragment } from '@/graphql/types';
-
 import { Button } from '@/components/ui/button';
 import {
     Command,
@@ -15,6 +13,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useFlow } from '@/providers/flow-provider';
 
 export interface FlowTasksDropdownValue {
     subtaskIds: string[];
@@ -24,11 +23,12 @@ export interface FlowTasksDropdownValue {
 interface FlowTasksDropdownProps {
     disabled?: boolean;
     onChange?: (value: FlowTasksDropdownValue) => void;
-    tasks: TaskFragmentFragment[];
     value?: FlowTasksDropdownValue;
 }
 
-const FlowTasksDropdown = ({ disabled, onChange, tasks, value }: FlowTasksDropdownProps) => {
+const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps) => {
+    const { flowData } = useFlow();
+    const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
     const [isOpen, setIsOpen] = useState(false);
     const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
 
