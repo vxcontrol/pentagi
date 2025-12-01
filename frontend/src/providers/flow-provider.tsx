@@ -20,6 +20,7 @@ import {
     useCreateAssistantMutation,
     useDeleteAssistantMutation,
     useFlowQuery,
+    useFlowUpdatedSubscription,
     useMessageLogAddedSubscription,
     useMessageLogUpdatedSubscription,
     usePutUserInputMutation,
@@ -33,13 +34,11 @@ import {
     useVectorStoreLogAddedSubscription,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
-import { useProviders } from '@/providers/providers-provider';
 
 interface FlowContextValue {
     assistantLogs: Array<AssistantLogFragmentFragment>;
     assistants: Array<AssistantFragmentFragment>;
-    callAssistant: (assistantId: string, message: string, useAgents: boolean) => Promise<void>;
-    createAssistant: (message: string, useAgents: boolean) => Promise<void>;
+    createAssistant: (values: FlowFormValues) => Promise<void>;
     deleteAssistant: (assistantId: string) => Promise<void>;
     flowData: FlowQuery | undefined;
     flowError: Error | undefined;
@@ -52,6 +51,7 @@ interface FlowContextValue {
     selectedAssistantId: null | string;
     stopAssistant: (assistantId: string) => Promise<void>;
     stopAutomation: () => Promise<void>;
+    submitAssistantMessage: (assistantId: string, values: FlowFormValues) => Promise<void>;
     submitAutomationMessage: (values: FlowFormValues) => Promise<void>;
 }
 
@@ -63,7 +63,6 @@ interface FlowProviderProps {
 
 export const FlowProvider = ({ children }: FlowProviderProps) => {
     const { flowId } = useParams();
-    const { selectedProvider } = useProviders();
 
     const [selectedAssistantIds, setSelectedAssistantIds] = useState<Record<string, null | string>>({});
 
@@ -75,7 +74,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         errorPolicy: 'all',
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-first',
-        notifyOnNetworkStatusChange: false,
+        notifyOnNetworkStatusChange: true,
         skip: !flowId,
         variables: { id: flowId ?? '' },
     });
@@ -124,6 +123,9 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     const subscriptionVariables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
     const subscriptionSkip = useMemo(() => !flowId, [flowId]);
 
+    // Global flow subscription - updates flow status (e.g., when stopped/finished)
+    useFlowUpdatedSubscription();
+
     // Flow-specific subscriptions that depend on the selected flow
     useTaskCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useTaskUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
@@ -168,12 +170,11 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     const [putUserInput] = usePutUserInputMutation();
     const [stopFlowMutation] = useStopFlowMutation();
     const [createAssistantMutation] = useCreateAssistantMutation();
-    const [callAssistantMutation] = useCallAssistantMutation();
+    const [submitAssistantMessageMutation] = useCallAssistantMutation();
     const [stopAssistantMutation] = useStopAssistantMutation();
     const [deleteAssistantMutation] = useDeleteAssistantMutation();
 
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
-    const selectedProviderName = useMemo(() => selectedProvider?.name ?? null, [selectedProvider?.name]);
 
     // Show toast notification when flow loading error occurs
     useEffect(() => {
@@ -234,8 +235,13 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     }, [flowId, stopFlowMutation]);
 
     const createAssistant = useCallback(
-        async (message: string, useAgents: boolean) => {
-            if (!message.trim() || !selectedProviderName || !flowId) {
+        async (values: FlowFormValues) => {
+            const { message, providerName, useAgents } = values;
+
+            const input = message.trim();
+            const modelProvider = providerName.trim();
+
+            if (!input || !modelProvider || !flowId) {
                 return;
             }
 
@@ -243,8 +249,8 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 const { data } = await createAssistantMutation({
                     variables: {
                         flowId,
-                        input: message.trim(),
-                        modelProvider: selectedProviderName,
+                        input,
+                        modelProvider,
                         useAgents,
                     },
                 });
@@ -265,21 +271,25 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 Log.error('Error creating assistant:', error);
             }
         },
-        [flowId, selectedProviderName, createAssistantMutation, selectAssistant],
+        [flowId, createAssistantMutation, selectAssistant],
     );
 
-    const callAssistant = useCallback(
-        async (assistantId: string, message: string, useAgents: boolean) => {
-            if (!flowId || !assistantId || !message.trim()) {
+    const submitAssistantMessage = useCallback(
+        async (assistantId: string, values: FlowFormValues) => {
+            const { message, useAgents } = values;
+
+            const input = message.trim();
+
+            if (!flowId || !assistantId || !input) {
                 return;
             }
 
             try {
-                await callAssistantMutation({
+                await submitAssistantMessageMutation({
                     variables: {
                         assistantId,
                         flowId,
-                        input: message.trim(),
+                        input,
                         useAgents,
                     },
                 });
@@ -293,7 +303,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 Log.error('Error calling assistant:', error);
             }
         },
-        [flowId, callAssistantMutation],
+        [flowId, submitAssistantMessageMutation],
     );
 
     const stopAssistant = useCallback(
@@ -360,7 +370,6 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         () => ({
             assistantLogs: assistantLogsData?.assistantLogs ?? [],
             assistants,
-            callAssistant,
             createAssistant,
             deleteAssistant,
             flowData,
@@ -374,12 +383,12 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             selectedAssistantId,
             stopAssistant,
             stopAutomation,
+            submitAssistantMessage,
             submitAutomationMessage,
         }),
         [
             assistantLogsData?.assistantLogs,
             assistants,
-            callAssistant,
             createAssistant,
             deleteAssistant,
             flowData,
@@ -393,6 +402,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
             selectedAssistantId,
             stopAssistant,
             stopAutomation,
+            submitAssistantMessage,
             submitAutomationMessage,
         ],
     );

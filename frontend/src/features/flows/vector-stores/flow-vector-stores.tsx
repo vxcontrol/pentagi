@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { Search, X } from 'lucide-react';
+import { Database, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useFlow } from '@/providers/flow-provider';
@@ -151,18 +152,20 @@ const FlowVectorStores = () => {
                     <div ref={vectorStoresEndRef} />
                 </div>
             ) : (
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <p>No vector store logs available</p>
-                        <p className="text-xs">
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                            <Database />
+                        </EmptyMedia>
+                        <EmptyTitle>No vector store logs available</EmptyTitle>
+                        <EmptyDescription>
                             Vector store logs will appear here when the agent uses knowledge database
-                        </p>
-                    </div>
-                </div>
+                        </EmptyDescription>
+                    </EmptyHeader>
+                </Empty>
             )}
         </div>
     );
 };
 
 export default FlowVectorStores;
-

@@ -1,19 +1,145 @@
-import { GripVertical, Loader2 } from 'lucide-react';
+import { ChevronDown, Copy, Download, ExternalLink, GripVertical, Loader2, NotepadText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import FlowCentralTabs from '@/features/flows/flow-central-tabs';
 import FlowTabs from '@/features/flows/flow-tabs';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { Log } from '@/lib/log';
+import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 import { formatName } from '@/lib/utils/format';
 import { useFlow } from '@/providers/flow-provider';
+
+const FlowReportDropdown = () => {
+    const { flowData, flowId } = useFlow();
+    const flow = flowData?.flow;
+    const tasks = flowData?.tasks ?? [];
+
+    // Check if flow is available for report generation
+    const isReportDisabled = !flow || !flowId;
+
+    // Report export handlers
+    const handleCopyToClipboard = async () => {
+        if (isReportDisabled) {
+            return;
+        }
+
+        const reportContent = generateReport(tasks, flow);
+        const success = await copyToClipboard(reportContent);
+
+        if (success) {
+            toast.success('Report copied to clipboard');
+        } else {
+            Log.error('Failed to copy report to clipboard');
+            toast.error('Failed to copy report to clipboard');
+        }
+    };
+
+    const handleDownloadMD = () => {
+        if (isReportDisabled || !flow) {
+            return;
+        }
+
+        try {
+            // Generate report content
+            const reportContent = generateReport(tasks, flow);
+
+            // Generate file name
+            const baseFileName = generateFileName(flow);
+            const fileName = `${baseFileName}.md`;
+
+            // Download file
+            downloadTextFile(reportContent, fileName, 'text/markdown; charset=UTF-8');
+        } catch (error) {
+            Log.error('Failed to download markdown report:', error);
+        }
+    };
+
+    const handleDownloadPDF = () => {
+        if (isReportDisabled || !flow || !flowId) {
+            return;
+        }
+
+        // Open new tab (not popup) with report page and download flag
+        const url = `/flows/${flowId}/report?download=true&silent=true`;
+        window.open(url, '_blank');
+    };
+
+    const handleOpenWebView = () => {
+        if (isReportDisabled || !flowId) {
+            return;
+        }
+
+        // Open new tab with report page for web viewing
+        const url = `/flows/${flowId}/report`;
+        window.open(url, '_blank');
+    };
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    className="shrink-0"
+                    disabled={isReportDisabled}
+                    variant="ghost"
+                >
+                    <NotepadText />
+                    Report
+                    <ChevronDown />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    disabled={isReportDisabled}
+                    onClick={handleOpenWebView}
+                >
+                    <ExternalLink className="size-4" />
+                    Open web view
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    disabled={isReportDisabled}
+                    onClick={handleCopyToClipboard}
+                >
+                    <Copy className="size-4" />
+                    Copy to clipboard
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    disabled={isReportDisabled}
+                    onClick={handleDownloadMD}
+                >
+                    <Download className="size-4" />
+                    Download MD
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    disabled={isReportDisabled}
+                    onClick={handleDownloadPDF}
+                >
+                    <Download className="size-4" />
+                    Download PDF
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+};
 
 const Flow = () => {
     const { isDesktop } = useBreakpoint();
@@ -74,6 +200,7 @@ const Flow = () => {
                             </BreadcrumbList>
                         </Breadcrumb>
                     </div>
+                    <FlowReportDropdown />
                 </div>
             </header>
             <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">

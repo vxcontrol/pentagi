@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { Search, X } from 'lucide-react';
+import { Search, Wrench, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useFlow } from '@/providers/flow-provider';
@@ -150,12 +151,17 @@ const FlowTools = () => {
                     <div ref={searchesEndRef} />
                 </div>
             ) : (
-                <div className="flex flex-1 items-center justify-center">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <p>No search logs available</p>
-                        <p className="text-xs">Search logs will appear here when the agent performs searches</p>
-                    </div>
-                </div>
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                            <Wrench />
+                        </EmptyMedia>
+                        <EmptyTitle>No search logs available</EmptyTitle>
+                        <EmptyDescription>
+                            Search logs will appear here when the agent performs searches
+                        </EmptyDescription>
+                    </EmptyHeader>
+                </Empty>
             )}
         </div>
     );
