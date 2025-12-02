@@ -133,13 +133,17 @@ const streamingLink = new ApolloLink((operation: Operation, forward) => {
 // Mapping of subscription names to their corresponding cache field names
 const subscriptionToCacheFieldMap: Record<string, string> = {
     agentLogAdded: 'agentLogs',
+    assistantCreated: 'assistants',
+    assistantDeleted: 'assistants',
     assistantLogAdded: 'assistantLogs',
     assistantLogUpdated: 'assistantLogs',
+    assistantUpdated: 'assistants',
     messageLogAdded: 'messageLogs',
     messageLogUpdated: 'messageLogs',
     screenshotAdded: 'screenshots',
     searchLogAdded: 'searchLogs',
     taskCreated: 'tasks',
+    taskUpdated: 'tasks',
     terminalLogAdded: 'terminalLogs',
     vectorStoreLogAdded: 'vectorStoreLogs',
 };
@@ -170,6 +174,18 @@ const handleCacheFieldUpdate = (
     const existingItemIndex = findItemIndex(existingArray, newItem.id, readField);
     const itemExists = existingItemIndex !== -1;
 
+    // Handle deletion subscriptions
+    if (subscriptionName.endsWith('Deleted')) {
+        // If item exists, remove it from the array
+        if (itemExists) {
+            return existingArray.filter((_, index) => index !== existingItemIndex);
+        }
+
+        // Item doesn't exist - nothing to delete
+        return existingArray;
+    }
+
+    // Handle addition/update subscriptions
     // If item exists, keep existing array (Apollo auto-updates normalized entities)
     if (itemExists) {
         return existingArray;
