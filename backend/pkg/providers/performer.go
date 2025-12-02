@@ -711,6 +711,7 @@ func (fp *flowProvider) storeAgentResponseToGraphiti(
 			),
 		},
 	}
+	logrus.WithField("messages", messages).Debug("storing agent response to graphiti")
 
 	fp.storeToGraphiti(ctx, groupID, messages)
 }

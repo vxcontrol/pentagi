@@ -33,7 +33,10 @@ services:
     ports:
       - ${PENTAGI_LISTEN_IP:-127.0.0.1}:${PENTAGI_LISTEN_PORT:-8443}:8443
     depends_on:
-      - pgvector
+      pgvector:
+        condition: service_started
+      graphiti:
+        condition: service_healthy
     environment:
       - DOCKER_GID=998
       - CORS_ORIGINS=${CORS_ORIGINS:-}
@@ -83,7 +86,7 @@ services:
       - SCRAPER_PUBLIC_URL=${SCRAPER_PUBLIC_URL:-}
       - SCRAPER_PRIVATE_URL=${SCRAPER_PRIVATE_URL:-}
       - GRAPHITI_ENABLED=${GRAPHITI_ENABLED:-}
-      - GRAPHITI_URL=${GRAPHITI_URL:-}
+      - GRAPHITI_URL=${GRAPHITI_URL:-http://graphiti:8001}
       - GRAPHITI_TIMEOUT=${GRAPHITI_TIMEOUT:-}
       - PUBLIC_URL=${PUBLIC_URL:-}
       - STATIC_DIR=${STATIC_DIR:-}
@@ -212,8 +215,6 @@ services:
   neo4j:
     image: neo4j:5.26.2
     restart: unless-stopped
-    container_name: neo4j
-    hostname: neo4j
     healthcheck:
       test:
         [
@@ -224,12 +225,9 @@ services:
       timeout: 10s
       retries: 10
       start_period: 3s
-    expose:
-      - 7474/tcp
-      - 7687/tcp
     ports:
-      - "127.0.0.1:7474:7474" # HTTP
-      - "127.0.0.1:${NEO4J_PORT:-7687}:${NEO4J_PORT:-7687}"
+      - "127.0.0.1:7474:7474"  # HTTP
+      - "127.0.0.1:7687:7687"  # Bolt
     logging:
       options:
         max-size: 50m
@@ -244,15 +242,13 @@ services:
   graphiti:
     image: graphiti-pentagi:latest
     restart: unless-stopped
-    container_name: graphiti
-    hostname: graphiti
     healthcheck:
       test:
         [
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/healthcheck')",
         ]
       interval: 10s
       timeout: 5s
@@ -260,19 +256,18 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
-    expose:
-      - 8000/tcp
+    # Only relevant when running the backend locally (outside of Docker Compose)    
     ports:
-      - "127.0.0.1:8001:8000"
+      - "127.0.0.1:8001:8001"
     logging:
       options:
         max-size: 50m
         max-file: '7'
     environment:
-      - OPENAI_API_KEY=${OPEN_AI_KEY:-}
-      - NEO4J_URI=bolt://neo4j:${NEO4J_PORT:-7687}
+      - OPENAI_API_KEY=${OPEN_AI_KEY}
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
       - NEO4J_USER=${NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-devpassword}
-      - PORT=8000
+      - MODEL_NAME=${GRAPHITI_MODEL_NAME:-gpt-5}
     networks:
       - pentagi-network

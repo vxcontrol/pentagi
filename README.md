@@ -568,16 +568,17 @@ SEARXNG_LANGUAGE=
 SEARXNG_SAFESEARCH=0
 SEARXNG_TIME_RANGE=
 
-# Neo4j (Graphiti) settings
-NEO4J_PORT=7687
-NEO4J_URI=neo4j://127.0.0.1:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=devpassword  # Change this to improve security
-
-# Graphiti knowledge graph settings
-GRAPHITI_ENABLED=false  # Set to true to enable knowledge graph integration
-GRAPHITI_URL=http://localhost:8000
+## Graphiti knowledge graph settings
+GRAPHITI_ENABLED=true
+# Disable when running everything in docker compose, enable when running locally with debugger
+# GRAPHITI_URL=http://localhost:8001
 GRAPHITI_TIMEOUT=30
+GRAPHITI_MODEL_NAME=gpt-5
+
+# Neo4j settings
+NEO4J_PORT=7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=devpassword
 
 # Assistant configuration
 ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating new assistants
@@ -1017,16 +1018,17 @@ The Graphiti knowledge graph is **optional** and disabled by default. To enable 
 1. Configure Graphiti environment variables in `.env` file:
 
 ```bash
-# Enable Graphiti integration
+## Graphiti knowledge graph settings
 GRAPHITI_ENABLED=true
-GRAPHITI_URL=http://graphiti:8000
+# Disable when running everything in docker compose, enable when running locally with debugger
+# GRAPHITI_URL=http://localhost:8001
 GRAPHITI_TIMEOUT=30
+GRAPHITI_MODEL_NAME=gpt-5
 
-# Neo4j configuration (used by Graphiti)
+# Neo4j settings
 NEO4J_PORT=7687
-NEO4J_URI=neo4j://neo4j:7687
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=your_secure_password  # Change this!
+NEO4J_PASSWORD=devpassword
 
 # OpenAI API key (required by Graphiti for entity extraction)
 OPEN_AI_KEY=your_openai_api_key

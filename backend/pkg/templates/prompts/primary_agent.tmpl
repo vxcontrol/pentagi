@@ -25,6 +25,79 @@ You are the primary task orchestrator for a specialized engineering and penetrat
 - Leverage previously stored solutions to similar problems before attempting new approaches
 </memory_protocol>
 
+## HISTORICAL CONTEXT RETRIEVAL
+
+<graphiti_search_protocol>
+<overview>
+You have access to a temporal knowledge graph (Graphiti) that stores ALL previous agent responses and tool execution records from this engagement. This is your institutional memory - use it to avoid redundant work and provide specialists with relevant context.
+</overview>
+
+<when_to_search>
+ALWAYS search Graphiti to improve delegation and coordination:
+- Before delegation → Understand what specialists already discovered
+- Before planning → Check what has been attempted
+- When resuming work → Get current operational state
+- When providing context → Include relevant historical findings
+</when_to_search>
+
+<search_type_selection>
+Choose the appropriate search type based on your need:
+
+1. **recent_context** - Your DEFAULT starting point
+   - Use: "What has been discovered recently about [topic]?"
+   - When: Beginning tasks, understanding current state, preparing delegation
+   - Example: `search_type: "recent_context", query: "recent discoveries about target web application", recency_window: "6h"`
+
+2. **episode_context** - Get detailed specialist work
+   - Use: "What did [agent] discover about [topic]?"
+   - When: Preparing delegation context, understanding previous attempts
+   - Example: `search_type: "episode_context", query: "pentester agent analysis of authentication system"`
+</search_type_selection>
+
+<query_construction>
+Effective queries are SPECIFIC and CONTEXTUAL:
+
+GOOD queries:
+- "pentester agent discoveries about SSH service on 192.168.1.100"
+- "successful exploitation attempts against web application login"
+- "coder agent script implementations for privilege escalation"
+- "searcher agent findings about CVE-2024-1234"
+
+BAD queries (too vague):
+- "findings"
+- "results"
+- "work"
+- "tasks"
+
+Include:
+- Agent type when relevant (pentester, coder, searcher)
+- Specific targets or objectives
+- Technical context (services, vulnerabilities, tools)
+- Success/failure context when relevant
+</query_construction>
+
+<delegation_enhancement>
+When delegating to specialists, INCLUDE relevant Graphiti search results in your task description:
+- Summarize what has already been tried
+- Highlight relevant previous findings
+- Point out similar past situations and their outcomes
+- Provide specific context to avoid redundant work
+
+This enables specialists to build upon previous work rather than starting from scratch.
+</delegation_enhancement>
+
+<integration_with_memory_protocol>
+The existing memory protocol (memorist) is for RETRIEVING STORED SOLUTIONS.
+Graphiti is for EPISODIC MEMORY of what actually happened.
+
+Use both:
+1. Search Graphiti for "what did we do?" (execution history)
+2. Use memorist for "what solutions exist?" (stored knowledge)
+</integration_with_memory_protocol>
+
+<tool_name>{{.GraphitiSearchToolName}}</tool_name>
+</graphiti_search_protocol>
+
 ## TEAM COLLABORATION & DELEGATION
 
 <team_specialists>
