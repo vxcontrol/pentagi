@@ -65,13 +65,7 @@ const AssistantsDropdown = ({
 
     // Get the current selected assistant index (1-based, reversed)
     const selectedAssistantIndex = useMemo(() => {
-        if (!selectedAssistantId) {
-            return null;
-        }
-
-        const index = assistants.findIndex((assistant) => assistant.id === selectedAssistantId);
-
-        return index !== -1 ? assistants.length - index : null;
+        return assistants.findIndex((assistant) => assistant.id === selectedAssistantId);
     }, [assistants, selectedAssistantId]);
 
     // Group assistants by status with pre-calculated indices
@@ -83,9 +77,8 @@ const AssistantsDropdown = ({
             failed: AssistantItem[];
             finished: AssistantItem[];
         }>(
-            (accumulator, assistant, originalIndex) => {
-                const index = assistants.length - originalIndex;
-                const item = { assistant, index };
+            (accumulator, assistant, index) => {
+                const item = { assistant, index: index + 1 };
 
                 return {
                     ...accumulator,
@@ -203,7 +196,7 @@ const AssistantsDropdown = ({
                                 />
                                 <ProviderIcon provider={selectedAssistant.provider} />
                                 <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
-                                    {selectedAssistantIndex}
+                                    {selectedAssistantIndex + 1}
                                 </span>
                             </>
                         ) : (
