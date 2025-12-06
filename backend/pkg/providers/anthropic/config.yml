@@ -24,8 +24,6 @@ primary_agent:
   temperature: 1.0
   n: 1
   max_tokens: 4000
-  reasoning:
-    max_tokens: 1024
   price:
     input: 3.0
     output: 15.0
@@ -35,8 +33,6 @@ assistant:
   temperature: 1.0
   n: 1
   max_tokens: 6000
-  reasoning:
-    max_tokens: 2048
   price:
     input: 3.0
     output: 15.0
@@ -46,8 +42,6 @@ generator:
   temperature: 1.0
   n: 1
   max_tokens: 8192
-  reasoning:
-    max_tokens: 4096
   price:
     input: 3.0
     output: 15.0
@@ -57,8 +51,6 @@ refiner:
   temperature: 1.0
   n: 1
   max_tokens: 8192
-  reasoning:
-    max_tokens: 2048
   price:
     input: 3.0
     output: 15.0
@@ -68,8 +60,6 @@ adviser:
   temperature: 1.0
   n: 1
   max_tokens: 6000
-  reasoning:
-    max_tokens: 4096
   price:
     input: 3.0
     output: 15.0
@@ -79,8 +69,6 @@ reflector:
   temperature: 1.0
   n: 1
   max_tokens: 4000
-  reasoning:
-    max_tokens: 0
   price:
     input: 3.0
     output: 15.0
@@ -90,8 +78,6 @@ searcher:
   temperature: 1.0
   n: 1
   max_tokens: 4000
-  reasoning:
-    max_tokens: 1024
   price:
     input: 3.0
     output: 15.0
@@ -101,8 +87,6 @@ enricher:
   temperature: 1.0
   n: 1
   max_tokens: 4000
-  reasoning:
-    max_tokens: 0
   price:
     input: 3.0
     output: 15.0
@@ -112,8 +96,6 @@ coder:
   temperature: 1.0
   n: 1
   max_tokens: 6000
-  reasoning:
-    max_tokens: 2048
   price:
     input: 3.0
     output: 15.0
@@ -123,8 +105,6 @@ installer:
   temperature: 1.0
   n: 1
   max_tokens: 6000
-  reasoning:
-    max_tokens: 1024
   price:
     input: 3.0
     output: 15.0
@@ -134,8 +114,6 @@ pentester:
   temperature: 1.0
   n: 1
   max_tokens: 4000
-  reasoning:
-    max_tokens: 1024
   price:
     input: 3.0
     output: 15.0
