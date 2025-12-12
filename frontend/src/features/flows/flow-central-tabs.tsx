@@ -12,12 +12,8 @@ const FlowCentralTabs = () => {
 
     // Switch to assistant tab if flow is loaded and messageLogs are empty
     useEffect(() => {
-        if (!isLoading && flowData?.messageLogs) {
-            const hasMessages = flowData.messageLogs.length > 0;
-
-            if (!hasMessages) {
-                setActiveTab('assistant');
-            }
+        if (!isLoading && !flowData?.messageLogs?.length) {
+            setActiveTab('assistant');
         }
     }, [isLoading, flowData?.messageLogs]);
 
