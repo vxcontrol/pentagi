@@ -9,7 +9,7 @@ import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib
 
 type ReportState = 'content' | 'error' | 'generating' | 'loading';
 
-const Report = () => {
+const FlowReport = () => {
     const { flowId } = useParams<{ flowId: string }>();
     const [searchParams] = useSearchParams();
     const download = searchParams.has('download');
@@ -136,4 +136,4 @@ const Report = () => {
     );
 };
 
-export default Report;
+export default FlowReport;

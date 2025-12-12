@@ -1,12 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import FlowAssistantMessages from '@/features/flows/messages/flow-assistant-messages';
 import FlowAutomationMessages from '@/features/flows/messages/flow-automation-messages';
+import { useFlow } from '@/providers/flow-provider';
 
 const FlowCentralTabs = () => {
+    const { flowData, isLoading } = useFlow();
     const [activeTab, setActiveTab] = useState<string>('automation');
+
+    // Switch to assistant tab if flow is loaded and messageLogs are empty
+    useEffect(() => {
+        if (!isLoading && flowData?.messageLogs) {
+            const hasMessages = flowData.messageLogs.length > 0;
+
+            if (!hasMessages) {
+                setActiveTab('assistant');
+            }
+        }
+    }, [isLoading, flowData?.messageLogs]);
 
     return (
         <Tabs
@@ -41,4 +54,3 @@ const FlowCentralTabs = () => {
 };
 
 export default FlowCentralTabs;
-

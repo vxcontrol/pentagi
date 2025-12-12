@@ -12,11 +12,11 @@ import PageLoader from '@/components/shared/page-loader';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
 import Flow from '@/pages/flows/flow';
+import FlowReport from '@/pages/flows/flow-report';
 import Flows from '@/pages/flows/Flows';
 import NewFlow from '@/pages/flows/new-flow';
 import Login from '@/pages/login';
 import OAuthResult from '@/pages/oauth-result';
-import Report from '@/pages/report';
 import SettingsPrompt from '@/pages/settings/settings-prompt';
 import SettingsPrompts from '@/pages/settings/settings-prompts';
 import SettingsProvider from '@/pages/settings/settings-provider';
@@ -140,7 +140,7 @@ const App = () => {
                                     element={
                                         <ProtectedRoute>
                                             <SystemSettingsProvider>
-                                                <Report />
+                                                <FlowReport />
                                             </SystemSettingsProvider>
                                         </ProtectedRoute>
                                     }
