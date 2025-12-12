@@ -179,6 +179,51 @@ const sanitizeTerminalOutput = (input: string): string => {
     return result.join('');
 };
 
+/**
+ * Checks if a string contains potentially problematic characters for xterm.js.
+ * Returns true if the string needs sanitization.
+ *
+ * @param input - The string to check
+ * @returns true if string contains problematic characters
+ */
+const needsSanitization = (input: string): boolean => {
+    if (!input) {
+        return false;
+    }
+
+    for (let index = 0; index < input.length; index++) {
+        const charCode = input.charCodeAt(index);
+
+        // Allow standard whitespace (tab, LF, CR)
+        if (charCode === 0x09 || charCode === 0x0a || charCode === 0x0d) {
+            continue;
+        }
+
+        // Allow ASCII printable range (0x20-0x7E)
+        if (charCode >= 0x20 && charCode <= 0x7e) {
+            continue;
+        }
+
+        // Allow ESC character (start of escape sequences)
+        if (charCode === 0x1b) {
+            // Quick validation of escape sequence
+            if (index + 1 < input.length) {
+                const nextChar = input.charAt(index + 1);
+
+                // Common valid escape sequences: ESC[, ESC], ESC(, ESC), etc.
+                if ('[]()\\_'.includes(nextChar)) {
+                    continue;
+                }
+            }
+        }
+
+        // Found problematic character (control chars, high-bit, Unicode)
+        return true;
+    }
+
+    return false;
+};
+
 const terminalOptions: ITerminalOptions = {
     allowProposedApi: true,
     allowTransparency: true,
@@ -626,7 +671,7 @@ const Terminal = ({
                 // Add logs in batch for performance optimization
                 safeTerminalOperation(() => {
                     for (const log of newLogs.filter(Boolean)) {
-                        terminal.writeln(sanitizeTerminalOutput(log));
+                        terminal.writeln(needsSanitization(log) ? sanitizeTerminalOutput(log) : log);
                     }
 
                     // Scroll down only once after adding all logs
@@ -644,7 +689,7 @@ const Terminal = ({
 
                     // Add all logs in batch again
                     for (const log of logs.filter(Boolean)) {
-                        terminal.writeln(sanitizeTerminalOutput(log));
+                        terminal.writeln(needsSanitization(log) ? sanitizeTerminalOutput(log) : log);
                     }
 
                     terminal.scrollToBottom();
