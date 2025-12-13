@@ -200,7 +200,7 @@ const Flow = () => {
                             </BreadcrumbList>
                         </Breadcrumb>
                     </div>
-                    <FlowReportDropdown />
+                    {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
                 </div>
             </header>
             <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
