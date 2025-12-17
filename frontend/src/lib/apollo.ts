@@ -222,7 +222,13 @@ const processSubscriptionUpdate = (
             },
         });
     } catch (error) {
-        Log.error(`Error updating cache for ${subscriptionName}:`, error);
+        // Log detailed error information for debugging
+        Log.error(`Error updating cache for ${subscriptionName}:`, {
+            cacheField,
+            error,
+            itemId: newItem.id,
+            subscriptionName,
+        });
     }
 };
 
@@ -235,18 +241,22 @@ const createSubscriptionCacheLink = (cache: InMemoryCache) => {
                 complete: observer.complete.bind(observer),
                 error: observer.error.bind(observer),
                 next: (result: FetchResult) => {
-                    // Process each subscription type and update cache
-                    if (result.data) {
-                        Object.entries(subscriptionToCacheFieldMap)
-                            .map(([subscriptionName, cacheField]) => ({
-                                cacheField,
-                                newItem: result.data?.[subscriptionName],
-                                subscriptionName,
-                            }))
-                            .filter(({ newItem }) => newItem?.id)
-                            .forEach(({ cacheField, newItem, subscriptionName }) => {
-                                processSubscriptionUpdate(cache, subscriptionName, cacheField, newItem);
-                            });
+                    try {
+                        // Process each subscription type and update cache
+                        if (result.data) {
+                            Object.entries(subscriptionToCacheFieldMap)
+                                .map(([subscriptionName, cacheField]) => ({
+                                    cacheField,
+                                    newItem: result.data?.[subscriptionName],
+                                    subscriptionName,
+                                }))
+                                .filter(({ newItem }) => newItem?.id)
+                                .forEach(({ cacheField, newItem, subscriptionName }) => {
+                                    processSubscriptionUpdate(cache, subscriptionName, cacheField, newItem);
+                                });
+                        }
+                    } catch (error) {
+                        Log.error('Error processing subscription cache update:', error);
                     }
 
                     // Process the result after cache update
