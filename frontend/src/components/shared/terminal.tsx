@@ -11,9 +11,9 @@ import { Terminal as XTerminal } from '@xterm/xterm';
 import debounce from 'lodash/debounce';
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 
+import { useTheme } from '@/hooks/use-theme';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
-import { useTheme } from '@/providers/theme-provider';
 
 /**
  * Sanitizes terminal output by handling binary/non-printable characters.

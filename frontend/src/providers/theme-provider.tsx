@@ -1,47 +1,71 @@
-import type { ReactNode } from 'react';
+import { createContext, useEffect, useState } from 'react';
 
-import { ThemeProvider as NextThemesProvider } from 'next-themes';
-import { useEffect } from 'react';
+const themes = ['dark', 'light', 'system'] as const;
 
-const ThemeProvider = ({ children }: { children: ReactNode }) => {
-    useEffect(() => {
-        const updateDataMode = () => {
-            const hasDark = document.documentElement.classList.contains('dark');
-            const hasLight = document.documentElement.classList.contains('light');
+export type Theme = (typeof themes)[number];
 
-            if (!hasDark && !hasLight) {
-                document.documentElement.classList.add('dark');
-            }
+const isThemeValid = (value: unknown): value is Theme => typeof value === 'string' && themes.includes(value as Theme);
 
-            const isDark = document.documentElement.classList.contains('dark');
-            const theme = isDark ? 'dark' : 'light';
-            document.documentElement.dataset.mode = theme;
-        };
+interface ThemeProviderProps {
+    children: React.ReactNode;
+    defaultTheme?: Theme;
+    storageKey?: string;
+}
 
-        const observer = new MutationObserver(updateDataMode);
+interface ThemeProviderState {
+    setTheme: (theme: Theme) => void;
+    theme: Theme;
+}
 
-        observer.observe(document.documentElement, {
-            attributeFilter: ['class'],
-            attributes: true,
-        });
-
-        updateDataMode();
-
-        return () => observer.disconnect();
-    }, []);
-
-    return (
-        <NextThemesProvider
-            attribute="class"
-            defaultTheme="dark"
-            disableTransitionOnChange
-            enableSystem={false}
-            storageKey="theme"
-        >
-            {children}
-        </NextThemesProvider>
-    );
+const initialState: ThemeProviderState = {
+    setTheme: () => null,
+    theme: 'system',
 };
 
-export { useTheme } from 'next-themes';
-export default ThemeProvider;
+export const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
+
+export const ThemeProvider = ({
+    children,
+    defaultTheme = 'dark',
+    storageKey = 'theme',
+    ...props
+}: ThemeProviderProps) => {
+    const [theme, setTheme] = useState<Theme>(() => {
+        const storedTheme = localStorage.getItem(storageKey);
+
+        return isThemeValid(storedTheme) ? storedTheme : defaultTheme;
+    });
+
+    useEffect(() => {
+        const root = window.document.documentElement;
+
+        root.classList.remove('light', 'dark');
+
+        if (theme === 'system') {
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+            root.classList.add(systemTheme);
+
+            return;
+        }
+
+        root.classList.add(theme);
+    }, [theme]);
+
+    const value = {
+        setTheme: (theme: Theme) => {
+            localStorage.setItem(storageKey, theme);
+            setTheme(theme);
+        },
+        theme,
+    };
+
+    return (
+        <ThemeProviderContext.Provider
+            {...props}
+            value={value}
+        >
+            {children}
+        </ThemeProviderContext.Provider>
+    );
+};

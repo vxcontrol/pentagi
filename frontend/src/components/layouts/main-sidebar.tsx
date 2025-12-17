@@ -1,7 +1,20 @@
 import { Avatar, AvatarFallback } from '@radix-ui/react-avatar';
-import { ChevronsUpDown, GitFork, KeyRound, LogOut, Moon, Settings, Sun, UserIcon } from 'lucide-react';
+import {
+    ChevronsUpDown,
+    GitFork,
+    KeyRound,
+    LogOut,
+    Monitor,
+    Moon,
+    Settings,
+    Settings2,
+    Sun,
+    UserIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link, useMatch } from 'react-router-dom';
+
+import type { Theme } from '@/providers/theme-provider';
 
 import Logo from '@/components/icons/logo';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,8 +38,9 @@ import {
     SidebarMenuItem,
     SidebarRail,
 } from '@/components/ui/sidebar';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PasswordChangeForm } from '@/features/authentication/password-change-form';
-import { useTheme } from '@/providers/theme-provider';
+import { useTheme } from '@/hooks/use-theme';
 import { useUser } from '@/providers/user-provider';
 
 const MainSidebar = () => {
@@ -129,13 +143,38 @@ const MainSidebar = () => {
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                                    {theme === 'light' ? (
-                                        <Moon className="mr-2 size-4" />
-                                    ) : (
-                                        <Sun className="mr-2 size-4" />
-                                    )}
-                                    <span>{theme === 'light' ? 'Dark mode' : 'Light mode'}</span>
+                                <DropdownMenuItem
+                                    className="cursor-default hover:bg-transparent focus:bg-transparent"
+                                    onSelect={(event) => event.preventDefault()}
+                                >
+                                    <Settings2 />
+                                    Theme
+                                    <Tabs
+                                        className="-my-1.5 -mr-2 ml-auto"
+                                        onValueChange={(value) => setTheme(value as Theme)}
+                                        value={theme || 'system'}
+                                    >
+                                        <TabsList className="h-7 p-0.5">
+                                            <TabsTrigger
+                                                className="h-6 px-2"
+                                                value="system"
+                                            >
+                                                <Monitor className="size-4" />
+                                            </TabsTrigger>
+                                            <TabsTrigger
+                                                className="h-6 px-2"
+                                                value="light"
+                                            >
+                                                <Sun className="size-4" />
+                                            </TabsTrigger>
+                                            <TabsTrigger
+                                                className="h-6 px-2"
+                                                value="dark"
+                                            >
+                                                <Moon className="size-4" />
+                                            </TabsTrigger>
+                                        </TabsList>
+                                    </Tabs>
                                 </DropdownMenuItem>
                                 {user?.type === 'local' && (
                                     <>

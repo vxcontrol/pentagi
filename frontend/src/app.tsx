@@ -23,7 +23,7 @@ import SettingsProvider from '@/pages/settings/settings-provider';
 import SettingsProviders from '@/pages/settings/settings-providers';
 import { FlowProvider } from '@/providers/flow-provider';
 import { ProvidersProvider } from '@/providers/providers-provider';
-import ThemeProvider from '@/providers/theme-provider';
+import { ThemeProvider } from '@/providers/theme-provider';
 import { UserProvider } from '@/providers/user-provider';
 
 import { SystemSettingsProvider } from './providers/system-settings-provider';
