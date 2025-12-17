@@ -57,6 +57,7 @@ func CreateDummyTemplateData() map[string]any {
 		"EnricherResultToolName":    tools.EnricherResultToolName,
 		"ReportResultToolName":      tools.ReportResultToolName,
 		"SubtaskListToolName":       tools.SubtaskListToolName,
+		"SubtaskPatchToolName":      tools.SubtaskPatchToolName,
 		"AskUserToolName":           tools.AskUserToolName,
 
 		// Summarization related - using constants from proper packages

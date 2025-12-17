@@ -35,6 +35,7 @@ type Browser struct {
 }
 
 type SubtaskInfo struct {
+	ID          int64  `json:"id,omitempty" jsonschema:"title=Subtask ID" jsonschema_description:"ID of the subtask (populated by the system for existing subtasks)"`
 	Title       string `json:"title" jsonschema:"required,title=Subtask title" jsonschema_description:"Subtask title to show to the user which contains main goal of work result by this subtask"`
 	Description string `json:"description" jsonschema:"required,title=Subtask to complete" jsonschema_description:"Detailed description and instructions and rules and requirements what have to do in the subtask"`
 }
@@ -42,6 +43,31 @@ type SubtaskInfo struct {
 type SubtaskList struct {
 	Subtasks []SubtaskInfo `json:"subtasks" jsonschema:"required,title=Subtasks to complete" jsonschema_description:"Ordered list of subtasks to execute after decomposing the task in the user language"`
 	Message  string        `json:"message" jsonschema:"required,title=Subtask generation result" jsonschema_description:"Not so long message with the generation result and main goal of work to send to the user in user's language only"`
+}
+
+// SubtaskOperationType defines the type of operation to perform on a subtask
+type SubtaskOperationType string
+
+const (
+	SubtaskOpAdd     SubtaskOperationType = "add"
+	SubtaskOpRemove  SubtaskOperationType = "remove"
+	SubtaskOpModify  SubtaskOperationType = "modify"
+	SubtaskOpReorder SubtaskOperationType = "reorder"
+)
+
+// SubtaskOperation defines a single operation on the subtask list for delta-based refinement
+type SubtaskOperation struct {
+	Op          SubtaskOperationType `json:"op" jsonschema:"required,enum=add,enum=remove,enum=modify,enum=reorder" jsonschema_description:"Operation type: 'add' creates a new subtask, 'remove' deletes a subtask by ID, 'modify' updates title/description of existing subtask, 'reorder' moves a subtask to a different position"`
+	ID          *int64               `json:"id,omitempty" jsonschema:"title=Subtask ID" jsonschema_description:"ID of existing subtask (required for remove/modify/reorder operations)"`
+	AfterID     *int64               `json:"after_id,omitempty" jsonschema:"title=Insert after ID" jsonschema_description:"For add/reorder: insert after this subtask ID (null/0 = insert at beginning)"`
+	Title       string               `json:"title,omitempty" jsonschema:"title=New title" jsonschema_description:"New title (required for add, optional for modify)"`
+	Description string               `json:"description,omitempty" jsonschema:"title=New description" jsonschema_description:"New description (required for add, optional for modify)"`
+}
+
+// SubtaskPatch is the delta-based refinement output for modifying subtask lists
+type SubtaskPatch struct {
+	Operations []SubtaskOperation `json:"operations" jsonschema:"required" jsonschema_description:"List of operations to apply to the current subtask list. Empty array means no changes needed."`
+	Message    string             `json:"message" jsonschema:"required,title=Refinement summary" jsonschema_description:"Summary of changes made and justification for modifications to send to the user in user's language only"`
 }
 
 type TaskResult struct {
