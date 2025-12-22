@@ -81,7 +81,7 @@ func (t *GraphitiSearchTool) IsAvailable() bool {
 // Handle executes the search based on search_type
 func (t *GraphitiSearchTool) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	if !t.IsAvailable() {
-		return "", fmt.Errorf("graphiti search is not available: graphiti integration is disabled")
+		return "Graphiti knowledge graph is not enabled. No historical context or memory data is available for this search.", nil
 	}
 
 	var searchArgs GraphitiSearchAction
