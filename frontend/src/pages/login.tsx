@@ -27,7 +27,7 @@ const Login = () => {
                         <Loader2 className="size-16 animate-spin" />
                     )}
                 </div>
-                <div className="hidden bg-gradient-to-r from-slate-800 to-slate-950 lg:flex">
+                <div className="hidden bg-gradient-to-br from-primary/20 via-primary/10 to-background lg:flex">
                     <Logo className="m-auto size-32 animate-logo-spin text-white delay-10000" />
                 </div>
             </div>

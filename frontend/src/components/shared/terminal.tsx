@@ -258,7 +258,7 @@ const lightSearchDecorations = {
 } as const;
 
 const darkTheme: ITheme = {
-    background: '#020817',
+    background: '#050c13',
     black: '#f4f4f5',
     blue: '#60a5fa',
     brightBlack: '#e4e4e7',
@@ -277,7 +277,7 @@ const darkTheme: ITheme = {
     magenta: '#c084fc',
     red: '#f87171',
     selectionBackground: 'rgba(96, 165, 250, 0.2)',
-    white: '#020817',
+    white: '#050c13',
     yellow: '#facc15',
 } as const;
 

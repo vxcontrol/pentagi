@@ -153,7 +153,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
         <div className={`flex flex-col ${type === MessageLogType.Input ? 'items-end' : 'items-start'}`}>
             <div
                 className={cn(
-                    'max-w-[90%] rounded-lg bg-accent p-3 text-accent-foreground',
+                    'max-w-[90%] rounded border bg-card p-3 text-card-foreground',
                     resultFormat === ResultFormat.Terminal && isDetailsVisible ? 'w-full' : '',
                 )}
             >

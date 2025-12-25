@@ -112,7 +112,7 @@ const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
 
     return (
         <div className="flex flex-col items-start">
-            <div className="max-w-full rounded-lg bg-accent p-3 text-accent-foreground">
+            <div className="max-w-full rounded border bg-card p-3 text-card-foreground">
                 <div className="flex flex-col">
                     <div className="cursor-pointer text-sm font-semibold">
                         <span className="inline-flex items-center gap-1">
@@ -190,4 +190,3 @@ const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
 };
 
 export default memo(FlowVectorStore);
-

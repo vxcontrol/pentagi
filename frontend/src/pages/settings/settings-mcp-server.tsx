@@ -8,17 +8,11 @@ import { z } from 'zod';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusCard } from '@/components/ui/status-card';
 import { Switch } from '@/components/ui/switch';
-
-interface KeyValuePair {
-    key: string;
-    value: string;
-}
 
 type McpTransport = 'sse' | 'stdio';
 
@@ -155,7 +149,7 @@ const SettingsMcpServer = () => {
         }
     };
 
-    const handleSubmit = async (data: FormData) => {
+    const handleSubmit = async (_data: FormData) => {
         try {
             setSubmitError(null);
             // Simulate request
@@ -254,362 +248,362 @@ const SettingsMcpServer = () => {
 
     return (
         <Fragment>
-            <Card>
-                <CardHeader>
-                    <CardDescription>
+            <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                    <h2 className="flex items-center gap-2 text-lg font-semibold">
+                        <Server className="size-5 text-muted-foreground" />
+                        {isNew ? 'New MCP Server' : 'MCP Server Settings'}
+                    </h2>
+
+                    <div className="text-muted-foreground">
                         {isNew ? 'Configure a new MCP server' : 'Update MCP server settings'}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Form {...form}>
-                        <form
-                            className="space-y-6"
-                            id="mcp-server-form"
-                            onSubmit={form.handleSubmit(handleSubmit)}
-                        >
-                            {(submitError || testMessage || testError) && (
-                                <Alert variant="destructive">
-                                    {submitError && (
-                                        <>
-                                            <AlertTitle>Error</AlertTitle>
-                                            <AlertDescription>{submitError}</AlertDescription>
-                                        </>
-                                    )}
-                                    {testError && (
-                                        <>
-                                            <AlertTitle>Test Failed</AlertTitle>
-                                            <AlertDescription>{testError}</AlertDescription>
-                                        </>
-                                    )}
-                                    {testMessage && !submitError && !testError && (
-                                        <>
-                                            <AlertTitle>Test Passed</AlertTitle>
-                                            <AlertDescription>{testMessage}</AlertDescription>
-                                        </>
-                                    )}
-                                </Alert>
-                            )}
+                    </div>
+                </div>
 
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <FormField
-                                    control={form.control}
-                                    name="name"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Name</FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    {...field}
-                                                    placeholder="Enter server name"
-                                                />
-                                            </FormControl>
-                                            <FormDescription>A unique name for this MCP server</FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                <Form {...form}>
+                    <form
+                        className="space-y-6"
+                        id="mcp-server-form"
+                        onSubmit={form.handleSubmit(handleSubmit)}
+                    >
+                        {(submitError || testMessage || testError) && (
+                            <Alert variant="destructive">
+                                {submitError && (
+                                    <>
+                                        <AlertTitle>Error</AlertTitle>
+                                        <AlertDescription>{submitError}</AlertDescription>
+                                    </>
+                                )}
+                                {testError && (
+                                    <>
+                                        <AlertTitle>Test Failed</AlertTitle>
+                                        <AlertDescription>{testError}</AlertDescription>
+                                    </>
+                                )}
+                                {testMessage && !submitError && !testError && (
+                                    <>
+                                        <AlertTitle>Test Passed</AlertTitle>
+                                        <AlertDescription>{testMessage}</AlertDescription>
+                                    </>
+                                )}
+                            </Alert>
+                        )}
 
-                                <FormField
-                                    control={form.control}
-                                    name="transport"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Transport</FormLabel>
-                                            <Select
-                                                defaultValue={field.value}
-                                                onValueChange={(v: McpTransport) => {
-                                                    field.onChange(v);
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <FormField
+                                control={form.control}
+                                name="name"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Name</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                {...field}
+                                                placeholder="Enter server name"
+                                            />
+                                        </FormControl>
+                                        <FormDescription>A unique name for this MCP server</FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
 
-                                                    // Normalize opposite config to avoid stale values
-                                                    if (v === 'stdio') {
-                                                        form.setValue('sse', undefined);
+                            <FormField
+                                control={form.control}
+                                name="transport"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Transport</FormLabel>
+                                        <Select
+                                            defaultValue={field.value}
+                                            onValueChange={(v: McpTransport) => {
+                                                field.onChange(v);
 
-                                                        if (!form.getValues('stdio')) {
-                                                            form.setValue('stdio', { args: '', command: '', env: [] });
-                                                        }
-                                                    } else {
-                                                        form.setValue('stdio', undefined);
+                                                // Normalize opposite config to avoid stale values
+                                                if (v === 'stdio') {
+                                                    form.setValue('sse', undefined);
 
-                                                        if (!form.getValues('sse')) {
-                                                            form.setValue('sse', { headers: [], url: '' });
-                                                        }
+                                                    if (!form.getValues('stdio')) {
+                                                        form.setValue('stdio', { args: '', command: '', env: [] });
                                                     }
-                                                }}
-                                            >
-                                                <FormControl>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select transport" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="stdio">STDIO</SelectItem>
-                                                    <SelectItem value="sse">SSE</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <FormDescription>
-                                                STDIO for local process; SSE for remote URL
-                                            </FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
+                                                } else {
+                                                    form.setValue('stdio', undefined);
 
-                            {/* STDIO configuration */}
-                            {transport === 'stdio' && (
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-medium">STDIO Configuration</h3>
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        <FormField
-                                            control={form.control}
-                                            name="stdio.command"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Command</FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            {...field}
-                                                            placeholder="/usr/local/bin/node"
-                                                        />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="stdio.args"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Args</FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            {...field}
-                                                            placeholder="/path/to/script.js --flag value"
-                                                            value={field.value ?? ''}
-                                                        />
-                                                    </FormControl>
-                                                    <FormDescription>Space-separated arguments</FormDescription>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
+                                                    if (!form.getValues('sse')) {
+                                                        form.setValue('sse', { headers: [], url: '' });
+                                                    }
+                                                }
+                                            }}
+                                        >
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select transport" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="stdio">STDIO</SelectItem>
+                                                <SelectItem value="sse">SSE</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <FormDescription>STDIO for local process; SSE for remote URL</FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
 
-                                    <div>
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <h4 className="text-sm font-medium">Environment Variables</h4>
-                                            <Button
-                                                onClick={() => handleAddKeyValue('env')}
-                                                size="sm"
-                                                type="button"
-                                                variant="outline"
-                                            >
-                                                <Plus className="size-3" /> Add
-                                            </Button>
-                                        </div>
-                                        <div className="space-y-2">
-                                            {stdioEnvArray.fields.length === 0 && (
-                                                <div className="text-sm text-muted-foreground">No variables</div>
-                                            )}
-                                            {stdioEnvArray.fields.map((field, index) => (
-                                                <div
-                                                    className="grid grid-cols-1 gap-2 md:grid-cols-5"
-                                                    key={field.id}
-                                                >
-                                                    <Controller
-                                                        control={form.control}
-                                                        name={`stdio.env.${index}.key` as const}
-                                                        render={({ field }) => (
-                                                            <Input
-                                                                {...field}
-                                                                className="md:col-span-2"
-                                                                placeholder="KEY"
-                                                            />
-                                                        )}
-                                                    />
-                                                    <Controller
-                                                        control={form.control}
-                                                        name={`stdio.env.${index}.value` as const}
-                                                        render={({ field }) => (
-                                                            <Input
-                                                                {...field}
-                                                                className="md:col-span-2"
-                                                                placeholder="VALUE"
-                                                            />
-                                                        )}
-                                                    />
-                                                    <Button
-                                                        className="justify-self-start"
-                                                        onClick={() => stdioEnvArray.remove(index)}
-                                                        type="button"
-                                                        variant="ghost"
-                                                    >
-                                                        <Trash2 className="size-4" />
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* SSE configuration */}
-                            {transport === 'sse' && (
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-medium">SSE Configuration</h3>
+                        {/* STDIO configuration */}
+                        {transport === 'stdio' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-medium">STDIO Configuration</h3>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <FormField
                                         control={form.control}
-                                        name="sse.url"
+                                        name="stdio.command"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>URL</FormLabel>
+                                                <FormLabel>Command</FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         {...field}
-                                                        placeholder="https://mcp.example.com/sse"
+                                                        placeholder="/usr/local/bin/node"
                                                     />
                                                 </FormControl>
                                                 <FormMessage />
                                             </FormItem>
                                         )}
                                     />
-
-                                    <div>
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <h4 className="text-sm font-medium">Headers</h4>
-                                            <Button
-                                                onClick={() => handleAddKeyValue('headers')}
-                                                size="sm"
-                                                type="button"
-                                                variant="outline"
-                                            >
-                                                <Plus className="size-3" /> Add
-                                            </Button>
-                                        </div>
-                                        <div className="space-y-2">
-                                            {sseHeadersArray.fields.length === 0 && (
-                                                <div className="text-sm text-muted-foreground">No headers</div>
-                                            )}
-                                            {sseHeadersArray.fields.map((field, index) => (
-                                                <div
-                                                    className="grid grid-cols-1 gap-2 md:grid-cols-5"
-                                                    key={field.id}
-                                                >
-                                                    <Controller
-                                                        control={form.control}
-                                                        name={`sse.headers.${index}.key` as const}
-                                                        render={({ field }) => (
-                                                            <Input
-                                                                {...field}
-                                                                className="md:col-span-2"
-                                                                placeholder="Header"
-                                                            />
-                                                        )}
+                                    <FormField
+                                        control={form.control}
+                                        name="stdio.args"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Args</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        {...field}
+                                                        placeholder="/path/to/script.js --flag value"
+                                                        value={field.value ?? ''}
                                                     />
-                                                    <Controller
-                                                        control={form.control}
-                                                        name={`sse.headers.${index}.value` as const}
-                                                        render={({ field }) => (
-                                                            <Input
-                                                                {...field}
-                                                                className="md:col-span-2"
-                                                                placeholder="Value"
-                                                            />
-                                                        )}
-                                                    />
-                                                    <Button
-                                                        className="justify-self-start"
-                                                        onClick={() => sseHeadersArray.remove(index)}
-                                                        type="button"
-                                                        variant="ghost"
-                                                    >
-                                                        <Trash2 className="size-4" />
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Tools configuration - only for existing servers; toggles only */}
-                            {!isNew && (
-                                <div className="space-y-4">
-                                    <div>
-                                        <h3 className="text-lg font-medium">Tools</h3>
-                                        <p className="text-sm text-muted-foreground">
-                                            Enable or disable available tools
-                                        </p>
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                        {toolsArray.fields.length === 0 && (
-                                            <div className="text-sm text-muted-foreground">No tools</div>
+                                                </FormControl>
+                                                <FormDescription>Space-separated arguments</FormDescription>
+                                                <FormMessage />
+                                            </FormItem>
                                         )}
-                                        {toolsArray.fields.map((tool, index) => (
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <h4 className="text-sm font-medium">Environment Variables</h4>
+                                        <Button
+                                            onClick={() => handleAddKeyValue('env')}
+                                            size="sm"
+                                            type="button"
+                                            variant="outline"
+                                        >
+                                            <Plus className="size-3" /> Add
+                                        </Button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {stdioEnvArray.fields.length === 0 && (
+                                            <div className="text-sm text-muted-foreground">No variables</div>
+                                        )}
+                                        {stdioEnvArray.fields.map((field, index) => (
                                             <div
-                                                className="flex flex-col gap-2 rounded-md border p-2"
-                                                key={tool.id}
+                                                className="grid grid-cols-1 gap-2 md:grid-cols-5"
+                                                key={field.id}
                                             >
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <div className="flex-1 text-sm">
-                                                        <div className="truncate font-medium">
-                                                            {form.watch(`tools.${index}.name`) || 'tool'}
-                                                        </div>
-                                                        {form.watch(`tools.${index}.description`) && (
-                                                            <div className="text-muted-foreground">
-                                                                {form.watch(`tools.${index}.description`) as string}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs text-muted-foreground">Enabled</span>
-                                                        <Controller
-                                                            control={form.control}
-                                                            name={`tools.${index}.enabled` as const}
-                                                            render={({ field }) => (
-                                                                <Switch
-                                                                    aria-label={`Toggle ${form.getValues(`tools.${index}.name`) || 'tool'}`}
-                                                                    checked={!!field.value}
-                                                                    onCheckedChange={field.onChange}
-                                                                />
-                                                            )}
+                                                <Controller
+                                                    control={form.control}
+                                                    name={`stdio.env.${index}.key` as const}
+                                                    render={({ field }) => (
+                                                        <Input
+                                                            {...field}
+                                                            className="md:col-span-2"
+                                                            placeholder="KEY"
                                                         />
-                                                        <Button
-                                                            disabled={toolTestLoadingIndex === index}
-                                                            onClick={() => handleTestTool(index)}
-                                                            size="sm"
-                                                            type="button"
-                                                            variant="outline"
-                                                        >
-                                                            {toolTestLoadingIndex === index ? (
-                                                                <Loader2 className="size-3 animate-spin" />
-                                                            ) : (
-                                                                <Play className="size-3" />
-                                                            )}
-                                                            {toolTestLoadingIndex === index ? 'Testing...' : 'Test'}
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                                {toolTestIndex === index && (toolTestMessage || toolTestError) && (
-                                                    <div className="mt-1 text-xs">
-                                                        {toolTestMessage && (
-                                                            <span className="text-green-600">{toolTestMessage}</span>
-                                                        )}
-                                                        {toolTestError && (
-                                                            <span className="text-red-600">{toolTestError}</span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                    )}
+                                                />
+                                                <Controller
+                                                    control={form.control}
+                                                    name={`stdio.env.${index}.value` as const}
+                                                    render={({ field }) => (
+                                                        <Input
+                                                            {...field}
+                                                            className="md:col-span-2"
+                                                            placeholder="VALUE"
+                                                        />
+                                                    )}
+                                                />
+                                                <Button
+                                                    className="justify-self-start"
+                                                    onClick={() => stdioEnvArray.remove(index)}
+                                                    type="button"
+                                                    variant="ghost"
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                            )}
-                        </form>
-                    </Form>
-                </CardContent>
-            </Card>
+                            </div>
+                        )}
+
+                        {/* SSE configuration */}
+                        {transport === 'sse' && (
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-medium">SSE Configuration</h3>
+                                <FormField
+                                    control={form.control}
+                                    name="sse.url"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>URL</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    {...field}
+                                                    placeholder="https://mcp.example.com/sse"
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <div>
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <h4 className="text-sm font-medium">Headers</h4>
+                                        <Button
+                                            onClick={() => handleAddKeyValue('headers')}
+                                            size="sm"
+                                            type="button"
+                                            variant="outline"
+                                        >
+                                            <Plus className="size-3" /> Add
+                                        </Button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {sseHeadersArray.fields.length === 0 && (
+                                            <div className="text-sm text-muted-foreground">No headers</div>
+                                        )}
+                                        {sseHeadersArray.fields.map((field, index) => (
+                                            <div
+                                                className="grid grid-cols-1 gap-2 md:grid-cols-5"
+                                                key={field.id}
+                                            >
+                                                <Controller
+                                                    control={form.control}
+                                                    name={`sse.headers.${index}.key` as const}
+                                                    render={({ field }) => (
+                                                        <Input
+                                                            {...field}
+                                                            className="md:col-span-2"
+                                                            placeholder="Header"
+                                                        />
+                                                    )}
+                                                />
+                                                <Controller
+                                                    control={form.control}
+                                                    name={`sse.headers.${index}.value` as const}
+                                                    render={({ field }) => (
+                                                        <Input
+                                                            {...field}
+                                                            className="md:col-span-2"
+                                                            placeholder="Value"
+                                                        />
+                                                    )}
+                                                />
+                                                <Button
+                                                    className="justify-self-start"
+                                                    onClick={() => sseHeadersArray.remove(index)}
+                                                    type="button"
+                                                    variant="ghost"
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Tools configuration - only for existing servers; toggles only */}
+                        {!isNew && (
+                            <div className="space-y-4">
+                                <div>
+                                    <h3 className="text-lg font-medium">Tools</h3>
+                                    <p className="text-sm text-muted-foreground">Enable or disable available tools</p>
+                                </div>
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                    {toolsArray.fields.length === 0 && (
+                                        <div className="text-sm text-muted-foreground">No tools</div>
+                                    )}
+                                    {toolsArray.fields.map((tool, index) => (
+                                        <div
+                                            className="flex flex-col gap-2 rounded-md border p-2"
+                                            key={tool.id}
+                                        >
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="flex-1 text-sm">
+                                                    <div className="truncate font-medium">
+                                                        {form.watch(`tools.${index}.name`) || 'tool'}
+                                                    </div>
+                                                    {form.watch(`tools.${index}.description`) && (
+                                                        <div className="text-muted-foreground">
+                                                            {form.watch(`tools.${index}.description`) as string}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-muted-foreground">Enabled</span>
+                                                    <Controller
+                                                        control={form.control}
+                                                        name={`tools.${index}.enabled` as const}
+                                                        render={({ field }) => (
+                                                            <Switch
+                                                                aria-label={`Toggle ${form.getValues(`tools.${index}.name`) || 'tool'}`}
+                                                                checked={!!field.value}
+                                                                onCheckedChange={field.onChange}
+                                                            />
+                                                        )}
+                                                    />
+                                                    <Button
+                                                        disabled={toolTestLoadingIndex === index}
+                                                        onClick={() => handleTestTool(index)}
+                                                        size="sm"
+                                                        type="button"
+                                                        variant="outline"
+                                                    >
+                                                        {toolTestLoadingIndex === index ? (
+                                                            <Loader2 className="size-3 animate-spin" />
+                                                        ) : (
+                                                            <Play className="size-3" />
+                                                        )}
+                                                        {toolTestLoadingIndex === index ? 'Testing...' : 'Test'}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            {toolTestIndex === index && (toolTestMessage || toolTestError) && (
+                                                <div className="mt-1 text-xs">
+                                                    {toolTestMessage && (
+                                                        <span className="text-green-600">{toolTestMessage}</span>
+                                                    )}
+                                                    {toolTestError && (
+                                                        <span className="text-red-600">{toolTestError}</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </form>
+                </Form>
+            </div>
 
             {/* Sticky buttons */}
             <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 flex items-center border-t bg-background p-4 shadow-lg">

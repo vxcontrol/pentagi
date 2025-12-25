@@ -41,7 +41,7 @@ const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
     return (
         <div className="flex flex-col items-start">
             <div
-                className={cn('max-w-full rounded-lg bg-accent p-3 text-accent-foreground', isExpanded ? 'w-full' : '')}
+                className={cn('max-w-full rounded border bg-card p-3 text-card-foreground', isExpanded ? 'w-full' : '')}
             >
                 <div className="flex flex-col">
                     <div className="cursor-pointer text-sm font-semibold">
@@ -94,4 +94,3 @@ const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
 };
 
 export default memo(FlowScreenshot);
-

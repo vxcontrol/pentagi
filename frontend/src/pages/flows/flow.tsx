@@ -7,7 +7,6 @@ import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -159,14 +158,14 @@ const Flow = () => {
     const [activeTabsTab, setActiveTabsTab] = useState<string>(!isDesktop ? 'automation' : 'terminal');
 
     const tabsCard = (
-        <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
-            <CardContent className="flex-1 overflow-auto pr-0 pt-4">
+        <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
+            <div className="flex-1 overflow-auto py-4 pl-4 pr-0">
                 <FlowTabs
                     activeTab={activeTabsTab}
                     onTabChange={setActiveTabsTab}
                 />
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 
     return (
@@ -218,11 +217,11 @@ const Flow = () => {
                             defaultSize={50}
                             minSize={30}
                         >
-                            <Card className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
-                                <CardContent className="flex-1 overflow-auto pr-0 pt-4">
+                            <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
+                                <div className="flex-1 overflow-auto py-4 pl-4 pr-0">
                                     <FlowCentralTabs />
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
                         </ResizablePanel>
                         <ResizableHandle withHandle>
                             <GripVertical className="size-4" />

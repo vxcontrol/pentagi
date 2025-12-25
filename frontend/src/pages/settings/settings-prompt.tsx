@@ -13,7 +13,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import * as React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -24,7 +24,6 @@ import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/gra
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { StatusCard } from '@/components/ui/status-card';
@@ -343,7 +342,7 @@ const SettingsPrompt = () => {
     const humanTemplate = humanForm.watch('template');
 
     // Determine prompt type and get prompt data
-    const promptInfo = (() => {
+    const promptInfo = useMemo(() => {
         if (!promptId || !data?.settingsPrompts) {
             return null;
         }
@@ -399,10 +398,10 @@ const SettingsPrompt = () => {
         }
 
         return null;
-    })();
+    }, [promptId, data?.settingsPrompts]);
 
     // Compute variables data based on active tab and prompt info
-    const variablesData = (() => {
+    const variablesData = useMemo(() => {
         if (!promptInfo) {
             return null;
         }
@@ -425,7 +424,7 @@ const SettingsPrompt = () => {
         }
 
         return { currentTemplate, formId, variables };
-    })();
+    }, [promptInfo, activeTab, systemTemplate, humanTemplate]);
 
     // Handle variable click with useCallback for better performance
     const handleVariableClickCallback = useCallback(
@@ -459,7 +458,8 @@ const SettingsPrompt = () => {
                 template: promptInfo.humanTemplate,
             });
         }
-    }, [promptInfo, systemForm, humanForm]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [promptInfo]);
 
     // Push a blocker entry when form is dirty to manage browser back
     useEffect(() => {
@@ -756,126 +756,124 @@ const SettingsPrompt = () => {
     const mutationError = createError || updateError || deleteError || validateError || submitError;
 
     return (
-        <>
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center gap-2">
-                        {promptInfo.type === 'agent' ? (
-                            <Bot className="size-5 text-muted-foreground" />
-                        ) : (
-                            <Wrench className="size-5 text-muted-foreground" />
-                        )}
-                        <CardTitle>{promptInfo.displayName}</CardTitle>
-                    </div>
-                    <CardDescription>
-                        {promptInfo.type === 'agent'
-                            ? 'Configure prompts for this AI agent'
-                            : 'Configure the prompt for this tool'}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Tabs
-                        className="w-full"
-                        defaultValue="system"
-                        onValueChange={(value) => setActiveTab(value as 'human' | 'system')}
-                    >
-                        <TabsList>
-                            <TabsTrigger value="system">
-                                <div className="flex items-center gap-2">
-                                    <Code className="size-4" />
-                                    System Prompt
-                                </div>
-                            </TabsTrigger>
-                            {promptInfo.type === 'agent' && promptInfo.hasHuman && (
-                                <TabsTrigger value="human">
-                                    <div className="flex items-center gap-2">
-                                        <User className="size-4" />
-                                        Human Prompt
-                                    </div>
-                                </TabsTrigger>
-                            )}
-                        </TabsList>
+        <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                    {promptInfo.type === 'agent' ? (
+                        <Bot className="size-5 text-muted-foreground" />
+                    ) : (
+                        <Wrench className="size-5 text-muted-foreground" />
+                    )}
+                    {promptInfo.displayName}
+                </h2>
 
-                        <TabsContent
-                            className="mt-6"
-                            value="system"
+                <div className="text-muted-foreground">
+                    {promptInfo.type === 'agent'
+                        ? 'Configure prompts for this AI agent'
+                        : 'Configure the prompt for this tool'}
+                </div>
+            </div>
+
+            <Tabs
+                className="w-full"
+                defaultValue="system"
+                onValueChange={(value) => setActiveTab(value as 'human' | 'system')}
+            >
+                <TabsList>
+                    <TabsTrigger value="system">
+                        <div className="flex items-center gap-2">
+                            <Code className="size-4" />
+                            System Prompt
+                        </div>
+                    </TabsTrigger>
+                    {promptInfo.type === 'agent' && promptInfo.hasHuman && (
+                        <TabsTrigger value="human">
+                            <div className="flex items-center gap-2">
+                                <User className="size-4" />
+                                Human Prompt
+                            </div>
+                        </TabsTrigger>
+                    )}
+                </TabsList>
+
+                <TabsContent
+                    className="mt-4"
+                    value="system"
+                >
+                    <Form {...systemForm}>
+                        <form
+                            className="space-y-6"
+                            id="system-prompt-form"
+                            onSubmit={systemForm.handleSubmit(handleSystemSubmit)}
                         >
-                            <Form {...systemForm}>
-                                <form
-                                    className="space-y-6"
-                                    id="system-prompt-form"
-                                    onSubmit={systemForm.handleSubmit(handleSystemSubmit)}
-                                >
-                                    {/* Error Alert */}
-                                    {mutationError && (
-                                        <Alert variant="destructive">
-                                            <AlertCircle className="size-4" />
-                                            <AlertTitle>Error</AlertTitle>
-                                            <AlertDescription>
-                                                {mutationError instanceof Error ? (
-                                                    mutationError.message
-                                                ) : (
-                                                    <div className="whitespace-pre-line">{mutationError}</div>
-                                                )}
-                                            </AlertDescription>
-                                        </Alert>
-                                    )}
-
-                                    {/* System Template Field */}
-                                    <FormTextareaItem
-                                        control={systemForm.control}
-                                        disabled={isLoading}
-                                        name="template"
-                                        placeholder={
-                                            promptInfo.type === 'tool'
-                                                ? 'Enter the tool template...'
-                                                : 'Enter the system prompt template...'
-                                        }
-                                    />
-                                </form>
-                            </Form>
-                        </TabsContent>
-
-                        {promptInfo.type === 'agent' && promptInfo.hasHuman && (
-                            <TabsContent
-                                className="mt-6"
-                                value="human"
-                            >
-                                <Form {...humanForm}>
-                                    <form
-                                        className="space-y-6"
-                                        id="human-prompt-form"
-                                        onSubmit={humanForm.handleSubmit(handleHumanSubmit)}
-                                    >
-                                        {/* Error Alert */}
-                                        {mutationError && (
-                                            <Alert variant="destructive">
-                                                <AlertCircle className="size-4" />
-                                                <AlertTitle>Error</AlertTitle>
-                                                <AlertDescription>
-                                                    {mutationError instanceof Error ? (
-                                                        mutationError.message
-                                                    ) : (
-                                                        <div className="whitespace-pre-line">{mutationError}</div>
-                                                    )}
-                                                </AlertDescription>
-                                            </Alert>
+                            {/* Error Alert */}
+                            {mutationError && (
+                                <Alert variant="destructive">
+                                    <AlertCircle className="size-4" />
+                                    <AlertTitle>Error</AlertTitle>
+                                    <AlertDescription>
+                                        {mutationError instanceof Error ? (
+                                            mutationError.message
+                                        ) : (
+                                            <div className="whitespace-pre-line">{mutationError}</div>
                                         )}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
 
-                                        {/* Human Template Field */}
-                                        <FormTextareaItem
-                                            control={humanForm.control}
-                                            disabled={isLoading}
-                                            name="template"
-                                            placeholder="Enter the human prompt template..."
-                                        />
-                                    </form>
-                                </Form>
-                            </TabsContent>
-                        )}
-                    </Tabs>
-                </CardContent>
-            </Card>
+                            {/* System Template Field */}
+                            <FormTextareaItem
+                                control={systemForm.control}
+                                disabled={isLoading}
+                                name="template"
+                                placeholder={
+                                    promptInfo.type === 'tool'
+                                        ? 'Enter the tool template...'
+                                        : 'Enter the system prompt template...'
+                                }
+                            />
+                        </form>
+                    </Form>
+                </TabsContent>
+
+                {promptInfo.type === 'agent' && promptInfo.hasHuman && (
+                    <TabsContent
+                        className="mt-6"
+                        value="human"
+                    >
+                        <Form {...humanForm}>
+                            <form
+                                className="space-y-6"
+                                id="human-prompt-form"
+                                onSubmit={humanForm.handleSubmit(handleHumanSubmit)}
+                            >
+                                {/* Error Alert */}
+                                {mutationError && (
+                                    <Alert variant="destructive">
+                                        <AlertCircle className="size-4" />
+                                        <AlertTitle>Error</AlertTitle>
+                                        <AlertDescription>
+                                            {mutationError instanceof Error ? (
+                                                mutationError.message
+                                            ) : (
+                                                <div className="whitespace-pre-line">{mutationError}</div>
+                                            )}
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+
+                                {/* Human Template Field */}
+                                <FormTextareaItem
+                                    control={humanForm.control}
+                                    disabled={isLoading}
+                                    name="template"
+                                    placeholder="Enter the human prompt template..."
+                                />
+                            </form>
+                        </Form>
+                    </TabsContent>
+                )}
+            </Tabs>
 
             {/* Sticky footer with variables and buttons */}
             <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 border-t bg-background p-4 shadow-lg">
@@ -1071,7 +1069,7 @@ const SettingsPrompt = () => {
                     </div>
                 </DialogContent>
             </Dialog>
-        </>
+        </div>
     );
 };
 

@@ -37,8 +37,8 @@ const NewFlow = () => {
             const flowId = flowType === 'automation' ? await createFlow(values) : await createFlowWithAssistant(values);
 
             if (flowId) {
-                // Navigate to the new flow page
-                navigate(`/flows/${flowId}`);
+                // Navigate to the new flow page with tab parameter
+                navigate(`/flows/${flowId}?tab=${flowType}`);
             }
         } finally {
             setIsLoading(false);
