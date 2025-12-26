@@ -13,7 +13,7 @@ import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
 import Flow from '@/pages/flows/flow';
 import FlowReport from '@/pages/flows/flow-report';
-import Flows from '@/pages/flows/Flows';
+import Flows from '@/pages/flows/flows';
 import NewFlow from '@/pages/flows/new-flow';
 import Login from '@/pages/login';
 import OAuthResult from '@/pages/oauth-result';
