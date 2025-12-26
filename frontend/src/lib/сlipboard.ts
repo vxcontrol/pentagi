@@ -1,4 +1,5 @@
 import { Terminal as XTerminal } from '@xterm/xterm';
+import { toast } from 'sonner';
 
 import { ResultFormat } from '@/graphql/types';
 
@@ -197,7 +198,8 @@ export const copyMessageToClipboard = async (messageData: CopyableMessage): Prom
     try {
         const content = await formatMessageForClipboard(messageData);
         await navigator.clipboard.writeText(content);
+        toast.success('Copied to clipboard');
     } catch {
-        // Ignore clipboard errors - they're handled silently
+        toast.error('Failed to copy to clipboard');
     }
 };

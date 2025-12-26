@@ -170,7 +170,7 @@ const Flow = () => {
 
     return (
         <>
-            <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+            <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
                 <div className="flex w-full items-center justify-between gap-2 px-4">
                     <div className="flex items-center gap-2">
                         <SidebarTrigger className="-ml-1" />

@@ -11,14 +11,14 @@ function InputGroup({ className, ...props }: React.ComponentProps<'div'>) {
     return (
         <div
             className={cn(
-                'group/input-group shadow-xs relative flex w-full items-center rounded-md border border-input outline-none transition-[color,box-shadow] dark:bg-input/30',
+                'group/input-group shadow-2xs relative flex w-full items-center rounded-md border border-input outline-hidden transition-[color,box-shadow] dark:bg-input/30',
                 'h-9 has-[>textarea]:h-auto',
 
                 // Variants based on alignment.
-                'has-[>[data-align=inline-start]]:[&>input]:pl-2',
-                'has-[>[data-align=inline-end]]:[&>input]:pr-2',
-                'has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>[data-align=block-start]]:[&>input]:pb-3',
-                'has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-end]]:[&>input]:pt-3',
+                '[&>input]:has-[>[data-align=inline-start]]:pl-2',
+                '[&>input]:has-[>[data-align=inline-end]]:pr-2',
+                'has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col [&>input]:has-[>[data-align=block-start]]:pb-3',
+                'has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col [&>input]:has-[>[data-align=block-end]]:pt-3',
 
                 // Focus state.
                 'has-[[data-slot=input-group-control]:focus-visible]:ring-1 has-[[data-slot=input-group-control]:focus-visible]:ring-ring',

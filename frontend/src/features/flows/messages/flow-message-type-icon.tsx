@@ -42,7 +42,7 @@ const defaultIcon = Brain;
 
 const FlowMessageTypeIcon = ({ className, type, tooltip = type }: MessageTypeIconProps) => {
     const Icon = type ? messageTypeIcons[type] || defaultIcon : defaultIcon;
-    const iconElement = <Icon className={cn('size-3 shrink-0', tooltip && 'cursor-pointer', className)} />;
+    const iconElement = <Icon className={cn('size-3 shrink-0', className)} />;
 
     if (!tooltip) {
         return iconElement;
@@ -57,4 +57,3 @@ const FlowMessageTypeIcon = ({ className, type, tooltip = type }: MessageTypeIco
 };
 
 export default FlowMessageTypeIcon;
-

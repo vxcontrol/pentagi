@@ -65,7 +65,7 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
                 />
                 <div className="text-sm">
                     <Markdown
-                        className="prose-fixed prose-sm break-words [&>*]:m-0 [&>p]:leading-tight"
+                        className="prose-fixed prose-sm wrap-break-word *:m-0 [&>p]:leading-tight"
                         searchValue={searchValue}
                     >
                         {title}
@@ -90,7 +90,7 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
                                         <span className="text-xs">Description</span>
                                     </div>
                                     <Markdown
-                                        className="prose-xs prose-fixed ml-6 break-words"
+                                        className="prose-xs prose-fixed ml-6 wrap-break-word"
                                         searchValue={searchValue}
                                     >
                                         {description}
@@ -105,7 +105,7 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
                                         <span className="text-xs">Result</span>
                                     </div>
                                     <Markdown
-                                        className="prose-xs prose-fixed ml-6 break-words"
+                                        className="prose-xs prose-fixed ml-6 wrap-break-word"
                                         searchValue={searchValue}
                                     >
                                         {result}

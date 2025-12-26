@@ -50,7 +50,7 @@ const defaultIcon = HelpCircle;
 
 const FlowAgentIcon = ({ className, type, tooltip = type }: FlowAgentIconProps) => {
     const Icon = type ? icons[type] || defaultIcon : defaultIcon;
-    const iconElement = <Icon className={cn('size-3 shrink-0', tooltip && 'cursor-pointer', className)} />;
+    const iconElement = <Icon className={cn('size-3 shrink-0', className)} />;
 
     if (!tooltip) {
         return iconElement;

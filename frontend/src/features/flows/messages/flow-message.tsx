@@ -106,7 +106,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
                 <div className="my-2 border-t dark:border-gray-700" />
                 {resultFormat === ResultFormat.Plain && (
                     <Markdown
-                        className="prose-xs prose-fixed break-words text-sm text-accent-foreground"
+                        className="prose-xs prose-fixed text-accent-foreground text-sm wrap-break-word"
                         searchValue={searchValue}
                     >
                         {result}
@@ -114,7 +114,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
                 )}
                 {resultFormat === ResultFormat.Markdown && (
                     <Markdown
-                        className="prose-xs prose-fixed break-words"
+                        className="prose-xs prose-fixed wrap-break-word"
                         searchValue={searchValue}
                     >
                         {result}
@@ -122,7 +122,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
                 )}
                 {resultFormat === ResultFormat.Terminal && (
                     <Terminal
-                        className="h-[240px] w-full bg-card py-1 pl-1"
+                        className="bg-card h-[240px] w-full py-1 pl-1"
                         logs={[result as string]}
                     />
                 )}
@@ -137,9 +137,9 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
 
         return (
             <>
-                <div className="mb-3 border-l-2 border-muted pl-3">
+                <div className="border-muted mb-3 border-l-2 pl-3">
                     <Markdown
-                        className="prose-xs prose-fixed break-words text-muted-foreground/80"
+                        className="prose-xs prose-fixed text-muted-foreground/80 wrap-break-word"
                         searchValue={searchValue}
                     >
                         {thinking}
@@ -153,13 +153,13 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
         <div className={`flex flex-col ${type === MessageLogType.Input ? 'items-end' : 'items-start'}`}>
             <div
                 className={cn(
-                    'max-w-[90%] rounded border bg-card p-3 text-card-foreground',
+                    'bg-card text-card-foreground max-w-[90%] rounded-xl border p-3',
                     resultFormat === ResultFormat.Terminal && isDetailsVisible ? 'w-full' : '',
                 )}
             >
                 {/* Thinking toggle button */}
                 {shouldShowThinkingToggle && (
-                    <div className="mb-2 text-xs text-muted-foreground">
+                    <div className="text-muted-foreground mb-2 text-xs">
                         <div
                             className="cursor-pointer"
                             onClick={toggleThinking}
@@ -175,7 +175,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
                 {/* Main message content */}
                 {message && (
                     <Markdown
-                        className="prose-xs prose-fixed break-words"
+                        className="prose-xs prose-fixed wrap-break-word"
                         searchValue={searchValue}
                     >
                         {message}
@@ -184,7 +184,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
 
                 {/* Result details */}
                 {result && (
-                    <div className="mt-2 text-xs text-muted-foreground">
+                    <div className="text-muted-foreground mt-2 text-xs">
                         <div
                             className="cursor-pointer"
                             onClick={toggleDetails}
@@ -196,7 +196,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
                 )}
             </div>
             <div
-                className={`mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground ${
+                className={`text-muted-foreground mt-1 flex items-center gap-1 px-1 text-xs ${
                     type === MessageLogType.Input ? 'flex-row-reverse' : 'flex-row'
                 }`}
             >
@@ -204,7 +204,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Copy
-                            className="mx-1 size-3 shrink-0 cursor-pointer transition-colors hover:text-foreground"
+                            className="hover:text-foreground mx-1 size-3 shrink-0 cursor-pointer transition-colors"
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>

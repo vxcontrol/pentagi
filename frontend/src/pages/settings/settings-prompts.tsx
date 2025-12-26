@@ -347,7 +347,7 @@ const SettingsPrompts = () => {
                 const status = row.getValue('systemStatus') as string;
 
                 return (
-                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
+                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline-solid'}>
                         {status}
                     </Badge>
                 );
@@ -361,7 +361,7 @@ const SettingsPrompts = () => {
                 const status = row.getValue('humanStatus') as string;
 
                 return (
-                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
+                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline-solid'}>
                         {status}
                     </Badge>
                 );
@@ -515,7 +515,7 @@ const SettingsPrompts = () => {
                 const status = row.getValue('status') as string;
 
                 return (
-                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
+                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline-solid'}>
                         {status}
                     </Badge>
                 );

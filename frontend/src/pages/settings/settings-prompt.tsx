@@ -91,7 +91,7 @@ const FormTextareaItem: React.FC<FormTextareaItemProps> = ({
             <FormControl>
                 <Textarea
                     {...field}
-                    className={cn('!min-h-[640px] font-mono text-sm', className)}
+                    className={cn('min-h-[640px]! font-mono text-sm', className)}
                     disabled={disabled}
                     placeholder={placeholder}
                 />
@@ -143,8 +143,8 @@ const Variables: React.FC<VariablesProps> = ({ currentTemplate, onVariableClick,
     const usedVariables = getUsedVariables(currentTemplate);
 
     return (
-        <div className="mb-4 rounded-md border bg-muted/50 p-3">
-            <h4 className="mb-2 text-sm font-medium text-muted-foreground">Available Variables:</h4>
+        <div className="bg-muted/50 mb-4 rounded-md border p-3">
+            <h4 className="text-muted-foreground mb-2 text-sm font-medium">Available Variables:</h4>
             <div className="flex flex-wrap gap-1">
                 {variables.map((variable) => {
                     const isUsed = usedVariables.has(variable);
@@ -639,7 +639,7 @@ const SettingsPrompt = () => {
         return (
             <StatusCard
                 description="Please wait while we fetch prompt information"
-                icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
+                icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                 title="Loading prompt data..."
             />
         );
@@ -760,9 +760,9 @@ const SettingsPrompt = () => {
             <div className="flex flex-col gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-semibold">
                     {promptInfo.type === 'agent' ? (
-                        <Bot className="size-5 text-muted-foreground" />
+                        <Bot className="text-muted-foreground size-5" />
                     ) : (
-                        <Wrench className="size-5 text-muted-foreground" />
+                        <Wrench className="text-muted-foreground size-5" />
                     )}
                     {promptInfo.displayName}
                 </h2>
@@ -876,7 +876,7 @@ const SettingsPrompt = () => {
             </Tabs>
 
             {/* Sticky footer with variables and buttons */}
-            <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 border-t bg-background p-4 shadow-lg">
+            <div className="bg-background sticky -bottom-4 -mx-4 mt-4 -mb-4 border-t p-4 shadow-lg">
                 {/* Variables */}
                 {variablesData && (
                     <Variables
@@ -1013,9 +1013,9 @@ const SettingsPrompt = () => {
                         <div className="space-y-4">
                             <Alert variant={validationResult.result ? 'default' : 'destructive'}>
                                 {validationResult.result === 'success' ? (
-                                    <CheckCircle className="size-4 !text-green-500" />
+                                    <CheckCircle className="size-4 text-green-500!" />
                                 ) : (
-                                    <XCircle className="size-4 !text-red-500" />
+                                    <XCircle className="size-4 text-red-500!" />
                                 )}
                                 <AlertTitle>
                                     {validationResult.result === 'success' ? 'Valid Template' : 'Validation Error'}

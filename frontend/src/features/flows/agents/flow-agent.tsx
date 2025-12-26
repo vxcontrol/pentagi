@@ -78,15 +78,15 @@ const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
 
     return (
         <div className="flex flex-col items-start">
-            <div className="max-w-full rounded border bg-card p-3 text-card-foreground">
+            <div className="bg-card text-card-foreground max-w-full rounded-xl border p-3">
                 <Markdown
-                    className="prose-xs prose-fixed break-words"
+                    className="prose-xs prose-fixed wrap-break-word"
                     searchValue={searchValue}
                 >
                     {taskToShow}
                 </Markdown>
                 {shouldShowDetailsToggle && (
-                    <div className="mt-2 text-xs text-muted-foreground">
+                    <div className="text-muted-foreground mt-2 text-xs">
                         <div
                             className="cursor-pointer"
                             onClick={() => setIsDetailsVisible(!isDetailsVisible)}
@@ -97,7 +97,7 @@ const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
                             <>
                                 <div className="my-2 border-t dark:border-gray-700" />
                                 <Markdown
-                                    className="prose-xs prose-fixed break-words"
+                                    className="prose-xs prose-fixed wrap-break-word"
                                     searchValue={searchValue}
                                 >
                                     {result}
@@ -107,7 +107,7 @@ const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
                     </div>
                 )}
             </div>
-            <div className="mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground">
+            <div className="text-muted-foreground mt-1 flex items-center gap-1 px-1 text-xs">
                 <span className="flex items-center gap-0.5">
                     <FlowAgentIcon
                         className="text-muted-foreground"
@@ -122,7 +122,7 @@ const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Copy
-                            className="mx-1 size-3 shrink-0 cursor-pointer transition-colors hover:text-foreground"
+                            className="hover:text-foreground mx-1 size-3 shrink-0 cursor-pointer transition-colors"
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>

@@ -420,7 +420,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                                             <Lightbulb className="size-3 text-muted-foreground" />
                                                         )}
                                                     </div>
-                                                    <span className="flex-shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                                                    <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                                                         {formatPrice(option.price)}
                                                     </span>
                                                 </div>
@@ -675,7 +675,7 @@ const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDia
             open={isOpen}
         >
             <DialogContent className="flex max-h-[80vh] max-w-4xl flex-col">
-                <DialogHeader className="flex-shrink-0">
+                <DialogHeader className="shrink-0">
                     <DialogTitle>Provider Test Results</DialogTitle>
                 </DialogHeader>
                 <div className="flex-1 space-y-6 overflow-y-auto">
@@ -1451,7 +1451,7 @@ const SettingsProvider = () => {
                                                     ) : (
                                                         <Play className="size-4" />
                                                     )}
-                                                    <span className="!no-underline hover:!no-underline">
+                                                    <span className="no-underline! hover:no-underline!">
                                                         {isAgentTestLoading && currentAgentKey === agentKey
                                                             ? 'Testing...'
                                                             : 'Test'}

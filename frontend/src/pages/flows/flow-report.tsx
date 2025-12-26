@@ -80,7 +80,7 @@ const FlowReport = () => {
     // Loading state (for all modes during initial loading and PDF generation)
     if (state === 'loading' || state === 'generating') {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+            <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
                     <Logo className="mb-8 size-16 animate-logo-spin text-white" />
                     <div className="space-y-4 text-center">
@@ -102,7 +102,7 @@ const FlowReport = () => {
     // Error state
     if (state === 'error') {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+            <div className="min-h-screen bg-linear-to-br from-red-50 via-white to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
                     <Logo className="mb-8 size-16" />
                     <div className="space-y-4 text-center">

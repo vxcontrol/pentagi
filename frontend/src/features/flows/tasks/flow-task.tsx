@@ -57,7 +57,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
     const hasSubtasks = subtasks && subtasks.length > 0;
 
     return (
-        <div className="rounded-lg border p-4 shadow-sm">
+        <div className="rounded-lg border p-4 shadow-xs">
             <div className="flex gap-2">
                 <FlowTaskStatusIcon
                     className="mt-px"
@@ -66,7 +66,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
                 />
                 <div className="font-semibold">
                     <Markdown
-                        className="prose-fixed prose-sm break-words [&>*]:m-0 [&>p]:leading-tight"
+                        className="prose-fixed prose-sm wrap-break-word *:m-0 [&>p]:leading-tight"
                         searchValue={searchValue}
                     >
                         {title}
@@ -85,7 +85,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
                         <>
                             <div className="my-2 border-t border-border" />
                             <Markdown
-                                className="prose-xs prose-fixed break-words"
+                                className="prose-xs prose-fixed wrap-break-word"
                                 searchValue={searchValue}
                             >
                                 {result}

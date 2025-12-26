@@ -25,7 +25,7 @@ import { type Flow, useFlows } from '@/providers/flows-provider';
 
 const statusConfig: Record<
     StatusType,
-    { label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' }
+    { label: string; variant: 'default' | 'destructive' | 'outline-solid' | 'secondary' }
 > = {
     [StatusType.Created]: {
         label: 'Created',
@@ -258,7 +258,7 @@ const Flows = () => {
     ];
 
     const pageHeader = (
-        <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+        <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
             <div className="flex items-center gap-2 px-4">
                 <SidebarTrigger className="-ml-1" />
                 <Separator

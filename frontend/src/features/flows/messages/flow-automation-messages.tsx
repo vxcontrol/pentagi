@@ -211,7 +211,7 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
 
     return (
         <div className={cn('flex h-full flex-col', className)}>
-            <div className="sticky top-0 z-10 bg-background pb-4">
+            <div className="bg-background sticky top-0 z-10 pb-4">
                 <Form {...form}>
                     <div className="flex gap-2 p-px">
                         <FormField
@@ -264,9 +264,9 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
             </div>
 
             {filteredLogs.length > 0 ? (
-                <div className="relative h-full overflow-y-hidden pb-4">
+                <div className="relative h-full overflow-y-hidden">
                     <div
-                        className="h-full space-y-4 overflow-y-auto"
+                        className="flex h-full flex-col gap-4 overflow-y-auto"
                         ref={containerRef}
                     >
                         {filteredLogs.map((log) => (
@@ -281,7 +281,7 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
 
                     {hasNewMessages && !isScrolledToBottom && (
                         <Button
-                            className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
+                            className="absolute right-4 bottom-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
                             onClick={() => scrollToEnd()}
                             size="icon"
                             type="button"
@@ -324,7 +324,7 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
                 </Empty>
             )}
 
-            <div className="sticky bottom-0 border-t bg-background p-px pt-4">
+            <div className="bg-background sticky bottom-0 p-px">
                 <FlowForm
                     defaultValues={{
                         providerName: flowData?.flow?.provider?.name ?? '',

@@ -41,7 +41,10 @@ const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
     return (
         <div className="flex flex-col items-start">
             <div
-                className={cn('max-w-full rounded border bg-card p-3 text-card-foreground', isExpanded ? 'w-full' : '')}
+                className={cn(
+                    'bg-card text-card-foreground max-w-full rounded-xl border p-3',
+                    isExpanded ? 'w-full' : '',
+                )}
             >
                 <div className="flex flex-col">
                     <div className="cursor-pointer text-sm font-semibold">
@@ -55,7 +58,7 @@ const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
                                     target="_blank"
                                     to={screenshot.url}
                                 >
-                                    <Image className="size-4 shrink-0 text-muted-foreground" />
+                                    <Image className="text-muted-foreground size-4 shrink-0" />
                                     <span className="truncate font-semibold">{screenshot.url}</span>
                                 </Link>
                             </TooltipTrigger>
@@ -86,7 +89,7 @@ const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
                     </div>
                 </div>
             </div>
-            <div className="mt-1 flex items-center gap-1 px-1 text-xs text-muted-foreground/50">
+            <div className="text-muted-foreground/50 mt-1 flex items-center gap-1 px-1 text-xs">
                 {formatDate(new Date(screenshot.createdAt))}
             </div>
         </div>

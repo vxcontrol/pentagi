@@ -21,9 +21,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
             style={
                 {
                     '--border-radius': 'var(--radius)',
-                    '--normal-bg': 'hsl(var(--popover))',
-                    '--normal-border': 'hsl(var(--border))',
-                    '--normal-text': 'hsl(var(--popover-foreground))',
+                    '--normal-bg': 'var(--popover)',
+                    '--normal-border': 'var(--border)',
+                    '--normal-text': 'var(--popover-foreground)',
                     '--toast-icon-margin-end': '0px',
                     '--toast-icon-margin-start': '0px',
                     '--width': '320px',

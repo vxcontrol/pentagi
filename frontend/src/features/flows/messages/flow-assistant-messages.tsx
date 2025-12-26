@@ -143,25 +143,25 @@ const AssistantsDropdown = ({
                     provider={assistant.provider}
                 />
 
-                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
+                <span className="bg-muted text-muted-foreground flex size-5 shrink-0 items-center justify-center rounded text-xs font-medium">
                     {index}
                 </span>
 
                 <div className="flex flex-1 items-center gap-2 overflow-hidden">
                     <span className="truncate text-sm">{assistant.title}</span>
-                    {!isValid && <span className="shrink-0 text-xs text-destructive">(unavailable)</span>}
+                    {!isValid && <span className="text-destructive shrink-0 text-xs">(unavailable)</span>}
                 </div>
 
                 <Check
                     className={cn(
-                        'ml-auto size-4 shrink-0 text-primary transition-opacity group-hover:opacity-0',
+                        'text-primary ml-auto size-4 shrink-0 transition-opacity group-hover:opacity-0',
                         isSelected ? 'opacity-100' : 'opacity-0',
                     )}
                 />
 
                 {!isDisabled && (
                     <Button
-                        className="absolute right-0.5 top-1/2 shrink-0 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                        className="text-muted-foreground hover:text-destructive absolute top-1/2 right-0.5 shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(event) => {
                             event.stopPropagation();
                             handleDeleteClick(assistant);
@@ -195,12 +195,12 @@ const AssistantsDropdown = ({
                                     tooltip={formatName(selectedAssistant.status)}
                                 />
                                 <ProviderIcon provider={selectedAssistant.provider} />
-                                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-xs font-medium text-muted-foreground">
+                                <span className="bg-muted text-muted-foreground flex size-5 shrink-0 items-center justify-center rounded text-xs font-medium">
                                     {selectedAssistantIndex + 1}
                                 </span>
                             </>
                         ) : (
-                            <span className="flex h-5 shrink-0 items-center justify-center rounded bg-muted px-1 text-xs font-medium text-muted-foreground">
+                            <span className="bg-muted text-muted-foreground flex h-5 shrink-0 items-center justify-center rounded px-1 text-xs font-medium">
                                 New
                             </span>
                         )}
@@ -531,7 +531,7 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
 
     return (
         <div className={cn('flex h-full flex-col', className)}>
-            <div className="sticky top-0 z-10 bg-background pb-4">
+            <div className="bg-background sticky top-0 z-10 pb-4">
                 <div className="flex gap-2 p-px">
                     {/* Assistant Dropdown */}
                     {flowId && (
@@ -602,9 +602,9 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
             ) : selectedAssistantId ? (
                 filteredLogs.length > 0 ? (
                     // Show messages for selected assistant
-                    <div className="relative h-full overflow-y-hidden pb-4">
+                    <div className="relative h-full overflow-y-hidden">
                         <div
-                            className="h-full space-y-4 overflow-y-auto"
+                            className="flex h-full flex-col gap-4 overflow-y-auto"
                             ref={containerRef}
                         >
                             {filteredLogs.map((log) => (
@@ -619,7 +619,7 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
 
                         {hasNewMessages && !isScrolledToBottom && (
                             <Button
-                                className="absolute bottom-4 right-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
+                                className="absolute right-4 bottom-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
                                 onClick={() => scrollToEnd()}
                                 size="icon"
                                 type="button"
@@ -671,7 +671,7 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
                 </Empty>
             )}
 
-            <div className="sticky bottom-0 border-t bg-background p-px pt-4">
+            <div className="bg-background sticky bottom-0 p-px">
                 <FlowForm
                     defaultValues={{
                         providerName: selectedAssistant?.provider?.name ?? '',
