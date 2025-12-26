@@ -1,5 +1,5 @@
 import { ApolloProvider } from '@apollo/client';
-import { Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import AppLayout from '@/components/layouts/app-layout';
@@ -11,22 +11,23 @@ import PublicRoute from '@/components/routes/public-route';
 import PageLoader from '@/components/shared/page-loader';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
-import Flow from '@/pages/flows/flow';
-import FlowReport from '@/pages/flows/flow-report';
-import Flows from '@/pages/flows/flows';
-import NewFlow from '@/pages/flows/new-flow';
-import Login from '@/pages/login';
-import OAuthResult from '@/pages/oauth-result';
-import SettingsPrompt from '@/pages/settings/settings-prompt';
-import SettingsPrompts from '@/pages/settings/settings-prompts';
-import SettingsProvider from '@/pages/settings/settings-provider';
-import SettingsProviders from '@/pages/settings/settings-providers';
 import { FlowProvider } from '@/providers/flow-provider';
 import { ProvidersProvider } from '@/providers/providers-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { UserProvider } from '@/providers/user-provider';
 
 import { SystemSettingsProvider } from './providers/system-settings-provider';
+
+const Flow = lazy(() => import('@/pages/flows/flow'));
+const FlowReport = lazy(() => import('@/pages/flows/flow-report'));
+const Flows = lazy(() => import('@/pages/flows/flows'));
+const NewFlow = lazy(() => import('@/pages/flows/new-flow'));
+const Login = lazy(() => import('@/pages/login'));
+const OAuthResult = lazy(() => import('@/pages/oauth-result'));
+const SettingsPrompt = lazy(() => import('@/pages/settings/settings-prompt'));
+const SettingsPrompts = lazy(() => import('@/pages/settings/settings-prompts'));
+const SettingsProvider = lazy(() => import('@/pages/settings/settings-provider'));
+const SettingsProviders = lazy(() => import('@/pages/settings/settings-providers'));
 
 const App = () => {
     const renderProtectedRoute = () => (

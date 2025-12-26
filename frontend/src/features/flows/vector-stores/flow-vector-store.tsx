@@ -138,7 +138,7 @@ const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
                         </div>
                         {isDetailsVisible && (
                             <>
-                                <div className="my-2 border-t dark:border-gray-700" />
+                                <div className="my-3 border-t" />
                                 <Markdown
                                     className="prose-xs prose-fixed wrap-break-word"
                                     searchValue={searchValue}

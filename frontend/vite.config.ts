@@ -56,6 +56,51 @@ export default defineConfig(({ mode }) => {
     };
 
     return {
+        build: {
+            chunkSizeWarningLimit: 1000,
+            minify: 'terser',
+            rollupOptions: {
+                output: {
+                    manualChunks: {
+                        'apollo-client': ['@apollo/client', 'graphql', 'graphql-ws'],
+                        markdown: ['react-markdown', 'rehype-highlight', 'rehype-raw', 'rehype-slug', 'remark-gfm'],
+                        pdf: ['html2pdf.js'],
+                        'radix-ui': [
+                            '@radix-ui/react-accordion',
+                            '@radix-ui/react-avatar',
+                            '@radix-ui/react-collapsible',
+                            '@radix-ui/react-dialog',
+                            '@radix-ui/react-dropdown-menu',
+                            '@radix-ui/react-label',
+                            '@radix-ui/react-popover',
+                            '@radix-ui/react-scroll-area',
+                            '@radix-ui/react-select',
+                            '@radix-ui/react-separator',
+                            '@radix-ui/react-slot',
+                            '@radix-ui/react-switch',
+                            '@radix-ui/react-tabs',
+                            '@radix-ui/react-tooltip',
+                        ],
+                        'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+                        terminal: [
+                            '@xterm/addon-fit',
+                            '@xterm/addon-search',
+                            '@xterm/addon-unicode11',
+                            '@xterm/addon-web-links',
+                            '@xterm/addon-webgl',
+                            '@xterm/xterm',
+                        ],
+                    },
+                },
+            },
+            sourcemap: false,
+            terserOptions: {
+                compress: {
+                    drop_console: mode === 'production',
+                    drop_debugger: mode === 'production',
+                },
+            },
+        },
         define: {
             APP_DEV_CWD: JSON.stringify(process.cwd()),
             APP_NAME: JSON.stringify(pkg.name),

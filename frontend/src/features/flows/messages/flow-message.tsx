@@ -103,7 +103,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
 
         return (
             <>
-                <div className="my-2 border-t dark:border-gray-700" />
+                <div className="my-2 border-t" />
                 {resultFormat === ResultFormat.Plain && (
                     <Markdown
                         className="prose-xs prose-fixed text-accent-foreground text-sm wrap-break-word"
