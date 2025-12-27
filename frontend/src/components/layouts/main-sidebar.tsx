@@ -6,6 +6,7 @@ import {
     LogOut,
     Monitor,
     Moon,
+    Plus,
     Settings,
     Settings2,
     Sun,
@@ -34,6 +35,7 @@ import {
     SidebarGroupContent,
     SidebarHeader,
     SidebarMenu,
+    SidebarMenuAction,
     SidebarMenuButton,
     SidebarMenuItem,
     SidebarRail,
@@ -63,7 +65,7 @@ const MainSidebar = () => {
                 <SidebarMenu>
                     <SidebarMenuItem className="flex items-center gap-2">
                         <div className="flex items-center gap-2">
-                            <Logo className="size-6 hover:animate-logo-spin" />
+                            <Logo className="hover:animate-logo-spin size-6" />
                             <span className="font-semibold">PentAGI</span>
                         </div>
                     </SidebarMenuItem>
@@ -83,6 +85,15 @@ const MainSidebar = () => {
                                         Flows
                                     </Link>
                                 </SidebarMenuButton>
+                                <SidebarMenuAction
+                                    asChild
+                                    className="data-[state=open]:bg-accent rounded-sm"
+                                    showOnHover
+                                >
+                                    <Link to="/flows/new">
+                                        <Plus />
+                                    </Link>
+                                </SidebarMenuAction>
                             </SidebarMenuItem>
                         </SidebarMenu>
                     </SidebarGroupContent>
@@ -108,7 +119,7 @@ const MainSidebar = () => {
                                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                     size="lg"
                                 >
-                                    <Avatar className="flex size-8 items-center justify-center rounded-lg bg-muted">
+                                    <Avatar className="bg-muted flex size-8 items-center justify-center rounded-lg">
                                         <AvatarFallback className="flex items-center justify-center rounded-lg">
                                             <UserIcon className="size-4" />
                                         </AvatarFallback>
@@ -128,7 +139,7 @@ const MainSidebar = () => {
                             >
                                 <DropdownMenuLabel className="p-0 font-normal">
                                     <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                                        <Avatar className="flex size-8 items-center justify-center rounded-lg bg-muted">
+                                        <Avatar className="bg-muted flex size-8 items-center justify-center rounded-lg">
                                             <AvatarFallback className="flex items-center justify-center rounded-lg">
                                                 <UserIcon className="size-4" />
                                             </AvatarFallback>
@@ -136,7 +147,7 @@ const MainSidebar = () => {
                                         <div className="grid flex-1 text-left text-sm leading-tight">
                                             <span className="truncate font-semibold">{user?.name}</span>
                                             <span className="truncate text-xs">{user?.mail}</span>
-                                            <span className="truncate text-xs text-muted-foreground">
+                                            <span className="text-muted-foreground truncate text-xs">
                                                 {user?.type === 'local' ? 'local' : 'oauth'}
                                             </span>
                                         </div>
