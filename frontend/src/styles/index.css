@@ -258,7 +258,7 @@
         --font-sans: Inter, sans-serif;
         --font-serif: Source Serif 4, serif;
         --font-mono: JetBrains Mono, monospace;
-        --radius: 0.375rem;
+        --radius: 0.5rem;
         --shadow-x: 0;
         --shadow-y: 1px;
         --shadow-blur: 3px;
@@ -286,16 +286,16 @@
     }
 
     ::-webkit-scrollbar-thumb {
-        background: hsl(var(--muted-foreground) / 0.3);
+        background: oklch(from var(--muted-foreground) l c h / 0.3);
         border-radius: 4px;
     }
 
     ::-webkit-scrollbar-thumb:hover {
-        background: hsl(var(--muted-foreground) / 0.5);
+        background: oklch(from var(--muted-foreground) l c h / 0.5);
     }
 
     * {
-        scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+        scrollbar-color: oklch(from var(--muted-foreground) l c h / 0.3) transparent;
     }
 }
 
@@ -453,5 +453,5 @@
     font-size: 12px !important;
     font-weight: 400 !important;
     line-height: 16px !important;
-    color: hsl(var(--muted-foreground)) !important;
+    color: var(--muted-foreground) !important;
 }
