@@ -77,7 +77,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
     }, [subtasks, completedSubtasksCount]);
 
     return (
-        <div className="relative">
+        <div className="flex flex-col">
             <div className="relative flex gap-2 pb-4">
                 <FlowTaskStatusIcon
                     className="bg-background ring-border ring-background relative z-1 mt-px size-5 rounded-full ring-3"
