@@ -78,7 +78,7 @@ const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
 
     return (
         <div className="flex flex-col items-start">
-            <div className="bg-card text-card-foreground max-w-full rounded-xl border p-3">
+            <div className="bg-card text-card-foreground max-w-full rounded-xl border p-3 shadow-sm">
                 <Markdown
                     className="prose-xs prose-fixed wrap-break-word"
                     searchValue={searchValue}

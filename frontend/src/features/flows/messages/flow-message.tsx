@@ -103,7 +103,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
 
         return (
             <>
-                <div className="my-2 border-t" />
+                <div className="my-3 border-t" />
                 {resultFormat === ResultFormat.Plain && (
                     <Markdown
                         className="prose-xs prose-fixed text-accent-foreground text-sm wrap-break-word"
@@ -153,7 +153,7 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
         <div className={`flex flex-col ${type === MessageLogType.Input ? 'items-end' : 'items-start'}`}>
             <div
                 className={cn(
-                    'bg-card text-card-foreground max-w-[90%] rounded-xl border p-3',
+                    'bg-card text-card-foreground max-w-[90%] rounded-xl border p-3 shadow-sm',
                     resultFormat === ResultFormat.Terminal && isDetailsVisible ? 'w-full' : '',
                 )}
             >

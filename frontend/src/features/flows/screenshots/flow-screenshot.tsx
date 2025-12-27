@@ -42,7 +42,7 @@ const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
         <div className="flex flex-col items-start">
             <div
                 className={cn(
-                    'bg-card text-card-foreground max-w-full rounded-xl border p-3',
+                    'bg-card text-card-foreground max-w-full rounded-xl border p-3 shadow-sm',
                     isExpanded ? 'w-full' : '',
                 )}
             >

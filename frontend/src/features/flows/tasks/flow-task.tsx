@@ -3,6 +3,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import type { TaskFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/markdown';
+import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { StatusType } from '@/graphql/types';
 
@@ -80,7 +81,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
         <div className="flex flex-col">
             <div className="relative flex gap-2 pb-4">
                 <FlowTaskStatusIcon
-                    className="bg-background ring-border ring-background relative z-1 mt-px size-5 rounded-full ring-3"
+                    className="bg-background ring-border ring-background relative z-1 -mt-px size-5 rounded-full ring-3"
                     status={status}
                     tooltip={`Task ID: ${id}`}
                 />
@@ -94,7 +95,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
                         </Markdown>
                     </div>
 
-                    {hasSubtasks && (
+                    {hasSubtasks && progress < 100 && (
                         <div className="flex items-center gap-2">
                             <Progress
                                 className="h-1.5 flex-1"
@@ -115,15 +116,16 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
                                 {isDetailsVisible ? 'Hide details' : 'Show details'}
                             </div>
                             {isDetailsVisible && (
-                                <>
-                                    <div className="border-border my-3 border-t" />
-                                    <Markdown
-                                        className="prose-xs prose-fixed wrap-break-word"
-                                        searchValue={searchValue}
-                                    >
-                                        {result}
-                                    </Markdown>
-                                </>
+                                <Card className="mt-4">
+                                    <CardContent className="p-3">
+                                        <Markdown
+                                            className="prose-xs prose-fixed wrap-break-word"
+                                            searchValue={searchValue}
+                                        >
+                                            {result}
+                                        </Markdown>
+                                    </CardContent>
+                                </Card>
                             )}
                         </div>
                     )}

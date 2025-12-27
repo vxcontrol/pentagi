@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import type { SubtaskFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/markdown';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import FlowTaskStatusIcon from './flow-task-status-icon';
 
@@ -81,38 +82,44 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
                             {isDetailsVisible ? 'Hide details' : 'Show details'}
                         </div>
                         {isDetailsVisible && (
-                            <>
-                                <div className="border-border my-3 border-t" />
+                            <div className="mt-4 flex flex-col gap-4">
                                 {description && (
-                                    <div className="flex flex-col gap-2">
-                                        <div className="text-muted-foreground flex items-center gap-2">
-                                            <ListTodo className="size-4" />
-                                            <span className="text-xs">Description</span>
-                                        </div>
-                                        <Markdown
-                                            className="prose-xs prose-fixed wrap-break-word"
-                                            searchValue={searchValue}
-                                        >
-                                            {description}
-                                        </Markdown>
-                                    </div>
+                                    <Card>
+                                        <CardHeader className="p-3">
+                                            <CardTitle className="flex items-center gap-2">
+                                                <ListTodo className="size-4 shrink-0" /> Description
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-3 pt-0">
+                                            <hr className="mt-0 mb-3" />
+                                            <Markdown
+                                                className="prose-xs prose-fixed wrap-break-word"
+                                                searchValue={searchValue}
+                                            >
+                                                {description}
+                                            </Markdown>
+                                        </CardContent>
+                                    </Card>
                                 )}
-                                {description && result && <div className="border-border my-3 border-t" />}
                                 {result && (
-                                    <div className="flex flex-col gap-2">
-                                        <div className="text-muted-foreground flex items-center gap-2">
-                                            <ListCheck className="size-4" />
-                                            <span className="text-xs">Result</span>
-                                        </div>
-                                        <Markdown
-                                            className="prose-xs prose-fixed wrap-break-word"
-                                            searchValue={searchValue}
-                                        >
-                                            {result}
-                                        </Markdown>
-                                    </div>
+                                    <Card>
+                                        <CardHeader className="p-3">
+                                            <CardTitle className="flex items-center gap-2">
+                                                <ListCheck className="size-4 shrink-0" /> Result
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-3 pt-0">
+                                            <hr className="mt-0 mb-3" />
+                                            <Markdown
+                                                className="prose-xs prose-fixed wrap-break-word"
+                                                searchValue={searchValue}
+                                            >
+                                                {result}
+                                            </Markdown>
+                                        </CardContent>
+                                    </Card>
                                 )}
-                            </>
+                            </div>
                         )}
                     </div>
                 )}
