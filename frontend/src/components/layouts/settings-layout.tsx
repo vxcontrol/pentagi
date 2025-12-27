@@ -9,7 +9,6 @@ import {
     SidebarFooter,
     SidebarGroup,
     SidebarGroupContent,
-    SidebarGroupLabel,
     SidebarHeader,
     SidebarInset,
     SidebarMenu,
@@ -130,16 +129,21 @@ const SettingsHeader = () => {
 // Settings sidebar component
 const SettingsSidebar = () => {
     return (
-        <Sidebar>
+        <Sidebar collapsible="icon">
             <SidebarHeader>
-                <div className="flex items-center gap-2">
-                    <SettingsIcon className="size-6" />
-                    <span className="font-semibold">Settings</span>
-                </div>
+                <SidebarMenu>
+                    <SidebarMenuItem className="flex items-center gap-2">
+                        <div className="flex aspect-square size-8 items-center justify-center">
+                            <SettingsIcon className="size-6" />
+                        </div>
+                        <div className="grid flex-1 text-left leading-tight">
+                            <span className="truncate font-semibold">Settings</span>
+                        </div>
+                    </SidebarMenuItem>
+                </SidebarMenu>
             </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup>
-                    <SidebarGroupLabel>Settings</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
                             {menuItems.map((item) => (

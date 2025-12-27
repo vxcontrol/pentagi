@@ -65,13 +65,15 @@ const MainSidebar = () => {
     };
 
     return (
-        <Sidebar>
+        <Sidebar collapsible="icon">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem className="flex items-center gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex aspect-square size-8 items-center justify-center">
                             <Logo className="hover:animate-logo-spin size-6" />
-                            <span className="font-semibold">PentAGI</span>
+                        </div>
+                        <div className="grid flex-1 text-left leading-tight">
+                            <span className="truncate font-semibold">PentAGI</span>
                         </div>
                     </SidebarMenuItem>
                 </SidebarMenu>
@@ -116,7 +118,7 @@ const MainSidebar = () => {
                                     <SidebarMenuItem key={flow.id}>
                                         <SidebarMenuButton asChild>
                                             <Link to={`/flows/${flow.id}`}>
-                                                <span className="text-muted-foreground bg-background dark:bg-muted min-w-5 shrink-0 rounded-md px-1 py-0.5 text-center text-xs">
+                                                <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[collapsible=icon]:max-w-5 group-data-[collapsible=icon]:overflow-hidden">
                                                     {flow.id}
                                                 </span>
                                                 <span className="truncate">{flow.name}</span>
@@ -156,8 +158,12 @@ const MainSidebar = () => {
                                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                     size="lg"
                                 >
-                                    <Avatar className="bg-muted flex size-8 items-center justify-center rounded-lg">
-                                        <AvatarFallback className="flex items-center justify-center rounded-lg">
+                                    <Avatar className="bg-background dark:bg-muted size-8 rounded-lg">
+                                        {/* <AvatarImage
+                                            alt={user.name}
+                                            src={user.avatar}
+                                        /> */}
+                                        <AvatarFallback className="flex size-8 items-center justify-center">
                                             <UserIcon className="size-4" />
                                         </AvatarFallback>
                                     </Avatar>
