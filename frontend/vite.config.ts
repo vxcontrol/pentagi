@@ -80,6 +80,7 @@ export default defineConfig(({ mode }) => {
                             '@radix-ui/react-switch',
                             '@radix-ui/react-tabs',
                             '@radix-ui/react-tooltip',
+                            '@radix-ui/react-progress',
                         ],
                         'react-vendor': ['react', 'react-dom', 'react-router-dom'],
                         terminal: [

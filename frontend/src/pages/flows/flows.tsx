@@ -29,7 +29,7 @@ const statusConfig: Record<
 > = {
     [StatusType.Created]: {
         label: 'Created',
-        variant: 'outline',
+        variant: 'outline-solid',
     },
     [StatusType.Failed]: {
         label: 'Failed',
@@ -113,7 +113,7 @@ const Flows = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -136,7 +136,7 @@ const Flows = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -171,7 +171,7 @@ const Flows = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -258,7 +258,7 @@ const Flows = () => {
     ];
 
     const pageHeader = (
-        <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+        <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
             <div className="flex items-center gap-2 px-4">
                 <SidebarTrigger className="-ml-1" />
                 <Separator
@@ -294,7 +294,7 @@ const Flows = () => {
                 <div className="flex flex-col gap-4 p-4">
                     <StatusCard
                         description="Please wait while we fetch your conversation flows"
-                        icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
+                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading flows..."
                     />
                 </div>
@@ -319,7 +319,7 @@ const Flows = () => {
                             </Button>
                         }
                         description="Get started by creating your first conversation flow"
-                        icon={<FileText className="size-8 text-muted-foreground" />}
+                        icon={<FileText className="text-muted-foreground size-8" />}
                         title="No flows found"
                     />
                 </div>

@@ -56,13 +56,13 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
     }, [searchValue, searchChecks.hasDescriptionMatch, searchChecks.hasResultMatch]);
 
     return (
-        <div className="border-l pl-4">
-            <div className="flex gap-2">
-                <FlowTaskStatusIcon
-                    className="mt-px"
-                    status={status}
-                    tooltip={`Subtask ID: ${id}`}
-                />
+        <div className="group relative flex gap-2.5 pb-4 pl-0.5">
+            <FlowTaskStatusIcon
+                className="bg-background ring-border ring-background relative z-1 mt-px rounded-full ring-3"
+                status={status}
+                tooltip={`Subtask ID: ${id}`}
+            />
+            <div className="flex flex-1 flex-col gap-2">
                 <div className="text-sm">
                     <Markdown
                         className="prose-fixed prose-sm wrap-break-word *:m-0 [&>p]:leading-tight"
@@ -71,51 +71,53 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
                         {title}
                     </Markdown>
                 </div>
-            </div>
-            {hasDetails && (
-                <div className="ml-6 text-xs text-muted-foreground">
-                    <div
-                        className="cursor-pointer hover:underline"
-                        onClick={() => setIsDetailsVisible(!isDetailsVisible)}
-                    >
-                        {isDetailsVisible ? 'Hide details' : 'Show details'}
+
+                {hasDetails && (
+                    <div className="text-muted-foreground text-xs">
+                        <div
+                            className="cursor-pointer hover:underline"
+                            onClick={() => setIsDetailsVisible(!isDetailsVisible)}
+                        >
+                            {isDetailsVisible ? 'Hide details' : 'Show details'}
+                        </div>
+                        {isDetailsVisible && (
+                            <>
+                                <div className="border-border my-3 border-t" />
+                                {description && (
+                                    <div className="flex flex-col gap-2">
+                                        <div className="text-muted-foreground flex items-center gap-2">
+                                            <ListTodo className="size-4" />
+                                            <span className="text-xs">Description</span>
+                                        </div>
+                                        <Markdown
+                                            className="prose-xs prose-fixed wrap-break-word"
+                                            searchValue={searchValue}
+                                        >
+                                            {description}
+                                        </Markdown>
+                                    </div>
+                                )}
+                                {description && result && <div className="border-border my-3 border-t" />}
+                                {result && (
+                                    <div className="flex flex-col gap-2">
+                                        <div className="text-muted-foreground flex items-center gap-2">
+                                            <ListCheck className="size-4" />
+                                            <span className="text-xs">Result</span>
+                                        </div>
+                                        <Markdown
+                                            className="prose-xs prose-fixed wrap-break-word"
+                                            searchValue={searchValue}
+                                        >
+                                            {result}
+                                        </Markdown>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
-                    {isDetailsVisible && (
-                        <>
-                            <div className="my-2 border-t border-border" />
-                            {description && (
-                                <>
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                        <ListTodo className="size-4" />
-                                        <span className="text-xs">Description</span>
-                                    </div>
-                                    <Markdown
-                                        className="prose-xs prose-fixed ml-6 wrap-break-word"
-                                        searchValue={searchValue}
-                                    >
-                                        {description}
-                                    </Markdown>
-                                    {result && <div className="my-2 border-t border-border" />}
-                                </>
-                            )}
-                            {result && (
-                                <>
-                                    <div className="flex items-center gap-2 text-muted-foreground">
-                                        <ListCheck className="size-4" />
-                                        <span className="text-xs">Result</span>
-                                    </div>
-                                    <Markdown
-                                        className="prose-xs prose-fixed ml-6 wrap-break-word"
-                                        searchValue={searchValue}
-                                    >
-                                        {result}
-                                    </Markdown>
-                                </>
-                            )}
-                        </>
-                    )}
-                </div>
-            )}
+                )}
+            </div>
+            <div className="absolute top-0 left-[calc((--spacing(2.5))-0.5px)] h-full border-l group-last:hidden"></div>
         </div>
     );
 };

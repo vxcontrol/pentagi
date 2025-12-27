@@ -82,7 +82,7 @@ const FlowScreenshots = () => {
 
     return (
         <div className="flex h-full flex-col">
-            <div className="sticky top-0 z-10 bg-background pb-4">
+            <div className="bg-background sticky top-0 z-10 pb-4">
                 <Form {...form}>
                     <div className="p-px">
                         <FormField
@@ -123,7 +123,7 @@ const FlowScreenshots = () => {
             </div>
 
             {hasScreenshots ? (
-                <div className="flex-1 space-y-4 overflow-auto pb-4">
+                <div className="flex flex-1 flex-col gap-4 overflow-auto">
                     {filteredScreenshots.map((screenshot) => (
                         <FlowScreenshot
                             key={screenshot.id}
