@@ -235,7 +235,7 @@ const SettingsMcpServers = () => {
                 const total = (s.tools || []).length;
 
                 if (total === 0) {
-                    return <span className="text-sm text-muted-foreground">—</span>;
+                    return <span className="text-muted-foreground text-sm">—</span>;
                 }
 
                 const enabled = (s.tools || []).filter((t) => t.enabled !== false);
@@ -282,20 +282,20 @@ const SettingsMcpServers = () => {
                 const s = row.original as McpServerItem;
 
                 if (s.transport === 'sse' && s.config.sse) {
-                    return <span className="break-all text-sm text-muted-foreground">{s.config.sse.url}</span>;
+                    return <span className="text-muted-foreground text-sm break-all">{s.config.sse.url}</span>;
                 }
 
                 if (s.transport === 'stdio' && s.config.stdio) {
                     const args = s.config.stdio.args?.join(' ') || '';
 
                     return (
-                        <span className="break-all text-sm text-muted-foreground">
+                        <span className="text-muted-foreground text-sm break-all">
                             {s.config.stdio.command} {args}
                         </span>
                     );
                 }
 
-                return <span className="text-sm text-muted-foreground">—</span>;
+                return <span className="text-muted-foreground text-sm">—</span>;
             },
             header: 'Endpoint',
             id: 'endpoint',
@@ -318,7 +318,7 @@ const SettingsMcpServers = () => {
                 const server = row.original as McpServerItem;
 
                 return (
-                    <div className="flex justify-end">
+                    <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -377,7 +377,7 @@ const SettingsMcpServers = () => {
 
         const renderKeyValue = (obj?: Record<string, string>) => {
             if (!obj || Object.keys(obj).length === 0) {
-                return <div className="text-sm text-muted-foreground">No data</div>;
+                return <div className="text-muted-foreground text-sm">No data</div>;
             }
 
             return (
@@ -394,7 +394,7 @@ const SettingsMcpServers = () => {
         };
 
         return (
-            <div className="space-y-4 border-t bg-muted/20 p-4">
+            <div className="bg-muted/20 space-y-4 border-t p-4">
                 <h4 className="font-medium">Configuration</h4>
                 <hr className="border-muted-foreground/20" />
                 {server.transport === 'stdio' && server.config.stdio && (
@@ -445,7 +445,7 @@ const SettingsMcpServers = () => {
                                         {t.description && <div className="text-muted-foreground">{t.description}</div>}
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-muted-foreground">Enabled</span>
+                                        <span className="text-muted-foreground text-xs">Enabled</span>
                                         <Switch
                                             aria-label={`Toggle ${t.name}`}
                                             checked={t.enabled !== false}
@@ -469,7 +469,7 @@ const SettingsMcpServers = () => {
                             ))}
                         </div>
                     ) : (
-                        <div className="text-sm text-muted-foreground">No tools available</div>
+                        <div className="text-muted-foreground text-sm">No tools available</div>
                     )}
                 </div>
             </div>
@@ -491,7 +491,7 @@ const SettingsMcpServers = () => {
                         </Button>
                     }
                     description="Get started by adding your first MCP server"
-                    icon={<Server className="size-8 text-muted-foreground" />}
+                    icon={<Server className="text-muted-foreground size-8" />}
                     title="No MCP servers configured"
                 />
             </div>

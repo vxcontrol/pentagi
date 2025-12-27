@@ -19,10 +19,10 @@ type ConfirmationDialogIconProps = ReactElement<React.SVGProps<SVGSVGElement>>;
 interface ConfirmationDialogProps {
     cancelIcon?: ConfirmationDialogIconProps;
     cancelText?: string;
-    cancelVariant?: 'default' | 'destructive' | 'ghost' | 'outline-solid' | 'secondary';
+    cancelVariant?: 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
     confirmIcon?: ConfirmationDialogIconProps;
     confirmText?: string;
-    confirmVariant?: 'default' | 'destructive' | 'ghost' | 'outline-solid' | 'secondary';
+    confirmVariant?: 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
     description?: string;
     handleConfirm: () => void;
     handleOpenChange: (isOpen: boolean) => void;
@@ -35,7 +35,7 @@ interface ConfirmationDialogProps {
 const ConfirmationDialog = ({
     cancelIcon,
     cancelText = 'Cancel',
-    cancelVariant = 'outline-solid',
+    cancelVariant = 'outline',
     confirmIcon = <Trash2 />,
     confirmText = 'Confirm',
     confirmVariant = 'destructive',
@@ -50,7 +50,7 @@ const ConfirmationDialog = ({
     const defaultDescription = description || (
         <>
             Are you sure you want to perform this action on{' '}
-            <strong className="font-semibold text-foreground">{itemName}</strong> {itemType}?
+            <strong className="text-foreground font-semibold">{itemName}</strong> {itemType}?
         </>
     );
 

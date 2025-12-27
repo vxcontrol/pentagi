@@ -164,7 +164,7 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                                 table.getRowModel().rows.map((row) => (
                                     <React.Fragment key={row.id}>
                                         <TableRow
-                                            className="cursor-pointer hover:bg-muted/50"
+                                            className="group hover:bg-muted/50 cursor-pointer"
                                             data-state={row.getIsSelected() && 'selected'}
                                             onClick={() => {
                                                 if (onRowClick) {
@@ -225,7 +225,7 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                 </div>
                 <div className="flex items-center justify-end space-x-2 py-4">
                     {!!table.getFilteredSelectedRowModel().rows.length && (
-                        <div className="flex-1 text-sm text-muted-foreground">
+                        <div className="text-muted-foreground flex-1 text-sm">
                             {table.getFilteredSelectedRowModel().rows.length} of{' '}
                             {table.getFilteredRowModel().rows.length} row(s) selected.
                         </div>

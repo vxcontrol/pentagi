@@ -326,7 +326,7 @@ const SettingsPrompts = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -347,7 +347,7 @@ const SettingsPrompts = () => {
                 const status = row.getValue('systemStatus') as string;
 
                 return (
-                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline-solid'}>
+                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
                         {status}
                     </Badge>
                 );
@@ -361,7 +361,7 @@ const SettingsPrompts = () => {
                 const status = row.getValue('humanStatus') as string;
 
                 return (
-                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline-solid'}>
+                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
                         {status}
                     </Badge>
                 );
@@ -374,7 +374,7 @@ const SettingsPrompts = () => {
                 const agent = row.original;
 
                 return (
-                    <div className="flex justify-end">
+                    <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -494,7 +494,7 @@ const SettingsPrompts = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -515,7 +515,7 @@ const SettingsPrompts = () => {
                 const status = row.getValue('status') as string;
 
                 return (
-                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline-solid'}>
+                    <Badge variant={status === 'Custom' ? 'default' : status === 'Default' ? 'secondary' : 'outline'}>
                         {status}
                     </Badge>
                 );
@@ -599,7 +599,7 @@ const SettingsPrompts = () => {
         const humanTemplate = userHumanPrompt?.template || agent.humanTemplate;
 
         return (
-            <div className="space-y-4 border-t bg-muted/20 p-4">
+            <div className="bg-muted/20 space-y-4 border-t p-4">
                 <h4 className="font-medium">Prompt Templates</h4>
                 <hr className="border-muted-foreground/20" />
 
@@ -618,7 +618,7 @@ const SettingsPrompts = () => {
                                     </Badge>
                                 )}
                             </h5>
-                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
+                            <pre className="bg-muted max-h-64 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
                                 {systemTemplate}
                             </pre>
                         </div>
@@ -638,7 +638,7 @@ const SettingsPrompts = () => {
                                     </Badge>
                                 )}
                             </h5>
-                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
+                            <pre className="bg-muted max-h-64 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
                                 {humanTemplate}
                             </pre>
                         </div>
@@ -659,7 +659,7 @@ const SettingsPrompts = () => {
         const template = userToolPrompt?.template || tool.template;
 
         return (
-            <div className="border-t bg-muted/20 p-4">
+            <div className="bg-muted/20 border-t p-4">
                 <div className="mb-2 flex items-center gap-2">
                     <h5 className="text-sm font-medium">Template</h5>
                     {userToolPrompt && (
@@ -671,7 +671,7 @@ const SettingsPrompts = () => {
                         </Badge>
                     )}
                 </div>
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
+                <pre className="bg-muted max-h-64 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
                     {template}
                 </pre>
             </div>
@@ -684,7 +684,7 @@ const SettingsPrompts = () => {
                 <SettingsPromptsHeader />
                 <StatusCard
                     description="Please wait while we fetch your prompt templates"
-                    icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
+                    icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                     title="Loading prompts..."
                 />
             </div>
@@ -713,7 +713,7 @@ const SettingsPrompts = () => {
                 <SettingsPromptsHeader />
                 <StatusCard
                     description="Prompt templates could not be loaded"
-                    icon={<Settings className="size-8 text-muted-foreground" />}
+                    icon={<Settings className="text-muted-foreground size-8" />}
                     title="No prompts available"
                 />
             </div>
@@ -729,11 +729,11 @@ const SettingsPrompts = () => {
                 {agentPrompts.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                            <Bot className="size-5 text-muted-foreground" />
+                            <Bot className="text-muted-foreground size-5" />
                             <h2 className="text-lg font-semibold">Agent Prompts</h2>
                             <Badge variant="secondary">{agentPrompts.length}</Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">System and human prompts for AI agents</p>
+                        <p className="text-muted-foreground text-sm">System and human prompts for AI agents</p>
                         <DataTable
                             columns={agentColumns}
                             data={agentPrompts}
@@ -749,11 +749,11 @@ const SettingsPrompts = () => {
                 {toolPrompts.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                            <Wrench className="size-5 text-muted-foreground" />
+                            <Wrench className="text-muted-foreground size-5" />
                             <h2 className="text-lg font-semibold">Tool Prompts</h2>
                             <Badge variant="secondary">{toolPrompts.length}</Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">Prompt templates for system tools and utilities</p>
+                        <p className="text-muted-foreground text-sm">Prompt templates for system tools and utilities</p>
                         <DataTable
                             columns={toolColumns}
                             data={toolPrompts}

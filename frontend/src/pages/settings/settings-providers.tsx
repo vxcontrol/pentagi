@@ -152,7 +152,7 @@ const SettingsProviders = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -185,7 +185,7 @@ const SettingsProviders = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -212,7 +212,7 @@ const SettingsProviders = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -239,7 +239,7 @@ const SettingsProviders = () => {
 
                 return (
                     <Button
-                        className="flex items-center gap-2 p-0 text-muted-foreground no-underline hover:text-primary hover:no-underline"
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
                         variant="link"
                     >
@@ -259,7 +259,7 @@ const SettingsProviders = () => {
                 const provider = row.original;
 
                 return (
-                    <div className="flex justify-end">
+                    <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -316,7 +316,7 @@ const SettingsProviders = () => {
         const { agents } = provider;
 
         if (!agents) {
-            return <div className="p-4 text-sm text-muted-foreground">No agent configuration available</div>;
+            return <div className="text-muted-foreground p-4 text-sm">No agent configuration available</div>;
         }
 
         // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
@@ -351,9 +351,9 @@ const SettingsProviders = () => {
             .sort((a, b) => a.name.localeCompare(b.name));
 
         return (
-            <div className="border-t bg-muted/20 p-4">
+            <div className="bg-muted/20 border-t p-4">
                 <h4 className="font-medium">Agent Configurations</h4>
-                <hr className="my-4 border-muted-foreground/20" />
+                <hr className="border-muted-foreground/20 my-4" />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
                     {agentTypes.map(({ data, key, name }) => {
                         // Get all fields from data, including nested objects
@@ -374,7 +374,7 @@ const SettingsProviders = () => {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="text-sm text-muted-foreground">No configuration available</div>
+                                    <div className="text-muted-foreground text-sm">No configuration available</div>
                                 )}
                             </div>
                         );
@@ -390,7 +390,7 @@ const SettingsProviders = () => {
                 <SettingsProvidersHeader />
                 <StatusCard
                     description="Please wait while we fetch your provider configurations"
-                    icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
+                    icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                     title="Loading providers..."
                 />
             </div>
@@ -428,7 +428,7 @@ const SettingsProviders = () => {
                         </Button>
                     }
                     description="Get started by adding your first language model provider"
-                    icon={<Settings className="size-8 text-muted-foreground" />}
+                    icon={<Settings className="text-muted-foreground size-8" />}
                     title="No providers configured"
                 />
             </div>

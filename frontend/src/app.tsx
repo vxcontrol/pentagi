@@ -11,6 +11,7 @@ import PublicRoute from '@/components/routes/public-route';
 import PageLoader from '@/components/shared/page-loader';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
+import { FavoritesProvider } from '@/providers/favorites-provider';
 import { FlowProvider } from '@/providers/flow-provider';
 import { ProvidersProvider } from '@/providers/providers-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
@@ -52,66 +53,67 @@ const App = () => {
                 <Toaster />
                 <BrowserRouter>
                     <UserProvider>
-                        <Suspense fallback={<PageLoader />}>
-                            <Routes>
-                                {/* private routes */}
-                                <Route element={renderProtectedRoute()}>
-                                    {/* Main layout for chat pages */}
-                                    <Route element={<MainLayout />}>
-                                        {/* Flows section with FlowsProvider */}
-                                        <Route element={<FlowsLayout />}>
-                                            <Route
-                                                element={<Flows />}
-                                                path="flows"
-                                            />
-                                            <Route
-                                                element={<NewFlow />}
-                                                path="flows/new"
-                                            />
-                                            <Route
-                                                element={
-                                                    <FlowProvider>
-                                                        <Flow />
-                                                    </FlowProvider>
-                                                }
-                                                path="flows/:flowId"
-                                            />
+                        <FavoritesProvider>
+                            <Suspense fallback={<PageLoader />}>
+                                <Routes>
+                                    {/* private routes */}
+                                    <Route element={renderProtectedRoute()}>
+                                        {/* Main layout for chat pages */}
+                                        <Route element={<MainLayout />}>
+                                            {/* Flows section with FlowsProvider */}
+                                            <Route element={<FlowsLayout />}>
+                                                <Route
+                                                    element={<Flows />}
+                                                    path="flows"
+                                                />
+                                                <Route
+                                                    element={<NewFlow />}
+                                                    path="flows/new"
+                                                />
+                                                <Route
+                                                    element={
+                                                        <FlowProvider>
+                                                            <Flow />
+                                                        </FlowProvider>
+                                                    }
+                                                    path="flows/:flowId"
+                                                />
+                                            </Route>
+
+                                            {/* Other pages can be added here without FlowsProvider */}
                                         </Route>
 
-                                        {/* Other pages can be added here without FlowsProvider */}
-                                    </Route>
-
-                                    {/* Settings with nested routes */}
-                                    <Route
-                                        element={<SettingsLayout />}
-                                        path="settings"
-                                    >
+                                        {/* Settings with nested routes */}
                                         <Route
-                                            element={
-                                                <Navigate
-                                                    replace
-                                                    to="providers"
-                                                />
-                                            }
-                                            index
-                                        />
-                                        <Route
-                                            element={<SettingsProviders />}
-                                            path="providers"
-                                        />
-                                        <Route
-                                            element={<SettingsProvider />}
-                                            path="providers/:providerId"
-                                        />
-                                        <Route
-                                            element={<SettingsPrompts />}
-                                            path="prompts"
-                                        />
-                                        <Route
-                                            element={<SettingsPrompt />}
-                                            path="prompts/:promptId"
-                                        />
-                                        {/* <Route
+                                            element={<SettingsLayout />}
+                                            path="settings"
+                                        >
+                                            <Route
+                                                element={
+                                                    <Navigate
+                                                        replace
+                                                        to="providers"
+                                                    />
+                                                }
+                                                index
+                                            />
+                                            <Route
+                                                element={<SettingsProviders />}
+                                                path="providers"
+                                            />
+                                            <Route
+                                                element={<SettingsProvider />}
+                                                path="providers/:providerId"
+                                            />
+                                            <Route
+                                                element={<SettingsPrompts />}
+                                                path="prompts"
+                                            />
+                                            <Route
+                                                element={<SettingsPrompt />}
+                                                path="prompts/:promptId"
+                                            />
+                                            {/* <Route
                                         path="mcp-servers"
                                         element={<SettingsMcpServers />}
                                         />
@@ -123,53 +125,54 @@ const App = () => {
                                             path="mcp-servers/:mcpServerId"
                                             element={<SettingsMcpServer />}
                                         /> */}
-                                        {/* Catch-all route for unknown settings paths */}
-                                        <Route
-                                            element={
-                                                <Navigate
-                                                    replace
-                                                    to="/settings/providers"
-                                                />
-                                            }
-                                            path="*"
-                                        />
+                                            {/* Catch-all route for unknown settings paths */}
+                                            <Route
+                                                element={
+                                                    <Navigate
+                                                        replace
+                                                        to="/settings/providers"
+                                                    />
+                                                }
+                                                path="*"
+                                            />
+                                        </Route>
                                     </Route>
-                                </Route>
 
-                                {/* report routes */}
-                                <Route
-                                    element={
-                                        <ProtectedRoute>
-                                            <SystemSettingsProvider>
-                                                <FlowReport />
-                                            </SystemSettingsProvider>
-                                        </ProtectedRoute>
-                                    }
-                                    path="flows/:flowId/report"
-                                />
+                                    {/* report routes */}
+                                    <Route
+                                        element={
+                                            <ProtectedRoute>
+                                                <SystemSettingsProvider>
+                                                    <FlowReport />
+                                                </SystemSettingsProvider>
+                                            </ProtectedRoute>
+                                        }
+                                        path="flows/:flowId/report"
+                                    />
 
-                                {/* public routes */}
-                                <Route
-                                    element={renderPublicRoute()}
-                                    path="login"
-                                />
+                                    {/* public routes */}
+                                    <Route
+                                        element={renderPublicRoute()}
+                                        path="login"
+                                    />
 
-                                <Route
-                                    element={<OAuthResult />}
-                                    path="oauth/result"
-                                />
+                                    <Route
+                                        element={<OAuthResult />}
+                                        path="oauth/result"
+                                    />
 
-                                {/* other routes */}
-                                <Route
-                                    element={<Navigate to="/flows" />}
-                                    path="/"
-                                />
-                                <Route
-                                    element={<Navigate to="/flows" />}
-                                    path="*"
-                                />
-                            </Routes>
-                        </Suspense>
+                                    {/* other routes */}
+                                    <Route
+                                        element={<Navigate to="/flows" />}
+                                        path="/"
+                                    />
+                                    <Route
+                                        element={<Navigate to="/flows" />}
+                                        path="*"
+                                    />
+                                </Routes>
+                            </Suspense>
+                        </FavoritesProvider>
                     </UserProvider>
                 </BrowserRouter>
             </ThemeProvider>

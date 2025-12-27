@@ -9,8 +9,10 @@ import {
     Plus,
     Settings,
     Settings2,
+    Star,
     Sun,
     UserIcon,
+    X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useMatch } from 'react-router-dom';
@@ -33,6 +35,7 @@ import {
     SidebarFooter,
     SidebarGroup,
     SidebarGroupContent,
+    SidebarGroupLabel,
     SidebarHeader,
     SidebarMenu,
     SidebarMenuAction,
@@ -43,6 +46,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PasswordChangeForm } from '@/features/authentication/password-change-form';
 import { useTheme } from '@/hooks/use-theme';
+import { useFavorites } from '@/providers/favorites-provider';
 import { useUser } from '@/providers/user-provider';
 
 const MainSidebar = () => {
@@ -54,6 +58,7 @@ const MainSidebar = () => {
     const { authInfo, logout } = useUser();
     const user = authInfo?.user;
     const { setTheme, theme } = useTheme();
+    const { favoriteFlows, removeFavoriteFlow } = useFavorites();
 
     const handlePasswordChangeSuccess = () => {
         setIsPasswordModalOpen(false);
@@ -72,7 +77,7 @@ const MainSidebar = () => {
                 </SidebarMenu>
             </SidebarHeader>
             <SidebarContent>
-                <SidebarGroup>
+                <SidebarGroup className="bg-sidebar sticky top-0 z-10">
                     <SidebarGroupContent>
                         <SidebarMenu>
                             <SidebarMenuItem>
@@ -98,6 +103,38 @@ const MainSidebar = () => {
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
+
+                {favoriteFlows.length > 0 && (
+                    <SidebarGroup>
+                        <SidebarGroupLabel className="flex items-center gap-2">
+                            <Star />
+                            Favorite Flows
+                        </SidebarGroupLabel>
+                        <SidebarGroupContent>
+                            <SidebarMenu>
+                                {favoriteFlows.map((flow) => (
+                                    <SidebarMenuItem key={flow.id}>
+                                        <SidebarMenuButton asChild>
+                                            <Link to={`/flows/${flow.id}`}>
+                                                <span className="text-muted-foreground bg-background dark:bg-muted min-w-5 shrink-0 rounded-md px-1 py-0.5 text-center text-xs">
+                                                    {flow.id}
+                                                </span>
+                                                <span className="truncate">{flow.name}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                        <SidebarMenuAction
+                                            className="data-[state=open]:bg-accent rounded-sm"
+                                            onClick={() => removeFavoriteFlow(flow.id)}
+                                            showOnHover
+                                        >
+                                            <X />
+                                        </SidebarMenuAction>
+                                    </SidebarMenuItem>
+                                ))}
+                            </SidebarMenu>
+                        </SidebarGroupContent>
+                    </SidebarGroup>
+                )}
             </SidebarContent>
             <SidebarFooter>
                 <SidebarMenu>

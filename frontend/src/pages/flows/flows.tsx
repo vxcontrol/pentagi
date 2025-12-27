@@ -1,6 +1,18 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { ArrowDown, ArrowUp, Eye, FileText, GitFork, Loader2, MoreHorizontal, Pause, Plus, Trash } from 'lucide-react';
+import {
+    ArrowDown,
+    ArrowUp,
+    Eye,
+    FileText,
+    GitFork,
+    Loader2,
+    MoreHorizontal,
+    Pause,
+    Plus,
+    Star,
+    Trash,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,16 +32,18 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
+import { Toggle } from '@/components/ui/toggle';
 import { StatusType } from '@/graphql/types';
+import { useFavorites } from '@/providers/favorites-provider';
 import { type Flow, useFlows } from '@/providers/flows-provider';
 
 const statusConfig: Record<
     StatusType,
-    { label: string; variant: 'default' | 'destructive' | 'outline-solid' | 'secondary' }
+    { label: string; variant: 'default' | 'destructive' | 'outline' | 'secondary' }
 > = {
     [StatusType.Created]: {
         label: 'Created',
-        variant: 'outline-solid',
+        variant: 'outline',
     },
     [StatusType.Failed]: {
         label: 'Failed',
@@ -52,6 +66,7 @@ const statusConfig: Record<
 const Flows = () => {
     const navigate = useNavigate();
     const { deleteFlow, finishFlow, flows, isLoading } = useFlows();
+    const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingFlow, setDeletingFlow] = useState<Flow | null>(null);
     const [finishingFlowIds, setFinishingFlowIds] = useState<Set<string>>(new Set());
@@ -192,7 +207,20 @@ const Flows = () => {
                 const isRunning = ![StatusType.Failed, StatusType.Finished].includes(flow.status);
 
                 return (
-                    <div className="flex justify-end">
+                    <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <Toggle
+                            aria-label="Toggle favorite"
+                            className="border-none data-[state=on]:bg-transparent data-[state=on]:*:[svg]:fill-yellow-500 data-[state=on]:*:[svg]:stroke-yellow-500"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                toggleFavoriteFlow(flow.id, flow.title || `Flow ${flow.id}`);
+                            }}
+                            pressed={isFavoriteFlow(flow.id)}
+                            size="sm"
+                            variant="outline"
+                        >
+                            <Star className="size-4" />
+                        </Toggle>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
