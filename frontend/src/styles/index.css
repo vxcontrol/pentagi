@@ -256,8 +256,8 @@
         --sidebar-border: oklch(0.3 0.04 245);
         --sidebar-ring: oklch(0.5 0.16 245);
         --font-sans: Inter, sans-serif;
-        --font-serif: Source Serif 4, serif;
-        --font-mono: JetBrains Mono, monospace;
+        --font-serif: Inter, serif;
+        --font-mono: 'Roboto Mono', monospace;
         --radius: 0.5rem;
         --shadow-x: 0;
         --shadow-y: 1px;
