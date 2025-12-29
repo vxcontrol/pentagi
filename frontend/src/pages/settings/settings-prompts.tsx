@@ -599,11 +599,11 @@ const SettingsPrompts = () => {
         const humanTemplate = userHumanPrompt?.template || agent.humanTemplate;
 
         return (
-            <div className="bg-muted/20 space-y-4 border-t p-4">
+            <div className="bg-muted/20 flex flex-col gap-4 border-t p-4">
                 <h4 className="font-medium">Prompt Templates</h4>
                 <hr className="border-muted-foreground/20" />
 
-                <div className="space-y-4">
+                <div className="flex flex-col gap-4">
                     {agent.hasSystem && (
                         <div>
                             <h5 className="mb-2 flex items-center gap-2 text-sm font-medium">
@@ -680,7 +680,7 @@ const SettingsPrompts = () => {
 
     if (isLoading) {
         return (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
                 <SettingsPromptsHeader />
                 <StatusCard
                     description="Please wait while we fetch your prompt templates"
@@ -693,7 +693,7 @@ const SettingsPrompts = () => {
 
     if (error) {
         return (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
                 <SettingsPromptsHeader />
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
@@ -709,7 +709,7 @@ const SettingsPrompts = () => {
 
     if (agentPrompts.length === 0 && toolPrompts.length === 0) {
         return (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
                 <SettingsPromptsHeader />
                 <StatusCard
                     description="Prompt templates could not be loaded"
@@ -722,12 +722,12 @@ const SettingsPrompts = () => {
 
     return (
         <Fragment>
-            <div className="space-y-6">
+            <div className="flex flex-col gap-6">
                 <SettingsPromptsHeader />
 
                 {/* Agent Prompts Section */}
                 {agentPrompts.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
                             <Bot className="text-muted-foreground size-5" />
                             <h2 className="text-lg font-semibold">Agent Prompts</h2>
@@ -747,7 +747,7 @@ const SettingsPrompts = () => {
 
                 {/* Tool Prompts Section */}
                 {toolPrompts.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
                             <Wrench className="text-muted-foreground size-5" />
                             <h2 className="text-lg font-semibold">Tool Prompts</h2>

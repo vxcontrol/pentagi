@@ -223,7 +223,7 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                         </TableBody>
                     </Table>
                 </div>
-                <div className="flex items-center justify-end space-x-2 py-4">
+                <div className="flex items-center justify-end gap-2 py-4">
                     {!!table.getFilteredSelectedRowModel().rows.length && (
                         <div className="text-muted-foreground flex-1 text-sm">
                             {table.getFilteredSelectedRowModel().rows.length} of{' '}
@@ -231,7 +231,7 @@ const DataTable = React.forwardRef<HTMLDivElement, DataTableProps<any, any>>(
                         </div>
                     )}
                     {(table.getCanPreviousPage() || table.getCanNextPage()) && (
-                        <div className="space-x-2">
+                        <div className="flex gap-2">
                             <Button
                                 disabled={!table.getCanPreviousPage()}
                                 onClick={() => table.previousPage()}

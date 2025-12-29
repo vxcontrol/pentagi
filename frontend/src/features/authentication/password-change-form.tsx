@@ -73,7 +73,7 @@ export function PasswordChangeForm({
     return (
         <Form {...form}>
             <form
-                className="space-y-4"
+                className="flex flex-col gap-4"
                 onSubmit={form.handleSubmit(handleSubmit)}
             >
                 <FormField
@@ -130,7 +130,7 @@ export function PasswordChangeForm({
                     )}
                 />
 
-                {error && <div className="text-sm text-destructive">{error}</div>}
+                {error && <div className="text-destructive text-sm">{error}</div>}
 
                 <div className="flex justify-end gap-2 pt-2">
                     {showSkip && (

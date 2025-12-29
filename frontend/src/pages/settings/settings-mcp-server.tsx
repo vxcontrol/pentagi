@@ -240,7 +240,7 @@ const SettingsMcpServer = () => {
                     </Button>
                 }
                 description="The requested MCP server could not be located in mock data"
-                icon={<Server className="size-8 text-muted-foreground" />}
+                icon={<Server className="text-muted-foreground size-8" />}
                 title="MCP Server not found"
             />
         );
@@ -251,7 +251,7 @@ const SettingsMcpServer = () => {
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                     <h2 className="flex items-center gap-2 text-lg font-semibold">
-                        <Server className="size-5 text-muted-foreground" />
+                        <Server className="text-muted-foreground size-5" />
                         {isNew ? 'New MCP Server' : 'MCP Server Settings'}
                     </h2>
 
@@ -262,7 +262,7 @@ const SettingsMcpServer = () => {
 
                 <Form {...form}>
                     <form
-                        className="space-y-6"
+                        className="flex flex-col gap-6"
                         id="mcp-server-form"
                         onSubmit={form.handleSubmit(handleSubmit)}
                     >
@@ -354,7 +354,7 @@ const SettingsMcpServer = () => {
 
                         {/* STDIO configuration */}
                         {transport === 'stdio' && (
-                            <div className="space-y-4">
+                            <div className="flex flex-col gap-4">
                                 <h3 className="text-lg font-medium">STDIO Configuration</h3>
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <FormField
@@ -405,9 +405,9 @@ const SettingsMcpServer = () => {
                                             <Plus className="size-3" /> Add
                                         </Button>
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="flex flex-col gap-2">
                                         {stdioEnvArray.fields.length === 0 && (
-                                            <div className="text-sm text-muted-foreground">No variables</div>
+                                            <div className="text-muted-foreground text-sm">No variables</div>
                                         )}
                                         {stdioEnvArray.fields.map((field, index) => (
                                             <div
@@ -453,7 +453,7 @@ const SettingsMcpServer = () => {
 
                         {/* SSE configuration */}
                         {transport === 'sse' && (
-                            <div className="space-y-4">
+                            <div className="flex flex-col gap-4">
                                 <h3 className="text-lg font-medium">SSE Configuration</h3>
                                 <FormField
                                     control={form.control}
@@ -484,9 +484,9 @@ const SettingsMcpServer = () => {
                                             <Plus className="size-3" /> Add
                                         </Button>
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="flex flex-col gap-2">
                                         {sseHeadersArray.fields.length === 0 && (
-                                            <div className="text-sm text-muted-foreground">No headers</div>
+                                            <div className="text-muted-foreground text-sm">No headers</div>
                                         )}
                                         {sseHeadersArray.fields.map((field, index) => (
                                             <div
@@ -532,14 +532,14 @@ const SettingsMcpServer = () => {
 
                         {/* Tools configuration - only for existing servers; toggles only */}
                         {!isNew && (
-                            <div className="space-y-4">
+                            <div className="flex flex-col gap-4">
                                 <div>
                                     <h3 className="text-lg font-medium">Tools</h3>
-                                    <p className="text-sm text-muted-foreground">Enable or disable available tools</p>
+                                    <p className="text-muted-foreground text-sm">Enable or disable available tools</p>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                                     {toolsArray.fields.length === 0 && (
-                                        <div className="text-sm text-muted-foreground">No tools</div>
+                                        <div className="text-muted-foreground text-sm">No tools</div>
                                     )}
                                     {toolsArray.fields.map((tool, index) => (
                                         <div
@@ -558,7 +558,7 @@ const SettingsMcpServer = () => {
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-muted-foreground">Enabled</span>
+                                                    <span className="text-muted-foreground text-xs">Enabled</span>
                                                     <Controller
                                                         control={form.control}
                                                         name={`tools.${index}.enabled` as const}
@@ -606,8 +606,8 @@ const SettingsMcpServer = () => {
             </div>
 
             {/* Sticky buttons */}
-            <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 flex items-center border-t bg-background p-4 shadow-lg">
-                <div className="flex space-x-2">
+            <div className="bg-background sticky -bottom-4 -mx-4 mt-4 -mb-4 flex items-center border-t p-4 shadow-lg">
+                <div className="flex gap-2">
                     {!isNew && (
                         <Button
                             onClick={handleDelete}
@@ -628,7 +628,7 @@ const SettingsMcpServer = () => {
                         {isTestLoading ? 'Testing...' : 'Test'}
                     </Button>
                 </div>
-                <div className="ml-auto flex space-x-2">
+                <div className="ml-auto flex gap-2">
                     <Button
                         onClick={() => navigate('/settings/mcp-servers')}
                         type="button"

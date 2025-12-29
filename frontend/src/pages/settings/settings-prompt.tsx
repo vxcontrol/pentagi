@@ -802,7 +802,7 @@ const SettingsPrompt = () => {
                 >
                     <Form {...systemForm}>
                         <form
-                            className="space-y-6"
+                            className="flex flex-col gap-6"
                             id="system-prompt-form"
                             onSubmit={systemForm.handleSubmit(handleSystemSubmit)}
                         >
@@ -843,7 +843,7 @@ const SettingsPrompt = () => {
                     >
                         <Form {...humanForm}>
                             <form
-                                className="space-y-6"
+                                className="flex flex-col gap-6"
                                 id="human-prompt-form"
                                 onSubmit={humanForm.handleSubmit(handleHumanSubmit)}
                             >
@@ -888,7 +888,7 @@ const SettingsPrompt = () => {
 
                 {/* Action buttons */}
                 <div className="flex items-center">
-                    <div className="flex space-x-2">
+                    <div className="flex gap-2">
                         {/* Reset button - only show when user has custom prompt */}
                         {((activeTab === 'system' && promptInfo?.userSystemPrompt) ||
                             (activeTab === 'human' && promptInfo?.userHumanPrompt)) && (
@@ -929,7 +929,7 @@ const SettingsPrompt = () => {
                         </Button>
                     </div>
 
-                    <div className="ml-auto flex space-x-2">
+                    <div className="ml-auto flex gap-2">
                         <Button
                             disabled={isLoading}
                             onClick={handleBack}
@@ -1010,7 +1010,7 @@ const SettingsPrompt = () => {
                     </DialogHeader>
 
                     {validationResult && (
-                        <div className="space-y-4">
+                        <div className="flex flex-col gap-4">
                             <Alert variant={validationResult.result ? 'default' : 'destructive'}>
                                 {validationResult.result === 'success' ? (
                                     <CheckCircle className="size-4 text-green-500!" />

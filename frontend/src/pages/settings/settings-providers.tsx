@@ -361,12 +361,12 @@ const SettingsProviders = () => {
 
                         return (
                             <div
-                                className="space-y-2"
+                                className="flex flex-col gap-2"
                                 key={key}
                             >
                                 <div className="text-sm font-medium">{name}</div>
                                 {fields.length > 0 ? (
-                                    <div className="space-y-1 text-sm">
+                                    <div className="flex flex-col gap-1 text-sm">
                                         {fields.map(({ label, value }) => (
                                             <div key={label}>
                                                 <span className="text-muted-foreground">{label}:</span> {value}
@@ -386,7 +386,7 @@ const SettingsProviders = () => {
 
     if (isLoading) {
         return (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
                 <SettingsProvidersHeader />
                 <StatusCard
                     description="Please wait while we fetch your provider configurations"
@@ -399,7 +399,7 @@ const SettingsProviders = () => {
 
     if (error) {
         return (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
                 <SettingsProvidersHeader />
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
@@ -415,7 +415,7 @@ const SettingsProviders = () => {
     // Check if providers list is empty
     if (providers.length === 0) {
         return (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
                 <SettingsProvidersHeader />
                 <StatusCard
                     action={
@@ -436,7 +436,7 @@ const SettingsProviders = () => {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
             <SettingsProvidersHeader />
 
             {/* Delete Error Alert */}

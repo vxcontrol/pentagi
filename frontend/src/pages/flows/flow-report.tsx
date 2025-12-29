@@ -82,8 +82,8 @@ const FlowReport = () => {
         return (
             <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
-                    <Logo className="mb-8 size-16 animate-logo-spin text-white" />
-                    <div className="space-y-4 text-center">
+                    <Logo className="animate-logo-spin mb-8 size-16 text-white" />
+                    <div className="flex flex-col gap-4 text-center">
                         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
                             {state === 'loading' ? 'Loading Report...' : 'Generating PDF...'}
                         </h1>
@@ -105,7 +105,7 @@ const FlowReport = () => {
             <div className="min-h-screen bg-linear-to-br from-red-50 via-white to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
                     <Logo className="mb-8 size-16" />
-                    <div className="space-y-4 text-center">
+                    <div className="flex flex-col gap-4 text-center">
                         <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400">Error Loading Report</h1>
                         <p className="max-w-md text-gray-600 dark:text-gray-400">
                             {error || 'An unexpected error occurred while loading the report.'}
@@ -127,7 +127,7 @@ const FlowReport = () => {
         <div className="min-h-screen bg-white dark:bg-gray-900">
             <div className="h-screen w-full overflow-auto p-8">
                 <div className="mx-auto max-w-4xl">
-                    <div className="prose prose-slate max-w-none dark:prose-invert">
+                    <div className="prose prose-slate dark:prose-invert max-w-none">
                         <Markdown>{reportContent}</Markdown>
                     </div>
                 </div>

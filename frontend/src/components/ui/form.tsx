@@ -73,7 +73,7 @@ const FormItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivEl
         return (
             <FormItemContext.Provider value={{ id }}>
                 <div
-                    className={cn('space-y-2', className)}
+                    className={cn('flex flex-col gap-2', className)}
                     ref={ref}
                     {...props}
                 />
@@ -123,7 +123,7 @@ const FormDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttribu
 
         return (
             <p
-                className={cn('text-[0.8rem] text-muted-foreground', className)}
+                className={cn('text-muted-foreground text-[0.8rem]', className)}
                 id={formDescriptionId}
                 ref={ref}
                 {...props}
@@ -144,7 +144,7 @@ const FormMessage = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<
 
         return (
             <p
-                className={cn('text-[0.8rem] font-medium text-destructive', className)}
+                className={cn('text-destructive text-[0.8rem] font-medium', className)}
                 id={formMessageId}
                 ref={ref}
                 {...props}

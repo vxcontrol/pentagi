@@ -237,7 +237,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
                             <CommandList>
                                 <CommandEmpty>
                                     <div className="py-2 text-center">
-                                        <p className="text-sm text-muted-foreground">No {label.toLowerCase()} found.</p>
+                                        <p className="text-muted-foreground text-sm">No {label.toLowerCase()} found.</p>
                                         {search && allowCustom && (
                                             <Button
                                                 className="mt-2"
@@ -382,7 +382,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                 <CommandList>
                                     <CommandEmpty>
                                         <div className="py-2 text-center">
-                                            <p className="text-sm text-muted-foreground">
+                                            <p className="text-muted-foreground text-sm">
                                                 No {label.toLowerCase()} found.
                                             </p>
                                             {search && allowCustom && (
@@ -417,10 +417,10 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
                                                     <div className="flex min-w-0 items-center gap-2">
                                                         <span className="truncate">{option.name}</span>
                                                         {option.thinking && (
-                                                            <Lightbulb className="size-3 text-muted-foreground" />
+                                                            <Lightbulb className="text-muted-foreground size-3" />
                                                         )}
                                                     </div>
-                                                    <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                                                    <span className="text-muted-foreground shrink-0 text-xs whitespace-nowrap">
                                                         {formatPrice(option.price)}
                                                     </span>
                                                 </div>
@@ -678,7 +678,7 @@ const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDia
                 <DialogHeader className="shrink-0">
                     <DialogTitle>Provider Test Results</DialogTitle>
                 </DialogHeader>
-                <div className="flex-1 space-y-6 overflow-y-auto">
+                <div className="flex flex-1 flex-col gap-6 overflow-y-auto">
                     <Accordion
                         className="w-full"
                         type="multiple"
@@ -695,13 +695,13 @@ const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDia
                                     <AccordionTrigger className="text-left">
                                         <div className="mr-4 flex w-full items-center justify-between">
                                             <span className="text-lg font-semibold capitalize">{agentType}</span>
-                                            <span className="text-sm text-muted-foreground">
+                                            <span className="text-muted-foreground text-sm">
                                                 {successTestsCount}/{testsCount} tests passed
                                             </span>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent>
-                                        <div className="space-y-3 pt-2">
+                                        <div className="flex flex-col gap-3 pt-2">
                                             {tests.map((test: any, index: number) => (
                                                 <div
                                                     className="rounded-lg border p-3"
@@ -712,12 +712,12 @@ const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDia
                                                             {getStatusIcon(test.result)}
                                                             <span className="font-medium">{test.name}</span>
                                                             {test.type && (
-                                                                <span className="text-sm text-muted-foreground">
+                                                                <span className="text-muted-foreground text-sm">
                                                                     ({test.type})
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                                        <div className="text-muted-foreground flex items-center gap-3 text-sm">
                                                             {test.reasoning !== undefined && (
                                                                 <span>Reasoning: {test.reasoning ? 'Yes' : 'No'}</span>
                                                             )}
@@ -745,7 +745,7 @@ const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDia
                                                 </div>
                                             ))}
                                             {tests.length === 0 && (
-                                                <div className="py-4 text-center text-muted-foreground">
+                                                <div className="text-muted-foreground py-4 text-center">
                                                     No tests available for this agent
                                                 </div>
                                             )}
@@ -1332,7 +1332,7 @@ const SettingsProvider = () => {
         return (
             <StatusCard
                 description="Please wait while we fetch provider configuration"
-                icon={<Loader2 className="size-16 animate-spin text-muted-foreground" />}
+                icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                 title="Loading provider data..."
             />
         );
@@ -1359,7 +1359,7 @@ const SettingsProvider = () => {
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                     <h2 className="flex items-center gap-2 text-lg font-semibold">
-                        <Cpu className="size-5 text-muted-foreground" />
+                        <Cpu className="text-muted-foreground size-5" />
                         {isNew ? 'New Provider' : 'Provider Settings'}
                     </h2>
 
@@ -1372,7 +1372,7 @@ const SettingsProvider = () => {
 
                 <Form {...form}>
                     <form
-                        className="space-y-6"
+                        className="flex flex-col gap-6"
                         id="provider-form"
                         onSubmit={handleFormSubmit(handleSubmit)}
                     >
@@ -1413,10 +1413,10 @@ const SettingsProvider = () => {
                         />
 
                         {/* Agents Configuration Section */}
-                        <div className="space-y-4">
+                        <div className="flex flex-col gap-4">
                             <div>
                                 <h3 className="text-lg font-medium">Agent Configurations</h3>
-                                <p className="text-sm text-muted-foreground">Configure settings for each agent type</p>
+                                <p className="text-muted-foreground text-sm">Configure settings for each agent type</p>
                             </div>
 
                             <Accordion
@@ -1433,7 +1433,7 @@ const SettingsProvider = () => {
                                                 <span className="group-hover:underline">{getName(agentKey)}</span>
                                                 <span
                                                     className={cn(
-                                                        'mr-2 flex items-center gap-1 rounded border px-2 py-1 text-xs hover:bg-accent hover:text-accent-foreground',
+                                                        'hover:bg-accent hover:text-accent-foreground mr-2 flex items-center gap-1 rounded border px-2 py-1 text-xs',
                                                         (isTestLoading || isAgentTestLoading) &&
                                                             'pointer-events-none cursor-not-allowed opacity-50',
                                                     )}
@@ -1459,7 +1459,7 @@ const SettingsProvider = () => {
                                                 </span>
                                             </div>
                                         </AccordionTrigger>
-                                        <AccordionContent className="space-y-4 pt-4">
+                                        <AccordionContent className="flex flex-col gap-4 pt-4">
                                             <div className="grid grid-cols-1 gap-4 p-px md:grid-cols-2">
                                                 {/* Model field */}
                                                 <FormModelComboboxItem
@@ -1594,7 +1594,7 @@ const SettingsProvider = () => {
 
                                             {/* Reasoning Configuration */}
                                             <div className="col-span-full p-px">
-                                                <div className="mt-6 space-y-4">
+                                                <div className="mt-6 flex flex-col gap-4">
                                                     <h4 className="text-sm font-medium">Reasoning Configuration</h4>
                                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                         {/* Reasoning Effort field */}
@@ -1654,7 +1654,7 @@ const SettingsProvider = () => {
 
                                             {/* Price Configuration */}
                                             <div className="col-span-full p-px">
-                                                <div className="mt-6 space-y-4">
+                                                <div className="mt-6 flex flex-col gap-4">
                                                     <h4 className="text-sm font-medium">Price Configuration</h4>
                                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                         {/* Price Input field */}
@@ -1691,8 +1691,8 @@ const SettingsProvider = () => {
             </div>
 
             {/* Sticky buttons at bottom */}
-            <div className="sticky -bottom-4 -mx-4 -mb-4 mt-4 flex items-center border-t bg-background p-4 shadow-lg">
-                <div className="flex space-x-2">
+            <div className="bg-background sticky -bottom-4 -mx-4 mt-4 -mb-4 flex items-center border-t p-4 shadow-lg">
+                <div className="flex gap-2">
                     {/* Delete button - only show when editing existing provider */}
                     {!isNew && (
                         <Button
@@ -1720,7 +1720,7 @@ const SettingsProvider = () => {
                     </Button>
                 </div>
 
-                <div className="ml-auto flex space-x-2">
+                <div className="ml-auto flex gap-2">
                     <Button
                         disabled={isLoading}
                         onClick={handleBack}

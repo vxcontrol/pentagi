@@ -145,9 +145,9 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     // If password change is required, show password change form
     if (passwordChangeRequired && authInfo?.user?.type === 'local') {
         return (
-            <div className="mx-auto w-[350px] space-y-6">
+            <div className="mx-auto flex w-[350px] flex-col gap-6">
                 <h1 className="text-center text-3xl font-bold">Update Password</h1>
-                <p className="text-center text-sm text-muted-foreground">
+                <p className="text-muted-foreground text-center text-sm">
                     You need to change your password before continuing.
                 </p>
                 <PasswordChangeForm
@@ -198,7 +198,7 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
                     </>
                 )}
 
-                <div className="grid gap-4">
+                <div className="flex flex-col gap-4">
                     <FormField
                         control={form.control}
                         name="mail"

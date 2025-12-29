@@ -381,7 +381,7 @@ const SettingsMcpServers = () => {
             }
 
             return (
-                <div className="space-y-1 text-sm">
+                <div className="flex flex-col gap-1 text-sm">
                     {Object.entries(obj)
                         .filter(([_, v]) => !!v)
                         .map(([k, v]) => (
@@ -394,13 +394,13 @@ const SettingsMcpServers = () => {
         };
 
         return (
-            <div className="bg-muted/20 space-y-4 border-t p-4">
+            <div className="bg-muted/20 flex flex-col gap-4 border-t p-4">
                 <h4 className="font-medium">Configuration</h4>
                 <hr className="border-muted-foreground/20" />
                 {server.transport === 'stdio' && server.config.stdio && (
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                         <div className="text-sm font-medium">STDIO</div>
-                        <div className="space-y-1 text-sm">
+                        <div className="flex flex-col gap-1 text-sm">
                             <div>
                                 <span className="text-muted-foreground">Command:</span> {server.config.stdio.command}
                             </div>
@@ -418,9 +418,9 @@ const SettingsMcpServers = () => {
                     </div>
                 )}
                 {server.transport === 'sse' && server.config.sse && (
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                         <div className="text-sm font-medium">SSE</div>
-                        <div className="space-y-1 text-sm">
+                        <div className="flex flex-col gap-1 text-sm">
                             <div>
                                 <span className="text-muted-foreground">URL:</span> {server.config.sse.url}
                             </div>
@@ -431,7 +431,7 @@ const SettingsMcpServers = () => {
                         </div>
                     </div>
                 )}
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                     <div className="text-sm font-medium">Tools</div>
                     {server.tools?.length ? (
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -478,7 +478,7 @@ const SettingsMcpServers = () => {
 
     if (servers.length === 0) {
         return (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
                 <SettingsMcpServersHeader />
                 <StatusCard
                     action={
@@ -499,7 +499,7 @@ const SettingsMcpServers = () => {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
             <SettingsMcpServersHeader />
 
             {deleteErrorMessage && (
