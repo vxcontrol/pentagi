@@ -1,19 +1,20 @@
-import { cn } from '@/lib/utils';
 import * as React from 'react';
 import { useImperativeHandle } from 'react';
 
+import { cn } from '@/lib/utils';
+
 interface UseTextareaProps {
-    textareaRef: React.MutableRefObject<HTMLTextAreaElement | null>;
-    minHeight?: number;
     maxHeight?: number;
+    minHeight?: number;
+    textareaRef: React.MutableRefObject<HTMLTextAreaElement | null>;
     triggerAutoSize: string;
 }
 
 const useTextarea = ({
-    textareaRef,
-    triggerAutoSize,
     maxHeight = Number.MAX_SAFE_INTEGER,
     minHeight = 0,
+    textareaRef,
+    triggerAutoSize,
 }: UseTextareaProps) => {
     const [init, setInit] = React.useState(true);
 
@@ -41,37 +42,37 @@ const useTextarea = ({
     }, [textareaRef.current, triggerAutoSize]);
 };
 
-type TextareaRef = {
-    textarea: HTMLTextAreaElement;
-    maxHeight: number;
-    minHeight: number;
-};
-
-type TextareaProps = {
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
     maxHeight?: number;
     minHeight?: number;
-} & React.TextareaHTMLAttributes<HTMLTextAreaElement>;
+};
+
+type TextareaRef = {
+    maxHeight: number;
+    minHeight: number;
+    textarea: HTMLTextAreaElement;
+};
 
 const Textarea = React.forwardRef<TextareaRef, TextareaProps>(
     (
-        { maxHeight = 118, minHeight = 38, className, onChange, value, ...props }: TextareaProps,
+        { className, maxHeight = 118, minHeight = 38, onChange, value, ...props }: TextareaProps,
         ref: React.Ref<TextareaRef>,
     ) => {
         const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
         const [triggerAutoSize, setTriggerAutoSize] = React.useState('');
 
         useTextarea({
-            textareaRef,
-            triggerAutoSize: triggerAutoSize,
             maxHeight,
             minHeight,
+            textareaRef,
+            triggerAutoSize: triggerAutoSize,
         });
 
         useImperativeHandle(ref, () => ({
-            textarea: textareaRef.current as HTMLTextAreaElement,
             focus: () => textareaRef?.current?.focus(),
             maxHeight,
             minHeight,
+            textarea: textareaRef.current as HTMLTextAreaElement,
         }));
 
         React.useEffect(() => {
@@ -81,16 +82,16 @@ const Textarea = React.forwardRef<TextareaRef, TextareaProps>(
         return (
             <textarea
                 className={cn(
-                    'flex w-full rounded-md border border-input bg-transparent px-3 py-2 shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 text-sm resize-none',
+                    'flex w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
                     className,
                 )}
                 ref={textareaRef}
                 {...props}
-                value={value}
                 onChange={(e) => {
                     setTriggerAutoSize(e.target.value);
                     onChange?.(e);
                 }}
+                value={value}
             />
         );
     },

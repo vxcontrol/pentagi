@@ -1,123 +1,32 @@
-import type { DefaultOptions } from '@apollo/client';
-import { ApolloClient, createHttpLink, InMemoryCache, split } from '@apollo/client';
+import type { DefaultOptions, FetchResult, Operation, Reference } from '@apollo/client';
+
+import { ApolloClient, ApolloLink, createHttpLink, InMemoryCache, Observable, split } from '@apollo/client';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { getMainDefinition } from '@apollo/client/utilities';
 import { createClient } from 'graphql-ws';
 import { LRUCache } from 'lru-cache';
 
 import type { AssistantLogFragmentFragment } from '@/graphql/types';
-import { AssistantLogFragmentFragmentDoc } from '@/graphql/types';
-import { Log } from '@/lib/log';
-import { baseUrl } from '@/models/Api';
 
-// Local cache for accumulating assistant log streaming parts during real-time updates.
-// We use LRUCache to store each log record by its unique logId, because Apollo cache
-// will overwrite fields and does not support partial accumulation for streaming logs.
-const streamingAssistantLogs = new LRUCache<string, {
-    message: string | null;
-    thinking: string | null;
-    result: string | null;
-}>({
+import { Log } from '@/lib/log';
+import { baseUrl } from '@/models/api';
+
+// Global cache for accumulating assistant log streaming parts during real-time updates.
+// This cache is shared across all components and subscription handlers.
+export const streamingAssistantLogs = new LRUCache<
+    string,
+    {
+        message: null | string;
+        result: null | string;
+        thinking: null | string;
+    }
+>({
     max: 500, // Maximum number of log records to keep in cache
     ttl: 1000 * 60 * 5, // Each log record lives for 5 minutes (in milliseconds)
 });
 
-const httpLink = createHttpLink({
-    uri: `${window.location.origin}${baseUrl}/graphql`,
-    credentials: 'include',
-});
-
-const wsLink = new GraphQLWsLink(
-    createClient({
-        url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${baseUrl}/graphql`,
-        retryAttempts: 5,
-        connectionParams: () => {
-            return {}; // Cookies are handled automatically
-        },
-        on: {
-            connected: () => Log.debug('GraphQL WebSocket connected'),
-            error: (error) => Log.error('GraphQL WebSocket error:', error),
-            closed: () => Log.debug('GraphQL WebSocket closed'),
-            connecting: () => Log.debug('GraphQL WebSocket connecting...'),
-            ping: () => Log.debug('GraphQL WebSocket ping'),
-            pong: () => Log.debug('GraphQL WebSocket pong'),
-        },
-        shouldRetry: () => true,
-        retryWait: (retries) => new Promise((resolve) => {
-            const timeout = Math.min(1000 * 2 ** retries, 10000);
-            setTimeout(() => resolve(), timeout);
-        }),
-    }),
-);
-
-const link = split(
-    ({ query }) => {
-        const definition = getMainDefinition(query);
-        return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
-    },
-    wsLink,
-    httpLink,
-);
-
-// Helper functions
-const addIncoming = (existing: any[], incoming: any, cache: any) => {
-    const incomingId = cache.identify(incoming);
-
-    if (existing.some((item) => cache.identify(item) === incomingId)) {
-        return existing;
-    }
-
-    return [...existing, incoming];
-};
-
-const addTopIncoming = (existing: any[], incoming: any, cache: any) => {
-    const incomingId = cache.identify(incoming);
-
-    if (existing.some((item) => cache.identify(item) === incomingId)) {
-        return existing;
-    }
-
-    return [incoming, ...existing];
-};
-
-// Add provider to sorted list in lexicographic order by name
-const addProviderSorted = (existing: any[], incoming: any, cache: any) => {
-    const incomingName = incoming.name;
-    const incomingType = incoming.type;
-
-    // Check if provider already exists
-    if (existing.some((item) => item.name === incomingName && item.type === incomingType)) {
-        return existing;
-    }
-
-    // Find the correct position to insert (sorted by name in lexicographic order)
-    const insertIndex = existing.findIndex((item) => item.name > incomingName);
-    
-    if (insertIndex === -1) {
-        return [...existing, incoming];
-    } else {
-        // Insert at the correct position
-        return [
-            ...existing.slice(0, insertIndex),
-            incoming,
-            ...existing.slice(insertIndex)
-        ];
-    }
-};
-
-const updateIncoming = (existing: any[], incoming: any, cache: any) => {
-    const incomingId = cache.identify(incoming);
-
-    return existing.map((item) => (cache.identify(item) === incomingId ? incoming : item));
-};
-
-const deleteIncoming = (existing: any[], incoming: any, cache: any) => {
-    const incomingId = cache.identify(incoming);
-
-    return existing.filter((item) => cache.identify(item) !== incomingId);
-};
-
-const concatStrings = (existing: string | null | undefined, incoming: string | null | undefined) => {
+// Helper to concatenate strings, handling null/undefined values
+const concatStrings = (existing: null | string | undefined, incoming: null | string | undefined): null | string => {
     if (existing && incoming) {
         return `${existing}${incoming}`;
     } else if (existing) {
@@ -129,514 +38,416 @@ const concatStrings = (existing: string | null | undefined, incoming: string | n
     return null;
 };
 
-// Helper to convert ProviderConfig to Provider
-const providerConfigToProvider = (providerConfig: any) => {
-    return {
-        __typename: 'Provider',
-        name: providerConfig.name,
-        type: providerConfig.type,
-    };
+const httpLink = createHttpLink({
+    credentials: 'include',
+    uri: `${window.location.origin}${baseUrl}/graphql`,
+});
+
+const wsLink = new GraphQLWsLink(
+    createClient({
+        connectionParams: () => {
+            return {}; // Cookies are handled automatically
+        },
+        on: {
+            closed: () => Log.debug('GraphQL WebSocket closed'),
+            connected: () => Log.debug('GraphQL WebSocket connected'),
+            connecting: () => Log.debug('GraphQL WebSocket connecting...'),
+            error: (error) => Log.error('GraphQL WebSocket error:', error),
+            ping: () => Log.debug('GraphQL WebSocket ping'),
+            pong: () => Log.debug('GraphQL WebSocket pong'),
+        },
+        retryAttempts: 5,
+        retryWait: (retries) =>
+            new Promise((resolve) => {
+                const timeout = Math.min(1000 * 2 ** retries, 10000);
+                setTimeout(() => resolve(), timeout);
+            }),
+        shouldRetry: () => true,
+        url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${baseUrl}/graphql`,
+    }),
+);
+
+// Link to handle streaming assistant logs (appendPart)
+// This link intercepts assistantLogUpdated subscription results and accumulates streaming parts
+const streamingLink = new ApolloLink((operation: Operation, forward) => {
+    return new Observable((observer) => {
+        const subscription = forward(operation).subscribe({
+            complete: observer.complete.bind(observer),
+            error: observer.error.bind(observer),
+            next: (result: FetchResult) => {
+                // Check if this is an assistantLogUpdated subscription result
+                if (result.data?.assistantLogUpdated) {
+                    const logUpdate = result.data.assistantLogUpdated as AssistantLogFragmentFragment;
+
+                    try {
+                        // Handle streaming parts (appendPart)
+                        if (logUpdate.appendPart && logUpdate.id) {
+                            const logRecordKey = `AssistantLog:${logUpdate.id}`;
+                            const cachedLog = streamingAssistantLogs.get(logRecordKey) || {
+                                message: null,
+                                result: null,
+                                thinking: null,
+                            };
+
+                            // Accumulate the streaming parts
+                            const accumulatedLog = {
+                                message: concatStrings(cachedLog.message, logUpdate.message),
+                                result: concatStrings(cachedLog.result, logUpdate.result),
+                                thinking: concatStrings(cachedLog.thinking, logUpdate.thinking),
+                            };
+
+                            streamingAssistantLogs.set(logRecordKey, accumulatedLog);
+
+                            // Modify the result to include accumulated data
+                            result = {
+                                ...result,
+                                data: {
+                                    ...result.data,
+                                    assistantLogUpdated: {
+                                        ...logUpdate,
+                                        appendPart: false, // Mark as processed
+                                        message: accumulatedLog.message || '',
+                                        result: accumulatedLog.result || '',
+                                        thinking: accumulatedLog.thinking,
+                                    },
+                                },
+                            };
+                        } else if (logUpdate.id) {
+                            // Final update - clear accumulated data
+                            const logRecordKey = `AssistantLog:${logUpdate.id}`;
+                            streamingAssistantLogs.delete(logRecordKey);
+                        }
+                    } catch (error) {
+                        Log.error('Error processing streaming assistant log:', error);
+                    }
+                }
+
+                observer.next(result);
+            },
+        });
+
+        return () => subscription.unsubscribe();
+    });
+});
+
+// Mapping of subscription names to their corresponding cache field names
+const subscriptionToCacheFieldMap: Record<string, string> = {
+    agentLogAdded: 'agentLogs',
+    assistantCreated: 'assistants',
+    assistantDeleted: 'assistants',
+    assistantLogAdded: 'assistantLogs',
+    assistantLogUpdated: 'assistantLogs',
+    assistantUpdated: 'assistants',
+    flowCreated: 'flows',
+    flowDeleted: 'flows',
+    flowUpdated: 'flows',
+    messageLogAdded: 'messageLogs',
+    messageLogUpdated: 'messageLogs',
+    screenshotAdded: 'screenshots',
+    searchLogAdded: 'searchLogs',
+    taskCreated: 'tasks',
+    taskUpdated: 'tasks',
+    terminalLogAdded: 'terminalLogs',
+    vectorStoreLogAdded: 'vectorStoreLogs',
 };
 
+// Helper function to find item index in cache array
+const findItemIndex = (
+    array: readonly Reference[],
+    itemId: number | string,
+    readField: (fieldName: string, ref: Reference) => unknown,
+): number => array.findIndex((ref) => readField('id', ref as Reference) === itemId);
+
+// Helper function to handle cache field update for a single subscription
+const handleCacheFieldUpdate = (
+    subscriptionName: string,
+    cacheField: string,
+    existing: unknown,
+    newItem: { id: number | string },
+    readField: (fieldName: string, ref: Reference) => unknown,
+    toReference: unknown,
+): readonly Reference[] => {
+    const existingArray = (existing ?? []) as readonly Reference[];
+    const toReferenceFunc = toReference as (item: unknown) => Reference | undefined;
+    const newRef = toReferenceFunc(newItem);
+
+    if (!newRef) {
+        return existingArray;
+    }
+
+    const existingItemIndex = findItemIndex(existingArray, newItem.id, readField);
+    const itemExists = existingItemIndex !== -1;
+
+    // Handle deletion subscriptions
+    if (subscriptionName.endsWith('Deleted')) {
+        // If item exists, remove it from the array
+        if (itemExists) {
+            return existingArray.filter((_, index) => index !== existingItemIndex);
+        }
+
+        // Item doesn't exist - nothing to delete
+        return existingArray;
+    }
+
+    // Handle addition/update subscriptions
+    // If item exists, keep existing array (Apollo auto-updates normalized entities)
+    if (itemExists) {
+        return existingArray;
+    }
+
+    // Item doesn't exist - add it to the beginning for flows (newest first), to the end for others
+    if (cacheField === 'flows') {
+        return [newRef, ...existingArray];
+    }
+
+    return [...existingArray, newRef];
+};
+
+// Helper function to process a single subscription update
+const processSubscriptionUpdate = (
+    cache: InMemoryCache,
+    subscriptionName: string,
+    cacheField: string,
+    newItem: undefined | { id: number | string },
+): void => {
+    if (!newItem?.id) {
+        return;
+    }
+
+    try {
+        cache.modify({
+            fields: {
+                [cacheField]: (existing, { readField, toReference }) =>
+                    handleCacheFieldUpdate(subscriptionName, cacheField, existing, newItem, readField, toReference),
+            },
+        });
+    } catch (error) {
+        // Log detailed error information for debugging
+        Log.error(`Error updating cache for ${subscriptionName}:`, {
+            cacheField,
+            error,
+            itemId: newItem.id,
+            subscriptionName,
+        });
+    }
+};
+
+// Link to automatically update cache when "Added" subscriptions fire
+// This link intercepts subscription results and adds new items to the corresponding cache arrays
+const createSubscriptionCacheLink = (cache: InMemoryCache) => {
+    return new ApolloLink((operation: Operation, forward) => {
+        return new Observable((observer) => {
+            const subscription = forward(operation).subscribe({
+                complete: observer.complete.bind(observer),
+                error: observer.error.bind(observer),
+                next: (result: FetchResult) => {
+                    try {
+                        // Process each subscription type and update cache
+                        if (result.data) {
+                            Object.entries(subscriptionToCacheFieldMap)
+                                .map(([subscriptionName, cacheField]) => ({
+                                    cacheField,
+                                    newItem: result.data?.[subscriptionName],
+                                    subscriptionName,
+                                }))
+                                .filter(({ newItem }) => newItem?.id)
+                                .forEach(({ cacheField, newItem, subscriptionName }) => {
+                                    processSubscriptionUpdate(cache, subscriptionName, cacheField, newItem);
+                                });
+                        }
+                    } catch (error) {
+                        Log.error('Error processing subscription cache update:', error);
+                    }
+
+                    // Process the result after cache update
+                    observer.next(result);
+                },
+            });
+
+            return () => subscription.unsubscribe();
+        });
+    });
+};
+
+// Split traffic between WebSocket (subscriptions) and HTTP (queries/mutations)
+const transportLink = split(
+    ({ query }) => {
+        const definition = getMainDefinition(query);
+
+        return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
+    },
+    wsLink,
+    httpLink,
+);
+
+// Create cache first
 const cache = new InMemoryCache({
     typePolicies: {
+        // Type-specific policies for normalization and identification (in alphabetical order)
+        AgentLog: {
+            keyFields: ['id'],
+        },
+        Assistant: {
+            keyFields: ['id'],
+        },
+        AssistantLog: {
+            keyFields: ['id'],
+        },
+        Flow: {
+            keyFields: ['id'],
+        },
+        MessageLog: {
+            keyFields: ['id'],
+        },
         ProviderConfig: {
             keyFields: (object) => {
-                // don't normalize default providers with id: 0
-                // they should be stored inline within DefaultProvidersConfig
+                // Don't normalize default providers with id: 0
+                // They should be stored inline within DefaultProvidersConfig
                 if (object.id === 0 || object.id === '0') {
                     return false;
                 }
-                // normalize user-defined providers by id
+
+                // Normalize user-defined providers by id
                 return ['id'];
             },
         },
+        // Query field policies
         Query: {
             fields: {
-                // Ensure tasks field is properly merged with incoming data
-                tasks: {
-                    merge(_existing = [], incoming) {
-                        return incoming; // Always use latest task data
+                // Agent logs - cache by flowId argument
+                agentLogs: {
+                    keyArgs: ['flowId'],
+                    merge(_existing, incoming) {
+                        return incoming;
                     },
                 },
-                assistants: {
-                    merge(_existing = [], incoming) {
-                        return incoming; // Always use latest assistants data
-                    },
-                },
+                // Assistant logs - cache by flowId and assistantId arguments
                 assistantLogs: {
-                    merge(_existing = [], incoming) {
-                        return incoming; // Always use latest assistantLogs data
+                    keyArgs: ['flowId', 'assistantId'],
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // Assistants list - cache by flowId argument
+                assistants: {
+                    keyArgs: ['flowId'],
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // Flow query with arguments - cache by flowId
+                flow: {
+                    read(existing, { args, toReference }) {
+                        if (!args?.flowId) {
+                            return existing;
+                        }
+
+                        return (
+                            existing ||
+                            toReference({
+                                __typename: 'Flow',
+                                id: args.flowId,
+                            })
+                        );
+                    },
+                },
+                // Flows list - always use latest data from network
+                flows: {
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // Message logs - cache by flowId argument
+                messageLogs: {
+                    keyArgs: ['flowId'],
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // Providers list - always use latest
+                providers: {
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // Screenshots - cache by flowId argument
+                screenshots: {
+                    keyArgs: ['flowId'],
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // Search logs - cache by flowId argument
+                searchLogs: {
+                    keyArgs: ['flowId'],
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // Settings - always use latest
+                settingsPrompts: {
+                    merge(_existing, incoming) {
+                        return incoming;
                     },
                 },
                 settingsProviders: {
                     merge(_existing, incoming) {
-                        return incoming; // Always use latest providers settings
+                        return incoming;
                     },
                 },
-                settingsPrompts: {
+                // Tasks - cache by flowId argument
+                tasks: {
+                    keyArgs: ['flowId'],
                     merge(_existing, incoming) {
-                        return incoming; // Always use latest prompts settings
+                        return incoming;
+                    },
+                },
+                // Terminal logs - cache by flowId argument
+                terminalLogs: {
+                    keyArgs: ['flowId'],
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // Vector store logs - cache by flowId argument
+                vectorStoreLogs: {
+                    keyArgs: ['flowId'],
+                    merge(_existing, incoming) {
+                        return incoming;
                     },
                 },
             },
         },
-        Mutation: {
-            fields: {
-                createFlow: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                flows: (existing = []) => addTopIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                createAssistant: {
-                    merge(_, incoming, { cache }) {
-                        // Update the flow
-                        if (incoming?.flow) {
-                            cache.modify({
-                                fields: {
-                                    flows: (existing = []) => updateIncoming(existing, incoming.flow, cache),
-                                },
-                            });
-                        }
-
-                        // Add the assistant to the list
-                        if (incoming?.assistant) {
-                            cache.modify({
-                                fields: {
-                                    assistants: (existing = []) => addTopIncoming(existing, incoming.assistant, cache),
-                                },
-                            });
-                        }
-                    },
-                },
-                stopAssistant: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                assistants: (existing = []) => updateIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                createProvider: {
-                    merge(_, incoming, { cache }) {
-                        // Add to providers list (short format, sorted by name)
-                        const provider = providerConfigToProvider(incoming);
-                        cache.modify({
-                            fields: {
-                                providers: (existing = []) => addProviderSorted(existing, provider, cache),
-                            },
-                        });
-
-                        // Update settingsProviders userDefined list (add to end, sorted by ID)
-                        cache.modify({
-                            fields: {
-                                settingsProviders: (existing) => {
-                                    if (existing && existing.userDefined) {
-                                        return {
-                                            ...existing,
-                                            userDefined: addIncoming(existing.userDefined, incoming, cache),
-                                        };
-                                    }
-                                    return existing;
-                                },
-                            },
-                        });
-                    },
-                },
-                updateProvider: {
-                    merge(_, incoming, { cache }) {
-                        const provider = providerConfigToProvider(incoming);
-                        cache.modify({
-                            fields: {
-                                providers: (existing = []) => {
-                                    // Check if provider exists in the list
-                                    const existingProvider = existing.find((item: any) => 
-                                        item.name === provider.name && item.type === provider.type
-                                    );
-                                    
-                                    if (!existingProvider) {
-                                        // Provider not found, invalidate cache to refetch
-                                        cache.evict({ fieldName: 'providers' });
-                                        return existing;
-                                    }
-                                    
-                                    // Update existing provider (only name can change, type cannot)
-                                    return existing.map((item: any) => 
-                                        item.name === provider.name && item.type === provider.type 
-                                            ? provider 
-                                            : item
-                                    );
-                                },
-                            },
-                        });
-
-                        cache.modify({
-                            fields: {
-                                settingsProviders: (existing) => {
-                                    if (existing && existing.userDefined) {
-                                        return {
-                                            ...existing,
-                                            userDefined: updateIncoming(existing.userDefined, incoming, cache),
-                                        };
-                                    }
-                                    return existing;
-                                },
-                            },
-                        });
-                    },
-                },
-                createPrompt: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                settingsPrompts: (existing) => {
-                                    if (existing && existing.userDefined) {
-                                        return {
-                                            ...existing,
-                                            userDefined: addTopIncoming(existing.userDefined, incoming, cache),
-                                        };
-                                    }
-                                    return existing;
-                                },
-                            },
-                        });
-                    },
-                },
-                updatePrompt: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                settingsPrompts: (existing) => {
-                                    if (existing && existing.userDefined) {
-                                        return {
-                                            ...existing,
-                                            userDefined: updateIncoming(existing.userDefined, incoming, cache),
-                                        };
-                                    }
-                                    return existing;
-                                },
-                            },
-                        });
-                    },
-                },
-            },
+        Screenshot: {
+            keyFields: ['id'],
         },
-        Subscription: {
-            fields: {
-                messageLogAdded: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                messageLogs: (existing = []) => addIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                messageLogUpdated: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                messageLogs: (existing = []) => updateIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                screenshotAdded: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                screenshots: (existing = []) => addIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                terminalLogAdded: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                terminalLogs: (existing = []) => addIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                taskCreated: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                tasks: (existing = []) => {
-                                    // Add the new task to the top of the list
-                                    return addTopIncoming(existing, incoming, cache);
-                                },
-                            },
-                        });
-                        // Force refresh any related queries
-                        cache.gc();
-                    },
-                },
-                taskUpdated: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                tasks: (existing = []) => updateIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                flowCreated: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                flows: (existing = []) => addTopIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                flowUpdated: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                flows: (existing = []) => updateIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                flowDeleted: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                flows: (existing = []) => deleteIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                agentLogAdded: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                agentLogs: (existing = []) => addIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                searchLogAdded: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                searchLogs: (existing = []) => addIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                vectorStoreLogAdded: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                vectorStoreLogs: (existing = []) => addIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                assistantLogAdded: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                assistantLogs: (existing = []) => addIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                assistantLogUpdated: {
-                    merge(_, incoming, { cache, toReference }) {
-                        cache.modify({
-                            fields: {
-                                assistantLogs: (existing = []) => {
-                                    // Extract actual log record object from Apollo cache reference
-                                    const incomingId = cache.identify(incoming);
-                                    const logRecord = cache.readFragment({
-                                        id: incomingId,
-                                        fragment: AssistantLogFragmentFragmentDoc,
-                                    }) as AssistantLogFragmentFragment;
-                                    if (!logRecord) {
-                                        return addIncoming(existing, incoming, cache);
-                                    }
-
-                                    // Initiate streaming for new assistant log record
-                                    const logRecordKey = incomingId || `${logRecord.id}`;
-                                    const existingIndex = existing.findIndex((item: Record<string, any>) => cache.identify(item) === incomingId);
-                                    if (existingIndex === -1) {
-                                        streamingAssistantLogs.set(logRecordKey, {
-                                            message: logRecord.message,
-                                            thinking: logRecord.thinking || null,
-                                            result: logRecord.result,
-                                        });
-                                        return addIncoming(existing, incoming, cache);
-                                    }
-
-                                    if (logRecord.appendPart === true) {
-                                        // Handle streaming message parts - accumulate locally to prevent Apollo cache overwrites
-                                        const emptyLogRecord = { message: null, thinking: null, result: null };
-                                        const cachedLogRecord = streamingAssistantLogs.get(logRecordKey) || emptyLogRecord;
-                                        const accumulatedLogRecord = {
-                                            message: concatStrings(cachedLogRecord.message, logRecord.message),
-                                            thinking: concatStrings(cachedLogRecord.thinking, logRecord.thinking),
-                                            result: concatStrings(cachedLogRecord.result, logRecord.result),
-                                        };
-                                        streamingAssistantLogs.set(logRecordKey, accumulatedLogRecord);
-
-                                        const updatedLogRecord = toReference({
-                                            ...logRecord,
-                                            appendPart: false, // prevent infinite loop on updating the log record
-                                            message: accumulatedLogRecord.message || '',
-                                            thinking: accumulatedLogRecord.thinking,
-                                            result: accumulatedLogRecord.result || '',
-                                        }, true);
-
-                                        return updateIncoming(existing, updatedLogRecord, cache);
-                                    }
-
-                                    return updateIncoming(existing, incoming, cache);
-                                },
-                            },
-                        });
-                    },
-                },
-                assistantCreated: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                assistants: (existing = []) => addTopIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                assistantUpdated: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                assistants: (existing = []) => updateIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                assistantDeleted: {
-                    merge(_, incoming, { cache }) {
-                        cache.modify({
-                            fields: {
-                                assistants: (existing = []) => deleteIncoming(existing, incoming, cache),
-                            },
-                        });
-                    },
-                },
-                providerCreated: {
-                    merge(_, incoming, { cache }) {
-                        // Add to providers list (short format, sorted by name)
-                        const provider = providerConfigToProvider(incoming);
-                        cache.modify({
-                            fields: {
-                                providers: (existing = []) => addProviderSorted(existing, provider, cache),
-                            },
-                        });
-
-                        // Update settingsProviders userDefined list (add to end, sorted by ID)
-                        cache.modify({
-                            fields: {
-                                settingsProviders: (existing) => {
-                                    if (existing && existing.userDefined) {
-                                        return {
-                                            ...existing,
-                                            userDefined: addIncoming(existing.userDefined, incoming, cache),
-                                        };
-                                    }
-                                    return existing;
-                                },
-                            },
-                        });
-                    },
-                },
-                providerUpdated: {
-                    merge(_, incoming, { cache }) {
-                        // Update providers list (short format)
-                        const provider = providerConfigToProvider(incoming);
-                        cache.modify({
-                            fields: {
-                                providers: (existing = []) => {
-                                    // Check if provider exists in the list
-                                    const existingProvider = existing.find((item: any) => 
-                                        item.name === provider.name && item.type === provider.type
-                                    );
-                                    
-                                    if (!existingProvider) {
-                                        // Provider not found, invalidate cache to refetch
-                                        cache.evict({ fieldName: 'providers' });
-                                        return existing;
-                                    }
-                                    
-                                    // Update existing provider (only name can change, type cannot)
-                                    return existing.map((item: any) => 
-                                        item.name === provider.name && item.type === provider.type 
-                                            ? provider 
-                                            : item
-                                    );
-                                },
-                            },
-                        });
-
-                        // Update settingsProviders userDefined list
-                        cache.modify({
-                            fields: {
-                                settingsProviders: (existing) => {
-                                    if (existing && existing.userDefined) {
-                                        return {
-                                            ...existing,
-                                            userDefined: updateIncoming(existing.userDefined, incoming, cache),
-                                        };
-                                    }
-                                    return existing;
-                                },
-                            },
-                        });
-                    },
-                },
-                providerDeleted: {
-                    merge(_, incoming, { cache }) {
-                        // Remove from providers list (short format)
-                        const provider = providerConfigToProvider(incoming);
-                        cache.modify({
-                            fields: {
-                                providers: (existing = []) => {
-                                    // Filter out by name+type since Provider doesn't have id
-                                    return existing.filter((item: any) => 
-                                        !(item.name === provider.name && item.type === provider.type)
-                                    );
-                                },
-                            },
-                        });
-
-                        // Remove from settingsProviders userDefined list
-                        cache.modify({
-                            fields: {
-                                settingsProviders: (existing) => {
-                                    if (existing && existing.userDefined) {
-                                        return {
-                                            ...existing,
-                                            userDefined: deleteIncoming(existing.userDefined, incoming, cache),
-                                        };
-                                    }
-                                    return existing;
-                                },
-                            },
-                        });
-                    },
-                },
-            },
+        SearchLog: {
+            keyFields: ['id'],
+        },
+        Subtask: {
+            keyFields: ['id'],
+        },
+        Task: {
+            keyFields: ['id'],
+        },
+        TerminalLog: {
+            keyFields: ['id'],
+        },
+        UserPrompt: {
+            keyFields: ['id'],
+        },
+        VectorStoreLog: {
+            keyFields: ['id'],
         },
     },
 });
+
+// Create subscription cache link with reference to cache instance
+const subscriptionCacheLink = createSubscriptionCacheLink(cache);
+
+// Final link chain: subscriptionCacheLink -> streamingLink -> transportLink
+// Order matters: cache updates happen after streaming processing, before result is sent to components
+const link = ApolloLink.from([subscriptionCacheLink, streamingLink, transportLink]);
 
 const defaultOptions: DefaultOptions = {
     watchQuery: {
@@ -647,9 +458,9 @@ const defaultOptions: DefaultOptions = {
 };
 
 export const client = new ApolloClient({
-    link,
     cache,
     defaultOptions,
+    link,
 });
 
 export default client;

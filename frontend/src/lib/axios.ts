@@ -1,7 +1,11 @@
 import type { AxiosError } from 'axios';
+
 import Axios from 'axios';
 
+import { AUTH_STORAGE_KEY } from '@/providers/user-provider';
+
 import { Log } from './log';
+import { getReturnUrlParam } from './utils/auth';
 
 const axios = Axios.create({
     baseURL: '/api/v1',
@@ -16,26 +20,30 @@ axios.interceptors.response.use(
     },
     (err: AxiosError) => {
         const error = {
-            name: err.name,
             message: err.message,
+            name: err.name,
             stack: err.stack,
             statusCode: err.response?.status,
             statusText: err.response?.statusText,
             warnings: undefined,
         };
+
         if (error.statusCode) {
             Log.warn(`[${error.statusCode}] ${error.statusText || 'empty statusText'}`);
+
             switch (error.statusCode) {
                 case 0: {
                     Log.error('No host was found to connect to.');
                     break;
                 }
+
                 case 200: {
                     Log.error(
                         'Failed to parse the return value, please check if the response is returned in JSON format',
                     );
                     break;
                 }
+
                 case 400: {
                     if (err.response?.data) {
                         Log.warn(err.response.data);
@@ -43,22 +51,27 @@ axios.interceptors.response.use(
                         const globalMessage = warns[''] || ['Please confirm your input.'];
                         error.message = globalMessage[0] as string;
                     }
+
                     break;
                 }
+
                 case 401:
+
                 case 403: {
                     Log.warn('You do not have permission to execute the api.');
-                    localStorage.removeItem('auth');
+                    localStorage.removeItem(AUTH_STORAGE_KEY);
 
                     // Redirect to login with current URL preserved
                     const currentPath = window.location.pathname;
-                    // Only save if it's not the default route
+
                     if (currentPath !== '/login') {
-                        const returnParam = currentPath !== '/chat/new' ? `?returnUrl=${encodeURIComponent(currentPath)}` : '';
+                        const returnParam = getReturnUrlParam(currentPath);
                         window.location.href = `/login${returnParam}`;
                     }
+
                     break;
                 }
+
                 default: {
                     Log.error(err.response?.data);
                 }
@@ -66,6 +79,7 @@ axios.interceptors.response.use(
         } else {
             Log.error(err);
         }
+
         return Promise.reject(error);
     },
 );

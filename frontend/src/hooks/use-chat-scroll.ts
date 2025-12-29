@@ -10,7 +10,7 @@ interface UseChatScrollOptions {
 
 export const useChatScroll = <T extends IdentifiableItem>(
     items: T[] | undefined,
-    resetKey: string | null | undefined,
+    resetKey: null | string | undefined,
     options?: UseChatScrollOptions,
 ) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -20,13 +20,14 @@ export const useChatScroll = <T extends IdentifiableItem>(
     const [hasNewMessages, setHasNewMessages] = useState(false);
 
     const isScrolledToBottomRef = useRef(true);
-    const lastMessageIdRef = useRef<string | null>(null);
+    const lastMessageIdRef = useRef<null | string>(null);
     const previousScrollTopRef = useRef<number>(0);
 
     const behavior = options?.autoScrollBehavior ?? 'smooth';
 
     useEffect(() => {
         isScrolledToBottomRef.current = isScrolledToBottom;
+
         if (isScrolledToBottom) {
             setHasNewMessages(false);
         }
@@ -49,9 +50,12 @@ export const useChatScroll = <T extends IdentifiableItem>(
 
     const handleScroll = useCallback(() => {
         const containerElement = containerRef.current;
-        if (!containerElement) return;
 
-        const { scrollTop, scrollHeight, clientHeight } = containerElement;
+        if (!containerElement) {
+            return;
+        }
+
+        const { clientHeight, scrollHeight, scrollTop } = containerElement;
         const effectivelyAtBottom = scrollHeight - scrollTop <= clientHeight + 2;
 
         if (effectivelyAtBottom) {
@@ -60,18 +64,25 @@ export const useChatScroll = <T extends IdentifiableItem>(
             }
         } else {
             const scrollUpThreshold = 10;
+
             if (isScrolledToBottomRef.current && scrollTop < previousScrollTopRef.current - scrollUpThreshold) {
                 setIsScrolledToBottom(false);
             }
         }
+
         previousScrollTopRef.current = scrollTop;
     }, []);
 
     // Attach scroll listener
     useEffect(() => {
         const containerElement = containerRef.current;
-        if (!containerElement) return;
+
+        if (!containerElement) {
+            return;
+        }
+
         containerElement.addEventListener('scroll', handleScroll);
+
         return () => {
             containerElement.removeEventListener('scroll', handleScroll);
         };
@@ -79,7 +90,11 @@ export const useChatScroll = <T extends IdentifiableItem>(
 
     const hasVerticalScroll = useCallback(() => {
         const containerElement = containerRef.current;
-        if (!containerElement) return false;
+
+        if (!containerElement) {
+            return false;
+        }
+
         return containerElement.scrollHeight - containerElement.clientHeight > 2;
     }, []);
 
@@ -87,14 +102,19 @@ export const useChatScroll = <T extends IdentifiableItem>(
     useEffect(() => {
         if (!items?.length) {
             lastMessageIdRef.current = null;
+
             return;
         }
-        const lastItem = items[items.length - 1];
+
+        const lastItem = items.at(-1);
         const lastId = lastItem?.id;
+
         if (!lastId) {
             lastMessageIdRef.current = null;
+
             return;
         }
+
         if (
             lastMessageIdRef.current &&
             lastMessageIdRef.current !== lastId &&
@@ -103,6 +123,7 @@ export const useChatScroll = <T extends IdentifiableItem>(
         ) {
             setHasNewMessages(true);
         }
+
         lastMessageIdRef.current = lastId;
     }, [items]);
 
@@ -112,6 +133,7 @@ export const useChatScroll = <T extends IdentifiableItem>(
             if (!isScrolledToBottom) {
                 setIsScrolledToBottom(true);
             }
+
             if (hasNewMessages) {
                 setHasNewMessages(false);
             }
@@ -128,17 +150,17 @@ export const useChatScroll = <T extends IdentifiableItem>(
     // Reset indicators on context switch (e.g., another flow or assistant)
     useEffect(() => {
         setHasNewMessages(false);
-        const lastId = items?.[items.length - 1]?.id ?? null;
+        const lastId = items?.at(-1)?.id ?? null;
         lastMessageIdRef.current = lastId ?? null;
     }, [resetKey]);
 
     return {
         containerRef,
         endRef,
-        isScrolledToBottom,
         hasNewMessages,
+        isScrolledToBottom,
         scrollToEnd,
-        setIsScrolledToBottom, // exposed in case component needs manual override
         setHasNewMessages, // exposed for explicit resets if needed
+        setIsScrolledToBottom, // exposed in case component needs manual override
     } as const;
 };

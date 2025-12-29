@@ -1,4 +1,5 @@
 {
+    "$schema": "https://json.schemastore.org/prettierrc",
     "printWidth": 120,
     "tabWidth": 4,
     "useTabs": false,
@@ -6,8 +7,11 @@
     "singleQuote": true,
     "trailingComma": "all",
     "singleAttributePerLine": true,
-    "endOfLine": "auto",
-    "plugins": ["prettier-plugin-tailwindcss", "prettier-plugin-organize-imports"],
+    "bracketSpacing": true,
+    "arrowParens": "always",
+    "endOfLine": "lf",
+    "plugins": ["prettier-plugin-tailwindcss"],
+    "tailwindFunctions": ["cn"],
     "overrides": [
         {
             "files": ["*.yml"],
