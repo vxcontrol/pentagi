@@ -82,6 +82,14 @@ const MainSidebar = () => {
                 <SidebarGroup className="bg-sidebar sticky top-0 z-10">
                     <SidebarGroupContent>
                         <SidebarMenu>
+                            <SidebarMenuItem className="group-data-[state=expanded]:hidden">
+                                <SidebarMenuButton asChild>
+                                    <Link to="/flows/new">
+                                        <Plus />
+                                        New Flow
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
                             <SidebarMenuItem>
                                 <SidebarMenuButton
                                     asChild
@@ -118,7 +126,10 @@ const MainSidebar = () => {
                                     <SidebarMenuItem key={flow.id}>
                                         <SidebarMenuButton asChild>
                                             <Link to={`/flows/${flow.id}`}>
-                                                <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[collapsible=icon]:max-w-5 group-data-[collapsible=icon]:overflow-hidden">
+                                                <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
+                                                    {flow.id}
+                                                </span>
+                                                <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
                                                     {flow.id}
                                                 </span>
                                                 <span className="truncate">{flow.name}</span>
