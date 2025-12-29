@@ -296,6 +296,11 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 
 	subtasksInfo := fp.getSubtasksInfo(taskID, tasksInfo.Subtasks)
 
+	logger.WithFields(logrus.Fields{
+		"planned_count":   len(subtasksInfo.Planned),
+		"completed_count": len(subtasksInfo.Completed),
+	}).Debug("retrieved subtasks info for refinement")
+
 	refinerContext := map[string]map[string]any{
 		"user": {
 			"Task":              tasksInfo.Task,
@@ -304,6 +309,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 			"CompletedSubtasks": subtasksInfo.Completed,
 		},
 		"system": {
+			"SubtaskPatchToolName":    tools.SubtaskPatchToolName,
 			"SubtaskListToolName":     tools.SubtaskListToolName,
 			"SearchToolName":          tools.SearchToolName,
 			"TerminalToolName":        tools.TerminalToolName,
@@ -368,7 +374,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task system refiner template", err)
 	}
 
-	subtasks, err := fp.performSubtasksRefiner(ctx, taskID, systemRefinerTmpl, refinerTmpl, tasksInfo.Task.Input)
+	subtasks, err := fp.performSubtasksRefiner(ctx, taskID, subtasksInfo.Planned, systemRefinerTmpl, refinerTmpl, tasksInfo.Task.Input)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to perform subtasks refiner", err)
 	}

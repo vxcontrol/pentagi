@@ -237,7 +237,7 @@ var PromptVariables = map[PromptType][]string{
 		"Subtasks",
 	},
 	PromptTypeRefiner: {
-		"SubtaskListToolName",
+		"SubtaskPatchToolName",
 		"SearchToolName",
 		"TerminalToolName",
 		"FileToolName",
