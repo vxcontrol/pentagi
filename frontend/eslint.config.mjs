@@ -1,40 +1,82 @@
 // @ts-check
-import { defineConfig } from 'eslint-config-hyoban';
+import { FlatCompat } from '@eslint/eslintrc';
+import js from '@eslint/js';
+import perfectionist from 'eslint-plugin-perfectionist';
 
-export default defineConfig(
-    {
-        formatting: {
-            quotes: 'single',
-            arrowParens: true,
-            braceStyle: '1tbs',
-            lineBreak: 'after',
-            semi: true,
-            indent: 4,
-        },
-        lessOpinionated: true,
-        preferESM: false,
-        ignores: ['public/mockServiceWorker.js', 'src/components/ui', 'pnpm-lock.yaml', 'src/graphql/types.ts'],
-    },
-    {
+const compat = new FlatCompat({
+    baseDirectory: import.meta.dirname,
+    recommendedConfig: js.configs.recommended,
+});
+
+const eslintConfig = [
+    ...compat.config({
+        extends: [
+            'eslint:recommended',
+            'plugin:@typescript-eslint/recommended',
+            'plugin:react/recommended',
+            'plugin:react/jsx-runtime',
+            'plugin:react-hooks/recommended',
+            'prettier',
+        ],
         settings: {
-            tailwindcss: {
-                whitelist: ['center'],
+            react: {
+                version: 'detect',
             },
         },
+    }),
+    {
         rules: {
-            '@stylistic/indent': ['error', 4],
-            'unicorn/template-indent': ['error', { indent: 4 }],
-            '@stylistic/quote-props': ['error', 'as-needed'],
-            '@stylistic/operator-linebreak': [
+            '@typescript-eslint/no-explicit-any': 'warn',
+            '@typescript-eslint/no-unused-vars': [
                 'error',
-                'after',
                 {
-                    overrides: {
-                        '?': 'before',
-                        ':': 'before',
-                    },
+                    argsIgnorePattern: '^_',
+                    varsIgnorePattern: '^_',
                 },
             ],
+            curly: ['error', 'all'],
+            'no-fallthrough': 'off',
+            'padding-line-between-statements': [
+                'error',
+                {
+                    blankLine: 'always',
+                    next: 'return',
+                    prev: '*',
+                },
+                {
+                    blankLine: 'always',
+                    next: 'block-like',
+                    prev: '*',
+                },
+                {
+                    blankLine: 'any',
+                    next: 'block-like',
+                    prev: 'case',
+                },
+                {
+                    blankLine: 'always',
+                    next: '*',
+                    prev: 'block-like',
+                },
+                {
+                    blankLine: 'always',
+                    next: 'block-like',
+                    prev: 'block-like',
+                },
+                {
+                    blankLine: 'any',
+                    next: 'while',
+                    prev: 'do',
+                },
+            ],
+            'react/no-unescaped-entities': 'off', // Allow quotes in JSX
+            'react/prop-types': 'off', // TypeScript provides type checking
         },
     },
-);
+    perfectionist.configs['recommended-natural'],
+    {
+        ignores: ['node_modules/**', 'dist/**', 'build/**', 'public/mockServiceWorker.js', 'src/graphql/types.ts'],
+    },
+];
+
+export default eslintConfig;

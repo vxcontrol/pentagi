@@ -477,6 +477,7 @@ These settings control the integration with various Large Language Model (LLM) p
 | BedrockRegion | `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
 | BedrockAccessKey | `BEDROCK_ACCESS_KEY_ID` | *(none)* | AWS access key ID for Bedrock authentication |
 | BedrockSecretKey | `BEDROCK_SECRET_ACCESS_KEY` | *(none)* | AWS secret access key for Bedrock authentication |
+| BedrockSessionToken | `BEDROCK_SESSION_TOKEN` | *(none)* | AWS session token for temporary credentials (optional, required for STS/assumed roles) |
 | BedrockServerURL | `BEDROCK_SERVER_URL` | *(none)* | Optional custom endpoint URL for Bedrock service |
 
 ### Custom LLM Provider
@@ -554,7 +555,7 @@ The LLM provider settings are used in `pkg/providers` modules to initialize and 
       bconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
           cfg.BedrockAccessKey,
           cfg.BedrockSecretKey,
-          "",
+          cfg.BedrockSessionToken,
       )),
   }
 
@@ -571,6 +572,8 @@ The LLM provider settings are used in `pkg/providers` modules to initialize and 
       bedrock.WithConverseAPI(),
   )
   ```
+
+  The `BedrockSessionToken` is optional and only required when using temporary AWS credentials (e.g., from STS, assumed roles, or MFA-enabled IAM users). For permanent IAM user credentials, leave this field empty.
 
 - **Custom LLM Settings**: Used in `pkg/providers/custom/custom.go` to create a custom LLM client:
   ```go

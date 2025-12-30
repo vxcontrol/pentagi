@@ -77,8 +77,6 @@ reflector:
   temperature: 0.7
   n: 1
   max_tokens: 4000
-  reasoning:
-    max_tokens: 0
   price:
     input: 1.0
     output: 5.0
@@ -99,8 +97,6 @@ enricher:
   temperature: 1.0
   n: 1
   max_tokens: 4000
-  reasoning:
-    max_tokens: 0
   price:
     input: 1.0
     output: 5.0
