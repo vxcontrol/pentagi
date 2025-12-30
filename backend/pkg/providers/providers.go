@@ -9,11 +9,13 @@ import (
 	"math/big"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
@@ -74,6 +76,7 @@ type ProviderController interface {
 	) (AssistantProvider, error)
 
 	Embedder() embeddings.Embedder
+	GraphitiClient() *graphiti.Client
 	DefaultProviders() provider.Providers
 	DefaultProvidersConfig() provider.ProvidersConfig
 	GetProvider(
@@ -121,11 +124,12 @@ type ProviderController interface {
 }
 
 type providerController struct {
-	db       database.Querier
-	cfg      *config.Config
-	docker   docker.DockerClient
-	publicIP string
-	embedder embeddings.Embedder
+	db             database.Querier
+	cfg            *config.Config
+	docker         docker.DockerClient
+	publicIP       string
+	embedder       embeddings.Embedder
+	graphitiClient *graphiti.Client
 
 	startCallNumber *atomic.Int64
 
@@ -266,12 +270,23 @@ func NewProviderController(
 		KeepQASections: cfg.AssistantSummarizerKeepQASections,
 	})
 
+	graphitiClient, err := graphiti.NewClient(
+		cfg.GraphitiURL,
+		time.Duration(cfg.GraphitiTimeout)*time.Second,
+		cfg.GraphitiEnabled && cfg.GraphitiURL != "",
+	)
+	if err != nil {
+		logrus.WithError(err).Warn("failed to initialize graphiti client, continuing without it")
+		graphitiClient = &graphiti.Client{}
+	}
+
 	return &providerController{
-		db:       db,
-		cfg:      cfg,
-		docker:   docker,
-		publicIP: cfg.DockerPublicIP,
-		embedder: embedder,
+		db:             db,
+		cfg:            cfg,
+		docker:         docker,
+		publicIP:       cfg.DockerPublicIP,
+		embedder:       embedder,
+		graphitiClient: graphitiClient,
 
 		startCallNumber: newAtomicInt64(0), // 0 means to make it random
 
@@ -347,18 +362,19 @@ func (pc *providerController) NewFlowProvider(
 	title = strings.TrimSpace(title)
 
 	fp := &flowProvider{
-		db:          pc.db,
-		embedder:    pc.embedder,
-		flowID:      flowID,
-		publicIP:    pc.publicIP,
-		callCounter: newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
-		image:       image,
-		title:       title,
-		language:    language,
-		prompter:    prompter,
-		executor:    executor,
-		summarizer:  pc.summarizerAgent,
-		Provider:    prv,
+		db:             pc.db,
+		embedder:       pc.embedder,
+		graphitiClient: pc.graphitiClient,
+		flowID:         flowID,
+		publicIP:       pc.publicIP,
+		callCounter:    newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+		image:          image,
+		title:          title,
+		language:       language,
+		prompter:       prompter,
+		executor:       executor,
+		summarizer:     pc.summarizerAgent,
+		Provider:       prv,
 	}
 
 	return fp, nil
@@ -381,18 +397,19 @@ func (pc *providerController) LoadFlowProvider(
 	}
 
 	fp := &flowProvider{
-		db:          pc.db,
-		embedder:    pc.embedder,
-		flowID:      flowID,
-		publicIP:    pc.publicIP,
-		callCounter: newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
-		image:       image,
-		title:       title,
-		language:    language,
-		prompter:    prompter,
-		executor:    executor,
-		summarizer:  pc.summarizerAgent,
-		Provider:    prv,
+		db:             pc.db,
+		embedder:       pc.embedder,
+		graphitiClient: pc.graphitiClient,
+		flowID:         flowID,
+		publicIP:       pc.publicIP,
+		callCounter:    newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+		image:          image,
+		title:          title,
+		language:       language,
+		prompter:       prompter,
+		executor:       executor,
+		summarizer:     pc.summarizerAgent,
+		Provider:       prv,
 	}
 
 	return fp, nil
@@ -400,6 +417,10 @@ func (pc *providerController) LoadFlowProvider(
 
 func (pc *providerController) Embedder() embeddings.Embedder {
 	return pc.embedder
+}
+
+func (pc *providerController) GraphitiClient() *graphiti.Client {
+	return pc.graphitiClient
 }
 
 func (pc *providerController) NewAssistantProvider(
@@ -452,19 +473,20 @@ func (pc *providerController) NewAssistantProvider(
 		id:         assistantID,
 		summarizer: pc.summarizerAssistant,
 		fp: flowProvider{
-			db:          pc.db,
-			embedder:    pc.embedder,
-			flowID:      flowID,
-			publicIP:    pc.publicIP,
-			callCounter: newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
-			image:       image,
-			title:       title,
-			language:    language,
-			prompter:    prompter,
-			executor:    executor,
-			streamCb:    streamCb,
-			summarizer:  pc.summarizerAgent,
-			Provider:    prv,
+			db:             pc.db,
+			embedder:       pc.embedder,
+			graphitiClient: pc.graphitiClient,
+			flowID:         flowID,
+			publicIP:       pc.publicIP,
+			callCounter:    newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+			image:          image,
+			title:          title,
+			language:       language,
+			prompter:       prompter,
+			executor:       executor,
+			streamCb:       streamCb,
+			summarizer:     pc.summarizerAgent,
+			Provider:       prv,
 		},
 	}
 
@@ -492,19 +514,20 @@ func (pc *providerController) LoadAssistantProvider(
 		id:         assistantID,
 		summarizer: pc.summarizerAssistant,
 		fp: flowProvider{
-			db:          pc.db,
-			embedder:    pc.embedder,
-			flowID:      flowID,
-			publicIP:    pc.publicIP,
-			callCounter: newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
-			image:       image,
-			title:       title,
-			language:    language,
-			prompter:    prompter,
-			executor:    executor,
-			streamCb:    streamCb,
-			summarizer:  pc.summarizerAgent,
-			Provider:    prv,
+			db:             pc.db,
+			embedder:       pc.embedder,
+			graphitiClient: pc.graphitiClient,
+			flowID:         flowID,
+			publicIP:       pc.publicIP,
+			callCounter:    newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+			image:          image,
+			title:          title,
+			language:       language,
+			prompter:       prompter,
+			executor:       executor,
+			streamCb:       streamCb,
+			summarizer:     pc.summarizerAgent,
+			Provider:       prv,
 		},
 	}
 

@@ -7,6 +7,8 @@ volumes:
     driver: local
   pentagi-postgres-data:
     driver: local
+  neo4j_data:
+    driver: local
 
 networks:
   pentagi-network:
@@ -31,8 +33,12 @@ services:
     ports:
       - ${PENTAGI_LISTEN_IP:-127.0.0.1}:${PENTAGI_LISTEN_PORT:-8443}:8443
     depends_on:
-      - pgvector
+      pgvector:
+        condition: service_started
+      graphiti:
+        condition: service_healthy
     environment:
+      - DEBUG=${DEBUG:-false}
       - DOCKER_GID=998
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - COOKIE_SIGNING_SALT=${COOKIE_SIGNING_SALT:-}
@@ -83,6 +89,9 @@ services:
       - EXTERNAL_SSL_INSECURE=${EXTERNAL_SSL_INSECURE:-}
       - SCRAPER_PUBLIC_URL=${SCRAPER_PUBLIC_URL:-}
       - SCRAPER_PRIVATE_URL=${SCRAPER_PRIVATE_URL:-}
+      - GRAPHITI_ENABLED=${GRAPHITI_ENABLED:-}
+      - GRAPHITI_TIMEOUT=${GRAPHITI_TIMEOUT:-}
+      - GRAPHITI_URL=${GRAPHITI_URL:-}
       - PUBLIC_URL=${PUBLIC_URL:-}
       - STATIC_DIR=${STATIC_DIR:-}
       - STATIC_URL=${STATIC_URL:-}

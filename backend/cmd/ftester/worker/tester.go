@@ -81,11 +81,13 @@ func NewTester(
 	flowExecutor.SetSearchLogProvider(proxies.GetSearchLogProvider())
 	flowExecutor.SetTermLogProvider(proxies.GetTermLogProvider())
 	flowExecutor.SetVectorStoreLogProvider(proxies.GetVectorStoreLogProvider())
+	flowExecutor.SetGraphitiClient(providerController.GraphitiClient())
 
 	// Initialize tool executor
 	toolExecutor := newToolExecutor(
 		flowExecutor, cfg, db, dockerClient, nil, proxies,
 		flowID, taskID, subtaskID, providerController.Embedder(),
+		providerController.GraphitiClient(),
 	)
 
 	t := &tester{

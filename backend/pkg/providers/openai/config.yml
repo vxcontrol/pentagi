@@ -40,19 +40,19 @@ assistant:
     output: 10.0
 
 generator:
-  model: o1
+  model: gpt-5.2
   n: 1
   max_tokens: 8192
   reasoning:
     effort: medium
   price:
-    input: 15.0
-    output: 60.0
+    input: 1.75
+    output: 14.0
 
 refiner:
   model: gpt-5
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   reasoning:
     effort: high
   price:
@@ -60,14 +60,14 @@ refiner:
     output: 10.0
 
 adviser:
-  model: o1
+  model: gpt-5.2
   n: 1
   max_tokens: 4000
   reasoning:
     effort: low
   price:
-    input: 15.0
-    output: 60.0
+    input: 1.75
+    output: 14.0
 
 reflector:
   model: o4-mini
@@ -100,24 +100,24 @@ enricher:
     output: 1.6
 
 coder:
-  model: gpt-5
+  model: gpt-5.2
   n: 1
   max_tokens: 6000
   reasoning:
     effort: medium
   price:
-    input: 1.25
-    output: 10.0
+    input: 1.75
+    output: 14.0
 
 installer:
-  model: gpt-5
+  model: o4-mini
   n: 1
   max_tokens: 6000
   reasoning:
     effort: low
   price:
-    input: 1.25
-    output: 10.0
+    input: 1.1
+    output: 4.4
 
 pentester:
   model: o4-mini

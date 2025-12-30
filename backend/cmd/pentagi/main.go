@@ -38,6 +38,14 @@ func main() {
 		log.Fatalf("Unable to load config: %v\n", err)
 	}
 
+	// Configure logrus log level based on DEBUG env variable
+	if cfg.Debug {
+		logrus.SetLevel(logrus.DebugLevel)
+		logrus.Debug("Debug logging enabled")
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+
 	lfclient, err := obs.NewLangfuseClient(ctx, cfg)
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
 		log.Fatalf("Unable to create langfuse client: %v\n", err)

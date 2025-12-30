@@ -44,6 +44,36 @@ type SubtaskList struct {
 	Message  string        `json:"message" jsonschema:"required,title=Subtask generation result" jsonschema_description:"Not so long message with the generation result and main goal of work to send to the user in user's language only"`
 }
 
+// SubtaskOperationType defines the type of operation to perform on a subtask
+type SubtaskOperationType string
+
+const (
+	SubtaskOpAdd     SubtaskOperationType = "add"
+	SubtaskOpRemove  SubtaskOperationType = "remove"
+	SubtaskOpModify  SubtaskOperationType = "modify"
+	SubtaskOpReorder SubtaskOperationType = "reorder"
+)
+
+// SubtaskOperation defines a single operation on the subtask list for delta-based refinement
+type SubtaskOperation struct {
+	Op          SubtaskOperationType `json:"op" jsonschema:"required,enum=add,enum=remove,enum=modify,enum=reorder" jsonschema_description:"Operation type: 'add' creates a new subtask, 'remove' deletes a subtask by ID, 'modify' updates title/description of existing subtask, 'reorder' moves a subtask to a different position"`
+	ID          *int64               `json:"id,omitempty" jsonschema:"title=Subtask ID" jsonschema_description:"ID of existing subtask (required for remove/modify/reorder operations)"`
+	AfterID     *int64               `json:"after_id,omitempty" jsonschema:"title=Insert after ID" jsonschema_description:"For add/reorder: insert after this subtask ID (null/0 = insert at beginning)"`
+	Title       string               `json:"title,omitempty" jsonschema:"title=New title" jsonschema_description:"New title (required for add, optional for modify)"`
+	Description string               `json:"description,omitempty" jsonschema:"title=New description" jsonschema_description:"New description (required for add, optional for modify)"`
+}
+
+type SubtaskInfoPatch struct {
+	ID int64 `json:"id,omitempty" jsonschema:"title=Subtask ID" jsonschema_description:"ID of the subtask (populated by the system for existing subtasks)"`
+	SubtaskInfo
+}
+
+// SubtaskPatch is the delta-based refinement output for modifying subtask lists
+type SubtaskPatch struct {
+	Operations []SubtaskOperation `json:"operations" jsonschema:"required" jsonschema_description:"List of operations to apply to the current subtask list. Empty array means no changes needed."`
+	Message    string             `json:"message" jsonschema:"required,title=Refinement summary" jsonschema_description:"Summary of changes made and justification for modifications to send to the user in user's language only"`
+}
+
 type TaskResult struct {
 	Success Bool   `json:"success" jsonschema:"title=Execution result,type=boolean" jsonschema_description:"True if the task was executed successfully and the user task result was reached"`
 	Result  string `json:"result" jsonschema:"required,title=Task result description" jsonschema_description:"Fully detailed report or error message of the task or subtask result what was achieved or not (in user's language only)"`
@@ -268,4 +298,20 @@ func (i *Int64) String() string {
 		return ""
 	}
 	return strconv.FormatInt(int64(*i), 10)
+}
+
+type GraphitiSearchAction struct {
+	SearchType     string   `json:"search_type" jsonschema:"required,enum=temporal_window,enum=entity_relationships,enum=diverse_results,enum=episode_context,enum=successful_tools,enum=recent_context,enum=entity_by_label" jsonschema_description:"Type of search to perform: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), successful_tools (proven techniques), recent_context (latest findings), entity_by_label (type-specific entity search)"`
+	Query          string   `json:"query" jsonschema:"required" jsonschema_description:"Natural language query describing what to search for in English"`
+	MaxResults     *Int64   `json:"max_results,omitempty" jsonschema:"title=Maximum Results,type=integer" jsonschema_description:"Maximum number of results to return (default varies by search type)"`
+	TimeStart      string   `json:"time_start,omitempty" jsonschema_description:"Start of time window (ISO 8601 format, required for temporal_window)"`
+	TimeEnd        string   `json:"time_end,omitempty" jsonschema_description:"End of time window (ISO 8601 format, required for temporal_window)"`
+	CenterNodeUUID string   `json:"center_node_uuid,omitempty" jsonschema_description:"UUID of entity to search from (required for entity_relationships)"`
+	MaxDepth       *Int64   `json:"max_depth,omitempty" jsonschema:"title=Maximum Depth,type=integer" jsonschema_description:"Maximum graph traversal depth (default: 2, max: 3, for entity_relationships)"`
+	NodeLabels     []string `json:"node_labels,omitempty" jsonschema_description:"Filter to specific node types (e.g., ['IP_ADDRESS', 'SERVICE', 'VULNERABILITY'])"`
+	EdgeTypes      []string `json:"edge_types,omitempty" jsonschema_description:"Filter to specific relationship types (e.g., ['HAS_PORT', 'EXPLOITS'])"`
+	DiversityLevel string   `json:"diversity_level,omitempty" jsonschema:"enum=low,enum=medium,enum=high" jsonschema_description:"How much diversity to prioritize (default: medium, for diverse_results)"`
+	MinMentions    *Int64   `json:"min_mentions,omitempty" jsonschema:"title=Minimum Mentions,type=integer" jsonschema_description:"Minimum episode mentions (default: 2, for successful_tools)"`
+	RecencyWindow  string   `json:"recency_window,omitempty" jsonschema:"enum=1h,enum=6h,enum=24h,enum=7d" jsonschema_description:"How far back to search (default: 24h, for recent_context)"`
+	Message        string   `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Not so long message with the summary of the search query and expected results to send to the user in user's language only"`
 }

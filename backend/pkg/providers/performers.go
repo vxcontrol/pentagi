@@ -13,6 +13,7 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/tools"
 
+	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
 )
 
@@ -170,14 +171,24 @@ func (fp *flowProvider) performSubtasksGenerator(
 func (fp *flowProvider) performSubtasksRefiner(
 	ctx context.Context,
 	taskID int64,
+	plannedSubtasks []database.Subtask,
 	systemRefinerTmpl, userRefinerTmpl, input string,
 ) ([]tools.SubtaskInfo, error) {
 	var (
-		subtaskList  tools.SubtaskList
+		subtaskPatch tools.SubtaskPatch
 		chain        []llms.MessageContent
 		optAgentType = pconfig.OptionsTypeRefiner
 		msgChainType = database.MsgchainTypeRefiner
 	)
+
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"task_id":        taskID,
+		"planned_count":  len(plannedSubtasks),
+		"msg_chain_type": msgChainType,
+		"opt_agent_type": optAgentType,
+	})
+
+	logger.Debug("starting subtasks refiner")
 
 	restoreChain := func(msgChain json.RawMessage) ([]llms.MessageContent, error) {
 		var msgList []llms.MessageContent
@@ -200,7 +211,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 		systemSection.Header.SystemMessage = &systemMessage
 		humanMessage := llms.TextParts(llms.ChatMessageTypeHuman, userRefinerTmpl)
 		systemSection.Header.HumanMessage = &humanMessage
-		// remove the last report with subtasks list
+		// remove the last report with subtasks list/patch
 		for idx := len(systemSection.Body) - 1; idx >= 0; idx-- {
 			if systemSection.Body[idx].Type == cast.RequestResponse {
 				systemSection.Body = systemSection.Body[:idx]
@@ -258,21 +269,28 @@ func (fp *flowProvider) performSubtasksRefiner(
 		return nil, fmt.Errorf("failed to get searcher handler: %w", err)
 	}
 
-	cfg := tools.GeneratorExecutorConfig{
+	cfg := tools.RefinerExecutorConfig{
 		TaskID:   taskID,
 		Memorist: memorist,
 		Searcher: searcher,
-		SubtaskList: func(ctx context.Context, name string, args json.RawMessage) (string, error) {
-			err := json.Unmarshal(args, &subtaskList)
-			if err != nil {
-				return "", fmt.Errorf("failed to unmarshal subtask list: %w", err)
+		SubtaskPatch: func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+			logger.WithField("args_len", len(args)).Debug("received subtask patch")
+			if err := json.Unmarshal(args, &subtaskPatch); err != nil {
+				logger.WithError(err).Error("failed to unmarshal subtask patch")
+				return "", fmt.Errorf("failed to unmarshal subtask patch: %w", err)
 			}
-			return "subtask list successfully processed", nil
+			if err := ValidateSubtaskPatch(subtaskPatch); err != nil {
+				logger.WithError(err).Error("invalid subtask patch")
+				return "", fmt.Errorf("invalid subtask patch: %w", err)
+			}
+			logger.WithField("operations_count", len(subtaskPatch.Operations)).Debug("subtask patch validated")
+			return "subtask patch successfully processed", nil
 		},
 	}
-	executor, err := fp.executor.GetGeneratorExecutor(cfg)
+	executor, err := fp.executor.GetRefinerExecutor(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get generator executor: %w", err)
+		logger.WithError(err).Error("failed to get refiner executor")
+		return nil, fmt.Errorf("failed to get refiner executor: %w", err)
 	}
 
 	chainBlob, err := json.Marshal(chain)
@@ -289,28 +307,46 @@ func (fp *flowProvider) performSubtasksRefiner(
 		TaskID:        database.Int64ToNullInt64(&taskID),
 	})
 	if err != nil {
+		logger.WithError(err).Error("failed to create msg chain")
 		return nil, fmt.Errorf("failed to create msg chain: %w", err)
 	}
+
+	logger.WithField("msg_chain_id", msgChain.ID).Debug("created msg chain for refiner")
 
 	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChain.ID, &taskID, nil, chain, executor, fp.summarizer)
 	if err != nil {
+		logger.WithError(err).Error("failed to perform subtasks refiner agent chain")
 		return nil, fmt.Errorf("failed to get subtasks refiner result: %w", err)
 	}
 
+	// Apply the patch operations to the planned subtasks
+	result, err := applySubtaskOperations(plannedSubtasks, subtaskPatch, logger)
+	if err != nil {
+		logger.WithError(err).Error("failed to apply subtask operations")
+		return nil, fmt.Errorf("failed to apply subtask operations: %w", err)
+	}
+
+	logger.WithFields(logrus.Fields{
+		"input_count":  len(plannedSubtasks),
+		"output_count": len(result),
+		"operations":   len(subtaskPatch.Operations),
+	}).Debug("successfully applied subtask patch")
+
+	subtasks := convertSubtaskInfoPatch(result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
 		fp.agentLog.PutLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
 			input,
-			fp.subtasksToMarkdown(subtaskList.Subtasks),
+			fp.subtasksToMarkdown(subtasks),
 			&taskID,
 			nil,
 		)
 	}
 
-	return subtaskList.Subtasks, nil
+	return subtasks, nil
 }
 
 func (fp *flowProvider) performCoder(

@@ -25,6 +25,14 @@
     output: 15.0
 
 # Claude 4 series - Most capable models for advanced security operations
+- name: claude-haiku-4-5
+  description: Fast and efficient model with exceptional function calling and low latency. Ideal for high-frequency security scanning, rapid vulnerability detection, real-time monitoring, and bulk automated testing where speed is paramount. Strong tool orchestration capabilities at minimal cost.
+  thinking: false
+  release_date: 2025-10-15
+  price:
+    input: 1.0
+    output: 5.0
+
 - name: claude-sonnet-4-0
   description: High-performance reasoning model with exceptional analytical capabilities (superseded by sonnet-4-5). Strong at complex threat modeling, multi-tool coordination, and advanced penetration testing. Maintains excellent function calling and autonomous agent performance.
   thinking: true
@@ -41,18 +49,10 @@
     input: 3.0
     output: 15.0
 
-- name: claude-opus-4-0
-  description: Flagship reasoning powerhouse with maximum capability (superseded by opus-4-1). Exceptional at highly complex security research, novel attack vector discovery, and intricate multi-stage penetration testing requiring extensive analytical depth and strategic planning.
-  thinking: true
-  release_date: 2025-05-22
-  price:
-    input: 15.0
-    output: 75.0
-
-- name: claude-opus-4-1
+- name: claude-opus-4-5
   description: Ultimate reasoning model with unparalleled analytical depth and comprehensive security expertise. Designed for critical security research, advanced zero-day discovery, sophisticated red team operations, and complex autonomous penetration testing requiring maximum intelligence and reasoning capability.
   thinking: true
-  release_date: 2025-08-05
+  release_date: 2025-11-24
   price:
-    input: 15.0
-    output: 75.0
+    input: 5.0
+    output: 25.0
