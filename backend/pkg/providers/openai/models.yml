@@ -1,3 +1,12 @@
+# Latest GPT-5.2 series - Enhanced agentic models with improved reasoning and tool integration
+- name: gpt-5.2
+  description: Latest flagship agentic model with enhanced reasoning and tool integration. Excels at autonomous security research, complex exploit chain development, and coordinating multi-tool penetration testing workflows. Optimal for sophisticated threat modeling and adaptive attack strategies.
+  thinking: true
+  release_date: 2025-12-11
+  price:
+    input: 1.75
+    output: 14.0
+
 # Latest GPT-5 series - Advanced agentic models with native function calling and reasoning
 - name: gpt-5
   description: Premier agentic model with advanced reasoning and native tool integration. Excels at autonomous security research, complex exploit chain development, and coordinating multi-tool penetration testing workflows. Optimal for sophisticated threat modeling and adaptive attack strategies.

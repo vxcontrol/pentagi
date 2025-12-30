@@ -20,16 +20,14 @@ simple_json:
     output: 0.3
 
 primary_agent:
-  model: gemini-2.5-flash-lite-preview-06-17
-  temperature: 0.5
-  top_p: 0.5
+  model: gemini-2.5-flash
   n: 1
   max_tokens: 6000
   reasoning:
     effort: medium
   price:
-    input: 0.1
-    output: 0.4
+    input: 0.3
+    output: 2.5
 
 assistant:
   model: gemini-2.5-flash
@@ -54,14 +52,16 @@ generator:
     output: 10.0
 
 refiner:
-  model: gemini-2.0-flash
+  model: gemini-2.5-flash
   temperature: 0.7
   top_p: 0.8
   n: 1
   max_tokens: 8000
+  reasoning:
+    effort: medium
   price:
-    input: 0.1
-    output: 0.4
+    input: 0.3
+    output: 2.5
 
 adviser:
   model: gemini-2.5-flash
@@ -74,14 +74,14 @@ adviser:
     output: 2.5
 
 reflector:
-  model: gemini-2.5-flash
+  model: gemini-2.0-flash
+  temperature: 0.8
+  top_p: 0.8
   n: 1
   max_tokens: 4000
-  reasoning:
-    effort: medium
   price:
-    input: 0.3
-    output: 2.5
+    input: 0.1
+    output: 0.4
 
 searcher:
   model: gemini-2.0-flash
@@ -116,9 +116,9 @@ coder:
     output: 10.0
 
 installer:
-  model: gemini-2.5-flash-lite-preview-06-17
-  temperature: 0.2
-  top_p: 0.1
+  model: gemini-2.5-flash-lite
+  temperature: 0.4
+  top_p: 0.5
   n: 1
   max_tokens: 6000
   reasoning:
@@ -128,9 +128,9 @@ installer:
     output: 0.4
 
 pentester:
-  model: gemini-2.5-flash-lite-preview-06-17
-  temperature: 0.5
-  top_p: 0.6
+  model: gemini-2.5-flash-lite
+  temperature: 0.6
+  top_p: 0.7
   n: 1
   max_tokens: 6000
   reasoning:
