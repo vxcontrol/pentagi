@@ -387,7 +387,7 @@ func FormatGraphitiTemporalResults(
 ) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("# Temporal Search Results\n\n"))
+	builder.WriteString("# Temporal Search Results\n\n")
 	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
 	builder.WriteString(fmt.Sprintf("**Time Window:** %s to %s\n\n",
 		resp.TimeWindow.Start.Format(time.RFC3339),
@@ -460,7 +460,7 @@ func FormatGraphitiEntityRelationshipResults(
 ) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("# Entity Relationship Search Results\n\n"))
+	builder.WriteString("# Entity Relationship Search Results\n\n")
 	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
 
 	if resp.CenterNode != nil {
@@ -513,7 +513,7 @@ func FormatGraphitiDiverseResults(
 ) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("# Diverse Search Results\n\n"))
+	builder.WriteString("# Diverse Search Results\n\n")
 	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
 
 	if len(resp.Communities) > 0 {
@@ -563,7 +563,7 @@ func FormatGraphitiEpisodeContextResults(
 ) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("# Episode Context Results\n\n"))
+	builder.WriteString("# Episode Context Results\n\n")
 	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
 
 	if len(resp.Episodes) > 0 {
@@ -605,7 +605,7 @@ func FormatGraphitiSuccessfulToolsResults(
 ) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("# Successful Tools & Techniques\n\n"))
+	builder.WriteString("# Successful Tools & Techniques\n\n")
 	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
 
 	if len(resp.Episodes) > 0 {
@@ -646,7 +646,7 @@ func FormatGraphitiRecentContextResults(
 ) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("# Recent Context\n\n"))
+	builder.WriteString("# Recent Context\n\n")
 	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
 	builder.WriteString(fmt.Sprintf("**Time Window:** %s to %s\n\n",
 		resp.TimeWindow.Start.Format(time.RFC3339),
@@ -701,7 +701,7 @@ func FormatGraphitiEntityByLabelResults(
 ) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("# Entity Inventory Search\n\n"))
+	builder.WriteString("# Entity Inventory Search\n\n")
 	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
 
 	if len(resp.Nodes) > 0 {

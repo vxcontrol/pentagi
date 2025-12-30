@@ -11,13 +11,13 @@ import (
 )
 
 // applySubtaskOperations applies delta operations to the current planned subtasks
-// and returns the updated list of SubtaskInfo. Operations are applied in order.
+// and returns the updated list of SubtaskInfoPatch. Operations are applied in order.
 // Returns an error if any operation has missing required fields.
 func applySubtaskOperations(
 	planned []database.Subtask,
 	patch tools.SubtaskPatch,
 	logger *logrus.Entry,
-) ([]tools.SubtaskInfo, error) {
+) ([]tools.SubtaskInfoPatch, error) {
 	logger.WithFields(logrus.Fields{
 		"planned_count":    len(planned),
 		"operations_count": len(patch.Operations),
@@ -25,12 +25,14 @@ func applySubtaskOperations(
 	}).Debug("applying subtask operations")
 
 	// Convert database.Subtask to tools.SubtaskInfo with IDs
-	result := make([]tools.SubtaskInfo, 0, len(planned))
+	result := make([]tools.SubtaskInfoPatch, 0, len(planned))
 	for _, st := range planned {
-		result = append(result, tools.SubtaskInfo{
-			ID:          st.ID,
-			Title:       st.Title,
-			Description: st.Description,
+		result = append(result, tools.SubtaskInfoPatch{
+			ID: st.ID,
+			SubtaskInfo: tools.SubtaskInfo{
+				Title:       st.Title,
+				Description: st.Description,
+			},
 		})
 	}
 
@@ -95,7 +97,7 @@ func applySubtaskOperations(
 
 	// Build result list (excluding removed subtasks)
 	if len(removed) > 0 {
-		filtered := make([]tools.SubtaskInfo, 0, len(result)-len(removed))
+		filtered := make([]tools.SubtaskInfoPatch, 0, len(result)-len(removed))
 		for _, st := range result {
 			if !removed[st.ID] {
 				filtered = append(filtered, st)
@@ -130,10 +132,12 @@ func applySubtaskOperations(
 				return nil, err
 			}
 
-			newSubtask := tools.SubtaskInfo{
-				ID:          0, // New subtasks don't have an ID yet
-				Title:       op.Title,
-				Description: op.Description,
+			newSubtask := tools.SubtaskInfoPatch{
+				ID: 0, // New subtasks don't have an ID yet
+				SubtaskInfo: tools.SubtaskInfo{
+					Title:       op.Title,
+					Description: op.Description,
+				},
 			}
 
 			insertIdx := calculateInsertIndex(op.AfterID, idToIdx, len(result))
@@ -190,8 +194,20 @@ func applySubtaskOperations(
 	return result, nil
 }
 
+// convertSubtaskInfoPatch removes the ID field from the subtasks info patches
+func convertSubtaskInfoPatch(subtasks []tools.SubtaskInfoPatch) []tools.SubtaskInfo {
+	result := make([]tools.SubtaskInfo, 0, len(subtasks))
+	for _, st := range subtasks {
+		result = append(result, tools.SubtaskInfo{
+			Title:       st.Title,
+			Description: st.Description,
+		})
+	}
+	return result
+}
+
 // buildIndexMap creates a map from subtask ID to its index in the slice
-func buildIndexMap(subtasks []tools.SubtaskInfo) map[int64]int {
+func buildIndexMap(subtasks []tools.SubtaskInfoPatch) map[int64]int {
 	idToIdx := make(map[int64]int, len(subtasks))
 	for i, st := range subtasks {
 		if st.ID != 0 {

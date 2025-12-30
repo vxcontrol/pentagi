@@ -244,8 +244,11 @@ func (dc *dockerClient) SpawnContainer(
 		hostConfig = &container.HostConfig{}
 	}
 
+	// prevent containers from auto-starting after OS or docker daemon restart
+	// because on startup they create docker.sock directory for DinD if it's enabled
 	hostConfig.RestartPolicy = container.RestartPolicy{
-		Name: "unless-stopped",
+		Name:              container.RestartPolicyOnFailure,
+		MaximumRetryCount: 5,
 	}
 
 	if hostDir == "" {

@@ -163,8 +163,8 @@ type Config struct {
 
 	// Graphiti knowledge graph
 	GraphitiEnabled bool   `env:"GRAPHITI_ENABLED" envDefault:"false"`
-	GraphitiURL     string `env:"GRAPHITI_URL" envDefault:"http://localhost:8001"`
 	GraphitiTimeout int    `env:"GRAPHITI_TIMEOUT" envDefault:"30"`
+	GraphitiURL     string `env:"GRAPHITI_URL"`
 }
 
 func NewConfig() (*Config, error) {

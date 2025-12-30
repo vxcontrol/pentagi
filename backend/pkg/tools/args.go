@@ -35,7 +35,6 @@ type Browser struct {
 }
 
 type SubtaskInfo struct {
-	ID          int64  `json:"id,omitempty" jsonschema:"title=Subtask ID" jsonschema_description:"ID of the subtask (populated by the system for existing subtasks)"`
 	Title       string `json:"title" jsonschema:"required,title=Subtask title" jsonschema_description:"Subtask title to show to the user which contains main goal of work result by this subtask"`
 	Description string `json:"description" jsonschema:"required,title=Subtask to complete" jsonschema_description:"Detailed description and instructions and rules and requirements what have to do in the subtask"`
 }
@@ -62,6 +61,11 @@ type SubtaskOperation struct {
 	AfterID     *int64               `json:"after_id,omitempty" jsonschema:"title=Insert after ID" jsonschema_description:"For add/reorder: insert after this subtask ID (null/0 = insert at beginning)"`
 	Title       string               `json:"title,omitempty" jsonschema:"title=New title" jsonschema_description:"New title (required for add, optional for modify)"`
 	Description string               `json:"description,omitempty" jsonschema:"title=New description" jsonschema_description:"New description (required for add, optional for modify)"`
+}
+
+type SubtaskInfoPatch struct {
+	ID int64 `json:"id,omitempty" jsonschema:"title=Subtask ID" jsonschema_description:"ID of the subtask (populated by the system for existing subtasks)"`
+	SubtaskInfo
 }
 
 // SubtaskPatch is the delta-based refinement output for modifying subtask lists

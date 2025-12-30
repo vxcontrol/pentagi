@@ -333,19 +333,20 @@ func (fp *flowProvider) performSubtasksRefiner(
 		"operations":   len(subtaskPatch.Operations),
 	}).Debug("successfully applied subtask patch")
 
+	subtasks := convertSubtaskInfoPatch(result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
 		fp.agentLog.PutLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
 			input,
-			fp.subtasksToMarkdown(result),
+			fp.subtasksToMarkdown(subtasks),
 			&taskID,
 			nil,
 		)
 	}
 
-	return result, nil
+	return subtasks, nil
 }
 
 func (fp *flowProvider) performCoder(

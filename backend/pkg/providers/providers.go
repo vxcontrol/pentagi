@@ -273,7 +273,7 @@ func NewProviderController(
 	graphitiClient, err := graphiti.NewClient(
 		cfg.GraphitiURL,
 		time.Duration(cfg.GraphitiTimeout)*time.Second,
-		cfg.GraphitiEnabled,
+		cfg.GraphitiEnabled && cfg.GraphitiURL != "",
 	)
 	if err != nil {
 		logrus.WithError(err).Warn("failed to initialize graphiti client, continuing without it")

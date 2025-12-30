@@ -49,6 +49,7 @@ require (
 	github.com/swaggo/swag v1.8.7
 	github.com/vektah/gqlparser/v2 v2.5.19
 	github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1
+	github.com/vxcontrol/graphiti-go-client v0.0.0-20251112134544-aa9c5316ed5d
 	github.com/vxcontrol/langchaingo v0.1.14-0.20250719180153-661a9f82a7e9
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.opentelemetry.io/otel v1.36.0
@@ -190,7 +191,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/urfave/cli/v2 v2.27.5 // indirect
-	github.com/vxcontrol/graphiti-go-client v0.0.0-20251112134544-aa9c5316ed5d // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect

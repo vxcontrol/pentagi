@@ -741,17 +741,6 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 		ce.barriers[AskUserToolName] = struct{}{}
 	}
 
-	graphitiSearch := NewGraphitiSearchTool(
-		fte.flowID,
-		&cfg.TaskID,
-		&cfg.SubtaskID,
-		fte.graphitiClient,
-	)
-	if graphitiSearch.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
-		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
-	}
-
 	return ce, nil
 }
 
@@ -1371,6 +1360,17 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 	if memory.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchInMemoryToolName])
 		ce.handlers[SearchInMemoryToolName] = memory.Handle
+	}
+
+	graphitiSearch := NewGraphitiSearchTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.graphitiClient,
+	)
+	if graphitiSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
+		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
 	return ce, nil

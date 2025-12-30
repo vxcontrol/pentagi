@@ -593,10 +593,9 @@ SEARXNG_TIME_RANGE=
 
 ## Graphiti knowledge graph settings
 GRAPHITI_ENABLED=true
-# Disable when running everything in docker compose, enable when running locally with debugger
-# GRAPHITI_URL=http://localhost:8001
 GRAPHITI_TIMEOUT=30
-GRAPHITI_MODEL_NAME=gpt-5
+GRAPHITI_URL=http://graphiti:8000
+GRAPHITI_MODEL_NAME=gpt-5-mini
 
 # Neo4j settings
 NEO4J_PORT=7687
@@ -643,7 +642,7 @@ docker compose up -d
 Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default is `admin@pentagi.com` / `admin`)
 
 > [!NOTE]
-> If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml` and `docker-compose-observability.yml` to use Langfuse and Observability services.
+> If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml`, `docker-compose-graphiti.yml`, and `docker-compose-observability.yml` to use Langfuse, Graphiti, and Observability services.
 >
 > You have to set at least one Language Model provider (OpenAI, Anthropic, Gemini, AWS Bedrock, or Ollama) to use PentAGI. AWS Bedrock provides enterprise-grade access to multiple foundation models from leading AI companies, while Ollama provides zero-cost local inference if you have sufficient computational resources. Additional API keys for search engines are optional but recommended for better results.
 >
@@ -1011,19 +1010,23 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 > [!NOTE]
 > If you want to use Observability stack with Langfuse, you need to enable integration in `.env` file to set `LANGFUSE_OTEL_EXPORTER_OTLP_ENDPOINT` to `http://otelcol:4318`.
 >
-> And you need to run both stacks `docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d` to have all services running.
->
-> Also you can register aliases for these commands in your shell to run it faster:
+> To run all available stacks together (Langfuse, Graphiti, and Observability):
 >
 > ```bash
-> alias pentagi="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml"
-> alias pentagi-up="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d"
-> alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml down"
+> docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-graphiti.yml -f docker-compose-observability.yml up -d
+> ```
+>
+> You can also register aliases for these commands in your shell to run it faster:
+>
+> ```bash
+> alias pentagi="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-graphiti.yml -f docker-compose-observability.yml"
+> alias pentagi-up="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-graphiti.yml -f docker-compose-observability.yml up -d"
+> alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-graphiti.yml -f docker-compose-observability.yml down"
 > ```
 
 ### Knowledge Graph Integration (Graphiti)
 
-PentAGI integrates with [Graphiti](https://https://github.com/vxcontrol/pentagi-graphiti), a temporal knowledge graph system powered by Neo4j, to provide advanced semantic understanding and relationship tracking for AI agent operations. The vxcontol fork provides custom entity and edge types that are specific to pentesting purposes.
+PentAGI integrates with [Graphiti](https://github.com/vxcontrol/pentagi-graphiti), a temporal knowledge graph system powered by Neo4j, to provide advanced semantic understanding and relationship tracking for AI agent operations. The vxcontrol fork provides custom entity and edge types that are specific to pentesting purposes.
 
 #### What is Graphiti?
 
@@ -1043,10 +1046,9 @@ The Graphiti knowledge graph is **optional** and disabled by default. To enable 
 ```bash
 ## Graphiti knowledge graph settings
 GRAPHITI_ENABLED=true
-# Disable when running everything in docker compose, enable when running locally with debugger
-# GRAPHITI_URL=http://localhost:8001
 GRAPHITI_TIMEOUT=30
-GRAPHITI_MODEL_NAME=gpt-5
+GRAPHITI_URL=http://graphiti:8000
+GRAPHITI_MODEL_NAME=gpt-5-mini
 
 # Neo4j settings
 NEO4J_PORT=7687
@@ -1057,26 +1059,34 @@ NEO4J_PASSWORD=devpassword
 OPEN_AI_KEY=your_openai_api_key
 ```
 
-2. The Neo4j and Graphiti services are already included in `docker-compose.yml` and will start automatically:
+2. Run the Graphiti stack along with the main PentAGI services:
 
 ```bash
-docker compose up -d
+# Download the Graphiti compose file if needed
+curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose-graphiti.yml
+
+# Start PentAGI with Graphiti
+docker compose -f docker-compose.yml -f docker-compose-graphiti.yml up -d
 ```
 
 3. Verify Graphiti is running:
 
 ```bash
 # Check service health
-docker compose ps graphiti neo4j
+docker compose -f docker-compose.yml -f docker-compose-graphiti.yml ps graphiti neo4j
 
 # View Graphiti logs
-docker compose logs -f graphiti
+docker compose -f docker-compose.yml -f docker-compose-graphiti.yml logs -f graphiti
 
 # Access Neo4j Browser (optional)
 # Visit http://localhost:7474 and login with NEO4J_USER/NEO4J_PASSWORD
+
+# Access Graphiti API (optional, for debugging)
+# Visit http://localhost:8000/docs for Swagger API documentation
 ```
 
-*Note: you need to build the pentagi-graphiti image.*
+> [!NOTE]
+> The Graphiti service is defined in `docker-compose-graphiti.yml` as a separate stack. You must run both compose files together to enable the knowledge graph functionality. The pre-built Docker image `vxcontrol/graphiti:latest` is used by default.
 
 #### What Gets Stored
 

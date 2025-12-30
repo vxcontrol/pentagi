@@ -33,6 +33,7 @@ func CreateDummyTemplateData() map[string]any {
 		"MemoristToolName":          tools.MemoristToolName,
 		"MaintenanceToolName":       tools.MaintenanceToolName,
 		"GraphitiSearchToolName":    tools.GraphitiSearchToolName,
+		"GraphitiEnabled":           true,
 		"TerminalToolName":          tools.TerminalToolName,
 		"FileToolName":              tools.FileToolName,
 		"BrowserToolName":           tools.BrowserToolName,
