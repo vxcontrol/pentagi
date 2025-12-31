@@ -14,6 +14,7 @@ type ProductStack string
 
 const (
 	ProductStackPentagi       ProductStack = "pentagi"
+	ProductStackGraphiti      ProductStack = "graphiti"
 	ProductStackLangfuse      ProductStack = "langfuse"
 	ProductStackObservability ProductStack = "observability"
 	ProductStackCompose       ProductStack = "compose"

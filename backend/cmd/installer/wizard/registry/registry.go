@@ -66,6 +66,7 @@ func (r *registry) initScreens() {
 	// Monitoring Forms
 	r.screens[models.MonitoringScreen] = models.NewMonitoringModel(r.controller, r.styles, r.window, r)
 	r.screens[models.LangfuseScreen] = models.NewLangfuseFormModel(r.controller, r.styles, r.window)
+	r.screens[models.GraphitiFormScreen] = models.NewGraphitiFormModel(r.controller, r.styles, r.window)
 	r.screens[models.ObservabilityScreen] = models.NewObservabilityFormModel(r.controller, r.styles, r.window)
 
 	// Tools Forms

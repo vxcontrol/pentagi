@@ -30,6 +30,7 @@ type Controller interface {
 
 	LLMProviderConfigController
 	LangfuseConfigController
+	GraphitiConfigController
 	ObservabilityConfigController
 	SummarizerConfigController
 	EmbedderConfigController
@@ -52,6 +53,12 @@ type LangfuseConfigController interface {
 	GetLangfuseConfig() *LangfuseConfig
 	UpdateLangfuseConfig(config *LangfuseConfig) error
 	ResetLangfuseConfig() *LangfuseConfig
+}
+
+type GraphitiConfigController interface {
+	GetGraphitiConfig() *GraphitiConfig
+	UpdateGraphitiConfig(config *GraphitiConfig) error
+	ResetGraphitiConfig() *GraphitiConfig
 }
 
 type ObservabilityConfigController interface {
@@ -553,6 +560,172 @@ func (c *controller) ResetLangfuseConfig() *LangfuseConfig {
 	}
 
 	return c.GetLangfuseConfig()
+}
+
+// GraphitiConfig represents Graphiti knowledge graph configuration
+type GraphitiConfig struct {
+	// deployment configuration
+	DeploymentType string // "embedded" or "external" or "disabled"
+
+	// integration settings (always)
+	GraphitiURL loader.EnvVar // GRAPHITI_URL
+	Timeout     loader.EnvVar // GRAPHITI_TIMEOUT
+	ModelName   loader.EnvVar // GRAPHITI_MODEL_NAME
+
+	// neo4j settings (embedded only)
+	Neo4jUser     loader.EnvVar // NEO4J_USER
+	Neo4jPassword loader.EnvVar // NEO4J_PASSWORD
+	Neo4jDatabase loader.EnvVar // NEO4J_DATABASE
+	Neo4jURI      loader.EnvVar // NEO4J_URI
+
+	// computed fields (not directly mapped to env vars)
+	Installed bool
+}
+
+// GetGraphitiConfig returns the current Graphiti configuration
+func (c *controller) GetGraphitiConfig() *GraphitiConfig {
+	vars, _ := c.GetVars([]string{
+		"GRAPHITI_URL",
+		"GRAPHITI_TIMEOUT",
+		"GRAPHITI_MODEL_NAME",
+		"NEO4J_USER",
+		"NEO4J_PASSWORD",
+		"NEO4J_DATABASE",
+		"NEO4J_URI",
+	})
+
+	// set defaults if missing
+	if v := vars["GRAPHITI_TIMEOUT"]; v.Default == "" {
+		v.Default = "30"
+		vars["GRAPHITI_TIMEOUT"] = v
+	}
+	if v := vars["GRAPHITI_MODEL_NAME"]; v.Default == "" {
+		v.Default = "gpt-5-mini"
+		vars["GRAPHITI_MODEL_NAME"] = v
+	}
+	if v := vars["NEO4J_USER"]; v.Default == "" {
+		v.Default = "neo4j"
+		vars["NEO4J_USER"] = v
+	}
+	if v := vars["NEO4J_PASSWORD"]; v.Default == "" {
+		v.Default = "devpassword"
+		vars["NEO4J_PASSWORD"] = v
+	}
+	if v := vars["NEO4J_DATABASE"]; v.Default == "" {
+		v.Default = "neo4j"
+		vars["NEO4J_DATABASE"] = v
+	}
+	if v := vars["NEO4J_URI"]; v.Default == "" {
+		v.Default = "bolt://neo4j:7687"
+		vars["NEO4J_URI"] = v
+	}
+
+	graphitiURL := vars["GRAPHITI_URL"]
+
+	// determine deployment type based on GRAPHITI_ENABLED and GRAPHITI_URL
+	graphitiEnabled, _ := c.GetVar("GRAPHITI_ENABLED")
+
+	var deploymentType string
+	if graphitiEnabled.Value != "true" || graphitiURL.Value == "" {
+		deploymentType = "disabled"
+	} else if graphitiURL.Value == checker.DefaultGraphitiEndpoint {
+		deploymentType = "embedded"
+	} else {
+		deploymentType = "external"
+	}
+
+	return &GraphitiConfig{
+		DeploymentType: deploymentType,
+		GraphitiURL:    graphitiURL,
+		Timeout:        vars["GRAPHITI_TIMEOUT"],
+		ModelName:      vars["GRAPHITI_MODEL_NAME"],
+		Neo4jUser:      vars["NEO4J_USER"],
+		Neo4jPassword:  vars["NEO4J_PASSWORD"],
+		Neo4jDatabase:  vars["NEO4J_DATABASE"],
+		Neo4jURI:       vars["NEO4J_URI"],
+		Installed:      c.checker.GraphitiInstalled,
+	}
+}
+
+// UpdateGraphitiConfig updates Graphiti configuration
+func (c *controller) UpdateGraphitiConfig(config *GraphitiConfig) error {
+	if config == nil {
+		return fmt.Errorf("config cannot be nil")
+	}
+
+	// set deployment type based configuration
+	switch config.DeploymentType {
+	case "embedded":
+		// for embedded mode, use default endpoint
+		config.GraphitiURL.Value = checker.DefaultGraphitiEndpoint
+
+		// enable Graphiti
+		if err := c.SetVar("GRAPHITI_ENABLED", "true"); err != nil {
+			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
+		}
+
+		// update timeout, model, and neo4j settings
+		if err := c.SetVar("GRAPHITI_TIMEOUT", config.Timeout.Value); err != nil {
+			return fmt.Errorf("failed to set GRAPHITI_TIMEOUT: %w", err)
+		}
+		if err := c.SetVar("GRAPHITI_MODEL_NAME", config.ModelName.Value); err != nil {
+			return fmt.Errorf("failed to set GRAPHITI_MODEL_NAME: %w", err)
+		}
+		if err := c.SetVar("NEO4J_USER", config.Neo4jUser.Value); err != nil {
+			return fmt.Errorf("failed to set NEO4J_USER: %w", err)
+		}
+		if err := c.SetVar("NEO4J_PASSWORD", config.Neo4jPassword.Value); err != nil {
+			return fmt.Errorf("failed to set NEO4J_PASSWORD: %w", err)
+		}
+		if err := c.SetVar("NEO4J_DATABASE", config.Neo4jDatabase.Value); err != nil {
+			return fmt.Errorf("failed to set NEO4J_DATABASE: %w", err)
+		}
+
+	case "external":
+		// for external mode, use provided endpoint
+		// enable Graphiti
+		if err := c.SetVar("GRAPHITI_ENABLED", "true"); err != nil {
+			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
+		}
+
+		// update timeout only (model is configured on external server)
+		if err := c.SetVar("GRAPHITI_TIMEOUT", config.Timeout.Value); err != nil {
+			return fmt.Errorf("failed to set GRAPHITI_TIMEOUT: %w", err)
+		}
+
+	case "disabled":
+		// for disabled mode, disable Graphiti
+		if err := c.SetVar("GRAPHITI_ENABLED", "false"); err != nil {
+			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
+		}
+		config.GraphitiURL.Value = ""
+	}
+
+	// update integration environment variables
+	if err := c.SetVar("GRAPHITI_URL", config.GraphitiURL.Value); err != nil {
+		return fmt.Errorf("failed to set GRAPHITI_URL: %w", err)
+	}
+
+	return nil
+}
+
+func (c *controller) ResetGraphitiConfig() *GraphitiConfig {
+	vars := []string{
+		"GRAPHITI_ENABLED",
+		"GRAPHITI_URL",
+		"GRAPHITI_TIMEOUT",
+		"GRAPHITI_MODEL_NAME",
+		"NEO4J_USER",
+		"NEO4J_PASSWORD",
+		"NEO4J_DATABASE",
+		"NEO4J_URI",
+	}
+
+	if err := c.ResetVars(vars); err != nil {
+		return nil
+	}
+
+	return c.GetGraphitiConfig()
 }
 
 // ObservabilityConfig represents observability configuration
@@ -1819,6 +1992,12 @@ func (c *controller) getVariableDescription(varName string) string {
 
 		"LANGFUSE_EE_LICENSE_KEY": locale.EnvDesc_LANGFUSE_EE_LICENSE_KEY,
 
+		"GRAPHITI_URL":        locale.EnvDesc_GRAPHITI_URL,
+		"GRAPHITI_TIMEOUT":    locale.EnvDesc_GRAPHITI_TIMEOUT,
+		"GRAPHITI_MODEL_NAME": locale.EnvDesc_GRAPHITI_MODEL_NAME,
+		"NEO4J_USER":          locale.EnvDesc_NEO4J_USER,
+		"NEO4J_DATABASE":      locale.EnvDesc_NEO4J_DATABASE,
+
 		"PENTAGI_POSTGRES_PASSWORD": locale.EnvDesc_PENTAGI_POSTGRES_PASSWORD,
 		"NEO4J_PASSWORD":            locale.EnvDesc_NEO4J_PASSWORD,
 	}
@@ -1953,6 +2132,11 @@ var criticalVariables = map[string]bool{
 
 	// observability changes
 	"OTEL_HOST": true,
+
+	// graphiti changes
+	"GRAPHITI_URL":        true,
+	"GRAPHITI_TIMEOUT":    true,
+	"GRAPHITI_MODEL_NAME": true,
 
 	// server settings changes
 	"ASK_USER":              true,

@@ -87,7 +87,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - langfuse-network
 
@@ -141,7 +141,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - langfuse-network
       - pentagi-network
@@ -168,7 +168,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - langfuse-network
 
@@ -211,7 +211,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - langfuse-network
 
@@ -230,7 +230,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - langfuse-network
 
@@ -253,6 +253,6 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - langfuse-network

@@ -34,6 +34,7 @@ func (h *ToolsHandler) LoadItems() []ListItem {
 		{ID: AIAgentsSettingsFormScreen},
 		{ID: SearchEnginesFormScreen},
 		{ID: ScraperFormScreen},
+		{ID: GraphitiFormScreen},
 		{ID: DockerFormScreen},
 	}
 

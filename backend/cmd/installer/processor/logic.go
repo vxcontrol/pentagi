@@ -66,6 +66,18 @@ func (p *processor) isEmbeddedDeployment(stack ProductStack) bool {
 
 		return false
 
+	case ProductStackGraphiti:
+		if !p.checker.GraphitiConnected {
+			return false
+		}
+
+		envVar, envVarValueEmbedded := "GRAPHITI_URL", checker.DefaultGraphitiEndpoint
+		if envVar, exists := p.state.GetVar(envVar); exists && envVar.Value == envVarValueEmbedded {
+			return true
+		}
+
+		return false
+
 	case ProductStackPentagi, ProductStackWorker, ProductStackInstaller:
 		return true
 
@@ -173,7 +185,12 @@ func (p *processor) applyChanges(ctx context.Context, state *operationState) (er
 		return fmt.Errorf("failed to apply langfuse changes: %w", err)
 	}
 
-	// phase 3: PentAGI Stack Management (always embedded, always required)
+	// phase 3: Graphiti Stack Management
+	if err := p.applyGraphitiChanges(ctx, state); err != nil {
+		return fmt.Errorf("failed to apply graphiti changes: %w", err)
+	}
+
+	// phase 4: PentAGI Stack Management (always embedded, always required)
 	if err := p.applyPentagiChanges(ctx, state); err != nil {
 		return fmt.Errorf("failed to apply pentagi changes: %w", err)
 	}
@@ -255,6 +272,43 @@ func (p *processor) applyLangfuseChanges(ctx context.Context, state *operationSt
 	return nil
 }
 
+func (p *processor) applyGraphitiChanges(ctx context.Context, state *operationState) error {
+	if p.isEmbeddedDeployment(ProductStackGraphiti) {
+		// user wants embedded graphiti
+		if !p.checker.GraphitiExtracted {
+			// fresh installation - extract compose file
+			if err := p.fsOps.ensureStackIntegrity(ctx, ProductStackGraphiti, state); err != nil {
+				return fmt.Errorf("failed to ensure graphiti integrity: %w", err)
+			}
+		} else {
+			// file exists - verify integrity, update if force=true
+			if err := p.fsOps.verifyStackIntegrity(ctx, ProductStackGraphiti, state); err != nil {
+				return fmt.Errorf("failed to verify graphiti integrity: %w", err)
+			}
+		}
+
+		// update/start containers
+		if err := p.composeOps.updateStack(ctx, ProductStackGraphiti, state); err != nil {
+			return fmt.Errorf("failed to update graphiti stack: %w", err)
+		}
+	} else {
+		// user wants disabled graphiti
+		if p.checker.GraphitiInstalled {
+			// remove containers but keep files (user might re-enable)
+			if err := p.composeOps.removeStack(ctx, ProductStackGraphiti, state); err != nil {
+				return fmt.Errorf("failed to remove graphiti stack: %w", err)
+			}
+		}
+	}
+
+	// refresh state to verify operation success
+	if err := p.checker.GatherGraphitiInfo(ctx); err != nil {
+		return fmt.Errorf("failed to gather graphiti info: %w", err)
+	}
+
+	return nil
+}
+
 func (p *processor) applyPentagiChanges(ctx context.Context, state *operationState) error {
 	// PentAGI is always embedded, always required
 	if !p.checker.PentagiExtracted {
@@ -293,14 +347,13 @@ func (p *processor) checkFiles(
 	defer func() { state.sendFilesCheck(stack, result, err) }()
 
 	result = make(map[string]files.FileStatus)
-	allStacks := []ProductStack{ProductStackPentagi, ProductStackLangfuse, ProductStackObservability}
 
 	if err := p.validateOperation(stack, ProcessorOperationCheckFiles); err != nil {
 		return nil, err
 	}
 
 	switch stack {
-	case ProductStackPentagi, ProductStackLangfuse, ProductStackObservability:
+	case ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability:
 		if !p.isEmbeddedDeployment(stack) {
 			return map[string]files.FileStatus{}, nil
 		}
@@ -420,7 +473,14 @@ func (p *processor) install(ctx context.Context, state *operationState) (err err
 		}
 	}
 
-	// phase 3: PentAGI Stack Management (always embedded, always required)
+	// phase 3: Graphiti Stack Management
+	if !p.checker.GraphitiInstalled {
+		if err := p.applyGraphitiChanges(ctx, state); err != nil {
+			return fmt.Errorf("failed to apply graphiti changes: %w", err)
+		}
+	}
+
+	// phase 4: PentAGI Stack Management (always embedded, always required)
 	if !p.checker.PentagiInstalled {
 		if err := p.applyPentagiChanges(ctx, state); err != nil {
 			return fmt.Errorf("failed to apply pentagi changes: %w", err)
@@ -450,11 +510,13 @@ func (p *processor) update(ctx context.Context, stack ProductStack, state *opera
 
 	composeStacksUpToDate := map[ProductStack]bool{
 		ProductStackPentagi:       p.checker.PentagiIsUpToDate,
+		ProductStackGraphiti:      p.checker.GraphitiIsUpToDate,
 		ProductStackLangfuse:      p.checker.LangfuseIsUpToDate,
 		ProductStackObservability: p.checker.ObservabilityIsUpToDate,
 	}
 	composeStacksGatherInfo := map[ProductStack]func(ctx context.Context) error{
 		ProductStackPentagi:       p.checker.GatherPentagiInfo,
+		ProductStackGraphiti:      p.checker.GatherGraphitiInfo,
 		ProductStackLangfuse:      p.checker.GatherLangfuseInfo,
 		ProductStackObservability: p.checker.GatherObservabilityInfo,
 	}
@@ -464,7 +526,7 @@ func (p *processor) update(ctx context.Context, stack ProductStack, state *opera
 	}
 
 	switch stack {
-	case ProductStackPentagi, ProductStackLangfuse, ProductStackObservability:
+	case ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability:
 		if composeStacksUpToDate[stack] {
 			return nil
 		}
@@ -539,7 +601,7 @@ func (p *processor) download(ctx context.Context, stack ProductStack, state *ope
 	}
 
 	switch stack {
-	case ProductStackPentagi, ProductStackLangfuse, ProductStackObservability:
+	case ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability:
 		// docker compose pull equivalent for all images
 		if err := p.composeOps.downloadStack(ctx, stack, state); err != nil {
 			return fmt.Errorf("failed to download stack: %w", err)
@@ -602,6 +664,7 @@ func (p *processor) remove(ctx context.Context, stack ProductStack, state *opera
 
 	composeStacksGatherInfo := map[ProductStack]func(ctx context.Context) error{
 		ProductStackPentagi:       p.checker.GatherPentagiInfo,
+		ProductStackGraphiti:      p.checker.GatherGraphitiInfo,
 		ProductStackLangfuse:      p.checker.GatherLangfuseInfo,
 		ProductStackObservability: p.checker.GatherObservabilityInfo,
 	}
@@ -611,7 +674,7 @@ func (p *processor) remove(ctx context.Context, stack ProductStack, state *opera
 	}
 
 	switch stack {
-	case ProductStackPentagi, ProductStackLangfuse, ProductStackObservability:
+	case ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability:
 		if err := p.composeOps.removeStack(ctx, stack, state); err != nil {
 			return fmt.Errorf("failed to remove stack: %w", err)
 		}
@@ -681,6 +744,7 @@ func (p *processor) purge(ctx context.Context, stack ProductStack, state *operat
 
 	composeStacksGatherInfo := map[ProductStack]func(ctx context.Context) error{
 		ProductStackPentagi:       p.checker.GatherPentagiInfo,
+		ProductStackGraphiti:      p.checker.GatherGraphitiInfo,
 		ProductStackLangfuse:      p.checker.GatherLangfuseInfo,
 		ProductStackObservability: p.checker.GatherObservabilityInfo,
 	}
@@ -690,7 +754,7 @@ func (p *processor) purge(ctx context.Context, stack ProductStack, state *operat
 	}
 
 	switch stack {
-	case ProductStackPentagi, ProductStackLangfuse, ProductStackObservability:
+	case ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability:
 		if err := p.composeOps.purgeImagesStack(ctx, stack, state); err != nil {
 			return fmt.Errorf("failed to purge with images stack: %w", err)
 		}

@@ -7,8 +7,6 @@ volumes:
     driver: local
   pentagi-postgres-data:
     driver: local
-  neo4j_data:
-    driver: local
 
 networks:
   pentagi-network:
@@ -22,7 +20,6 @@ networks:
     name: langfuse-network
 
 services:
-
   pentagi:
     image: vxcontrol/pentagi:latest
     restart: unless-stopped
@@ -35,8 +32,6 @@ services:
     depends_on:
       pgvector:
         condition: service_started
-      graphiti:
-        condition: service_healthy
     environment:
       - DEBUG=${DEBUG:-false}
       - DOCKER_GID=998
@@ -138,7 +133,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     volumes:
       - ${PENTAGI_DATA_DIR:-pentagi-data}:/opt/pentagi/data
       - ${PENTAGI_SSL_DIR:-pentagi-ssl}:/opt/pentagi/ssl
@@ -159,7 +154,7 @@ services:
     expose:
       - 5432/tcp
     ports:
-      - 127.0.0.1:5432:5432
+      - ${PGVECTOR_LISTEN_IP:-127.0.0.1}:${PGVECTOR_LISTEN_PORT:-5432}:5432
     environment:
       POSTGRES_USER: ${PENTAGI_POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${PENTAGI_POSTGRES_PASSWORD:-postgres}
@@ -167,7 +162,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     volumes:
       - pentagi-postgres-data:/var/lib/postgresql/data
     networks:
@@ -183,13 +178,13 @@ services:
     expose:
       - 9187/tcp
     ports:
-      - 127.0.0.1:9187:9187
+      - ${POSTGRES_EXPORTER_LISTEN_IP:-127.0.0.1}:${POSTGRES_EXPORTER_LISTEN_PORT:-9187}:9187
     environment:
       - DATA_SOURCE_NAME=postgresql://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - pentagi-network
 
@@ -201,7 +196,7 @@ services:
     expose:
       - 443/tcp
     ports:
-      - 127.0.0.1:9443:443
+      - ${SCRAPER_LISTEN_IP:-127.0.0.1}:${SCRAPER_LISTEN_PORT:-9443}:443
     environment:
       - MAX_CONCURRENT_SESSIONS=${LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS:-10}
       - USERNAME=${LOCAL_SCRAPER_USERNAME:-someuser}
@@ -209,7 +204,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     volumes:
       - scraper-ssl:/usr/src/app/ssl
     networks:

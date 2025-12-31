@@ -250,6 +250,7 @@ func TestCheckMemoryResources(t *testing.T) {
 	tests := []struct {
 		name                     string
 		needsForPentagi          bool
+		needsForGraphiti         bool
 		needsForLangfuse         bool
 		needsForObservability    bool
 		expectMinimumRequirement bool
@@ -257,6 +258,7 @@ func TestCheckMemoryResources(t *testing.T) {
 		{
 			name:                     "no components needed",
 			needsForPentagi:          false,
+			needsForGraphiti:         false,
 			needsForLangfuse:         false,
 			needsForObservability:    false,
 			expectMinimumRequirement: true,
@@ -264,6 +266,7 @@ func TestCheckMemoryResources(t *testing.T) {
 		{
 			name:                     "pentagi only",
 			needsForPentagi:          true,
+			needsForGraphiti:         false,
 			needsForLangfuse:         false,
 			needsForObservability:    false,
 			expectMinimumRequirement: false, // requires actual memory check
@@ -271,6 +274,7 @@ func TestCheckMemoryResources(t *testing.T) {
 		{
 			name:                     "all components",
 			needsForPentagi:          true,
+			needsForGraphiti:         true,
 			needsForLangfuse:         true,
 			needsForObservability:    true,
 			expectMinimumRequirement: false, // requires actual memory check
@@ -279,7 +283,7 @@ func TestCheckMemoryResources(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := checkMemoryResources(tt.needsForPentagi, tt.needsForLangfuse, tt.needsForObservability)
+			result := checkMemoryResources(tt.needsForPentagi, tt.needsForGraphiti, tt.needsForLangfuse, tt.needsForObservability)
 			if tt.expectMinimumRequirement && !result {
 				t.Errorf("checkMemoryResources() should return true when no components are needed")
 			}
@@ -296,6 +300,9 @@ func TestCheckDiskSpaceWithContext(t *testing.T) {
 		name              string
 		workerImageExists bool
 		pentagiInstalled  bool
+		graphitiConnected bool
+		graphitiExternal  bool
+		graphitiInstalled bool
 		langfuseConnected bool
 		langfuseExternal  bool
 		langfuseInstalled bool
@@ -308,6 +315,9 @@ func TestCheckDiskSpaceWithContext(t *testing.T) {
 			name:              "all installed and running",
 			workerImageExists: true,
 			pentagiInstalled:  true,
+			graphitiConnected: true,
+			graphitiExternal:  false,
+			graphitiInstalled: true,
 			langfuseConnected: true,
 			langfuseExternal:  false,
 			langfuseInstalled: true,
@@ -345,6 +355,9 @@ func TestCheckDiskSpaceWithContext(t *testing.T) {
 				ctx,
 				tt.workerImageExists,
 				tt.pentagiInstalled,
+				tt.graphitiConnected,
+				tt.graphitiExternal,
+				tt.graphitiInstalled,
 				tt.langfuseConnected,
 				tt.langfuseExternal,
 				tt.langfuseInstalled,

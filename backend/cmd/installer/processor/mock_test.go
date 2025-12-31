@@ -626,6 +626,11 @@ func defaultCheckResult() *checker.CheckResult {
 	handler.config.PentagiExtracted = false
 	handler.config.PentagiInstalled = false
 	handler.config.PentagiRunning = false
+	handler.config.GraphitiConnected = false
+	handler.config.GraphitiExternal = false
+	handler.config.GraphitiExtracted = false
+	handler.config.GraphitiInstalled = false
+	handler.config.GraphitiRunning = false
 	handler.config.LangfuseConnected = true
 	handler.config.LangfuseExternal = false
 	handler.config.LangfuseExtracted = false
@@ -638,6 +643,7 @@ func defaultCheckResult() *checker.CheckResult {
 	handler.config.ObservabilityRunning = false
 	handler.config.WorkerImageExists = false
 	handler.config.PentagiIsUpToDate = true
+	handler.config.GraphitiIsUpToDate = true
 	handler.config.LangfuseIsUpToDate = true
 	handler.config.ObservabilityIsUpToDate = true
 	handler.config.InstallerIsUpToDate = true
@@ -689,6 +695,13 @@ func (h *defaultStateHandler) GatherWorkerInfo(ctx context.Context, c *checker.C
 func (h *defaultStateHandler) GatherPentagiInfo(ctx context.Context, c *checker.CheckResult) error {
 	if !h.initialized {
 		return h.mockHandler.GatherPentagiInfo(ctx, c)
+	}
+	return nil
+}
+
+func (h *defaultStateHandler) GatherGraphitiInfo(ctx context.Context, c *checker.CheckResult) error {
+	if !h.initialized {
+		return h.mockHandler.GatherGraphitiInfo(ctx, c)
 	}
 	return nil
 }
@@ -876,6 +889,13 @@ type mockCheckConfig struct {
 	PentagiInstalled       bool
 	PentagiRunning         bool
 
+	// Graphiti states
+	GraphitiConnected bool
+	GraphitiExternal  bool
+	GraphitiExtracted bool
+	GraphitiInstalled bool
+	GraphitiRunning   bool
+
 	// Langfuse states
 	LangfuseConnected bool
 	LangfuseExternal  bool
@@ -900,6 +920,7 @@ type mockCheckConfig struct {
 	UpdateServerAccessible  bool
 	InstallerIsUpToDate     bool
 	PentagiIsUpToDate       bool
+	GraphitiIsUpToDate      bool
 	LangfuseIsUpToDate      bool
 	ObservabilityIsUpToDate bool
 }
@@ -925,6 +946,7 @@ func newMockCheckHandler() *mockCheckHandler {
 			UpdateServerAccessible:  true,
 			InstallerIsUpToDate:     true,
 			PentagiIsUpToDate:       true,
+			GraphitiIsUpToDate:      true,
 			LangfuseIsUpToDate:      true,
 			ObservabilityIsUpToDate: true,
 		},
@@ -971,6 +993,9 @@ func (m *mockCheckHandler) GatherAllInfo(ctx context.Context, c *checker.CheckRe
 		return err
 	}
 	if err := m.GatherPentagiInfo(ctx, c); err != nil {
+		return err
+	}
+	if err := m.GatherGraphitiInfo(ctx, c); err != nil {
 		return err
 	}
 	if err := m.GatherLangfuseInfo(ctx, c); err != nil {
@@ -1042,6 +1067,24 @@ func (m *mockCheckHandler) GatherPentagiInfo(ctx context.Context, c *checker.Che
 	return nil
 }
 
+func (m *mockCheckHandler) GatherGraphitiInfo(ctx context.Context, c *checker.CheckResult) error {
+	m.recordCall("GatherGraphitiInfo")
+	if m.gatherError != nil {
+		return m.gatherError
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	c.GraphitiConnected = m.config.GraphitiConnected
+	c.GraphitiExternal = m.config.GraphitiExternal
+	c.GraphitiExtracted = m.config.GraphitiExtracted
+	c.GraphitiInstalled = m.config.GraphitiInstalled
+	c.GraphitiRunning = m.config.GraphitiRunning
+
+	return nil
+}
+
 func (m *mockCheckHandler) GatherLangfuseInfo(ctx context.Context, c *checker.CheckResult) error {
 	m.recordCall("GatherLangfuseInfo")
 	if m.gatherError != nil {
@@ -1107,6 +1150,7 @@ func (m *mockCheckHandler) GatherUpdatesInfo(ctx context.Context, c *checker.Che
 	c.UpdateServerAccessible = m.config.UpdateServerAccessible
 	c.InstallerIsUpToDate = m.config.InstallerIsUpToDate
 	c.PentagiIsUpToDate = m.config.PentagiIsUpToDate
+	c.GraphitiIsUpToDate = m.config.GraphitiIsUpToDate
 	c.LangfuseIsUpToDate = m.config.LangfuseIsUpToDate
 	c.ObservabilityIsUpToDate = m.config.ObservabilityIsUpToDate
 
@@ -1239,6 +1283,7 @@ func TestMockCheckHandler_GatherAllInfo(t *testing.T) {
 		"GatherDockerInfo",
 		"GatherWorkerInfo",
 		"GatherPentagiInfo",
+		"GatherGraphitiInfo",
 		"GatherLangfuseInfo",
 		"GatherObservabilityInfo",
 		"GatherSystemInfo",

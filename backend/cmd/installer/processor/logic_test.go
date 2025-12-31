@@ -383,17 +383,21 @@ func TestApplyChanges_Embedded_AllStacksUpdated(t *testing.T) {
 		// mark as not extracted to force ensure
 		config.ObservabilityExtracted = false
 		config.LangfuseExtracted = false
+		config.GraphitiExtracted = false
 		config.PentagiExtracted = false
 		// ensure embedded mode conditions
 		config.ObservabilityConnected = true
 		config.ObservabilityExternal = false
 		config.LangfuseConnected = true
 		config.LangfuseExternal = false
+		config.GraphitiConnected = true
+		config.GraphitiExternal = false
 	})
 
 	// mark state dirty and set embedded modes
 	_ = p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint)
 	_ = p.state.SetVar("LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint)
+	_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
 
 	err := p.applyChanges(t.Context(), testOperationState(t))
 	if err != nil {
@@ -405,8 +409,8 @@ func TestApplyChanges_Embedded_AllStacksUpdated(t *testing.T) {
 		t.Fatalf("expected ensureMainDockerNetworks first, got: %+v", dockerCalls)
 	}
 
-	// ensure/verify for three stacks and update three stacks
-	// since all not extracted -> ensure called for obs, langfuse, pentagi
+	// ensure/verify for four stacks and update four stacks
+	// since all not extracted -> ensure called for obs, langfuse, graphiti, pentagi
 	fsCalls := fsOps.getCalls()
 	ensureCount := 0
 	for _, c := range fsCalls {
@@ -422,8 +426,8 @@ func TestApplyChanges_Embedded_AllStacksUpdated(t *testing.T) {
 			updateCount++
 		}
 	}
-	if ensureCount != 3 || updateCount != 3 {
-		t.Fatalf("expected ensure=3 and update=3, got ensure=%d update=%d", ensureCount, updateCount)
+	if ensureCount != 4 || updateCount != 4 {
+		t.Fatalf("expected ensure=4 and update=4, got ensure=%d update=%d", ensureCount, updateCount)
 	}
 }
 
@@ -470,7 +474,9 @@ func TestDownload_ComposeStacks(t *testing.T) {
 
 	// should download all individual stacks
 	composeCalls := composeOps.getCalls()
-	expectedComposeStacks := []ProductStack{ProductStackPentagi, ProductStackLangfuse, ProductStackObservability}
+	expectedComposeStacks := []ProductStack{
+		ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability,
+	}
 	composeCallCount := 0
 	for _, call := range composeCalls {
 		if call.Method == "downloadStack" {
@@ -505,7 +511,9 @@ func TestDownload_AllStacks(t *testing.T) {
 
 	// should download all individual stacks
 	composeCalls := composeOps.getCalls()
-	expectedComposeStacks := []ProductStack{ProductStackPentagi, ProductStackLangfuse, ProductStackObservability}
+	expectedComposeStacks := []ProductStack{
+		ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability,
+	}
 	composeCallCount := 0
 	for _, call := range composeCalls {
 		if call.Method == "downloadStack" {
@@ -590,26 +598,35 @@ func TestValidateOperation_ErrorCases(t *testing.T) {
 }
 
 func TestIsEmbeddedDeployment(t *testing.T) {
-	p, _, _, _ := newProcessorForLogicTests(t)
-
 	tests := []struct {
-		name     string
-		stack    ProductStack
-		envVar   string
-		envValue string
-		expected bool
+		name              string
+		stack             ProductStack
+		envVar            string
+		envValue          string
+		langfuseConnected bool
+		graphitiConnected bool
+		expected          bool
 	}{
-		{"observability embedded", ProductStackObservability, "OTEL_HOST", checker.DefaultObservabilityEndpoint, true},
-		{"observability external", ProductStackObservability, "OTEL_HOST", "http://external:4318", false},
-		{"langfuse embedded", ProductStackLangfuse, "LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint, true},
-		{"langfuse external", ProductStackLangfuse, "LANGFUSE_BASE_URL", "http://external:3000", false},
-		{"pentagi always embedded", ProductStackPentagi, "", "", true},     // pentagi is always embedded
-		{"worker always embedded", ProductStackWorker, "", "", true},       // worker is always embedded
-		{"installer always embedded", ProductStackInstaller, "", "", true}, // installer is always embedded
+		{"observability embedded", ProductStackObservability, "OTEL_HOST", checker.DefaultObservabilityEndpoint, false, false, true},
+		{"observability external", ProductStackObservability, "OTEL_HOST", "http://external:4318", false, false, false},
+		{"langfuse embedded", ProductStackLangfuse, "LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint, true, false, true},
+		{"langfuse external", ProductStackLangfuse, "LANGFUSE_BASE_URL", "http://external:3000", true, false, false},
+		{"langfuse disabled", ProductStackLangfuse, "", "", false, false, false},
+		{"graphiti embedded", ProductStackGraphiti, "GRAPHITI_URL", checker.DefaultGraphitiEndpoint, false, true, true},
+		{"graphiti external", ProductStackGraphiti, "GRAPHITI_URL", "http://external:8000", false, true, false},
+		{"graphiti disabled", ProductStackGraphiti, "", "", false, false, false},
+		{"pentagi always embedded", ProductStackPentagi, "", "", false, false, true},     // pentagi is always embedded
+		{"worker always embedded", ProductStackWorker, "", "", false, false, true},       // worker is always embedded
+		{"installer always embedded", ProductStackInstaller, "", "", false, false, true}, // installer is always embedded
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			p, _, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
+				config.LangfuseConnected = tt.langfuseConnected
+				config.GraphitiConnected = tt.graphitiConnected
+			})
+
 			if tt.envVar != "" {
 				_ = p.state.SetVar(tt.envVar, tt.envValue)
 			}
@@ -689,6 +706,22 @@ func TestApplyChanges_StateMachine_PhaseErrors(t *testing.T) {
 			expectedError: "failed to apply langfuse changes: failed to ensure langfuse integrity: langfuse error",
 		},
 		{
+			name: "graphiti phase error",
+			configSetup: func(config *mockCheckConfig) {
+				config.GraphitiExtracted = false
+				config.GraphitiConnected = true
+				config.GraphitiExternal = false
+			},
+			setupError: func(p *processor) {
+				_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
+				_ = p.state.SetVar("PENTAGI_VERSION", "1.0.0") // make state dirty
+				injectFSError(p, map[string]error{
+					"ensureStackIntegrity": fmt.Errorf("graphiti error"),
+				})
+			},
+			expectedError: "failed to apply graphiti changes: failed to ensure graphiti integrity: graphiti error",
+		},
+		{
 			name: "pentagi phase error",
 			configSetup: func(config *mockCheckConfig) {
 				config.PentagiExtracted = false
@@ -745,20 +778,25 @@ func TestInstall_FullScenario(t *testing.T) {
 			// simulate fresh install - nothing installed
 			config.ObservabilityInstalled = false
 			config.LangfuseInstalled = false
+			config.GraphitiInstalled = false
 			config.PentagiInstalled = false
 			config.ObservabilityExtracted = false
 			config.LangfuseExtracted = false
+			config.GraphitiExtracted = false
 			config.PentagiExtracted = false
 			// mark as embedded
 			config.ObservabilityConnected = true
 			config.ObservabilityExternal = false
 			config.LangfuseConnected = true
 			config.LangfuseExternal = false
+			config.GraphitiConnected = true
+			config.GraphitiExternal = false
 		})
 
 		// set embedded mode for all
 		_ = p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint)
 		_ = p.state.SetVar("LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint)
+		_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
 
 		err := p.install(t.Context(), testOperationState(t))
 		assertNoError(t, err)
@@ -777,9 +815,9 @@ func TestInstall_FullScenario(t *testing.T) {
 				ensureCount++
 			}
 		}
-		// Should be 2 (observability, langfuse) since pentagi might be handled differently
-		if ensureCount < 2 {
-			t.Errorf("expected at least 2 ensureStackIntegrity calls, got %d", ensureCount)
+		// should be 3 (observability, langfuse, graphiti) since pentagi might be handled differently
+		if ensureCount < 3 {
+			t.Errorf("expected at least 3 ensureStackIntegrity calls, got %d", ensureCount)
 		}
 
 		// verify compose update operations
@@ -790,9 +828,9 @@ func TestInstall_FullScenario(t *testing.T) {
 				updateCount++
 			}
 		}
-		// All 3 stacks should be updated
-		if updateCount != 3 {
-			t.Errorf("expected 3 updateStack calls, got %d", updateCount)
+		// all 4 stacks should be updated (observability, langfuse, graphiti, pentagi)
+		if updateCount != 4 {
+			t.Errorf("expected 4 updateStack calls, got %d", updateCount)
 		}
 	})
 
@@ -920,8 +958,10 @@ func TestPurge_AllStacks_Detailed(t *testing.T) {
 	// verify compose operations for all stacks
 	composeCalls := composeOps.getCalls()
 
-	// should have purgeImagesStack for all three compose stacks in order
-	expectedOrder := []ProductStack{ProductStackObservability, ProductStackLangfuse, ProductStackPentagi}
+	// should have purgeImagesStack for all four compose stacks in order
+	expectedOrder := []ProductStack{
+		ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi,
+	}
 	purgeImagesCalls := 0
 	for _, call := range composeCalls {
 		if call.Method == "purgeImagesStack" {
@@ -932,8 +972,8 @@ func TestPurge_AllStacks_Detailed(t *testing.T) {
 			purgeImagesCalls++
 		}
 	}
-	if purgeImagesCalls != 3 {
-		t.Errorf("expected 3 purgeImagesStack calls, got %d", purgeImagesCalls)
+	if purgeImagesCalls != 4 {
+		t.Errorf("expected 4 purgeImagesStack calls, got %d", purgeImagesCalls)
 	}
 
 	// verify docker cleanup operations
@@ -1004,12 +1044,13 @@ func TestRemove_PreservesData(t *testing.T) {
 func TestApplyChanges_ComplexScenarios(t *testing.T) {
 	t.Run("mixed_deployment_modes", func(t *testing.T) {
 		p, composeOps, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			// observability external, langfuse embedded, pentagi always embedded
+			// observability external, langfuse embedded, graphiti disabled, pentagi always embedded
 			config.ObservabilityExternal = true
 			config.ObservabilityInstalled = true // should be removed
 			config.LangfuseExternal = false
 			config.LangfuseExtracted = true // mark as extracted so it goes to update path
 			config.LangfuseConnected = true // required for isEmbeddedDeployment to return true
+			config.GraphitiConnected = false
 			config.PentagiExtracted = false
 		})
 
@@ -1040,6 +1081,110 @@ func TestApplyChanges_ComplexScenarios(t *testing.T) {
 		}
 		if !langfuseUpdated {
 			t.Error("expected langfuse to be updated")
+		}
+	})
+
+	t.Run("graphiti_external_removes_installed", func(t *testing.T) {
+		p, composeOps, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
+			// graphiti external but installed locally - should be removed
+			config.GraphitiConnected = true
+			config.GraphitiExternal = true
+			config.GraphitiInstalled = true
+		})
+
+		_ = p.state.SetVar("GRAPHITI_URL", "http://external:8000")
+
+		err := p.applyChanges(t.Context(), testOperationState(t))
+		assertNoError(t, err)
+
+		// verify graphiti removed
+		composeCalls := composeOps.getCalls()
+		graphitiRemoved := false
+		for _, call := range composeCalls {
+			if call.Method == "removeStack" && call.Stack == ProductStackGraphiti {
+				graphitiRemoved = true
+			}
+		}
+		if !graphitiRemoved {
+			t.Error("expected graphiti to be removed when external")
+		}
+	})
+
+	t.Run("graphiti_embedded_installs", func(t *testing.T) {
+		p, composeOps, fsOps, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
+			// graphiti embedded but not installed yet
+			config.GraphitiConnected = true
+			config.GraphitiExternal = false
+			config.GraphitiExtracted = false
+			config.GraphitiInstalled = false
+		})
+
+		_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
+
+		err := p.applyChanges(t.Context(), testOperationState(t))
+		assertNoError(t, err)
+
+		// verify graphiti files ensured
+		fsCalls := fsOps.getCalls()
+		graphitiEnsured := false
+		for _, call := range fsCalls {
+			if call.Method == "ensureStackIntegrity" && call.Stack == ProductStackGraphiti {
+				graphitiEnsured = true
+			}
+		}
+		if !graphitiEnsured {
+			t.Error("expected graphiti files to be ensured")
+		}
+
+		// verify graphiti updated
+		composeCalls := composeOps.getCalls()
+		graphitiUpdated := false
+		for _, call := range composeCalls {
+			if call.Method == "updateStack" && call.Stack == ProductStackGraphiti {
+				graphitiUpdated = true
+			}
+		}
+		if !graphitiUpdated {
+			t.Error("expected graphiti to be updated")
+		}
+	})
+
+	t.Run("graphiti_embedded_already_extracted", func(t *testing.T) {
+		p, composeOps, fsOps, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
+			// graphiti embedded and already extracted - should verify integrity
+			config.GraphitiConnected = true
+			config.GraphitiExternal = false
+			config.GraphitiExtracted = true
+			config.GraphitiInstalled = false
+		})
+
+		_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
+
+		err := p.applyChanges(t.Context(), testOperationState(t))
+		assertNoError(t, err)
+
+		// verify graphiti files verified (not ensured)
+		fsCalls := fsOps.getCalls()
+		graphitiVerified := false
+		for _, call := range fsCalls {
+			if call.Method == "verifyStackIntegrity" && call.Stack == ProductStackGraphiti {
+				graphitiVerified = true
+			}
+		}
+		if !graphitiVerified {
+			t.Error("expected graphiti files to be verified")
+		}
+
+		// verify graphiti updated
+		composeCalls := composeOps.getCalls()
+		graphitiUpdated := false
+		for _, call := range composeCalls {
+			if call.Method == "updateStack" && call.Stack == ProductStackGraphiti {
+				graphitiUpdated = true
+			}
+		}
+		if !graphitiUpdated {
+			t.Error("expected graphiti to be updated")
 		}
 	})
 

@@ -646,6 +646,97 @@ to monitor AI agent performance and
 optimize costs effectively.`
 )
 
+// Graphiti Integration constants
+const (
+	MonitoringGraphitiFormTitle       = "Graphiti Configuration (beta)"
+	MonitoringGraphitiFormDescription = "Configuration of Graphiti knowledge graph integration"
+	MonitoringGraphitiFormName        = "Graphiti (beta)"
+	MonitoringGraphitiFormOverview    = `⚠️  BETA FEATURE: This functionality is currently under active development. Please monitor updates for improvements and stability fixes.
+
+Graphiti provides temporal knowledge graph capabilities:
+• Entity and relationship extraction
+• Semantic memory for AI agents
+• Temporal context tracking
+• Knowledge reuse across flows
+
+⚠️  REQUIREMENT: Graphiti requires configured OpenAI provider (LLM Providers → OpenAI) for entity extraction.
+
+Choose between embedded instance or external connection.`
+
+	// Deployment types
+	MonitoringGraphitiEmbedded = "Embedded Stack"
+	MonitoringGraphitiExternal = "External Service"
+	MonitoringGraphitiDisabled = "Disabled"
+
+	// Form fields
+	MonitoringGraphitiDeploymentType     = "Deployment Type"
+	MonitoringGraphitiDeploymentTypeDesc = "Select the deployment type for Graphiti"
+	MonitoringGraphitiURL                = "Graphiti Server URL"
+	MonitoringGraphitiURLDesc            = "Address of the Graphiti API server"
+	MonitoringGraphitiTimeout            = "Request Timeout"
+	MonitoringGraphitiTimeoutDesc        = "Timeout in seconds for Graphiti operations"
+	MonitoringGraphitiModelName          = "Extraction Model"
+	MonitoringGraphitiModelNameDesc      = "LLM model for entity extraction (uses OpenAI provider from LLM Providers configuration)"
+	MonitoringGraphitiNeo4jUser          = "Neo4j Username"
+	MonitoringGraphitiNeo4jUserDesc      = "Username for Neo4j database access"
+	MonitoringGraphitiNeo4jPassword      = "Neo4j Password"
+	MonitoringGraphitiNeo4jPasswordDesc  = "Password for Neo4j database access"
+	MonitoringGraphitiNeo4jDatabase      = "Neo4j Database"
+	MonitoringGraphitiNeo4jDatabaseDesc  = "Neo4j database name"
+
+	// Help text
+	MonitoringGraphitiModeGuide    = "Choose deployment: Embedded (local Neo4j), External (existing Graphiti), Disabled (no knowledge graph)"
+	MonitoringGraphitiEmbeddedHelp = `⚠️  BETA: This feature is under active development. Monitor updates for improvements.
+
+Embedded deploys complete Graphiti stack:
+• Neo4j graph database
+• Graphiti API service
+• Automatic entity extraction from agent interactions
+• Temporal relationship tracking
+• Private knowledge graph on your server
+
+Prerequisites:
+• OpenAI provider must be configured (LLM Providers → OpenAI)
+• OpenAI API key is used for entity extraction
+• Configured model will be used for knowledge graph operations
+
+Resource requirements:
+• ~1.5GB RAM, 3GB disk space minimum
+• Neo4j UI: http://localhost:7474
+• Graphiti API: http://localhost:8000
+• Automatic setup and maintenance
+
+Best for: Teams wanting knowledge graph capabilities with full data control and privacy.`
+	MonitoringGraphitiExternalHelp = `⚠️  BETA: This feature is under active development. Monitor updates for improvements.
+
+External connects to your existing Graphiti server:
+
+• No local infrastructure needed
+• Managed updates and maintenance
+• Shared knowledge graph across teams
+• Data stored on external provider
+
+Setup requirements:
+• Graphiti server URL and access
+• Network connectivity required
+• External server must be configured with OpenAI API key
+• Model and extraction settings configured on external server
+
+Best for: Teams using existing Graphiti deployments or cloud services.`
+	MonitoringGraphitiDisabledHelp = `Graphiti is disabled. You will not have:
+
+• Temporal knowledge graph
+• Entity and relationship extraction
+• Semantic memory for AI agents
+• Knowledge reuse across flows
+• Advanced contextual search
+
+Note: Graphiti is currently in beta.
+Consider enabling for production use
+to build a knowledge base from
+penetration testing results.`
+)
+
 // Observability Integration constants
 const (
 	MonitoringObservabilityFormTitle       = "Observability Configuration"
@@ -916,7 +1007,9 @@ Available settings:
 • Human-in-the-loop - Enable user interaction during testing
 • AI Agents Settings - Configure global behavior for AI agents
 • Search Engines - Configure external search providers
-• Scraper - Web content extraction and analysis`
+• Scraper - Web content extraction and analysis
+• Graphiti (beta) - Temporal knowledge graph for semantic memory
+• Docker - Container environment configuration`
 )
 
 // Server Settings screen strings
@@ -1948,7 +2041,13 @@ const (
 
 	EnvDesc_LANGFUSE_EE_LICENSE_KEY   = "Langfuse Enterprise License Key"
 	EnvDesc_PENTAGI_POSTGRES_PASSWORD = "PentAGI PostgreSQL Password"
-	EnvDesc_NEO4J_PASSWORD            = "Neo4j Database Password"
+
+	EnvDesc_GRAPHITI_URL        = "Graphiti Server URL"
+	EnvDesc_GRAPHITI_TIMEOUT    = "Graphiti Request Timeout"
+	EnvDesc_GRAPHITI_MODEL_NAME = "Graphiti Extraction Model"
+	EnvDesc_NEO4J_USER          = "Neo4j Username"
+	EnvDesc_NEO4J_DATABASE      = "Neo4j Database Name"
+	EnvDesc_NEO4J_PASSWORD      = "Neo4j Database Password"
 )
 
 // dynamic, contextual sections used in processor operation forms

@@ -597,10 +597,11 @@ GRAPHITI_TIMEOUT=30
 GRAPHITI_URL=http://graphiti:8000
 GRAPHITI_MODEL_NAME=gpt-5-mini
 
-# Neo4j settings
-NEO4J_PORT=7687
+# Neo4j settings (used by Graphiti stack)
 NEO4J_USER=neo4j
+NEO4J_DATABASE=neo4j
 NEO4J_PASSWORD=devpassword
+NEO4J_URI=bolt://neo4j:7687
 
 # Assistant configuration
 ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating new assistants
@@ -1051,10 +1052,11 @@ GRAPHITI_TIMEOUT=30
 GRAPHITI_URL=http://graphiti:8000
 GRAPHITI_MODEL_NAME=gpt-5-mini
 
-# Neo4j settings
-NEO4J_PORT=7687
+# Neo4j settings (used by Graphiti stack)
 NEO4J_USER=neo4j
+NEO4J_DATABASE=neo4j
 NEO4J_PASSWORD=devpassword
+NEO4J_URI=bolt://neo4j:7687
 
 # OpenAI API key (required by Graphiti for entity extraction)
 OPEN_AI_KEY=your_openai_api_key

@@ -11,17 +11,18 @@ import (
 
 const (
 	composeFilePentagi       = "docker-compose.yml"
+	composeFileGraphiti      = "docker-compose-graphiti.yml"
 	composeFileLangfuse      = "docker-compose-langfuse.yml"
 	composeFileObservability = "docker-compose-observability.yml"
 )
 
 var composeOperationAllStacksOrder = map[ProcessorOperation][]ProductStack{
-	ProcessorOperationStart:    {ProductStackObservability, ProductStackLangfuse, ProductStackPentagi},
-	ProcessorOperationStop:     {ProductStackPentagi, ProductStackLangfuse, ProductStackObservability},
-	ProcessorOperationUpdate:   {ProductStackObservability, ProductStackLangfuse, ProductStackPentagi},
-	ProcessorOperationDownload: {ProductStackObservability, ProductStackLangfuse, ProductStackPentagi},
-	ProcessorOperationRemove:   {ProductStackObservability, ProductStackLangfuse, ProductStackPentagi},
-	ProcessorOperationPurge:    {ProductStackObservability, ProductStackLangfuse, ProductStackPentagi},
+	ProcessorOperationStart:    {ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi},
+	ProcessorOperationStop:     {ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability},
+	ProcessorOperationUpdate:   {ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi},
+	ProcessorOperationDownload: {ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi},
+	ProcessorOperationRemove:   {ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi},
+	ProcessorOperationPurge:    {ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi},
 }
 
 type composeOperationsImpl struct {
@@ -87,7 +88,7 @@ func (c *composeOperationsImpl) performStackOperation(
 	case ProductStackPentagi:
 		return c.wrapPerformStackCommand(ctx, stack, state, operation, args...)
 
-	case ProductStackLangfuse, ProductStackObservability:
+	case ProductStackLangfuse, ProductStackObservability, ProductStackGraphiti:
 		switch operation {
 		// for destructive operations we must always allow compose to run, even if stack is disabled/external now
 		case ProcessorOperationRemove, ProcessorOperationPurge, ProcessorOperationStop:
@@ -166,6 +167,8 @@ func (c *composeOperationsImpl) determineComposeFile(stack ProductStack) (string
 	switch stack {
 	case ProductStackPentagi:
 		return composeFilePentagi, nil
+	case ProductStackGraphiti:
+		return composeFileGraphiti, nil
 	case ProductStackLangfuse:
 		return composeFileLangfuse, nil
 	case ProductStackObservability:
