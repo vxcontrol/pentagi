@@ -63,11 +63,13 @@ type CheckResult struct {
 	PentagiExtracted        bool   `json:"pentagi_extracted" yaml:"pentagi_extracted"`
 	PentagiInstalled        bool   `json:"pentagi_installed" yaml:"pentagi_installed"`
 	PentagiRunning          bool   `json:"pentagi_running" yaml:"pentagi_running"`
+	PentagiVolumesExist     bool   `json:"pentagi_volumes_exist" yaml:"pentagi_volumes_exist"`
 	LangfuseConnected       bool   `json:"langfuse_connected" yaml:"langfuse_connected"`
 	LangfuseExternal        bool   `json:"langfuse_external" yaml:"langfuse_external"`
 	LangfuseExtracted       bool   `json:"langfuse_extracted" yaml:"langfuse_extracted"`
 	LangfuseInstalled       bool   `json:"langfuse_installed" yaml:"langfuse_installed"`
 	LangfuseRunning         bool   `json:"langfuse_running" yaml:"langfuse_running"`
+	LangfuseVolumesExist    bool   `json:"langfuse_volumes_exist" yaml:"langfuse_volumes_exist"`
 	ObservabilityConnected  bool   `json:"observability_connected" yaml:"observability_connected"`
 	ObservabilityExternal   bool   `json:"observability_external" yaml:"observability_external"`
 	ObservabilityExtracted  bool   `json:"observability_extracted" yaml:"observability_extracted"`
@@ -361,6 +363,10 @@ func (h *defaultCheckHandler) GatherPentagiInfo(ctx context.Context, c *CheckRes
 		exists, running := checkContainerExists(ctx, h.dockerClient, PentagiContainerName)
 		c.PentagiInstalled = exists
 		c.PentagiRunning = running
+
+		// check if pentagi-related volumes exist (indicates previous installation)
+		pentagiVolumes := []string{"pentagi-postgres-data", "pentagi-data", "pentagi-ssl", "scraper-ssl", "neo4j_data"}
+		c.PentagiVolumesExist = checkVolumesExist(ctx, h.dockerClient, pentagiVolumes)
 	}
 
 	return nil
@@ -388,6 +394,10 @@ func (h *defaultCheckHandler) GatherLangfuseInfo(ctx context.Context, c *CheckRe
 
 		c.LangfuseInstalled = workerExists && webExists
 		c.LangfuseRunning = workerRunning && webRunning
+
+		// check if langfuse-related volumes exist (indicates previous installation)
+		langfuseVolumes := []string{"langfuse-postgres-data", "langfuse-clickhouse-data", "langfuse-minio-data"}
+		c.LangfuseVolumesExist = checkVolumesExist(ctx, h.dockerClient, langfuseVolumes)
 	}
 
 	return nil

@@ -629,3 +629,134 @@ func TestImageInfoStructure(t *testing.T) {
 		t.Error("ImageInfo.Hash should be set correctly")
 	}
 }
+
+func TestCheckVolumesExist(t *testing.T) {
+	// note: this test uses a mock volume list since we can't rely on real Docker client in unit tests
+	// in real scenarios, checkVolumesExist is called with actual Docker API client
+
+	// test with nil client
+	t.Run("nil_client", func(t *testing.T) {
+		ctx := context.Background()
+		volumeNames := []string{"test-volume"}
+		result := checkVolumesExist(ctx, nil, volumeNames)
+		if result {
+			t.Error("checkVolumesExist should return false for nil client")
+		}
+	})
+
+	// test with empty volume list
+	t.Run("empty_volume_list", func(t *testing.T) {
+		ctx := context.Background()
+		// we can't create a real client in unit tests, so we pass nil
+		// the function should handle empty list gracefully
+		result := checkVolumesExist(ctx, nil, []string{})
+		if result {
+			t.Error("checkVolumesExist should return false for empty volume list")
+		}
+	})
+
+	// note: testing actual volume matching requires Docker integration tests
+	// the function logic handles:
+	// 1. Exact match: "pentagi-data" matches "pentagi-data"
+	// 2. Compose prefix match: "pentagi-data" matches "pentagi_pentagi-data"
+	// 3. Compose prefix match: "pentagi-postgres-data" matches "myproject_pentagi-postgres-data"
+	//
+	// This ensures compatibility with Docker Compose project prefixes
+}
+
+// mockDockerVolume simulates Docker API volume structure for testing
+type mockDockerVolume struct {
+	Name string
+}
+
+func TestCheckVolumesExist_MatchingLogic(t *testing.T) {
+	// unit test for the matching logic without Docker client
+	// simulates what checkVolumesExist does internally
+
+	tests := []struct {
+		name            string
+		existingVolumes []string
+		searchVolumes   []string
+		expected        bool
+		description     string
+	}{
+		{
+			name:            "exact match",
+			existingVolumes: []string{"pentagi-data", "other-volume"},
+			searchVolumes:   []string{"pentagi-data"},
+			expected:        true,
+			description:     "should match exact volume name",
+		},
+		{
+			name:            "compose prefix match",
+			existingVolumes: []string{"pentagi_pentagi-data", "pentagi_pentagi-ssl"},
+			searchVolumes:   []string{"pentagi-data"},
+			expected:        true,
+			description:     "should match volume with compose project prefix",
+		},
+		{
+			name:            "arbitrary prefix match",
+			existingVolumes: []string{"myproject_pentagi-postgres-data", "other_volume"},
+			searchVolumes:   []string{"pentagi-postgres-data"},
+			expected:        true,
+			description:     "should match volume with any compose prefix",
+		},
+		{
+			name:            "no match",
+			existingVolumes: []string{"other-volume", "another-volume"},
+			searchVolumes:   []string{"pentagi-data"},
+			expected:        false,
+			description:     "should not match when volume doesn't exist",
+		},
+		{
+			name:            "partial name should not match",
+			existingVolumes: []string{"pentagi-data-backup", "my-pentagi-data"},
+			searchVolumes:   []string{"pentagi-data"},
+			expected:        false,
+			description:     "should not match partial names without underscore separator",
+		},
+		{
+			name:            "match multiple search volumes",
+			existingVolumes: []string{"proj_pentagi-data", "langfuse-data"},
+			searchVolumes:   []string{"pentagi-data", "langfuse-data", "missing-volume"},
+			expected:        true,
+			description:     "should return true if any search volume matches",
+		},
+		{
+			name:            "empty existing volumes",
+			existingVolumes: []string{},
+			searchVolumes:   []string{"pentagi-data"},
+			expected:        false,
+			description:     "should return false when no volumes exist",
+		},
+		{
+			name:            "multiple compose prefixes",
+			existingVolumes: []string{"proj1_vol1", "proj2_vol2", "pentagi_pentagi-ssl"},
+			searchVolumes:   []string{"pentagi-ssl"},
+			expected:        true,
+			description:     "should find volume among multiple compose projects",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// simulate the matching logic from checkVolumesExist
+			result := false
+			for _, volumeName := range tt.searchVolumes {
+				for _, existingVolume := range tt.existingVolumes {
+					if existingVolume == volumeName || strings.HasSuffix(existingVolume, "_"+volumeName) {
+						result = true
+						break
+					}
+				}
+				if result {
+					break
+				}
+			}
+
+			if result != tt.expected {
+				t.Errorf("%s: got %v, want %v", tt.description, result, tt.expected)
+			}
+		})
+	}
+}

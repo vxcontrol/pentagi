@@ -526,8 +526,10 @@ func TestDoHardening(t *testing.T) {
 		{
 			name: "langfuse not installed - should harden",
 			checkResult: checker.CheckResult{
-				LangfuseInstalled: false,
-				PentagiInstalled:  true,
+				LangfuseInstalled:    false,
+				LangfuseVolumesExist: false,
+				PentagiInstalled:     true,
+				PentagiVolumesExist:  true,
 			},
 			setupVars: map[string]loader.EnvVar{
 				"LANGFUSE_SALT": {Name: "LANGFUSE_SALT", Value: "salt", Default: "salt"},
@@ -537,8 +539,10 @@ func TestDoHardening(t *testing.T) {
 		{
 			name: "pentagi not installed - should harden",
 			checkResult: checker.CheckResult{
-				LangfuseInstalled: true,
-				PentagiInstalled:  false,
+				LangfuseInstalled:    true,
+				LangfuseVolumesExist: true,
+				PentagiInstalled:     false,
+				PentagiVolumesExist:  false,
 			},
 			setupVars: map[string]loader.EnvVar{
 				"COOKIE_SIGNING_SALT": {Name: "COOKIE_SIGNING_SALT", Value: "salt", Default: "salt"},
@@ -548,8 +552,10 @@ func TestDoHardening(t *testing.T) {
 		{
 			name: "both installed - should not harden",
 			checkResult: checker.CheckResult{
-				LangfuseInstalled: true,
-				PentagiInstalled:  true,
+				LangfuseInstalled:    true,
+				LangfuseVolumesExist: true,
+				PentagiInstalled:     true,
+				PentagiVolumesExist:  true,
 			},
 			setupVars:     map[string]loader.EnvVar{},
 			expectChanges: false,
@@ -557,8 +563,10 @@ func TestDoHardening(t *testing.T) {
 		{
 			name: "neither installed - should harden both",
 			checkResult: checker.CheckResult{
-				LangfuseInstalled: false,
-				PentagiInstalled:  false,
+				LangfuseInstalled:    false,
+				LangfuseVolumesExist: false,
+				PentagiInstalled:     false,
+				PentagiVolumesExist:  false,
 			},
 			setupVars: map[string]loader.EnvVar{
 				"LANGFUSE_SALT":       {Name: "LANGFUSE_SALT", Value: "salt", Default: "salt"},
@@ -569,13 +577,55 @@ func TestDoHardening(t *testing.T) {
 		{
 			name: "langfuse not installed but no default values - should not commit",
 			checkResult: checker.CheckResult{
-				LangfuseInstalled: false,
-				PentagiInstalled:  true,
+				LangfuseInstalled:    false,
+				LangfuseVolumesExist: false,
+				PentagiInstalled:     true,
+				PentagiVolumesExist:  true,
 			},
 			setupVars: map[string]loader.EnvVar{
 				"LANGFUSE_SALT": {Name: "LANGFUSE_SALT", Value: "custom", Default: "salt"}, // custom value, not default
 			},
 			expectChanges: false,
+		},
+		{
+			name: "langfuse volumes exist but containers removed - should NOT harden",
+			checkResult: checker.CheckResult{
+				LangfuseInstalled:    false, // containers removed
+				LangfuseVolumesExist: true,  // but volumes remain!
+				PentagiInstalled:     true,
+				PentagiVolumesExist:  true,
+			},
+			setupVars: map[string]loader.EnvVar{
+				"LANGFUSE_SALT": {Name: "LANGFUSE_SALT", Value: "salt", Default: "salt"},
+			},
+			expectChanges: false, // should NOT change because volumes exist
+		},
+		{
+			name: "pentagi volumes exist but containers removed - should NOT harden",
+			checkResult: checker.CheckResult{
+				LangfuseInstalled:    true,
+				LangfuseVolumesExist: true,
+				PentagiInstalled:     false, // containers removed
+				PentagiVolumesExist:  true,  // but volumes remain!
+			},
+			setupVars: map[string]loader.EnvVar{
+				"PENTAGI_POSTGRES_PASSWORD": {Name: "PENTAGI_POSTGRES_PASSWORD", Value: "postgres", Default: "postgres"},
+			},
+			expectChanges: false, // should NOT change because volumes exist
+		},
+		{
+			name: "containers removed but volumes remain for both - should NOT harden any",
+			checkResult: checker.CheckResult{
+				LangfuseInstalled:    false, // containers removed
+				LangfuseVolumesExist: true,  // volumes remain
+				PentagiInstalled:     false, // containers removed
+				PentagiVolumesExist:  true,  // volumes remain
+			},
+			setupVars: map[string]loader.EnvVar{
+				"LANGFUSE_SALT":             {Name: "LANGFUSE_SALT", Value: "salt", Default: "salt"},
+				"PENTAGI_POSTGRES_PASSWORD": {Name: "PENTAGI_POSTGRES_PASSWORD", Value: "postgres", Default: "postgres"},
+			},
+			expectChanges: false, // should NOT change anything
 		},
 	}
 
@@ -722,8 +772,10 @@ func TestDoHardening_ScraperURLLogic(t *testing.T) {
 			mockSt := &mockState{vars: tt.setupVars}
 
 			checkResult := checker.CheckResult{
-				LangfuseInstalled: true,
-				PentagiInstalled:  false, // Trigger pentagi hardening
+				LangfuseInstalled:    true,
+				LangfuseVolumesExist: true,
+				PentagiInstalled:     false, // Trigger pentagi hardening
+				PentagiVolumesExist:  false,
 			}
 
 			originalURL := tt.setupVars["SCRAPER_PRIVATE_URL"].Value
@@ -1157,8 +1209,10 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 		{
 			name: "harden langfuse only",
 			checkResult: checker.CheckResult{
-				LangfuseInstalled: false, // Should harden langfuse
-				PentagiInstalled:  true,  // Should not harden pentagi
+				LangfuseInstalled:    false, // Should harden langfuse
+				LangfuseVolumesExist: false,
+				PentagiInstalled:     true, // Should not harden pentagi
+				PentagiVolumesExist:  true,
 			},
 			expectedHardenedVars: []string{
 				"LANGFUSE_POSTGRES_PASSWORD",
@@ -1176,6 +1230,7 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 			expectedUnchangedVars: []string{
 				"COOKIE_SIGNING_SALT",
 				"PENTAGI_POSTGRES_PASSWORD",
+				"NEO4J_PASSWORD",
 				"LOCAL_SCRAPER_USERNAME",
 				"LOCAL_SCRAPER_PASSWORD",
 			},
@@ -1183,12 +1238,15 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 		{
 			name: "harden pentagi only",
 			checkResult: checker.CheckResult{
-				LangfuseInstalled: true,  // Should not harden langfuse
-				PentagiInstalled:  false, // Should harden pentagi
+				LangfuseInstalled:    true, // Should not harden langfuse
+				LangfuseVolumesExist: true,
+				PentagiInstalled:     false, // Should harden pentagi
+				PentagiVolumesExist:  false,
 			},
 			expectedHardenedVars: []string{
 				"COOKIE_SIGNING_SALT",
 				"PENTAGI_POSTGRES_PASSWORD",
+				"NEO4J_PASSWORD",
 				"LOCAL_SCRAPER_USERNAME",
 				"LOCAL_SCRAPER_PASSWORD",
 				"SCRAPER_PRIVATE_URL", // Should be updated if credentials are hardened
@@ -1203,13 +1261,16 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 		{
 			name: "harden both",
 			checkResult: checker.CheckResult{
-				LangfuseInstalled: false, // Should harden langfuse
-				PentagiInstalled:  false, // Should harden pentagi
+				LangfuseInstalled:    false, // Should harden langfuse
+				LangfuseVolumesExist: false,
+				PentagiInstalled:     false, // Should harden pentagi
+				PentagiVolumesExist:  false,
 			},
 			expectedHardenedVars: []string{
 				// Pentagi vars
 				"COOKIE_SIGNING_SALT",
 				"PENTAGI_POSTGRES_PASSWORD",
+				"NEO4J_PASSWORD",
 				"LOCAL_SCRAPER_USERNAME",
 				"LOCAL_SCRAPER_PASSWORD",
 				"SCRAPER_PRIVATE_URL",

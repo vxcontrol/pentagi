@@ -24,6 +24,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 )
 
@@ -292,6 +293,38 @@ func checkContainerExists(ctx context.Context, cli *client.Client, name string) 
 	}
 
 	return false, false
+}
+
+// checkVolumesExist checks if any of the specified volumes exist
+// it matches both exact names and volumes with compose project prefix (e.g., "pentagi_pentagi-data")
+func checkVolumesExist(ctx context.Context, cli *client.Client, volumeNames []string) bool {
+	if cli == nil || len(volumeNames) == 0 {
+		return false
+	}
+
+	volumes, err := cli.VolumeList(ctx, volume.ListOptions{})
+	if err != nil {
+		return false
+	}
+
+	// collect all volume names from Docker
+	existingVolumes := make([]string, 0, len(volumes.Volumes))
+	for _, vol := range volumes.Volumes {
+		existingVolumes = append(existingVolumes, vol.Name)
+	}
+
+	// check if any of the requested volumes exist
+	// matches both exact names and volumes with compose prefix (project_volume-name)
+	for _, volumeName := range volumeNames {
+		for _, existingVolume := range existingVolumes {
+			// exact match or suffix match with underscore separator
+			if existingVolume == volumeName || strings.HasSuffix(existingVolume, "_"+volumeName) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func checkCPUResources() bool {

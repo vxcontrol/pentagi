@@ -42,6 +42,7 @@ var varsForHardening = map[HardeningArea][]string{
 	HardeningAreaPentagi: {
 		"COOKIE_SIGNING_SALT",
 		"PENTAGI_POSTGRES_PASSWORD",
+		"NEO4J_PASSWORD",
 		"LOCAL_SCRAPER_USERNAME",
 		"LOCAL_SCRAPER_PASSWORD",
 		"SCRAPER_PRIVATE_URL",
@@ -68,6 +69,7 @@ var varsForHardening = map[HardeningArea][]string{
 var varsForHardeningDefault = map[string]string{
 	"COOKIE_SIGNING_SALT":              "salt",
 	"PENTAGI_POSTGRES_PASSWORD":        "postgres",
+	"NEO4J_PASSWORD":                   "devpassword",
 	"LOCAL_SCRAPER_USERNAME":           "someuser",
 	"LOCAL_SCRAPER_PASSWORD":           "somepass",
 	"SCRAPER_PRIVATE_URL":              "https://someuser:somepass@scraper/",
@@ -98,6 +100,7 @@ var varsHardeningPolicies = map[HardeningArea]map[string]HardeningPolicy{
 	HardeningAreaPentagi: {
 		"COOKIE_SIGNING_SALT":       {Type: HardeningPolicyTypeHex, Length: 32},
 		"PENTAGI_POSTGRES_PASSWORD": {Type: HardeningPolicyTypeDefault, Length: 18},
+		"NEO4J_PASSWORD":            {Type: HardeningPolicyTypeDefault, Length: 18},
 		"LOCAL_SCRAPER_USERNAME":    {Type: HardeningPolicyTypeDefault, Length: 10},
 		"LOCAL_SCRAPER_PASSWORD":    {Type: HardeningPolicyTypeDefault, Length: 12},
 		// SCRAPER_PRIVATE_URL is handled specially in DoHardening logic
@@ -141,7 +144,9 @@ func DoHardening(s state.State, c checker.CheckResult) error {
 		}
 	}
 
-	if vars, _ := s.GetVars(varsForHardening[HardeningAreaLangfuse]); !c.LangfuseInstalled {
+	// harden langfuse vars only if neither containers nor volumes exist
+	// this prevents password changes when volumes with existing credentials are present
+	if vars, _ := s.GetVars(varsForHardening[HardeningAreaLangfuse]); !c.LangfuseInstalled && !c.LangfuseVolumesExist {
 		updateDefaultValues(vars)
 
 		if isChanged, err := replaceDefaultValues(s, vars, varsHardeningPolicies[HardeningAreaLangfuse]); err != nil {
@@ -157,7 +162,9 @@ func DoHardening(s state.State, c checker.CheckResult) error {
 		}
 	}
 
-	if vars, _ := s.GetVars(varsForHardening[HardeningAreaPentagi]); !c.PentagiInstalled {
+	// harden pentagi vars only if neither containers nor volumes exist
+	// this prevents password changes when volumes with existing credentials are present
+	if vars, _ := s.GetVars(varsForHardening[HardeningAreaPentagi]); !c.PentagiInstalled && !c.PentagiVolumesExist {
 		updateDefaultValues(vars)
 
 		if isChanged, err := replaceDefaultValues(s, vars, varsHardeningPolicies[HardeningAreaPentagi]); err != nil {
