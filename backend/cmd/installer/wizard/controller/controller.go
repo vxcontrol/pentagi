@@ -142,9 +142,10 @@ type LLMProviderConfig struct {
 	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | BEDROCK_ACCESS_KEY_ID | OLLAMA_SERVER_CONFIG_PATH | LLM_SERVER_KEY
 	Model   loader.EnvVar // LLM_SERVER_MODEL
 	// AWS Bedrock specific fields
-	AccessKey loader.EnvVar // BEDROCK_ACCESS_KEY_ID
-	SecretKey loader.EnvVar // BEDROCK_SECRET_ACCESS_KEY
-	Region    loader.EnvVar // BEDROCK_REGION
+	AccessKey    loader.EnvVar // BEDROCK_ACCESS_KEY_ID
+	SecretKey    loader.EnvVar // BEDROCK_SECRET_ACCESS_KEY
+	SessionToken loader.EnvVar // BEDROCK_SESSION_TOKEN
+	Region       loader.EnvVar // BEDROCK_REGION
 	// Ollama and Custom specific fields
 	ConfigPath      loader.EnvVar // OLLAMA_SERVER_CONFIG_PATH | LLM_SERVER_CONFIG_PATH
 	LegacyReasoning loader.EnvVar // LLM_SERVER_LEGACY_REASONING
@@ -208,8 +209,9 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.Region, _ = c.GetVar("BEDROCK_REGION")
 		providerConfig.AccessKey, _ = c.GetVar("BEDROCK_ACCESS_KEY_ID")
 		providerConfig.SecretKey, _ = c.GetVar("BEDROCK_SECRET_ACCESS_KEY")
+		providerConfig.SessionToken, _ = c.GetVar("BEDROCK_SESSION_TOKEN")
 		providerConfig.BaseURL, _ = c.GetVar("BEDROCK_SERVER_URL")
-		providerConfig.Configured = providerConfig.AccessKey.Value != "" && providerConfig.SecretKey.Value != ""
+		providerConfig.Configured = (providerConfig.AccessKey.Value != "" && providerConfig.SecretKey.Value != "") || providerConfig.SessionToken.Value != ""
 
 	case "ollama":
 		providerConfig.Name = "Ollama"
@@ -268,6 +270,9 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 		if err := c.SetVar(config.SecretKey.Name, config.SecretKey.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.SecretKey.Name, err)
 		}
+		if err := c.SetVar(config.SessionToken.Name, config.SessionToken.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.SessionToken.Name, err)
+		}
 		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
 		}
@@ -323,7 +328,7 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 		vars = []string{"GEMINI_API_KEY", "GEMINI_SERVER_URL"}
 	case "bedrock":
 		vars = []string{
-			"BEDROCK_ACCESS_KEY_ID", "BEDROCK_SECRET_ACCESS_KEY",
+			"BEDROCK_ACCESS_KEY_ID", "BEDROCK_SECRET_ACCESS_KEY", "BEDROCK_SESSION_TOKEN",
 			"BEDROCK_REGION", "BEDROCK_SERVER_URL",
 		}
 	case "ollama":
@@ -1687,6 +1692,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"GEMINI_SERVER_URL":           locale.EnvDesc_GEMINI_SERVER_URL,
 		"BEDROCK_ACCESS_KEY_ID":       locale.EnvDesc_BEDROCK_ACCESS_KEY_ID,
 		"BEDROCK_SECRET_ACCESS_KEY":   locale.EnvDesc_BEDROCK_SECRET_ACCESS_KEY,
+		"BEDROCK_SESSION_TOKEN":       locale.EnvDesc_BEDROCK_SESSION_TOKEN,
 		"BEDROCK_REGION":              locale.EnvDesc_BEDROCK_REGION,
 		"BEDROCK_SERVER_URL":          locale.EnvDesc_BEDROCK_SERVER_URL,
 		"OLLAMA_SERVER_URL":           locale.EnvDesc_OLLAMA_SERVER_URL,
@@ -1814,6 +1820,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"LANGFUSE_EE_LICENSE_KEY": locale.EnvDesc_LANGFUSE_EE_LICENSE_KEY,
 
 		"PENTAGI_POSTGRES_PASSWORD": locale.EnvDesc_PENTAGI_POSTGRES_PASSWORD,
+		"NEO4J_PASSWORD":            locale.EnvDesc_NEO4J_PASSWORD,
 	}
 	if desc, ok := envVarDescriptions[varName]; ok {
 		return desc
@@ -1829,6 +1836,7 @@ var maskedVariables = map[string]bool{
 	"GEMINI_API_KEY":            true,
 	"BEDROCK_ACCESS_KEY_ID":     true,
 	"BEDROCK_SECRET_ACCESS_KEY": true,
+	"BEDROCK_SESSION_TOKEN":     true,
 	"LLM_SERVER_KEY":            true,
 	"LANGFUSE_PUBLIC_KEY":       true,
 	"LANGFUSE_SECRET_KEY":       true,
@@ -1860,6 +1868,9 @@ var maskedVariables = map[string]bool{
 	// postgres password for pentagi service (pgvector binds on localhost)
 	"PENTAGI_POSTGRES_PASSWORD": true,
 
+	// neo4j password for graphiti service (neo4j binds on localhost)
+	"NEO4J_PASSWORD": true,
+
 	// langfuse stack secrets (compose-managed)
 	"LANGFUSE_SALT":                      true,
 	"LANGFUSE_ENCRYPTION_KEY":            true,
@@ -1890,6 +1901,7 @@ var criticalVariables = map[string]bool{
 	"GEMINI_SERVER_URL":           true,
 	"BEDROCK_ACCESS_KEY_ID":       true,
 	"BEDROCK_SECRET_ACCESS_KEY":   true,
+	"BEDROCK_SESSION_TOKEN":       true,
 	"BEDROCK_REGION":              true,
 	"OLLAMA_SERVER_URL":           true,
 	"OLLAMA_SERVER_CONFIG_PATH":   true,

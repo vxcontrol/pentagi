@@ -53,6 +53,7 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 		fields = append(fields, m.createBaseURLField(config))
 		fields = append(fields, m.createAccessKeyField(config))
 		fields = append(fields, m.createSecretKeyField(config))
+		fields = append(fields, m.createSessionTokenField(config))
 		fields = append(fields, m.createRegionField(config))
 
 	case LLMProviderOllama:
@@ -122,6 +123,20 @@ func (m *LLMProviderFormModel) createSecretKeyField(config *controller.LLMProvid
 		Title:       locale.LLMFormFieldSecretKey,
 		Description: locale.LLMFormSecretKeyDesc,
 		Required:    true,
+		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createSessionTokenField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.SessionToken)
+
+	return FormField{
+		Key:         "session_token",
+		Title:       locale.LLMFormFieldSessionToken,
+		Description: locale.LLMFormSessionTokenDesc,
+		Required:    false,
 		Masked:      true,
 		Input:       input,
 		Value:       input.Value(),
@@ -296,6 +311,10 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldSecretKey, m.GetStyles().Muted.Render(getMaskedValue(config.SecretKey.Value))))
 		}
+		if config.SessionToken.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldSessionToken, m.GetStyles().Muted.Render(getMaskedValue(config.SessionToken.Value))))
+		}
 		if config.Region.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldRegion, m.GetStyles().Info.Render(config.Region.Value)))
@@ -378,6 +397,7 @@ func (m *LLMProviderFormModel) HandleSave() error {
 		Model:                  config.Model,
 		AccessKey:              config.AccessKey,
 		SecretKey:              config.SecretKey,
+		SessionToken:           config.SessionToken,
 		Region:                 config.Region,
 		ConfigPath:             config.ConfigPath,
 		LegacyReasoning:        config.LegacyReasoning,
@@ -399,6 +419,8 @@ func (m *LLMProviderFormModel) HandleSave() error {
 			newConfig.AccessKey.Value = value
 		case "secret_key":
 			newConfig.SecretKey.Value = value
+		case "session_token":
+			newConfig.SessionToken.Value = value
 		case "region":
 			newConfig.Region.Value = value
 		case "config_path":
@@ -415,7 +437,7 @@ func (m *LLMProviderFormModel) HandleSave() error {
 	// determine if configured based on provider type
 	switch m.providerID {
 	case LLMProviderBedrock:
-		newConfig.Configured = newConfig.AccessKey.Value != "" && newConfig.SecretKey.Value != ""
+		newConfig.Configured = (newConfig.AccessKey.Value != "" && newConfig.SecretKey.Value != "") || newConfig.SessionToken.Value != ""
 	case LLMProviderOllama:
 		newConfig.Configured = newConfig.BaseURL.Value != ""
 	default:

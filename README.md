@@ -863,6 +863,7 @@ PentAGI integrates with Amazon Bedrock, offering access to a wide range of found
 | `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
 | `BEDROCK_ACCESS_KEY_ID` | | AWS access key ID for authentication |
 | `BEDROCK_SECRET_ACCESS_KEY` | | AWS secret access key for authentication |
+| `BEDROCK_SESSION_TOKEN` | | AWS session token as alternative way for authentication |
 | `BEDROCK_SERVER_URL` | | Optional custom Bedrock endpoint URL |
 
 Configuration examples:
@@ -1403,6 +1404,7 @@ GEMINI_SERVER_URL=https://generativelanguage.googleapis.com  # Google AI API end
 BEDROCK_REGION=us-east-1                         # AWS region for Bedrock service
 BEDROCK_ACCESS_KEY_ID=your_aws_access_key        # AWS access key ID
 BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key    # AWS secret access key
+BEDROCK_SESSION_TOKEN=your_aws_session_token     # AWS session token (alternative auth method)
 BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint
 
 # For Ollama (local inference)

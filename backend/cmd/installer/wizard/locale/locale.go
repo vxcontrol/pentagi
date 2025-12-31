@@ -494,6 +494,7 @@ const (
 	LLMFormFieldAPIKey          = "API Key"
 	LLMFormFieldAccessKey       = "Access Key ID"
 	LLMFormFieldSecretKey       = "Secret Access Key"
+	LLMFormFieldSessionToken    = "Session Token"
 	LLMFormFieldRegion          = "Region"
 	LLMFormFieldModel           = "Model"
 	LLMFormFieldConfigPath      = "Config Path"
@@ -502,6 +503,7 @@ const (
 	LLMFormAPIKeyDesc           = "Your API key for authentication"
 	LLMFormAccessKeyDesc        = "AWS Access Key ID for Bedrock access"
 	LLMFormSecretKeyDesc        = "AWS Secret Access Key for Bedrock access"
+	LLMFormSessionTokenDesc     = "AWS Session Token for Bedrock access"
 	LLMFormRegionDesc           = "AWS region for Bedrock service"
 	LLMFormModelDesc            = "Default model to use for this provider"
 	LLMFormConfigPathDesc       = "Path to configuration file (optional)"
@@ -1819,6 +1821,7 @@ const (
 	EnvDesc_GEMINI_SERVER_URL           = "Gemini Server URL"
 	EnvDesc_BEDROCK_ACCESS_KEY_ID       = "AWS Bedrock Access Key"
 	EnvDesc_BEDROCK_SECRET_ACCESS_KEY   = "AWS Bedrock Secret Key"
+	EnvDesc_BEDROCK_SESSION_TOKEN       = "AWS Bedrock Session Token"
 	EnvDesc_BEDROCK_REGION              = "AWS Bedrock Region"
 	EnvDesc_BEDROCK_SERVER_URL          = "AWS Bedrock Server URL"
 	EnvDesc_OLLAMA_SERVER_URL           = "Ollama Server URL"
@@ -1945,6 +1948,7 @@ const (
 
 	EnvDesc_LANGFUSE_EE_LICENSE_KEY   = "Langfuse Enterprise License Key"
 	EnvDesc_PENTAGI_POSTGRES_PASSWORD = "PentAGI PostgreSQL Password"
+	EnvDesc_NEO4J_PASSWORD            = "Neo4j Database Password"
 )
 
 // dynamic, contextual sections used in processor operation forms
