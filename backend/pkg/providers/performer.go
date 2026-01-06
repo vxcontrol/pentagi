@@ -308,6 +308,7 @@ func (fp *flowProvider) callWithRetries(
 	defer ticker.Stop()
 
 	fillResult := func(resp *llms.ContentResponse) error {
+		var stopReason string
 		var parts []string
 
 		if resp == nil || len(resp.Choices) == 0 {
@@ -315,6 +316,10 @@ func (fp *flowProvider) callWithRetries(
 		}
 
 		for _, choice := range resp.Choices {
+			if stopReason == "" {
+				stopReason = choice.StopReason
+			}
+
 			if strings.TrimSpace(choice.Content) != "" {
 				parts = append(parts, choice.Content)
 			}
@@ -337,7 +342,7 @@ func (fp *flowProvider) callWithRetries(
 
 		result.content = strings.Join(parts, "\n")
 		if strings.Trim(result.content, "' \"\n\r\t") == "" && len(result.funcCalls) == 0 {
-			return fmt.Errorf("no content and tool calls in response")
+			return fmt.Errorf("no content and tool calls in response: stop reason '%s'", stopReason)
 		}
 
 		return nil
