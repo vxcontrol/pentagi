@@ -60,6 +60,7 @@ func CreateDummyTemplateData() map[string]any {
 		"SubtaskListToolName":       tools.SubtaskListToolName,
 		"SubtaskPatchToolName":      tools.SubtaskPatchToolName,
 		"AskUserToolName":           tools.AskUserToolName,
+		"AskUserEnabled":            true,
 
 		// Summarization related - using constants from proper packages
 		"SummarizationToolName":   cast.SummarizationToolName,

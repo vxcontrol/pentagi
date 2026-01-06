@@ -187,6 +187,7 @@ func (t *tester) initFlowProviderController() error {
 		t.flowExecutor,
 		t.flowID,
 		t.userID,
+		t.cfg.AskUser,
 		container.Image,
 		flow.Language,
 		flow.Title,

@@ -46,6 +46,7 @@ type ProviderController interface {
 		prompter templates.Prompter,
 		executor tools.FlowToolsExecutor,
 		flowID, userID int64,
+		askUser bool,
 		input string,
 	) (FlowProvider, error)
 	LoadFlowProvider(
@@ -54,6 +55,7 @@ type ProviderController interface {
 		prompter templates.Prompter,
 		executor tools.FlowToolsExecutor,
 		flowID, userID int64,
+		askUser bool,
 		image, language, title string,
 	) (FlowProvider, error)
 	NewAssistantProvider(
@@ -307,6 +309,7 @@ func (pc *providerController) NewFlowProvider(
 	prompter templates.Prompter,
 	executor tools.FlowToolsExecutor,
 	flowID, userID int64,
+	askUser bool,
 	input string,
 ) (FlowProvider, error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.NewFlowProvider")
@@ -371,6 +374,7 @@ func (pc *providerController) NewFlowProvider(
 		image:          image,
 		title:          title,
 		language:       language,
+		askUser:        askUser,
 		prompter:       prompter,
 		executor:       executor,
 		summarizer:     pc.summarizerAgent,
@@ -386,6 +390,7 @@ func (pc *providerController) LoadFlowProvider(
 	prompter templates.Prompter,
 	executor tools.FlowToolsExecutor,
 	flowID, userID int64,
+	askUser bool,
 	image, language, title string,
 ) (FlowProvider, error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.LoadFlowProvider")
@@ -406,6 +411,7 @@ func (pc *providerController) LoadFlowProvider(
 		image:          image,
 		title:          title,
 		language:       language,
+		askUser:        askUser,
 		prompter:       prompter,
 		executor:       executor,
 		summarizer:     pc.summarizerAgent,

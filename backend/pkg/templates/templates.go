@@ -69,6 +69,8 @@ var PromptVariables = map[PromptType][]string{
 		"MaintenanceToolName",
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
+		"AskUserToolName",
+		"AskUserEnabled",
 		"ExecutionContext",
 		"Lang",
 		"DockerImage",

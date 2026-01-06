@@ -128,6 +128,7 @@ type flowProvider struct {
 	image    string
 	title    string
 	language string
+	askUser  bool
 
 	prompter templates.Prompter
 	executor tools.FlowToolsExecutor
@@ -524,6 +525,8 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 		"MaintenanceToolName":     tools.MaintenanceToolName,
 		"SummarizationToolName":   cast.SummarizationToolName,
 		"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+		"AskUserToolName":         tools.AskUserToolName,
+		"AskUserEnabled":          fp.askUser,
 		"ExecutionContext":        executionContext,
 		"Lang":                    fp.language,
 		"DockerImage":             fp.image,

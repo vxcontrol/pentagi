@@ -168,7 +168,9 @@ func NewFlowWorker(
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
 	}
-	flowProvider, err := fwc.provs.NewFlowProvider(ctx, fwc.prvname, prompter, executor, flow.ID, fwc.userID, fwc.input)
+	flowProvider, err := fwc.provs.NewFlowProvider(
+		ctx, fwc.prvname, prompter, executor, flow.ID, fwc.userID, fwc.cfg.AskUser, fwc.input,
+	)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow provider", err)
 	}
@@ -331,8 +333,11 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
 	}
-	flowProvider, err := fwc.provs.LoadFlowProvider(ctx, provider.ProviderName(flow.ModelProviderName),
-		prompter, executor, flow.ID, flow.UserID, container.Image, flow.Language, flow.Title)
+	flowProvider, err := fwc.provs.LoadFlowProvider(
+		ctx, provider.ProviderName(flow.ModelProviderName),
+		prompter, executor, flow.ID, flow.UserID, fwc.cfg.AskUser,
+		container.Image, flow.Language, flow.Title,
+	)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow provider", err)
 	}
