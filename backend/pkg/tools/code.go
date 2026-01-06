@@ -123,14 +123,16 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 		_, observation = event.Observation(ctx)
 
 		buffer := strings.Builder{}
-		for _, doc := range docs {
+		for i, doc := range docs {
 			observation.Score(
 				langfuse.WithScoreComment("code samples vector store result"),
 				langfuse.WithScoreName("code_search_result"),
 				langfuse.WithScoreFloatValue(float64(doc.Score)),
 			)
-			buffer.WriteString(fmt.Sprintf("# Original Code Question\n\n%s\n\n", doc.Metadata["question"]))
-			buffer.WriteString(fmt.Sprintf("# Original Code Description\n\n%s\n\n", doc.Metadata["description"]))
+			buffer.WriteString(fmt.Sprintf("# Document %d Match score: %f\n\n", i+1, doc.Score))
+			buffer.WriteString(fmt.Sprintf("## Original Code Question\n\n%s\n\n", doc.Metadata["question"]))
+			buffer.WriteString(fmt.Sprintf("## Original Code Description\n\n%s\n\n", doc.Metadata["description"]))
+			buffer.WriteString("## Content\n\n")
 			buffer.WriteString(doc.PageContent)
 			buffer.WriteString("\n\n")
 		}

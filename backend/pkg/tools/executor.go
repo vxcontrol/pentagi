@@ -309,8 +309,8 @@ func (ce *customExecutor) storeToolResult(ctx context.Context, name, result stri
 	}
 
 	var buffer strings.Builder
-	buffer.WriteString(fmt.Sprintf("## Incomming arguments %s\n\n", args))
-	buffer.WriteString(fmt.Sprintf("### Tool result\n\n%s\n\n", result))
+	buffer.WriteString(fmt.Sprintf("### Incomming arguments\n\n```json\n%s\n```\n\n", args))
+	buffer.WriteString(fmt.Sprintf("#### Tool result\n\n%s\n\n", result))
 	text := buffer.String()
 
 	split := textsplitter.NewRecursiveCharacter(

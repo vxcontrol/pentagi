@@ -122,14 +122,16 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 		_, observation = event.Observation(ctx)
 
 		buffer := strings.Builder{}
-		for _, doc := range docs {
+		for i, doc := range docs {
 			observation.Score(
 				langfuse.WithScoreComment("search answer vector store result"),
 				langfuse.WithScoreName("search_answer_result"),
 				langfuse.WithScoreFloatValue(float64(doc.Score)),
 			)
-			buffer.WriteString(fmt.Sprintf("# Original Answer Type: %s\n\n", doc.Metadata["answer_type"]))
-			buffer.WriteString(fmt.Sprintf("# Original Search Question\n\n%s\n\n", doc.Metadata["question"]))
+			buffer.WriteString(fmt.Sprintf("# Document %d Search Score: %f\n\n", i+1, doc.Score))
+			buffer.WriteString(fmt.Sprintf("## Original Answer Type: %s\n\n", doc.Metadata["answer_type"]))
+			buffer.WriteString(fmt.Sprintf("## Original Search Question\n\n%s\n\n", doc.Metadata["question"]))
+			buffer.WriteString("## Content\n\n")
 			buffer.WriteString(doc.PageContent)
 			buffer.WriteString("\n\n")
 		}
