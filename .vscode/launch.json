@@ -21,7 +21,7 @@
                 // Observability (optional) uncomment to enable
                 // "OTEL_HOST": "localhost:8148",
                 // Scraper (optional) uncomment to enable
-                "SCRAPER_PRIVATE_URL": "https://someuser:somepass@localhost:9443/",
+                // "SCRAPER_PRIVATE_URL": "https://someuser:somepass@localhost:9443/",
             },
             "cwd": "${workspaceFolder}",
             "output": "${workspaceFolder}/build/__debug_bin_pentagi",
