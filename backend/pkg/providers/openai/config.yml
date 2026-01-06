@@ -3,7 +3,7 @@ simple:
   temperature: 0.5
   top_p: 0.5
   n: 1
-  max_tokens: 3000
+  max_tokens: 4000
   price:
     input: 0.4
     output: 1.6
@@ -13,56 +13,56 @@ simple_json:
   temperature: 0.5
   top_p: 0.5
   n: 1
-  max_tokens: 3000
+  max_tokens: 4000
   json: true
   price:
     input: 0.4
     output: 1.6
 
 primary_agent:
-  model: gpt-5
-  n: 1
-  max_tokens: 4000
-  reasoning:
-    effort: low
-  price:
-    input: 1.25
-    output: 10.0
-
-assistant:
-  model: gpt-5
+  model: o4-mini
   n: 1
   max_tokens: 6000
   reasoning:
     effort: medium
   price:
-    input: 1.25
-    output: 10.0
+    input: 1.1
+    output: 4.4
+
+assistant:
+  model: o4-mini
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.1
+    output: 4.4
 
 generator:
-  model: gpt-5.2
+  model: o3
   n: 1
   max_tokens: 8192
   reasoning:
     effort: medium
   price:
-    input: 1.75
-    output: 14.0
+    input: 2.0
+    output: 8.0
 
 refiner:
-  model: gpt-5
+  model: o3
   n: 1
-  max_tokens: 16384
+  max_tokens: 8192
   reasoning:
     effort: high
   price:
-    input: 1.25
-    output: 10.0
+    input: 2.0
+    output: 8.0
 
 adviser:
   model: gpt-5.2
   n: 1
-  max_tokens: 4000
+  max_tokens: 6000
   reasoning:
     effort: low
   price:
@@ -72,7 +72,7 @@ adviser:
 reflector:
   model: o4-mini
   n: 1
-  max_tokens: 3000
+  max_tokens: 4000
   reasoning:
     effort: medium
   price:
@@ -100,19 +100,19 @@ enricher:
     output: 1.6
 
 coder:
-  model: gpt-5.2
+  model: o3
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   reasoning:
-    effort: medium
+    effort: low
   price:
-    input: 1.75
-    output: 14.0
+    input: 2.0
+    output: 8.0
 
 installer:
   model: o4-mini
   n: 1
-  max_tokens: 6000
+  max_tokens: 8192
   reasoning:
     effort: low
   price:
@@ -122,7 +122,7 @@ installer:
 pentester:
   model: o4-mini
   n: 1
-  max_tokens: 4000
+  max_tokens: 8192
   reasoning:
     effort: low
   price:
