@@ -22,6 +22,8 @@ var configFS embed.FS
 
 const GeminiAgentModel = "gemini-2.5-flash"
 
+const defaultGeminiHost = "generativelanguage.googleapis.com"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(GeminiAgentModel),
@@ -99,7 +101,7 @@ func (t *apiKeyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	// add Authorization header for LiteLLM passthrough compatibility
 	// LiteLLM can accept either query parameter or Bearer token depending on configuration
-	if t.apiKey != "" {
+	if t.apiKey != "" && newReq.Host != defaultGeminiHost {
 		newReq.Header.Set("Authorization", "Bearer "+t.apiKey)
 	}
 
