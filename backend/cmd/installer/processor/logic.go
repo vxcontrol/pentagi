@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"pentagi/cmd/installer/checker"
@@ -89,7 +90,7 @@ func (p *processor) isEmbeddedDeployment(stack ProductStack) bool {
 func (p *processor) runCommand(cmd *exec.Cmd, stack ProductStack, state *operationState) error {
 	if state.terminal != nil {
 		// patch env vars for docker compose and small size screen
-		if width, _ := state.terminal.GetSize(); width < minTerminalWidthForCompose {
+		if width, _ := state.terminal.GetSize(); width < minTerminalWidthForCompose || runtime.GOOS == "windows" {
 			cmd.Env = append(cmd.Env, "COMPOSE_ANSI=never")
 		}
 
