@@ -66,17 +66,20 @@ func NewClient(url string, timeout time.Duration, enabled bool) (*Client, error)
 
 // IsEnabled returns whether Graphiti integration is active
 func (c *Client) IsEnabled() bool {
-	return c.enabled
+	return c != nil && c.enabled
 }
 
 // GetTimeout returns the configured timeout duration
 func (c *Client) GetTimeout() time.Duration {
+	if c == nil {
+		return 0
+	}
 	return c.timeout
 }
 
 // AddMessages adds messages to Graphiti (no-op if disabled)
 func (c *Client) AddMessages(ctx context.Context, req graphiti.AddMessagesRequest) error {
-	if !c.enabled {
+	if !c.IsEnabled() {
 		return nil
 	}
 
@@ -86,7 +89,7 @@ func (c *Client) AddMessages(ctx context.Context, req graphiti.AddMessagesReques
 
 // TemporalWindowSearch searches within a time window
 func (c *Client) TemporalWindowSearch(ctx context.Context, req TemporalSearchRequest) (*TemporalSearchResponse, error) {
-	if !c.enabled {
+	if !c.IsEnabled() {
 		return nil, fmt.Errorf("graphiti is not enabled")
 	}
 	return c.client.TemporalWindowSearch(req)
@@ -94,7 +97,7 @@ func (c *Client) TemporalWindowSearch(ctx context.Context, req TemporalSearchReq
 
 // EntityRelationshipsSearch finds relationships from a center node
 func (c *Client) EntityRelationshipsSearch(ctx context.Context, req EntityRelationshipSearchRequest) (*EntityRelationshipSearchResponse, error) {
-	if !c.enabled {
+	if !c.IsEnabled() {
 		return nil, fmt.Errorf("graphiti is not enabled")
 	}
 	return c.client.EntityRelationshipsSearch(req)
@@ -102,7 +105,7 @@ func (c *Client) EntityRelationshipsSearch(ctx context.Context, req EntityRelati
 
 // DiverseResultsSearch gets diverse, non-redundant results
 func (c *Client) DiverseResultsSearch(ctx context.Context, req DiverseSearchRequest) (*DiverseSearchResponse, error) {
-	if !c.enabled {
+	if !c.IsEnabled() {
 		return nil, fmt.Errorf("graphiti is not enabled")
 	}
 	return c.client.DiverseResultsSearch(req)
@@ -110,7 +113,7 @@ func (c *Client) DiverseResultsSearch(ctx context.Context, req DiverseSearchRequ
 
 // EpisodeContextSearch searches through agent responses and tool execution records
 func (c *Client) EpisodeContextSearch(ctx context.Context, req EpisodeContextSearchRequest) (*EpisodeContextSearchResponse, error) {
-	if !c.enabled {
+	if !c.IsEnabled() {
 		return nil, fmt.Errorf("graphiti is not enabled")
 	}
 	return c.client.EpisodeContextSearch(req)
@@ -118,7 +121,7 @@ func (c *Client) EpisodeContextSearch(ctx context.Context, req EpisodeContextSea
 
 // SuccessfulToolsSearch finds successful tool executions and attack patterns
 func (c *Client) SuccessfulToolsSearch(ctx context.Context, req SuccessfulToolsSearchRequest) (*SuccessfulToolsSearchResponse, error) {
-	if !c.enabled {
+	if !c.IsEnabled() {
 		return nil, fmt.Errorf("graphiti is not enabled")
 	}
 	return c.client.SuccessfulToolsSearch(req)
@@ -126,7 +129,7 @@ func (c *Client) SuccessfulToolsSearch(ctx context.Context, req SuccessfulToolsS
 
 // RecentContextSearch retrieves recent relevant context
 func (c *Client) RecentContextSearch(ctx context.Context, req RecentContextSearchRequest) (*RecentContextSearchResponse, error) {
-	if !c.enabled {
+	if !c.IsEnabled() {
 		return nil, fmt.Errorf("graphiti is not enabled")
 	}
 	return c.client.RecentContextSearch(req)
@@ -134,7 +137,7 @@ func (c *Client) RecentContextSearch(ctx context.Context, req RecentContextSearc
 
 // EntityByLabelSearch searches for entities by label/type
 func (c *Client) EntityByLabelSearch(ctx context.Context, req EntityByLabelSearchRequest) (*EntityByLabelSearchResponse, error) {
-	if !c.enabled {
+	if !c.IsEnabled() {
 		return nil, fmt.Errorf("graphiti is not enabled")
 	}
 	return c.client.EntityByLabelSearch(req)
