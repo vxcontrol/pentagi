@@ -52,7 +52,7 @@
         "date-fns": "^4.1.0",
         "graphql": "^16.11.0",
         "graphql-ws": "^6.0.5",
-        "html2pdf.js": "^0.13.0",
+        "html2pdf.js": "^0.14.0",
         "js-cookie": "^3.0.5",
         "lru-cache": "^11.1.0",
         "lucide-react": "^0.553.0",
