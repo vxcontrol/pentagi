@@ -104,7 +104,7 @@ p.checker.GatherPentagiInfo(ctx)
 - **verifyStackIntegrity**: checks existence, updates with force=true
 - **Embedded Provider**: uses `files.Files` for embedded content access
 - correctness of directory checks: when modified files are detected and force=false, we log skip explicitly and keep files intact; the final directory log reflects whether modified files were present
-- excluded files policy: `observability/otel/config.yml`, `observability/grafana/config/grafana.ini`, `example.provider.yml` are ensured to exist but not overwritten if modified
+- excluded files policy: `observability/otel/config.yml`, `observability/grafana/config/grafana.ini`, `example.custom.provider.yml`, `example.ollama.provider.yml` are ensured to exist but not overwritten if modified
 
 #### Container State Management
 - `updateStack`: executes `docker compose up -d` for rolling update

@@ -2,6 +2,8 @@ package models
 
 import (
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 
 	"pentagi/cmd/installer/wizard/controller"
@@ -58,7 +60,11 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 
 	case LLMProviderOllama:
 		fields = append(fields, m.createBaseURLField(config))
+		fields = append(fields, m.createModelField(config))
 		fields = append(fields, m.createConfigPathField(config))
+		fields = append(fields, m.createPullTimeoutField(config))
+		fields = append(fields, m.createPullEnabledField(config))
+		fields = append(fields, m.createLoadModelsEnabledField(config))
 
 	case LLMProviderCustom:
 		fields = append(fields, m.createBaseURLField(config))
@@ -173,8 +179,8 @@ func (m *LLMProviderFormModel) createModelField(config *controller.LLMProviderCo
 }
 
 func (m *LLMProviderFormModel) createConfigPathField(config *controller.LLMProviderConfig) FormField {
-	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.ConfigPath)
-	if config.ConfigPath.Default == "" {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.HostConfigPath)
+	if config.HostConfigPath.Default == "" {
 		input.Placeholder = "/opt/pentagi/conf/config.yml"
 	}
 
@@ -197,6 +203,53 @@ func (m *LLMProviderFormModel) createLegacyReasoningField(config *controller.LLM
 		Key:         "legacy_reasoning",
 		Title:       locale.LLMFormFieldLegacyReasoning,
 		Description: locale.LLMFormLegacyReasoningDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createPullTimeoutField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.PullTimeout)
+	input.Placeholder = config.PullTimeout.Default
+
+	return FormField{
+		Key:         "pull_timeout",
+		Title:       locale.LLMFormFieldPullTimeout,
+		Description: locale.LLMFormPullTimeoutDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createPullEnabledField(config *controller.LLMProviderConfig) FormField {
+	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.PullEnabled)
+	input.Placeholder = config.PullEnabled.Default
+
+	return FormField{
+		Key:         "pull_enabled",
+		Title:       locale.LLMFormFieldPullEnabled,
+		Description: locale.LLMFormPullEnabledDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createLoadModelsEnabledField(config *controller.LLMProviderConfig) FormField {
+	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.LoadModelsEnabled)
+	input.Placeholder = config.LoadModelsEnabled.Default
+
+	return FormField{
+		Key:         "load_models_enabled",
+		Title:       locale.LLMFormFieldLoadModelsEnabled,
+		Description: locale.LLMFormLoadModelsEnabledDesc,
 		Required:    false,
 		Masked:      false,
 		Input:       input,
@@ -325,9 +378,25 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(config.BaseURL.Value)))
 		}
-		if config.ConfigPath.Value != "" {
+		if config.Model.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
-				locale.LLMFormFieldConfigPath, m.GetStyles().Info.Render(config.ConfigPath.Value)))
+				locale.LLMFormFieldModel, m.GetStyles().Info.Render(config.Model.Value)))
+		}
+		if config.HostConfigPath.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldConfigPath, m.GetStyles().Info.Render(config.HostConfigPath.Value)))
+		}
+		if config.PullTimeout.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldPullTimeout, m.GetStyles().Info.Render(config.PullTimeout.Value)))
+		}
+		if config.PullEnabled.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldPullEnabled, m.GetStyles().Info.Render(config.PullEnabled.Value)))
+		}
+		if config.LoadModelsEnabled.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldLoadModelsEnabled, m.GetStyles().Info.Render(config.LoadModelsEnabled.Value)))
 		}
 
 	case LLMProviderCustom:
@@ -343,9 +412,9 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldModel, m.GetStyles().Info.Render(config.Model.Value)))
 		}
-		if config.ConfigPath.Value != "" {
+		if config.HostConfigPath.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
-				locale.LLMFormFieldConfigPath, m.GetStyles().Info.Render(config.ConfigPath.Value)))
+				locale.LLMFormFieldConfigPath, m.GetStyles().Info.Render(config.HostConfigPath.Value)))
 		}
 		if config.LegacyReasoning.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
@@ -400,7 +469,11 @@ func (m *LLMProviderFormModel) HandleSave() error {
 		SessionToken:           config.SessionToken,
 		Region:                 config.Region,
 		ConfigPath:             config.ConfigPath,
+		HostConfigPath:         config.HostConfigPath,
 		LegacyReasoning:        config.LegacyReasoning,
+		PullTimeout:            config.PullTimeout,
+		PullEnabled:            config.PullEnabled,
+		LoadModelsEnabled:      config.LoadModelsEnabled,
 		EmbeddedLLMConfigsPath: config.EmbeddedLLMConfigsPath,
 	}
 
@@ -424,13 +497,47 @@ func (m *LLMProviderFormModel) HandleSave() error {
 		case "region":
 			newConfig.Region.Value = value
 		case "config_path":
-			newConfig.ConfigPath.Value = value
+			// User edits HostConfigPath, ConfigPath is auto-generated on save
+			// validate config path if provided (skip validation for embedded configs)
+			if value != "" {
+				// embedded configs don't need validation (they're inside the docker image)
+				isEmbedded := slices.Contains(newConfig.EmbeddedLLMConfigsPath, value)
+
+				// only validate custom (non-embedded) configs on host filesystem
+				if !isEmbedded {
+					info, err := os.Stat(value)
+					if err != nil {
+						if os.IsNotExist(err) {
+							return fmt.Errorf("config file does not exist: %s", value)
+						}
+						return fmt.Errorf("cannot access config file %s: %v", value, err)
+					}
+					if info.IsDir() {
+						return fmt.Errorf("config path must be a file, not a directory: %s", value)
+					}
+				}
+			}
+			newConfig.HostConfigPath.Value = value
 		case "legacy_reasoning":
 			// validate boolean input
 			if value != "" && value != "true" && value != "false" {
 				return fmt.Errorf("invalid boolean value for legacy reasoning: %s (must be 'true' or 'false')", value)
 			}
 			newConfig.LegacyReasoning.Value = value
+		case "pull_timeout":
+			newConfig.PullTimeout.Value = value
+		case "pull_enabled":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for pull enabled: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.PullEnabled.Value = value
+		case "load_models_enabled":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for load models enabled: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.LoadModelsEnabled.Value = value
 		}
 	}
 

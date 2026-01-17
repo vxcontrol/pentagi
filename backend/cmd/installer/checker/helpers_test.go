@@ -402,7 +402,7 @@ func TestCheckUpdatesServer(t *testing.T) {
 
 		ctx := context.Background()
 		request := CheckUpdatesRequest{
-			InstallerVersion: "0.3.0",
+			InstallerVersion: "1.0.0",
 			InstallerOsType:  "darwin",
 		}
 
@@ -435,7 +435,7 @@ func TestCheckUpdatesServer(t *testing.T) {
 		defer ts.Close()
 
 		ctx := context.Background()
-		request := CheckUpdatesRequest{InstallerVersion: "0.3.0"}
+		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
 
 		response := checkUpdatesServer(ctx, ts.URL, "", request)
 		if response != nil {
@@ -452,7 +452,7 @@ func TestCheckUpdatesServer(t *testing.T) {
 		defer ts.Close()
 
 		ctx := context.Background()
-		request := CheckUpdatesRequest{InstallerVersion: "0.3.0"}
+		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
 
 		response := checkUpdatesServer(ctx, ts.URL, "", request)
 		if response != nil {
@@ -471,7 +471,7 @@ func TestCheckUpdatesServer(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 
-		request := CheckUpdatesRequest{InstallerVersion: "0.3.0"}
+		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
 		response := checkUpdatesServer(ctx, ts.URL, "", request)
 		if response != nil {
 			t.Error("expected nil response for timeout")
@@ -488,7 +488,7 @@ func TestCheckUpdatesServer(t *testing.T) {
 		defer proxyTs.Close()
 
 		ctx := context.Background()
-		request := CheckUpdatesRequest{InstallerVersion: "0.3.0"}
+		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
 
 		// note: testing with actual proxy setup is complex in unit tests
 		// this mainly tests that proxy URL doesn't cause the function to panic
@@ -500,7 +500,7 @@ func TestCheckUpdatesServer(t *testing.T) {
 	// test malformed server URL
 	t.Run("malformed_url", func(t *testing.T) {
 		ctx := context.Background()
-		request := CheckUpdatesRequest{InstallerVersion: "0.3.0"}
+		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
 
 		response := checkUpdatesServer(ctx, "://invalid-url", "", request)
 		if response != nil {
@@ -597,7 +597,7 @@ func TestCheckUpdatesRequestStructure(t *testing.T) {
 	// test that CheckUpdatesRequest can be marshaled to JSON
 	request := CheckUpdatesRequest{
 		InstallerOsType:        "darwin",
-		InstallerVersion:       "0.3.0",
+		InstallerVersion:       "1.0.0",
 		LangfuseConnected:      true,
 		LangfuseExternal:       false,
 		ObservabilityConnected: true,

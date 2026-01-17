@@ -20,6 +20,7 @@ type HardeningArea string
 const (
 	HardeningAreaPentagi  HardeningArea = "pentagi"
 	HardeningAreaLangfuse HardeningArea = "langfuse"
+	HardeningAreaGraphiti HardeningArea = "graphiti"
 )
 
 type HardeningPolicyType string
@@ -42,10 +43,12 @@ var varsForHardening = map[HardeningArea][]string{
 	HardeningAreaPentagi: {
 		"COOKIE_SIGNING_SALT",
 		"PENTAGI_POSTGRES_PASSWORD",
-		"NEO4J_PASSWORD",
 		"LOCAL_SCRAPER_USERNAME",
 		"LOCAL_SCRAPER_PASSWORD",
 		"SCRAPER_PRIVATE_URL",
+	},
+	HardeningAreaGraphiti: {
+		"NEO4J_PASSWORD",
 	},
 	HardeningAreaLangfuse: {
 		"LANGFUSE_POSTGRES_PASSWORD",
@@ -100,10 +103,12 @@ var varsHardeningPolicies = map[HardeningArea]map[string]HardeningPolicy{
 	HardeningAreaPentagi: {
 		"COOKIE_SIGNING_SALT":       {Type: HardeningPolicyTypeHex, Length: 32},
 		"PENTAGI_POSTGRES_PASSWORD": {Type: HardeningPolicyTypeDefault, Length: 18},
-		"NEO4J_PASSWORD":            {Type: HardeningPolicyTypeDefault, Length: 18},
 		"LOCAL_SCRAPER_USERNAME":    {Type: HardeningPolicyTypeDefault, Length: 10},
 		"LOCAL_SCRAPER_PASSWORD":    {Type: HardeningPolicyTypeDefault, Length: 12},
 		// SCRAPER_PRIVATE_URL is handled specially in DoHardening logic
+	},
+	HardeningAreaGraphiti: {
+		"NEO4J_PASSWORD": {Type: HardeningPolicyTypeDefault, Length: 18},
 	},
 	HardeningAreaLangfuse: {
 		"LANGFUSE_POSTGRES_PASSWORD":       {Type: HardeningPolicyTypeDefault, Length: 18},
@@ -157,6 +162,18 @@ func DoHardening(s state.State, c checker.CheckResult) error {
 
 		if isChanged, err := syncLangfuseState(s, vars); err != nil {
 			return fmt.Errorf("failed to sync langfuse vars: %w", err)
+		} else if isChanged {
+			haveToCommit = true
+		}
+	}
+
+	// harden graphiti vars only if neither containers nor volumes exist
+	// this prevents password changes when volumes with existing credentials are present
+	if vars, _ := s.GetVars(varsForHardening[HardeningAreaGraphiti]); !c.GraphitiInstalled && !c.GraphitiVolumesExist {
+		updateDefaultValues(vars)
+
+		if isChanged, err := replaceDefaultValues(s, vars, varsHardeningPolicies[HardeningAreaGraphiti]); err != nil {
+			return fmt.Errorf("failed to replace default values for graphiti: %w", err)
 		} else if isChanged {
 			haveToCommit = true
 		}

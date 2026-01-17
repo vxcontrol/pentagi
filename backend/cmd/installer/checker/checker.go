@@ -13,13 +13,15 @@ import (
 	"github.com/docker/docker/client"
 )
 
-const InstallerVersion = "0.3.0"
+const InstallerVersion = "1.0.0"
 
 const (
 	DockerComposeFile            = "docker-compose.yml"
 	GraphitiComposeFile          = "docker-compose-graphiti.yml"
 	LangfuseComposeFile          = "docker-compose-langfuse.yml"
 	ObservabilityComposeFile     = "docker-compose-observability.yml"
+	ExampleCustomConfigLLMFile   = "example.custom.provider.yml"
+	ExampleOllamaConfigLLMFile   = "example.ollama.provider.yml"
 	PentagiScriptFile            = "/usr/local/bin/pentagi"
 	PentagiContainerName         = "pentagi"
 	GraphitiContainerName        = "graphiti"
@@ -360,14 +362,21 @@ func (h *defaultCheckHandler) GatherWorkerInfo(ctx context.Context, c *CheckResu
 	defer h.mx.Unlock()
 
 	dockerHost := getEnvVar(h.appState, "DOCKER_HOST", "")
-	dockerCertPath := getEnvVar(h.appState, "DOCKER_CERT_PATH", "")
+	dockerCertPath := getEnvVar(h.appState, "PENTAGI_DOCKER_CERT_PATH", "")
 	dockerTLSVerify := getEnvVar(h.appState, "DOCKER_TLS_VERIFY", "") != ""
 
 	cli, err := createDockerClient(dockerHost, dockerCertPath, dockerTLSVerify)
 	if err != nil {
-		c.WorkerEnvApiAccessible = false
-		c.WorkerImageExists = false
-		return nil
+		// fallback to DOCKER_CERT_PATH for backward compatibility
+		// this handles cases where migration failed or user manually edited .env
+		// note: after migration, DOCKER_CERT_PATH contains container path, not host path
+		dockerCertPath = getEnvVar(h.appState, "DOCKER_CERT_PATH", "")
+		cli, err = createDockerClient(dockerHost, dockerCertPath, dockerTLSVerify)
+		if err != nil {
+			c.WorkerEnvApiAccessible = false
+			c.WorkerImageExists = false
+			return nil
+		}
 	}
 
 	h.workerClient = cli
@@ -385,7 +394,9 @@ func (h *defaultCheckHandler) GatherPentagiInfo(ctx context.Context, c *CheckRes
 
 	envDir := filepath.Dir(h.appState.GetEnvPath())
 	dockerComposeFile := filepath.Join(envDir, DockerComposeFile)
-	c.PentagiExtracted = checkFileExists(dockerComposeFile)
+	c.PentagiExtracted = checkFileExists(dockerComposeFile) &&
+		checkFileExists(ExampleCustomConfigLLMFile) &&
+		checkFileExists(ExampleOllamaConfigLLMFile)
 	c.PentagiScriptInstalled = checkFileExists(PentagiScriptFile)
 
 	if h.dockerClient != nil {

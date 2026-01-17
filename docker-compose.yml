@@ -21,7 +21,7 @@ networks:
 
 services:
   pentagi:
-    image: vxcontrol/pentagi:latest
+    image: ${PENTAGI_IMAGE:-vxcontrol/pentagi:latest}
     restart: unless-stopped
     container_name: pentagi
     hostname: pentagi
@@ -57,7 +57,11 @@ services:
       - LLM_SERVER_CONFIG_PATH=${LLM_SERVER_CONFIG_PATH:-}
       - LLM_SERVER_LEGACY_REASONING=${LLM_SERVER_LEGACY_REASONING:-}
       - OLLAMA_SERVER_URL=${OLLAMA_SERVER_URL:-}
+      - OLLAMA_SERVER_MODEL=${OLLAMA_SERVER_MODEL:-}
       - OLLAMA_SERVER_CONFIG_PATH=${OLLAMA_SERVER_CONFIG_PATH:-}
+      - OLLAMA_SERVER_PULL_MODELS_TIMEOUT=${OLLAMA_SERVER_PULL_MODELS_TIMEOUT:-}
+      - OLLAMA_SERVER_PULL_MODELS_ENABLED=${OLLAMA_SERVER_PULL_MODELS_ENABLED:-}
+      - OLLAMA_SERVER_LOAD_MODELS_ENABLED=${OLLAMA_SERVER_LOAD_MODELS_ENABLED:-}
       - EMBEDDING_URL=${EMBEDDING_URL:-}
       - EMBEDDING_KEY=${EMBEDDING_KEY:-}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
@@ -138,8 +142,9 @@ services:
       - ${PENTAGI_DATA_DIR:-pentagi-data}:/opt/pentagi/data
       - ${PENTAGI_SSL_DIR:-pentagi-ssl}:/opt/pentagi/ssl
       - ${PENTAGI_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
-      - ${PENTAGI_LLM_SERVER_CONFIG_PATH:-./example.provider.yml}:${PENTAGI_LLM_SERVER_CONFIG_PATH:-/opt/pentagi/conf/example.provider.yml}
-      - ${DOCKER_CERT_PATH:-./docker-ssl}:${DOCKER_CERT_PATH:-/opt/pentagi/docker-ssl}
+      - ${PENTAGI_LLM_SERVER_CONFIG_PATH:-./example.custom.provider.yml}:/opt/pentagi/conf/custom.provider.yml
+      - ${PENTAGI_OLLAMA_SERVER_CONFIG_PATH:-./example.ollama.provider.yml}:/opt/pentagi/conf/ollama.provider.yml
+      - ${PENTAGI_DOCKER_CERT_PATH:-./docker-ssl}:/opt/pentagi/docker/ssl
     user: root:root # while using docker.sock
     networks:
       - pentagi-network

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"pentagi/cmd/installer/loader"
+	"pentagi/cmd/installer/wizard/controller"
 )
 
 var mockError = errors.New("mocked error")
@@ -758,6 +759,292 @@ func TestDoSyncNetworkSettings_EdgeCases(t *testing.T) {
 			}
 			if !tt.expectSync && anyVarSet {
 				t.Errorf("Expected no variables to be synced for case: %s", tt.description)
+			}
+		})
+	}
+}
+
+// Test 6: DOCKER_CERT_PATH migration to PENTAGI_DOCKER_CERT_PATH
+func TestDoSyncNetworkSettings_DockerCertPathMigration(t *testing.T) {
+	tests := []struct {
+		name            string
+		setupFunc       func(*testing.T) (string, func())
+		expectMigration bool
+		description     string
+	}{
+		{
+			name: "DOCKER_CERT_PATH with existing directory should migrate to PENTAGI_DOCKER_CERT_PATH",
+			setupFunc: func(t *testing.T) (string, func()) {
+				tmpDir, err := os.MkdirTemp("", "docker-certs-*")
+				if err != nil {
+					t.Fatalf("Failed to create temp dir: %v", err)
+				}
+				return tmpDir, func() { os.RemoveAll(tmpDir) }
+			},
+			expectMigration: true,
+			description:     "Valid directory should be migrated",
+		},
+		{
+			name: "DOCKER_CERT_PATH with non-existing directory should not migrate",
+			setupFunc: func(t *testing.T) (string, func()) {
+				return "/nonexistent/docker/certs", func() {}
+			},
+			expectMigration: false,
+			description:     "Non-existing path should not be migrated",
+		},
+		{
+			name: "DOCKER_CERT_PATH pointing to file instead of directory should not migrate",
+			setupFunc: func(t *testing.T) (string, func()) {
+				tmpFile, err := os.CreateTemp("", "docker-cert-*")
+				if err != nil {
+					t.Fatalf("Failed to create temp file: %v", err)
+				}
+				tmpFile.Close()
+				return tmpFile.Name(), func() { os.Remove(tmpFile.Name()) }
+			},
+			expectMigration: false,
+			description:     "File instead of directory should not be migrated",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original environment
+			originalDockerHost := os.Getenv("DOCKER_HOST")
+			originalDockerCertPath := os.Getenv("DOCKER_CERT_PATH")
+
+			// Clean up after test
+			defer func() {
+				if originalDockerHost != "" {
+					os.Setenv("DOCKER_HOST", originalDockerHost)
+				} else {
+					os.Unsetenv("DOCKER_HOST")
+				}
+				if originalDockerCertPath != "" {
+					os.Setenv("DOCKER_CERT_PATH", originalDockerCertPath)
+				} else {
+					os.Unsetenv("DOCKER_CERT_PATH")
+				}
+			}()
+
+			// Setup test environment
+			dockerCertPath, cleanup := tt.setupFunc(t)
+			defer cleanup()
+
+			// Set environment variables
+			os.Setenv("DOCKER_HOST", "tcp://docker.example.com:2376")
+			os.Setenv("DOCKER_CERT_PATH", dockerCertPath)
+
+			// Create mock state
+			mockSt := &mockState{vars: make(map[string]loader.EnvVar)}
+
+			// Execute function
+			err := DoSyncNetworkSettings(mockSt)
+			if err != nil {
+				t.Fatalf("DoSyncNetworkSettings() unexpected error = %v", err)
+			}
+
+			// Verify migration results
+			if tt.expectMigration {
+				// Check PENTAGI_DOCKER_CERT_PATH was set to original path
+				pentagiVar, exists := mockSt.GetVar("PENTAGI_DOCKER_CERT_PATH")
+				if !exists {
+					t.Errorf("Expected PENTAGI_DOCKER_CERT_PATH to be set: %s", tt.description)
+				} else if pentagiVar.Value != dockerCertPath {
+					t.Errorf("Expected PENTAGI_DOCKER_CERT_PATH = %q, got %q: %s", dockerCertPath, pentagiVar.Value, tt.description)
+				}
+
+				// Check DOCKER_CERT_PATH was set to default container path
+				dockerVar, exists := mockSt.GetVar("DOCKER_CERT_PATH")
+				if !exists {
+					t.Errorf("Expected DOCKER_CERT_PATH to be set: %s", tt.description)
+				} else if dockerVar.Value != controller.DefaultDockerCertPath {
+					t.Errorf("Expected DOCKER_CERT_PATH = %q, got %q: %s", controller.DefaultDockerCertPath, dockerVar.Value, tt.description)
+				}
+			} else {
+				// Check PENTAGI_DOCKER_CERT_PATH was set but empty (migration did not occur)
+				pentagiVar, exists := mockSt.GetVar("PENTAGI_DOCKER_CERT_PATH")
+				if !exists {
+					t.Errorf("Expected PENTAGI_DOCKER_CERT_PATH to exist in state: %s", tt.description)
+				} else if pentagiVar.Value != "" {
+					t.Errorf("Expected PENTAGI_DOCKER_CERT_PATH to be empty, got %q: %s", pentagiVar.Value, tt.description)
+				}
+
+				// Check DOCKER_CERT_PATH was set to original value (not migrated)
+				dockerVar, exists := mockSt.GetVar("DOCKER_CERT_PATH")
+				if !exists {
+					t.Errorf("Expected DOCKER_CERT_PATH to be set: %s", tt.description)
+				} else if dockerVar.Value != dockerCertPath {
+					t.Errorf("Expected DOCKER_CERT_PATH = %q, got %q: %s", dockerCertPath, dockerVar.Value, tt.description)
+				}
+			}
+
+			// Verify DOCKER_HOST was synced correctly in all cases
+			dockerHostVar, exists := mockSt.GetVar("DOCKER_HOST")
+			if !exists {
+				t.Errorf("Expected DOCKER_HOST to be set")
+			} else if dockerHostVar.Value != "tcp://docker.example.com:2376" {
+				t.Errorf("Expected DOCKER_HOST = %q, got %q", "tcp://docker.example.com:2376", dockerHostVar.Value)
+			}
+		})
+	}
+}
+
+// Test 7: Prevent sync when state already has Docker connection settings
+func TestDoSyncNetworkSettings_PreventOverrideExistingSettings(t *testing.T) {
+	tests := []struct {
+		name              string
+		existingStateVars map[string]string
+		envVars           map[string]string
+		expectSync        bool
+		description       string
+	}{
+		{
+			name: "existing DOCKER_HOST in state prevents sync",
+			existingStateVars: map[string]string{
+				"DOCKER_HOST": "tcp://existing.example.com:2376",
+			},
+			envVars: map[string]string{
+				"DOCKER_HOST": "tcp://new.example.com:2376",
+			},
+			expectSync:  false,
+			description: "State with DOCKER_HOST should prevent sync",
+		},
+		{
+			name: "existing DOCKER_TLS_VERIFY in state prevents sync",
+			existingStateVars: map[string]string{
+				"DOCKER_TLS_VERIFY": "1",
+			},
+			envVars: map[string]string{
+				"DOCKER_HOST": "tcp://new.example.com:2376",
+			},
+			expectSync:  false,
+			description: "State with DOCKER_TLS_VERIFY should prevent sync",
+		},
+		{
+			name: "existing DOCKER_CERT_PATH in state prevents sync",
+			existingStateVars: map[string]string{
+				"DOCKER_CERT_PATH": "/existing/certs",
+			},
+			envVars: map[string]string{
+				"DOCKER_HOST": "tcp://new.example.com:2376",
+			},
+			expectSync:  false,
+			description: "State with DOCKER_CERT_PATH should prevent sync",
+		},
+		{
+			name: "existing PENTAGI_DOCKER_CERT_PATH in state prevents sync",
+			existingStateVars: map[string]string{
+				"PENTAGI_DOCKER_CERT_PATH": "/existing/certs",
+			},
+			envVars: map[string]string{
+				"DOCKER_HOST": "tcp://new.example.com:2376",
+			},
+			expectSync:  false,
+			description: "State with PENTAGI_DOCKER_CERT_PATH should prevent sync",
+		},
+		{
+			name:              "empty state allows sync",
+			existingStateVars: map[string]string{},
+			envVars: map[string]string{
+				"DOCKER_HOST": "tcp://new.example.com:2376",
+			},
+			expectSync:  true,
+			description: "Empty state should allow sync",
+		},
+		{
+			name: "state with empty values allows sync",
+			existingStateVars: map[string]string{
+				"DOCKER_HOST":       "",
+				"DOCKER_TLS_VERIFY": "",
+				"DOCKER_CERT_PATH":  "",
+			},
+			envVars: map[string]string{
+				"DOCKER_HOST": "tcp://new.example.com:2376",
+			},
+			expectSync:  true,
+			description: "State with empty values should allow sync",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original environment
+			allEnvVars := []string{"DOCKER_HOST", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"}
+			originalEnv := make(map[string]string)
+			for _, varName := range allEnvVars {
+				originalEnv[varName] = os.Getenv(varName)
+			}
+
+			// Clean up after test
+			defer func() {
+				for _, varName := range allEnvVars {
+					if originalVal := originalEnv[varName]; originalVal != "" {
+						os.Setenv(varName, originalVal)
+					} else {
+						os.Unsetenv(varName)
+					}
+				}
+			}()
+
+			// Clear environment
+			for _, varName := range allEnvVars {
+				os.Unsetenv(varName)
+			}
+
+			// Set up environment variables
+			for varName, value := range tt.envVars {
+				os.Setenv(varName, value)
+			}
+
+			// Create mock state with existing values
+			mockSt := &mockState{vars: make(map[string]loader.EnvVar)}
+			for varName, value := range tt.existingStateVars {
+				mockSt.vars[varName] = loader.EnvVar{
+					Name:      varName,
+					Value:     value,
+					Line:      1,
+					IsChanged: false,
+				}
+			}
+
+			// Execute function
+			err := DoSyncNetworkSettings(mockSt)
+			if err != nil {
+				t.Fatalf("DoSyncNetworkSettings() unexpected error = %v", err)
+			}
+
+			// Verify sync behavior
+			if tt.expectSync {
+				// Check that env vars were synced to state
+				for envVarName, envVarValue := range tt.envVars {
+					stateVar, exists := mockSt.GetVar(envVarName)
+					if !exists {
+						t.Errorf("Expected %s to be synced from env: %s", envVarName, tt.description)
+					} else if stateVar.Value != envVarValue {
+						t.Errorf("Expected %s = %q, got %q: %s", envVarName, envVarValue, stateVar.Value, tt.description)
+					}
+				}
+			} else {
+				// Check that existing state vars were not modified
+				for varName, originalValue := range tt.existingStateVars {
+					stateVar, exists := mockSt.GetVar(varName)
+					if !exists && originalValue != "" {
+						t.Errorf("Expected %s to still exist in state: %s", varName, tt.description)
+					} else if exists && stateVar.Value != originalValue {
+						t.Errorf("Expected %s to remain %q, got %q: %s", varName, originalValue, stateVar.Value, tt.description)
+					}
+				}
+
+				// Check that no new Docker vars were added from env
+				for envVarName := range tt.envVars {
+					if _, existsInState := tt.existingStateVars[envVarName]; !existsInState {
+						stateVar, exists := mockSt.GetVar(envVarName)
+						if exists && stateVar.IsChanged {
+							t.Errorf("Expected %s to not be synced from env due to existing settings: %s", envVarName, tt.description)
+						}
+					}
+				}
 			}
 		})
 	}

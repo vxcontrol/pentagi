@@ -86,8 +86,12 @@ type Config struct {
 	LLMServerLegacyReasoning bool   `env:"LLM_SERVER_LEGACY_REASONING" envDefault:"false"`
 
 	// Ollama LLM provider
-	OllamaServerURL    string `env:"OLLAMA_SERVER_URL"`
-	OllamaServerConfig string `env:"OLLAMA_SERVER_CONFIG_PATH"`
+	OllamaServerURL               string `env:"OLLAMA_SERVER_URL"`
+	OllamaServerModel             string `env:"OLLAMA_SERVER_MODEL" envDefault:"llama3.1:8b-instruct-q8_0"`
+	OllamaServerConfig            string `env:"OLLAMA_SERVER_CONFIG_PATH"`
+	OllamaServerPullModelsTimeout int    `env:"OLLAMA_SERVER_PULL_MODELS_TIMEOUT" envDefault:"600"`
+	OllamaServerPullModelsEnabled bool   `env:"OLLAMA_SERVER_PULL_MODELS_ENABLED" envDefault:"false"`
+	OllamaServerLoadModelsEnabled bool   `env:"OLLAMA_SERVER_LOAD_MODELS_ENABLED" envDefault:"false"`
 
 	// Google AI (Gemini) LLM provider
 	GeminiAPIKey    string `env:"GEMINI_API_KEY"`

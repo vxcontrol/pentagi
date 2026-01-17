@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -13,14 +14,16 @@ import (
 )
 
 const (
-	observabilityDirectory  = "observability"
-	pentagiExampleConfigLLM = "example.provider.yml"
+	observabilityDirectory        = "observability"
+	pentagiExampleCustomConfigLLM = "example.custom.provider.yml"
+	pentagiExampleOllamaConfigLLM = "example.ollama.provider.yml"
 )
 
 var filesToExcludeFromVerification = []string{
 	"observability/otel/config.yml",
 	"observability/grafana/config/grafana.ini",
-	pentagiExampleConfigLLM,
+	pentagiExampleCustomConfigLLM,
+	pentagiExampleOllamaConfigLLM,
 }
 
 var allStacks = []ProductStack{
@@ -44,10 +47,10 @@ func (fs *fileSystemOperationsImpl) ensureStackIntegrity(ctx context.Context, st
 
 	switch stack {
 	case ProductStackPentagi:
-		if err := fs.ensureFileFromEmbed(composeFilePentagi, state); err != nil {
-			return err
-		}
-		return fs.ensureFileFromEmbed(pentagiExampleConfigLLM, state)
+		errCompose := fs.ensureFileFromEmbed(composeFilePentagi, state)
+		errCustom := fs.ensureFileFromEmbed(pentagiExampleCustomConfigLLM, state)
+		errOllama := fs.ensureFileFromEmbed(pentagiExampleOllamaConfigLLM, state)
+		return errors.Join(errCompose, errCustom, errOllama)
 
 	case ProductStackGraphiti:
 		return fs.ensureFileFromEmbed(composeFileGraphiti, state)
@@ -56,10 +59,9 @@ func (fs *fileSystemOperationsImpl) ensureStackIntegrity(ctx context.Context, st
 		return fs.ensureFileFromEmbed(composeFileLangfuse, state)
 
 	case ProductStackObservability:
-		if err := fs.ensureFileFromEmbed(composeFileObservability, state); err != nil {
-			return err
-		}
-		return fs.ensureDirectoryFromEmbed(observabilityDirectory, state)
+		errCompose := fs.ensureFileFromEmbed(composeFileObservability, state)
+		errDirectory := fs.ensureDirectoryFromEmbed(observabilityDirectory, state)
+		return errors.Join(errCompose, errDirectory)
 
 	case ProductStackAll, ProductStackCompose:
 		// process all stacks sequentially
@@ -158,7 +160,8 @@ func (fs *fileSystemOperationsImpl) cleanupStackFiles(ctx context.Context, stack
 	switch stack {
 	case ProductStackPentagi:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFilePentagi))
-		filesToRemove = append(filesToRemove, filepath.Join(workingDir, pentagiExampleConfigLLM))
+		filesToRemove = append(filesToRemove, filepath.Join(workingDir, pentagiExampleCustomConfigLLM))
+		filesToRemove = append(filesToRemove, filepath.Join(workingDir, pentagiExampleOllamaConfigLLM))
 
 	case ProductStackGraphiti:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFileGraphiti))

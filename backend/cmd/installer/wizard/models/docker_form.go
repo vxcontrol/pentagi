@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"pentagi/cmd/installer/loader"
@@ -110,7 +111,7 @@ func (m *DockerFormModel) BuildForm() tea.Cmd {
 	fields = append(fields, m.createTextField("docker_cert_path",
 		locale.ToolsDockerCertPath,
 		locale.ToolsDockerCertPathDesc,
-		config.DockerCertPath,
+		config.HostDockerCertPath,
 		false,
 	))
 
@@ -242,7 +243,7 @@ func (m *DockerFormModel) GetCurrentConfiguration() string {
 	}
 
 	// TLS settings
-	if config.DockerHost.Value != "" && config.DockerTLSVerify.Value == "1" && config.DockerCertPath.Value != "" {
+	if config.DockerHost.Value != "" && config.DockerTLSVerify.Value == "1" && config.HostDockerCertPath.Value != "" {
 		sections = append(sections, fmt.Sprintf("• TLS Connection: %s",
 			m.GetStyles().Success.Render(locale.StatusConfigured)))
 	} else if config.DockerHost.Value != "" {
@@ -329,7 +330,7 @@ func (m *DockerFormModel) HandleSave() error {
 		DockerDefaultImageForPentest: config.DockerDefaultImageForPentest,
 		DockerHost:                   config.DockerHost,
 		DockerTLSVerify:              config.DockerTLSVerify,
-		DockerCertPath:               config.DockerCertPath,
+		HostDockerCertPath:           config.HostDockerCertPath,
 	}
 
 	// update field values based on form input
@@ -377,7 +378,20 @@ func (m *DockerFormModel) HandleSave() error {
 			}
 			newConfig.DockerTLSVerify.Value = value
 		case "docker_cert_path":
-			newConfig.DockerCertPath.Value = value
+			// validate cert path if provided
+			if value != "" {
+				info, err := os.Stat(value)
+				if err != nil {
+					if os.IsNotExist(err) {
+						return fmt.Errorf("docker cert path does not exist: %s", value)
+					}
+					return fmt.Errorf("cannot access docker cert path %s: %v", value, err)
+				}
+				if !info.IsDir() {
+					return fmt.Errorf("docker cert path must be a directory, not a file: %s", value)
+				}
+			}
+			newConfig.HostDockerCertPath.Value = value
 		}
 	}
 

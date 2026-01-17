@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	version = "0.3.0"
+	version = "1.0.0"
 )
 
 type Config struct {
@@ -47,6 +47,10 @@ func main() {
 	appState, err := initializeState(envPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize state: %v", err)
+	}
+
+	if err := hardening.DoMigrateSettings(appState); err != nil {
+		log.Fatalf("Failed to migrate settings: %v", err)
 	}
 
 	if err := hardening.DoSyncNetworkSettings(appState); err != nil {

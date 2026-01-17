@@ -3,6 +3,7 @@ package files
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -124,11 +125,18 @@ func TestCopy_PreservesExecutable_FromFS(t *testing.T) {
 		t.Fatalf("failed to create links dir: %v", err)
 	}
 
-	// create executable source file
+	// create source file with specific permissions
 	src := filepath.Join(testLinksDir, "run.sh")
 	if err := os.WriteFile(src, []byte("#!/bin/sh\necho hi\n"), 0755); err != nil {
 		t.Fatalf("failed to create exec file: %v", err)
 	}
+
+	// get actual source mode (may differ on Windows)
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatalf("failed to stat source: %v", err)
+	}
+	expectedMode := srcInfo.Mode().Perm()
 
 	copyDstDir := t.TempDir()
 	defer os.RemoveAll(copyDstDir)
@@ -139,14 +147,15 @@ func TestCopy_PreservesExecutable_FromFS(t *testing.T) {
 		t.Fatalf("Copy() error = %v", err)
 	}
 
-	// verify executable bit preserved
+	// verify permissions preserved (whatever they actually are on this OS)
 	copied := filepath.Join(copyDstDir, "run.sh")
 	info, err := os.Stat(copied)
 	if err != nil {
 		t.Fatalf("failed to stat copied: %v", err)
 	}
-	if info.Mode().Perm() != 0755 {
-		t.Errorf("copied mode = %o, want %o", info.Mode().Perm(), os.FileMode(0755))
+
+	if info.Mode().Perm() != expectedMode {
+		t.Errorf("copied mode = %o, want %o (source permissions not preserved)", info.Mode().Perm(), expectedMode)
 	}
 }
 
@@ -159,10 +168,16 @@ func TestCheck_DetectsPermissionMismatch_FromFS(t *testing.T) {
 		t.Fatalf("failed to create links dir: %v", err)
 	}
 
-	// create executable source file
+	// create source file
 	src := filepath.Join(testLinksDir, "tool.sh")
 	if err := os.WriteFile(src, []byte("#!/bin/sh\necho tool\n"), 0755); err != nil {
 		t.Fatalf("failed to create exec file: %v", err)
+	}
+
+	// get actual source mode
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatalf("failed to stat source: %v", err)
 	}
 
 	f := newTestFiles(testLinksDir)
@@ -174,15 +189,44 @@ func TestCheck_DetectsPermissionMismatch_FromFS(t *testing.T) {
 		t.Fatalf("Copy() error = %v", err)
 	}
 
-	// change permissions to remove executable bit
 	target := filepath.Join(workingDir, "tool.sh")
-	if err := os.Chmod(target, 0644); err != nil {
+
+	// try to change permissions
+	newMode := os.FileMode(0644)
+	if runtime.GOOS == "windows" {
+		// on Windows, we can only toggle read-only bit
+		newMode = 0444 // read-only
+	}
+
+	if err := os.Chmod(target, newMode); err != nil {
 		t.Fatalf("failed to chmod: %v", err)
 	}
 
+	// verify permissions actually changed
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatalf("failed to stat target: %v", err)
+	}
+
+	if targetInfo.Mode().Perm() == srcInfo.Mode().Perm() {
+		// permissions didn't change on this OS, skip the rest
+		t.Skipf("cannot change file permissions on this OS (from %o to %o, got %o)",
+			srcInfo.Mode().Perm(), newMode, targetInfo.Mode().Perm())
+	}
+
 	status := f.Check("tool.sh", workingDir)
-	if status != FileStatusModified {
-		t.Errorf("Check() perms mismatch = %v, want %v", status, FileStatusModified)
+
+	// on Windows, Check() doesn't compare permissions (by design)
+	// so even if permissions changed, status will be OK
+	if runtime.GOOS == "windows" {
+		if status != FileStatusOK {
+			t.Errorf("Check() on Windows = %v, want %v (permissions not checked on Windows)", status, FileStatusOK)
+		}
+	} else {
+		// on Unix, permissions should be checked
+		if status != FileStatusModified {
+			t.Errorf("Check() perms mismatch = %v, want %v", status, FileStatusModified)
+		}
 	}
 }
 

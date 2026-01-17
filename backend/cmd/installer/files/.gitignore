@@ -1,2 +1,3 @@
 fs.go
+fs_test.go
 fs/

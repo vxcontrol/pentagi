@@ -528,6 +528,8 @@ func TestDoHardening(t *testing.T) {
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    false,
 				LangfuseVolumesExist: false,
+				GraphitiInstalled:    true,
+				GraphitiVolumesExist: true,
 				PentagiInstalled:     true,
 				PentagiVolumesExist:  true,
 			},
@@ -541,6 +543,8 @@ func TestDoHardening(t *testing.T) {
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    true,
 				LangfuseVolumesExist: true,
+				GraphitiInstalled:    true,
+				GraphitiVolumesExist: true,
 				PentagiInstalled:     false,
 				PentagiVolumesExist:  false,
 			},
@@ -550,10 +554,27 @@ func TestDoHardening(t *testing.T) {
 			expectChanges: true,
 		},
 		{
-			name: "both installed - should not harden",
+			name: "graphiti not installed - should harden",
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    true,
 				LangfuseVolumesExist: true,
+				GraphitiInstalled:    false,
+				GraphitiVolumesExist: false,
+				PentagiInstalled:     true,
+				PentagiVolumesExist:  true,
+			},
+			setupVars: map[string]loader.EnvVar{
+				"NEO4J_PASSWORD": {Name: "NEO4J_PASSWORD", Value: "devpassword", Default: "devpassword"},
+			},
+			expectChanges: true,
+		},
+		{
+			name: "all installed - should not harden",
+			checkResult: checker.CheckResult{
+				LangfuseInstalled:    true,
+				LangfuseVolumesExist: true,
+				GraphitiInstalled:    true,
+				GraphitiVolumesExist: true,
 				PentagiInstalled:     true,
 				PentagiVolumesExist:  true,
 			},
@@ -561,15 +582,18 @@ func TestDoHardening(t *testing.T) {
 			expectChanges: false,
 		},
 		{
-			name: "neither installed - should harden both",
+			name: "none installed - should harden all",
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    false,
 				LangfuseVolumesExist: false,
+				GraphitiInstalled:    false,
+				GraphitiVolumesExist: false,
 				PentagiInstalled:     false,
 				PentagiVolumesExist:  false,
 			},
 			setupVars: map[string]loader.EnvVar{
 				"LANGFUSE_SALT":       {Name: "LANGFUSE_SALT", Value: "salt", Default: "salt"},
+				"NEO4J_PASSWORD":      {Name: "NEO4J_PASSWORD", Value: "devpassword", Default: "devpassword"},
 				"COOKIE_SIGNING_SALT": {Name: "COOKIE_SIGNING_SALT", Value: "salt", Default: "salt"},
 			},
 			expectChanges: true,
@@ -579,6 +603,8 @@ func TestDoHardening(t *testing.T) {
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    false,
 				LangfuseVolumesExist: false,
+				GraphitiInstalled:    true,
+				GraphitiVolumesExist: true,
 				PentagiInstalled:     true,
 				PentagiVolumesExist:  true,
 			},
@@ -592,6 +618,8 @@ func TestDoHardening(t *testing.T) {
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    false, // containers removed
 				LangfuseVolumesExist: true,  // but volumes remain!
+				GraphitiInstalled:    true,
+				GraphitiVolumesExist: true,
 				PentagiInstalled:     true,
 				PentagiVolumesExist:  true,
 			},
@@ -605,6 +633,8 @@ func TestDoHardening(t *testing.T) {
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    true,
 				LangfuseVolumesExist: true,
+				GraphitiInstalled:    true,
+				GraphitiVolumesExist: true,
 				PentagiInstalled:     false, // containers removed
 				PentagiVolumesExist:  true,  // but volumes remain!
 			},
@@ -614,15 +644,33 @@ func TestDoHardening(t *testing.T) {
 			expectChanges: false, // should NOT change because volumes exist
 		},
 		{
-			name: "containers removed but volumes remain for both - should NOT harden any",
+			name: "graphiti volumes exist but containers removed - should NOT harden",
+			checkResult: checker.CheckResult{
+				LangfuseInstalled:    true,
+				LangfuseVolumesExist: true,
+				GraphitiInstalled:    false, // containers removed
+				GraphitiVolumesExist: true,  // but volumes remain!
+				PentagiInstalled:     true,
+				PentagiVolumesExist:  true,
+			},
+			setupVars: map[string]loader.EnvVar{
+				"NEO4J_PASSWORD": {Name: "NEO4J_PASSWORD", Value: "devpassword", Default: "devpassword"},
+			},
+			expectChanges: false, // should NOT change because volumes exist
+		},
+		{
+			name: "containers removed but volumes remain for all - should NOT harden any",
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    false, // containers removed
 				LangfuseVolumesExist: true,  // volumes remain
+				GraphitiInstalled:    false, // containers removed
+				GraphitiVolumesExist: true,  // volumes remain
 				PentagiInstalled:     false, // containers removed
 				PentagiVolumesExist:  true,  // volumes remain
 			},
 			setupVars: map[string]loader.EnvVar{
 				"LANGFUSE_SALT":             {Name: "LANGFUSE_SALT", Value: "salt", Default: "salt"},
+				"NEO4J_PASSWORD":            {Name: "NEO4J_PASSWORD", Value: "devpassword", Default: "devpassword"},
 				"PENTAGI_POSTGRES_PASSWORD": {Name: "PENTAGI_POSTGRES_PASSWORD", Value: "postgres", Default: "postgres"},
 			},
 			expectChanges: false, // should NOT change anything
@@ -1211,6 +1259,8 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    false, // Should harden langfuse
 				LangfuseVolumesExist: false,
+				GraphitiInstalled:    true, // Should not harden graphiti
+				GraphitiVolumesExist: true,
 				PentagiInstalled:     true, // Should not harden pentagi
 				PentagiVolumesExist:  true,
 			},
@@ -1230,7 +1280,7 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 			expectedUnchangedVars: []string{
 				"COOKIE_SIGNING_SALT",
 				"PENTAGI_POSTGRES_PASSWORD",
-				"NEO4J_PASSWORD",
+				"NEO4J_PASSWORD", // Graphiti installed, should not harden
 				"LOCAL_SCRAPER_USERNAME",
 				"LOCAL_SCRAPER_PASSWORD",
 			},
@@ -1240,18 +1290,20 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    true, // Should not harden langfuse
 				LangfuseVolumesExist: true,
+				GraphitiInstalled:    true, // Should not harden graphiti
+				GraphitiVolumesExist: true,
 				PentagiInstalled:     false, // Should harden pentagi
 				PentagiVolumesExist:  false,
 			},
 			expectedHardenedVars: []string{
 				"COOKIE_SIGNING_SALT",
 				"PENTAGI_POSTGRES_PASSWORD",
-				"NEO4J_PASSWORD",
 				"LOCAL_SCRAPER_USERNAME",
 				"LOCAL_SCRAPER_PASSWORD",
 				"SCRAPER_PRIVATE_URL", // Should be updated if credentials are hardened
 			},
 			expectedUnchangedVars: []string{
+				"NEO4J_PASSWORD", // Graphiti installed, should not harden
 				"LANGFUSE_POSTGRES_PASSWORD",
 				"LANGFUSE_CLICKHOUSE_PASSWORD",
 				"LANGFUSE_S3_ACCESS_KEY_ID",
@@ -1259,10 +1311,34 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 			},
 		},
 		{
-			name: "harden both",
+			name: "harden graphiti only",
+			checkResult: checker.CheckResult{
+				LangfuseInstalled:    true, // Should not harden langfuse
+				LangfuseVolumesExist: true,
+				GraphitiInstalled:    false, // Should harden graphiti
+				GraphitiVolumesExist: false,
+				PentagiInstalled:     true, // Should not harden pentagi
+				PentagiVolumesExist:  true,
+			},
+			expectedHardenedVars: []string{
+				"NEO4J_PASSWORD",
+			},
+			expectedUnchangedVars: []string{
+				"COOKIE_SIGNING_SALT",
+				"PENTAGI_POSTGRES_PASSWORD",
+				"LOCAL_SCRAPER_USERNAME",
+				"LOCAL_SCRAPER_PASSWORD",
+				"LANGFUSE_POSTGRES_PASSWORD",
+				"LANGFUSE_CLICKHOUSE_PASSWORD",
+			},
+		},
+		{
+			name: "harden all stacks",
 			checkResult: checker.CheckResult{
 				LangfuseInstalled:    false, // Should harden langfuse
 				LangfuseVolumesExist: false,
+				GraphitiInstalled:    false, // Should harden graphiti
+				GraphitiVolumesExist: false,
 				PentagiInstalled:     false, // Should harden pentagi
 				PentagiVolumesExist:  false,
 			},
@@ -1270,10 +1346,11 @@ func TestDoHardening_IntegrationWithRealEnvFile(t *testing.T) {
 				// Pentagi vars
 				"COOKIE_SIGNING_SALT",
 				"PENTAGI_POSTGRES_PASSWORD",
-				"NEO4J_PASSWORD",
 				"LOCAL_SCRAPER_USERNAME",
 				"LOCAL_SCRAPER_PASSWORD",
 				"SCRAPER_PRIVATE_URL",
+				// Graphiti vars
+				"NEO4J_PASSWORD",
 				// Langfuse vars
 				"LANGFUSE_POSTGRES_PASSWORD",
 				"LANGFUSE_CLICKHOUSE_PASSWORD",

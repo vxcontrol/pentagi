@@ -3,9 +3,11 @@ package ollama
 import (
 	"context"
 	"embed"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"time"
 
 	"pentagi/pkg/config"
@@ -22,13 +24,16 @@ import (
 //go:embed config.yml
 var configFS embed.FS
 
-const OllamaAgentModel = "llama3.1:8b"
+const (
+	defaultPullTimeout    = 10 * time.Minute
+	defaultAPICallTimeout = 10 * time.Second
+)
 
 func BuildProviderConfig(cfg *config.Config, configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithN(1),
-		llms.WithMaxTokens(4000),
-		llms.WithModel(OllamaAgentModel),
+		llms.WithMaxTokens(8192),
+		llms.WithModel(cfg.OllamaServerModel),
 	}
 
 	providerConfig, err := pconfig.LoadConfigData(configData, defaultOptions)
@@ -57,20 +62,22 @@ func DefaultProviderConfig(cfg *config.Config) (*pconfig.ProviderConfig, error) 
 	return BuildProviderConfig(cfg, configData)
 }
 
-func loadModelsFromServer(serverURL string, httpClient *http.Client) pconfig.ModelsConfig {
+func newOllamaClient(serverURL string, httpClient *http.Client) (*api.Client, error) {
 	parsedURL, err := url.Parse(serverURL)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to parse Ollama server URL: %w", err)
 	}
 
-	client := api.NewClient(parsedURL, httpClient)
+	return api.NewClient(parsedURL, httpClient), nil
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+func loadAvailableModelsFromServer(client *api.Client) (pconfig.ModelsConfig, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultAPICallTimeout)
 	defer cancel()
 
 	response, err := client.List(ctx)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	var models pconfig.ModelsConfig
@@ -82,7 +89,56 @@ func loadModelsFromServer(serverURL string, httpClient *http.Client) pconfig.Mod
 		models = append(models, modelConfig)
 	}
 
+	return models, nil
+}
+
+func getConfigModelsList(baseModel string, providerConfig *pconfig.ProviderConfig) []string {
+	models := []string{baseModel}
+	modelsMap := make(map[string]bool)
+	modelsMap[baseModel] = true
+
+	configModels := providerConfig.GetModelsMap()
+
+	for _, model := range configModels {
+		if !modelsMap[model] {
+			models = append(models, model)
+			modelsMap[model] = true
+		}
+	}
+
+	slices.Sort(models)
+
 	return models
+}
+
+func ensureModelsAvailable(ctx context.Context, client *api.Client, models []string) error {
+	errs := make(chan error, len(models))
+	pullProgress := func(api.ProgressResponse) error { return nil }
+
+	for _, model := range models {
+		go func(model string) {
+			// fast path: if the model already exists locally, skip pulling
+			showCtx, cancelShow := context.WithTimeout(ctx, defaultAPICallTimeout)
+			defer cancelShow()
+
+			if _, err := client.Show(showCtx, &api.ShowRequest{Model: model}); err == nil {
+				// model exists locally, no need to pull
+				errs <- nil
+				return
+			}
+
+			// model doesn't exist, pull it from registry
+			errs <- client.Pull(ctx, &api.PullRequest{Model: model}, pullProgress)
+		}(model)
+	}
+
+	for range len(models) {
+		if err := <-errs; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type ollamaProvider struct {
@@ -98,25 +154,54 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		return nil, err
 	}
 
-	model := OllamaAgentModel
+	baseModel := cfg.OllamaServerModel
 	serverURL := cfg.OllamaServerURL
+	timeout := time.Duration(cfg.OllamaServerPullModelsTimeout) * time.Second
+	if timeout <= 0 {
+		timeout = defaultPullTimeout
+	}
+
+	apiClient, err := newOllamaClient(serverURL, httpClient)
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.OllamaServerPullModelsEnabled {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
+		configModels := getConfigModelsList(baseModel, providerConfig)
+		err = ensureModelsAvailable(ctx, apiClient, configModels)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	client, err := ollama.New(
 		ollama.WithServerURL(serverURL),
 		ollama.WithHTTPClient(httpClient),
-		ollama.WithModel(model),
-		ollama.WithPullModel(),
+		ollama.WithModel(baseModel),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	models := loadModelsFromServer(serverURL, httpClient)
+	availableModels := pconfig.ModelsConfig{
+		{
+			Name: baseModel,
+		},
+	}
+	if cfg.OllamaServerLoadModelsEnabled {
+		availableModels, err = loadAvailableModelsFromServer(apiClient)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return &ollamaProvider{
 		llm:            client,
-		model:          model,
-		models:         models,
+		model:          baseModel,
+		models:         availableModels,
 		providerConfig: providerConfig,
 	}, nil
 }
@@ -193,12 +278,27 @@ func (p *ollamaProvider) CallWithTools(
 
 func (p *ollamaProvider) GetUsage(info map[string]any) (int64, int64) {
 	var inputTokens, outputTokens int64
+
 	if value, ok := info["PromptTokens"]; ok {
-		inputTokens = int64(value.(int))
+		switch v := value.(type) {
+		case int:
+			inputTokens = int64(v)
+		case int64:
+			inputTokens = v
+		case float64:
+			inputTokens = int64(v)
+		}
 	}
 
 	if value, ok := info["CompletionTokens"]; ok {
-		outputTokens = int64(value.(int))
+		switch v := value.(type) {
+		case int:
+			outputTokens = int64(v)
+		case int64:
+			outputTokens = v
+		case float64:
+			outputTokens = int64(v)
+		}
 	}
 
 	return inputTokens, outputTokens

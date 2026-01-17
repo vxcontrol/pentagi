@@ -461,7 +461,13 @@ These settings control the integration with various Large Language Model (LLM) p
 | Option | Environment Variable | Default Value | Description |
 |--------|---------------------|---------------|-------------|
 | OllamaServerURL | `OLLAMA_SERVER_URL` | *(none)* | Server URL for Ollama API requests |
+| OllamaServerModel | `OLLAMA_SERVER_MODEL` | `llama3.1:8b-instruct-q8_0` | Default model to use for inference |
 | OllamaServerConfig | `OLLAMA_SERVER_CONFIG_PATH` | *(none)* | Path to config file for Ollama provider options |
+| OllamaServerPullModelsTimeout | `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600` | Timeout in seconds for model downloads |
+| OllamaServerPullModelsEnabled | `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false` | Automatically download required models on startup |
+| OllamaServerLoadModelsEnabled | `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false` | Load available models list from server API |
+
+**Note:** When `OllamaServerLoadModelsEnabled=false`, only the default model is available. Enable this to see all installed models in the UI.
 
 ### Google AI (Gemini) LLM Provider
 

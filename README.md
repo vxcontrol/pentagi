@@ -558,7 +558,14 @@ mkdir pentagi && cd pentagi
 curl -o .env https://raw.githubusercontent.com/vxcontrol/pentagi/master/.env.example
 ```
 
-3. Fill in the required API keys in `.env` file.
+3. Touch examples files (`example.custom.provider.yml`, `example.ollama.provider.yml`) or download it:
+
+```bash
+curl -o example.custom.provider.yml https://raw.githubusercontent.com/vxcontrol/pentagi/master/examples/configs/custom-openai.provider.yml
+curl -o example.ollama.provider.yml https://raw.githubusercontent.com/vxcontrol/pentagi/master/examples/configs/ollama-llama318b.provider.yml
+```
+
+4. Fill in the required API keys in `.env` file.
 
 ```bash
 # Required: At least one of these LLM providers
@@ -573,6 +580,7 @@ BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
 
 # Optional: Local LLM provider (zero-cost inference)
 OLLAMA_SERVER_URL=http://localhost:11434
+OLLAMA_SERVER_MODEL=your_model_name
 
 # Optional: Additional search capabilities
 DUCKDUCKGO_ENABLED=true
@@ -607,7 +615,7 @@ NEO4J_URI=bolt://neo4j:7687
 ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating new assistants
 ```
 
-4. Change all security related environment variables in `.env` file to improve security.
+5. Change all security related environment variables in `.env` file to improve security.
 
 <details>
     <summary>Security related environment variables</summary>
@@ -627,13 +635,13 @@ ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating
 
 </details>
 
-5. Remove all inline comments from `.env` file if you want to use it in VSCode or other IDEs as a envFile option:
+6. Remove all inline comments from `.env` file if you want to use it in VSCode or other IDEs as a envFile option:
 
 ```bash
 perl -i -pe 's/\s+#.*$//' .env
 ```
 
-6. Run the PentAGI stack:
+7. Run the PentAGI stack:
 
 ```bash
 curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose.yml
@@ -692,25 +700,38 @@ PentAGI supports Ollama for local LLM inference, providing zero-cost operation a
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_SERVER_URL` | | URL of your Ollama server |
+| `OLLAMA_SERVER_MODEL` | `llama3.1:8b-instruct-q8_0` | Default model for inference |
 | `OLLAMA_SERVER_CONFIG_PATH` | | Path to custom agent configuration file |
+| `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600` | Timeout for model downloads (seconds) |
+| `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false` | Auto-download models on startup |
+| `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false` | Query server for available models |
 
 Configuration examples:
 
 ```bash
-# Basic Ollama setup
+# Basic Ollama setup with default model
 OLLAMA_SERVER_URL=http://localhost:11434
+OLLAMA_SERVER_MODEL=llama3.1:8b-instruct-q8_0
 
-# Remote Ollama server
+# Production setup with auto-pull and model discovery
 OLLAMA_SERVER_URL=http://ollama-server:11434
+OLLAMA_SERVER_PULL_MODELS_ENABLED=true
+OLLAMA_SERVER_PULL_MODELS_TIMEOUT=900
+OLLAMA_SERVER_LOAD_MODELS_ENABLED=true
 
 # Custom configuration with agent-specific models
 OLLAMA_SERVER_CONFIG_PATH=/path/to/ollama-config.yml
 
-# Default configuration file inside the docker container (just for example)
+# Default configuration file inside docker container
 OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
 ```
 
-The system automatically discovers available models from your Ollama server and provides zero-cost inference for penetration testing workflows.
+**Performance Considerations:**
+
+- **Model Discovery** (`OLLAMA_SERVER_LOAD_MODELS_ENABLED=true`): Adds 1-2s startup latency querying Ollama API
+- **Auto-pull** (`OLLAMA_SERVER_PULL_MODELS_ENABLED=true`): First startup may take several minutes downloading models
+- **Pull timeout** (`OLLAMA_SERVER_PULL_MODELS_TIMEOUT=900`): 15 minutes in seconds
+- **Static Config**: Disable both flags and specify models in config file for fastest startup
 
 #### Creating Custom Ollama Models with Extended Context
 
@@ -1410,8 +1431,11 @@ BEDROCK_SESSION_TOKEN=your_aws_session_token     # AWS session token (alternativ
 BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint
 
 # For Ollama (local inference)
-OLLAMA_SERVER_URL=http://localhost:11434         # Your Ollama server URL (only for test run)
-OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml  # or ollama-qwen332b-fp16-tc.provider.yml or ollama-qwq32b-fp16-tc.provider.yml
+OLLAMA_SERVER_URL=http://localhost:11434
+OLLAMA_SERVER_MODEL=llama3.1:8b-instruct-q8_0
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
+OLLAMA_SERVER_PULL_MODELS_ENABLED=false
+OLLAMA_SERVER_LOAD_MODELS_ENABLED=false
 ```
 
 #### Using OpenAI with Unverified Organizations

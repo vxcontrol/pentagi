@@ -188,12 +188,31 @@ func (p *bedrockProvider) CallWithTools(
 
 func (p *bedrockProvider) GetUsage(info map[string]any) (int64, int64) {
 	var inputTokens, outputTokens int64
+
 	if value, ok := info["input_tokens"]; ok {
-		inputTokens = int64(value.(int32))
+		switch v := value.(type) {
+		case int:
+			inputTokens = int64(v)
+		case int32:
+			inputTokens = int64(v)
+		case int64:
+			inputTokens = v
+		case float64:
+			inputTokens = int64(v)
+		}
 	}
 
 	if value, ok := info["output_tokens"]; ok {
-		outputTokens = int64(value.(int32))
+		switch v := value.(type) {
+		case int:
+			outputTokens = int64(v)
+		case int32:
+			outputTokens = int64(v)
+		case int64:
+			outputTokens = v
+		case float64:
+			outputTokens = int64(v)
+		}
 	}
 
 	return inputTokens, outputTokens

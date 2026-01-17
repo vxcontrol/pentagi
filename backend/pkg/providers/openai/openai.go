@@ -159,12 +159,27 @@ func (p *openaiProvider) CallWithTools(
 
 func (p *openaiProvider) GetUsage(info map[string]any) (int64, int64) {
 	var inputTokens, outputTokens int64
+
 	if value, ok := info["PromptTokens"]; ok {
-		inputTokens = int64(value.(int))
+		switch v := value.(type) {
+		case int:
+			inputTokens = int64(v)
+		case int64:
+			inputTokens = v
+		case float64:
+			inputTokens = int64(v)
+		}
 	}
 
 	if value, ok := info["CompletionTokens"]; ok {
-		outputTokens = int64(value.(int))
+		switch v := value.(type) {
+		case int:
+			outputTokens = int64(v)
+		case int64:
+			outputTokens = v
+		case float64:
+			outputTokens = int64(v)
+		}
 	}
 
 	return inputTokens, outputTokens
