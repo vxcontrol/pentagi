@@ -87,6 +87,16 @@ definitions:
         type: string
       type: array
     type: object
+  models.AgentTypeUsageStats:
+    properties:
+      agent_type:
+        type: string
+      stats:
+        $ref: '#/definitions/models.UsageStats'
+    required:
+    - agent_type
+    - stats
+    type: object
   models.Agentlog:
     properties:
       created_at:
@@ -301,6 +311,36 @@ definitions:
     - input
     - provider
     type: object
+  models.DailyFlowsStats:
+    properties:
+      date:
+        type: string
+      stats:
+        $ref: '#/definitions/models.FlowsStats'
+    required:
+    - date
+    - stats
+    type: object
+  models.DailyToolcallsStats:
+    properties:
+      date:
+        type: string
+      stats:
+        $ref: '#/definitions/models.ToolcallsStats'
+    required:
+    - date
+    - stats
+    type: object
+  models.DailyUsageStats:
+    properties:
+      date:
+        type: string
+      stats:
+        $ref: '#/definitions/models.UsageStats'
+    required:
+    - date
+    - stats
+    type: object
   models.Flow:
     properties:
       created_at:
@@ -339,6 +379,41 @@ definitions:
     - model_provider_type
     - status
     - title
+    type: object
+  models.FlowExecutionStats:
+    properties:
+      flow_id:
+        minimum: 0
+        type: integer
+      flow_title:
+        type: string
+      tasks:
+        items:
+          $ref: '#/definitions/models.TaskExecutionStats'
+        type: array
+      total_assistants_count:
+        minimum: 0
+        type: integer
+      total_duration_seconds:
+        minimum: 0
+        type: number
+      total_toolcalls_count:
+        minimum: 0
+        type: integer
+    required:
+    - flow_title
+    type: object
+  models.FlowStats:
+    properties:
+      total_assistants_count:
+        minimum: 0
+        type: integer
+      total_subtasks_count:
+        minimum: 0
+        type: integer
+      total_tasks_count:
+        minimum: 0
+        type: integer
     type: object
   models.FlowTasksSubtasks:
     properties:
@@ -384,6 +459,63 @@ definitions:
     - tasks
     - title
     type: object
+  models.FlowUsageResponse:
+    properties:
+      flow_id:
+        minimum: 0
+        type: integer
+      flow_stats_by_flow:
+        $ref: '#/definitions/models.FlowStats'
+      toolcalls_stats_by_flow:
+        $ref: '#/definitions/models.ToolcallsStats'
+      toolcalls_stats_by_function_for_flow:
+        items:
+          $ref: '#/definitions/models.FunctionToolcallsStats'
+        type: array
+      usage_stats_by_agent_type_for_flow:
+        items:
+          $ref: '#/definitions/models.AgentTypeUsageStats'
+        type: array
+      usage_stats_by_flow:
+        $ref: '#/definitions/models.UsageStats'
+    required:
+    - flow_stats_by_flow
+    - toolcalls_stats_by_flow
+    - usage_stats_by_flow
+    type: object
+  models.FlowsStats:
+    properties:
+      total_assistants_count:
+        minimum: 0
+        type: integer
+      total_flows_count:
+        minimum: 0
+        type: integer
+      total_subtasks_count:
+        minimum: 0
+        type: integer
+      total_tasks_count:
+        minimum: 0
+        type: integer
+    type: object
+  models.FunctionToolcallsStats:
+    properties:
+      avg_duration_seconds:
+        minimum: 0
+        type: number
+      function_name:
+        type: string
+      is_agent:
+        type: boolean
+      total_count:
+        minimum: 0
+        type: integer
+      total_duration_seconds:
+        minimum: 0
+        type: number
+    required:
+    - function_name
+    type: object
   models.Login:
     properties:
       mail:
@@ -396,6 +528,19 @@ definitions:
     required:
     - mail
     - password
+    type: object
+  models.ModelUsageStats:
+    properties:
+      model:
+        type: string
+      provider:
+        type: string
+      stats:
+        $ref: '#/definitions/models.UsageStats'
+    required:
+    - model
+    - provider
+    - stats
     type: object
   models.Msglog:
     properties:
@@ -480,6 +625,29 @@ definitions:
     required:
     - prompt
     type: object
+  models.PeriodUsageResponse:
+    properties:
+      flows_execution_stats_by_period:
+        items:
+          $ref: '#/definitions/models.FlowExecutionStats'
+        type: array
+      flows_stats_by_period:
+        items:
+          $ref: '#/definitions/models.DailyFlowsStats'
+        type: array
+      period:
+        type: string
+      toolcalls_stats_by_period:
+        items:
+          $ref: '#/definitions/models.DailyToolcallsStats'
+        type: array
+      usage_stats_by_period:
+        items:
+          $ref: '#/definitions/models.DailyUsageStats'
+        type: array
+    required:
+    - period
+    type: object
   models.Privilege:
     properties:
       id:
@@ -555,6 +723,16 @@ definitions:
     required:
     - name
     - type
+    type: object
+  models.ProviderUsageStats:
+    properties:
+      provider:
+        type: string
+      stats:
+        $ref: '#/definitions/models.UsageStats'
+    required:
+    - provider
+    - stats
     type: object
   models.Role:
     properties:
@@ -665,6 +843,51 @@ definitions:
     - status
     - title
     type: object
+  models.SubtaskExecutionStats:
+    properties:
+      subtask_id:
+        minimum: 0
+        type: integer
+      subtask_title:
+        type: string
+      total_duration_seconds:
+        minimum: 0
+        type: number
+      total_toolcalls_count:
+        minimum: 0
+        type: integer
+    required:
+    - subtask_title
+    type: object
+  models.SystemUsageResponse:
+    properties:
+      flows_stats_total:
+        $ref: '#/definitions/models.FlowsStats'
+      toolcalls_stats_by_function:
+        items:
+          $ref: '#/definitions/models.FunctionToolcallsStats'
+        type: array
+      toolcalls_stats_total:
+        $ref: '#/definitions/models.ToolcallsStats'
+      usage_stats_by_agent_type:
+        items:
+          $ref: '#/definitions/models.AgentTypeUsageStats'
+        type: array
+      usage_stats_by_model:
+        items:
+          $ref: '#/definitions/models.ModelUsageStats'
+        type: array
+      usage_stats_by_provider:
+        items:
+          $ref: '#/definitions/models.ProviderUsageStats'
+        type: array
+      usage_stats_total:
+        $ref: '#/definitions/models.UsageStats'
+    required:
+    - flows_stats_total
+    - toolcalls_stats_total
+    - usage_stats_total
+    type: object
   models.Task:
     properties:
       created_at:
@@ -689,6 +912,26 @@ definitions:
     - input
     - status
     - title
+    type: object
+  models.TaskExecutionStats:
+    properties:
+      subtasks:
+        items:
+          $ref: '#/definitions/models.SubtaskExecutionStats'
+        type: array
+      task_id:
+        minimum: 0
+        type: integer
+      task_title:
+        type: string
+      total_duration_seconds:
+        minimum: 0
+        type: number
+      total_toolcalls_count:
+        minimum: 0
+        type: integer
+    required:
+    - task_title
     type: object
   models.TaskSubtasks:
     properties:
@@ -748,6 +991,36 @@ definitions:
     - flow_id
     - text
     - type
+    type: object
+  models.ToolcallsStats:
+    properties:
+      total_count:
+        minimum: 0
+        type: integer
+      total_duration_seconds:
+        minimum: 0
+        type: number
+    type: object
+  models.UsageStats:
+    properties:
+      total_usage_cache_in:
+        minimum: 0
+        type: integer
+      total_usage_cache_out:
+        minimum: 0
+        type: integer
+      total_usage_cost_in:
+        minimum: 0
+        type: number
+      total_usage_cost_out:
+        minimum: 0
+        type: number
+      total_usage_in:
+        minimum: 0
+        type: integer
+      total_usage_out:
+        minimum: 0
+        type: integer
     type: object
   models.User:
     properties:
@@ -3155,6 +3428,48 @@ paths:
       summary: Retrieve termlogs list by flow id
       tags:
       - Termlogs
+  /flows/{flowID}/usage:
+    get:
+      description: Get comprehensive analytics for a single flow including all breakdowns
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow analytics received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.FlowUsageResponse'
+              type: object
+        "400":
+          description: invalid flow id
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flow analytics not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow analytics
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve analytics for specific flow
+      tags:
+      - Flows
+      - Usage
   /flows/{flowID}/vecstorelogs/:
     get:
       parameters:
@@ -3994,6 +4309,73 @@ paths:
       summary: Create new JWT token to use it into automation connections
       tags:
       - Proto
+  /usage:
+    get:
+      description: Get comprehensive analytics for all user's flows including usage,
+        toolcalls, and structural stats
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: analytics received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.SystemUsageResponse'
+              type: object
+        "403":
+          description: getting analytics not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting analytics
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve system-wide analytics
+      tags:
+      - Usage
+  /usage/{period}:
+    get:
+      description: Get time-series analytics data for week, month, or quarter
+      parameters:
+      - description: period
+        enum:
+        - week
+        - month
+        - quarter
+        in: path
+        name: period
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: period analytics received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.PeriodUsageResponse'
+              type: object
+        "400":
+          description: invalid period parameter
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting analytics not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting analytics
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Retrieve analytics for specific time period
+      tags:
+      - Usage
   /user/:
     get:
       produces:
