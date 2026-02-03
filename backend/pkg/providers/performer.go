@@ -778,16 +778,22 @@ func (fp *flowProvider) storeAgentResponseToGraphiti(
 		return
 	}
 
+	parts := []string{fmt.Sprintf("PentAGI %s agent execution in flow %d", agentType, fp.flowID)}
+	if taskID != nil {
+		parts = append(parts, fmt.Sprintf("task %d", *taskID))
+	}
+	if subtaskID != nil {
+		parts = append(parts, fmt.Sprintf("subtask %d", *subtaskID))
+	}
+	sourceDescription := strings.Join(parts, ", ")
+
 	messages := []graphiti.Message{
 		{
-			Content:   content,
-			Author:    fmt.Sprintf("%s Agent", string(agentType)),
-			Timestamp: time.Now(),
-			Name:      "agent_response",
-			SourceDescription: fmt.Sprintf(
-				"Pentagi %s agent execution in flow %d, task %v, subtask %v",
-				agentType, fp.flowID, taskID, subtaskID,
-			),
+			Content:           content,
+			Author:            fmt.Sprintf("%s Agent", string(agentType)),
+			Timestamp:         time.Now(),
+			Name:              "agent_response",
+			SourceDescription: sourceDescription,
 		},
 	}
 	logrus.WithField("messages", messages).Debug("storing agent response to graphiti")
@@ -854,16 +860,22 @@ func (fp *flowProvider) storeToolExecutionToGraphiti(
 		return
 	}
 
+	parts := []string{fmt.Sprintf("PentAGI tool execution in flow %d", fp.flowID)}
+	if taskID != nil {
+		parts = append(parts, fmt.Sprintf("task %d", *taskID))
+	}
+	if subtaskID != nil {
+		parts = append(parts, fmt.Sprintf("subtask %d", *subtaskID))
+	}
+	sourceDescription := strings.Join(parts, ", ")
+
 	messages := []graphiti.Message{
 		{
-			Content:   toolExecContent,
-			Author:    fmt.Sprintf("%s Agent", string(agentType)),
-			Timestamp: time.Now(),
-			Name:      fmt.Sprintf("tool_execution_%s", funcName),
-			SourceDescription: fmt.Sprintf(
-				"Pentagi tool execution in flow %d, task %v, subtask %v",
-				fp.flowID, taskID, subtaskID,
-			),
+			Content:           toolExecContent,
+			Author:            fmt.Sprintf("%s Agent", string(agentType)),
+			Timestamp:         time.Now(),
+			Name:              fmt.Sprintf("tool_execution_%s", funcName),
+			SourceDescription: sourceDescription,
 		},
 	}
 
