@@ -66,6 +66,7 @@ type Summarizer interface {
 		ctx context.Context,
 		handler tools.SummarizeHandler,
 		chain []llms.MessageContent,
+		tcIDTemplate string,
 	) ([]llms.MessageContent, error)
 }
 
@@ -107,6 +108,7 @@ func (s *summarizer) SummarizeChain(
 	ctx context.Context,
 	handler tools.SummarizeHandler,
 	chain []llms.MessageContent,
+	tcIDTemplate string,
 ) ([]llms.MessageContent, error) {
 	// Skip summarization for empty chains
 	if len(chain) == 0 {
@@ -124,7 +126,7 @@ func (s *summarizer) SummarizeChain(
 	cfg := s.config
 
 	// 0. All sections except last N should have exactly one Completion body pair
-	err = summarizeSections(ctx, ast, handler, cfg.KeepQASections)
+	err = summarizeSections(ctx, ast, handler, cfg.KeepQASections, tcIDTemplate)
 	if err != nil {
 		return chain, fmt.Errorf("failed to summarize sections: %w", err)
 	}
@@ -135,7 +137,7 @@ func (s *summarizer) SummarizeChain(
 		lastSectionIndexLeft := len(ast.Sections) - 1
 		lastSectionIndexRight := len(ast.Sections) - cfg.KeepQASections
 		for sdx := lastSectionIndexLeft; sdx >= lastSectionIndexRight && sdx >= 0; sdx-- {
-			err = summarizeLastSection(ctx, ast, handler, sdx, cfg.LastSecBytes, cfg.MaxBPBytes, percent)
+			err = summarizeLastSection(ctx, ast, handler, sdx, cfg.LastSecBytes, cfg.MaxBPBytes, percent, tcIDTemplate)
 			if err != nil {
 				return chain, fmt.Errorf("failed to summarize last section %d: %w", sdx, err)
 			}
@@ -144,7 +146,7 @@ func (s *summarizer) SummarizeChain(
 
 	// 2. QA-pair summarization - focus on question-answer sections
 	if cfg.UseQA {
-		err = summarizeQAPairs(ctx, ast, handler, cfg.MaxQASections, cfg.MaxQABytes, cfg.SummHumanInQA)
+		err = summarizeQAPairs(ctx, ast, handler, cfg.MaxQASections, cfg.MaxQABytes, cfg.SummHumanInQA, tcIDTemplate)
 		if err != nil {
 			return chain, fmt.Errorf("failed to summarize QA pairs: %w", err)
 		}
@@ -160,6 +162,7 @@ func summarizeSections(
 	ast *cast.ChainAST,
 	handler tools.SummarizeHandler,
 	keepQASections int,
+	tcIDTemplate string,
 ) error {
 	// Concurrent processing of sections summarization
 	mx := sync.Mutex{}
@@ -209,7 +212,7 @@ func summarizeSections(
 			var summaryPair *cast.BodyPair
 			switch t := determineTypeToSummarizedSection(section); t {
 			case cast.Summarization:
-				summaryPair = cast.NewBodyPairFromSummarization(summaryText)
+				summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate)
 			case cast.Completion:
 				summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 			default:
@@ -251,6 +254,7 @@ func summarizeLastSection(
 	maxLastSectionBytes int,
 	maxSingleBodyPairBytes int,
 	reservePercent int,
+	tcIDTemplate string,
 ) error {
 	// Prevent out of bounds access
 	if numLastSection >= len(ast.Sections) || numLastSection < 0 {
@@ -260,7 +264,7 @@ func summarizeLastSection(
 	lastSection := ast.Sections[numLastSection]
 
 	// 1. First, handle oversized individual body pairs
-	err := summarizeOversizedBodyPairs(ctx, lastSection, handler, maxSingleBodyPairBytes)
+	err := summarizeOversizedBodyPairs(ctx, lastSection, handler, maxSingleBodyPairBytes, tcIDTemplate)
 	if err != nil {
 		return fmt.Errorf("failed to summarize oversized body pairs: %w", err)
 	}
@@ -300,7 +304,7 @@ func summarizeLastSection(
 		sectionToSummarize := cast.NewChainSection(lastSection.Header, pairsToSummarize)
 		switch t := determineTypeToSummarizedSection(sectionToSummarize); t {
 		case cast.Summarization:
-			summaryPair = cast.NewBodyPairFromSummarization(summaryText)
+			summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate)
 		case cast.Completion:
 			summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 		default:
@@ -359,6 +363,7 @@ func summarizeOversizedBodyPairs(
 	section *cast.ChainSection,
 	handler tools.SummarizeHandler,
 	maxBodyPairBytes int,
+	tcIDTemplate string,
 ) error {
 	if len(section.Body) == 0 {
 		return nil
@@ -371,8 +376,15 @@ func summarizeOversizedBodyPairs(
 	// Map of body pairs that have been summarized
 	bodyPairsSummarized := make(map[int]*cast.BodyPair)
 
-	// Process each body pair
+	// Process each body pair except the last one
+	// The last body pair should never be summarized to preserve reasoning signatures
+	// which are critical for providers like Gemini (thought_signature requirement)
 	for i, pair := range section.Body {
+		// Always skip the last body pair to preserve reasoning signatures
+		if i == len(section.Body)-1 {
+			continue
+		}
+
 		// Skip pairs that are already summarized content or under the size limit
 		if pair.Size() <= maxBodyPairBytes || containsSummarizedContent(pair) {
 			continue
@@ -407,7 +419,7 @@ func summarizeOversizedBodyPairs(
 			// If the pair is a Completion, we need to create a new Completion pair
 			// If the pair is a RequestResponse, we need to create a new Summarization pair
 			if pair.Type == cast.RequestResponse {
-				bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText)
+				bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate)
 			} else {
 				bodyPairsSummarized[i] = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 			}
@@ -470,6 +482,7 @@ func summarizeQAPairs(
 	maxQASections int,
 	maxQABytes int,
 	summarizeHuman bool,
+	tcIDTemplate string,
 ) error {
 	// Skip if limits aren't exceeded
 	if !exceedsQASectionLimits(ast, maxQASections, maxQABytes) {
@@ -516,7 +529,7 @@ func summarizeQAPairs(
 	sectionsToSummarize := ast.Sections[:len(ast.Sections)-sectionsToKeep]
 	switch t := determineTypeToSummarizedSections(sectionsToSummarize); t {
 	case cast.Summarization:
-		summaryPair = cast.NewBodyPairFromSummarization(aiSummary)
+		summaryPair = cast.NewBodyPairFromSummarization(aiSummary, tcIDTemplate)
 	case cast.Completion:
 		summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + aiSummary)
 	default:
@@ -679,7 +692,9 @@ func determineLastSectionPairs(
 
 	// To ensure we have at least some pairs, if there are any
 	if len(section.Body) > 0 {
-		// Always keep the last (most recent) pair
+		// CRITICAL: Always keep the last (most recent) pair without summarization
+		// This preserves reasoning signatures required by providers like Gemini
+		// (thought_signature) and Anthropic (cryptographic signatures)
 		pairsToKeep = make([]*cast.BodyPair, 0, len(section.Body))
 		lastPair := section.Body[len(section.Body)-1]
 		pairsToKeep = append(pairsToKeep, lastPair)

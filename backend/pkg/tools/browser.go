@@ -40,20 +40,24 @@ var localZones = []string{
 }
 
 type browser struct {
-	flowID   int64
-	dataDir  string
-	scPrvURL string
-	scPubURL string
-	scp      ScreenshotProvider
+	flowID    int64
+	taskID    *int64
+	subtaskID *int64
+	dataDir   string
+	scPrvURL  string
+	scPubURL  string
+	scp       ScreenshotProvider
 }
 
-func NewBrowserTool(flowID int64, dataDir, scPrvURL, scPubURL string, scp ScreenshotProvider) Tool {
+func NewBrowserTool(flowID int64, taskID, subtaskID *int64, dataDir, scPrvURL, scPubURL string, scp ScreenshotProvider) Tool {
 	return &browser{
-		flowID:   flowID,
-		dataDir:  dataDir,
-		scPrvURL: scPrvURL,
-		scPubURL: scPubURL,
-		scp:      scp,
+		flowID:    flowID,
+		taskID:    taskID,
+		subtaskID: subtaskID,
+		dataDir:   dataDir,
+		scPrvURL:  scPrvURL,
+		scPubURL:  scPubURL,
+		scp:       scp,
 	}
 }
 
@@ -67,7 +71,7 @@ func (b *browser) wrapCommandResult(ctx context.Context, name, result, url, scre
 		}).Error("browser tool failed")
 		return fmt.Sprintf("browser tool '%s' handled with error: %v", name, err), nil
 	}
-	_, _ = b.scp.PutScreenshot(ctx, screen, url)
+	_, _ = b.scp.PutScreenshot(ctx, screen, url, b.taskID, b.subtaskID)
 	return result, nil
 }
 

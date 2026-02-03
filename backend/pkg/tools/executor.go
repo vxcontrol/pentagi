@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"text/template"
+	"time"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/schema"
@@ -61,6 +62,8 @@ func (ce *customExecutor) Execute(
 	id, name, thinking string,
 	args json.RawMessage,
 ) (string, error) {
+	startTime := time.Now()
+
 	handler, ok := ce.handlers[name]
 	if !ok {
 		return fmt.Sprintf("function '%s' not found in available tools list", name), nil
@@ -98,9 +101,11 @@ func (ce *customExecutor) Execute(
 		resultFormat := getMessageResultFormat(name)
 		result, err := handler(ctx, name, args)
 		if err != nil {
+			durationDelta := time.Since(startTime).Seconds()
 			_, _ = ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
-				Result: fmt.Sprintf("failed to execute handler: %s", err.Error()),
-				ID:     tc.ID,
+				Result:          fmt.Sprintf("failed to execute handler: %s", err.Error()),
+				DurationSeconds: durationDelta,
+				ID:              tc.ID,
 			})
 			return "", resultFormat, fmt.Errorf("failed to execute handler: %w", err)
 		}
@@ -114,18 +119,22 @@ func (ce *customExecutor) Execute(
 			}
 			result, err = ce.summarizer(ctx, summarizePrompt)
 			if err != nil {
+				durationDelta := time.Since(startTime).Seconds()
 				_, _ = ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
-					Result: fmt.Sprintf("failed to summarize result: %s", err.Error()),
-					ID:     tc.ID,
+					Result:          fmt.Sprintf("failed to summarize result: %s", err.Error()),
+					DurationSeconds: durationDelta,
+					ID:              tc.ID,
 				})
 				return "", resultFormat, fmt.Errorf("failed to summarize result: %w", err)
 			}
 			resultFormat = database.MsglogResultFormatMarkdown
 		}
 
+		durationDelta := time.Since(startTime).Seconds()
 		_, err = ce.db.UpdateToolcallFinishedResult(ctx, database.UpdateToolcallFinishedResultParams{
-			Result: result,
-			ID:     tc.ID,
+			Result:          result,
+			DurationSeconds: durationDelta,
+			ID:              tc.ID,
 		})
 		if err != nil {
 			return "", resultFormat, fmt.Errorf("failed to update toolcall result: %w", err)

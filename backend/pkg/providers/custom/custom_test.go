@@ -1,6 +1,7 @@
 package custom
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -564,5 +565,342 @@ func TestProviderModelsIntegration(t *testing.T) {
 		if model2.Price.Output != 2000.0 {
 			t.Errorf("Expected output price 2000.0, got %f", model2.Price.Output)
 		}
+	}
+}
+
+func TestPatchProviderConfigWithProviderName(t *testing.T) {
+	tests := []struct {
+		name         string
+		configData   string
+		providerName string
+		validate     func(*testing.T, []byte)
+		description  string
+	}{
+		{
+			name:         "empty provider name returns original data",
+			providerName: "",
+			configData: `{
+				"simple": {"model": "gpt-4"},
+				"assistant": {"model": "claude-3"}
+			}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				if config.Simple.Model != "gpt-4" {
+					t.Errorf("Expected model 'gpt-4', got '%s'", config.Simple.Model)
+				}
+				if config.Assistant.Model != "claude-3" {
+					t.Errorf("Expected model 'claude-3', got '%s'", config.Assistant.Model)
+				}
+			},
+			description: "should return original data when provider name is empty",
+		},
+		{
+			name:         "patch JSON config with multiple agents",
+			providerName: "openrouter",
+			configData: `{
+				"simple": {"model": "gpt-4o", "temperature": 0.7},
+				"assistant": {"model": "claude-3-sonnet", "max_tokens": 4096},
+				"generator": {"model": "gemini-pro"},
+				"coder": {"model": "deepseek-coder"}
+			}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				if config.Simple.Model != "openrouter/gpt-4o" {
+					t.Errorf("Expected 'openrouter/gpt-4o', got '%s'", config.Simple.Model)
+				}
+				if config.Assistant.Model != "openrouter/claude-3-sonnet" {
+					t.Errorf("Expected 'openrouter/claude-3-sonnet', got '%s'", config.Assistant.Model)
+				}
+				if config.Generator.Model != "openrouter/gemini-pro" {
+					t.Errorf("Expected 'openrouter/gemini-pro', got '%s'", config.Generator.Model)
+				}
+				if config.Coder.Model != "openrouter/deepseek-coder" {
+					t.Errorf("Expected 'openrouter/deepseek-coder', got '%s'", config.Coder.Model)
+				}
+				// Verify other parameters are preserved
+				if config.Simple.Temperature != 0.7 {
+					t.Errorf("Expected temperature 0.7, got %f", config.Simple.Temperature)
+				}
+				if config.Assistant.MaxTokens != 4096 {
+					t.Errorf("Expected max_tokens 4096, got %d", config.Assistant.MaxTokens)
+				}
+			},
+			description: "should patch all agent models with provider prefix",
+		},
+		{
+			name:         "patch YAML config",
+			providerName: "anthropic",
+			configData: `
+simple:
+  model: claude-3-opus
+  temperature: 0.5
+refiner:
+  model: claude-3-sonnet
+  max_tokens: 2048
+`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				if config.Simple.Model != "anthropic/claude-3-opus" {
+					t.Errorf("Expected 'anthropic/claude-3-opus', got '%s'", config.Simple.Model)
+				}
+				if config.Refiner.Model != "anthropic/claude-3-sonnet" {
+					t.Errorf("Expected 'anthropic/claude-3-sonnet', got '%s'", config.Refiner.Model)
+				}
+			},
+			description: "should parse YAML and patch model names",
+		},
+		{
+			name:         "agents with empty model names should not be patched",
+			providerName: "provider",
+			configData: `{
+				"simple": {"model": "", "temperature": 0.9},
+				"assistant": {"model": "gpt-4"},
+				"generator": {"temperature": 0.5}
+			}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				if config.Simple.Model != "" {
+					t.Errorf("Expected empty model, got '%s'", config.Simple.Model)
+				}
+				if config.Assistant.Model != "provider/gpt-4" {
+					t.Errorf("Expected 'provider/gpt-4', got '%s'", config.Assistant.Model)
+				}
+				if config.Generator.Model != "" {
+					t.Errorf("Expected empty model, got '%s'", config.Generator.Model)
+				}
+			},
+			description: "should not add prefix to empty model names",
+		},
+		{
+			name:         "all agent types are patched",
+			providerName: "test",
+			configData: `{
+				"simple": {"model": "m1"},
+				"simple_json": {"model": "m2"},
+				"primary_agent": {"model": "m3"},
+				"assistant": {"model": "m4"},
+				"generator": {"model": "m5"},
+				"refiner": {"model": "m6"},
+				"adviser": {"model": "m7"},
+				"reflector": {"model": "m8"},
+				"searcher": {"model": "m9"},
+				"enricher": {"model": "m10"},
+				"coder": {"model": "m11"},
+				"installer": {"model": "m12"},
+				"pentester": {"model": "m13"}
+			}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				expectedModels := map[string]string{
+					"simple":        "test/m1",
+					"simple_json":   "test/m2",
+					"primary_agent": "test/m3",
+					"assistant":     "test/m4",
+					"generator":     "test/m5",
+					"refiner":       "test/m6",
+					"adviser":       "test/m7",
+					"reflector":     "test/m8",
+					"searcher":      "test/m9",
+					"enricher":      "test/m10",
+					"coder":         "test/m11",
+					"installer":     "test/m12",
+					"pentester":     "test/m13",
+				}
+
+				if config.Simple.Model != expectedModels["simple"] {
+					t.Errorf("Simple: expected '%s', got '%s'", expectedModels["simple"], config.Simple.Model)
+				}
+				if config.SimpleJSON.Model != expectedModels["simple_json"] {
+					t.Errorf("SimpleJSON: expected '%s', got '%s'", expectedModels["simple_json"], config.SimpleJSON.Model)
+				}
+				if config.PrimaryAgent.Model != expectedModels["primary_agent"] {
+					t.Errorf("PrimaryAgent: expected '%s', got '%s'", expectedModels["primary_agent"], config.PrimaryAgent.Model)
+				}
+				if config.Assistant.Model != expectedModels["assistant"] {
+					t.Errorf("Assistant: expected '%s', got '%s'", expectedModels["assistant"], config.Assistant.Model)
+				}
+				if config.Generator.Model != expectedModels["generator"] {
+					t.Errorf("Generator: expected '%s', got '%s'", expectedModels["generator"], config.Generator.Model)
+				}
+				if config.Refiner.Model != expectedModels["refiner"] {
+					t.Errorf("Refiner: expected '%s', got '%s'", expectedModels["refiner"], config.Refiner.Model)
+				}
+				if config.Adviser.Model != expectedModels["adviser"] {
+					t.Errorf("Adviser: expected '%s', got '%s'", expectedModels["adviser"], config.Adviser.Model)
+				}
+				if config.Reflector.Model != expectedModels["reflector"] {
+					t.Errorf("Reflector: expected '%s', got '%s'", expectedModels["reflector"], config.Reflector.Model)
+				}
+				if config.Searcher.Model != expectedModels["searcher"] {
+					t.Errorf("Searcher: expected '%s', got '%s'", expectedModels["searcher"], config.Searcher.Model)
+				}
+				if config.Enricher.Model != expectedModels["enricher"] {
+					t.Errorf("Enricher: expected '%s', got '%s'", expectedModels["enricher"], config.Enricher.Model)
+				}
+				if config.Coder.Model != expectedModels["coder"] {
+					t.Errorf("Coder: expected '%s', got '%s'", expectedModels["coder"], config.Coder.Model)
+				}
+				if config.Installer.Model != expectedModels["installer"] {
+					t.Errorf("Installer: expected '%s', got '%s'", expectedModels["installer"], config.Installer.Model)
+				}
+				if config.Pentester.Model != expectedModels["pentester"] {
+					t.Errorf("Pentester: expected '%s', got '%s'", expectedModels["pentester"], config.Pentester.Model)
+				}
+			},
+			description: "should patch all 13 agent types",
+		},
+		{
+			name:         "invalid JSON returns original data",
+			providerName: "provider",
+			configData:   `{"simple": {"model": "test", "invalid": }`,
+			validate: func(t *testing.T, result []byte) {
+				expected := `{"simple": {"model": "test", "invalid": }`
+				if string(result) != expected {
+					t.Errorf("Expected original data to be returned unchanged")
+				}
+			},
+			description: "should return original data on unmarshal error",
+		},
+		{
+			name:         "invalid YAML returns original data",
+			providerName: "provider",
+			configData: `
+simple:
+  model: test
+  invalid: [unclosed
+`,
+			validate: func(t *testing.T, result []byte) {
+				if len(result) == 0 {
+					t.Error("Expected original data, got empty result")
+				}
+			},
+			description: "should return original data when both YAML and JSON parsing fail",
+		},
+		{
+			name:         "special characters in provider name",
+			providerName: "my-provider.v2",
+			configData:   `{"simple": {"model": "gpt-4"}}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				if config.Simple.Model != "my-provider.v2/gpt-4" {
+					t.Errorf("Expected 'my-provider.v2/gpt-4', got '%s'", config.Simple.Model)
+				}
+			},
+			description: "should handle special characters in provider name",
+		},
+		{
+			name:         "special characters in model name",
+			providerName: "provider",
+			configData:   `{"simple": {"model": "claude-3.5-sonnet@20241022"}}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				if config.Simple.Model != "provider/claude-3.5-sonnet@20241022" {
+					t.Errorf("Expected 'provider/claude-3.5-sonnet@20241022', got '%s'", config.Simple.Model)
+				}
+			},
+			description: "should handle special characters in model name",
+		},
+		{
+			name:         "model name already contains slash",
+			providerName: "openrouter",
+			configData:   `{"simple": {"model": "anthropic/claude-3-opus"}}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				// Function adds prefix regardless of existing slashes
+				if config.Simple.Model != "openrouter/anthropic/claude-3-opus" {
+					t.Errorf("Expected 'openrouter/anthropic/claude-3-opus', got '%s'", config.Simple.Model)
+				}
+			},
+			description: "should add prefix even if model name contains slash",
+		},
+		{
+			name:         "empty config object",
+			providerName: "provider",
+			configData:   `{}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				// All fields should be nil
+				if config.Simple != nil && config.Simple.Model != "" {
+					t.Error("Expected no simple config")
+				}
+			},
+			description: "should handle empty config object",
+		},
+		{
+			name:         "preserve non-model fields",
+			providerName: "provider",
+			configData: `{
+				"simple": {
+					"model": "gpt-4",
+					"temperature": 0.8,
+					"max_tokens": 1000,
+					"top_p": 0.95,
+					"frequency_penalty": 0.5
+				}
+			}`,
+			validate: func(t *testing.T, result []byte) {
+				var config pconfig.ProviderConfig
+				if err := json.Unmarshal(result, &config); err != nil {
+					t.Fatalf("Failed to unmarshal result: %v", err)
+				}
+				if config.Simple.Model != "provider/gpt-4" {
+					t.Errorf("Expected 'provider/gpt-4', got '%s'", config.Simple.Model)
+				}
+				if config.Simple.Temperature != 0.8 {
+					t.Errorf("Expected temperature 0.8, got %f", config.Simple.Temperature)
+				}
+				if config.Simple.MaxTokens != 1000 {
+					t.Errorf("Expected max_tokens 1000, got %d", config.Simple.MaxTokens)
+				}
+				if config.Simple.TopP != 0.95 {
+					t.Errorf("Expected top_p 0.95, got %f", config.Simple.TopP)
+				}
+				if config.Simple.FrequencyPenalty != 0.5 {
+					t.Errorf("Expected frequency_penalty 0.5, got %f", config.Simple.FrequencyPenalty)
+				}
+			},
+			description: "should preserve all non-model configuration fields",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := patchProviderConfigWithProviderName([]byte(tt.configData), tt.providerName)
+
+			if result == nil {
+				t.Fatal("Expected non-nil result")
+			}
+
+			if tt.validate != nil {
+				tt.validate(t, result)
+			}
+		})
 	}
 }

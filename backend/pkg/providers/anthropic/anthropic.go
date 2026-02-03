@@ -8,6 +8,7 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/system"
+	"pentagi/pkg/templates"
 
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/anthropic"
@@ -76,6 +77,13 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		anthropic.WithModel(AnthropicAgentModel),
 		anthropic.WithBaseURL(baseURL),
 		anthropic.WithHTTPClient(httpClient),
+		// Enable prompt caching for cost optimization (90% savings on cached reads)
+		anthropic.WithDefaultCacheStrategy(anthropic.CacheStrategy{
+			CacheTools:    true,
+			CacheSystem:   true,
+			CacheMessages: true,
+			TTL:           "5m",
+		}),
 	)
 	if err != nil {
 		return nil, err
@@ -158,30 +166,10 @@ func (p *anthropicProvider) CallWithTools(
 	)
 }
 
-func (p *anthropicProvider) GetUsage(info map[string]any) (int64, int64) {
-	var inputTokens, outputTokens int64
+func (p *anthropicProvider) GetUsage(info map[string]any) pconfig.CallUsage {
+	return pconfig.NewCallUsage(info)
+}
 
-	if value, ok := info["InputTokens"]; ok {
-		switch v := value.(type) {
-		case int:
-			inputTokens = int64(v)
-		case int64:
-			inputTokens = v
-		case float64:
-			inputTokens = int64(v)
-		}
-	}
-
-	if value, ok := info["OutputTokens"]; ok {
-		switch v := value.(type) {
-		case int:
-			outputTokens = int64(v)
-		case int64:
-			outputTokens = v
-		case float64:
-			outputTokens = int64(v)
-		}
-	}
-
-	return inputTokens, outputTokens
+func (p *anthropicProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
 }

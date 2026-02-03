@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"pentagi/pkg/providers/pconfig"
+	"pentagi/pkg/templates"
 
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
@@ -45,7 +46,7 @@ const (
 type Provider interface {
 	Type() ProviderType
 	Model(opt pconfig.ProviderOptionsType) string
-	GetUsage(info map[string]any) (int64, int64)
+	GetUsage(info map[string]any) pconfig.CallUsage
 
 	Call(ctx context.Context, opt pconfig.ProviderOptionsType, prompt string) (string, error)
 	CallEx(
@@ -71,6 +72,10 @@ type Provider interface {
 
 	// Models information methods
 	GetModels() pconfig.ModelsConfig
+
+	// GetToolCallIDTemplate returns the pattern template for tool call IDs
+	// This method is cached per provider instance using sync.Once
+	GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error)
 }
 
 type (

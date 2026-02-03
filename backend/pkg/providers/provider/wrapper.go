@@ -165,40 +165,37 @@ func WrapGenerateFromSinglePrompt(
 
 	if len(resp.Choices) == 1 {
 		choice := resp.Choices[0]
-		input, output := provider.GetUsage(choice.GenerationInfo)
+		usage := provider.GetUsage(choice.GenerationInfo)
+		usage.UpdateCost(provider.GetPriceInfo(opt))
 
 		generation.End(
 			langfuse.WithEndGenerationOutput(choice),
 			langfuse.WithEndGenerationStatus("success"),
 			langfuse.WithEndGenerationUsage(&langfuse.GenerationUsage{
-				Input:  int(input),
-				Output: int(output),
+				Input:  int(usage.Input),
+				Output: int(usage.Output),
 			}),
 		)
 
 		return choice.Content, nil
 	}
 
+	var usage pconfig.CallUsage
 	choicesOutput := make([]string, 0, len(resp.Choices))
-	totalInput, totalOutput := int64(0), int64(0)
 	for _, choice := range resp.Choices {
-		input, output := provider.GetUsage(choice.GenerationInfo)
-		if input > 0 {
-			totalInput = input
-		}
-		if output > 0 {
-			totalOutput = output
-		}
+		usage.Merge(provider.GetUsage(choice.GenerationInfo))
 		choicesOutput = append(choicesOutput, choice.Content)
 	}
+
+	usage.UpdateCost(provider.GetPriceInfo(opt))
 
 	respOutput := strings.Join(choicesOutput, "\n-----\n")
 	generation.End(
 		langfuse.WithEndGenerationOutput(resp.Choices),
 		langfuse.WithEndGenerationStatus("success"),
 		langfuse.WithEndGenerationUsage(&langfuse.GenerationUsage{
-			Input:  int(totalInput),
-			Output: int(totalOutput),
+			Input:  int(usage.Input),
+			Output: int(usage.Output),
 		}),
 	)
 
@@ -252,37 +249,34 @@ func WrapGenerateContent(
 
 	if len(resp.Choices) == 1 {
 		choice := resp.Choices[0]
-		input, output := provider.GetUsage(choice.GenerationInfo)
+		usage := provider.GetUsage(choice.GenerationInfo)
+		usage.UpdateCost(provider.GetPriceInfo(opt))
 
 		generation.End(
 			langfuse.WithEndGenerationOutput(choice),
 			langfuse.WithEndGenerationStatus("success"),
 			langfuse.WithEndGenerationUsage(&langfuse.GenerationUsage{
-				Input:  int(input),
-				Output: int(output),
+				Input:  int(usage.Input),
+				Output: int(usage.Output),
 			}),
 		)
 
 		return resp, nil
 	}
 
-	totalInput, totalOutput := int64(0), int64(0)
+	var usage pconfig.CallUsage
 	for _, choice := range resp.Choices {
-		input, output := provider.GetUsage(choice.GenerationInfo)
-		if input > 0 {
-			totalInput = input
-		}
-		if output > 0 {
-			totalOutput = output
-		}
+		usage.Merge(provider.GetUsage(choice.GenerationInfo))
 	}
+
+	usage.UpdateCost(provider.GetPriceInfo(opt))
 
 	generation.End(
 		langfuse.WithEndGenerationOutput(resp.Choices),
 		langfuse.WithEndGenerationStatus("success"),
 		langfuse.WithEndGenerationUsage(&langfuse.GenerationUsage{
-			Input:  int(totalInput),
-			Output: int(totalOutput),
+			Input:  int(usage.Input),
+			Output: int(usage.Output),
 		}),
 	)
 

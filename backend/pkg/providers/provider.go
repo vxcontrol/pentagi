@@ -21,6 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
@@ -59,7 +60,7 @@ type StreamMessageChunk struct {
 	Type         StreamMessageChunkType
 	MsgType      database.MsglogType
 	Content      string
-	Thinking     string
+	Thinking     *reasoning.ContentReasoning
 	Result       string
 	ResultFormat database.MsglogResultFormat
 	StreamID     int64
@@ -73,6 +74,7 @@ type FlowProvider interface {
 	Image() string
 	Title() string
 	Language() string
+	ToolCallIDTemplate() string
 	Embedder() embeddings.Embedder
 
 	SetAgentLogProvider(agentLog tools.AgentLogProvider)
@@ -130,6 +132,8 @@ type flowProvider struct {
 	language string
 	askUser  bool
 
+	tcIDTemplate string
+
 	prompter templates.Prompter
 	executor tools.FlowToolsExecutor
 	agentLog tools.AgentLogProvider
@@ -159,6 +163,10 @@ func (fp *flowProvider) Title() string {
 
 func (fp *flowProvider) Language() string {
 	return fp.language
+}
+
+func (fp *flowProvider) ToolCallIDTemplate() string {
+	return fp.tcIDTemplate
 }
 
 func (fp *flowProvider) Embedder() embeddings.Embedder {

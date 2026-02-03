@@ -6,6 +6,15 @@
   price:
     input: 1.75
     output: 14.0
+    cache_read: 0.175
+
+- name: gpt-5.2-pro
+  description: Premium version of GPT-5.2 with superior agentic coding capabilities and long-context performance. Designed for mission-critical security research, advanced zero-day discovery, and complex autonomous penetration testing requiring maximum reasoning depth, accuracy, and reduced hallucinations in high-stakes scenarios.
+  thinking: true
+  release_date: 2025-12-11
+  price:
+    input: 21.0
+    output: 168.0
 
 # Latest GPT-5 series - Advanced agentic models with native function calling and reasoning
 - name: gpt-5
@@ -15,6 +24,24 @@
   price:
     input: 1.25
     output: 10.0
+    cache_read: 0.125
+
+- name: gpt-5.1
+  description: Enhanced agentic model with adaptive reasoning and improved conversational capabilities. Bridges the gap between GPT-5 and GPT-5.2 with faster responses, better personality presets, and refined security analysis. Excellent for balanced penetration testing requiring strong tool coordination with enhanced contextual understanding.
+  thinking: true
+  release_date: 2025-11-12
+  price:
+    input: 1.25
+    output: 10.0
+    cache_read: 0.125
+
+- name: gpt-5-pro
+  description: Premium version of GPT-5 with major improvements in reasoning depth and code quality. Optimized for complex security tasks requiring step-by-step reasoning, reduced hallucinations, and exceptional accuracy in high-stakes penetration testing. Superior instruction following and advanced prompt understanding for critical security operations.
+  thinking: true
+  release_date: 2025-08-07
+  price:
+    input: 15.0
+    output: 120.0
 
 - name: gpt-5-mini
   description: Efficient agentic model balancing speed and intelligence for well-scoped security tasks. Ideal for automated vulnerability analysis, exploit generation, and systematic penetration testing with strong function calling capabilities for security tool orchestration.
@@ -23,6 +50,7 @@
   price:
     input: 0.25
     output: 2.0
+    cache_read: 0.025
 
 - name: gpt-5-nano
   description: Fastest agentic model optimized for high-throughput security scanning and rapid tool execution. Perfect for reconnaissance phases, bulk vulnerability detection, and real-time security monitoring with minimal latency in autonomous agent workflows.
@@ -31,6 +59,7 @@
   price:
     input: 0.05
     output: 0.4
+    cache_read: 0.005
 
 # Flagship chat models - Versatile, high-intelligence models for complex tasks
 - name: gpt-4o
@@ -40,6 +69,7 @@
   price:
     input: 2.5
     output: 10.0
+    cache_read: 1.25
 
 - name: gpt-4o-mini
   description: Compact multimodal model with strong function calling and fast inference. Optimal for high-frequency security scanning, automated vulnerability checks, and routine penetration testing tasks. Cost-effective choice for bulk operations and continuous security monitoring.
@@ -48,6 +78,7 @@
   price:
     input: 0.15
     output: 0.6
+    cache_read: 0.075
 
 # Latest GPT-4.1 series - Enhanced intelligence models with improved function calling
 - name: gpt-4.1
@@ -57,6 +88,7 @@
   price:
     input: 2.0
     output: 8.0
+    cache_read: 0.5
 
 - name: gpt-4.1-mini
   description: Balanced performance model with improved efficiency and strong function calling. Excellent for routine security assessments, automated code analysis, and systematic vulnerability testing with optimal cost-to-intelligence ratio for production workloads.
@@ -65,6 +97,7 @@
   price:
     input: 0.4
     output: 1.6
+    cache_read: 0.1
 
 - name: gpt-4.1-nano
   description: Ultra-fast lightweight model optimized for high-throughput operations. Perfect for bulk security scanning, rapid reconnaissance, continuous monitoring, and basic vulnerability detection where speed and cost efficiency are critical.
@@ -73,6 +106,62 @@
   price:
     input: 0.1
     output: 0.4
+    cache_read: 0.025
+
+# Codex series - Specialized models optimized for code analysis, exploit development, and cybersecurity
+- name: gpt-5.2-codex
+  description: Most advanced code-specialized model optimized for agentic security coding. Features context compaction for long-horizon work, superior performance on large code refactors and migrations, enhanced Windows environment support, and significantly stronger cybersecurity capabilities. Ideal for vulnerability discovery, exploit chain development, and complex code analysis in large repositories.
+  thinking: true
+  release_date: 2025-12-11
+  price:
+    input: 1.75
+    output: 14.0
+    cache_read: 0.175
+
+- name: gpt-5.1-codex-max
+  description: Enhanced reasoning model for sophisticated coding workflows with superior long-horizon task performance. Proven track record in real-world vulnerability discovery (CVE findings). Excels at systematic exploit development, complex code analysis, and agentic penetration testing requiring extended reasoning chains and deep code comprehension.
+  thinking: true
+  release_date: 2025-11-01
+  price:
+    input: 1.25
+    output: 10.0
+    cache_read: 0.125
+
+- name: gpt-5.1-codex
+  description: Standard code-optimized model with strong reasoning capabilities for security engineering. Balanced performance for exploit generation, vulnerability analysis, and automated security code review. Excellent choice for systematic penetration testing workflows requiring reliable code understanding and tool orchestration.
+  thinking: true
+  release_date: 2025-11-01
+  price:
+    input: 1.25
+    output: 10.0
+    cache_read: 0.125
+
+- name: gpt-5-codex
+  description: Foundational code-specialized model for security-focused development tasks. Strong at vulnerability scanning, basic exploit generation, and security code analysis. Cost-effective option for routine penetration testing workflows requiring solid code comprehension and tool integration.
+  thinking: true
+  release_date: 2025-08-07
+  price:
+    input: 1.25
+    output: 10.0
+    cache_read: 0.125
+
+- name: gpt-5.1-codex-mini
+  description: Compact high-performance code model with 4x higher usage capacity compared to full Codex variants. Optimized for high-frequency security code analysis, rapid vulnerability detection, and bulk exploit scanning where speed and cost efficiency are paramount while maintaining strong coding capabilities.
+  thinking: true
+  release_date: 2025-11-01
+  price:
+    input: 0.25
+    output: 2.0
+    cache_read: 0.025
+
+- name: codex-mini-latest
+  description: Latest compact code model offering balanced performance for routine security coding tasks. Ideal for automated code review, basic vulnerability analysis, and continuous security monitoring requiring efficient code understanding at minimal cost.
+  thinking: true
+  release_date: 2025-01-01
+  price:
+    input: 1.5
+    output: 6.0
+    cache_read: 0.375
 
 # Reasoning models - o-series with extended chain-of-thought for complex security tasks
 - name: o3-mini
@@ -82,6 +171,7 @@
   price:
     input: 1.1
     output: 4.4
+    cache_read: 0.55
 
 - name: o4-mini
   description: Next-generation reasoning model with enhanced speed and accuracy. Ideal for methodical security assessments, systematic exploit development, and structured vulnerability analysis. Balances deep reasoning with faster inference for production penetration testing workflows.
@@ -90,6 +180,7 @@
   price:
     input: 1.1
     output: 4.4
+    cache_read: 0.275
 
 - name: o3
   description: Advanced reasoning powerhouse for sophisticated security research and complex threat modeling. Excels at multi-stage attack chain development, deep vulnerability analysis, and intricate exploit construction requiring extensive deliberative thinking and strategic planning.
@@ -98,6 +189,7 @@
   price:
     input: 2.0
     output: 8.0
+    cache_read: 0.5
 
 - name: o1
   description: Premier reasoning model with maximum thinking depth for highly complex security challenges. Specialized in advanced penetration testing methodologies, novel exploit research, and sophisticated attack vector discovery. Best for critical security research requiring exhaustive analysis.
@@ -106,3 +198,20 @@
   price:
     input: 15.0
     output: 60.0
+    cache_read: 7.5
+
+- name: o3-pro
+  description: Most advanced reasoning powerhouse with deep slow-thinking capabilities. Delivers exceptional performance in complex mathematical analysis, scientific security research, and intricate coding challenges. Massive 80% price reduction from previous o1-pro while maintaining superior reasoning depth. Ideal for novel zero-day research, sophisticated attack chain analysis, and critical security investigations requiring maximum cognitive depth.
+  thinking: true
+  release_date: 2025-06-10
+  price:
+    input: 20.0
+    output: 80.0
+
+- name: o1-pro
+  description: Previous-generation premium reasoning model with maximum deliberation capabilities. Specialized in exhaustive security analysis, advanced cryptographic research, and complex threat modeling. Highest cost point but unmatched reasoning depth for mission-critical security challenges where budget is not a constraint and absolute thoroughness is required.
+  thinking: true
+  release_date: 2024-12-17
+  price:
+    input: 150.0
+    output: 600.0

@@ -64,6 +64,8 @@ fragment subtaskFragment on Subtask {
 fragment terminalLogFragment on TerminalLog {
     id
     flowId
+    taskId
+    subtaskId
     type
     text
     terminal
@@ -86,6 +88,8 @@ fragment messageLogFragment on MessageLog {
 fragment screenshotFragment on Screenshot {
     id
     flowId
+    taskId
+    subtaskId
     name
     url
     createdAt
@@ -219,6 +223,8 @@ fragment modelConfigFragment on ModelConfig {
     price {
         input
         output
+        cacheRead
+        cacheWrite
     }
 }
 
@@ -298,6 +304,8 @@ fragment agentConfigFragment on AgentConfig {
     price {
         input
         output
+        cacheRead
+        cacheWrite
     }
 }
 
@@ -321,6 +329,112 @@ fragment promptValidationResultFragment on PromptValidationResult {
     message
     line
     details
+}
+
+fragment usageStatsFragment on UsageStats {
+    totalUsageIn
+    totalUsageOut
+    totalUsageCacheIn
+    totalUsageCacheOut
+    totalUsageCostIn
+    totalUsageCostOut
+}
+
+fragment dailyUsageStatsFragment on DailyUsageStats {
+    date
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment providerUsageStatsFragment on ProviderUsageStats {
+    provider
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment modelUsageStatsFragment on ModelUsageStats {
+    model
+    provider
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
+    agentType
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment toolcallsStatsFragment on ToolcallsStats {
+    totalCount
+    totalDurationSeconds
+}
+
+fragment dailyToolcallsStatsFragment on DailyToolcallsStats {
+    date
+    stats {
+        ...toolcallsStatsFragment
+    }
+}
+
+fragment functionToolcallsStatsFragment on FunctionToolcallsStats {
+    functionName
+    isAgent
+    totalCount
+    totalDurationSeconds
+    avgDurationSeconds
+}
+
+fragment flowsStatsFragment on FlowsStats {
+    totalFlowsCount
+    totalTasksCount
+    totalSubtasksCount
+    totalAssistantsCount
+}
+
+fragment flowStatsFragment on FlowStats {
+    totalTasksCount
+    totalSubtasksCount
+    totalAssistantsCount
+}
+
+fragment dailyFlowsStatsFragment on DailyFlowsStats {
+    date
+    stats {
+        ...flowsStatsFragment
+    }
+}
+
+fragment subtaskExecutionStatsFragment on SubtaskExecutionStats {
+    subtaskId
+    subtaskTitle
+    totalDurationSeconds
+    totalToolcallsCount
+}
+
+fragment taskExecutionStatsFragment on TaskExecutionStats {
+    taskId
+    taskTitle
+    totalDurationSeconds
+    totalToolcallsCount
+    subtasks {
+        ...subtaskExecutionStatsFragment
+    }
+}
+
+fragment flowExecutionStatsFragment on FlowExecutionStats {
+    flowId
+    flowTitle
+    totalDurationSeconds
+    totalToolcallsCount
+    totalAssistantsCount
+    tasks {
+        ...taskExecutionStatsFragment
+    }
 }
 
 # ==================== Queries ====================
@@ -537,6 +651,12 @@ query settingsPrompts {
                 chooseUserLanguage {
                     ...defaultPromptFragment
                 }
+                collectToolCallID {
+                    ...defaultPromptFragment
+                }
+                detectToolCallIDPattern {
+                    ...defaultPromptFragment
+                }
             }
         }
         userDefined {
@@ -596,6 +716,102 @@ query flowReport($id: ID!) {
     }
     tasks(flowId: $id) {
         ...taskFragment
+    }
+}
+
+query usageStatsTotal {
+    usageStatsTotal {
+        ...usageStatsFragment
+    }
+}
+
+query usageStatsByPeriod($period: UsageStatsPeriod!) {
+    usageStatsByPeriod(period: $period) {
+        ...dailyUsageStatsFragment
+    }
+}
+
+query usageStatsByProvider {
+    usageStatsByProvider {
+        ...providerUsageStatsFragment
+    }
+}
+
+query usageStatsByModel {
+    usageStatsByModel {
+        ...modelUsageStatsFragment
+    }
+}
+
+query usageStatsByAgentType {
+    usageStatsByAgentType {
+        ...agentTypeUsageStatsFragment
+    }
+}
+
+query usageStatsByFlow($flowId: ID!) {
+    usageStatsByFlow(flowId: $flowId) {
+        ...usageStatsFragment
+    }
+}
+
+query usageStatsByAgentTypeForFlow($flowId: ID!) {
+    usageStatsByAgentTypeForFlow(flowId: $flowId) {
+        ...agentTypeUsageStatsFragment
+    }
+}
+
+query toolcallsStatsTotal {
+    toolcallsStatsTotal {
+        ...toolcallsStatsFragment
+    }
+}
+
+query toolcallsStatsByPeriod($period: UsageStatsPeriod!) {
+    toolcallsStatsByPeriod(period: $period) {
+        ...dailyToolcallsStatsFragment
+    }
+}
+
+query toolcallsStatsByFunction {
+    toolcallsStatsByFunction {
+        ...functionToolcallsStatsFragment
+    }
+}
+
+query toolcallsStatsByFlow($flowId: ID!) {
+    toolcallsStatsByFlow(flowId: $flowId) {
+        ...toolcallsStatsFragment
+    }
+}
+
+query toolcallsStatsByFunctionForFlow($flowId: ID!) {
+    toolcallsStatsByFunctionForFlow(flowId: $flowId) {
+        ...functionToolcallsStatsFragment
+    }
+}
+
+query flowsStatsTotal {
+    flowsStatsTotal {
+        ...flowsStatsFragment
+    }
+}
+
+query flowsStatsByPeriod($period: UsageStatsPeriod!) {
+    flowsStatsByPeriod(period: $period) {
+        ...dailyFlowsStatsFragment
+    }
+}
+
+query flowStatsByFlow($flowId: ID!) {
+    flowStatsByFlow(flowId: $flowId) {
+        ...flowStatsFragment
+    }
+}
+
+query flowsExecutionStatsByPeriod($period: UsageStatsPeriod!) {
+    flowsExecutionStatsByPeriod(period: $period) {
+        ...flowExecutionStatsFragment
     }
 }
 

@@ -1,0 +1,15 @@
+<role>
+You are a helpful assistant that calls functions when requested.
+</role>
+
+<task>
+Call the {{.FunctionName}} function with the value 42 as requested.
+</task>
+
+<context>
+{{.RandomContext}}
+</context>
+
+<instruction>
+Please call the {{.FunctionName}} function with the parameter value set to 42.
+</instruction>

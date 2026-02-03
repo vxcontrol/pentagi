@@ -9,6 +9,8 @@
   - [Fundamental Concepts](#fundamental-concepts)
     - [ChainAST Structure with Size Tracking](#chainast-structure-with-size-tracking)
     - [ChainAST Construction Process](#chainast-construction-process)
+    - [Tool Call ID Normalization](#tool-call-id-normalization)
+    - [Reasoning Content Cleanup](#reasoning-content-cleanup)
     - [Summarization Types](#summarization-types)
   - [Configuration Parameters](#configuration-parameters)
   - [Algorithm Operation](#algorithm-operation)
@@ -161,6 +163,134 @@ flowchart TD
     C --> K[Calculate Sizes for All Components]
     K --> L[Return Populated ChainAST]
 ```
+
+The ChainAST construction process analyzes the roles and types of messages in the chain, grouping them into logical sections with headers and body pairs.
+
+### Tool Call ID Normalization
+
+When switching between different LLM providers (e.g., from Gemini to Anthropic), tool call IDs may have different formats that are incompatible with the new provider's API. The `NormalizeToolCallIDs` method addresses this by validating and replacing incompatible IDs:
+
+```mermaid
+flowchart TD
+    A[ChainAST with Tool Calls] --> B[Iterate Through Sections]
+    B --> C{Has RequestResponse or\nSummarization?}
+    C -->|No| D[Skip Section]
+    C -->|Yes| E[Extract Tool Call IDs]
+    E --> F{Validate ID Against\nNew Template}
+    F -->|Valid| G[Keep Existing ID]
+    F -->|Invalid| H[Generate New ID]
+    H --> I[Create ID Mapping]
+    I --> J[Update Tool Call ID]
+    J --> K[Update Corresponding\nTool Response IDs]
+    G --> L[Continue to Next]
+    K --> L
+    D --> L
+    L --> M{More Sections?}
+    M -->|Yes| B
+    M -->|No| N[Return Normalized AST]
+```
+
+The normalization process:
+1. **Validates** each tool call ID against the new provider's template using `ValidatePattern`
+2. **Generates** new IDs only for those that don't match the template
+3. **Preserves** IDs that already match to avoid unnecessary changes
+4. **Updates** both tool calls and their corresponding responses to maintain consistency
+5. **Supports** all body pair types: RequestResponse and Summarization
+
+**Example Usage:**
+
+```go
+// After restoring a chain that may contain tool calls from a different provider
+ast, err := cast.NewChainAST(chain, true)
+if err != nil {
+    return err
+}
+
+// Normalize to new provider's format (e.g., from "call_*" to "toolu_*")
+err = ast.NormalizeToolCallIDs("toolu_{r:24:b}")
+if err != nil {
+    return err
+}
+
+// Chain now has compatible tool call IDs
+normalizedChain := ast.Messages()
+```
+
+**Template Format Examples:**
+
+| Provider | Template Format | Example ID |
+|----------|----------------|------------|
+| OpenAI/Gemini | `call_{r:24:x}` | `call_abc123def456ghi789jkl` |
+| Anthropic | `toolu_{r:24:b}` | `toolu_A1b2C3d4E5f6G7h8I9j0K1l2` |
+| Custom | `{prefix}_{r:N:charset}` | Defined per provider |
+
+This feature is critical for assistant providers that may switch between different LLM providers while maintaining conversation history.
+
+### Reasoning Content Cleanup
+
+When switching between providers, reasoning content must also be cleared because it contains provider-specific data:
+
+```mermaid
+flowchart TD
+    A[ChainAST with Reasoning] --> B[Iterate Through Sections]
+    B --> C[Process Header Messages]
+    C --> D[Clear SystemMessage Reasoning]
+    D --> E[Clear HumanMessage Reasoning]
+    E --> F[Process Body Pairs]
+    F --> G[Clear AI Message Reasoning]
+    G --> H[Clear Tool Messages Reasoning]
+    H --> I{More Sections?}
+    I -->|Yes| B
+    I -->|No| J[Return Cleaned AST]
+```
+
+The cleanup process:
+1. **Iterates** through all sections, headers, and body pairs
+2. **Clears** `Reasoning` field from `TextContent` parts
+3. **Clears** `Reasoning` field from `ToolCall` parts
+4. **Preserves** all other content (text, arguments, function names, etc.)
+
+**Why this is needed:**
+- Reasoning content includes cryptographic signatures (especially Anthropic's extended thinking)
+- These signatures are validated by the provider and will fail if sent to a different provider
+- Reasoning blocks may contain provider-specific metadata
+
+**Example Usage:**
+
+```go
+// After restoring and normalizing a chain
+ast, err := cast.NewChainAST(chain, true)
+if err != nil {
+    return err
+}
+
+// First normalize tool call IDs
+err = ast.NormalizeToolCallIDs(newTemplate)
+if err != nil {
+    return err
+}
+
+// Then clear provider-specific reasoning
+err = ast.ClearReasoning()
+if err != nil {
+    return err
+}
+
+// Chain is now safe to use with the new provider
+cleanedChain := ast.Messages()
+```
+
+**What gets cleared:**
+- `TextContent.Reasoning` - Extended thinking signatures and content
+- `ToolCall.Reasoning` - Per-tool reasoning (used by some providers)
+
+**What stays preserved:**
+- All text content
+- Tool call IDs (after normalization)
+- Function names and arguments
+- Tool responses
+
+This operation is automatically performed in `restoreChain()` when switching providers, ensuring compatibility across different LLM providers.
 
 ### Summarization Types
 
@@ -441,11 +571,16 @@ func determineTypeToSummarizedSection(section *cast.ChainSection) cast.BodyPairT
 
 Before handling the overall last section size, manage individual oversized body pairs:
 
+**CRITICAL**: The last body pair in a section is **NEVER** summarized to preserve reasoning signatures required by providers like Gemini (thought_signature) and Anthropic (cryptographic signatures). Summarizing the last pair would remove these signatures and cause API errors.
+
 ```mermaid
 flowchart TD
     A[Start with Section's Body Pairs] --> B[Initialize concurrent processing]
     B --> C[For each body pair]
-    C --> D{Is pair oversized AND\nnot already summarized?}
+    C --> CA{Is this the\nlast body pair?}
+    CA -->|Yes| CB[SKIP - Never summarize last pair]
+    CA -->|No| D{Is pair oversized AND\nnot already summarized?}
+    CB --> C
     D -->|Yes| E[Start goroutine for pair processing]
     D -->|No| C
     E --> F[Get messages from pair]
@@ -472,20 +607,27 @@ func summarizeOversizedBodyPairs(
     section *cast.ChainSection,
     handler tools.SummarizeHandler,
     maxBodyPairBytes int,
+    tcIDTemplate string,
 ) error {
     if len(section.Body) == 0 {
         return nil
     }
 
     // Concurrent processing of body pairs summarization
+    // CRITICAL: Never summarize the last body pair to preserve reasoning signatures
     mx := sync.Mutex{}
     wg := sync.WaitGroup{}
 
     // Map of body pairs that have been summarized
     bodyPairsSummarized := make(map[int]*cast.BodyPair)
 
-    // Process each body pair
+    // Process each body pair EXCEPT the last one
     for i, pair := range section.Body {
+        // Always skip the last body pair to preserve reasoning signatures
+        if i == len(section.Body)-1 {
+            continue
+        }
+
         // Skip pairs that are already summarized content or under the size limit
         if pair.Size() <= maxBodyPairBytes || containsSummarizedContent(pair) {
             continue
@@ -546,6 +688,11 @@ func summarizeOversizedBodyPairs(
 ### 3. Last Section Rotation
 
 For the specified section (which can be any of the last N sections in the active conversation), when it exceeds size limits:
+
+**CRITICAL PRESERVATION RULE**: The last (most recent) body pair in a section is **ALWAYS** kept without summarization. This ensures:
+1. **Reasoning signatures** (Gemini's thought_signature, Anthropic's cryptographic signatures) are preserved
+2. **Latest tool calls** maintain their complete context including thinking content
+3. **API compatibility** when the chain continues with the same provider
 
 ```mermaid
 flowchart TD

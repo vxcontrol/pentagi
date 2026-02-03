@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"pentagi/pkg/cast"
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/subscriptions"
 	obs "pentagi/pkg/observability"
@@ -105,15 +106,16 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	}
 
 	assistant, err := awc.db.CreateAssistant(ctx, database.CreateAssistantParams{
-		Title:             "untitled",
-		Status:            database.AssistantStatusCreated,
-		Model:             "unknown",
-		ModelProviderName: string(awc.prvname),
-		ModelProviderType: database.ProviderType(awc.prvtype),
-		Language:          "English",
-		Functions:         []byte("{}"),
-		FlowID:            awc.flowID,
-		UseAgents:         awc.useAgents,
+		Title:              "untitled",
+		Status:             database.AssistantStatusCreated,
+		Model:              "unknown",
+		ModelProviderName:  string(awc.prvname),
+		ModelProviderType:  database.ProviderType(awc.prvtype),
+		Language:           "English",
+		ToolCallIDTemplate: cast.ToolCallIDTemplate,
+		Functions:          []byte("{}"),
+		FlowID:             awc.flowID,
+		UseAgents:          awc.useAgents,
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to create assistant in DB")
@@ -177,13 +179,14 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	logger.Info("assistant provider prepared")
 
 	assistant, err = awc.db.UpdateAssistant(ctx, database.UpdateAssistantParams{
-		Title:      assistantProvider.Title(),
-		Model:      assistantProvider.Model(pconfig.OptionsTypePrimaryAgent),
-		Language:   assistantProvider.Language(),
-		Functions:  functionsBlob,
-		TraceID:    database.StringToNullString(observation.TraceID()),
-		MsgchainID: database.Int64ToNullInt64(&msgChainID),
-		ID:         assistant.ID,
+		Title:              assistantProvider.Title(),
+		Model:              assistantProvider.Model(pconfig.OptionsTypePrimaryAgent),
+		Language:           assistantProvider.Language(),
+		ToolCallIDTemplate: assistantProvider.ToolCallIDTemplate(),
+		Functions:          functionsBlob,
+		TraceID:            database.StringToNullString(observation.TraceID()),
+		MsgchainID:         database.Int64ToNullInt64(&msgChainID),
+		ID:                 assistant.ID,
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to create assistant in DB")
@@ -323,7 +326,7 @@ func LoadAssistantWorker(
 	}
 	assistantProvider, err := awc.provs.LoadAssistantProvider(ctx, provider.ProviderName(assistant.ModelProviderName),
 		prompter, executor, assistant.ID, awc.flowID, awc.userID, container.Image, assistant.Language, assistant.Title,
-		aslw.StreamFlowAssistantMsg)
+		assistant.ToolCallIDTemplate, aslw.StreamFlowAssistantMsg)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to get assistant provider", err)
 	}

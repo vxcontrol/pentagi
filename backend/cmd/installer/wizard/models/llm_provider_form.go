@@ -72,6 +72,8 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 		fields = append(fields, m.createModelField(config))
 		fields = append(fields, m.createConfigPathField(config))
 		fields = append(fields, m.createLegacyReasoningField(config))
+		fields = append(fields, m.createPreserveReasoningField(config))
+		fields = append(fields, m.createProviderNameField(config))
 	}
 
 	m.SetFormFields(fields)
@@ -208,6 +210,36 @@ func (m *LLMProviderFormModel) createLegacyReasoningField(config *controller.LLM
 		Input:       input,
 		Value:       input.Value(),
 		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createPreserveReasoningField(config *controller.LLMProviderConfig) FormField {
+	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.PreserveReasoning)
+
+	return FormField{
+		Key:         "preserve_reasoning",
+		Title:       locale.LLMFormFieldPreserveReasoning,
+		Description: locale.LLMFormPreserveReasoningDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createProviderNameField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.ProviderName)
+	input.Placeholder = "openrouter"
+
+	return FormField{
+		Key:         "provider_name",
+		Title:       locale.LLMFormFieldProviderName,
+		Description: locale.LLMFormProviderNameDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
 	}
 }
 
@@ -420,6 +452,14 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldLegacyReasoning, m.GetStyles().Info.Render(config.LegacyReasoning.Value)))
 		}
+		if config.PreserveReasoning.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldPreserveReasoning, m.GetStyles().Info.Render(config.PreserveReasoning.Value)))
+		}
+		if config.ProviderName.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldProviderName, m.GetStyles().Info.Render(config.ProviderName.Value)))
+		}
 	}
 
 	return strings.Join(sections, "\n")
@@ -471,6 +511,8 @@ func (m *LLMProviderFormModel) HandleSave() error {
 		ConfigPath:             config.ConfigPath,
 		HostConfigPath:         config.HostConfigPath,
 		LegacyReasoning:        config.LegacyReasoning,
+		PreserveReasoning:      config.PreserveReasoning,
+		ProviderName:           config.ProviderName,
 		PullTimeout:            config.PullTimeout,
 		PullEnabled:            config.PullEnabled,
 		LoadModelsEnabled:      config.LoadModelsEnabled,
@@ -524,6 +566,14 @@ func (m *LLMProviderFormModel) HandleSave() error {
 				return fmt.Errorf("invalid boolean value for legacy reasoning: %s (must be 'true' or 'false')", value)
 			}
 			newConfig.LegacyReasoning.Value = value
+		case "preserve_reasoning":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for preserve reasoning: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.PreserveReasoning.Value = value
+		case "provider_name":
+			newConfig.ProviderName.Value = value
 		case "pull_timeout":
 			newConfig.PullTimeout.Value = value
 		case "pull_enabled":

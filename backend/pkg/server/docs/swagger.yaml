@@ -595,6 +595,12 @@ definitions:
         type: integer
       name:
         type: string
+      subtask_id:
+        minimum: 0
+        type: integer
+      task_id:
+        minimum: 0
+        type: integer
       url:
         type: string
     required:
@@ -721,7 +727,16 @@ definitions:
         type: integer
       created_at:
         type: string
+      flow_id:
+        minimum: 0
+        type: integer
       id:
+        minimum: 0
+        type: integer
+      subtask_id:
+        minimum: 0
+        type: integer
+      task_id:
         minimum: 0
         type: integer
       text:
@@ -730,6 +745,7 @@ definitions:
         type: string
     required:
     - container_id
+    - flow_id
     - text
     - type
     type: object

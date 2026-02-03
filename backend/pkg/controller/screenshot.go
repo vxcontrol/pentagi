@@ -10,7 +10,7 @@ import (
 )
 
 type FlowScreenshotWorker interface {
-	PutScreenshot(ctx context.Context, name, url string) (int64, error)
+	PutScreenshot(ctx context.Context, name, url string, taskID, subtaskID *int64) (int64, error)
 	GetScreenshot(ctx context.Context, screenshotID int64) (database.Screenshot, error)
 }
 
@@ -32,14 +32,16 @@ func NewFlowScreenshotWorker(db database.Querier, flowID int64, pub subscription
 	}
 }
 
-func (sw *flowScreenshotWorker) PutScreenshot(ctx context.Context, name, url string) (int64, error) {
+func (sw *flowScreenshotWorker) PutScreenshot(ctx context.Context, name, url string, taskID, subtaskID *int64) (int64, error) {
 	sw.mx.Lock()
 	defer sw.mx.Unlock()
 
 	screenshot, err := sw.db.CreateScreenshot(ctx, database.CreateScreenshotParams{
-		Name:   database.SanitizeUTF8(name),
-		Url:    database.SanitizeUTF8(url),
-		FlowID: sw.flowID,
+		Name:      database.SanitizeUTF8(name),
+		Url:       database.SanitizeUTF8(url),
+		FlowID:    sw.flowID,
+		TaskID:    database.Int64ToNullInt64(taskID),
+		SubtaskID: database.Int64ToNullInt64(subtaskID),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to create screenshot: %w", err)

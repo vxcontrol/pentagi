@@ -21,6 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
@@ -36,7 +37,7 @@ type callResult struct {
 	streamID  int64
 	funcCalls []llms.ToolCall
 	info      map[string]any
-	thinking  string
+	thinking  *reasoning.ContentReasoning
 	content   string
 }
 
@@ -73,6 +74,14 @@ func (fp *flowProvider) performAgentChain(
 
 	logger := logrus.WithContext(ctx).WithFields(fields)
 
+	// Track execution time for duration calculation
+	lastUpdateTime := time.Now()
+	rollLastUpdateTime := func() float64 {
+		durationDelta := time.Since(lastUpdateTime).Seconds()
+		lastUpdateTime = time.Now()
+		return durationDelta
+	}
+
 	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get execution context")
@@ -89,7 +98,7 @@ func (fp *flowProvider) performAgentChain(
 			return err
 		}
 
-		if err := fp.updateMsgChainUsage(ctx, chainID, result.info); err != nil {
+		if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, rollLastUpdateTime()); err != nil {
 			logger.WithError(err).Error("failed to update msg chain usage")
 			return err
 		}
@@ -97,17 +106,24 @@ func (fp *flowProvider) performAgentChain(
 		if len(result.funcCalls) == 0 {
 			if optAgentType == pconfig.OptionsTypeAssistant {
 				fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID)
-				return fp.processAssistantResult(ctx, logger, chainID, chain, result, summarizer, summarizerHandler)
+				return fp.processAssistantResult(ctx, logger, chainID, chain, result, summarizer, summarizerHandler, rollLastUpdateTime())
 			} else {
+				// Build AI message with reasoning for reflector (universal pattern)
+				reflectorMsg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+				if result.content != "" || !result.thinking.IsEmpty() {
+					reflectorMsg.Parts = append(reflectorMsg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+				}
 				result, err = fp.performReflector(
 					ctx, optAgentType, chainID, taskID, subtaskID,
-					append(chain, llms.TextParts(llms.ChatMessageTypeAI, result.content)),
+					append(chain, reflectorMsg),
 					fp.getLastHumanMessage(chain), result.content, executionContext, executor, 1)
 				if err != nil {
 					fields := make(logrus.Fields)
 					if result != nil {
 						fields["content"] = result.content[:min(1000, len(result.content))]
-						fields["thinking"] = result.thinking[:min(1000, len(result.thinking))]
+						if !result.thinking.IsEmpty() {
+							fields["thinking"] = result.thinking.Content[:min(1000, len(result.thinking.Content))]
+						}
 						fields["execution"] = executionContext[:min(1000, len(executionContext))]
 					}
 					logger.WithError(err).WithFields(fields).Error("failed to perform reflector")
@@ -119,12 +135,16 @@ func (fp *flowProvider) performAgentChain(
 		fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID)
 
 		msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+		// Universal pattern: preserve content with or without reasoning (works for all providers thanks to deduplication)
+		if result.content != "" || !result.thinking.IsEmpty() {
+			msg.Parts = append(msg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+		}
 		for _, toolCall := range result.funcCalls {
 			msg.Parts = append(msg.Parts, toolCall)
 		}
 		chain = append(chain, msg)
 
-		if err := fp.updateMsgChain(ctx, chainID, chain); err != nil {
+		if err := fp.updateMsgChain(ctx, chainID, chain, rollLastUpdateTime()); err != nil {
 			logger.WithError(err).Error("failed to update msg chain")
 			return err
 		}
@@ -159,7 +179,7 @@ func (fp *flowProvider) performAgentChain(
 					},
 				},
 			})
-			if err := fp.updateMsgChain(ctx, chainID, chain); err != nil {
+			if err := fp.updateMsgChain(ctx, chainID, chain, rollLastUpdateTime()); err != nil {
 				logger.WithError(err).Error("failed to update msg chain")
 				return err
 			}
@@ -175,10 +195,10 @@ func (fp *flowProvider) performAgentChain(
 
 		if summarizer != nil {
 			// it returns the same chain state if error occurs
-			chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain)
+			chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain, fp.tcIDTemplate)
 			if err != nil {
 				logger.WithError(err).Warn("failed to summarize chain")
-			} else if err := fp.updateMsgChain(ctx, chainID, chain); err != nil {
+			} else if err := fp.updateMsgChain(ctx, chainID, chain, rollLastUpdateTime()); err != nil {
 				logger.WithError(err).Error("failed to update msg chain")
 				return err
 			}
@@ -202,7 +222,9 @@ func (fp *flowProvider) execToolCall(
 	// use streamID and thinking only for first tool call to minimize content
 	if toolCallIDx == 0 {
 		streamID = result.streamID
-		thinking = result.thinking
+		if !result.thinking.IsEmpty() {
+			thinking = result.thinking.Content
+		}
 	}
 
 	toolCall := result.funcCalls[toolCallIDx]
@@ -320,12 +342,22 @@ func (fp *flowProvider) callWithRetries(
 				stopReason = choice.StopReason
 			}
 
-			if strings.TrimSpace(choice.Content) != "" {
-				parts = append(parts, choice.Content)
-			}
-
 			if choice.GenerationInfo != nil {
 				result.info = choice.GenerationInfo
+			}
+
+			// Extract reasoning for logging/analytics (provider-aware)
+			if result.thinking.IsEmpty() {
+				if !choice.Reasoning.IsEmpty() {
+					result.thinking = choice.Reasoning
+				} else if len(choice.ToolCalls) > 0 && !choice.ToolCalls[0].Reasoning.IsEmpty() {
+					// Gemini puts reasoning in first tool call when tools are used
+					result.thinking = choice.ToolCalls[0].Reasoning
+				}
+			}
+
+			if strings.TrimSpace(choice.Content) != "" {
+				parts = append(parts, choice.Content)
 			}
 
 			for _, toolCall := range choice.ToolCalls {
@@ -333,10 +365,6 @@ func (fp *flowProvider) callWithRetries(
 					continue
 				}
 				result.funcCalls = append(result.funcCalls, toolCall)
-			}
-
-			if choice.ReasoningContent != "" {
-				result.thinking = choice.ReasoningContent
 			}
 		}
 
@@ -360,10 +388,13 @@ func (fp *flowProvider) callWithRetries(
 			streamCb = func(ctx context.Context, chunk streaming.Chunk) error {
 				switch chunk.Type {
 				case streaming.ChunkTypeReasoning:
+					if chunk.Reasoning.IsEmpty() {
+						return nil
+					}
 					return fp.streamCb(ctx, &StreamMessageChunk{
 						Type:     StreamMessageChunkTypeThinking,
 						MsgType:  msgType,
-						Thinking: chunk.ReasoningContent,
+						Thinking: chunk.Reasoning,
 						StreamID: result.streamID,
 					})
 				case streaming.ChunkTypeText:
@@ -416,7 +447,6 @@ func (fp *flowProvider) callWithRetries(
 		// because we stored thinking and content into standalone messages
 		if len(result.funcCalls) > 0 && result.content != "" {
 			result.streamID = 0
-			result.thinking = ""
 		}
 	}
 
@@ -532,12 +562,18 @@ func (fp *flowProvider) performReflector(
 		return nil, err
 	}
 
-	if err := fp.updateMsgChainUsage(ctx, chainID, result.info); err != nil {
+	// Don't update duration delta for reflector because it's already included in the performAgentChain
+	if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, 0); err != nil {
 		logger.WithError(err).Error("failed to update msg chain usage")
 		return nil, err
 	}
 
-	chain = append(chain, llms.TextParts(llms.ChatMessageTypeAI, result.content))
+	// Preserve reasoning in reflector response using universal pattern
+	reflectorMsg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+	if result.content != "" || !result.thinking.IsEmpty() {
+		reflectorMsg.Parts = append(reflectorMsg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+	}
+	chain = append(chain, reflectorMsg)
 	if len(result.funcCalls) == 0 {
 		return fp.performReflector(ctx, optOriginType, chainID, taskID, subtaskID, chain,
 			humanMessage, result.content, executionContext, executor, iteration+1)
@@ -577,8 +613,11 @@ func (fp *flowProvider) processAssistantResult(
 	result *callResult,
 	summarizer csum.Summarizer,
 	summarizerHandler tools.SummarizeHandler,
+	durationDelta float64,
 ) error {
 	var err error
+
+	processAssistantResultStartTime := time.Now()
 
 	if fp.streamCb != nil {
 		if result.streamID == 0 {
@@ -598,29 +637,41 @@ func (fp *flowProvider) processAssistantResult(
 
 	if summarizer != nil {
 		// it returns the same chain state if error occurs
-		chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain)
+		chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain, fp.tcIDTemplate)
 		if err != nil {
 			logger.WithError(err).Warn("failed to summarize chain")
 		}
 	}
 
-	chain = append(chain, llms.TextParts(llms.ChatMessageTypeAI, result.content))
-	if err := fp.updateMsgChain(ctx, chainID, chain); err != nil {
+	// Preserve reasoning for assistant responses using universal pattern
+	msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+	if result.content != "" || !result.thinking.IsEmpty() {
+		msg.Parts = append(msg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+	}
+	chain = append(chain, msg)
+	durationDelta += time.Since(processAssistantResultStartTime).Seconds()
+	if err := fp.updateMsgChain(ctx, chainID, chain, durationDelta); err != nil {
 		return fmt.Errorf("failed to update msg chain: %w", err)
 	}
 
 	return nil
 }
 
-func (fp *flowProvider) updateMsgChain(ctx context.Context, chainID int64, chain []llms.MessageContent) error {
+func (fp *flowProvider) updateMsgChain(
+	ctx context.Context,
+	chainID int64,
+	chain []llms.MessageContent,
+	durationDelta float64,
+) error {
 	chainBlob, err := json.Marshal(chain)
 	if err != nil {
 		return fmt.Errorf("failed to marshal msg chain: %w", err)
 	}
 
 	_, err = fp.db.UpdateMsgChain(ctx, database.UpdateMsgChainParams{
-		Chain: chainBlob,
-		ID:    chainID,
+		Chain:           chainBlob,
+		DurationSeconds: durationDelta,
+		ID:              chainID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update msg chain in DB: %w", err)
@@ -629,16 +680,32 @@ func (fp *flowProvider) updateMsgChain(ctx context.Context, chainID int64, chain
 	return nil
 }
 
-func (fp *flowProvider) updateMsgChainUsage(ctx context.Context, chainID int64, info map[string]any) error {
-	inputTokens, outputTokens := int64(0), int64(0)
-	if info != nil {
-		inputTokens, outputTokens = fp.GetUsage(info)
+func (fp *flowProvider) updateMsgChainUsage(
+	ctx context.Context,
+	chainID int64,
+	optAgentType pconfig.ProviderOptionsType,
+	info map[string]any,
+	durationDelta float64,
+) error {
+	usage := fp.GetUsage(info)
+	if usage.IsZero() {
+		return nil
+	}
+
+	price := fp.GetPriceInfo(optAgentType)
+	if price != nil {
+		usage.UpdateCost(price)
 	}
 
 	_, err := fp.db.UpdateMsgChainUsage(ctx, database.UpdateMsgChainUsageParams{
-		UsageIn:  inputTokens,
-		UsageOut: outputTokens,
-		ID:       chainID,
+		UsageIn:         usage.Input,
+		UsageOut:        usage.Output,
+		UsageCacheIn:    usage.CacheRead,
+		UsageCacheOut:   usage.CacheWrite,
+		UsageCostIn:     usage.CostInput,
+		UsageCostOut:    usage.CostOutput,
+		DurationSeconds: durationDelta,
+		ID:              chainID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update msg chain usage in DB: %w", err)

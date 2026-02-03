@@ -62,6 +62,8 @@ enum PromptType {
   execution_logs
   full_execution_context
   short_execution_context
+  tool_call_id_collector
+  tool_call_id_detector
 }
 
 # AI agent types for autonomous penetration testing
@@ -269,6 +271,8 @@ type SearchLog {
 type TerminalLog {
   id: ID!
   flowId: ID!
+  taskId: ID
+  subtaskId: ID
   type: TerminalLogType!
   text: String!
   terminal: ID!
@@ -292,6 +296,8 @@ type VectorStoreLog {
 type Screenshot {
   id: ID!
   flowId: ID!
+  taskId: ID
+  subtaskId: ID
   name: String!
   url: String!
   createdAt: Time!
@@ -372,6 +378,8 @@ type ToolsPrompts {
   getShortExecutionContext: DefaultPrompt!
   chooseDockerImage: DefaultPrompt!
   chooseUserLanguage: DefaultPrompt!
+  collectToolCallID: DefaultPrompt!
+  detectToolCallIDPattern: DefaultPrompt!
 }
 
 # Complete default prompt configuration (read only)
@@ -416,6 +424,119 @@ type ProviderTestResult {
   coder: AgentTestResult!
   installer: AgentTestResult!
   pentester: AgentTestResult!
+}
+
+# ==================== Analytics & Usage Statistics Types ====================
+
+# Usage statistics data for LLM token usage
+type UsageStats {
+  totalUsageIn: Int!
+  totalUsageOut: Int!
+  totalUsageCacheIn: Int!
+  totalUsageCacheOut: Int!
+  totalUsageCostIn: Float!
+  totalUsageCostOut: Float!
+}
+
+# Toolcalls statistics data
+type ToolcallsStats {
+  totalCount: Int!
+  totalDurationSeconds: Float!
+}
+
+# Flows statistics data for all flows
+type FlowsStats {
+  totalFlowsCount: Int!
+  totalTasksCount: Int!
+  totalSubtasksCount: Int!
+  totalAssistantsCount: Int!
+}
+
+# Flow statistics data for a specific flow
+type FlowStats {
+  totalTasksCount: Int!
+  totalSubtasksCount: Int!
+  totalAssistantsCount: Int!
+}
+
+# Daily usage statistics
+type DailyUsageStats {
+  date: Time!
+  stats: UsageStats!
+}
+
+# Provider-specific usage statistics
+type ProviderUsageStats {
+  provider: String!
+  stats: UsageStats!
+}
+
+# Model-specific usage statistics
+type ModelUsageStats {
+  model: String!
+  provider: String!
+  stats: UsageStats!
+}
+
+# Agent type usage statistics
+type AgentTypeUsageStats {
+  agentType: AgentType!
+  stats: UsageStats!
+}
+
+# Daily toolcalls statistics
+type DailyToolcallsStats {
+  date: Time!
+  stats: ToolcallsStats!
+}
+
+# Function-specific toolcalls statistics
+type FunctionToolcallsStats {
+  functionName: String!
+  isAgent: Boolean!
+  totalCount: Int!
+  totalDurationSeconds: Float!
+  avgDurationSeconds: Float!
+}
+
+# Daily flows statistics
+type DailyFlowsStats {
+  date: Time!
+  stats: FlowsStats!
+}
+
+# Subtask execution time statistics
+type SubtaskExecutionStats {
+  subtaskId: ID!
+  subtaskTitle: String!
+  totalDurationSeconds: Float!
+  totalToolcallsCount: Int!
+}
+
+# Task execution time statistics
+type TaskExecutionStats {
+  taskId: ID!
+  taskTitle: String!
+  totalDurationSeconds: Float!
+  totalToolcallsCount: Int!
+  subtasks: [SubtaskExecutionStats!]!
+}
+
+# Flow execution time statistics
+type FlowExecutionStats {
+  flowId: ID!
+  flowTitle: String!
+  totalDurationSeconds: Float!
+  totalToolcallsCount: Int!
+  totalAssistantsCount: Int!
+  tasks: [TaskExecutionStats!]!
+}
+
+# Time period for usage statistics queries
+enum UsageStatsPeriod {
+  week
+  month
+  quarter
 }
 
 # ==================== Provider Configuration Types ====================
@@ -493,6 +614,8 @@ type ReasoningConfig {
 type ModelPrice {
   input: Float!
   output: Float!
+  cacheRead: Float!
+  cacheWrite: Float!
 }
 
 # AI agent configuration parameters
@@ -540,6 +663,8 @@ input ReasoningConfigInput {
 input ModelPriceInput {
   input: Float!
   output: Float!
+  cacheRead: Float!
+  cacheWrite: Float!
 }
 
 # Input type for AgentConfig
@@ -595,6 +720,30 @@ type Query {
   searchLogs(flowId: ID!): [SearchLog!]
   vectorStoreLogs(flowId: ID!): [VectorStoreLog!]
   assistantLogs(flowId: ID!, assistantId: ID!): [AssistantLog!]
+
+  # Usage statistics and analytics
+  usageStatsTotal: UsageStats!
+  usageStatsByPeriod(period: UsageStatsPeriod!): [DailyUsageStats!]!
+  usageStatsByProvider: [ProviderUsageStats!]!
+  usageStatsByModel: [ModelUsageStats!]!
+  usageStatsByAgentType: [AgentTypeUsageStats!]!
+  usageStatsByFlow(flowId: ID!): UsageStats!
+  usageStatsByAgentTypeForFlow(flowId: ID!): [AgentTypeUsageStats!]!
+
+  # Toolcalls statistics and analytics
+  toolcallsStatsTotal: ToolcallsStats!
+  toolcallsStatsByPeriod(period: UsageStatsPeriod!): [DailyToolcallsStats!]!
+  toolcallsStatsByFunction: [FunctionToolcallsStats!]!
+  toolcallsStatsByFlow(flowId: ID!): ToolcallsStats!
+  toolcallsStatsByFunctionForFlow(flowId: ID!): [FunctionToolcallsStats!]!
+
+  # Flows statistics and analytics
+  flowsStatsTotal: FlowsStats!
+  flowsStatsByPeriod(period: UsageStatsPeriod!): [DailyFlowsStats!]!
+  flowStatsByFlow(flowId: ID!): FlowStats!
+
+  # Flows/Tasks/Subtasks execution time analytics
+  flowsExecutionStatsByPeriod(period: UsageStatsPeriod!): [FlowExecutionStats!]!
 
   # System settings
   settings: Settings!

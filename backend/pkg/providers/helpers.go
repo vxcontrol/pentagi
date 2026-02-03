@@ -353,6 +353,14 @@ func (fp *flowProvider) restoreChain(
 				ast.AppendHumanMessage(humanPrompt)
 			}
 
+			if err := ast.NormalizeToolCallIDs(fp.tcIDTemplate); err != nil {
+				return fmt.Errorf("failed to normalize tool call IDs: %w", err)
+			}
+
+			if err := ast.ClearReasoning(); err != nil {
+				return fmt.Errorf("failed to clear reasoning: %w", err)
+			}
+
 			summarizeHandler := fp.GetSummarizeResultHandler(taskID, subtaskID)
 			summarizer := csum.NewSummarizer(csum.SummarizerConfig{
 				PreserveLast:   true,
@@ -365,7 +373,7 @@ func (fp *flowProvider) restoreChain(
 				KeepQASections: keepQASectionsAfterRestore,
 			})
 
-			chain, err = summarizer.SummarizeChain(ctx, summarizeHandler, ast.Messages())
+			chain, err = summarizer.SummarizeChain(ctx, summarizeHandler, ast.Messages(), fp.tcIDTemplate)
 			if err != nil {
 				chain = ast.Messages()
 			}
@@ -390,6 +398,7 @@ func (fp *flowProvider) restoreChain(
 		Chain:         chainBlob,
 		FlowID:        fp.flowID,
 		TaskID:        database.Int64ToNullInt64(taskID),
+		SubtaskID:     database.Int64ToNullInt64(subtaskID),
 	})
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to create msg chain: %w", err)

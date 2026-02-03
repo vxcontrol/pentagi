@@ -31,17 +31,22 @@ type execResult struct {
 
 type terminal struct {
 	flowID       int64
+	taskID       *int64
+	subtaskID    *int64
 	containerID  int64
 	containerLID string
 	dockerClient docker.DockerClient
 	tlp          TermLogProvider
 }
 
-func NewTerminalTool(flowID int64, containerID int64, containerLID string,
+func NewTerminalTool(flowID int64, taskID, subtaskID *int64,
+	containerID int64, containerLID string,
 	dockerClient docker.DockerClient, tlp TermLogProvider,
 ) Tool {
 	return &terminal{
 		flowID:       flowID,
+		taskID:       taskID,
+		subtaskID:    subtaskID,
 		containerID:  containerID,
 		containerLID: containerLID,
 		dockerClient: dockerClient,
@@ -133,7 +138,7 @@ func (t *terminal) ExecCommand(
 	}
 
 	formattedCommand := FormatTerminalInput(cwd, command)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (stdin): %w", err)
 	}
@@ -216,7 +221,7 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 
 	results := dst.String()
 	formattedResults := FormatTerminalSystemOutput(results)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, formattedResults, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, formattedResults, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (stdout): %w", err)
 	}
@@ -241,7 +246,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 
 	cwd := docker.WorkFolderPathInContainer
 	formattedCommand := FormatTerminalInput(cwd, fmt.Sprintf("cat %s", path))
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (read file cmd): %w", err)
 	}
@@ -290,7 +295,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 
 	content := buffer.String()
 	formattedContent := FormatTerminalSystemOutput(content)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, formattedContent, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, formattedContent, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (read file content): %w", err)
 	}
@@ -337,7 +342,7 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	}
 
 	formattedCommand := FormatTerminalSystemOutput(fmt.Sprintf("Wrote to %s", path))
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (write file cmd): %w", err)
 	}

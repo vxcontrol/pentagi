@@ -374,6 +374,8 @@ const (
 	PromptTypeExecutionLogs         PromptType = "execution_logs"
 	PromptTypeFullExecutionContext  PromptType = "full_execution_context"
 	PromptTypeShortExecutionContext PromptType = "short_execution_context"
+	PromptTypeToolCallIDCollector   PromptType = "tool_call_id_collector"
+	PromptTypeToolCallIDDetector    PromptType = "tool_call_id_detector"
 )
 
 func (e *PromptType) Scan(src interface{}) error {
@@ -821,21 +823,22 @@ type Agentlog struct {
 }
 
 type Assistant struct {
-	ID                int64           `json:"id"`
-	Status            AssistantStatus `json:"status"`
-	Title             string          `json:"title"`
-	Model             string          `json:"model"`
-	ModelProviderName string          `json:"model_provider_name"`
-	Language          string          `json:"language"`
-	Functions         json.RawMessage `json:"functions"`
-	TraceID           sql.NullString  `json:"trace_id"`
-	FlowID            int64           `json:"flow_id"`
-	UseAgents         bool            `json:"use_agents"`
-	MsgchainID        sql.NullInt64   `json:"msgchain_id"`
-	CreatedAt         sql.NullTime    `json:"created_at"`
-	UpdatedAt         sql.NullTime    `json:"updated_at"`
-	DeletedAt         sql.NullTime    `json:"deleted_at"`
-	ModelProviderType ProviderType    `json:"model_provider_type"`
+	ID                 int64           `json:"id"`
+	Status             AssistantStatus `json:"status"`
+	Title              string          `json:"title"`
+	Model              string          `json:"model"`
+	ModelProviderName  string          `json:"model_provider_name"`
+	Language           string          `json:"language"`
+	Functions          json.RawMessage `json:"functions"`
+	TraceID            sql.NullString  `json:"trace_id"`
+	FlowID             int64           `json:"flow_id"`
+	UseAgents          bool            `json:"use_agents"`
+	MsgchainID         sql.NullInt64   `json:"msgchain_id"`
+	CreatedAt          sql.NullTime    `json:"created_at"`
+	UpdatedAt          sql.NullTime    `json:"updated_at"`
+	DeletedAt          sql.NullTime    `json:"deleted_at"`
+	ModelProviderType  ProviderType    `json:"model_provider_type"`
+	ToolCallIDTemplate string          `json:"tool_call_id_template"`
 }
 
 type Assistantlog struct {
@@ -864,34 +867,40 @@ type Container struct {
 }
 
 type Flow struct {
-	ID                int64           `json:"id"`
-	Status            FlowStatus      `json:"status"`
-	Title             string          `json:"title"`
-	Model             string          `json:"model"`
-	ModelProviderName string          `json:"model_provider_name"`
-	Language          string          `json:"language"`
-	Functions         json.RawMessage `json:"functions"`
-	UserID            int64           `json:"user_id"`
-	CreatedAt         sql.NullTime    `json:"created_at"`
-	UpdatedAt         sql.NullTime    `json:"updated_at"`
-	DeletedAt         sql.NullTime    `json:"deleted_at"`
-	TraceID           sql.NullString  `json:"trace_id"`
-	ModelProviderType ProviderType    `json:"model_provider_type"`
+	ID                 int64           `json:"id"`
+	Status             FlowStatus      `json:"status"`
+	Title              string          `json:"title"`
+	Model              string          `json:"model"`
+	ModelProviderName  string          `json:"model_provider_name"`
+	Language           string          `json:"language"`
+	Functions          json.RawMessage `json:"functions"`
+	UserID             int64           `json:"user_id"`
+	CreatedAt          sql.NullTime    `json:"created_at"`
+	UpdatedAt          sql.NullTime    `json:"updated_at"`
+	DeletedAt          sql.NullTime    `json:"deleted_at"`
+	TraceID            sql.NullString  `json:"trace_id"`
+	ModelProviderType  ProviderType    `json:"model_provider_type"`
+	ToolCallIDTemplate string          `json:"tool_call_id_template"`
 }
 
 type Msgchain struct {
-	ID            int64           `json:"id"`
-	Type          MsgchainType    `json:"type"`
-	Model         string          `json:"model"`
-	ModelProvider string          `json:"model_provider"`
-	UsageIn       int64           `json:"usage_in"`
-	UsageOut      int64           `json:"usage_out"`
-	Chain         json.RawMessage `json:"chain"`
-	FlowID        int64           `json:"flow_id"`
-	TaskID        sql.NullInt64   `json:"task_id"`
-	SubtaskID     sql.NullInt64   `json:"subtask_id"`
-	CreatedAt     sql.NullTime    `json:"created_at"`
-	UpdatedAt     sql.NullTime    `json:"updated_at"`
+	ID              int64           `json:"id"`
+	Type            MsgchainType    `json:"type"`
+	Model           string          `json:"model"`
+	ModelProvider   string          `json:"model_provider"`
+	UsageIn         int64           `json:"usage_in"`
+	UsageOut        int64           `json:"usage_out"`
+	Chain           json.RawMessage `json:"chain"`
+	FlowID          int64           `json:"flow_id"`
+	TaskID          sql.NullInt64   `json:"task_id"`
+	SubtaskID       sql.NullInt64   `json:"subtask_id"`
+	CreatedAt       sql.NullTime    `json:"created_at"`
+	UpdatedAt       sql.NullTime    `json:"updated_at"`
+	UsageCacheIn    int64           `json:"usage_cache_in"`
+	UsageCacheOut   int64           `json:"usage_cache_out"`
+	UsageCostIn     float64         `json:"usage_cost_in"`
+	UsageCostOut    float64         `json:"usage_cost_out"`
+	DurationSeconds float64         `json:"duration_seconds"`
 }
 
 type Msglog struct {
@@ -939,11 +948,13 @@ type Role struct {
 }
 
 type Screenshot struct {
-	ID        int64        `json:"id"`
-	Name      string       `json:"name"`
-	Url       string       `json:"url"`
-	FlowID    int64        `json:"flow_id"`
-	CreatedAt sql.NullTime `json:"created_at"`
+	ID        int64         `json:"id"`
+	Name      string        `json:"name"`
+	Url       string        `json:"url"`
+	FlowID    int64         `json:"flow_id"`
+	CreatedAt sql.NullTime  `json:"created_at"`
+	TaskID    sql.NullInt64 `json:"task_id"`
+	SubtaskID sql.NullInt64 `json:"subtask_id"`
 }
 
 type Searchlog struct {
@@ -983,25 +994,29 @@ type Task struct {
 }
 
 type Termlog struct {
-	ID          int64        `json:"id"`
-	Type        TermlogType  `json:"type"`
-	Text        string       `json:"text"`
-	ContainerID int64        `json:"container_id"`
-	CreatedAt   sql.NullTime `json:"created_at"`
+	ID          int64         `json:"id"`
+	Type        TermlogType   `json:"type"`
+	Text        string        `json:"text"`
+	ContainerID int64         `json:"container_id"`
+	CreatedAt   sql.NullTime  `json:"created_at"`
+	FlowID      int64         `json:"flow_id"`
+	TaskID      sql.NullInt64 `json:"task_id"`
+	SubtaskID   sql.NullInt64 `json:"subtask_id"`
 }
 
 type Toolcall struct {
-	ID        int64           `json:"id"`
-	CallID    string          `json:"call_id"`
-	Status    ToolcallStatus  `json:"status"`
-	Name      string          `json:"name"`
-	Args      json.RawMessage `json:"args"`
-	Result    string          `json:"result"`
-	FlowID    int64           `json:"flow_id"`
-	TaskID    sql.NullInt64   `json:"task_id"`
-	SubtaskID sql.NullInt64   `json:"subtask_id"`
-	CreatedAt sql.NullTime    `json:"created_at"`
-	UpdatedAt sql.NullTime    `json:"updated_at"`
+	ID              int64           `json:"id"`
+	CallID          string          `json:"call_id"`
+	Status          ToolcallStatus  `json:"status"`
+	Name            string          `json:"name"`
+	Args            json.RawMessage `json:"args"`
+	Result          string          `json:"result"`
+	FlowID          int64           `json:"flow_id"`
+	TaskID          sql.NullInt64   `json:"task_id"`
+	SubtaskID       sql.NullInt64   `json:"subtask_id"`
+	CreatedAt       sql.NullTime    `json:"created_at"`
+	UpdatedAt       sql.NullTime    `json:"updated_at"`
+	DurationSeconds float64         `json:"duration_seconds"`
 }
 
 type User struct {

@@ -2,7 +2,7 @@ simple:
   model: "kimi-k2-0905-preview"
   temperature: 0.5
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
     input: 0.6
     output: 2.5
@@ -11,61 +11,71 @@ simple_json:
   model: "kimi-k2-0905-preview"
   temperature: 0.4
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
     input: 0.6
     output: 2.5
 
 primary_agent:
-  model: "kimi-k2-turbo-preview"
-  temperature: 0.6
+  model: "kimi-k2.5"
+  temperature: 1.0
   n: 1
-  max_tokens: 4000
-  price:
-    input: 2.4
-    output: 10.0
-
-assistant:
-  model: "kimi-k2-turbo-preview"
-  temperature: 0.7
-  n: 1
-  max_tokens: 6000
-  price:
-    input: 2.4
-    output: 10.0
-
-generator:
-  model: "kimi-k2-turbo-preview"
-  temperature: 0.6
-  n: 1
-  max_tokens: 8000
-  price:
-    input: 2.4
-    output: 10.0
-
-refiner:
-  model: "kimi-k2-turbo-preview"
-  temperature: 0.7
-  n: 1
-  max_tokens: 6000
-  price:
-    input: 2.4
-    output: 10.0
-
-adviser:
-  model: "kimi-k2-0905-preview"
-  temperature: 0.8
-  n: 1
-  max_tokens: 4000
+  max_tokens: 8192
+  reasoning:
+    effort: high
   price:
     input: 0.6
-    output: 2.5
+    output: 3.0
+
+assistant:
+  model: "kimi-k2.5"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: high
+  price:
+    input: 0.6
+    output: 3.0
+
+generator:
+  model: "kimi-k2.5"
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.6
+    output: 3.0
+
+refiner:
+  model: "kimi-k2.5"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: medium
+  price:
+    input: 0.6
+    output: 3.0
+
+adviser:
+  model: "kimi-k2.5"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: high
+  price:
+    input: 0.6
+    output: 3.0
 
 reflector:
   model: "kimi-k2-0905-preview"
   temperature: 0.5
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
     input: 0.6
     output: 2.5
@@ -74,7 +84,7 @@ searcher:
   model: "kimi-k2-0905-preview"
   temperature: 0.7
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
     input: 0.6
     output: 2.5
@@ -83,34 +93,36 @@ enricher:
   model: "kimi-k2-0905-preview"
   temperature: 0.7
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
     input: 0.6
     output: 2.5
 
 coder:
-  model: "kimi-k2-0905-preview"
-  temperature: 0.5
+  model: "kimi-k2.5"
+  temperature: 1.0
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
+  reasoning:
+    effort: high
   price:
     input: 0.6
-    output: 2.5
+    output: 3.0
 
 installer:
-  model: "kimi-k2-0905-preview"
+  model: "kimi-k2-turbo-preview"
   temperature: 0.5
   n: 1
-  max_tokens: 6000
+  max_tokens: 8192
   price:
-    input: 0.6
-    output: 2.5
+    input: 1.15
+    output: 8.0
 
 pentester:
   model: "kimi-k2-turbo-preview"
-  temperature: 0.6
+  temperature: 0.7
   n: 1
-  max_tokens: 6000
+  max_tokens: 8192
   price:
-    input: 2.4
-    output: 10.0
+    input: 1.15
+    output: 8.0

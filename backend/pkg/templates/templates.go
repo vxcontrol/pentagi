@@ -2,11 +2,15 @@ package templates
 
 import (
 	"bytes"
+	"crypto/rand"
 	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"path"
+	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -56,6 +60,8 @@ const (
 	PromptTypeExecutionLogs         PromptType = "execution_logs"          // formats execution history for display
 	PromptTypeFullExecutionContext  PromptType = "full_execution_context"  // prepares complete context for summarization
 	PromptTypeShortExecutionContext PromptType = "short_execution_context" // prepares minimal context for quick processing
+	PromptTypeToolCallIDCollector   PromptType = "tool_call_id_collector"  // requests function call to collect tool call ID sample
+	PromptTypeToolCallIDDetector    PromptType = "tool_call_id_detector"   // analyzes tool call ID samples to detect pattern template
 )
 
 var PromptVariables = map[PromptType][]string{
@@ -353,6 +359,15 @@ var PromptVariables = map[PromptType][]string{
 	PromptTypeLanguageChooser: {
 		"Input",
 	},
+	PromptTypeToolCallIDCollector: {
+		"FunctionName",
+		"RandomContext",
+	},
+	PromptTypeToolCallIDDetector: {
+		"FunctionName",
+		"Samples",
+		"PreviousAttempts",
+	},
 }
 
 type Prompt struct {
@@ -396,6 +411,8 @@ type ToolsPrompts struct {
 	GetShortExecutionContext Prompt
 	ChooseDockerImage        Prompt
 	ChooseUserLanguage       Prompt
+	CollectToolCallID        Prompt
+	DetectToolCallIDPattern  Prompt
 }
 
 type DefaultPrompts struct {
@@ -496,6 +513,8 @@ func GetDefaultPrompts() (*DefaultPrompts, error) {
 			GetShortExecutionContext: getPrompt(PromptTypeShortExecutionContext),
 			ChooseDockerImage:        getPrompt(PromptTypeImageChooser),
 			ChooseUserLanguage:       getPrompt(PromptTypeLanguageChooser),
+			CollectToolCallID:        getPrompt(PromptTypeToolCallIDCollector),
+			DetectToolCallIDPattern:  getPrompt(PromptTypeToolCallIDDetector),
 		},
 	}, nil
 }
@@ -614,4 +633,340 @@ func ReadGraphitiTemplate(name string) (string, error) {
 		return "", fmt.Errorf("failed to read graphiti template %s: %w", name, err)
 	}
 	return string(templateBytes), nil
+}
+
+// String pattern template format:
+// - Literal parts: any text outside curly braces
+// - Random parts: {r:LENGTH:CHARSET}
+//   - LENGTH: number of characters to generate
+//   - CHARSET: character set type
+//     - d, digit: [0-9]
+//     - l, lower: [a-z]
+//     - u, upper: [A-Z]
+//     - a, alpha: [a-zA-Z]
+//     - x, alnum: [a-zA-Z0-9]
+//     - h, hex: [0-9a-f]
+//     - H, HEX: [0-9A-F]
+//     - b, base62: [0-9A-Za-z]
+//
+// Examples:
+//   - "toolu_{r:24:b}" → "toolu_013wc5CxNCjWGN2rsAR82rJK"
+//   - "call_{r:24:x}" → "call_Z8ofZnYOCeOnpu0h2auwOgeR"
+//   - "chatcmpl-tool-{r:32:h}" → "chatcmpl-tool-23c5c0da71854f9bbd8774f7d0113a69"
+
+const (
+	charsetDigit  = "0123456789"
+	charsetLower  = "abcdefghijklmnopqrstuvwxyz"
+	charsetUpper  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	charsetAlpha  = charsetLower + charsetUpper
+	charsetAlnum  = charsetDigit + charsetAlpha
+	charsetHex    = "0123456789abcdef"
+	charsetHexUp  = "0123456789ABCDEF"
+	charsetBase62 = charsetDigit + charsetUpper + charsetLower
+)
+
+var patternRegex = regexp.MustCompile(`\{r:(\d+):(d|digit|l|lower|u|upper|a|alpha|x|alnum|h|hex|H|HEX|b|base62)\}`)
+
+type patternPart struct {
+	literal  string
+	isRandom bool
+	length   int
+	charset  string
+}
+
+// getCharset returns the character set for a given charset name
+func getCharset(name string) string {
+	switch name {
+	case "d", "digit":
+		return charsetDigit
+	case "l", "lower":
+		return charsetLower
+	case "u", "upper":
+		return charsetUpper
+	case "a", "alpha":
+		return charsetAlpha
+	case "x", "alnum":
+		return charsetAlnum
+	case "h", "hex":
+		return charsetHex
+	case "H", "HEX":
+		return charsetHexUp
+	case "b", "base62":
+		return charsetBase62
+	default:
+		return charsetAlnum // fallback
+	}
+}
+
+// parsePattern parses a pattern string into parts
+func parsePattern(pattern string) []patternPart {
+	var parts []patternPart
+	lastIndex := 0
+
+	matches := patternRegex.FindAllStringSubmatchIndex(pattern, -1)
+	for _, match := range matches {
+		// Add literal part before this match
+		if match[0] > lastIndex {
+			parts = append(parts, patternPart{
+				literal:  pattern[lastIndex:match[0]],
+				isRandom: false,
+			})
+		}
+
+		// Parse random part
+		length, _ := strconv.Atoi(pattern[match[2]:match[3]])
+		charsetName := pattern[match[4]:match[5]]
+		parts = append(parts, patternPart{
+			isRandom: true,
+			length:   length,
+			charset:  getCharset(charsetName),
+		})
+
+		lastIndex = match[1]
+	}
+
+	// Add remaining literal part
+	if lastIndex < len(pattern) {
+		parts = append(parts, patternPart{
+			literal:  pattern[lastIndex:],
+			isRandom: false,
+		})
+	}
+
+	return parts
+}
+
+// generateRandomString generates a random string of specified length using the given charset
+func generateRandomString(length int, charset string) string {
+	if length == 0 || charset == "" {
+		return ""
+	}
+
+	result := make([]byte, length)
+	charsetLen := big.NewInt(int64(len(charset)))
+
+	for i := 0; i < length; i++ {
+		num, err := rand.Int(rand.Reader, charsetLen)
+		if err != nil {
+			// Fallback to first character if random fails (should never happen)
+			result[i] = charset[0]
+		} else {
+			result[i] = charset[num.Int64()]
+		}
+	}
+
+	return string(result)
+}
+
+// GenerateFromPattern generates a random string matching the given pattern template.
+// This function never returns an error - it uses fallback values for invalid patterns.
+//
+// Pattern format: literal text with {r:LENGTH:CHARSET} for random parts
+// Example: "toolu_{r:24:base62}" → "toolu_xK9pQw2mN5vR8tY7uI6oP3zA"
+func GenerateFromPattern(pattern string) string {
+	parts := parsePattern(pattern)
+	var result strings.Builder
+
+	for _, part := range parts {
+		if part.isRandom {
+			result.WriteString(generateRandomString(part.length, part.charset))
+		} else {
+			result.WriteString(part.literal)
+		}
+	}
+
+	return result.String()
+}
+
+// PatternValidationError represents a validation error for a specific value
+type PatternValidationError struct {
+	Value    string
+	Position int
+	Expected string
+	Got      string
+	Message  string
+}
+
+func (e *PatternValidationError) Error() string {
+	if e.Position >= 0 {
+		return fmt.Sprintf("validation failed for '%s' at position %d: expected %s, got '%s': %s",
+			e.Value, e.Position, e.Expected, e.Got, e.Message)
+	}
+	return fmt.Sprintf("validation failed for '%s': %s", e.Value, e.Message)
+}
+
+// ValidatePattern validates that all provided values match the given pattern template.
+// Returns a detailed error if any value doesn't match, nil if all values are valid.
+//
+// Pattern format: literal text with {r:LENGTH:CHARSET} for random parts
+// Example: ValidatePattern("call_{r:24:alnum}", "call_abc123...", "call_xyz789...")
+func ValidatePattern(pattern string, values ...string) error {
+	if len(values) == 0 {
+		return nil
+	}
+
+	parts := parsePattern(pattern)
+
+	// Build expected length and regex pattern
+	var expectedLen int
+	var regexParts []string
+
+	for _, part := range parts {
+		if part.isRandom {
+			expectedLen += part.length
+			// Build character class from charset
+			charClass := buildCharClass(part.charset)
+			regexParts = append(regexParts, fmt.Sprintf("%s{%d}", charClass, part.length))
+		} else {
+			expectedLen += len(part.literal)
+			regexParts = append(regexParts, regexp.QuoteMeta(part.literal))
+		}
+	}
+
+	regexPattern := "^" + strings.Join(regexParts, "") + "$"
+	re := regexp.MustCompile(regexPattern)
+
+	// Validate each value
+	for _, value := range values {
+		// Check length
+		if len(value) != expectedLen {
+			return &PatternValidationError{
+				Value:    value,
+				Position: -1,
+				Expected: fmt.Sprintf("length %d", expectedLen),
+				Got:      fmt.Sprintf("length %d", len(value)),
+				Message:  fmt.Sprintf("incorrect length: expected %d, got %d", expectedLen, len(value)),
+			}
+		}
+
+		// Check pattern match
+		if !re.MatchString(value) {
+			// Find the exact position where it fails
+			pos := findMismatchPosition(value, parts)
+			part := getPartAtPosition(parts, pos)
+
+			var expected string
+			if part.isRandom {
+				expected = fmt.Sprintf("character from charset [%s]", describeCharset(part.charset))
+			} else {
+				expected = fmt.Sprintf("'%s'", part.literal)
+			}
+
+			got := ""
+			if pos < len(value) {
+				got = string(value[pos])
+			}
+
+			return &PatternValidationError{
+				Value:    value,
+				Position: pos,
+				Expected: expected,
+				Got:      got,
+				Message:  "pattern mismatch",
+			}
+		}
+	}
+
+	return nil
+}
+
+// buildCharClass builds a regex character class from a charset string
+func buildCharClass(charset string) string {
+	// Optimize for common charsets
+	switch charset {
+	case charsetDigit:
+		return `\d`
+	case charsetLower:
+		return `[a-z]`
+	case charsetUpper:
+		return `[A-Z]`
+	case charsetAlpha:
+		return `[a-zA-Z]`
+	case charsetAlnum:
+		return `[a-zA-Z0-9]`
+	case charsetHex:
+		return `[0-9a-f]`
+	case charsetHexUp:
+		return `[0-9A-F]`
+	case charsetBase62:
+		return `[0-9A-Za-z]`
+	default:
+		// Build custom character class
+		return `[` + regexp.QuoteMeta(charset) + `]`
+	}
+}
+
+// describeCharset returns a human-readable description of a charset
+func describeCharset(charset string) string {
+	switch charset {
+	case charsetDigit:
+		return "0-9"
+	case charsetLower:
+		return "a-z"
+	case charsetUpper:
+		return "A-Z"
+	case charsetAlpha:
+		return "a-zA-Z"
+	case charsetAlnum:
+		return "a-zA-Z0-9"
+	case charsetHex:
+		return "0-9a-f"
+	case charsetHexUp:
+		return "0-9A-F"
+	case charsetBase62:
+		return "0-9A-Za-z"
+	default:
+		return charset
+	}
+}
+
+// findMismatchPosition finds the first position where value doesn't match the pattern
+func findMismatchPosition(value string, parts []patternPart) int {
+	pos := 0
+
+	for _, part := range parts {
+		if part.isRandom {
+			// Check each character against charset
+			for i := 0; i < part.length && pos < len(value); i++ {
+				if !strings.ContainsRune(part.charset, rune(value[pos])) {
+					return pos
+				}
+				pos++
+			}
+		} else {
+			// Check literal match
+			for i := 0; i < len(part.literal) && pos < len(value); i++ {
+				if value[pos] != part.literal[i] {
+					return pos
+				}
+				pos++
+			}
+		}
+	}
+
+	return pos
+}
+
+// getPartAtPosition returns the pattern part at the given position in the generated string
+func getPartAtPosition(parts []patternPart, position int) patternPart {
+	pos := 0
+
+	for _, part := range parts {
+		length := part.length
+		if !part.isRandom {
+			length = len(part.literal)
+		}
+
+		if position < pos+length {
+			return part
+		}
+		pos += length
+	}
+
+	// Return last part if position is beyond
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+
+	return patternPart{}
 }

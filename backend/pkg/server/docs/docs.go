@@ -5642,6 +5642,14 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "subtask_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "task_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
                 "url": {
                     "type": "string"
                 }
@@ -5812,6 +5820,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "container_id",
+                "flow_id",
                 "text",
                 "type"
             ],
@@ -5823,7 +5832,19 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
                 "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "subtask_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "task_id": {
                     "type": "integer",
                     "minimum": 0
                 },

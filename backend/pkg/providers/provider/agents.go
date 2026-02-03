@@ -1,0 +1,570 @@
+package provider
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"sync"
+
+	"pentagi/pkg/providers/pconfig"
+	"pentagi/pkg/templates"
+
+	"github.com/google/uuid"
+	"github.com/vxcontrol/langchaingo/llms"
+)
+
+const (
+	maxRetries          = 5
+	sampleCount         = 5
+	testFunctionName    = "get_number"
+	patternFunctionName = "submit_pattern"
+)
+
+var cacheTemplates sync.Map
+
+// attemptRecord stores information about a failed pattern detection attempt
+type attemptRecord struct {
+	Template string
+	Error    string
+}
+
+func lookupInCache(provider Provider) (string, bool) {
+	if template, ok := cacheTemplates.Load(provider.Type()); ok {
+		if template, ok := template.(string); ok {
+			return template, true
+		}
+	}
+	return "", false
+}
+
+func storeInCache(provider Provider, template string) {
+	cacheTemplates.Store(provider.Type(), template)
+}
+
+// DetermineToolCallIDTemplate analyzes tool call ID format by collecting samples
+// and using AI to detect the pattern, with fallback to heuristic analysis
+func DetermineToolCallIDTemplate(
+	ctx context.Context,
+	provider Provider,
+	opt pconfig.ProviderOptionsType,
+	prompter templates.Prompter,
+) (string, error) {
+	// Step 0: Check if template is already in cache
+	if template, ok := lookupInCache(provider); ok {
+		return template, nil
+	}
+
+	// Step 1: Collect 5 sample tool call IDs in parallel
+	samples, err := collectToolCallIDSamples(ctx, provider, opt, prompter)
+	if err != nil {
+		return "", fmt.Errorf("failed to collect tool call ID samples: %w", err)
+	}
+
+	if len(samples) == 0 {
+		return "", fmt.Errorf("no tool call ID samples collected")
+	}
+
+	// Step 2-4: Try to detect pattern using AI with retry logic
+	var previousAttempts []attemptRecord
+	for attempt := range maxRetries {
+		template, newSampleID, err := detectPatternWithAI(ctx, provider, opt, prompter, samples, previousAttempts)
+		if err != nil {
+			// If AI detection completely fails, use fallback
+			if attempt == maxRetries-1 {
+				template = fallbackHeuristicDetection(samples)
+				storeInCache(provider, template)
+				return template, nil
+			}
+			continue
+		}
+
+		// Add new sample from detector call
+		allSamples := append(samples, newSampleID)
+
+		// Validate template against all samples
+		validationErr := templates.ValidatePattern(template, allSamples...)
+		if validationErr == nil {
+			storeInCache(provider, template)
+			return template, nil
+		}
+
+		// Validation failed, record attempt and retry
+		previousAttempts = append(previousAttempts, attemptRecord{
+			Template: template,
+			Error:    validationErr.Error(),
+		})
+
+		// Update samples to include the new one for next iteration
+		samples = allSamples
+	}
+
+	// All retries exhausted, use fallback heuristic
+	template := fallbackHeuristicDetection(samples)
+	storeInCache(provider, template)
+	return template, nil
+}
+
+// collectToolCallIDSamples collects tool call ID samples in parallel
+func collectToolCallIDSamples(
+	ctx context.Context,
+	provider Provider,
+	opt pconfig.ProviderOptionsType,
+	prompter templates.Prompter,
+) ([]string, error) {
+	type sampleResult struct {
+		id  string
+		err error
+	}
+
+	results := make(chan sampleResult, sampleCount)
+	var wg sync.WaitGroup
+
+	// Launch parallel goroutines to collect samples
+	for range sampleCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			id, err := runToolCallIDCollector(ctx, provider, opt, prompter)
+			results <- sampleResult{id: id, err: err}
+		}()
+	}
+
+	// Wait for all goroutines to complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	var samples []string
+	var errs []error
+	for result := range results {
+		if result.err != nil {
+			errs = append(errs, result.err)
+		} else {
+			samples = append(samples, result.id)
+		}
+	}
+
+	// Return error only if we got no samples at all
+	if len(samples) == 0 && len(errs) > 0 {
+		return nil, fmt.Errorf("all sample collection attempts failed: %w", errors.Join(errs...))
+	}
+
+	return samples, nil
+}
+
+// runToolCallIDCollector collects a single tool call ID sample
+func runToolCallIDCollector(
+	ctx context.Context,
+	provider Provider,
+	opt pconfig.ProviderOptionsType,
+	prompter templates.Prompter,
+) (string, error) {
+	// Generate random context to prevent caching
+	randomContext := uuid.New().String()
+
+	// Render collector prompt
+	prompt, err := prompter.RenderTemplate(templates.PromptTypeToolCallIDCollector, map[string]any{
+		"FunctionName":  testFunctionName,
+		"RandomContext": randomContext,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to render collector prompt: %w", err)
+	}
+
+	// Create test tool
+	testTool := llms.Tool{
+		Type: "function",
+		Function: &llms.FunctionDefinition{
+			Name:        testFunctionName,
+			Description: "Get a number value",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"value": map[string]any{
+						"type":        "integer",
+						"description": "The number value",
+					},
+				},
+				"required": []string{"value"},
+			},
+		},
+	}
+
+	// Call LLM with tool
+	messages := []llms.MessageContent{
+		{
+			Role:  llms.ChatMessageTypeHuman,
+			Parts: []llms.ContentPart{llms.TextContent{Text: prompt}},
+		},
+	}
+
+	response, err := provider.CallWithTools(ctx, opt, messages, []llms.Tool{testTool}, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to call LLM: %w", err)
+	}
+
+	// Extract tool call ID
+	for _, choice := range response.Choices {
+		for _, toolCall := range choice.ToolCalls {
+			if toolCall.ID != "" {
+				return toolCall.ID, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no tool call ID found in response")
+}
+
+// detectPatternWithAI uses AI to analyze samples and detect pattern template
+func detectPatternWithAI(
+	ctx context.Context,
+	provider Provider,
+	opt pconfig.ProviderOptionsType,
+	prompter templates.Prompter,
+	samples []string,
+	previousAttempts []attemptRecord,
+) (string, string, error) {
+	// Render detector prompt
+	prompt, err := prompter.RenderTemplate(templates.PromptTypeToolCallIDDetector, map[string]any{
+		"FunctionName":     patternFunctionName,
+		"Samples":          samples,
+		"PreviousAttempts": previousAttempts,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("failed to render detector prompt: %w", err)
+	}
+
+	// Create pattern submission tool
+	patternTool := llms.Tool{
+		Type: "function",
+		Function: &llms.FunctionDefinition{
+			Name:        patternFunctionName,
+			Description: "Submit the detected pattern template",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"template": map[string]any{
+						"type":        "string",
+						"description": "The pattern template in format like 'toolu_{r:24:b}' or 'call_{r:24:x}'",
+					},
+				},
+				"required": []string{"template"},
+			},
+		},
+	}
+
+	// Call LLM with tool
+	messages := []llms.MessageContent{
+		{
+			Role:  llms.ChatMessageTypeHuman,
+			Parts: []llms.ContentPart{llms.TextContent{Text: prompt}},
+		},
+	}
+
+	response, err := provider.CallWithTools(ctx, opt, messages, []llms.Tool{patternTool}, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to call LLM: %w", err)
+	}
+
+	// Extract template and new tool call ID from response
+	var detectedTemplate string
+	var newToolCallID string
+
+	for _, choice := range response.Choices {
+		for _, toolCall := range choice.ToolCalls {
+			if toolCall.ID != "" {
+				newToolCallID = toolCall.ID
+			}
+			if toolCall.FunctionCall != nil && toolCall.FunctionCall.Name == patternFunctionName {
+				// Parse arguments to get template
+				var args struct {
+					Template string `json:"template"`
+				}
+				if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err == nil {
+					detectedTemplate = args.Template
+				}
+			}
+		}
+	}
+
+	if detectedTemplate == "" {
+		return "", "", fmt.Errorf("no template found in AI response")
+	}
+	if newToolCallID == "" {
+		return "", "", fmt.Errorf("no tool call ID found in AI response")
+	}
+
+	return detectedTemplate, newToolCallID, nil
+}
+
+// fallbackHeuristicDetection performs character-by-character analysis to build pattern
+func fallbackHeuristicDetection(samples []string) string {
+	if len(samples) == 0 {
+		return ""
+	}
+
+	// Find minimum length
+	minLen := len(samples[0])
+	for _, sample := range samples[1:] {
+		if len(sample) < minLen {
+			minLen = len(sample)
+		}
+	}
+
+	var pattern strings.Builder
+	pos := 0
+
+	for pos < minLen {
+		// Get character at position from all samples
+		chars := make([]byte, len(samples))
+		for i, sample := range samples {
+			chars[i] = sample[pos]
+		}
+
+		// Check if all characters are the same (literal)
+		allSame := true
+		firstChar := chars[0]
+		for _, ch := range chars[1:] {
+			if ch != firstChar {
+				allSame = false
+				break
+			}
+		}
+
+		if allSame {
+			// Collect all consecutive literal characters
+			for pos < minLen {
+				chars := make([]byte, len(samples))
+				for i, sample := range samples {
+					chars[i] = sample[pos]
+				}
+
+				allSame := true
+				firstChar := chars[0]
+				for _, ch := range chars[1:] {
+					if ch != firstChar {
+						allSame = false
+						break
+					}
+				}
+
+				if !allSame {
+					break
+				}
+
+				pattern.WriteByte(firstChar)
+				pos++
+			}
+		} else {
+			// Random part - collect all consecutive random characters
+			var allCharsInRandom [][]byte
+
+			// Collect all random characters until we hit a literal
+			for pos < minLen {
+				chars := make([]byte, len(samples))
+				for i, sample := range samples {
+					chars[i] = sample[pos]
+				}
+
+				// Check if this position is literal
+				allSame := true
+				firstChar := chars[0]
+				for _, ch := range chars[1:] {
+					if ch != firstChar {
+						allSame = false
+						break
+					}
+				}
+
+				if allSame {
+					break
+				}
+
+				allCharsInRandom = append(allCharsInRandom, chars)
+				pos++
+			}
+
+			// Determine charset for all collected random characters
+			if len(allCharsInRandom) > 0 {
+				charset := determineCommonCharset(allCharsInRandom)
+				pattern.WriteString(fmt.Sprintf("{r:%d:%s}", len(allCharsInRandom), charset))
+			}
+		}
+	}
+
+	return pattern.String()
+}
+
+// determineCommonCharset finds charset that covers all character sets across positions
+func determineCommonCharset(allCharsPerPosition [][]byte) string {
+	hasDigit := false
+	hasLower := false
+	hasUpper := false
+
+	// Check all positions
+	for _, chars := range allCharsPerPosition {
+		for _, ch := range chars {
+			if ch >= '0' && ch <= '9' {
+				hasDigit = true
+			} else if ch >= 'a' && ch <= 'z' {
+				hasLower = true
+			} else if ch >= 'A' && ch <= 'Z' {
+				hasUpper = true
+			}
+		}
+	}
+
+	// Determine minimal charset that covers all
+	if hasDigit && !hasLower && !hasUpper {
+		return "d" // digit
+	}
+	if !hasDigit && hasLower && !hasUpper {
+		// Check if hex lowercase
+		isHex := true
+		for _, chars := range allCharsPerPosition {
+			for _, ch := range chars {
+				if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
+					isHex = false
+					break
+				}
+			}
+			if !isHex {
+				break
+			}
+		}
+		if isHex {
+			return "h" // hex lowercase
+		}
+		return "l" // lower
+	}
+	if !hasDigit && !hasLower && hasUpper {
+		// Check if hex uppercase
+		isHex := true
+		for _, chars := range allCharsPerPosition {
+			for _, ch := range chars {
+				if !((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F')) {
+					isHex = false
+					break
+				}
+			}
+			if !isHex {
+				break
+			}
+		}
+		if isHex {
+			return "H" // hex uppercase
+		}
+		return "u" // upper
+	}
+	if !hasDigit && hasLower && hasUpper {
+		return "a" // alpha
+	}
+	if hasDigit && hasLower && !hasUpper {
+		// Check if hex lowercase
+		isHex := true
+		for _, chars := range allCharsPerPosition {
+			for _, ch := range chars {
+				if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
+					isHex = false
+					break
+				}
+			}
+			if !isHex {
+				break
+			}
+		}
+		if isHex {
+			return "h" // hex lowercase
+		}
+		return "x" // alnum
+	}
+	if hasDigit && !hasLower && hasUpper {
+		// Check if hex uppercase
+		isHex := true
+		for _, chars := range allCharsPerPosition {
+			for _, ch := range chars {
+				if !((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F')) {
+					isHex = false
+					break
+				}
+			}
+			if !isHex {
+				break
+			}
+		}
+		if isHex {
+			return "H" // hex uppercase
+		}
+		return "x" // alnum
+	}
+
+	// All three: base62
+	return "b"
+}
+
+// determineMinimalCharset finds the minimal charset that covers all characters
+func determineMinimalCharset(chars []byte) string {
+	hasDigit := false
+	hasLower := false
+	hasUpper := false
+
+	for _, ch := range chars {
+		if ch >= '0' && ch <= '9' {
+			hasDigit = true
+		} else if ch >= 'a' && ch <= 'z' {
+			hasLower = true
+		} else if ch >= 'A' && ch <= 'Z' {
+			hasUpper = true
+		}
+	}
+
+	// Determine minimal charset
+	if hasDigit && !hasLower && !hasUpper {
+		return "d" // digit
+	}
+	if !hasDigit && hasLower && !hasUpper {
+		return "l" // lower
+	}
+	if !hasDigit && !hasLower && hasUpper {
+		return "u" // upper
+	}
+	if !hasDigit && hasLower && hasUpper {
+		return "a" // alpha
+	}
+
+	// Check for hex (lowercase)
+	isHexLower := true
+	for _, ch := range chars {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
+			isHexLower = false
+			break
+		}
+	}
+	if isHexLower && !hasUpper {
+		return "h" // hex lowercase
+	}
+
+	// Check for hex (uppercase)
+	isHexUpper := true
+	for _, ch := range chars {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F')) {
+			isHexUpper = false
+			break
+		}
+	}
+	if isHexUpper && !hasLower {
+		return "H" // hex uppercase
+	}
+
+	// Alphanumeric or base62
+	if hasDigit && hasLower && hasUpper {
+		return "b" // base62
+	}
+
+	return "x" // alnum (fallback)
+}

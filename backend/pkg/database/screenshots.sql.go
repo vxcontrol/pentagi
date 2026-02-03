@@ -7,28 +7,39 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createScreenshot = `-- name: CreateScreenshot :one
 INSERT INTO screenshots (
   name,
   url,
-  flow_id
+  flow_id,
+  task_id,
+  subtask_id
 )
 VALUES (
-  $1, $2, $3
+  $1, $2, $3, $4, $5
 )
-RETURNING id, name, url, flow_id, created_at
+RETURNING id, name, url, flow_id, created_at, task_id, subtask_id
 `
 
 type CreateScreenshotParams struct {
-	Name   string `json:"name"`
-	Url    string `json:"url"`
-	FlowID int64  `json:"flow_id"`
+	Name      string        `json:"name"`
+	Url       string        `json:"url"`
+	FlowID    int64         `json:"flow_id"`
+	TaskID    sql.NullInt64 `json:"task_id"`
+	SubtaskID sql.NullInt64 `json:"subtask_id"`
 }
 
 func (q *Queries) CreateScreenshot(ctx context.Context, arg CreateScreenshotParams) (Screenshot, error) {
-	row := q.db.QueryRowContext(ctx, createScreenshot, arg.Name, arg.Url, arg.FlowID)
+	row := q.db.QueryRowContext(ctx, createScreenshot,
+		arg.Name,
+		arg.Url,
+		arg.FlowID,
+		arg.TaskID,
+		arg.SubtaskID,
+	)
 	var i Screenshot
 	err := row.Scan(
 		&i.ID,
@@ -36,13 +47,15 @@ func (q *Queries) CreateScreenshot(ctx context.Context, arg CreateScreenshotPara
 		&i.Url,
 		&i.FlowID,
 		&i.CreatedAt,
+		&i.TaskID,
+		&i.SubtaskID,
 	)
 	return i, err
 }
 
 const getFlowScreenshots = `-- name: GetFlowScreenshots :many
 SELECT
-  s.id, s.name, s.url, s.flow_id, s.created_at
+  s.id, s.name, s.url, s.flow_id, s.created_at, s.task_id, s.subtask_id
 FROM screenshots s
 INNER JOIN flows f ON s.flow_id = f.id
 WHERE s.flow_id = $1 AND f.deleted_at IS NULL
@@ -64,6 +77,8 @@ func (q *Queries) GetFlowScreenshots(ctx context.Context, flowID int64) ([]Scree
 			&i.Url,
 			&i.FlowID,
 			&i.CreatedAt,
+			&i.TaskID,
+			&i.SubtaskID,
 		); err != nil {
 			return nil, err
 		}
@@ -80,7 +95,7 @@ func (q *Queries) GetFlowScreenshots(ctx context.Context, flowID int64) ([]Scree
 
 const getScreenshot = `-- name: GetScreenshot :one
 SELECT
-  s.id, s.name, s.url, s.flow_id, s.created_at
+  s.id, s.name, s.url, s.flow_id, s.created_at, s.task_id, s.subtask_id
 FROM screenshots s
 WHERE s.id = $1
 `
@@ -94,13 +109,97 @@ func (q *Queries) GetScreenshot(ctx context.Context, id int64) (Screenshot, erro
 		&i.Url,
 		&i.FlowID,
 		&i.CreatedAt,
+		&i.TaskID,
+		&i.SubtaskID,
 	)
 	return i, err
 }
 
+const getSubtaskScreenshots = `-- name: GetSubtaskScreenshots :many
+SELECT
+  s.id, s.name, s.url, s.flow_id, s.created_at, s.task_id, s.subtask_id
+FROM screenshots s
+INNER JOIN flows f ON s.flow_id = f.id
+INNER JOIN subtasks st ON s.subtask_id = st.id
+WHERE s.subtask_id = $1 AND f.deleted_at IS NULL
+ORDER BY s.created_at DESC
+`
+
+func (q *Queries) GetSubtaskScreenshots(ctx context.Context, subtaskID sql.NullInt64) ([]Screenshot, error) {
+	rows, err := q.db.QueryContext(ctx, getSubtaskScreenshots, subtaskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Screenshot
+	for rows.Next() {
+		var i Screenshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Url,
+			&i.FlowID,
+			&i.CreatedAt,
+			&i.TaskID,
+			&i.SubtaskID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskScreenshots = `-- name: GetTaskScreenshots :many
+SELECT
+  s.id, s.name, s.url, s.flow_id, s.created_at, s.task_id, s.subtask_id
+FROM screenshots s
+INNER JOIN flows f ON s.flow_id = f.id
+INNER JOIN tasks t ON s.task_id = t.id
+WHERE s.task_id = $1 AND f.deleted_at IS NULL
+ORDER BY s.created_at DESC
+`
+
+func (q *Queries) GetTaskScreenshots(ctx context.Context, taskID sql.NullInt64) ([]Screenshot, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskScreenshots, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Screenshot
+	for rows.Next() {
+		var i Screenshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Url,
+			&i.FlowID,
+			&i.CreatedAt,
+			&i.TaskID,
+			&i.SubtaskID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserFlowScreenshots = `-- name: GetUserFlowScreenshots :many
 SELECT
-  s.id, s.name, s.url, s.flow_id, s.created_at
+  s.id, s.name, s.url, s.flow_id, s.created_at, s.task_id, s.subtask_id
 FROM screenshots s
 INNER JOIN flows f ON s.flow_id = f.id
 INNER JOIN users u ON f.user_id = u.id
@@ -128,6 +227,8 @@ func (q *Queries) GetUserFlowScreenshots(ctx context.Context, arg GetUserFlowScr
 			&i.Url,
 			&i.FlowID,
 			&i.CreatedAt,
+			&i.TaskID,
+			&i.SubtaskID,
 		); err != nil {
 			return nil, err
 		}

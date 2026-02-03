@@ -60,7 +60,9 @@ func (t *testCaseCompletion) StreamingCallback() streaming.Callback {
 		defer t.mu.Unlock()
 
 		t.content.WriteString(chunk.Content)
-		t.reasoning.WriteString(chunk.ReasoningContent)
+		if !chunk.Reasoning.IsEmpty() {
+			t.reasoning.WriteString(chunk.Reasoning.Content)
+		}
 		return nil
 	}
 }
@@ -95,7 +97,7 @@ func (t *testCaseCompletion) Execute(response any, latency time.Duration) TestRe
 		responseStr = choice.Content
 
 		// check for reasoning content
-		if len(choice.ReasoningContent) > 0 {
+		if !choice.Reasoning.IsEmpty() {
 			hasReasoning = true
 		}
 		if reasoningTokens, ok := choice.GenerationInfo["ReasoningTokens"]; ok {

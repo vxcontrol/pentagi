@@ -56,7 +56,7 @@ type ProviderController interface {
 		executor tools.FlowToolsExecutor,
 		flowID, userID int64,
 		askUser bool,
-		image, language, title string,
+		image, language, title, tcIDTemplate string,
 	) (FlowProvider, error)
 	NewAssistantProvider(
 		ctx context.Context,
@@ -73,7 +73,7 @@ type ProviderController interface {
 		prompter templates.Prompter,
 		executor tools.FlowToolsExecutor,
 		assistantID, flowID, userID int64,
-		image, language, title string,
+		image, language, title, tcIDTemplate string,
 		streamCb StreamMessageHandler,
 	) (AssistantProvider, error)
 
@@ -364,6 +364,11 @@ func (pc *providerController) NewFlowProvider(
 	}
 	title = strings.TrimSpace(title)
 
+	tcIDTemplate, err := prv.GetToolCallIDTemplate(ctx, prompter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine tool call ID template: %w", err)
+	}
+
 	fp := &flowProvider{
 		db:             pc.db,
 		embedder:       pc.embedder,
@@ -375,6 +380,7 @@ func (pc *providerController) NewFlowProvider(
 		title:          title,
 		language:       language,
 		askUser:        askUser,
+		tcIDTemplate:   tcIDTemplate,
 		prompter:       prompter,
 		executor:       executor,
 		summarizer:     pc.summarizerAgent,
@@ -391,7 +397,7 @@ func (pc *providerController) LoadFlowProvider(
 	executor tools.FlowToolsExecutor,
 	flowID, userID int64,
 	askUser bool,
-	image, language, title string,
+	image, language, title, tcIDTemplate string,
 ) (FlowProvider, error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.LoadFlowProvider")
 	defer span.End()
@@ -412,6 +418,7 @@ func (pc *providerController) LoadFlowProvider(
 		title:          title,
 		language:       language,
 		askUser:        askUser,
+		tcIDTemplate:   tcIDTemplate,
 		prompter:       prompter,
 		executor:       executor,
 		summarizer:     pc.summarizerAgent,
@@ -475,6 +482,11 @@ func (pc *providerController) NewAssistantProvider(
 	}
 	title = strings.TrimSpace(title)
 
+	tcIDTemplate, err := prv.GetToolCallIDTemplate(ctx, prompter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine tool call ID template: %w", err)
+	}
+
 	ap := &assistantProvider{
 		id:         assistantID,
 		summarizer: pc.summarizerAssistant,
@@ -488,6 +500,7 @@ func (pc *providerController) NewAssistantProvider(
 			image:          image,
 			title:          title,
 			language:       language,
+			tcIDTemplate:   tcIDTemplate,
 			prompter:       prompter,
 			executor:       executor,
 			streamCb:       streamCb,
@@ -505,7 +518,7 @@ func (pc *providerController) LoadAssistantProvider(
 	prompter templates.Prompter,
 	executor tools.FlowToolsExecutor,
 	assistantID, flowID, userID int64,
-	image, language, title string,
+	image, language, title, tcIDTemplate string,
 	streamCb StreamMessageHandler,
 ) (AssistantProvider, error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.LoadAssistantProvider")
@@ -529,6 +542,7 @@ func (pc *providerController) LoadAssistantProvider(
 			image:          image,
 			title:          title,
 			language:       language,
+			tcIDTemplate:   tcIDTemplate,
 			prompter:       prompter,
 			executor:       executor,
 			streamCb:       streamCb,

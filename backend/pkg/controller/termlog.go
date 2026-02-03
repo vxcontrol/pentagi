@@ -10,7 +10,13 @@ import (
 )
 
 type FlowTermLogWorker interface {
-	PutMsg(ctx context.Context, msgType database.TermlogType, msg string, containerID int64) (int64, error)
+	PutMsg(
+		ctx context.Context,
+		msgType database.TermlogType,
+		msg string,
+		containerID int64,
+		taskID, subtaskID *int64,
+	) (int64, error)
 	GetMsg(ctx context.Context, msgID int64) (database.Termlog, error)
 	GetContainers(ctx context.Context) ([]database.Container, error)
 }
@@ -38,6 +44,7 @@ func (tlw *flowTermLogWorker) PutMsg(
 	msgType database.TermlogType,
 	msg string,
 	containerID int64,
+	taskID, subtaskID *int64,
 ) (int64, error) {
 	tlw.mx.Lock()
 	defer tlw.mx.Unlock()
@@ -61,6 +68,9 @@ func (tlw *flowTermLogWorker) PutMsg(
 		Type:        msgType,
 		Text:        database.SanitizeUTF8(msg),
 		ContainerID: containerID,
+		FlowID:      tlw.flowID,
+		TaskID:      database.Int64ToNullInt64(taskID),
+		SubtaskID:   database.Int64ToNullInt64(subtaskID),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("failed to create termlog: %w", err)

@@ -6,6 +6,7 @@
   price:
     input: 2.0
     output: 12.0
+    cache_read: 0.2
 
 - name: gemini-3-flash-preview
   description: Latest and fastest and cost-effective thinking preview model designed for high-throughput security scanning and rapid vulnerability classification
@@ -14,6 +15,7 @@
   price:
     input: 0.5
     output: 3.0
+    cache_read: 0.05
 
 # Gemini 2.5 Series - Advanced thinking models with enhanced reasoning capabilities
 - name: gemini-2.5-pro
@@ -23,6 +25,7 @@
   price:
     input: 1.25
     output: 10.0
+    cache_read: 0.125
 
 - name: gemini-2.5-flash
   description: Best price-performance thinking model ideal for large-scale security assessments, automated vulnerability analysis, and high-volume penetration testing workflows
@@ -31,6 +34,7 @@
   price:
     input: 0.3
     output: 2.5
+    cache_read: 0.03
 
 - name: gemini-2.5-flash-lite
   description: Fastest and most cost-effective thinking model designed for high-throughput security scanning and rapid vulnerability classification
@@ -39,6 +43,7 @@
   price:
     input: 0.1
     output: 0.4
+    cache_read: 0.01
 
 # Gemini 2.0 Series - Balanced multimodal models for agent-based security operations
 - name: gemini-2.0-flash
@@ -48,6 +53,7 @@
   price:
     input: 0.1
     output: 0.4
+    cache_read: 0.025
 
 - name: gemini-2.0-flash-lite
   description: Lightweight model perfect for continuous security monitoring, basic vulnerability scanning, and automated security alert processing

@@ -20,7 +20,8 @@ SELECT
   ml.*
 FROM msglogs ml
 INNER JOIN tasks t ON ml.task_id = t.id
-WHERE ml.task_id = $1
+INNER JOIN flows f ON t.flow_id = f.id
+WHERE ml.task_id = $1 AND f.deleted_at IS NULL
 ORDER BY ml.created_at ASC;
 
 -- name: GetSubtaskMsgLogs :many
@@ -28,7 +29,9 @@ SELECT
   ml.*
 FROM msglogs ml
 INNER JOIN subtasks s ON ml.subtask_id = s.id
-WHERE ml.subtask_id = $1
+INNER JOIN tasks t ON s.task_id = t.id
+INNER JOIN flows f ON t.flow_id = f.id
+WHERE ml.subtask_id = $1 AND f.deleted_at IS NULL
 ORDER BY ml.created_at ASC;
 
 -- name: CreateMsgLog :one

@@ -607,13 +607,16 @@ func TestSummarizeChain(t *testing.T) {
 					// Get the body pairs
 					lastSection := ast.Sections[0]
 
-					// Check which pair was the oversized one and verify it's summarized
-					// The oversized pair should be at index 2 (after original and normal pair)
-					assert.True(t, containsSummarizedContent(lastSection.Body[2]),
-						"Should have summarized the oversized body pair")
+					// CRITICAL: The last body pair should NEVER be summarized
+					// This preserves reasoning signatures for providers like Gemini
+					if len(lastSection.Body) > 0 {
+						lastPair := lastSection.Body[len(lastSection.Body)-1]
+						assert.False(t, containsSummarizedContent(lastPair),
+							"Last body pair should NEVER be summarized (preserves reasoning signatures)")
+					}
 
-					// We should have 3 body pairs in total (original + 2 added)
-					assert.Equal(t, 3, len(lastSection.Body), "Should have 3 body pairs in total")
+					// We should have some body pairs after summarization
+					assert.Greater(t, len(lastSection.Body), 0, "Should have at least one body pair")
 
 					// Basic AST check
 					verifyASTConsistency(t, ast)
@@ -856,7 +859,7 @@ func TestSummarizeChain(t *testing.T) {
 				originalAST := cloneAST(ast)
 
 				// Summarize chain
-				newMessages, err := summarizer.SummarizeChain(ctx, mockSum.SummarizerHandler(), messages)
+				newMessages, err := summarizer.SummarizeChain(ctx, mockSum.SummarizerHandler(), messages, cast.ToolCallIDTemplate)
 				assert.NoError(t, err, "Failed to summarize chain")
 
 				// Convert back to AST for verification

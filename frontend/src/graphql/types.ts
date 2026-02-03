@@ -1,5 +1,5 @@
-import * as Apollo from '@apollo/client';
 import { gql } from '@apollo/client';
+import * as Apollo from '@apollo/client';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
@@ -107,6 +107,11 @@ export enum AgentType {
     ToolCallFixer = 'tool_call_fixer',
 }
 
+export type AgentTypeUsageStats = {
+    agentType: AgentType;
+    stats: UsageStats;
+};
+
 export type AgentsConfig = {
     adviser: AgentConfig;
     assistant: AgentConfig;
@@ -181,6 +186,21 @@ export type AssistantLog = {
     type: MessageLogType;
 };
 
+export type DailyFlowsStats = {
+    date: Scalars['Time']['output'];
+    stats: FlowsStats;
+};
+
+export type DailyToolcallsStats = {
+    date: Scalars['Time']['output'];
+    stats: ToolcallsStats;
+};
+
+export type DailyUsageStats = {
+    date: Scalars['Time']['output'];
+    stats: UsageStats;
+};
+
 export type DefaultPrompt = {
     template: Scalars['String']['output'];
     type: PromptType;
@@ -214,6 +234,36 @@ export type Flow = {
 export type FlowAssistant = {
     assistant: Assistant;
     flow: Flow;
+};
+
+export type FlowExecutionStats = {
+    flowId: Scalars['ID']['output'];
+    flowTitle: Scalars['String']['output'];
+    tasks: Array<TaskExecutionStats>;
+    totalAssistantsCount: Scalars['Int']['output'];
+    totalDurationSeconds: Scalars['Float']['output'];
+    totalToolcallsCount: Scalars['Int']['output'];
+};
+
+export type FlowStats = {
+    totalAssistantsCount: Scalars['Int']['output'];
+    totalSubtasksCount: Scalars['Int']['output'];
+    totalTasksCount: Scalars['Int']['output'];
+};
+
+export type FlowsStats = {
+    totalAssistantsCount: Scalars['Int']['output'];
+    totalFlowsCount: Scalars['Int']['output'];
+    totalSubtasksCount: Scalars['Int']['output'];
+    totalTasksCount: Scalars['Int']['output'];
+};
+
+export type FunctionToolcallsStats = {
+    avgDurationSeconds: Scalars['Float']['output'];
+    functionName: Scalars['String']['output'];
+    isAgent: Scalars['Boolean']['output'];
+    totalCount: Scalars['Int']['output'];
+    totalDurationSeconds: Scalars['Float']['output'];
 };
 
 export type MessageLog = {
@@ -252,13 +302,23 @@ export type ModelConfig = {
 };
 
 export type ModelPrice = {
+    cacheRead: Scalars['Float']['output'];
+    cacheWrite: Scalars['Float']['output'];
     input: Scalars['Float']['output'];
     output: Scalars['Float']['output'];
 };
 
 export type ModelPriceInput = {
+    cacheRead: Scalars['Float']['input'];
+    cacheWrite: Scalars['Float']['input'];
     input: Scalars['Float']['input'];
     output: Scalars['Float']['input'];
+};
+
+export type ModelUsageStats = {
+    model: Scalars['String']['output'];
+    provider: Scalars['String']['output'];
+    stats: UsageStats;
 };
 
 export type Mutation = {
@@ -408,6 +468,8 @@ export enum PromptType {
     Summarizer = 'summarizer',
     TaskDescriptor = 'task_descriptor',
     TaskReporter = 'task_reporter',
+    ToolCallIdCollector = 'tool_call_id_collector',
+    ToolCallIdDetector = 'tool_call_id_detector',
     ToolcallFixer = 'toolcall_fixer',
 }
 
@@ -472,6 +534,11 @@ export enum ProviderType {
     Openai = 'openai',
 }
 
+export type ProviderUsageStats = {
+    provider: Scalars['String']['output'];
+    stats: UsageStats;
+};
+
 export type ProvidersConfig = {
     default: DefaultProvidersConfig;
     enabled: ProvidersReadinessStatus;
@@ -502,7 +569,11 @@ export type Query = {
     assistantLogs?: Maybe<Array<AssistantLog>>;
     assistants?: Maybe<Array<Assistant>>;
     flow: Flow;
+    flowStatsByFlow: FlowStats;
     flows?: Maybe<Array<Flow>>;
+    flowsExecutionStatsByPeriod: Array<FlowExecutionStats>;
+    flowsStatsByPeriod: Array<DailyFlowsStats>;
+    flowsStatsTotal: FlowsStats;
     messageLogs?: Maybe<Array<MessageLog>>;
     providers: Array<Provider>;
     screenshots?: Maybe<Array<Screenshot>>;
@@ -512,6 +583,18 @@ export type Query = {
     settingsProviders: ProvidersConfig;
     tasks?: Maybe<Array<Task>>;
     terminalLogs?: Maybe<Array<TerminalLog>>;
+    toolcallsStatsByFlow: ToolcallsStats;
+    toolcallsStatsByFunction: Array<FunctionToolcallsStats>;
+    toolcallsStatsByFunctionForFlow: Array<FunctionToolcallsStats>;
+    toolcallsStatsByPeriod: Array<DailyToolcallsStats>;
+    toolcallsStatsTotal: ToolcallsStats;
+    usageStatsByAgentType: Array<AgentTypeUsageStats>;
+    usageStatsByAgentTypeForFlow: Array<AgentTypeUsageStats>;
+    usageStatsByFlow: UsageStats;
+    usageStatsByModel: Array<ModelUsageStats>;
+    usageStatsByPeriod: Array<DailyUsageStats>;
+    usageStatsByProvider: Array<ProviderUsageStats>;
+    usageStatsTotal: UsageStats;
     vectorStoreLogs?: Maybe<Array<VectorStoreLog>>;
 };
 
@@ -532,6 +615,18 @@ export type QueryFlowArgs = {
     flowId: Scalars['ID']['input'];
 };
 
+export type QueryFlowStatsByFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type QueryFlowsExecutionStatsByPeriodArgs = {
+    period: UsageStatsPeriod;
+};
+
+export type QueryFlowsStatsByPeriodArgs = {
+    period: UsageStatsPeriod;
+};
+
 export type QueryMessageLogsArgs = {
     flowId: Scalars['ID']['input'];
 };
@@ -550,6 +645,30 @@ export type QueryTasksArgs = {
 
 export type QueryTerminalLogsArgs = {
     flowId: Scalars['ID']['input'];
+};
+
+export type QueryToolcallsStatsByFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type QueryToolcallsStatsByFunctionForFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type QueryToolcallsStatsByPeriodArgs = {
+    period: UsageStatsPeriod;
+};
+
+export type QueryUsageStatsByAgentTypeForFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type QueryUsageStatsByFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type QueryUsageStatsByPeriodArgs = {
+    period: UsageStatsPeriod;
 };
 
 export type QueryVectorStoreLogsArgs = {
@@ -588,6 +707,8 @@ export type Screenshot = {
     flowId: Scalars['ID']['output'];
     id: Scalars['ID']['output'];
     name: Scalars['String']['output'];
+    subtaskId?: Maybe<Scalars['ID']['output']>;
+    taskId?: Maybe<Scalars['ID']['output']>;
     url: Scalars['String']['output'];
 };
 
@@ -709,6 +830,13 @@ export type Subtask = {
     updatedAt: Scalars['Time']['output'];
 };
 
+export type SubtaskExecutionStats = {
+    subtaskId: Scalars['ID']['output'];
+    subtaskTitle: Scalars['String']['output'];
+    totalDurationSeconds: Scalars['Float']['output'];
+    totalToolcallsCount: Scalars['Int']['output'];
+};
+
 export type Task = {
     createdAt: Scalars['Time']['output'];
     flowId: Scalars['ID']['output'];
@@ -719,6 +847,14 @@ export type Task = {
     subtasks?: Maybe<Array<Subtask>>;
     title: Scalars['String']['output'];
     updatedAt: Scalars['Time']['output'];
+};
+
+export type TaskExecutionStats = {
+    subtasks: Array<SubtaskExecutionStats>;
+    taskId: Scalars['ID']['output'];
+    taskTitle: Scalars['String']['output'];
+    totalDurationSeconds: Scalars['Float']['output'];
+    totalToolcallsCount: Scalars['Int']['output'];
 };
 
 export type Terminal = {
@@ -734,6 +870,8 @@ export type TerminalLog = {
     createdAt: Scalars['Time']['output'];
     flowId: Scalars['ID']['output'];
     id: Scalars['ID']['output'];
+    subtaskId?: Maybe<Scalars['ID']['output']>;
+    taskId?: Maybe<Scalars['ID']['output']>;
     terminal: Scalars['ID']['output'];
     text: Scalars['String']['output'];
     type: TerminalLogType;
@@ -760,15 +898,37 @@ export type TestResult = {
     type: Scalars['String']['output'];
 };
 
+export type ToolcallsStats = {
+    totalCount: Scalars['Int']['output'];
+    totalDurationSeconds: Scalars['Float']['output'];
+};
+
 export type ToolsPrompts = {
     chooseDockerImage: DefaultPrompt;
     chooseUserLanguage: DefaultPrompt;
+    collectToolCallID: DefaultPrompt;
+    detectToolCallIDPattern: DefaultPrompt;
     getExecutionLogs: DefaultPrompt;
     getFlowDescription: DefaultPrompt;
     getFullExecutionContext: DefaultPrompt;
     getShortExecutionContext: DefaultPrompt;
     getTaskDescription: DefaultPrompt;
 };
+
+export type UsageStats = {
+    totalUsageCacheIn: Scalars['Int']['output'];
+    totalUsageCacheOut: Scalars['Int']['output'];
+    totalUsageCostIn: Scalars['Float']['output'];
+    totalUsageCostOut: Scalars['Float']['output'];
+    totalUsageIn: Scalars['Int']['output'];
+    totalUsageOut: Scalars['Int']['output'];
+};
+
+export enum UsageStatsPeriod {
+    Month = 'month',
+    Quarter = 'quarter',
+    Week = 'week',
+}
 
 export type UserPrompt = {
     createdAt: Scalars['Time']['output'];
@@ -851,6 +1011,8 @@ export type SubtaskFragmentFragment = {
 export type TerminalLogFragmentFragment = {
     id: string;
     flowId: string;
+    taskId?: string | null;
+    subtaskId?: string | null;
     type: TerminalLogType;
     text: string;
     terminal: string;
@@ -870,7 +1032,15 @@ export type MessageLogFragmentFragment = {
     createdAt: any;
 };
 
-export type ScreenshotFragmentFragment = { id: string; flowId: string; name: string; url: string; createdAt: any };
+export type ScreenshotFragmentFragment = {
+    id: string;
+    flowId: string;
+    taskId?: string | null;
+    subtaskId?: string | null;
+    name: string;
+    url: string;
+    createdAt: any;
+};
 
 export type AgentLogFragmentFragment = {
     id: string;
@@ -963,7 +1133,10 @@ export type ProviderTestResultFragmentFragment = {
     pentester: AgentTestResultFragmentFragment;
 };
 
-export type ModelConfigFragmentFragment = { name: string; price?: { input: number; output: number } | null };
+export type ModelConfigFragmentFragment = {
+    name: string;
+    price?: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
+};
 
 export type ProviderFragmentFragment = { name: string; type: ProviderType };
 
@@ -1004,7 +1177,7 @@ export type AgentConfigFragmentFragment = {
     frequencyPenalty?: number | null;
     presencePenalty?: number | null;
     reasoning?: { effort?: ReasoningEffort | null; maxTokens?: number | null } | null;
-    price?: { input: number; output: number } | null;
+    price?: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
 };
 
 export type UserPromptFragmentFragment = {
@@ -1023,6 +1196,74 @@ export type PromptValidationResultFragmentFragment = {
     message?: string | null;
     line?: number | null;
     details?: string | null;
+};
+
+export type UsageStatsFragmentFragment = {
+    totalUsageIn: number;
+    totalUsageOut: number;
+    totalUsageCacheIn: number;
+    totalUsageCacheOut: number;
+    totalUsageCostIn: number;
+    totalUsageCostOut: number;
+};
+
+export type DailyUsageStatsFragmentFragment = { date: any; stats: UsageStatsFragmentFragment };
+
+export type ProviderUsageStatsFragmentFragment = { provider: string; stats: UsageStatsFragmentFragment };
+
+export type ModelUsageStatsFragmentFragment = { model: string; provider: string; stats: UsageStatsFragmentFragment };
+
+export type AgentTypeUsageStatsFragmentFragment = { agentType: AgentType; stats: UsageStatsFragmentFragment };
+
+export type ToolcallsStatsFragmentFragment = { totalCount: number; totalDurationSeconds: number };
+
+export type DailyToolcallsStatsFragmentFragment = { date: any; stats: ToolcallsStatsFragmentFragment };
+
+export type FunctionToolcallsStatsFragmentFragment = {
+    functionName: string;
+    isAgent: boolean;
+    totalCount: number;
+    totalDurationSeconds: number;
+    avgDurationSeconds: number;
+};
+
+export type FlowsStatsFragmentFragment = {
+    totalFlowsCount: number;
+    totalTasksCount: number;
+    totalSubtasksCount: number;
+    totalAssistantsCount: number;
+};
+
+export type FlowStatsFragmentFragment = {
+    totalTasksCount: number;
+    totalSubtasksCount: number;
+    totalAssistantsCount: number;
+};
+
+export type DailyFlowsStatsFragmentFragment = { date: any; stats: FlowsStatsFragmentFragment };
+
+export type SubtaskExecutionStatsFragmentFragment = {
+    subtaskId: string;
+    subtaskTitle: string;
+    totalDurationSeconds: number;
+    totalToolcallsCount: number;
+};
+
+export type TaskExecutionStatsFragmentFragment = {
+    taskId: string;
+    taskTitle: string;
+    totalDurationSeconds: number;
+    totalToolcallsCount: number;
+    subtasks: Array<SubtaskExecutionStatsFragmentFragment>;
+};
+
+export type FlowExecutionStatsFragmentFragment = {
+    flowId: string;
+    flowTitle: string;
+    totalDurationSeconds: number;
+    totalToolcallsCount: number;
+    totalAssistantsCount: number;
+    tasks: Array<TaskExecutionStatsFragmentFragment>;
 };
 
 export type FlowsQueryVariables = Exact<{ [key: string]: never }>;
@@ -1099,6 +1340,8 @@ export type SettingsPromptsQuery = {
                 getShortExecutionContext: DefaultPromptFragmentFragment;
                 chooseDockerImage: DefaultPromptFragmentFragment;
                 chooseUserLanguage: DefaultPromptFragmentFragment;
+                collectToolCallID: DefaultPromptFragmentFragment;
+                detectToolCallIDPattern: DefaultPromptFragmentFragment;
             };
         };
         userDefined?: Array<UserPromptFragmentFragment> | null;
@@ -1144,6 +1387,94 @@ export type FlowReportQueryVariables = Exact<{
 }>;
 
 export type FlowReportQuery = { flow: FlowFragmentFragment; tasks?: Array<TaskFragmentFragment> | null };
+
+export type UsageStatsTotalQueryVariables = Exact<{ [key: string]: never }>;
+
+export type UsageStatsTotalQuery = { usageStatsTotal: UsageStatsFragmentFragment };
+
+export type UsageStatsByPeriodQueryVariables = Exact<{
+    period: UsageStatsPeriod;
+}>;
+
+export type UsageStatsByPeriodQuery = { usageStatsByPeriod: Array<DailyUsageStatsFragmentFragment> };
+
+export type UsageStatsByProviderQueryVariables = Exact<{ [key: string]: never }>;
+
+export type UsageStatsByProviderQuery = { usageStatsByProvider: Array<ProviderUsageStatsFragmentFragment> };
+
+export type UsageStatsByModelQueryVariables = Exact<{ [key: string]: never }>;
+
+export type UsageStatsByModelQuery = { usageStatsByModel: Array<ModelUsageStatsFragmentFragment> };
+
+export type UsageStatsByAgentTypeQueryVariables = Exact<{ [key: string]: never }>;
+
+export type UsageStatsByAgentTypeQuery = { usageStatsByAgentType: Array<AgentTypeUsageStatsFragmentFragment> };
+
+export type UsageStatsByFlowQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type UsageStatsByFlowQuery = { usageStatsByFlow: UsageStatsFragmentFragment };
+
+export type UsageStatsByAgentTypeForFlowQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type UsageStatsByAgentTypeForFlowQuery = {
+    usageStatsByAgentTypeForFlow: Array<AgentTypeUsageStatsFragmentFragment>;
+};
+
+export type ToolcallsStatsTotalQueryVariables = Exact<{ [key: string]: never }>;
+
+export type ToolcallsStatsTotalQuery = { toolcallsStatsTotal: ToolcallsStatsFragmentFragment };
+
+export type ToolcallsStatsByPeriodQueryVariables = Exact<{
+    period: UsageStatsPeriod;
+}>;
+
+export type ToolcallsStatsByPeriodQuery = { toolcallsStatsByPeriod: Array<DailyToolcallsStatsFragmentFragment> };
+
+export type ToolcallsStatsByFunctionQueryVariables = Exact<{ [key: string]: never }>;
+
+export type ToolcallsStatsByFunctionQuery = { toolcallsStatsByFunction: Array<FunctionToolcallsStatsFragmentFragment> };
+
+export type ToolcallsStatsByFlowQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type ToolcallsStatsByFlowQuery = { toolcallsStatsByFlow: ToolcallsStatsFragmentFragment };
+
+export type ToolcallsStatsByFunctionForFlowQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type ToolcallsStatsByFunctionForFlowQuery = {
+    toolcallsStatsByFunctionForFlow: Array<FunctionToolcallsStatsFragmentFragment>;
+};
+
+export type FlowsStatsTotalQueryVariables = Exact<{ [key: string]: never }>;
+
+export type FlowsStatsTotalQuery = { flowsStatsTotal: FlowsStatsFragmentFragment };
+
+export type FlowsStatsByPeriodQueryVariables = Exact<{
+    period: UsageStatsPeriod;
+}>;
+
+export type FlowsStatsByPeriodQuery = { flowsStatsByPeriod: Array<DailyFlowsStatsFragmentFragment> };
+
+export type FlowStatsByFlowQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowStatsByFlowQuery = { flowStatsByFlow: FlowStatsFragmentFragment };
+
+export type FlowsExecutionStatsByPeriodQueryVariables = Exact<{
+    period: UsageStatsPeriod;
+}>;
+
+export type FlowsExecutionStatsByPeriodQuery = {
+    flowsExecutionStatsByPeriod: Array<FlowExecutionStatsFragmentFragment>;
+};
 
 export type CreateFlowMutationVariables = Exact<{
     modelProvider: Scalars['String']['input'];
@@ -1486,6 +1817,8 @@ export const TerminalLogFragmentFragmentDoc = gql`
     fragment terminalLogFragment on TerminalLog {
         id
         flowId
+        taskId
+        subtaskId
         type
         text
         terminal
@@ -1510,6 +1843,8 @@ export const ScreenshotFragmentFragmentDoc = gql`
     fragment screenshotFragment on Screenshot {
         id
         flowId
+        taskId
+        subtaskId
         name
         url
         createdAt
@@ -1652,6 +1987,8 @@ export const ModelConfigFragmentFragmentDoc = gql`
         price {
             input
             output
+            cacheRead
+            cacheWrite
         }
     }
 `;
@@ -1674,6 +2011,8 @@ export const AgentConfigFragmentFragmentDoc = gql`
         price {
             input
             output
+            cacheRead
+            cacheWrite
         }
     }
 `;
@@ -1755,6 +2094,126 @@ export const PromptValidationResultFragmentFragmentDoc = gql`
         message
         line
         details
+    }
+`;
+export const UsageStatsFragmentFragmentDoc = gql`
+    fragment usageStatsFragment on UsageStats {
+        totalUsageIn
+        totalUsageOut
+        totalUsageCacheIn
+        totalUsageCacheOut
+        totalUsageCostIn
+        totalUsageCostOut
+    }
+`;
+export const DailyUsageStatsFragmentFragmentDoc = gql`
+    fragment dailyUsageStatsFragment on DailyUsageStats {
+        date
+        stats {
+            ...usageStatsFragment
+        }
+    }
+`;
+export const ProviderUsageStatsFragmentFragmentDoc = gql`
+    fragment providerUsageStatsFragment on ProviderUsageStats {
+        provider
+        stats {
+            ...usageStatsFragment
+        }
+    }
+`;
+export const ModelUsageStatsFragmentFragmentDoc = gql`
+    fragment modelUsageStatsFragment on ModelUsageStats {
+        model
+        provider
+        stats {
+            ...usageStatsFragment
+        }
+    }
+`;
+export const AgentTypeUsageStatsFragmentFragmentDoc = gql`
+    fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
+        agentType
+        stats {
+            ...usageStatsFragment
+        }
+    }
+`;
+export const ToolcallsStatsFragmentFragmentDoc = gql`
+    fragment toolcallsStatsFragment on ToolcallsStats {
+        totalCount
+        totalDurationSeconds
+    }
+`;
+export const DailyToolcallsStatsFragmentFragmentDoc = gql`
+    fragment dailyToolcallsStatsFragment on DailyToolcallsStats {
+        date
+        stats {
+            ...toolcallsStatsFragment
+        }
+    }
+`;
+export const FunctionToolcallsStatsFragmentFragmentDoc = gql`
+    fragment functionToolcallsStatsFragment on FunctionToolcallsStats {
+        functionName
+        isAgent
+        totalCount
+        totalDurationSeconds
+        avgDurationSeconds
+    }
+`;
+export const FlowStatsFragmentFragmentDoc = gql`
+    fragment flowStatsFragment on FlowStats {
+        totalTasksCount
+        totalSubtasksCount
+        totalAssistantsCount
+    }
+`;
+export const FlowsStatsFragmentFragmentDoc = gql`
+    fragment flowsStatsFragment on FlowsStats {
+        totalFlowsCount
+        totalTasksCount
+        totalSubtasksCount
+        totalAssistantsCount
+    }
+`;
+export const DailyFlowsStatsFragmentFragmentDoc = gql`
+    fragment dailyFlowsStatsFragment on DailyFlowsStats {
+        date
+        stats {
+            ...flowsStatsFragment
+        }
+    }
+`;
+export const SubtaskExecutionStatsFragmentFragmentDoc = gql`
+    fragment subtaskExecutionStatsFragment on SubtaskExecutionStats {
+        subtaskId
+        subtaskTitle
+        totalDurationSeconds
+        totalToolcallsCount
+    }
+`;
+export const TaskExecutionStatsFragmentFragmentDoc = gql`
+    fragment taskExecutionStatsFragment on TaskExecutionStats {
+        taskId
+        taskTitle
+        totalDurationSeconds
+        totalToolcallsCount
+        subtasks {
+            ...subtaskExecutionStatsFragment
+        }
+    }
+`;
+export const FlowExecutionStatsFragmentFragmentDoc = gql`
+    fragment flowExecutionStatsFragment on FlowExecutionStats {
+        flowId
+        flowTitle
+        totalDurationSeconds
+        totalToolcallsCount
+        totalAssistantsCount
+        tasks {
+            ...taskExecutionStatsFragment
+        }
     }
 `;
 export const FlowsDocument = gql`
@@ -2131,6 +2590,12 @@ export const SettingsPromptsDocument = gql`
                     chooseUserLanguage {
                         ...defaultPromptFragment
                     }
+                    collectToolCallID {
+                        ...defaultPromptFragment
+                    }
+                    detectToolCallIDPattern {
+                        ...defaultPromptFragment
+                    }
                 }
             }
             userDefined {
@@ -2461,6 +2926,987 @@ export type FlowReportQueryHookResult = ReturnType<typeof useFlowReportQuery>;
 export type FlowReportLazyQueryHookResult = ReturnType<typeof useFlowReportLazyQuery>;
 export type FlowReportSuspenseQueryHookResult = ReturnType<typeof useFlowReportSuspenseQuery>;
 export type FlowReportQueryResult = Apollo.QueryResult<FlowReportQuery, FlowReportQueryVariables>;
+export const UsageStatsTotalDocument = gql`
+    query usageStatsTotal {
+        usageStatsTotal {
+            ...usageStatsFragment
+        }
+    }
+    ${UsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsTotalQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsTotalQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsTotalQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsTotalQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useUsageStatsTotalQuery(
+    baseOptions?: Apollo.QueryHookOptions<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>(UsageStatsTotalDocument, options);
+}
+export function useUsageStatsTotalLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>(UsageStatsTotalDocument, options);
+}
+export function useUsageStatsTotalSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>(
+        UsageStatsTotalDocument,
+        options,
+    );
+}
+export type UsageStatsTotalQueryHookResult = ReturnType<typeof useUsageStatsTotalQuery>;
+export type UsageStatsTotalLazyQueryHookResult = ReturnType<typeof useUsageStatsTotalLazyQuery>;
+export type UsageStatsTotalSuspenseQueryHookResult = ReturnType<typeof useUsageStatsTotalSuspenseQuery>;
+export type UsageStatsTotalQueryResult = Apollo.QueryResult<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>;
+export const UsageStatsByPeriodDocument = gql`
+    query usageStatsByPeriod($period: UsageStatsPeriod!) {
+        usageStatsByPeriod(period: $period) {
+            ...dailyUsageStatsFragment
+        }
+    }
+    ${DailyUsageStatsFragmentFragmentDoc}
+    ${UsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsByPeriodQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsByPeriodQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsByPeriodQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsByPeriodQuery({
+ *   variables: {
+ *      period: // value for 'period'
+ *   },
+ * });
+ */
+export function useUsageStatsByPeriodQuery(
+    baseOptions: Apollo.QueryHookOptions<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables> &
+        ({ variables: UsageStatsByPeriodQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>(
+        UsageStatsByPeriodDocument,
+        options,
+    );
+}
+export function useUsageStatsByPeriodLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>(
+        UsageStatsByPeriodDocument,
+        options,
+    );
+}
+export function useUsageStatsByPeriodSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>(
+        UsageStatsByPeriodDocument,
+        options,
+    );
+}
+export type UsageStatsByPeriodQueryHookResult = ReturnType<typeof useUsageStatsByPeriodQuery>;
+export type UsageStatsByPeriodLazyQueryHookResult = ReturnType<typeof useUsageStatsByPeriodLazyQuery>;
+export type UsageStatsByPeriodSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByPeriodSuspenseQuery>;
+export type UsageStatsByPeriodQueryResult = Apollo.QueryResult<
+    UsageStatsByPeriodQuery,
+    UsageStatsByPeriodQueryVariables
+>;
+export const UsageStatsByProviderDocument = gql`
+    query usageStatsByProvider {
+        usageStatsByProvider {
+            ...providerUsageStatsFragment
+        }
+    }
+    ${ProviderUsageStatsFragmentFragmentDoc}
+    ${UsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsByProviderQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsByProviderQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsByProviderQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsByProviderQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useUsageStatsByProviderQuery(
+    baseOptions?: Apollo.QueryHookOptions<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>(
+        UsageStatsByProviderDocument,
+        options,
+    );
+}
+export function useUsageStatsByProviderLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>(
+        UsageStatsByProviderDocument,
+        options,
+    );
+}
+export function useUsageStatsByProviderSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>(
+        UsageStatsByProviderDocument,
+        options,
+    );
+}
+export type UsageStatsByProviderQueryHookResult = ReturnType<typeof useUsageStatsByProviderQuery>;
+export type UsageStatsByProviderLazyQueryHookResult = ReturnType<typeof useUsageStatsByProviderLazyQuery>;
+export type UsageStatsByProviderSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByProviderSuspenseQuery>;
+export type UsageStatsByProviderQueryResult = Apollo.QueryResult<
+    UsageStatsByProviderQuery,
+    UsageStatsByProviderQueryVariables
+>;
+export const UsageStatsByModelDocument = gql`
+    query usageStatsByModel {
+        usageStatsByModel {
+            ...modelUsageStatsFragment
+        }
+    }
+    ${ModelUsageStatsFragmentFragmentDoc}
+    ${UsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsByModelQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsByModelQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsByModelQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsByModelQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useUsageStatsByModelQuery(
+    baseOptions?: Apollo.QueryHookOptions<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>(UsageStatsByModelDocument, options);
+}
+export function useUsageStatsByModelLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>(
+        UsageStatsByModelDocument,
+        options,
+    );
+}
+export function useUsageStatsByModelSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>(
+        UsageStatsByModelDocument,
+        options,
+    );
+}
+export type UsageStatsByModelQueryHookResult = ReturnType<typeof useUsageStatsByModelQuery>;
+export type UsageStatsByModelLazyQueryHookResult = ReturnType<typeof useUsageStatsByModelLazyQuery>;
+export type UsageStatsByModelSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByModelSuspenseQuery>;
+export type UsageStatsByModelQueryResult = Apollo.QueryResult<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>;
+export const UsageStatsByAgentTypeDocument = gql`
+    query usageStatsByAgentType {
+        usageStatsByAgentType {
+            ...agentTypeUsageStatsFragment
+        }
+    }
+    ${AgentTypeUsageStatsFragmentFragmentDoc}
+    ${UsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsByAgentTypeQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsByAgentTypeQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsByAgentTypeQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsByAgentTypeQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useUsageStatsByAgentTypeQuery(
+    baseOptions?: Apollo.QueryHookOptions<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>(
+        UsageStatsByAgentTypeDocument,
+        options,
+    );
+}
+export function useUsageStatsByAgentTypeLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>(
+        UsageStatsByAgentTypeDocument,
+        options,
+    );
+}
+export function useUsageStatsByAgentTypeSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>(
+        UsageStatsByAgentTypeDocument,
+        options,
+    );
+}
+export type UsageStatsByAgentTypeQueryHookResult = ReturnType<typeof useUsageStatsByAgentTypeQuery>;
+export type UsageStatsByAgentTypeLazyQueryHookResult = ReturnType<typeof useUsageStatsByAgentTypeLazyQuery>;
+export type UsageStatsByAgentTypeSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByAgentTypeSuspenseQuery>;
+export type UsageStatsByAgentTypeQueryResult = Apollo.QueryResult<
+    UsageStatsByAgentTypeQuery,
+    UsageStatsByAgentTypeQueryVariables
+>;
+export const UsageStatsByFlowDocument = gql`
+    query usageStatsByFlow($flowId: ID!) {
+        usageStatsByFlow(flowId: $flowId) {
+            ...usageStatsFragment
+        }
+    }
+    ${UsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsByFlowQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsByFlowQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsByFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsByFlowQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useUsageStatsByFlowQuery(
+    baseOptions: Apollo.QueryHookOptions<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables> &
+        ({ variables: UsageStatsByFlowQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>(UsageStatsByFlowDocument, options);
+}
+export function useUsageStatsByFlowLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>(
+        UsageStatsByFlowDocument,
+        options,
+    );
+}
+export function useUsageStatsByFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>(
+        UsageStatsByFlowDocument,
+        options,
+    );
+}
+export type UsageStatsByFlowQueryHookResult = ReturnType<typeof useUsageStatsByFlowQuery>;
+export type UsageStatsByFlowLazyQueryHookResult = ReturnType<typeof useUsageStatsByFlowLazyQuery>;
+export type UsageStatsByFlowSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByFlowSuspenseQuery>;
+export type UsageStatsByFlowQueryResult = Apollo.QueryResult<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>;
+export const UsageStatsByAgentTypeForFlowDocument = gql`
+    query usageStatsByAgentTypeForFlow($flowId: ID!) {
+        usageStatsByAgentTypeForFlow(flowId: $flowId) {
+            ...agentTypeUsageStatsFragment
+        }
+    }
+    ${AgentTypeUsageStatsFragmentFragmentDoc}
+    ${UsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsByAgentTypeForFlowQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsByAgentTypeForFlowQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsByAgentTypeForFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsByAgentTypeForFlowQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useUsageStatsByAgentTypeForFlowQuery(
+    baseOptions: Apollo.QueryHookOptions<
+        UsageStatsByAgentTypeForFlowQuery,
+        UsageStatsByAgentTypeForFlowQueryVariables
+    > &
+        ({ variables: UsageStatsByAgentTypeForFlowQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsByAgentTypeForFlowQuery, UsageStatsByAgentTypeForFlowQueryVariables>(
+        UsageStatsByAgentTypeForFlowDocument,
+        options,
+    );
+}
+export function useUsageStatsByAgentTypeForFlowLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<
+        UsageStatsByAgentTypeForFlowQuery,
+        UsageStatsByAgentTypeForFlowQueryVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsByAgentTypeForFlowQuery, UsageStatsByAgentTypeForFlowQueryVariables>(
+        UsageStatsByAgentTypeForFlowDocument,
+        options,
+    );
+}
+export function useUsageStatsByAgentTypeForFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<
+              UsageStatsByAgentTypeForFlowQuery,
+              UsageStatsByAgentTypeForFlowQueryVariables
+          >,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsByAgentTypeForFlowQuery, UsageStatsByAgentTypeForFlowQueryVariables>(
+        UsageStatsByAgentTypeForFlowDocument,
+        options,
+    );
+}
+export type UsageStatsByAgentTypeForFlowQueryHookResult = ReturnType<typeof useUsageStatsByAgentTypeForFlowQuery>;
+export type UsageStatsByAgentTypeForFlowLazyQueryHookResult = ReturnType<
+    typeof useUsageStatsByAgentTypeForFlowLazyQuery
+>;
+export type UsageStatsByAgentTypeForFlowSuspenseQueryHookResult = ReturnType<
+    typeof useUsageStatsByAgentTypeForFlowSuspenseQuery
+>;
+export type UsageStatsByAgentTypeForFlowQueryResult = Apollo.QueryResult<
+    UsageStatsByAgentTypeForFlowQuery,
+    UsageStatsByAgentTypeForFlowQueryVariables
+>;
+export const ToolcallsStatsTotalDocument = gql`
+    query toolcallsStatsTotal {
+        toolcallsStatsTotal {
+            ...toolcallsStatsFragment
+        }
+    }
+    ${ToolcallsStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useToolcallsStatsTotalQuery__
+ *
+ * To run a query within a React component, call `useToolcallsStatsTotalQuery` and pass it any options that fit your needs.
+ * When your component renders, `useToolcallsStatsTotalQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useToolcallsStatsTotalQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useToolcallsStatsTotalQuery(
+    baseOptions?: Apollo.QueryHookOptions<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>(
+        ToolcallsStatsTotalDocument,
+        options,
+    );
+}
+export function useToolcallsStatsTotalLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>(
+        ToolcallsStatsTotalDocument,
+        options,
+    );
+}
+export function useToolcallsStatsTotalSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>(
+        ToolcallsStatsTotalDocument,
+        options,
+    );
+}
+export type ToolcallsStatsTotalQueryHookResult = ReturnType<typeof useToolcallsStatsTotalQuery>;
+export type ToolcallsStatsTotalLazyQueryHookResult = ReturnType<typeof useToolcallsStatsTotalLazyQuery>;
+export type ToolcallsStatsTotalSuspenseQueryHookResult = ReturnType<typeof useToolcallsStatsTotalSuspenseQuery>;
+export type ToolcallsStatsTotalQueryResult = Apollo.QueryResult<
+    ToolcallsStatsTotalQuery,
+    ToolcallsStatsTotalQueryVariables
+>;
+export const ToolcallsStatsByPeriodDocument = gql`
+    query toolcallsStatsByPeriod($period: UsageStatsPeriod!) {
+        toolcallsStatsByPeriod(period: $period) {
+            ...dailyToolcallsStatsFragment
+        }
+    }
+    ${DailyToolcallsStatsFragmentFragmentDoc}
+    ${ToolcallsStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useToolcallsStatsByPeriodQuery__
+ *
+ * To run a query within a React component, call `useToolcallsStatsByPeriodQuery` and pass it any options that fit your needs.
+ * When your component renders, `useToolcallsStatsByPeriodQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useToolcallsStatsByPeriodQuery({
+ *   variables: {
+ *      period: // value for 'period'
+ *   },
+ * });
+ */
+export function useToolcallsStatsByPeriodQuery(
+    baseOptions: Apollo.QueryHookOptions<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables> &
+        ({ variables: ToolcallsStatsByPeriodQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>(
+        ToolcallsStatsByPeriodDocument,
+        options,
+    );
+}
+export function useToolcallsStatsByPeriodLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>(
+        ToolcallsStatsByPeriodDocument,
+        options,
+    );
+}
+export function useToolcallsStatsByPeriodSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>(
+        ToolcallsStatsByPeriodDocument,
+        options,
+    );
+}
+export type ToolcallsStatsByPeriodQueryHookResult = ReturnType<typeof useToolcallsStatsByPeriodQuery>;
+export type ToolcallsStatsByPeriodLazyQueryHookResult = ReturnType<typeof useToolcallsStatsByPeriodLazyQuery>;
+export type ToolcallsStatsByPeriodSuspenseQueryHookResult = ReturnType<typeof useToolcallsStatsByPeriodSuspenseQuery>;
+export type ToolcallsStatsByPeriodQueryResult = Apollo.QueryResult<
+    ToolcallsStatsByPeriodQuery,
+    ToolcallsStatsByPeriodQueryVariables
+>;
+export const ToolcallsStatsByFunctionDocument = gql`
+    query toolcallsStatsByFunction {
+        toolcallsStatsByFunction {
+            ...functionToolcallsStatsFragment
+        }
+    }
+    ${FunctionToolcallsStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useToolcallsStatsByFunctionQuery__
+ *
+ * To run a query within a React component, call `useToolcallsStatsByFunctionQuery` and pass it any options that fit your needs.
+ * When your component renders, `useToolcallsStatsByFunctionQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useToolcallsStatsByFunctionQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useToolcallsStatsByFunctionQuery(
+    baseOptions?: Apollo.QueryHookOptions<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>(
+        ToolcallsStatsByFunctionDocument,
+        options,
+    );
+}
+export function useToolcallsStatsByFunctionLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>(
+        ToolcallsStatsByFunctionDocument,
+        options,
+    );
+}
+export function useToolcallsStatsByFunctionSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>(
+        ToolcallsStatsByFunctionDocument,
+        options,
+    );
+}
+export type ToolcallsStatsByFunctionQueryHookResult = ReturnType<typeof useToolcallsStatsByFunctionQuery>;
+export type ToolcallsStatsByFunctionLazyQueryHookResult = ReturnType<typeof useToolcallsStatsByFunctionLazyQuery>;
+export type ToolcallsStatsByFunctionSuspenseQueryHookResult = ReturnType<
+    typeof useToolcallsStatsByFunctionSuspenseQuery
+>;
+export type ToolcallsStatsByFunctionQueryResult = Apollo.QueryResult<
+    ToolcallsStatsByFunctionQuery,
+    ToolcallsStatsByFunctionQueryVariables
+>;
+export const ToolcallsStatsByFlowDocument = gql`
+    query toolcallsStatsByFlow($flowId: ID!) {
+        toolcallsStatsByFlow(flowId: $flowId) {
+            ...toolcallsStatsFragment
+        }
+    }
+    ${ToolcallsStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useToolcallsStatsByFlowQuery__
+ *
+ * To run a query within a React component, call `useToolcallsStatsByFlowQuery` and pass it any options that fit your needs.
+ * When your component renders, `useToolcallsStatsByFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useToolcallsStatsByFlowQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useToolcallsStatsByFlowQuery(
+    baseOptions: Apollo.QueryHookOptions<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables> &
+        ({ variables: ToolcallsStatsByFlowQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>(
+        ToolcallsStatsByFlowDocument,
+        options,
+    );
+}
+export function useToolcallsStatsByFlowLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>(
+        ToolcallsStatsByFlowDocument,
+        options,
+    );
+}
+export function useToolcallsStatsByFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>(
+        ToolcallsStatsByFlowDocument,
+        options,
+    );
+}
+export type ToolcallsStatsByFlowQueryHookResult = ReturnType<typeof useToolcallsStatsByFlowQuery>;
+export type ToolcallsStatsByFlowLazyQueryHookResult = ReturnType<typeof useToolcallsStatsByFlowLazyQuery>;
+export type ToolcallsStatsByFlowSuspenseQueryHookResult = ReturnType<typeof useToolcallsStatsByFlowSuspenseQuery>;
+export type ToolcallsStatsByFlowQueryResult = Apollo.QueryResult<
+    ToolcallsStatsByFlowQuery,
+    ToolcallsStatsByFlowQueryVariables
+>;
+export const ToolcallsStatsByFunctionForFlowDocument = gql`
+    query toolcallsStatsByFunctionForFlow($flowId: ID!) {
+        toolcallsStatsByFunctionForFlow(flowId: $flowId) {
+            ...functionToolcallsStatsFragment
+        }
+    }
+    ${FunctionToolcallsStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useToolcallsStatsByFunctionForFlowQuery__
+ *
+ * To run a query within a React component, call `useToolcallsStatsByFunctionForFlowQuery` and pass it any options that fit your needs.
+ * When your component renders, `useToolcallsStatsByFunctionForFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useToolcallsStatsByFunctionForFlowQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useToolcallsStatsByFunctionForFlowQuery(
+    baseOptions: Apollo.QueryHookOptions<
+        ToolcallsStatsByFunctionForFlowQuery,
+        ToolcallsStatsByFunctionForFlowQueryVariables
+    > &
+        ({ variables: ToolcallsStatsByFunctionForFlowQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ToolcallsStatsByFunctionForFlowQuery, ToolcallsStatsByFunctionForFlowQueryVariables>(
+        ToolcallsStatsByFunctionForFlowDocument,
+        options,
+    );
+}
+export function useToolcallsStatsByFunctionForFlowLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<
+        ToolcallsStatsByFunctionForFlowQuery,
+        ToolcallsStatsByFunctionForFlowQueryVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ToolcallsStatsByFunctionForFlowQuery, ToolcallsStatsByFunctionForFlowQueryVariables>(
+        ToolcallsStatsByFunctionForFlowDocument,
+        options,
+    );
+}
+export function useToolcallsStatsByFunctionForFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<
+              ToolcallsStatsByFunctionForFlowQuery,
+              ToolcallsStatsByFunctionForFlowQueryVariables
+          >,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ToolcallsStatsByFunctionForFlowQuery, ToolcallsStatsByFunctionForFlowQueryVariables>(
+        ToolcallsStatsByFunctionForFlowDocument,
+        options,
+    );
+}
+export type ToolcallsStatsByFunctionForFlowQueryHookResult = ReturnType<typeof useToolcallsStatsByFunctionForFlowQuery>;
+export type ToolcallsStatsByFunctionForFlowLazyQueryHookResult = ReturnType<
+    typeof useToolcallsStatsByFunctionForFlowLazyQuery
+>;
+export type ToolcallsStatsByFunctionForFlowSuspenseQueryHookResult = ReturnType<
+    typeof useToolcallsStatsByFunctionForFlowSuspenseQuery
+>;
+export type ToolcallsStatsByFunctionForFlowQueryResult = Apollo.QueryResult<
+    ToolcallsStatsByFunctionForFlowQuery,
+    ToolcallsStatsByFunctionForFlowQueryVariables
+>;
+export const FlowsStatsTotalDocument = gql`
+    query flowsStatsTotal {
+        flowsStatsTotal {
+            ...flowsStatsFragment
+        }
+    }
+    ${FlowsStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowsStatsTotalQuery__
+ *
+ * To run a query within a React component, call `useFlowsStatsTotalQuery` and pass it any options that fit your needs.
+ * When your component renders, `useFlowsStatsTotalQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowsStatsTotalQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useFlowsStatsTotalQuery(
+    baseOptions?: Apollo.QueryHookOptions<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>(FlowsStatsTotalDocument, options);
+}
+export function useFlowsStatsTotalLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>(FlowsStatsTotalDocument, options);
+}
+export function useFlowsStatsTotalSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>(
+        FlowsStatsTotalDocument,
+        options,
+    );
+}
+export type FlowsStatsTotalQueryHookResult = ReturnType<typeof useFlowsStatsTotalQuery>;
+export type FlowsStatsTotalLazyQueryHookResult = ReturnType<typeof useFlowsStatsTotalLazyQuery>;
+export type FlowsStatsTotalSuspenseQueryHookResult = ReturnType<typeof useFlowsStatsTotalSuspenseQuery>;
+export type FlowsStatsTotalQueryResult = Apollo.QueryResult<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>;
+export const FlowsStatsByPeriodDocument = gql`
+    query flowsStatsByPeriod($period: UsageStatsPeriod!) {
+        flowsStatsByPeriod(period: $period) {
+            ...dailyFlowsStatsFragment
+        }
+    }
+    ${DailyFlowsStatsFragmentFragmentDoc}
+    ${FlowsStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowsStatsByPeriodQuery__
+ *
+ * To run a query within a React component, call `useFlowsStatsByPeriodQuery` and pass it any options that fit your needs.
+ * When your component renders, `useFlowsStatsByPeriodQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowsStatsByPeriodQuery({
+ *   variables: {
+ *      period: // value for 'period'
+ *   },
+ * });
+ */
+export function useFlowsStatsByPeriodQuery(
+    baseOptions: Apollo.QueryHookOptions<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables> &
+        ({ variables: FlowsStatsByPeriodQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>(
+        FlowsStatsByPeriodDocument,
+        options,
+    );
+}
+export function useFlowsStatsByPeriodLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>(
+        FlowsStatsByPeriodDocument,
+        options,
+    );
+}
+export function useFlowsStatsByPeriodSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>(
+        FlowsStatsByPeriodDocument,
+        options,
+    );
+}
+export type FlowsStatsByPeriodQueryHookResult = ReturnType<typeof useFlowsStatsByPeriodQuery>;
+export type FlowsStatsByPeriodLazyQueryHookResult = ReturnType<typeof useFlowsStatsByPeriodLazyQuery>;
+export type FlowsStatsByPeriodSuspenseQueryHookResult = ReturnType<typeof useFlowsStatsByPeriodSuspenseQuery>;
+export type FlowsStatsByPeriodQueryResult = Apollo.QueryResult<
+    FlowsStatsByPeriodQuery,
+    FlowsStatsByPeriodQueryVariables
+>;
+export const FlowStatsByFlowDocument = gql`
+    query flowStatsByFlow($flowId: ID!) {
+        flowStatsByFlow(flowId: $flowId) {
+            ...flowStatsFragment
+        }
+    }
+    ${FlowStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowStatsByFlowQuery__
+ *
+ * To run a query within a React component, call `useFlowStatsByFlowQuery` and pass it any options that fit your needs.
+ * When your component renders, `useFlowStatsByFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowStatsByFlowQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowStatsByFlowQuery(
+    baseOptions: Apollo.QueryHookOptions<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables> &
+        ({ variables: FlowStatsByFlowQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>(FlowStatsByFlowDocument, options);
+}
+export function useFlowStatsByFlowLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>(FlowStatsByFlowDocument, options);
+}
+export function useFlowStatsByFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>(
+        FlowStatsByFlowDocument,
+        options,
+    );
+}
+export type FlowStatsByFlowQueryHookResult = ReturnType<typeof useFlowStatsByFlowQuery>;
+export type FlowStatsByFlowLazyQueryHookResult = ReturnType<typeof useFlowStatsByFlowLazyQuery>;
+export type FlowStatsByFlowSuspenseQueryHookResult = ReturnType<typeof useFlowStatsByFlowSuspenseQuery>;
+export type FlowStatsByFlowQueryResult = Apollo.QueryResult<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>;
+export const FlowsExecutionStatsByPeriodDocument = gql`
+    query flowsExecutionStatsByPeriod($period: UsageStatsPeriod!) {
+        flowsExecutionStatsByPeriod(period: $period) {
+            ...flowExecutionStatsFragment
+        }
+    }
+    ${FlowExecutionStatsFragmentFragmentDoc}
+    ${TaskExecutionStatsFragmentFragmentDoc}
+    ${SubtaskExecutionStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowsExecutionStatsByPeriodQuery__
+ *
+ * To run a query within a React component, call `useFlowsExecutionStatsByPeriodQuery` and pass it any options that fit your needs.
+ * When your component renders, `useFlowsExecutionStatsByPeriodQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowsExecutionStatsByPeriodQuery({
+ *   variables: {
+ *      period: // value for 'period'
+ *   },
+ * });
+ */
+export function useFlowsExecutionStatsByPeriodQuery(
+    baseOptions: Apollo.QueryHookOptions<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables> &
+        ({ variables: FlowsExecutionStatsByPeriodQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables>(
+        FlowsExecutionStatsByPeriodDocument,
+        options,
+    );
+}
+export function useFlowsExecutionStatsByPeriodLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<
+        FlowsExecutionStatsByPeriodQuery,
+        FlowsExecutionStatsByPeriodQueryVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables>(
+        FlowsExecutionStatsByPeriodDocument,
+        options,
+    );
+}
+export function useFlowsExecutionStatsByPeriodSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables>(
+        FlowsExecutionStatsByPeriodDocument,
+        options,
+    );
+}
+export type FlowsExecutionStatsByPeriodQueryHookResult = ReturnType<typeof useFlowsExecutionStatsByPeriodQuery>;
+export type FlowsExecutionStatsByPeriodLazyQueryHookResult = ReturnType<typeof useFlowsExecutionStatsByPeriodLazyQuery>;
+export type FlowsExecutionStatsByPeriodSuspenseQueryHookResult = ReturnType<
+    typeof useFlowsExecutionStatsByPeriodSuspenseQuery
+>;
+export type FlowsExecutionStatsByPeriodQueryResult = Apollo.QueryResult<
+    FlowsExecutionStatsByPeriodQuery,
+    FlowsExecutionStatsByPeriodQueryVariables
+>;
 export const CreateFlowDocument = gql`
     mutation createFlow($modelProvider: String!, $input: String!) {
         createFlow(modelProvider: $modelProvider, input: $input) {

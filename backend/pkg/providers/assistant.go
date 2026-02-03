@@ -28,6 +28,7 @@ type AssistantProvider interface {
 	Model(opt pconfig.ProviderOptionsType) string
 	Title() string
 	Language() string
+	ToolCallIDTemplate() string
 	Embedder() embeddings.Embedder
 
 	SetMsgChainID(msgChainID int64)
@@ -61,6 +62,10 @@ func (ap *assistantProvider) Title() string {
 
 func (ap *assistantProvider) Language() string {
 	return ap.fp.language
+}
+
+func (ap *assistantProvider) ToolCallIDTemplate() string {
+	return ap.fp.tcIDTemplate
 }
 
 func (ap *assistantProvider) Embedder() embeddings.Embedder {

@@ -89,14 +89,14 @@ This function automatically loads environment variables from a `.env` file if pr
 
 These settings control basic application behavior and are foundational for the system's operation.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| DatabaseURL | `DATABASE_URL` | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension |
-| Debug | `DEBUG` | `false` | Enables debug mode with additional logging |
-| DataDir | `DATA_DIR` | `./data` | Directory for storing persistent data |
-| AskUser | `ASK_USER` | `false` | When enabled, requires explicit user confirmation for certain operations |
-| InstallationID | `INSTALLATION_ID` | *(none)* | Unique installation identifier for PentAGI Cloud API communication |
-| LicenseKey | `LICENSE_KEY` | *(none)* | License key for PentAGI Cloud API authentication and feature activation |
+| Option         | Environment Variable | Default Value                                                                | Description                                                              |
+| -------------- | -------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| DatabaseURL    | `DATABASE_URL`       | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
+| Debug          | `DEBUG`              | `false`                                                                      | Enables debug mode with additional logging                               |
+| DataDir        | `DATA_DIR`           | `./data`                                                                     | Directory for storing persistent data                                    |
+| AskUser        | `ASK_USER`           | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
+| InstallationID | `INSTALLATION_ID`    | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
+| LicenseKey     | `LICENSE_KEY`        | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
 
 ### Usage Details
 
@@ -183,16 +183,16 @@ if cfg.LicenseKey != "" {
 
 These settings control how PentAGi interacts with Docker, which is used for terminal isolation and executing commands in a controlled environment. They're crucial for the security and functionality of tool execution.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| DockerInside   | `DOCKER_INSIDE`   | `false` | Set to `true` if PentAGI runs inside Docker and needs to access the host Docker daemon. |
-| DockerNetAdmin | `DOCKER_NET_ADMIN` | `false` | Set to `true` to grant the primary container NET_ADMIN capability for advanced networking. |
-| DockerSocket | `DOCKER_SOCKET` | *(none)* | Path to Docker socket for container management |
-| DockerNetwork | `DOCKER_NETWORK` | *(none)* | Docker network name for container communication |
-| DockerPublicIP | `DOCKER_PUBLIC_IP` | `0.0.0.0` | Public IP address for Docker containers' port bindings |
-| DockerWorkDir | `DOCKER_WORK_DIR` | *(none)* | Custom working directory inside Docker containers |
-| DockerDefaultImage | `DOCKER_DEFAULT_IMAGE` | `debian:latest` | Default Docker image for containers when specific images fail |
-| DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
+| Option                       | Environment Variable               | Default Value          | Description                                                                                |
+| ---------------------------- | ---------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------ |
+| DockerInside                 | `DOCKER_INSIDE`                    | `false`                | Set to `true` if PentAGI runs inside Docker and needs to access the host Docker daemon.    |
+| DockerNetAdmin               | `DOCKER_NET_ADMIN`                 | `false`                | Set to `true` to grant the primary container NET_ADMIN capability for advanced networking. |
+| DockerSocket                 | `DOCKER_SOCKET`                    | *(none)*               | Path to Docker socket for container management                                             |
+| DockerNetwork                | `DOCKER_NETWORK`                   | *(none)*               | Docker network name for container communication                                            |
+| DockerPublicIP               | `DOCKER_PUBLIC_IP`                 | `0.0.0.0`              | Public IP address for Docker containers' port bindings                                     |
+| DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers                                          |
+| DockerDefaultImage           | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for containers when specific images fail                              |
+| DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks                                         |
 
 
 ### Usage Details
@@ -257,13 +257,13 @@ This client is used by the tools executor to run commands in isolated containers
 
 These settings control the HTTP and GraphQL server that forms the backend API of PentAGi.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| ServerPort | `SERVER_PORT` | `8080` | Port for the HTTP server |
-| ServerHost | `SERVER_HOST` | `0.0.0.0` | Host address for the HTTP server |
-| ServerUseSSL | `SERVER_USE_SSL` | `false` | Enable SSL for the HTTP server |
-| ServerSSLKey | `SERVER_SSL_KEY` | *(none)* | Path to SSL key file |
-| ServerSSLCrt | `SERVER_SSL_CRT` | *(none)* | Path to SSL certificate file |
+| Option       | Environment Variable | Default Value | Description                      |
+| ------------ | -------------------- | ------------- | -------------------------------- |
+| ServerPort   | `SERVER_PORT`        | `8080`        | Port for the HTTP server         |
+| ServerHost   | `SERVER_HOST`        | `0.0.0.0`     | Host address for the HTTP server |
+| ServerUseSSL | `SERVER_USE_SSL`     | `false`       | Enable SSL for the HTTP server   |
+| ServerSSLKey | `SERVER_SSL_KEY`     | *(none)*      | Path to SSL key file             |
+| ServerSSLCrt | `SERVER_SSL_CRT`     | *(none)*      | Path to SSL certificate file     |
 
 ### Usage Details
 
@@ -292,11 +292,11 @@ These configurations are crucial for production deployments where proper server 
 
 These settings control how the server serves frontend assets and handles Cross-Origin Resource Sharing (CORS) for API requests from browsers.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| StaticURL | `STATIC_URL` | *(none)* | URL to serve static frontend assets from (enables reverse proxy mode) |
-| StaticDir | `STATIC_DIR` | `./fe` | Directory containing frontend static files (used when not in proxy mode) |
-| CorsOrigins | `CORS_ORIGINS` | `*` | Allowed origins for CORS requests (comma-separated) |
+| Option      | Environment Variable | Default Value | Description                                                              |
+| ----------- | -------------------- | ------------- | ------------------------------------------------------------------------ |
+| StaticURL   | `STATIC_URL`         | *(none)*      | URL to serve static frontend assets from (enables reverse proxy mode)    |
+| StaticDir   | `STATIC_DIR`         | `./fe`        | Directory containing frontend static files (used when not in proxy mode) |
+| CorsOrigins | `CORS_ORIGINS`       | `*`           | Allowed origins for CORS requests (comma-separated)                      |
 
 ### Usage Details
 
@@ -345,14 +345,14 @@ These settings are essential for:
 
 These settings control authentication mechanisms, including cookie-based sessions and OAuth providers for user login.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| CookieSigningSalt | `COOKIE_SIGNING_SALT` | *(none)* | Salt for signing and securing cookies used in sessions |
-| PublicURL | `PUBLIC_URL` | *(none)* | Public URL for auth callbacks from OAuth providers |
-| OAuthGoogleClientID | `OAUTH_GOOGLE_CLIENT_ID` | *(none)* | Google OAuth client ID for authentication |
-| OAuthGoogleClientSecret | `OAUTH_GOOGLE_CLIENT_SECRET` | *(none)* | Google OAuth client secret |
-| OAuthGithubClientID | `OAUTH_GITHUB_CLIENT_ID` | *(none)* | GitHub OAuth client ID for authentication |
-| OAuthGithubClientSecret | `OAUTH_GITHUB_CLIENT_SECRET` | *(none)* | GitHub OAuth client secret |
+| Option                  | Environment Variable         | Default Value | Description                                            |
+| ----------------------- | ---------------------------- | ------------- | ------------------------------------------------------ |
+| CookieSigningSalt       | `COOKIE_SIGNING_SALT`        | *(none)*      | Salt for signing and securing cookies used in sessions |
+| PublicURL               | `PUBLIC_URL`                 | *(none)*      | Public URL for auth callbacks from OAuth providers     |
+| OAuthGoogleClientID     | `OAUTH_GOOGLE_CLIENT_ID`     | *(none)*      | Google OAuth client ID for authentication              |
+| OAuthGoogleClientSecret | `OAUTH_GOOGLE_CLIENT_SECRET` | *(none)*      | Google OAuth client secret                             |
+| OAuthGithubClientID     | `OAUTH_GITHUB_CLIENT_ID`     | *(none)*      | GitHub OAuth client ID for authentication              |
+| OAuthGithubClientSecret | `OAUTH_GITHUB_CLIENT_SECRET` | *(none)*      | GitHub OAuth client secret                             |
 
 ### Usage Details
 
@@ -405,10 +405,10 @@ These settings are essential for:
 
 These settings control the web scraper service used for browsing websites and taking screenshots, which allows AI agents to interact with web content.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| ScraperPublicURL | `SCRAPER_PUBLIC_URL` | *(none)* | Public URL for accessing the scraper service from clients |
-| ScraperPrivateURL | `SCRAPER_PRIVATE_URL` | *(none)* | Private URL for internal scraper service access |
+| Option            | Environment Variable  | Default Value | Description                                               |
+| ----------------- | --------------------- | ------------- | --------------------------------------------------------- |
+| ScraperPublicURL  | `SCRAPER_PUBLIC_URL`  | *(none)*      | Public URL for accessing the scraper service from clients |
+| ScraperPrivateURL | `SCRAPER_PRIVATE_URL` | *(none)*      | Private URL for internal scraper service access           |
 
 ### Usage Details
 
@@ -444,57 +444,59 @@ These settings control the integration with various Large Language Model (LLM) p
 
 ### OpenAI
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| OpenAIKey | `OPEN_AI_KEY` | *(none)* | API key for OpenAI services |
+| Option          | Environment Variable | Default Value               | Description                        |
+| --------------- | -------------------- | --------------------------- | ---------------------------------- |
+| OpenAIKey       | `OPEN_AI_KEY`        | *(none)*                    | API key for OpenAI services        |
 | OpenAIServerURL | `OPEN_AI_SERVER_URL` | `https://api.openai.com/v1` | Server URL for OpenAI API requests |
 
 ### Anthropic
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| AnthropicAPIKey | `ANTHROPIC_API_KEY` | *(none)* | API key for Anthropic Claude services |
+| Option             | Environment Variable   | Default Value                  | Description                           |
+| ------------------ | ---------------------- | ------------------------------ | ------------------------------------- |
+| AnthropicAPIKey    | `ANTHROPIC_API_KEY`    | *(none)*                       | API key for Anthropic Claude services |
 | AnthropicServerURL | `ANTHROPIC_SERVER_URL` | `https://api.anthropic.com/v1` | Server URL for Anthropic API requests |
 
 ### Ollama LLM Provider
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| OllamaServerURL | `OLLAMA_SERVER_URL` | *(none)* | Server URL for Ollama API requests |
-| OllamaServerModel | `OLLAMA_SERVER_MODEL` | `llama3.1:8b-instruct-q8_0` | Default model to use for inference |
-| OllamaServerConfig | `OLLAMA_SERVER_CONFIG_PATH` | *(none)* | Path to config file for Ollama provider options |
-| OllamaServerPullModelsTimeout | `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600` | Timeout in seconds for model downloads |
-| OllamaServerPullModelsEnabled | `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false` | Automatically download required models on startup |
-| OllamaServerLoadModelsEnabled | `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false` | Load available models list from server API |
+| Option                        | Environment Variable                | Default Value               | Description                                       |
+| ----------------------------- | ----------------------------------- | --------------------------- | ------------------------------------------------- |
+| OllamaServerURL               | `OLLAMA_SERVER_URL`                 | *(none)*                    | Server URL for Ollama API requests                |
+| OllamaServerModel             | `OLLAMA_SERVER_MODEL`               | `llama3.1:8b-instruct-q8_0` | Default model to use for inference                |
+| OllamaServerConfig            | `OLLAMA_SERVER_CONFIG_PATH`         | *(none)*                    | Path to config file for Ollama provider options   |
+| OllamaServerPullModelsTimeout | `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600`                       | Timeout in seconds for model downloads            |
+| OllamaServerPullModelsEnabled | `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false`                     | Automatically download required models on startup |
+| OllamaServerLoadModelsEnabled | `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false`                     | Load available models list from server API        |
 
 **Note:** When `OllamaServerLoadModelsEnabled=false`, only the default model is available. Enable this to see all installed models in the UI.
 
 ### Google AI (Gemini) LLM Provider
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| GeminiAPIKey | `GEMINI_API_KEY` | *(none)* | API key for Google AI Gemini services |
-| GeminiServerURL | `GEMINI_SERVER_URL` | `https://generativelanguage.googleapis.com` | Server URL for Gemini API requests |
+| Option          | Environment Variable | Default Value                               | Description                           |
+| --------------- | -------------------- | ------------------------------------------- | ------------------------------------- |
+| GeminiAPIKey    | `GEMINI_API_KEY`     | *(none)*                                    | API key for Google AI Gemini services |
+| GeminiServerURL | `GEMINI_SERVER_URL`  | `https://generativelanguage.googleapis.com` | Server URL for Gemini API requests    |
 
 ### AWS Bedrock LLM Provider
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| BedrockRegion | `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
-| BedrockAccessKey | `BEDROCK_ACCESS_KEY_ID` | *(none)* | AWS access key ID for Bedrock authentication |
-| BedrockSecretKey | `BEDROCK_SECRET_ACCESS_KEY` | *(none)* | AWS secret access key for Bedrock authentication |
-| BedrockSessionToken | `BEDROCK_SESSION_TOKEN` | *(none)* | AWS session token for temporary credentials (optional, required for STS/assumed roles) |
-| BedrockServerURL | `BEDROCK_SERVER_URL` | *(none)* | Optional custom endpoint URL for Bedrock service |
+| Option              | Environment Variable        | Default Value | Description                                                                            |
+| ------------------- | --------------------------- | ------------- | -------------------------------------------------------------------------------------- |
+| BedrockRegion       | `BEDROCK_REGION`            | `us-east-1`   | AWS region for Bedrock service                                                         |
+| BedrockAccessKey    | `BEDROCK_ACCESS_KEY_ID`     | *(none)*      | AWS access key ID for Bedrock authentication                                           |
+| BedrockSecretKey    | `BEDROCK_SECRET_ACCESS_KEY` | *(none)*      | AWS secret access key for Bedrock authentication                                       |
+| BedrockSessionToken | `BEDROCK_SESSION_TOKEN`     | *(none)*      | AWS session token for temporary credentials (optional, required for STS/assumed roles) |
+| BedrockServerURL    | `BEDROCK_SERVER_URL`        | *(none)*      | Optional custom endpoint URL for Bedrock service                                       |
 
 ### Custom LLM Provider
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| LLMServerURL | `LLM_SERVER_URL` | *(none)* | Server URL for custom LLM provider |
-| LLMServerKey | `LLM_SERVER_KEY` | *(none)* | API key for custom LLM provider |
-| LLMServerModel | `LLM_SERVER_MODEL` | *(none)* | Model name for custom LLM provider |
-| LLMServerConfig | `LLM_SERVER_CONFIG_PATH` | *(none)* | Path to config file for custom LLM provider options |
-| LLMServerLegacyReasoning | `LLM_SERVER_LEGACY_REASONING` | `false` | Controls reasoning format in API requests |
+| Option                     | Environment Variable            | Default Value | Description                                                                  |
+| -------------------------- | ------------------------------- | ------------- | ---------------------------------------------------------------------------- |
+| LLMServerURL               | `LLM_SERVER_URL`                | *(none)*      | Server URL for custom LLM provider                                           |
+| LLMServerKey               | `LLM_SERVER_KEY`                | *(none)*      | API key for custom LLM provider                                              |
+| LLMServerModel             | `LLM_SERVER_MODEL`              | *(none)*      | Model name for custom LLM provider                                           |
+| LLMServerConfig            | `LLM_SERVER_CONFIG_PATH`        | *(none)*      | Path to config file for custom LLM provider options                          |
+| LLMServerProvider          | `LLM_SERVER_PROVIDER`           | *(none)*      | Provider name prefix for model names (useful for LiteLLM proxy)              |
+| LLMServerLegacyReasoning   | `LLM_SERVER_LEGACY_REASONING`   | `false`       | Controls reasoning format in API requests                                    |
+| LLMServerPreserveReasoning | `LLM_SERVER_PRESERVE_REASONING` | `false`       | Preserve reasoning content in multi-turn conversations (required by some providers) |
 
 ### Usage Details
 
@@ -615,6 +617,18 @@ The LLM provider settings are used in `pkg/providers` modules to initialize and 
 
 This setting is important when working with different LLM providers as they may expect different reasoning formats in their API requests. If you encounter reasoning-related errors with custom providers, try changing this setting.
 
+- **LLMServerPreserveReasoning**: Controls whether reasoning content is preserved and sent back in multi-turn conversations:
+  ```go
+  // Used in custom provider to preserve reasoning content
+  if cfg.LLMServerPreserveReasoning {
+      // Preserves and returns reasoning_content in assistant messages
+  }
+  ```
+  - `false` (default): Reasoning content is not preserved in conversation history
+  - `true`: Reasoning content is preserved and sent in subsequent API calls
+
+This setting is required by some LLM providers (e.g., Moonshot) that return errors like "thinking is enabled but reasoning_content is missing in assistant tool call message" when reasoning content is not included in multi-turn conversations. Enable this setting if your provider requires reasoning content to be preserved across conversation turns.
+
 The provider registration is managed in `pkg/providers/providers.go`:
 
 ```go
@@ -678,14 +692,14 @@ These settings are critical for:
 
 These settings control the vector embedding service used for semantic search and similarity matching, which is fundamental for PentAGi's intelligent search capabilities.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| EmbeddingURL | `EMBEDDING_URL` | *(none)* | Server URL for embedding provider (overrides provider-specific URLs) |
-| EmbeddingKey | `EMBEDDING_KEY` | *(none)* | API key for embedding provider (overrides provider-specific keys) |
-| EmbeddingModel | `EMBEDDING_MODEL` | *(none)* | Model name for embedding generation |
-| EmbeddingStripNewLines | `EMBEDDING_STRIP_NEW_LINES` | `true` | Whether to strip newlines before embedding (improves quality) |
-| EmbeddingBatchSize | `EMBEDDING_BATCH_SIZE` | `512` | Batch size for embedding operations (affects memory usage and performance) |
-| EmbeddingProvider | `EMBEDDING_PROVIDER` | `openai` | Provider for embeddings (openai, ollama, mistral, jina, huggingface) |
+| Option                 | Environment Variable        | Default Value | Description                                                                |
+| ---------------------- | --------------------------- | ------------- | -------------------------------------------------------------------------- |
+| EmbeddingURL           | `EMBEDDING_URL`             | *(none)*      | Server URL for embedding provider (overrides provider-specific URLs)       |
+| EmbeddingKey           | `EMBEDDING_KEY`             | *(none)*      | API key for embedding provider (overrides provider-specific keys)          |
+| EmbeddingModel         | `EMBEDDING_MODEL`           | *(none)*      | Model name for embedding generation                                        |
+| EmbeddingStripNewLines | `EMBEDDING_STRIP_NEW_LINES` | `true`        | Whether to strip newlines before embedding (improves quality)              |
+| EmbeddingBatchSize     | `EMBEDDING_BATCH_SIZE`      | `512`         | Batch size for embedding operations (affects memory usage and performance) |
+| EmbeddingProvider      | `EMBEDDING_PROVIDER`        | `openai`      | Provider for embeddings (openai, ollama, mistral, jina, huggingface)       |
 
 ### Usage Details
 
@@ -745,16 +759,16 @@ These settings are essential for:
 
 These settings control the text summarization behavior used for condensing long conversations and improving context management in AI interactions. The summarization system is a critical component that allows PentAGi to maintain coherent, long-running conversations while managing token usage effectively.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| SummarizerPreserveLast | `SUMMARIZER_PRESERVE_LAST` | `true` | Preserve the last message in summarization |
-| SummarizerUseQA | `SUMMARIZER_USE_QA` | `true` | Use question-answer format for summarization |
-| SummarizerSumHumanInQA | `SUMMARIZER_SUM_MSG_HUMAN_IN_QA` | `false` | Include human messages in QA summaries |
-| SummarizerLastSecBytes | `SUMMARIZER_LAST_SEC_BYTES` | `51200` | Bytes to preserve from the last section (50KB) |
-| SummarizerMaxBPBytes | `SUMMARIZER_MAX_BP_BYTES` | `16384` | Maximum bytes for bullet points summarization (16KB) |
-| SummarizerMaxQASections | `SUMMARIZER_MAX_QA_SECTIONS` | `10` | Maximum QA sections to include |
-| SummarizerMaxQABytes | `SUMMARIZER_MAX_QA_BYTES` | `65536` | Maximum bytes for QA summarization (64KB) |
-| SummarizerKeepQASections | `SUMMARIZER_KEEP_QA_SECTIONS` | `1` | Number of recent QA sections to keep without summarization |
+| Option                   | Environment Variable             | Default Value | Description                                                |
+| ------------------------ | -------------------------------- | ------------- | ---------------------------------------------------------- |
+| SummarizerPreserveLast   | `SUMMARIZER_PRESERVE_LAST`       | `true`        | Preserve the last message in summarization                 |
+| SummarizerUseQA          | `SUMMARIZER_USE_QA`              | `true`        | Use question-answer format for summarization               |
+| SummarizerSumHumanInQA   | `SUMMARIZER_SUM_MSG_HUMAN_IN_QA` | `false`       | Include human messages in QA summaries                     |
+| SummarizerLastSecBytes   | `SUMMARIZER_LAST_SEC_BYTES`      | `51200`       | Bytes to preserve from the last section (50KB)             |
+| SummarizerMaxBPBytes     | `SUMMARIZER_MAX_BP_BYTES`        | `16384`       | Maximum bytes for bullet points summarization (16KB)       |
+| SummarizerMaxQASections  | `SUMMARIZER_MAX_QA_SECTIONS`     | `10`          | Maximum QA sections to include                             |
+| SummarizerMaxQABytes     | `SUMMARIZER_MAX_QA_BYTES`        | `65536`       | Maximum bytes for QA summarization (64KB)                  |
+| SummarizerKeepQASections | `SUMMARIZER_KEEP_QA_SECTIONS`    | `1`           | Number of recent QA sections to keep without summarization |
 
 ### Usage Details and Impact on System Behavior
 
@@ -951,15 +965,15 @@ func NewSummarizer(config SummarizerConfig) Summarizer {
 
 These settings control the behavior of the AI assistant functionality, including whether to use multi-agent delegation and assistant-specific summarization settings.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| AssistantUseAgents | `ASSISTANT_USE_AGENTS` | `false` | Controls the default value for agent usage when creating new assistants |
-| AssistantSummarizerPreserveLast | `ASSISTANT_SUMMARIZER_PRESERVE_LAST` | `true` | Whether to preserve all messages in the assistant's last section |
-| AssistantSummarizerLastSecBytes | `ASSISTANT_SUMMARIZER_LAST_SEC_BYTES` | `76800` | Maximum byte size for assistant's last section (75KB) |
-| AssistantSummarizerMaxBPBytes | `ASSISTANT_SUMMARIZER_MAX_BP_BYTES` | `16384` | Maximum byte size for a single body pair in assistant context (16KB) |
-| AssistantSummarizerMaxQASections | `ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS` | `7` | Maximum QA sections to preserve in assistant context |
-| AssistantSummarizerMaxQABytes | `ASSISTANT_SUMMARIZER_MAX_QA_BYTES` | `76800` | Maximum byte size for assistant's QA sections (75KB) |
-| AssistantSummarizerKeepQASections | `ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS` | `3` | Number of recent QA sections to preserve without summarization |
+| Option                            | Environment Variable                    | Default Value | Description                                                             |
+| --------------------------------- | --------------------------------------- | ------------- | ----------------------------------------------------------------------- |
+| AssistantUseAgents                | `ASSISTANT_USE_AGENTS`                  | `false`       | Controls the default value for agent usage when creating new assistants |
+| AssistantSummarizerPreserveLast   | `ASSISTANT_SUMMARIZER_PRESERVE_LAST`    | `true`        | Whether to preserve all messages in the assistant's last section        |
+| AssistantSummarizerLastSecBytes   | `ASSISTANT_SUMMARIZER_LAST_SEC_BYTES`   | `76800`       | Maximum byte size for assistant's last section (75KB)                   |
+| AssistantSummarizerMaxBPBytes     | `ASSISTANT_SUMMARIZER_MAX_BP_BYTES`     | `16384`       | Maximum byte size for a single body pair in assistant context (16KB)    |
+| AssistantSummarizerMaxQASections  | `ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS`  | `7`           | Maximum QA sections to preserve in assistant context                    |
+| AssistantSummarizerMaxQABytes     | `ASSISTANT_SUMMARIZER_MAX_QA_BYTES`     | `76800`       | Maximum byte size for assistant's QA sections (75KB)                    |
+| AssistantSummarizerKeepQASections | `ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS` | `3`           | Number of recent QA sections to preserve without summarization          |
 
 ### Usage Details
 
@@ -1026,47 +1040,47 @@ These settings control the integration with various search engines used for web 
 
 ### DuckDuckGo Search
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| DuckDuckGoEnabled | `DUCKDUCKGO_ENABLED` | `true` | Enable or disable DuckDuckGo Search engine |
+| Option            | Environment Variable | Default Value | Description                                |
+| ----------------- | -------------------- | ------------- | ------------------------------------------ |
+| DuckDuckGoEnabled | `DUCKDUCKGO_ENABLED` | `true`        | Enable or disable DuckDuckGo Search engine |
 
 ### Google Search
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| GoogleAPIKey | `GOOGLE_API_KEY` | *(none)* | API key for Google Search |
-| GoogleCXKey | `GOOGLE_CX_KEY` | *(none)* | Custom Search Engine ID for Google Search |
-| GoogleLRKey | `GOOGLE_LR_KEY` | `lang_en` | Language restriction for Google Search (e.g., `lang_en`) |
+| Option       | Environment Variable | Default Value | Description                                              |
+| ------------ | -------------------- | ------------- | -------------------------------------------------------- |
+| GoogleAPIKey | `GOOGLE_API_KEY`     | *(none)*      | API key for Google Search                                |
+| GoogleCXKey  | `GOOGLE_CX_KEY`      | *(none)*      | Custom Search Engine ID for Google Search                |
+| GoogleLRKey  | `GOOGLE_LR_KEY`      | `lang_en`     | Language restriction for Google Search (e.g., `lang_en`) |
 
 ### Traversaal Search
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| TraversaalAPIKey | `TRAVERSAAL_API_KEY` | *(none)* | API key for Traversaal search engine |
+| Option           | Environment Variable | Default Value | Description                          |
+| ---------------- | -------------------- | ------------- | ------------------------------------ |
+| TraversaalAPIKey | `TRAVERSAAL_API_KEY` | *(none)*      | API key for Traversaal search engine |
 
 ### Tavily Search
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| TavilyAPIKey | `TAVILY_API_KEY` | *(none)* | API key for Tavily search engine |
+| Option       | Environment Variable | Default Value | Description                      |
+| ------------ | -------------------- | ------------- | -------------------------------- |
+| TavilyAPIKey | `TAVILY_API_KEY`     | *(none)*      | API key for Tavily search engine |
 
 ### Perplexity Search
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| PerplexityAPIKey | `PERPLEXITY_API_KEY` | *(none)* | API key for Perplexity search engine |
-| PerplexityModel | `PERPLEXITY_MODEL` | `sonar` | Model to use for Perplexity search |
-| PerplexityContextSize | `PERPLEXITY_CONTEXT_SIZE` | `low` | Context size for Perplexity search (`low`, `medium`, `high`) |
+| Option                | Environment Variable      | Default Value | Description                                                  |
+| --------------------- | ------------------------- | ------------- | ------------------------------------------------------------ |
+| PerplexityAPIKey      | `PERPLEXITY_API_KEY`      | *(none)*      | API key for Perplexity search engine                         |
+| PerplexityModel       | `PERPLEXITY_MODEL`        | `sonar`       | Model to use for Perplexity search                           |
+| PerplexityContextSize | `PERPLEXITY_CONTEXT_SIZE` | `low`         | Context size for Perplexity search (`low`, `medium`, `high`) |
 
 ### Searxng Search
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| SearxngURL | `SEARXNG_URL` | *(none)* | Base URL for Searxng meta search engine instance |
-| SearxngCategories | `SEARXNG_CATEGORIES` | `general` | Search categories to use (e.g., `general`, `news`, `web`) |
-| SearxngLanguage | `SEARXNG_LANGUAGE` | *(none)* | Language filter for search results (e.g., `en`, `ch`) |
-| SearxngSafeSearch | `SEARXNG_SAFESEARCH` | `0` | Safe search filter level (`0` = none, `1` = moderate, `2` = strict) |
-| SearxngTimeRange | `SEARXNG_TIME_RANGE` | *(none)* | Time range filter (e.g., `day`, `month`, `year`) |
+| Option            | Environment Variable | Default Value | Description                                                         |
+| ----------------- | -------------------- | ------------- | ------------------------------------------------------------------- |
+| SearxngURL        | `SEARXNG_URL`        | *(none)*      | Base URL for Searxng meta search engine instance                    |
+| SearxngCategories | `SEARXNG_CATEGORIES` | `general`     | Search categories to use (e.g., `general`, `news`, `web`)           |
+| SearxngLanguage   | `SEARXNG_LANGUAGE`   | *(none)*      | Language filter for search results (e.g., `en`, `ch`)               |
+| SearxngSafeSearch | `SEARXNG_SAFESEARCH` | `0`           | Safe search filter level (`0` = none, `1` = moderate, `2` = strict) |
+| SearxngTimeRange  | `SEARXNG_TIME_RANGE` | *(none)*      | Time range filter (e.g., `day`, `month`, `year`)                    |
 
 ### Usage Details
 
@@ -1133,9 +1147,9 @@ Having multiple search engine options ensures redundancy and provides different 
 
 These settings control the HTTP proxy used for outbound connections, which is important for network security and access control.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| ProxyURL | `PROXY_URL` | *(none)* | URL for HTTP proxy (e.g., `http://user:pass@proxy:8080`) |
+| Option   | Environment Variable | Default Value | Description                                              |
+| -------- | -------------------- | ------------- | -------------------------------------------------------- |
+| ProxyURL | `PROXY_URL`          | *(none)*      | URL for HTTP proxy (e.g., `http://user:pass@proxy:8080`) |
 
 ### Usage Details
 
@@ -1176,11 +1190,11 @@ The proxy setting is essential for:
 
 These settings control the integration with Graphiti, a temporal knowledge graph system powered by Neo4j, for advanced semantic understanding and relationship tracking of AI agent operations.
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| GraphitiEnabled | `GRAPHITI_ENABLED` | `false` | Enable or disable Graphiti knowledge graph integration |
-| GraphitiURL | `GRAPHITI_URL` | `http://localhost:8001` | Base URL for Graphiti API service |
-| GraphitiTimeout | `GRAPHITI_TIMEOUT` | `30` | Timeout in seconds for Graphiti operations |
+| Option          | Environment Variable | Default Value           | Description                                            |
+| --------------- | -------------------- | ----------------------- | ------------------------------------------------------ |
+| GraphitiEnabled | `GRAPHITI_ENABLED`   | `false`                 | Enable or disable Graphiti knowledge graph integration |
+| GraphitiURL     | `GRAPHITI_URL`       | `http://localhost:8001` | Base URL for Graphiti API service                      |
+| GraphitiTimeout | `GRAPHITI_TIMEOUT`   | `30`                    | Timeout in seconds for Graphiti operations             |
 
 ### Usage Details
 
@@ -1226,18 +1240,18 @@ These settings control the observability and monitoring capabilities, including 
 
 ### Telemetry
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| TelemetryEndpoint | `OTEL_HOST` | *(none)* | Endpoint for OpenTelemetry data collection |
+| Option            | Environment Variable | Default Value | Description                                |
+| ----------------- | -------------------- | ------------- | ------------------------------------------ |
+| TelemetryEndpoint | `OTEL_HOST`          | *(none)*      | Endpoint for OpenTelemetry data collection |
 
 ### Langfuse
 
-| Option | Environment Variable | Default Value | Description |
-|--------|---------------------|---------------|-------------|
-| LangfuseBaseURL | `LANGFUSE_BASE_URL` | *(none)* | Base URL for Langfuse API |
-| LangfuseProjectID | `LANGFUSE_PROJECT_ID` | *(none)* | Project ID for Langfuse |
-| LangfusePublicKey | `LANGFUSE_PUBLIC_KEY` | *(none)* | Public key for Langfuse API |
-| LangfuseSecretKey | `LANGFUSE_SECRET_KEY` | *(none)* | Secret key for Langfuse API |
+| Option            | Environment Variable  | Default Value | Description                 |
+| ----------------- | --------------------- | ------------- | --------------------------- |
+| LangfuseBaseURL   | `LANGFUSE_BASE_URL`   | *(none)*      | Base URL for Langfuse API   |
+| LangfuseProjectID | `LANGFUSE_PROJECT_ID` | *(none)*      | Project ID for Langfuse     |
+| LangfusePublicKey | `LANGFUSE_PUBLIC_KEY` | *(none)*      | Public key for Langfuse API |
+| LangfuseSecretKey | `LANGFUSE_SECRET_KEY` | *(none)*      | Secret key for Langfuse API |
 
 ### Usage Details
 

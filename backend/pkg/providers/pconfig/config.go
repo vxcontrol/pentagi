@@ -11,6 +11,128 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type CallUsage struct {
+	Input      int64   `json:"input" yaml:"input"`
+	Output     int64   `json:"output" yaml:"output"`
+	CacheRead  int64   `json:"cache_read" yaml:"cache_read"`
+	CacheWrite int64   `json:"cache_write" yaml:"cache_write"`
+	CostInput  float64 `json:"cost_input" yaml:"cost_input"`
+	CostOutput float64 `json:"cost_output" yaml:"cost_output"`
+}
+
+func NewCallUsage(info map[string]any) CallUsage {
+	usage := CallUsage{}
+	usage.Fill(info)
+
+	return usage
+}
+
+func (c *CallUsage) getInt64(info map[string]any, key string) int64 {
+	if info == nil {
+		return 0
+	}
+
+	if value, ok := info[key]; ok {
+		switch v := value.(type) {
+		case int:
+			return int64(v)
+		case int64:
+			return v
+		case int32:
+			return int64(v)
+		case float64:
+			return int64(v)
+		}
+	}
+
+	return 0
+}
+
+func (c *CallUsage) getFloat64(info map[string]any, key string) float64 {
+	if info == nil {
+		return 0.0
+	}
+
+	if value, ok := info[key]; ok {
+		switch v := value.(type) {
+		case float64:
+			return v
+		}
+	}
+
+	return 0.0
+}
+
+func (c *CallUsage) Fill(info map[string]any) {
+	c.Input = c.getInt64(info, "PromptTokens")
+	c.Output = c.getInt64(info, "CompletionTokens")
+	c.CacheRead = c.getInt64(info, "CacheReadInputTokens")
+	c.CacheWrite = c.getInt64(info, "CacheCreationInputTokens")
+	c.CostInput = c.getFloat64(info, "UpstreamInferencePromptCost")
+	c.CostOutput = c.getFloat64(info, "UpstreamInferenceCompletionsCost")
+}
+
+func (c *CallUsage) Merge(other CallUsage) {
+	if other.Input > 0 {
+		c.Input = other.Input
+	}
+	if other.Output > 0 {
+		c.Output = other.Output
+	}
+	if other.CacheRead > 0 {
+		c.CacheRead = other.CacheRead
+	}
+	if other.CacheWrite > 0 {
+		c.CacheWrite = other.CacheWrite
+	}
+	if other.CostInput > 0 {
+		c.CostInput = other.CostInput
+	}
+	if other.CostOutput > 0 {
+		c.CostOutput = other.CostOutput
+	}
+}
+
+func (c *CallUsage) UpdateCost(price *PriceInfo) {
+	if price == nil {
+		return
+	}
+
+	// If cost is already calculated by the provider (OpenRouter), don't overwrite it
+	if c.CostInput != 0.0 || c.CostOutput != 0.0 {
+		return
+	}
+
+	// If there are no cache prices, calculate everything at full cost (fallback)
+	if price.CacheRead == 0.0 && price.CacheWrite == 0.0 {
+		c.CostInput = float64(c.Input) * price.Input / 1e6
+		c.CostOutput = float64(c.Output) * price.Output / 1e6
+		return
+	}
+
+	// Calculation with cache
+	uncachedTokens := max(float64(c.Input-c.CacheRead), 0.0)
+	cacheReadCost := float64(c.CacheRead) * price.CacheRead / 1e6
+	cacheWriteCost := float64(c.CacheWrite) * price.CacheWrite / 1e6
+
+	c.CostInput = uncachedTokens*price.Input/1e6 + cacheReadCost + cacheWriteCost
+	c.CostOutput = float64(c.Output) * price.Output / 1e6
+}
+
+func (c *CallUsage) IsZero() bool {
+	return c.Input == 0 &&
+		c.Output == 0 &&
+		c.CacheRead == 0 &&
+		c.CacheWrite == 0 &&
+		c.CostInput == 0.0 &&
+		c.CostOutput == 0.0
+}
+
+func (c *CallUsage) String() string {
+	return fmt.Sprintf("Input: %d, Output: %d, CacheRead: %d, CacheWrite: %d, CostInput: %f, CostOutput: %f",
+		c.Input, c.Output, c.CacheRead, c.CacheWrite, c.CostInput, c.CostOutput)
+}
+
 type ProviderOptionsType string
 
 const (
@@ -56,8 +178,10 @@ type ModelConfig struct {
 type ModelsConfig []ModelConfig
 
 type PriceInfo struct {
-	Input  float64 `json:"input,omitempty" yaml:"input,omitempty"`
-	Output float64 `json:"output,omitempty" yaml:"output,omitempty"`
+	Input      float64 `json:"input,omitempty" yaml:"input,omitempty"`
+	Output     float64 `json:"output,omitempty" yaml:"output,omitempty"`
+	CacheRead  float64 `json:"cache_read,omitempty" yaml:"cache_read,omitempty"`
+	CacheWrite float64 `json:"cache_write,omitempty" yaml:"cache_write,omitempty"`
 }
 
 type ReasoningConfig struct {
@@ -371,6 +495,13 @@ func (ac *AgentConfig) UnmarshalJSON(data []byte) error {
 	}
 	ac.raw = raw
 	return nil
+}
+
+// ClearRaw clears the raw map, forcing marshal to use struct field values
+func (ac *AgentConfig) ClearRaw() {
+	if ac != nil {
+		ac.raw = nil
+	}
 }
 
 func (ac *AgentConfig) UnmarshalYAML(value *yaml.Node) error {

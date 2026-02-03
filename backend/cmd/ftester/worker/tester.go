@@ -191,6 +191,7 @@ func (t *tester) initFlowProviderController() error {
 		container.Image,
 		flow.Language,
 		flow.Title,
+		flow.ToolCallIDTemplate,
 	)
 	if err != nil {
 		return wrapErrorEndSpan(t.ctx, flowSpan, "failed to load flow provider", err)

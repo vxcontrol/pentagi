@@ -162,22 +162,22 @@ func TestGetUsage(t *testing.T) {
 
 	// Test usage parsing with Google AI format
 	usageInfo := map[string]any{
-		"input_tokens":  int32(100),
-		"output_tokens": int32(50),
+		"PromptTokens":     int32(100),
+		"CompletionTokens": int32(50),
 	}
 
-	inputTokens, outputTokens := prov.GetUsage(usageInfo)
-	if inputTokens != 100 {
-		t.Errorf("Expected input tokens 100, got %d", inputTokens)
+	usage := prov.GetUsage(usageInfo)
+	if usage.Input != 100 {
+		t.Errorf("Expected input tokens 100, got %d", usage.Input)
 	}
-	if outputTokens != 50 {
-		t.Errorf("Expected output tokens 50, got %d", outputTokens)
+	if usage.Output != 50 {
+		t.Errorf("Expected output tokens 50, got %d", usage.Output)
 	}
 
 	// Test with missing usage info
 	emptyInfo := map[string]any{}
-	inputTokens, outputTokens = prov.GetUsage(emptyInfo)
-	if inputTokens != 0 || outputTokens != 0 {
-		t.Errorf("Expected zero tokens with empty usage info, got input: %d, output: %d", inputTokens, outputTokens)
+	usage = prov.GetUsage(emptyInfo)
+	if !usage.IsZero() {
+		t.Errorf("Expected zero tokens with empty usage info, got %s", usage.String())
 	}
 }

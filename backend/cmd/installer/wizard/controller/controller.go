@@ -157,9 +157,12 @@ type LLMProviderConfig struct {
 	SessionToken loader.EnvVar // BEDROCK_SESSION_TOKEN
 	Region       loader.EnvVar // BEDROCK_REGION
 	// Ollama and Custom specific fields
-	ConfigPath      loader.EnvVar // OLLAMA_SERVER_CONFIG_PATH | LLM_SERVER_CONFIG_PATH
-	HostConfigPath  loader.EnvVar // PENTAGI_OLLAMA_SERVER_CONFIG_PATH | PENTAGI_LLM_SERVER_CONFIG_PATH
-	LegacyReasoning loader.EnvVar // LLM_SERVER_LEGACY_REASONING
+	ConfigPath        loader.EnvVar // OLLAMA_SERVER_CONFIG_PATH | LLM_SERVER_CONFIG_PATH
+	HostConfigPath    loader.EnvVar // PENTAGI_OLLAMA_SERVER_CONFIG_PATH | PENTAGI_LLM_SERVER_CONFIG_PATH
+	LegacyReasoning   loader.EnvVar // LLM_SERVER_LEGACY_REASONING
+	PreserveReasoning loader.EnvVar // LLM_SERVER_PRESERVE_REASONING
+	// Custom specific fields
+	ProviderName loader.EnvVar // LLM_SERVER_PROVIDER
 	// Ollama specific fields
 	PullTimeout       loader.EnvVar // OLLAMA_SERVER_PULL_MODELS_TIMEOUT
 	PullEnabled       loader.EnvVar // OLLAMA_SERVER_PULL_MODELS_ENABLED
@@ -258,6 +261,8 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 			providerConfig.HostConfigPath.Value = providerConfig.ConfigPath.Value
 		}
 		providerConfig.LegacyReasoning, _ = c.GetVar("LLM_SERVER_LEGACY_REASONING")
+		providerConfig.PreserveReasoning, _ = c.GetVar("LLM_SERVER_PRESERVE_REASONING")
+		providerConfig.ProviderName, _ = c.GetVar("LLM_SERVER_PROVIDER")
 		providerConfig.Configured = providerConfig.BaseURL.Value != "" && providerConfig.APIKey.Value != "" &&
 			(providerConfig.Model.Value != "" || providerConfig.ConfigPath.Value != "")
 	}
@@ -357,6 +362,12 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 		if err := c.SetVar(config.LegacyReasoning.Name, config.LegacyReasoning.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.LegacyReasoning.Name, err)
 		}
+		if err := c.SetVar(config.PreserveReasoning.Name, config.PreserveReasoning.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.PreserveReasoning.Name, err)
+		}
+		if err := c.SetVar(config.ProviderName.Name, config.ProviderName.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
+		}
 
 		var containerPath, hostPath string
 		if config.HostConfigPath.Value != "" {
@@ -409,6 +420,7 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 		vars = []string{
 			"LLM_SERVER_URL", "LLM_SERVER_KEY", "LLM_SERVER_MODEL",
 			"LLM_SERVER_CONFIG_PATH", "LLM_SERVER_LEGACY_REASONING",
+			"LLM_SERVER_PRESERVE_REASONING", "LLM_SERVER_PROVIDER",
 			"PENTAGI_LLM_SERVER_CONFIG_PATH", // local path to the LLM config file
 		}
 	}
@@ -1951,6 +1963,8 @@ func (c *controller) getVariableDescription(varName string) string {
 		"LLM_SERVER_MODEL":                  locale.EnvDesc_LLM_SERVER_MODEL,
 		"LLM_SERVER_CONFIG_PATH":            locale.EnvDesc_LLM_SERVER_CONFIG_PATH,
 		"LLM_SERVER_LEGACY_REASONING":       locale.EnvDesc_LLM_SERVER_LEGACY_REASONING,
+		"LLM_SERVER_PRESERVE_REASONING":     locale.EnvDesc_LLM_SERVER_PRESERVE_REASONING,
+		"LLM_SERVER_PROVIDER":               locale.EnvDesc_LLM_SERVER_PROVIDER,
 
 		"LANGFUSE_LISTEN_IP":   locale.EnvDesc_LANGFUSE_LISTEN_IP,
 		"LANGFUSE_LISTEN_PORT": locale.EnvDesc_LANGFUSE_LISTEN_PORT,
@@ -2171,6 +2185,8 @@ var criticalVariables = map[string]bool{
 	"LLM_SERVER_MODEL":                  true,
 	"LLM_SERVER_CONFIG_PATH":            true,
 	"LLM_SERVER_LEGACY_REASONING":       true,
+	"LLM_SERVER_PRESERVE_REASONING":     true,
+	"LLM_SERVER_PROVIDER":               true,
 
 	// tools changes
 	"DUCKDUCKGO_ENABLED":      true,

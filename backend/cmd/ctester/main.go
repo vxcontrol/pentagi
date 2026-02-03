@@ -27,6 +27,7 @@ import (
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
 	providerType := flag.String("type", "custom", "Provider type [custom, openai, anthropic, gemini, bedrock, ollama]")
+	providerName := flag.String("name", "", "Provider name using as PROVDER_NAME/MODEL_NAME while building provider config")
 	configPath := flag.String("config", "", "Path to provider config file")
 	testsPath := flag.String("tests", "", "Path to custom tests YAML file")
 	reportPath := flag.String("report", "", "Path to write report file")
@@ -48,6 +49,9 @@ func main() {
 	if *configPath != "" {
 		cfg.LLMServerConfig = *configPath
 		cfg.OllamaServerConfig = *configPath
+	}
+	if *providerName != "" {
+		cfg.LLMServerProvider = *providerName
 	}
 
 	prv, err := createProvider(*providerType, cfg)

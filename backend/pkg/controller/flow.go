@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"pentagi/pkg/cast"
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
@@ -113,14 +114,15 @@ func NewFlowWorker(
 	defer span.End()
 
 	flow, err := fwc.db.CreateFlow(ctx, database.CreateFlowParams{
-		Title:             "untitled",
-		Status:            database.FlowStatusCreated,
-		Model:             "unknown",
-		ModelProviderName: fwc.prvname.String(),
-		ModelProviderType: database.ProviderType(fwc.prvtype),
-		Language:          "English",
-		Functions:         []byte("{}"),
-		UserID:            fwc.userID,
+		Title:              "untitled",
+		Status:             database.FlowStatusCreated,
+		Model:              "unknown",
+		ModelProviderName:  fwc.prvname.String(),
+		ModelProviderType:  database.ProviderType(fwc.prvtype),
+		Language:           "English",
+		ToolCallIDTemplate: cast.ToolCallIDTemplate,
+		Functions:          []byte("{}"),
+		UserID:             fwc.userID,
 	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to create flow in DB")
@@ -181,12 +183,13 @@ func NewFlowWorker(
 	}
 
 	flow, err = fwc.db.UpdateFlow(ctx, database.UpdateFlowParams{
-		Title:     flowProvider.Title(),
-		Model:     flowProvider.Model(pconfig.OptionsTypePrimaryAgent),
-		Language:  flowProvider.Language(),
-		Functions: functionsBlob,
-		TraceID:   database.StringToNullString(observation.TraceID()),
-		ID:        flow.ID,
+		Title:              flowProvider.Title(),
+		Model:              flowProvider.Model(pconfig.OptionsTypePrimaryAgent),
+		Language:           flowProvider.Language(),
+		ToolCallIDTemplate: flowProvider.ToolCallIDTemplate(),
+		Functions:          functionsBlob,
+		TraceID:            database.StringToNullString(observation.TraceID()),
+		ID:                 flow.ID,
 	})
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to update flow in DB", err)
@@ -336,7 +339,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	flowProvider, err := fwc.provs.LoadFlowProvider(
 		ctx, provider.ProviderName(flow.ModelProviderName),
 		prompter, executor, flow.ID, flow.UserID, fwc.cfg.AskUser,
-		container.Image, flow.Language, flow.Title,
+		container.Image, flow.Language, flow.Title, flow.ToolCallIDTemplate,
 	)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow provider", err)

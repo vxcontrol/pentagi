@@ -15,6 +15,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 func (fp *flowProvider) performTaskResultReporter(
@@ -190,6 +191,9 @@ func (fp *flowProvider) performSubtasksRefiner(
 
 	logger.Debug("starting subtasks refiner")
 
+	// Track execution time for duration calculation
+	startTime := time.Now()
+
 	restoreChain := func(msgChain json.RawMessage) ([]llms.MessageContent, error) {
 		var msgList []llms.MessageContent
 		err := json.Unmarshal(msgChain, &msgList)
@@ -299,12 +303,13 @@ func (fp *flowProvider) performSubtasksRefiner(
 	}
 
 	msgChain, err = fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          msgChainType,
-		Model:         fp.Model(optAgentType),
-		ModelProvider: string(fp.Type()),
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(&taskID),
+		Type:            msgChainType,
+		Model:           fp.Model(optAgentType),
+		ModelProvider:   string(fp.Type()),
+		Chain:           chainBlob,
+		FlowID:          fp.flowID,
+		TaskID:          database.Int64ToNullInt64(&taskID),
+		DurationSeconds: time.Since(startTime).Seconds(),
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to create msg chain")
@@ -786,6 +791,8 @@ func (fp *flowProvider) performSimpleChain(
 		err  error
 	)
 
+	startTime := time.Now()
+
 	chain := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemTmpl),
 		llms.TextParts(llms.ChatMessageTypeHuman, userTmpl),
@@ -818,12 +825,27 @@ func (fp *flowProvider) performSimpleChain(
 	}
 
 	var parts []string
-	var inputTokens, outputTokens int64
+	var usage pconfig.CallUsage
+	var reasoning *reasoning.ContentReasoning
 	for _, choice := range resp.Choices {
 		parts = append(parts, choice.Content)
-		inputTokens, outputTokens = fp.GetUsage(choice.GenerationInfo)
+		usage.Merge(fp.GetUsage(choice.GenerationInfo))
+		// Preserve reasoning from first choice for simple chains (safe for all providers)
+		if reasoning == nil && !choice.Reasoning.IsEmpty() {
+			reasoning = choice.Reasoning
+		}
 	}
-	chain = append(chain, llms.TextParts(llms.ChatMessageTypeAI, parts...))
+
+	// Update cost based on price info
+	usage.UpdateCost(fp.GetPriceInfo(opt))
+
+	// Universal pattern for simple chains - preserve reasoning if present
+	msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+	content := strings.Join(parts, "\n")
+	if content != "" || reasoning != nil {
+		msg.Parts = append(msg.Parts, llms.TextPartWithReasoning(content, reasoning))
+	}
+	chain = append(chain, msg)
 
 	chainBlob, err := json.Marshal(chain)
 	if err != nil {
@@ -831,15 +853,20 @@ func (fp *flowProvider) performSimpleChain(
 	}
 
 	_, err = fp.db.CreateMsgChain(ctx, database.CreateMsgChainParams{
-		Type:          msgChainType,
-		Model:         fp.Model(opt),
-		ModelProvider: string(fp.Type()),
-		UsageIn:       inputTokens,
-		UsageOut:      outputTokens,
-		Chain:         chainBlob,
-		FlowID:        fp.flowID,
-		TaskID:        database.Int64ToNullInt64(taskID),
-		SubtaskID:     database.Int64ToNullInt64(subtaskID),
+		Type:            msgChainType,
+		Model:           fp.Model(opt),
+		ModelProvider:   string(fp.Type()),
+		UsageIn:         usage.Input,
+		UsageOut:        usage.Output,
+		UsageCacheIn:    usage.CacheRead,
+		UsageCacheOut:   usage.CacheWrite,
+		UsageCostIn:     usage.CostInput,
+		UsageCostOut:    usage.CostOutput,
+		DurationSeconds: time.Since(startTime).Seconds(),
+		Chain:           chainBlob,
+		FlowID:          fp.flowID,
+		TaskID:          database.Int64ToNullInt64(taskID),
+		SubtaskID:       database.Int64ToNullInt64(subtaskID),
 	})
 
 	return strings.Join(parts, "\n\n"), nil

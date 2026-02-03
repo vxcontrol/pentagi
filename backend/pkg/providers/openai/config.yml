@@ -7,6 +7,7 @@ simple:
   price:
     input: 0.4
     output: 1.6
+    cache_read: 0.1
 
 simple_json:
   model: gpt-4.1-mini
@@ -18,6 +19,7 @@ simple_json:
   price:
     input: 0.4
     output: 1.6
+    cache_read: 0.1
 
 primary_agent:
   model: o4-mini
@@ -28,6 +30,7 @@ primary_agent:
   price:
     input: 1.1
     output: 4.4
+    cache_read: 0.275
 
 assistant:
   model: o4-mini
@@ -38,6 +41,7 @@ assistant:
   price:
     input: 1.1
     output: 4.4
+    cache_read: 0.275
 
 generator:
   model: o3
@@ -48,6 +52,7 @@ generator:
   price:
     input: 2.0
     output: 8.0
+    cache_read: 0.5
 
 refiner:
   model: o3
@@ -58,6 +63,7 @@ refiner:
   price:
     input: 2.0
     output: 8.0
+    cache_read: 0.5
 
 adviser:
   model: gpt-5.2
@@ -68,6 +74,7 @@ adviser:
   price:
     input: 1.75
     output: 14.0
+    cache_read: 0.175
 
 reflector:
   model: o4-mini
@@ -78,6 +85,7 @@ reflector:
   price:
     input: 1.1
     output: 4.4
+    cache_read: 0.275
 
 searcher:
   model: gpt-4.1-mini
@@ -88,6 +96,7 @@ searcher:
   price:
     input: 0.4
     output: 1.6
+    cache_read: 0.1
 
 enricher:
   model: gpt-4.1-mini
@@ -98,6 +107,7 @@ enricher:
   price:
     input: 0.4
     output: 1.6
+    cache_read: 0.1
 
 coder:
   model: o3
@@ -108,6 +118,7 @@ coder:
   price:
     input: 2.0
     output: 8.0
+    cache_read: 0.5
 
 installer:
   model: o4-mini
@@ -118,6 +129,7 @@ installer:
   price:
     input: 1.1
     output: 4.4
+    cache_read: 0.275
 
 pentester:
   model: o4-mini
@@ -128,3 +140,4 @@ pentester:
   price:
     input: 1.1
     output: 4.4
+    cache_read: 0.275

@@ -73,7 +73,7 @@ func (p *flowPublisher) ScreenshotAdded(ctx context.Context, screenshot database
 }
 
 func (p *flowPublisher) TerminalLogAdded(ctx context.Context, terminalLog database.Termlog) {
-	p.ctrl.terminalLogAdded.Publish(ctx, p.flowID, converter.ConvertTerminalLog(terminalLog, p.flowID))
+	p.ctrl.terminalLogAdded.Publish(ctx, p.flowID, converter.ConvertTerminalLog(terminalLog))
 }
 
 func (p *flowPublisher) MessageLogAdded(ctx context.Context, messageLog database.Msglog) {

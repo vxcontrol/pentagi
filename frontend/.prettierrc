@@ -14,6 +14,12 @@
     "tailwindFunctions": ["cn"],
     "overrides": [
         {
+            "files": ["src/graphql/types.ts"],
+            "options": {
+                "tabWidth": 4
+            }
+        },
+        {
             "files": ["*.yml"],
             "options": {
                 "tabWidth": 2
