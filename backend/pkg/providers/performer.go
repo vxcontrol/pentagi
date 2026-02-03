@@ -724,12 +724,19 @@ func (fp *flowProvider) storeToGraphiti(
 		return
 	}
 
+	ctx, observation := obs.Observer.NewObservation(ctx)
+
 	storeCtx, cancel := context.WithTimeout(ctx, fp.graphitiClient.GetTimeout())
 	defer cancel()
 
 	err := fp.graphitiClient.AddMessages(storeCtx, graphiti.AddMessagesRequest{
 		GroupID:  groupID,
 		Messages: messages,
+		Observation: &graphiti.Observation{
+			ID:      observation.ID(),
+			TraceID: observation.TraceID(),
+			Time:    time.Now().UTC(),
+		},
 	})
 	if err != nil {
 		logrus.WithError(err).

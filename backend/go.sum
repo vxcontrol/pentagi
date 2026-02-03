@@ -609,8 +609,8 @@ github.com/vmihailenco/tagparser/v2 v2.0.0 h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAh
 github.com/vmihailenco/tagparser/v2 v2.0.0/go.mod h1:Wri+At7QHww0WTrCBeu4J6bNtoV6mEfg5OIWRZA9qds=
 github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1 h1:qx2SF3lrUBFSMylsk6jMVEI1AWOTIDHTz3ddMQ0ryCw=
 github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1/go.mod h1:AeiQFqiMgJJAXy6FYXtDS2a3P/PMB56iiBNY2vGrZhQ=
-github.com/vxcontrol/graphiti-go-client v0.0.0-20251112134544-aa9c5316ed5d h1:qTyangWlq6+kc8SeBnth0JY4Q7SLIhzTyiL7xmRIPWc=
-github.com/vxcontrol/graphiti-go-client v0.0.0-20251112134544-aa9c5316ed5d/go.mod h1:6UHL5uqAKp4KAdziva4qgcAxFtBzU05Hm/BAo4NkAuo=
+github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f h1:5RzZ9isUxs51yYrcwop1MeDJMTX3aLAKqYi6taOVpZc=
+github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f/go.mod h1:6UHL5uqAKp4KAdziva4qgcAxFtBzU05Hm/BAo4NkAuo=
 github.com/vxcontrol/langchaingo v0.1.15-0.20260203101354-ef220222bded h1:TIVNzJp1sMg68An+IyV70a4Me8hiGHjqJ4Cy957OCiY=
 github.com/vxcontrol/langchaingo v0.1.15-0.20260203101354-ef220222bded/go.mod h1:h20fCvlWxpWdzMWpSPZTWFVgKKRioFMZbGcxs+DXlJs=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=

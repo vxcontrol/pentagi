@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"pentagi/pkg/graphiti"
+	obs "pentagi/pkg/observability"
 )
 
 type graphitiSearcher interface {
@@ -99,25 +100,32 @@ func (t *GraphitiSearchTool) Handle(ctx context.Context, name string, args json.
 		return "", fmt.Errorf("search_type parameter is required")
 	}
 
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	observationObject := &graphiti.Observation{
+		ID:      observation.ID(),
+		TraceID: observation.TraceID(),
+		Time:    time.Now().UTC(),
+	}
+
 	// Get group ID from flow context
 	groupID := fmt.Sprintf("flow-%d", t.flowID)
 
 	// Route to appropriate search method
 	switch searchArgs.SearchType {
 	case "temporal_window":
-		return t.handleTemporalWindowSearch(ctx, groupID, searchArgs)
+		return t.handleTemporalWindowSearch(ctx, groupID, searchArgs, observationObject)
 	case "entity_relationships":
-		return t.handleEntityRelationshipsSearch(ctx, groupID, searchArgs)
+		return t.handleEntityRelationshipsSearch(ctx, groupID, searchArgs, observationObject)
 	case "diverse_results":
-		return t.handleDiverseResultsSearch(ctx, groupID, searchArgs)
+		return t.handleDiverseResultsSearch(ctx, groupID, searchArgs, observationObject)
 	case "episode_context":
-		return t.handleEpisodeContextSearch(ctx, groupID, searchArgs)
+		return t.handleEpisodeContextSearch(ctx, groupID, searchArgs, observationObject)
 	case "successful_tools":
-		return t.handleSuccessfulToolsSearch(ctx, groupID, searchArgs)
+		return t.handleSuccessfulToolsSearch(ctx, groupID, searchArgs, observationObject)
 	case "recent_context":
-		return t.handleRecentContextSearch(ctx, groupID, searchArgs)
+		return t.handleRecentContextSearch(ctx, groupID, searchArgs, observationObject)
 	case "entity_by_label":
-		return t.handleEntityByLabelSearch(ctx, groupID, searchArgs)
+		return t.handleEntityByLabelSearch(ctx, groupID, searchArgs, observationObject)
 	default:
 		return "", fmt.Errorf("unknown search_type: %s", searchArgs.SearchType)
 	}
@@ -128,6 +136,7 @@ func (t *GraphitiSearchTool) handleTemporalWindowSearch(
 	ctx context.Context,
 	groupID string,
 	args GraphitiSearchAction,
+	observationObject *graphiti.Observation,
 ) (string, error) {
 	// Validate temporal parameters
 	if args.TimeStart == "" || args.TimeEnd == "" {
@@ -154,11 +163,12 @@ func (t *GraphitiSearchTool) handleTemporalWindowSearch(
 	}
 
 	req := graphiti.TemporalSearchRequest{
-		Query:      args.Query,
-		GroupID:    &groupID,
-		TimeStart:  timeStart,
-		TimeEnd:    timeEnd,
-		MaxResults: maxResults,
+		Query:       args.Query,
+		GroupID:     &groupID,
+		TimeStart:   timeStart,
+		TimeEnd:     timeEnd,
+		MaxResults:  maxResults,
+		Observation: observationObject,
 	}
 
 	resp, err := t.graphitiClient.TemporalWindowSearch(ctx, req)
@@ -174,6 +184,7 @@ func (t *GraphitiSearchTool) handleEntityRelationshipsSearch(
 	ctx context.Context,
 	groupID string,
 	args GraphitiSearchAction,
+	observationObject *graphiti.Observation,
 ) (string, error) {
 	if args.CenterNodeUUID == "" {
 		return "", fmt.Errorf("center_node_uuid is required for entity_relationships search")
@@ -210,6 +221,7 @@ func (t *GraphitiSearchTool) handleEntityRelationshipsSearch(
 		NodeLabels:     nodeLabels,
 		EdgeTypes:      edgeTypes,
 		MaxResults:     maxResults,
+		Observation:    observationObject,
 	}
 
 	resp, err := t.graphitiClient.EntityRelationshipsSearch(ctx, req)
@@ -225,6 +237,7 @@ func (t *GraphitiSearchTool) handleDiverseResultsSearch(
 	ctx context.Context,
 	groupID string,
 	args GraphitiSearchAction,
+	observationObject *graphiti.Observation,
 ) (string, error) {
 	maxResults := args.MaxResults.Int()
 	if maxResults <= 0 {
@@ -244,6 +257,7 @@ func (t *GraphitiSearchTool) handleDiverseResultsSearch(
 		GroupID:        &groupID,
 		DiversityLevel: diversityLevel,
 		MaxResults:     maxResults,
+		Observation:    observationObject,
 	}
 
 	resp, err := t.graphitiClient.DiverseResultsSearch(ctx, req)
@@ -259,6 +273,7 @@ func (t *GraphitiSearchTool) handleEpisodeContextSearch(
 	ctx context.Context,
 	groupID string,
 	args GraphitiSearchAction,
+	observationObject *graphiti.Observation,
 ) (string, error) {
 	maxResults := args.MaxResults.Int()
 	if maxResults <= 0 {
@@ -266,9 +281,10 @@ func (t *GraphitiSearchTool) handleEpisodeContextSearch(
 	}
 
 	req := graphiti.EpisodeContextSearchRequest{
-		Query:      args.Query,
-		GroupID:    &groupID,
-		MaxResults: maxResults,
+		Query:       args.Query,
+		GroupID:     &groupID,
+		MaxResults:  maxResults,
+		Observation: observationObject,
 	}
 
 	resp, err := t.graphitiClient.EpisodeContextSearch(ctx, req)
@@ -284,6 +300,7 @@ func (t *GraphitiSearchTool) handleSuccessfulToolsSearch(
 	ctx context.Context,
 	groupID string,
 	args GraphitiSearchAction,
+	observationObject *graphiti.Observation,
 ) (string, error) {
 	maxResults := args.MaxResults.Int()
 	if maxResults <= 0 {
@@ -300,6 +317,7 @@ func (t *GraphitiSearchTool) handleSuccessfulToolsSearch(
 		GroupID:     &groupID,
 		MinMentions: minMentions,
 		MaxResults:  maxResults,
+		Observation: observationObject,
 	}
 
 	resp, err := t.graphitiClient.SuccessfulToolsSearch(ctx, req)
@@ -315,6 +333,7 @@ func (t *GraphitiSearchTool) handleRecentContextSearch(
 	ctx context.Context,
 	groupID string,
 	args GraphitiSearchAction,
+	observationObject *graphiti.Observation,
 ) (string, error) {
 	maxResults := args.MaxResults.Int()
 	if maxResults <= 0 {
@@ -334,6 +353,7 @@ func (t *GraphitiSearchTool) handleRecentContextSearch(
 		GroupID:       &groupID,
 		RecencyWindow: recencyWindow,
 		MaxResults:    maxResults,
+		Observation:   observationObject,
 	}
 
 	resp, err := t.graphitiClient.RecentContextSearch(ctx, req)
@@ -349,6 +369,7 @@ func (t *GraphitiSearchTool) handleEntityByLabelSearch(
 	ctx context.Context,
 	groupID string,
 	args GraphitiSearchAction,
+	observationObject *graphiti.Observation,
 ) (string, error) {
 	if len(args.NodeLabels) == 0 {
 		return "", fmt.Errorf("node_labels is required for entity_by_label search")
@@ -365,11 +386,12 @@ func (t *GraphitiSearchTool) handleEntityByLabelSearch(
 	}
 
 	req := graphiti.EntityByLabelSearchRequest{
-		Query:      args.Query,
-		GroupID:    &groupID,
-		NodeLabels: args.NodeLabels,
-		EdgeTypes:  edgeTypes,
-		MaxResults: maxResults,
+		Query:       args.Query,
+		GroupID:     &groupID,
+		NodeLabels:  args.NodeLabels,
+		EdgeTypes:   edgeTypes,
+		MaxResults:  maxResults,
+		Observation: observationObject,
 	}
 
 	resp, err := t.graphitiClient.EntityByLabelSearch(ctx, req)
