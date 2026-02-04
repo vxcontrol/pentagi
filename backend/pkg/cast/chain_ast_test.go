@@ -1750,7 +1750,8 @@ func TestBodyPairConstructors(t *testing.T) {
 	t.Run("NewBodyPairFromSummarization", func(t *testing.T) {
 		summarizationText := "This is a summary of the conversation about the weather in New York."
 
-		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate)
+		// Test without fake signature
+		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, false)
 		assert.NotNil(t, bodyPair)
 		assert.Equal(t, Summarization, bodyPair.Type)
 
@@ -1764,6 +1765,7 @@ func TestBodyPairConstructors(t *testing.T) {
 				foundToolCall = true
 				toolCallID = toolCall.ID
 				assert.Equal(t, SummarizationToolArgs, toolCall.FunctionCall.Arguments)
+				assert.Nil(t, toolCall.Reasoning, "Should not have reasoning without fake signature flag")
 				t.Logf("Found summarization tool call with ID %s", toolCallID)
 				break
 			}
@@ -1797,7 +1799,7 @@ func TestBodyPairConstructors(t *testing.T) {
 		assert.Equal(t, 1, len(toolCallsInfo.CompletedToolCalls))
 
 		// Test with empty text
-		emptyTextPair := NewBodyPairFromSummarization("", ToolCallIDTemplate)
+		emptyTextPair := NewBodyPairFromSummarization("", ToolCallIDTemplate, false)
 		assert.NotNil(t, emptyTextPair)
 		assert.Equal(t, Summarization, emptyTextPair.Type)
 		assert.True(t, emptyTextPair.IsValid())
@@ -1815,6 +1817,152 @@ func TestBodyPairConstructors(t *testing.T) {
 			}
 		}
 		assert.True(t, foundValidID, "Should find a valid tool call ID")
+	})
+
+	// Test NewBodyPairFromSummarization with fake signature
+	t.Run("NewBodyPairFromSummarization_WithFakeSignature", func(t *testing.T) {
+		summarizationText := "This is a summary of the conversation with reasoning signatures."
+
+		// Test with fake signature
+		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, true)
+		assert.NotNil(t, bodyPair)
+		assert.Equal(t, Summarization, bodyPair.Type)
+
+		// Check AI message has tool call with fake reasoning signature
+		foundToolCall := false
+		for _, part := range bodyPair.AIMessage.Parts {
+			if toolCall, ok := part.(llms.ToolCall); ok &&
+				toolCall.FunctionCall != nil &&
+				toolCall.FunctionCall.Name == SummarizationToolName {
+				foundToolCall = true
+				assert.NotNil(t, toolCall.Reasoning, "Should have reasoning with fake signature flag")
+				assert.Equal(t, []byte(FakeReasoningSignatureGemini), toolCall.Reasoning.Signature,
+					"Should have the correct fake signature for Gemini")
+				t.Logf("Found summarization tool call with fake signature: %s", toolCall.Reasoning.Signature)
+				break
+			}
+		}
+		assert.True(t, foundToolCall, "Summarization tool call not found")
+
+		// Check validity
+		assert.True(t, bodyPair.IsValid())
+	})
+}
+
+func TestContainsToolCallReasoning(t *testing.T) {
+	t.Run("EmptyMessages", func(t *testing.T) {
+		assert.False(t, ContainsToolCallReasoning([]llms.MessageContent{}),
+			"Empty message slice should not contain reasoning")
+	})
+
+	t.Run("MessagesWithoutReasoning", func(t *testing.T) {
+		messages := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeHuman,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "Hello, how can you help me?"},
+				},
+			},
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "I can answer your questions."},
+					llms.ToolCall{
+						ID:   "call_123",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "get_weather",
+							Arguments: `{"location": "Paris"}`,
+						},
+					},
+				},
+			},
+		}
+		assert.False(t, ContainsToolCallReasoning(messages),
+			"Messages without reasoning should return false")
+	})
+
+	t.Run("MessagesWithTextContentReasoningOnly", func(t *testing.T) {
+		messages := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{
+						Text: "Let me think about this...",
+						Reasoning: &reasoning.ContentReasoning{
+							Signature: []byte("WaUjzkypQ2mUEVM36O2TxuC06KN8..."),
+						},
+					},
+					llms.TextContent{Text: "The answer is 42."},
+				},
+			},
+		}
+		assert.False(t, ContainsToolCallReasoning(messages),
+			"Messages with reasoning ONLY in TextContent should return FALSE (we only check ToolCall.Reasoning)")
+	})
+
+	t.Run("MessagesWithToolCallReasoning", func(t *testing.T) {
+		messages := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.ToolCall{
+						ID:   "call_456",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "search",
+							Arguments: `{"query": "test"}`,
+						},
+						Reasoning: &reasoning.ContentReasoning{
+							Signature: []byte(FakeReasoningSignatureGemini),
+						},
+					},
+				},
+			},
+		}
+		assert.True(t, ContainsToolCallReasoning(messages),
+			"Messages with reasoning in ToolCall should return true")
+	})
+
+	t.Run("MultipleMessagesWithMixedContent", func(t *testing.T) {
+		messages := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeHuman,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "Question 1"},
+				},
+			},
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "Answer 1"},
+				},
+			},
+			{
+				Role: llms.ChatMessageTypeHuman,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "Question 2"},
+				},
+			},
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.ToolCall{
+						ID:   "call_789",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "calculate",
+							Arguments: `{"expression": "2+2"}`,
+						},
+						Reasoning: &reasoning.ContentReasoning{
+							Signature: []byte(FakeReasoningSignatureGemini),
+						},
+					},
+				},
+			},
+		}
+		assert.True(t, ContainsToolCallReasoning(messages),
+			"Should detect reasoning even when it's in the last message")
 	})
 }
 

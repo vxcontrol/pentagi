@@ -24,6 +24,11 @@
   - [Message Chain Structure in LLM Providers](#message-chain-structure-in-llm-providers)
     - [Message Roles](#message-roles)
     - [Message Content](#message-content)
+  - [Provider-Specific Requirements](#provider-specific-requirements)
+    - [Reasoning Signatures](#reasoning-signatures)
+      - [Gemini (Google AI)](#gemini-google-ai)
+      - [Anthropic (Claude)](#anthropic-claude)
+    - [Helper Functions](#helper-functions)
   - [Best Practices](#best-practices)
   - [Common Use Cases](#common-use-cases)
     - [1. Chain Validation and Repair](#1-chain-validation-and-repair)
@@ -159,7 +164,19 @@ section := NewChainSection(header, bodyPairs)
 completionPair := NewBodyPairFromCompletion("This is a response")
 
 // Create a summarization body pair with text
-summarizationPair := NewBodyPairFromSummarization("This is a summary of the conversation")
+// The third parameter (addFakeSignature) should be true if the original content
+// contained reasoning signatures (required for providers like Gemini)
+summarizationPair := NewBodyPairFromSummarization("This is a summary of the conversation", tcIDTemplate, false)
+
+// Create a summarization body pair with fake reasoning signature
+// This is necessary when summarizing content that originally had reasoning signatures
+// to satisfy provider requirements (e.g., Gemini's thought_signature)
+summarizationWithSignature := NewBodyPairFromSummarization("Summary with signature", tcIDTemplate, true)
+
+// Check if messages contain reasoning signatures in ToolCall parts
+// This is useful for determining if summarized content should include fake signatures
+// Only checks ToolCall.Reasoning (not TextContent.Reasoning)
+hasReasoning := ContainsToolCallReasoning(messages)
 
 // Check if a message contains tool calls
 hasCalls := HasToolCalls(aiMessage)
@@ -368,6 +385,52 @@ Messages can contain different types of content:
 - **ToolCall**: Function call requests from the model
 - **ToolCallResponse**: Results returned from executing tools
 
+## Provider-Specific Requirements
+
+### Reasoning Signatures
+
+Different LLM providers have specific requirements for reasoning content in function calls:
+
+#### Gemini (Google AI)
+
+Gemini requires **thought signatures** (`thought_signature`) for function calls, especially in multi-turn conversations with tool use. These signatures:
+
+- Are cryptographic representations of the model's internal reasoning process
+- Are strictly validated only for the **current turn** (defined as all messages after the last user message with text content)
+- Must be preserved when summarizing content that contains them
+- Can use fake signatures when creating summarized content: `"skip_thought_signature_validator"`
+
+**Example:**
+```go
+// Check if original content had reasoning
+hasReasoning := ContainsReasoning(originalMessages)
+
+// Create summarized content with fake signature if needed
+summaryPair := NewBodyPairFromSummarization(summaryText, tcIDTemplate, hasReasoning)
+```
+
+#### Anthropic (Claude)
+
+Anthropic uses **extended thinking** with cryptographic signatures that:
+
+- Are automatically removed from previous turns (not counted in context window)
+- Are only required for the current tool use loop
+
+**Critical Rule:** Never summarize the last body pair in a section, as this preserves reasoning signatures required by both Gemini and Anthropic.
+
+### Helper Functions
+
+```go
+// Check if messages contain reasoning signatures in ToolCall parts
+// Returns true if any message contains Reasoning in ToolCall (NOT TextContent)
+// This is specific to function calling scenarios which require thought_signature
+hasReasoning := ContainsToolCallReasoning(messages)
+
+// Create summarization with conditional fake signature
+addFakeSignature := ContainsToolCallReasoning(originalMessages)
+summaryPair := NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature)
+```
+
 ## Best Practices
 
 1. **Validation First**: Use `NewChainAST` with `force=false` to validate chains before processing
@@ -376,6 +439,8 @@ Messages can contain different types of content:
 4. **Section Management**: Use sections to organize conversation turns logically
 5. **Testing**: Use the provided generators to test code that manipulates message chains
 6. **Size Management**: Leverage size tracking to maintain efficient context windows
+7. **Reasoning Preservation**: Use `ContainsToolCallReasoning()` to check if fake signatures are needed when summarizing (only checks ToolCall.Reasoning, not TextContent.Reasoning)
+8. **Last Pair Protection**: Never summarize the last (most recent) body pair in a section to preserve reasoning signatures
 
 ## Common Use Cases
 

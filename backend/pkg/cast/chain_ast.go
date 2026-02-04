@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 // Constants for common operations in chainAST
@@ -16,6 +17,10 @@ const (
 	SummarizationToolName   = "execute_task_and_return_summary"
 	SummarizationToolArgs   = `{"question": "delegate and execute the task, then return the summary of the result"}`
 	ToolCallIDTemplate      = "call_{r:24:x}"
+
+	// Fake reasoning signatures for different providers when summarizing content
+	// that originally contained reasoning signatures
+	FakeReasoningSignatureGemini = "skip_thought_signature_validator"
 )
 
 // BodyPairType represents the type of body pair in the chain
@@ -494,20 +499,35 @@ func NewBodyPairFromMessages(messages []llms.MessageContent) (*BodyPair, error) 
 }
 
 // NewBodyPairFromSummarization creates a new BodyPair from a summarization tool call
-func NewBodyPairFromSummarization(text string, tcIDTemplate string) *BodyPair {
+// If addFakeSignature is true, adds a fake reasoning signature to the tool call
+// This is required when summarizing content that originally contained reasoning signatures
+// to satisfy provider requirements (e.g., Gemini's thought_signature requirement)
+func NewBodyPairFromSummarization(text string, tcIDTemplate string, addFakeSignature bool) *BodyPair {
 	toolCallID := templates.GenerateFromPattern(tcIDTemplate)
+
+	toolCall := llms.ToolCall{
+		ID:   toolCallID,
+		Type: "function",
+		FunctionCall: &llms.FunctionCall{
+			Name:      SummarizationToolName,
+			Arguments: SummarizationToolArgs,
+		},
+	}
+
+	// Add fake reasoning signature if requested
+	// This preserves the reasoning signature requirement for providers like Gemini
+	// while replacing the actual content with a summary
+	if addFakeSignature {
+		toolCall.Reasoning = &reasoning.ContentReasoning{
+			Signature: []byte(FakeReasoningSignatureGemini),
+		}
+	}
+
 	return NewBodyPair(
 		&llms.MessageContent{
 			Role: llms.ChatMessageTypeAI,
 			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   toolCallID,
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      SummarizationToolName,
-						Arguments: SummarizationToolArgs,
-					},
-				},
+				toolCall,
 			},
 		},
 		[]*llms.MessageContent{
@@ -991,4 +1011,26 @@ func clearMessageReasoning(msg *llms.MessageContent) {
 			}
 		}
 	}
+}
+
+// ContainsToolCallReasoning checks if any message in the slice contains Reasoning signatures
+// in ToolCall parts. This function is useful for determining whether summarized content should include
+// fake reasoning signatures to satisfy provider requirements (e.g., Gemini's thought_signature)
+func ContainsToolCallReasoning(messages []llms.MessageContent) bool {
+	if len(messages) == 0 {
+		return false
+	}
+
+	for _, msg := range messages {
+		for _, part := range msg.Parts {
+			switch p := part.(type) {
+			case llms.ToolCall:
+				if p.Reasoning != nil {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }

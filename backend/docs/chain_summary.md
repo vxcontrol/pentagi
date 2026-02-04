@@ -16,6 +16,7 @@
   - [Algorithm Operation](#algorithm-operation)
   - [Key Algorithm Components](#key-algorithm-components)
     - [1. Section Summarization](#1-section-summarization)
+      - [Reasoning Signature Handling](#reasoning-signature-handling)
     - [2. Individual Body Pair Size Management](#2-individual-body-pair-size-management)
     - [3. Last Section Rotation](#3-last-section-rotation)
     - [4. QA Pair Management](#4-qa-pair-management)
@@ -567,11 +568,40 @@ func determineTypeToSummarizedSection(section *cast.ChainSection) cast.BodyPairT
 }
 ```
 
+#### Reasoning Signature Handling
+
+When summarizing content that originally contained reasoning signatures, the algorithm:
+
+1. **Detects Reasoning**: Uses `cast.ContainsToolCallReasoning()` to check if messages contain reasoning in ToolCall parts (NOT TextContent)
+2. **Preserves Requirements**: Adds a fake signature to the summarized ToolCall if ToolCall reasoning was present
+3. **Provider Compatibility**: Ensures the summarized chain remains compatible with provider APIs
+
+```go
+// Check if the original pair contained reasoning signatures in ToolCall parts
+addFakeSignature := cast.ContainsToolCallReasoning(pairMessages)
+
+// Create summarization with conditional fake signature
+bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature)
+```
+
+**Why this is needed:**
+- Gemini validates `thought_signature` presence for function calls in the current turn
+- Removing signatures during summarization would cause 400 errors: "Function call is missing a thought_signature"
+- Fake signatures satisfy the API validation while replacing actual content with summaries
+
 ### 2. Individual Body Pair Size Management
 
 Before handling the overall last section size, manage individual oversized body pairs:
 
-**CRITICAL**: The last body pair in a section is **NEVER** summarized to preserve reasoning signatures required by providers like Gemini (thought_signature) and Anthropic (cryptographic signatures). Summarizing the last pair would remove these signatures and cause API errors.
+**CRITICAL PRESERVATION RULES**:
+
+1. **Never Summarize Last Pair**: The last (most recent) body pair in a section is **NEVER** summarized to preserve reasoning signatures required by providers like Gemini (thought_signature) and Anthropic (cryptographic signatures). Summarizing the last pair would remove these signatures and cause API errors.
+
+2. **Preserve Reasoning Requirements**: When summarizing body pairs that contain reasoning signatures:
+   - The algorithm checks if the original content contained reasoning using `cast.ContainsReasoning()`
+   - If reasoning was present, a fake signature is added to the summarized content
+   - For Gemini: uses `"skip_thought_signature_validator"`
+   - This ensures API compatibility when the chain continues with the same provider
 
 ```mermaid
 flowchart TD

@@ -212,7 +212,7 @@ func summarizeSections(
 			var summaryPair *cast.BodyPair
 			switch t := determineTypeToSummarizedSection(section); t {
 			case cast.Summarization:
-				summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate)
+				summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, false)
 			case cast.Completion:
 				summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 			default:
@@ -304,7 +304,10 @@ func summarizeLastSection(
 		sectionToSummarize := cast.NewChainSection(lastSection.Header, pairsToSummarize)
 		switch t := determineTypeToSummarizedSection(sectionToSummarize); t {
 		case cast.Summarization:
-			summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate)
+			// Check if any of the pairs to summarize contained reasoning signatures
+			// If yes, add a fake signature to preserve provider requirements
+			addFakeSignature := cast.ContainsToolCallReasoning(messagesToSummarize)
+			summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature)
 		case cast.Completion:
 			summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 		default:
@@ -419,7 +422,11 @@ func summarizeOversizedBodyPairs(
 			// If the pair is a Completion, we need to create a new Completion pair
 			// If the pair is a RequestResponse, we need to create a new Summarization pair
 			if pair.Type == cast.RequestResponse {
-				bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate)
+				// Check if the original pair contained reasoning signatures
+				// This is critical for providers like Gemini that require thought_signature
+				// If the original pair had reasoning, we add a fake signature to satisfy API requirements
+				addFakeSignature := cast.ContainsToolCallReasoning(pairMessages)
+				bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature)
 			} else {
 				bodyPairsSummarized[i] = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 			}
@@ -529,7 +536,7 @@ func summarizeQAPairs(
 	sectionsToSummarize := ast.Sections[:len(ast.Sections)-sectionsToKeep]
 	switch t := determineTypeToSummarizedSections(sectionsToSummarize); t {
 	case cast.Summarization:
-		summaryPair = cast.NewBodyPairFromSummarization(aiSummary, tcIDTemplate)
+		summaryPair = cast.NewBodyPairFromSummarization(aiSummary, tcIDTemplate, false)
 	case cast.Completion:
 		summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + aiSummary)
 	default:
