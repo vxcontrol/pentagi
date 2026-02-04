@@ -28,6 +28,7 @@
     - [Reasoning Signatures](#reasoning-signatures)
       - [Gemini (Google AI)](#gemini-google-ai)
       - [Anthropic (Claude)](#anthropic-claude)
+      - [Kimi/Moonshot (OpenAI-compatible)](#kimimoonshot-openai-compatible)
     - [Helper Functions](#helper-functions)
   - [Best Practices](#best-practices)
   - [Common Use Cases](#common-use-cases)
@@ -165,18 +166,31 @@ completionPair := NewBodyPairFromCompletion("This is a response")
 
 // Create a summarization body pair with text
 // The third parameter (addFakeSignature) should be true if the original content
-// contained reasoning signatures (required for providers like Gemini)
-summarizationPair := NewBodyPairFromSummarization("This is a summary of the conversation", tcIDTemplate, false)
+// contained ToolCall reasoning signatures (required for providers like Gemini)
+// The fourth parameter (reasoningMsg) preserves reasoning TextContent before ToolCall
+// (required for providers like Kimi/Moonshot)
+summarizationPair := NewBodyPairFromSummarization("This is a summary of the conversation", tcIDTemplate, false, nil)
 
-// Create a summarization body pair with fake reasoning signature
-// This is necessary when summarizing content that originally had reasoning signatures
+// Create a summarization body pair with fake reasoning signature (Gemini)
+// This is necessary when summarizing content that originally had ToolCall reasoning
 // to satisfy provider requirements (e.g., Gemini's thought_signature)
-summarizationWithSignature := NewBodyPairFromSummarization("Summary with signature", tcIDTemplate, true)
+summarizationWithSignature := NewBodyPairFromSummarization("Summary with signature", tcIDTemplate, true, nil)
+
+// Extract reasoning message for Kimi/Moonshot compatibility
+// Returns the first AI message with TextContent containing reasoning (or nil)
+reasoningMsg := ExtractReasoningMessage(messages)
+
+// Create summarization with preserved reasoning message (Kimi/Moonshot)
+summarizationWithReasoning := NewBodyPairFromSummarization("Summary", tcIDTemplate, false, reasoningMsg)
+
+// Create summarization with BOTH fake signature AND reasoning message
+// Required when original had both ToolCall.Reasoning and TextContent.Reasoning
+summarizationFull := NewBodyPairFromSummarization("Summary", tcIDTemplate, true, reasoningMsg)
 
 // Check if messages contain reasoning signatures in ToolCall parts
 // This is useful for determining if summarized content should include fake signatures
 // Only checks ToolCall.Reasoning (not TextContent.Reasoning)
-hasReasoning := ContainsToolCallReasoning(messages)
+hasToolCallReasoning := ContainsToolCallReasoning(messages)
 
 // Check if a message contains tool calls
 hasCalls := HasToolCalls(aiMessage)
@@ -416,7 +430,24 @@ Anthropic uses **extended thinking** with cryptographic signatures that:
 - Are automatically removed from previous turns (not counted in context window)
 - Are only required for the current tool use loop
 
-**Critical Rule:** Never summarize the last body pair in a section, as this preserves reasoning signatures required by both Gemini and Anthropic.
+#### Kimi/Moonshot (OpenAI-compatible)
+
+Kimi reasoning models require **reasoning_content in TextContent** before ToolCall:
+
+- Reasoning must be present in a TextContent part before any ToolCall when thinking is enabled
+- Error: "thinking is enabled but reasoning_content is missing in assistant tool call message"
+- Use `ExtractReasoningMessage()` to preserve reasoning TextContent when summarizing
+- Combine with fake ToolCall signatures for full multi-provider compatibility
+
+**Example structure:**
+```go
+AIMessage.Parts = [
+    TextContent{Text: "...", Reasoning: {Content: "..."}},  // Required by Kimi
+    ToolCall{..., Reasoning: {Signature: []byte("...")}},  // Required by Gemini
+]
+```
+
+**Critical Rule:** Never summarize the last body pair in a section, as this preserves reasoning signatures required by Gemini, Anthropic, and Kimi.
 
 ### Helper Functions
 
@@ -424,11 +455,17 @@ Anthropic uses **extended thinking** with cryptographic signatures that:
 // Check if messages contain reasoning signatures in ToolCall parts
 // Returns true if any message contains Reasoning in ToolCall (NOT TextContent)
 // This is specific to function calling scenarios which require thought_signature
-hasReasoning := ContainsToolCallReasoning(messages)
+hasToolCallReasoning := ContainsToolCallReasoning(messages)
 
-// Create summarization with conditional fake signature
+// Extract reasoning message from AI messages
+// Returns the first AI message with TextContent containing reasoning (or nil)
+// Useful for preserving reasoning content for providers like Kimi (Moonshot)
+reasoningMsg := ExtractReasoningMessage(messages)
+
+// Create summarization with conditional fake signature and reasoning message
 addFakeSignature := ContainsToolCallReasoning(originalMessages)
-summaryPair := NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature)
+reasoningMsg := ExtractReasoningMessage(originalMessages)
+summaryPair := NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature, reasoningMsg)
 ```
 
 ## Best Practices
@@ -439,8 +476,11 @@ summaryPair := NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSi
 4. **Section Management**: Use sections to organize conversation turns logically
 5. **Testing**: Use the provided generators to test code that manipulates message chains
 6. **Size Management**: Leverage size tracking to maintain efficient context windows
-7. **Reasoning Preservation**: Use `ContainsToolCallReasoning()` to check if fake signatures are needed when summarizing (only checks ToolCall.Reasoning, not TextContent.Reasoning)
+7. **Reasoning Preservation**: 
+   - Use `ContainsToolCallReasoning()` to check if fake signatures are needed (checks only ToolCall.Reasoning)
+   - Use `ExtractReasoningMessage()` to preserve reasoning TextContent for Kimi/Moonshot
 8. **Last Pair Protection**: Never summarize the last (most recent) body pair in a section to preserve reasoning signatures
+9. **Multi-Provider Support**: When summarizing for current turn, preserve both ToolCall and TextContent reasoning for maximum compatibility
 
 ## Common Use Cases
 

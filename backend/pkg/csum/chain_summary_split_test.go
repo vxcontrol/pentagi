@@ -383,7 +383,7 @@ func TestSummarizeSections(t *testing.T) {
 				cast.NewChainSection(
 					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 2")),
 					[]*cast.BodyPair{
-						cast.NewBodyPairFromSummarization("Answer 2", cast.ToolCallIDTemplate, false),
+						cast.NewBodyPairFromSummarization("Answer 2", cast.ToolCallIDTemplate, false, nil),
 					},
 				),
 				cast.NewChainSection(
@@ -992,7 +992,7 @@ func TestSummarizeLastSection(t *testing.T) {
 					[]*cast.BodyPair{
 						// Create a pair with already summarized but large content
 						func() *cast.BodyPair {
-							return cast.NewBodyPairFromSummarization(strings.Repeat("S", 20*1024), cast.ToolCallIDTemplate, false)
+							return cast.NewBodyPairFromSummarization(strings.Repeat("S", 20*1024), cast.ToolCallIDTemplate, false, nil)
 						}(),
 						cast.NewBodyPairFromCompletion("Normal response"),
 					},

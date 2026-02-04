@@ -570,24 +570,32 @@ func determineTypeToSummarizedSection(section *cast.ChainSection) cast.BodyPairT
 
 #### Reasoning Signature Handling
 
-When summarizing content that originally contained reasoning signatures, the algorithm:
+When summarizing content that originally contained reasoning, the algorithm:
 
-1. **Detects Reasoning**: Uses `cast.ContainsToolCallReasoning()` to check if messages contain reasoning in ToolCall parts (NOT TextContent)
-2. **Preserves Requirements**: Adds a fake signature to the summarized ToolCall if ToolCall reasoning was present
-3. **Provider Compatibility**: Ensures the summarized chain remains compatible with provider APIs
+1. **Detects ToolCall Reasoning**: Uses `cast.ContainsToolCallReasoning()` to check if messages contain reasoning in ToolCall parts (NOT TextContent)
+2. **Extracts TextContent Reasoning**: Uses `cast.ExtractReasoningMessage()` to preserve reasoning TextContent for providers like Kimi/Moonshot
+3. **Adds Fake Signatures**: Adds a fake signature to the summarized ToolCall if ToolCall reasoning was present
+4. **Preserves Reasoning Message**: Prepends reasoning TextContent before ToolCall in the summarized content
+5. **Provider Compatibility**: Ensures the summarized chain remains compatible with all provider APIs
 
 ```go
 // Check if the original pair contained reasoning signatures in ToolCall parts
 addFakeSignature := cast.ContainsToolCallReasoning(pairMessages)
 
-// Create summarization with conditional fake signature
-bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature)
+// Extract reasoning message for Kimi/Moonshot compatibility
+reasoningMsg := cast.ExtractReasoningMessage(pairMessages)
+
+// Create summarization with conditional fake signature AND preserved reasoning
+bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature, reasoningMsg)
 ```
 
 **Why this is needed:**
-- Gemini validates `thought_signature` presence for function calls in the current turn
-- Removing signatures during summarization would cause 400 errors: "Function call is missing a thought_signature"
-- Fake signatures satisfy the API validation while replacing actual content with summaries
+
+- **Gemini**: Validates `thought_signature` presence for function calls in the current turn. Removing signatures would cause 400 errors: "Function call is missing a thought_signature". Fake signatures satisfy the API validation.
+- **Kimi/Moonshot**: Requires `reasoning_content` in TextContent before ToolCall when thinking is enabled. Without it: "thinking is enabled but reasoning_content is missing". Preserving reasoning message satisfies this requirement.
+- **Anthropic**: Extended thinking with cryptographic signatures, automatically removed from previous turns.
+
+**Important:** This reasoning preservation is **only applied to current turn** (last section). Previous turns are summarized without fake signatures to save tokens, as they are not validated by provider APIs.
 
 ### 2. Individual Body Pair Size Management
 

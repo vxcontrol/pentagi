@@ -502,7 +502,14 @@ func NewBodyPairFromMessages(messages []llms.MessageContent) (*BodyPair, error) 
 // If addFakeSignature is true, adds a fake reasoning signature to the tool call
 // This is required when summarizing content that originally contained reasoning signatures
 // to satisfy provider requirements (e.g., Gemini's thought_signature requirement)
-func NewBodyPairFromSummarization(text string, tcIDTemplate string, addFakeSignature bool) *BodyPair {
+// If reasoningMsg is not nil, its parts are prepended to the AI message before the ToolCall
+// This preserves reasoning content for providers like Kimi (Moonshot) that require reasoning_content
+func NewBodyPairFromSummarization(
+	text string,
+	tcIDTemplate string,
+	addFakeSignature bool,
+	reasoningMsg *llms.MessageContent,
+) *BodyPair {
 	toolCallID := templates.GenerateFromPattern(tcIDTemplate)
 
 	toolCall := llms.ToolCall{
@@ -523,12 +530,22 @@ func NewBodyPairFromSummarization(text string, tcIDTemplate string, addFakeSigna
 		}
 	}
 
+	// Build AI message parts
+	var aiParts []llms.ContentPart
+
+	// If reasoning message is provided, prepend its parts before the ToolCall
+	// This is required for providers like Kimi (Moonshot) that need reasoning_content before ToolCall
+	if reasoningMsg != nil {
+		aiParts = append(aiParts, reasoningMsg.Parts...)
+	}
+
+	// Add the summarization ToolCall
+	aiParts = append(aiParts, toolCall)
+
 	return NewBodyPair(
 		&llms.MessageContent{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				toolCall,
-			},
+			Role:  llms.ChatMessageTypeAI,
+			Parts: aiParts,
 		},
 		[]*llms.MessageContent{
 			{
@@ -1033,4 +1050,39 @@ func ContainsToolCallReasoning(messages []llms.MessageContent) bool {
 	}
 
 	return false
+}
+
+// ExtractReasoningMessage extracts the first AI message that contains reasoning content
+// in a TextContent part. This is useful for preserving reasoning messages when summarizing
+// content for providers like Kimi (Moonshot) that require reasoning_content before ToolCall.
+// Returns nil if no reasoning message is found.
+func ExtractReasoningMessage(messages []llms.MessageContent) *llms.MessageContent {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	for _, msg := range messages {
+		// Only look at AI messages
+		if msg.Role != llms.ChatMessageTypeAI {
+			continue
+		}
+
+		// Check if this message has TextContent with Reasoning
+		for _, part := range msg.Parts {
+			if textContent, ok := part.(llms.TextContent); ok {
+				if !textContent.Reasoning.IsEmpty() {
+					// Found a reasoning message - create a copy with only the reasoning part
+					reasoningMsg := &llms.MessageContent{
+						Role: llms.ChatMessageTypeAI,
+						Parts: []llms.ContentPart{
+							textContent,
+						},
+					}
+					return reasoningMsg
+				}
+			}
+		}
+	}
+
+	return nil
 }

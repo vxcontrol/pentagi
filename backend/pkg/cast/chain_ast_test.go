@@ -1750,8 +1750,8 @@ func TestBodyPairConstructors(t *testing.T) {
 	t.Run("NewBodyPairFromSummarization", func(t *testing.T) {
 		summarizationText := "This is a summary of the conversation about the weather in New York."
 
-		// Test without fake signature
-		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, false)
+		// Test without fake signature and without reasoning message
+		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, false, nil)
 		assert.NotNil(t, bodyPair)
 		assert.Equal(t, Summarization, bodyPair.Type)
 
@@ -1799,7 +1799,7 @@ func TestBodyPairConstructors(t *testing.T) {
 		assert.Equal(t, 1, len(toolCallsInfo.CompletedToolCalls))
 
 		// Test with empty text
-		emptyTextPair := NewBodyPairFromSummarization("", ToolCallIDTemplate, false)
+		emptyTextPair := NewBodyPairFromSummarization("", ToolCallIDTemplate, false, nil)
 		assert.NotNil(t, emptyTextPair)
 		assert.Equal(t, Summarization, emptyTextPair.Type)
 		assert.True(t, emptyTextPair.IsValid())
@@ -1823,8 +1823,8 @@ func TestBodyPairConstructors(t *testing.T) {
 	t.Run("NewBodyPairFromSummarization_WithFakeSignature", func(t *testing.T) {
 		summarizationText := "This is a summary of the conversation with reasoning signatures."
 
-		// Test with fake signature
-		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, true)
+		// Test with fake signature but without reasoning message
+		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, true, nil)
 		assert.NotNil(t, bodyPair)
 		assert.Equal(t, Summarization, bodyPair.Type)
 
@@ -1846,6 +1846,53 @@ func TestBodyPairConstructors(t *testing.T) {
 
 		// Check validity
 		assert.True(t, bodyPair.IsValid())
+	})
+
+	// Test NewBodyPairFromSummarization with reasoning message
+	t.Run("NewBodyPairFromSummarization_WithReasoningMessage", func(t *testing.T) {
+		summarizationText := "Summary with preserved reasoning"
+
+		// Create a reasoning message like Kimi produces
+		reasoningMsg := &llms.MessageContent{
+			Role: llms.ChatMessageTypeAI,
+			Parts: []llms.ContentPart{
+				llms.TextContent{
+					Text: "Let me analyze this task...",
+					Reasoning: &reasoning.ContentReasoning{
+						Content: "The wp-abilities plugin seems to be the main target here.",
+					},
+				},
+			},
+		}
+
+		// Test with fake signature AND reasoning message
+		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, true, reasoningMsg)
+		assert.NotNil(t, bodyPair)
+		assert.Equal(t, Summarization, bodyPair.Type)
+
+		// Check AI message structure: should have reasoning TextContent BEFORE ToolCall
+		assert.GreaterOrEqual(t, len(bodyPair.AIMessage.Parts), 2,
+			"Should have at least 2 parts: reasoning TextContent + ToolCall")
+
+		// First part should be the reasoning TextContent
+		firstPart, ok := bodyPair.AIMessage.Parts[0].(llms.TextContent)
+		assert.True(t, ok, "First part should be TextContent")
+		assert.Equal(t, "Let me analyze this task...", firstPart.Text)
+		assert.NotNil(t, firstPart.Reasoning, "Should preserve reasoning in TextContent")
+		assert.Equal(t, "The wp-abilities plugin seems to be the main target here.",
+			firstPart.Reasoning.Content)
+
+		// Second part should be the ToolCall with fake signature
+		secondPart, ok := bodyPair.AIMessage.Parts[1].(llms.ToolCall)
+		assert.True(t, ok, "Second part should be ToolCall")
+		assert.Equal(t, SummarizationToolName, secondPart.FunctionCall.Name)
+		assert.NotNil(t, secondPart.Reasoning, "ToolCall should have fake signature")
+		assert.Equal(t, []byte(FakeReasoningSignatureGemini), secondPart.Reasoning.Signature)
+
+		// Check validity
+		assert.True(t, bodyPair.IsValid())
+
+		t.Logf("✓ Successfully created summarization with reasoning message + fake signature")
 	})
 }
 
@@ -1963,6 +2010,129 @@ func TestContainsToolCallReasoning(t *testing.T) {
 		}
 		assert.True(t, ContainsToolCallReasoning(messages),
 			"Should detect reasoning even when it's in the last message")
+	})
+}
+
+func TestExtractReasoningMessage(t *testing.T) {
+	t.Run("EmptyMessages", func(t *testing.T) {
+		result := ExtractReasoningMessage([]llms.MessageContent{})
+		assert.Nil(t, result, "Empty message slice should return nil")
+	})
+
+	t.Run("NoReasoningInMessages", func(t *testing.T) {
+		messages := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeHuman,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "Question"},
+				},
+			},
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "Answer without reasoning"},
+					llms.ToolCall{
+						ID:   "call_123",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "search",
+							Arguments: `{"query": "test"}`,
+						},
+					},
+				},
+			},
+		}
+		result := ExtractReasoningMessage(messages)
+		assert.Nil(t, result, "Messages without TextContent reasoning should return nil")
+	})
+
+	t.Run("ExtractReasoningFromTextContent", func(t *testing.T) {
+		messages := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{
+						Text: "Let me think about this problem...",
+						Reasoning: &reasoning.ContentReasoning{
+							Content: "The wp-abilities plugin seems to be the main target.",
+						},
+					},
+					llms.TextContent{Text: "Here is my answer"},
+				},
+			},
+		}
+
+		result := ExtractReasoningMessage(messages)
+		assert.NotNil(t, result, "Should extract reasoning message")
+		assert.Equal(t, llms.ChatMessageTypeAI, result.Role)
+		assert.Equal(t, 1, len(result.Parts), "Should have only the reasoning part")
+
+		textContent, ok := result.Parts[0].(llms.TextContent)
+		assert.True(t, ok, "Part should be TextContent")
+		assert.Equal(t, "Let me think about this problem...", textContent.Text)
+		assert.NotNil(t, textContent.Reasoning)
+		assert.Equal(t, "The wp-abilities plugin seems to be the main target.",
+			textContent.Reasoning.Content)
+	})
+
+	t.Run("ExtractFirstReasoningMessage", func(t *testing.T) {
+		messages := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeHuman,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "Question 1"},
+				},
+			},
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{
+						Text: "First reasoning",
+						Reasoning: &reasoning.ContentReasoning{
+							Content: "First analysis",
+						},
+					},
+				},
+			},
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{
+						Text: "Second reasoning",
+						Reasoning: &reasoning.ContentReasoning{
+							Content: "Second analysis",
+						},
+					},
+				},
+			},
+		}
+
+		result := ExtractReasoningMessage(messages)
+		assert.NotNil(t, result, "Should extract first reasoning message")
+
+		textContent, ok := result.Parts[0].(llms.TextContent)
+		assert.True(t, ok)
+		assert.Equal(t, "First reasoning", textContent.Text, "Should extract FIRST reasoning message")
+		assert.Equal(t, "First analysis", textContent.Reasoning.Content)
+	})
+
+	t.Run("SkipEmptyReasoning", func(t *testing.T) {
+		messages := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{
+						Text:      "Text with empty reasoning",
+						Reasoning: &reasoning.ContentReasoning{
+							// Empty reasoning
+						},
+					},
+				},
+			},
+		}
+
+		result := ExtractReasoningMessage(messages)
+		assert.Nil(t, result, "Should skip empty reasoning and return nil")
 	})
 }
 

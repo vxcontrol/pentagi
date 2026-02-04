@@ -212,7 +212,8 @@ func summarizeSections(
 			var summaryPair *cast.BodyPair
 			switch t := determineTypeToSummarizedSection(section); t {
 			case cast.Summarization:
-				summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, false)
+				// For previous turns, don't preserve reasoning messages to save tokens
+				summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, false, nil)
 			case cast.Completion:
 				summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 			default:
@@ -307,7 +308,12 @@ func summarizeLastSection(
 			// Check if any of the pairs to summarize contained reasoning signatures
 			// If yes, add a fake signature to preserve provider requirements
 			addFakeSignature := cast.ContainsToolCallReasoning(messagesToSummarize)
-			summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature)
+
+			// Extract reasoning message for providers like Kimi that require reasoning_content before ToolCall
+			// This is important for current turn (last section) to preserve provider compatibility
+			reasoningMsg := cast.ExtractReasoningMessage(messagesToSummarize)
+
+			summaryPair = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature, reasoningMsg)
 		case cast.Completion:
 			summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 		default:
@@ -426,7 +432,12 @@ func summarizeOversizedBodyPairs(
 				// This is critical for providers like Gemini that require thought_signature
 				// If the original pair had reasoning, we add a fake signature to satisfy API requirements
 				addFakeSignature := cast.ContainsToolCallReasoning(pairMessages)
-				bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature)
+
+				// Extract reasoning message for providers like Kimi that require reasoning_content before ToolCall
+				// This preserves the original reasoning structure in the current turn
+				reasoningMsg := cast.ExtractReasoningMessage(pairMessages)
+
+				bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature, reasoningMsg)
 			} else {
 				bodyPairsSummarized[i] = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
 			}
@@ -536,7 +547,7 @@ func summarizeQAPairs(
 	sectionsToSummarize := ast.Sections[:len(ast.Sections)-sectionsToKeep]
 	switch t := determineTypeToSummarizedSections(sectionsToSummarize); t {
 	case cast.Summarization:
-		summaryPair = cast.NewBodyPairFromSummarization(aiSummary, tcIDTemplate, false)
+		summaryPair = cast.NewBodyPairFromSummarization(aiSummary, tcIDTemplate, false, nil)
 	case cast.Completion:
 		summaryPair = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + aiSummary)
 	default:
