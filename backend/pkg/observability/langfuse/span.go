@@ -124,7 +124,7 @@ func WithEndSpanLevel(level ObservationLevel) SpanEndOption {
 func newSpan(observer enqueue, opts ...SpanStartOption) Span {
 	s := &span{
 		Name:          spanDefaultName,
-		ObservationID: newID(),
+		ObservationID: newSpanID(),
 		Version:       getStringRef(firstVersion),
 		StartTime:     getCurrentTimeRef(),
 		observer:      observer,
@@ -135,7 +135,7 @@ func newSpan(observer enqueue, opts ...SpanStartOption) Span {
 	}
 
 	obsCreate := api.NewIngestionEventFromIngestionEventEight(&api.IngestionEventEight{
-		Id:        newID(),
+		Id:        newSpanID(),
 		Timestamp: getTimeRefString(s.StartTime),
 		Type:      ingestionCreateObservation,
 		Body: &api.ObservationBody{
@@ -165,7 +165,7 @@ func (s *span) End(opts ...SpanEndOption) {
 	}
 
 	obsUpdate := api.NewIngestionEventFromIngestionEventNine(&api.IngestionEventNine{
-		Id:        newID(),
+		Id:        newSpanID(),
 		Timestamp: getTimeRefString(s.EndTime),
 		Type:      ingestionUpdateObservation,
 		Body: &api.ObservationBody{

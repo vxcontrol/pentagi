@@ -119,7 +119,7 @@ func newEvent(observer enqueue, opts ...EventStartOption) Event {
 	currentTime := getCurrentTimeRef()
 	e := &event{
 		Name:          spanDefaultName,
-		ObservationID: newID(),
+		ObservationID: newSpanID(),
 		Version:       getStringRef(firstVersion),
 		StartTime:     currentTime,
 		EndTime:       currentTime,
@@ -135,7 +135,7 @@ func newEvent(observer enqueue, opts ...EventStartOption) Event {
 	}
 
 	obsCreate := api.NewIngestionEventFromIngestionEventEight(&api.IngestionEventEight{
-		Id:        newID(),
+		Id:        newSpanID(),
 		Timestamp: getTimeRefString(e.StartTime),
 		Type:      ingestionCreateObservation,
 		Body: &api.ObservationBody{
@@ -167,7 +167,7 @@ func (e *event) End(opts ...EventEndOption) {
 	}
 
 	obsUpdate := api.NewIngestionEventFromIngestionEventNine(&api.IngestionEventNine{
-		Id:        newID(),
+		Id:        newSpanID(),
 		Timestamp: getTimeRefString(e.EndTime),
 		Type:      ingestionUpdateObservation,
 		Body: &api.ObservationBody{

@@ -167,7 +167,7 @@ func newGeneration(observer enqueue, opts ...GenerationStartOption) Generation {
 	currentTime := getCurrentTimeRef()
 	g := &generation{
 		Name:                generationDefaultName,
-		ObservationID:       newID(),
+		ObservationID:       newSpanID(),
 		Version:             getStringRef(firstVersion),
 		StartTime:           currentTime,
 		CompletionStartTime: currentTime,
@@ -183,7 +183,7 @@ func newGeneration(observer enqueue, opts ...GenerationStartOption) Generation {
 	}
 
 	genCreate := api.NewIngestionEventFromIngestionEventFour(&api.IngestionEventFour{
-		Id:        newID(),
+		Id:        newSpanID(),
 		Timestamp: getTimeRefString(g.StartTime),
 		Type:      ingestionCreateGeneration,
 		Body: &api.CreateGenerationBody{
@@ -216,7 +216,7 @@ func (g *generation) End(opts ...GenerationEndOption) {
 	}
 
 	genUpdate := api.NewIngestionEventFromIngestionEventFive(&api.IngestionEventFive{
-		Id:        newID(),
+		Id:        newSpanID(),
 		Timestamp: getTimeRefString(g.EndTime),
 		Type:      ingestionUpdateGeneration,
 		Body: &api.UpdateGenerationBody{

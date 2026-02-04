@@ -96,7 +96,7 @@ func (o *observer) NewObservation(
 				obsCtx.ObservationID = parentObsCtx.ObservationID
 			}
 		} else {
-			obsCtx.TraceID = newID()
+			obsCtx.TraceID = newTraceID()
 		}
 	}
 
@@ -231,7 +231,7 @@ func (o *observer) sender() {
 
 func (o *observer) putTraceInfo(obsCtx ObservationContext) {
 	traceCreate := api.NewIngestionEventFromIngestionEventZero(&api.IngestionEventZero{
-		Id:        newID(),
+		Id:        newSpanID(),
 		Timestamp: getCurrentTimeString(),
 		Type:      ingestionCreateTrace,
 		Body: &api.TraceBody{

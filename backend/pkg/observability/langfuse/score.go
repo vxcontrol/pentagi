@@ -86,9 +86,9 @@ func WithScoreConfigId(configId string) ScoreOption {
 
 func newScore(observer enqueue, opts ...ScoreOption) {
 	s := &score{
-		ID:            newID(),
+		ID:            newSpanID(),
 		Name:          scoreDefaultName,
-		ObservationID: newID(),
+		ObservationID: newSpanID(),
 		StartTime:     getCurrentTimeRef(),
 		Value:         api.NewCreateScoreValueFromDouble(0),
 		DataType:      api.ScoreDataTypeCategorical.Ptr(),
@@ -100,7 +100,7 @@ func newScore(observer enqueue, opts ...ScoreOption) {
 	}
 
 	obsCreate := api.NewIngestionEventFromIngestionEventOne(&api.IngestionEventOne{
-		Id:        newID(),
+		Id:        newSpanID(),
 		Timestamp: getTimeRefString(s.StartTime),
 		Type:      ingestionCreateScore,
 		Body: &api.ScoreBody{

@@ -1,13 +1,14 @@
 package langfuse
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"pentagi/pkg/observability/langfuse/api"
 
-	"github.com/google/uuid"
 	"github.com/vxcontrol/langchaingo/llms"
 )
 
@@ -236,8 +237,20 @@ func GetLangchainModelParameters(options []llms.CallOption) *ModelParameters {
 	return &parameters
 }
 
-func newID() string {
-	return uuid.New().String()
+// newTraceID generates W3C Trace Context compliant trace ID
+// Returns 32 lowercase hexadecimal characters
+func newTraceID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// newSpanID generates W3C Trace Context compliant span/observation ID
+// Returns 16 lowercase hexadecimal characters
+func newSpanID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func getCurrentTime() time.Time {

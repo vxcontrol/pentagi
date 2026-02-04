@@ -38,7 +38,7 @@ func (o *observation) String() string {
 }
 
 func (o *observation) Log(ctx context.Context, message string) {
-	logID := newID()
+	logID := newSpanID()
 	logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"langfuse_trace_id":       o.obsCtx.TraceID,
 		"langfuse_observation_id": o.obsCtx.ObservationID,
