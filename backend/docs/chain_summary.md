@@ -37,12 +37,14 @@ The Enhanced Chain Summarization Algorithm manages context growth in conversatio
 Key features of the enhanced algorithm:
 
 - **Size-aware processing** - Tracks byte size of all content to make optimal retention decisions
-- **Section summarization** - Ensures all sections except the last ones consist of a header and a single body pair
+- **Section summarization** - Ensures all sections except the last `KeepQASections` ones consist of a header and a single body pair
 - **Last section rotation** - Intelligently manages active conversation sections with size limits
-- **QA pair summarization** - Focuses on question-answer sections when enabled
+- **QA pair summarization** - Focuses on question-answer sections when enabled, **preserving last `KeepQASections` sections unconditionally**
 - **Body pair type preservation** - Maintains appropriate type for summarized content based on original types
-- **Keep QA Sections** - Preserves a configurable number of recent QA sections without summarization
+- **Keep QA Sections** - Preserves a configurable number of recent QA sections without summarization, **even if they exceed `MaxQABytes`** (critical for agent state preservation)
 - **Concurrent processing** - Uses goroutines for efficient parallel summarization of sections and body pairs
+- **Idempotent operation** - Multiple consecutive calls do not modify already summarized content
+- **Last BodyPair protection** - The last BodyPair in a section is never summarized to preserve reasoning signatures
 
 ## Architectural Overview
 
@@ -330,7 +332,7 @@ These parameters have default values defined as constants:
 | Max QA byte size | `MaxQABytes` | `maxQAPairByteSize` | 64 KB | Maximum size for QA sections |
 | Summarize human in QA | `SummHumanInQA` | `summarizeHumanMessagesInQAPairs` | false | Whether to summarize human messages in QA pairs |
 | Last section reserve percentage | N/A | `lastSectionReservePercentage` | 25% | Percentage of section size to reserve for future messages |
-| Keep QA sections | `KeepQASections` | `keepMinLastQASections` | 1 | Number of most recent QA sections to preserve without summarization |
+| Keep QA sections | `KeepQASections` | `keepMinLastQASections` | 1 | Number of most recent QA sections to preserve without summarization, even if they exceed MaxQABytes |
 
 ## Algorithm Operation
 
@@ -339,8 +341,13 @@ The enhanced algorithm operates in these sequential phases:
 1. Convert input chain to ChainAST with size tracking
 2. Apply section summarization to all sections except the last `KeepQASections` sections (with concurrent processing)
 3. Apply last section rotation to multiple recent sections if enabled and size limits are exceeded
-4. Apply QA pair summarization if enabled and limits are exceeded
+4. Apply QA pair summarization if enabled and limits are exceeded, **preserving the last `KeepQASections` sections**
 5. Return the modified chain if it saves space
+
+**Critical Guarantees:**
+- The last `KeepQASections` sections are **NEVER** summarized by section or QA summarization, even if they exceed `MaxQABytes`
+- The last BodyPair in a section is **NEVER** summarized by `summarizeOversizedBodyPairs` or `summarizeLastSection` to preserve reasoning signatures
+- **Idempotent**: calling `SummarizeChain` multiple times on already summarized content does not change it further
 
 The primary algorithm is implemented through the `Summarizer` interface in the `pentagi/pkg/csum` package:
 
@@ -428,7 +435,7 @@ func (s *summarizer) SummarizeChain(
 
     // 2. QA-pair summarization - focus on question-answer sections
     if cfg.UseQA {
-        err = summarizeQAPairs(ctx, ast, handler, cfg.MaxQASections, cfg.MaxQABytes, cfg.SummHumanInQA)
+        err = summarizeQAPairs(ctx, ast, handler, cfg.KeepQASections, cfg.MaxQASections, cfg.MaxQABytes, cfg.SummHumanInQA)
         if err != nil {
             return chain, fmt.Errorf("failed to summarize QA pairs: %w", err)
         }
@@ -868,7 +875,10 @@ func determineLastSectionPairs(
 
 ### 4. QA Pair Management
 
-When QA pair summarization is enabled:
+When QA pair summarization is enabled, the algorithm **preserves the last `KeepQASections` sections** without summarization, even if they exceed `MaxQABytes`. This ensures that:
+- Recent reasoning blocks are preserved for AI agent continuation
+- Tool calls in the most recent sections maintain their full context
+- Agent state remains intact for multi-turn conversations
 
 ```mermaid
 flowchart TD
@@ -902,6 +912,7 @@ func summarizeQAPairs(
     ctx context.Context,
     ast *cast.ChainAST,
     handler tools.SummarizeHandler,
+    keepQASections int,  // CRITICAL: Number of recent sections to keep unconditionally
     maxQASections int,
     maxQABytes int,
     summarizeHuman bool,
@@ -1311,8 +1322,10 @@ for _, msg := range newChain {
 | Last section over size limit | Create a new section with summary pair followed by recent pairs |
 | QA pairs over limit | Create summary section and keep most recent sections |
 | KeepQASections larger than number of sections | No summarization performed, preserves all sections |
+| Last KeepQASections sections exceed MaxQABytes | Sections are kept anyway to preserve reasoning and agent state |
 | Summary generation fails | Keep the most recent content and log the error |
-| Chain with already summarized content | Detected during processing and handled appropriately |
+| Chain with already summarized content | Detected during processing and handled appropriately (idempotent) |
+| Multiple consecutive summarization calls | Idempotent - no changes after first summarization |
 
 ## Performance Considerations
 

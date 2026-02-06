@@ -577,6 +577,37 @@ func TestSummarizeSections(t *testing.T) {
 			expectedNoChange: true, // No changes when keepQASections > section count
 			keepQASections:   5,    // More than the number of sections
 		},
+		{
+			// Test for the bug fix: when last QA section exceeds MaxQABytes,
+			// it should NOT be summarized together with previous sections
+			name: "Last QA section exceeds MaxQABytes - should not be summarized",
+			sections: []*cast.ChainSection{
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 1")),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 1a"),
+						cast.NewBodyPairFromCompletion("Answer 1b"),
+					},
+				),
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 2")),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 2a"),
+						cast.NewBodyPairFromCompletion("Answer 2b"),
+					},
+				),
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 3")),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 3a"),
+						cast.NewBodyPairFromCompletion("Answer 3b"),
+					},
+				),
+			},
+			returnText:       "Summarized content",
+			expectedNoChange: false,
+			keepQASections:   1, // Keep last 1 section
+		},
 	}
 
 	for _, tt := range tests {
@@ -1235,6 +1266,7 @@ func TestSummarizeQAPairs(t *testing.T) {
 	tests := []struct {
 		name                string
 		sections            []*cast.ChainSection
+		keepQASections      int
 		maxSections         int
 		maxBytes            int
 		summarizeHuman      bool
@@ -1244,6 +1276,7 @@ func TestSummarizeQAPairs(t *testing.T) {
 		expectedNoChange    bool
 		expectedErrorCheck  func(error) bool
 		expectedQAPairCheck func(*cast.ChainAST) bool
+		skipSizeChecks      bool // Skip size checks when last section exceeds limits due to KeepQASections
 	}{
 		{
 			// Test with empty chain - should return without changes
@@ -1484,6 +1517,73 @@ func TestSummarizeQAPairs(t *testing.T) {
 				return err != nil && strings.Contains(err.Error(), "QA (ai) summary generation failed")
 			},
 		},
+		{
+			// Test for bug fix: Last QA section with large content should be preserved
+			// This reproduces the issue from msgchain_coder_8572_clear.json
+			name: "Last QA section with large content exceeds MaxQABytes",
+			sections: []*cast.ChainSection{
+				cast.NewChainSection(
+					cast.NewHeader(
+						newTextMsg(llms.ChatMessageTypeSystem, "System message"),
+						newTextMsg(llms.ChatMessageTypeHuman, "Question 1"),
+					),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 1"),
+					},
+				),
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 2")),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 2"),
+					},
+				),
+				// Last section with very large content (simulates search_code response with 90KB)
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 3")),
+					[]*cast.BodyPair{
+						// Create a large body pair that exceeds MaxQABytes
+						func() *cast.BodyPair {
+							largeContent := strings.Repeat("X", 100*1024) // 100KB content
+							return cast.NewBodyPairFromCompletion(largeContent)
+						}(),
+					},
+				),
+			},
+			keepQASections: 1,     // Keep last 1 section (critical for bug fix)
+			maxSections:    5,     // High limit - not the limiting factor
+			maxBytes:       64000, // 64KB - last section exceeds this
+			summarizeHuman: false,
+			summarizerChecks: &SummarizerChecks{
+				ExpectedStrings:   []string{"Answer 1", "Answer 2"}, // Should summarize first two sections
+				UnexpectedStrings: []string{"XXX"},                  // Should NOT summarize the large last section
+				ExpectedCallCount: 1,                                // One call to summarize first two sections
+			},
+			returnText:       "Summarized older sections",
+			expectedNoChange: false,
+			skipSizeChecks:   true, // Skip size checks - last section exceeds maxBytes but is kept due to KeepQASections
+			expectedQAPairCheck: func(ast *cast.ChainAST) bool {
+				// Should have: 1 summary section + 1 last section kept
+				if len(ast.Sections) != 2 {
+					return false
+				}
+				// First section should be summarized
+				if !containsSummarizedContent(ast.Sections[0].Body[0]) {
+					return false
+				}
+				// Last section should NOT be summarized - should have original large content
+				lastSection := ast.Sections[1]
+				if len(lastSection.Body) != 1 {
+					return false
+				}
+				// Check that the last section contains the large content (not summarized)
+				lastPair := lastSection.Body[0]
+				if lastPair.Type == cast.Summarization {
+					return false // Should NOT be Summarization type
+				}
+				// The content should still be large (>50KB indicates it wasn't summarized)
+				return lastPair.Size() > 50*1024
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1506,7 +1606,7 @@ func TestSummarizeQAPairs(t *testing.T) {
 
 			// Call the function
 			err := summarizeQAPairs(ctx, ast, mockSum.SummarizerHandler(),
-				tt.maxSections, tt.maxBytes, tt.summarizeHuman, cast.ToolCallIDTemplate)
+				tt.keepQASections, tt.maxSections, tt.maxBytes, tt.summarizeHuman, cast.ToolCallIDTemplate)
 
 			// Check error if expected
 			if tt.expectedErrorCheck != nil {
@@ -1559,19 +1659,22 @@ func TestSummarizeQAPairs(t *testing.T) {
 				assert.LessOrEqual(t, len(ast.Sections), tt.maxSections+1, // +1 for summary section
 					"Section count should be within limit after summarization")
 
-				// Approximate size check - rebuilding would be more precise
-				totalSize := 0
-				for _, section := range ast.Sections {
-					totalSize += section.Size()
+				// Skip size checks if requested (e.g., when last section exceeds limits but is kept due to KeepQASections)
+				if !tt.skipSizeChecks {
+					// Approximate size check - rebuilding would be more precise
+					totalSize := 0
+					for _, section := range ast.Sections {
+						totalSize += section.Size()
+					}
+					assert.LessOrEqual(t, totalSize, tt.maxBytes+200, // Allow some overhead
+						"Total size should be approximately within limits")
+
+					// Verify size reduction if applicable
+					verifySizeReduction(t, originalSize, ast)
 				}
-				assert.LessOrEqual(t, totalSize, tt.maxBytes+200, // Allow some overhead
-					"Total size should be approximately within limits")
 
 				// Verify summarization patterns
 				verifySummarizationPatterns(t, ast, "qaPair", 1)
-
-				// Verify size reduction if applicable
-				verifySizeReduction(t, originalSize, ast)
 			}
 		})
 	}

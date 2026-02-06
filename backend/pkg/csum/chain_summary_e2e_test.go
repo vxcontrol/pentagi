@@ -1052,3 +1052,370 @@ func addNormalAndOversizedBodyPairs() astModifier {
 		lastSection.AddBodyPair(oversizedPair)
 	}
 }
+
+// TestSummarizationIdempotence verifies that calling summarizer multiple times
+// on already summarized content does not change it further
+func TestSummarizationIdempotence(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a chain that will trigger summarization
+	initialChain := []llms.MessageContent{
+		*newTextMsg(llms.ChatMessageTypeSystem, "System message"),
+		*newTextMsg(llms.ChatMessageTypeHuman, "Question 1"),
+		*newTextMsg(llms.ChatMessageTypeAI, strings.Repeat("A", 200)+"Answer 1"),
+		*newTextMsg(llms.ChatMessageTypeHuman, "Question 2"),
+		*newTextMsg(llms.ChatMessageTypeAI, strings.Repeat("B", 200)+"Answer 2"),
+		*newTextMsg(llms.ChatMessageTypeHuman, "Question 3"),
+		*newTextMsg(llms.ChatMessageTypeAI, strings.Repeat("C", 200)+"Answer 3"),
+	}
+
+	config := SummarizerConfig{
+		PreserveLast:   true,
+		LastSecBytes:   300, // Small to trigger summarization
+		MaxBPBytes:     1000,
+		UseQA:          false,
+		KeepQASections: 1,
+	}
+
+	summarizer := NewSummarizer(config)
+	mockSum := newMockSummarizer("Summarized content", nil, nil)
+
+	// First summarization
+	summarized1, err := summarizer.SummarizeChain(ctx, mockSum.SummarizerHandler(), initialChain, cast.ToolCallIDTemplate)
+	assert.NoError(t, err)
+
+	// Reset mock to track second call
+	mockSum.called = false
+	mockSum.callCount = 0
+
+	// Second summarization - should not change anything
+	summarized2, err := summarizer.SummarizeChain(ctx, mockSum.SummarizerHandler(), summarized1, cast.ToolCallIDTemplate)
+	assert.NoError(t, err)
+
+	// Verify that second summarization didn't change the chain
+	assert.Equal(t, len(summarized1), len(summarized2), "Second summarization should not change message count")
+	assert.Equal(t, toString(t, summarized1), toString(t, summarized2), "Second summarization should be idempotent")
+
+	// Third summarization - should also not change anything
+	summarized3, err := summarizer.SummarizeChain(ctx, mockSum.SummarizerHandler(), summarized2, cast.ToolCallIDTemplate)
+	assert.NoError(t, err)
+
+	assert.Equal(t, len(summarized1), len(summarized3), "Third summarization should not change message count")
+	assert.Equal(t, toString(t, summarized1), toString(t, summarized3), "Third summarization should be idempotent")
+}
+
+// TestLastBodyPairPreservation verifies that the last BodyPair in a section
+// is NEVER summarized, even if it exceeds size limits
+func TestLastBodyPairPreservation(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		createChain    func() *cast.ChainAST
+		config         SummarizerConfig
+		validateResult func(t *testing.T, ast *cast.ChainAST)
+	}{
+		{
+			name: "Last BodyPair with large content - section has multiple pairs",
+			createChain: func() *cast.ChainAST {
+				// Create a section with multiple body pairs
+				// When we have another section after it, the first section will be summarized
+				// Note: section summarization (summarizeSections) summarizes ALL body pairs in the section
+				// The "don't touch last body pair" rule applies only to oversized pair summarization
+				// and last section rotation, not to section summarization
+				return createTestChainAST(
+					cast.NewChainSection(
+						cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question")),
+						[]*cast.BodyPair{
+							cast.NewBodyPairFromCompletion("Answer 1"),
+							cast.NewBodyPairFromCompletion("Answer 2"),
+							cast.NewBodyPairFromCompletion("Answer 3"),
+						},
+					),
+					// Add another section to trigger section summarization
+					cast.NewChainSection(
+						cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Another question")),
+						[]*cast.BodyPair{
+							cast.NewBodyPairFromCompletion("Another answer"),
+						},
+					),
+				)
+			},
+			config: SummarizerConfig{
+				PreserveLast:   false,
+				UseQA:          false,
+				MaxBPBytes:     16 * 1024,
+				KeepQASections: 1, // Keep last 1 section
+			},
+			validateResult: func(t *testing.T, ast *cast.ChainAST) {
+				// First section should be summarized to 1 body pair
+				assert.Equal(t, 1, len(ast.Sections[0].Body), "First section should be summarized to 1 body pair")
+
+				// Verify the summarized content
+				assert.True(t, containsSummarizedContent(ast.Sections[0].Body[0]),
+					"First section should have summarized content")
+
+				// Last section should remain unchanged
+				assert.Equal(t, 1, len(ast.Sections[1].Body),
+					"Last section should remain unchanged (KeepQASections=1)")
+			},
+		},
+		{
+			name: "Last BodyPair preserved in oversized pair summarization",
+			createChain: func() *cast.ChainAST {
+				return createTestChainAST(
+					cast.NewChainSection(
+						cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question")),
+						[]*cast.BodyPair{
+							// First pair - oversized, can be summarized
+							cast.NewBodyPairFromCompletion(strings.Repeat("A", 20*1024) + "First"),
+							// Second pair - oversized, can be summarized
+							cast.NewBodyPairFromCompletion(strings.Repeat("B", 20*1024) + "Second"),
+							// Last pair - oversized, should NOT be summarized
+							cast.NewBodyPairFromCompletion(strings.Repeat("C", 20*1024) + "Last"),
+						},
+					),
+				)
+			},
+			config: SummarizerConfig{
+				PreserveLast:   true,
+				LastSecBytes:   100 * 1024, // Large to avoid section summarization
+				MaxBPBytes:     16 * 1024,  // Trigger oversized pair summarization
+				UseQA:          false,
+				KeepQASections: 1,
+			},
+			validateResult: func(t *testing.T, ast *cast.ChainAST) {
+				assert.Equal(t, 1, len(ast.Sections), "Should have 1 section")
+				section := ast.Sections[0]
+
+				// Should have 3 body pairs: 2 summarized + 1 last preserved
+				assert.Equal(t, 3, len(section.Body), "Should have 3 body pairs")
+
+				// First two should be summarized
+				assert.True(t, containsSummarizedContent(section.Body[0]) || section.Body[0].Type == cast.Summarization,
+					"First pair should be summarized")
+				assert.True(t, containsSummarizedContent(section.Body[1]) || section.Body[1].Type == cast.Summarization,
+					"Second pair should be summarized")
+
+				// Last pair should NOT be summarized
+				lastPair := section.Body[2]
+				assert.False(t, containsSummarizedContent(lastPair),
+					"Last pair should NOT be summarized")
+				assert.Equal(t, cast.Completion, lastPair.Type,
+					"Last pair should remain Completion type")
+
+				// Verify last pair still has large content
+				assert.Greater(t, lastPair.Size(), 20*1024,
+					"Last pair should still have large content (not summarized)")
+			},
+		},
+		{
+			name: "Last BodyPair with tool calls preserved in last section rotation",
+			createChain: func() *cast.ChainAST {
+				// Create tool call body pair
+				toolCallPair := func() *cast.BodyPair {
+					aiMsg := &llms.MessageContent{
+						Role: llms.ChatMessageTypeAI,
+						Parts: []llms.ContentPart{
+							llms.ToolCall{
+								ID:   "call_test_large",
+								Type: "function",
+								FunctionCall: &llms.FunctionCall{
+									Name:      "search",
+									Arguments: `{"query": "test"}`,
+								},
+							},
+						},
+					}
+					toolMsg := &llms.MessageContent{
+						Role: llms.ChatMessageTypeTool,
+						Parts: []llms.ContentPart{
+							llms.ToolCallResponse{
+								ToolCallID: "call_test_large",
+								Name:       "search",
+								Content:    strings.Repeat("Result: ", 10000), // Large response
+							},
+						},
+					}
+					return cast.NewBodyPair(aiMsg, []*llms.MessageContent{toolMsg})
+				}()
+
+				return createTestChainAST(
+					cast.NewChainSection(
+						cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question")),
+						[]*cast.BodyPair{
+							cast.NewBodyPairFromCompletion(strings.Repeat("A", 100) + "First"),
+							cast.NewBodyPairFromCompletion(strings.Repeat("B", 100) + "Second"),
+							toolCallPair, // Last pair with tool calls - should be preserved
+						},
+					),
+				)
+			},
+			config: SummarizerConfig{
+				PreserveLast:   true,
+				LastSecBytes:   500, // Small to trigger last section rotation
+				MaxBPBytes:     1000,
+				UseQA:          false,
+				KeepQASections: 1,
+			},
+			validateResult: func(t *testing.T, ast *cast.ChainAST) {
+				assert.Equal(t, 1, len(ast.Sections), "Should have 1 section")
+				section := ast.Sections[0]
+
+				// Should have at least 2 body pairs: summarized + last preserved
+				assert.GreaterOrEqual(t, len(section.Body), 2, "Should have at least 2 body pairs")
+
+				// Last pair should be RequestResponse type (tool call)
+				lastPair := section.Body[len(section.Body)-1]
+				assert.Equal(t, cast.RequestResponse, lastPair.Type,
+					"Last pair should remain RequestResponse type")
+				assert.False(t, containsSummarizedContent(lastPair),
+					"Last pair with tool calls should NOT be summarized")
+
+				// Verify tool call is still present
+				hasToolCall := false
+				for _, part := range lastPair.AIMessage.Parts {
+					if _, ok := part.(llms.ToolCall); ok {
+						hasToolCall = true
+						break
+					}
+				}
+				assert.True(t, hasToolCall, "Last pair should still have tool call")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ast := tt.createChain()
+			mockSum := newMockSummarizer("Summarized", nil, nil)
+			summarizer := NewSummarizer(tt.config)
+
+			messages := ast.Messages()
+			summarized, err := summarizer.SummarizeChain(ctx, mockSum.SummarizerHandler(), messages, cast.ToolCallIDTemplate)
+			assert.NoError(t, err)
+
+			resultAST, err := cast.NewChainAST(summarized, false)
+			assert.NoError(t, err)
+
+			verifyASTConsistency(t, resultAST)
+			tt.validateResult(t, resultAST)
+		})
+	}
+}
+
+// TestLastQASectionExceedsMaxQABytes reproduces the bug from msgchain_coder_8572_clear.json
+// where a last QA section with large content was incorrectly summarized together with previous sections
+func TestLastQASectionExceedsMaxQABytes(t *testing.T) {
+	ctx := context.Background()
+
+	// Simulate the scenario from msgchain_coder_8572_clear.json:
+	// - Multiple QA sections
+	// - Last section has very large content (90KB in search_code response)
+	// - Old bug: last section was summarized together with previous sections, losing reasoning blocks
+
+	chain := []llms.MessageContent{
+		*newTextMsg(llms.ChatMessageTypeSystem, "System message"),
+
+		// Section 1 - normal size
+		*newTextMsg(llms.ChatMessageTypeHuman, "Question 1"),
+		*newTextMsg(llms.ChatMessageTypeAI, "Answer 1"),
+
+		// Section 2 - normal size
+		*newTextMsg(llms.ChatMessageTypeHuman, "Question 2"),
+		*newTextMsg(llms.ChatMessageTypeAI, "Answer 2"),
+
+		// Section 3 - LAST SECTION with VERY LARGE content (simulates search_code response)
+		*newTextMsg(llms.ChatMessageTypeHuman, "Question 3 - search for code"),
+		// Large AI response with reasoning and tool call
+		{
+			Role: llms.ChatMessageTypeAI,
+			Parts: []llms.ContentPart{
+				llms.TextContent{Text: "Let me search for that"},
+				llms.ToolCall{
+					ID:   "call_search",
+					Type: "function",
+					FunctionCall: &llms.FunctionCall{
+						Name:      "search_code",
+						Arguments: `{"query": "vulnerability"}`,
+					},
+				},
+			},
+		},
+		// Very large tool response (90KB)
+		{
+			Role: llms.ChatMessageTypeTool,
+			Parts: []llms.ContentPart{
+				llms.ToolCallResponse{
+					ToolCallID: "call_search",
+					Name:       "search_code",
+					Content:    strings.Repeat("Code result line\n", 5000), // ~90KB
+				},
+			},
+		},
+	}
+
+	config := SummarizerConfig{
+		PreserveLast:   false,
+		UseQA:          true,
+		MaxQASections:  5,
+		MaxQABytes:     64000, // 64KB - last section exceeds this
+		SummHumanInQA:  false,
+		KeepQASections: 1, // CRITICAL: Keep last 1 section (the bug fix)
+		MaxBPBytes:     16 * 1024,
+	}
+
+	summarizer := NewSummarizer(config)
+	mockSum := newMockSummarizer("Summarized older sections", nil, nil)
+
+	// Summarize the chain
+	summarized, err := summarizer.SummarizeChain(ctx, mockSum.SummarizerHandler(), chain, cast.ToolCallIDTemplate)
+	assert.NoError(t, err)
+
+	// Parse result
+	resultAST, err := cast.NewChainAST(summarized, false)
+	assert.NoError(t, err)
+
+	// Verify the fix:
+	// 1. Should have 2 sections: summary + last section
+	assert.Equal(t, 2, len(resultAST.Sections),
+		"Should have 2 sections: summary of first 2 sections + last section preserved")
+
+	// 2. First section should be the summary
+	assert.True(t, containsSummarizedContent(resultAST.Sections[0].Body[0]),
+		"First section should contain summarized content of older sections")
+
+	// 3. Last section should NOT be summarized (this was the bug)
+	lastSection := resultAST.Sections[1]
+	assert.Equal(t, 1, len(lastSection.Body),
+		"Last section should have 1 body pair (the large tool response)")
+
+	lastPair := lastSection.Body[0]
+
+	// CRITICAL: Last pair should be RequestResponse type, NOT Summarization
+	assert.Equal(t, cast.RequestResponse, lastPair.Type,
+		"Last section should remain RequestResponse (not summarized despite large size)")
+
+	// Verify the tool call is still present (not lost in summarization)
+	hasToolCall := false
+	for _, part := range lastPair.AIMessage.Parts {
+		if toolCall, ok := part.(llms.ToolCall); ok {
+			assert.Equal(t, "call_search", toolCall.ID, "Tool call ID should be preserved")
+			assert.Equal(t, "search_code", toolCall.FunctionCall.Name, "Tool call name should be preserved")
+			hasToolCall = true
+		}
+	}
+	assert.True(t, hasToolCall, "Tool call should be preserved in last section")
+
+	// Verify the large tool response is still present
+	assert.Equal(t, 1, len(lastPair.ToolMessages), "Should have 1 tool message")
+	toolResponse := lastPair.ToolMessages[0]
+	assert.Greater(t, cast.CalculateMessageSize(toolResponse), 50*1024,
+		"Tool response should still be large (not summarized)")
+
+	// Verify we can call summarizer again and it won't change anything (idempotence)
+	summarized2, err := summarizer.SummarizeChain(ctx, mockSum.SummarizerHandler(), summarized, cast.ToolCallIDTemplate)
+	assert.NoError(t, err)
+	assert.Equal(t, len(summarized), len(summarized2),
+		"Second summarization should not change the chain (idempotent)")
+}

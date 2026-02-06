@@ -146,7 +146,7 @@ func (s *summarizer) SummarizeChain(
 
 	// 2. QA-pair summarization - focus on question-answer sections
 	if cfg.UseQA {
-		err = summarizeQAPairs(ctx, ast, handler, cfg.MaxQASections, cfg.MaxQABytes, cfg.SummHumanInQA, tcIDTemplate)
+		err = summarizeQAPairs(ctx, ast, handler, cfg.KeepQASections, cfg.MaxQASections, cfg.MaxQABytes, cfg.SummHumanInQA, tcIDTemplate)
 		if err != nil {
 			return chain, fmt.Errorf("failed to summarize QA pairs: %w", err)
 		}
@@ -497,6 +497,7 @@ func summarizeQAPairs(
 	ctx context.Context,
 	ast *cast.ChainAST,
 	handler tools.SummarizeHandler,
+	keepQASections int,
 	maxQASections int,
 	maxQABytes int,
 	summarizeHuman bool,
@@ -508,7 +509,7 @@ func summarizeQAPairs(
 	}
 
 	// Identify sections to summarize
-	humanMessages, aiMessages := prepareQASectionsForSummarization(ast, maxQASections, maxQABytes)
+	humanMessages, aiMessages := prepareQASectionsForSummarization(ast, keepQASections, maxQASections, maxQABytes)
 	if len(humanMessages) == 0 && len(aiMessages) == 0 {
 		return nil
 	}
@@ -540,7 +541,7 @@ func summarizeQAPairs(
 	}
 
 	// Create a new AST with summary + recent sections
-	sectionsToKeep := determineRecentSectionsToKeep(ast, maxQASections, maxQABytes)
+	sectionsToKeep := determineRecentSectionsToKeep(ast, keepQASections, maxQASections, maxQABytes)
 
 	// Create a summarization body pair with the generated summary
 	var summaryPair *cast.BodyPair
@@ -596,6 +597,7 @@ func exceedsQASectionLimits(ast *cast.ChainAST, maxSections int, maxBytes int) b
 // returns human and ai messages separately for better control over the summarization process
 func prepareQASectionsForSummarization(
 	ast *cast.ChainAST,
+	keepQASections int,
 	maxSections int,
 	maxBytes int,
 ) ([]llms.MessageContent, []llms.MessageContent) {
@@ -605,7 +607,7 @@ func prepareQASectionsForSummarization(
 	}
 
 	// Calculate how many recent sections to keep
-	sectionsToKeep := determineRecentSectionsToKeep(ast, maxSections, maxBytes)
+	sectionsToKeep := determineRecentSectionsToKeep(ast, keepQASections, maxSections, maxBytes)
 
 	// Select oldest sections for summarization
 	sectionsToSummarize := ast.Sections[:totalSections-sectionsToKeep]
@@ -625,7 +627,7 @@ func prepareQASectionsForSummarization(
 }
 
 // determineRecentSectionsToKeep determines how many recent sections to preserve
-func determineRecentSectionsToKeep(ast *cast.ChainAST, maxSections int, maxBytes int) int {
+func determineRecentSectionsToKeep(ast *cast.ChainAST, keepQASections int, maxSections int, maxBytes int) int {
 	totalSections := len(ast.Sections)
 	keepCount := 0
 	currentSize := 0
@@ -634,8 +636,20 @@ func determineRecentSectionsToKeep(ast *cast.ChainAST, maxSections int, maxBytes
 	const bufferSpace = 1000
 	effectiveMaxBytes := maxBytes - bufferSpace
 
+	// Keep the most recent sections
+	for i := totalSections - 1; i >= totalSections-keepQASections; i-- {
+		sectionSize := ast.Sections[i].Size()
+		currentSize += sectionSize
+		keepCount++
+	}
+
+	// Stop if the current size exceeds the effective max bytes
+	if currentSize > effectiveMaxBytes {
+		return keepCount
+	}
+
 	// Start from most recent sections (end of array) and work backwards
-	for i := totalSections - 1; i >= 0; i-- {
+	for i := totalSections - keepQASections - 1; i >= 0; i-- {
 		// Stop if we've reached max sections to keep
 		if keepCount >= maxSections {
 			break
