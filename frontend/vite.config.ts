@@ -46,6 +46,11 @@ export default defineConfig(({ mode }) => {
                 target: `${useHttps ? 'wss' : 'ws'}://${viteEnv.VITE_API_URL}`,
                 wss: `${useHttps}`,
             },
+            '/graphql': {
+                changeOrigin: true,
+                target: `http://localhost:${viteEnv.VITE_NEO4J_PORT || '4000'}`,
+                ws: true,
+            },
         },
         ...(useHttps && {
             https: {

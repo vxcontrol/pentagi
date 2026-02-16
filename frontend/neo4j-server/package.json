@@ -1,0 +1,25 @@
+{
+    "name": "pentagi-neo4j-server",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "Small Node.js server that queries Neo4j and exposes pentest metrics for the frontend",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js",
+        "dev": "node --watch index.js"
+    },
+    "dependencies": {
+        "@apollo/server": "^5.4.0",
+        "@as-integrations/express4": "^1.1.2",
+        "@graphql-tools/schema": "^10.0.31",
+        "cors": "^2.8.6",
+        "dotenv": "^16.4.5",
+        "express": "^4.21.1",
+        "graphql": "^16.12.0",
+        "graphql-subscriptions": "^3.0.0",
+        "graphql-tag": "^2.12.6",
+        "graphql-ws": "^6.0.7",
+        "neo4j-driver": "^5.25.0",
+        "ws": "^8.19.0"
+    }
+}

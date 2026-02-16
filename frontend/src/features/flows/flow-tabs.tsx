@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import FlowAgents from '@/features/flows/agents/flow-agents';
+import FlowDashboard from '@/features/flows/dashboard/flow-dashboard';
 import FlowAssistantMessages from '@/features/flows/messages/flow-assistant-messages';
 import FlowAutomationMessages from '@/features/flows/messages/flow-automation-messages';
 import FlowScreenshots from '@/features/flows/screenshots/flow-screenshots';
@@ -44,6 +45,7 @@ const FlowTabs = ({ activeTab, onTabChange }: FlowTabsProps) => {
                     <TabsList className="flex w-fit">
                         {!isDesktop && <TabsTrigger value="automation">Automation</TabsTrigger>}
                         {!isDesktop && <TabsTrigger value="assistant">Assistant</TabsTrigger>}
+                        {!isDesktop && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
                         <TabsTrigger value="terminal">Terminal</TabsTrigger>
                         <TabsTrigger value="tasks">Tasks</TabsTrigger>
                         <TabsTrigger value="agents">Agents</TabsTrigger>
@@ -70,6 +72,14 @@ const FlowTabs = ({ activeTab, onTabChange }: FlowTabsProps) => {
                     value="assistant"
                 >
                     <FlowAssistantMessages className="pr-4" />
+                </TabsContent>
+            )}
+            {!isDesktop && (
+                <TabsContent
+                    className="mt-2 flex-1 overflow-auto pr-4"
+                    value="dashboard"
+                >
+                    <FlowDashboard />
                 </TabsContent>
             )}
 

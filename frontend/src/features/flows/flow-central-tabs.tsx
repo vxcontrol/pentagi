@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import FlowDashboard from '@/features/flows/dashboard/flow-dashboard';
 import FlowAssistantMessages from '@/features/flows/messages/flow-assistant-messages';
 import FlowAutomationMessages from '@/features/flows/messages/flow-automation-messages';
 import { useFlow } from '@/providers/flow-provider';
@@ -22,7 +23,7 @@ const FlowCentralTabs = () => {
         // Check URL parameter
         const tabParam = searchParams.get('tab');
 
-        if (tabParam === 'automation' || tabParam === 'assistant') {
+        if (tabParam === 'automation' || tabParam === 'assistant' || tabParam === 'dashboard') {
             return tabParam;
         }
 
@@ -51,6 +52,7 @@ const FlowCentralTabs = () => {
                     <TabsList className="flex w-fit">
                         <TabsTrigger value="automation">Automation</TabsTrigger>
                         <TabsTrigger value="assistant">Assistant</TabsTrigger>
+                        <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
                     </TabsList>
                     <ScrollBar orientation="horizontal" />
                 </ScrollArea>
@@ -67,6 +69,12 @@ const FlowCentralTabs = () => {
                 value="assistant"
             >
                 <FlowAssistantMessages />
+            </TabsContent>
+            <TabsContent
+                className="mt-2 flex-1 overflow-auto pr-4"
+                value="dashboard"
+            >
+                <FlowDashboard />
             </TabsContent>
         </Tabs>
     );
