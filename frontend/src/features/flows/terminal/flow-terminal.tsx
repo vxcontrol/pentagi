@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import Terminal from '@/components/shared/terminal';
+import MonacoTerminal from '@/components/shared/monaco-terminal';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { useFlow } from '@/providers/flow-provider';
@@ -98,7 +98,7 @@ const FlowTerminal = () => {
 
     return (
         <div className="flex size-full flex-col gap-4">
-            <div className="sticky top-0 z-10 bg-background pr-4">
+            <div className="bg-background sticky top-0 z-10 pr-4">
                 <Form {...form}>
                     <div className="p-px">
                         <FormField
@@ -155,7 +155,7 @@ const FlowTerminal = () => {
                     </div>
                 </Form>
             </div>
-            <Terminal
+            <MonacoTerminal
                 className="w-full grow"
                 logs={filteredLogs}
                 ref={terminalRef}
