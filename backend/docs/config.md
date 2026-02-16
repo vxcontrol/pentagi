@@ -49,10 +49,12 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Usage Details](#usage-details-9)
   - [Proxy Settings](#proxy-settings)
     - [Usage Details](#usage-details-10)
+  - [Graphiti Knowledge Graph Settings](#graphiti-knowledge-graph-settings)
+    - [Usage Details](#usage-details-11)
   - [Observability Settings](#observability-settings)
     - [Telemetry](#telemetry)
     - [Langfuse](#langfuse)
-    - [Usage Details](#usage-details-11)
+    - [Usage Details](#usage-details-12)
 
 ## Configuration Basics
 
@@ -459,7 +461,13 @@ These settings control the integration with various Large Language Model (LLM) p
 | Option | Environment Variable | Default Value | Description |
 |--------|---------------------|---------------|-------------|
 | OllamaServerURL | `OLLAMA_SERVER_URL` | *(none)* | Server URL for Ollama API requests |
+| OllamaServerModel | `OLLAMA_SERVER_MODEL` | `llama3.1:8b-instruct-q8_0` | Default model to use for inference |
 | OllamaServerConfig | `OLLAMA_SERVER_CONFIG_PATH` | *(none)* | Path to config file for Ollama provider options |
+| OllamaServerPullModelsTimeout | `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600` | Timeout in seconds for model downloads |
+| OllamaServerPullModelsEnabled | `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false` | Automatically download required models on startup |
+| OllamaServerLoadModelsEnabled | `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false` | Load available models list from server API |
+
+**Note:** When `OllamaServerLoadModelsEnabled=false`, only the default model is available. Enable this to see all installed models in the UI.
 
 ### Google AI (Gemini) LLM Provider
 
@@ -475,6 +483,7 @@ These settings control the integration with various Large Language Model (LLM) p
 | BedrockRegion | `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
 | BedrockAccessKey | `BEDROCK_ACCESS_KEY_ID` | *(none)* | AWS access key ID for Bedrock authentication |
 | BedrockSecretKey | `BEDROCK_SECRET_ACCESS_KEY` | *(none)* | AWS secret access key for Bedrock authentication |
+| BedrockSessionToken | `BEDROCK_SESSION_TOKEN` | *(none)* | AWS session token for temporary credentials (optional, required for STS/assumed roles) |
 | BedrockServerURL | `BEDROCK_SERVER_URL` | *(none)* | Optional custom endpoint URL for Bedrock service |
 
 ### Custom LLM Provider
@@ -552,7 +561,7 @@ The LLM provider settings are used in `pkg/providers` modules to initialize and 
       bconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
           cfg.BedrockAccessKey,
           cfg.BedrockSecretKey,
-          "",
+          cfg.BedrockSessionToken,
       )),
   }
 
@@ -569,6 +578,8 @@ The LLM provider settings are used in `pkg/providers` modules to initialize and 
       bedrock.WithConverseAPI(),
   )
   ```
+
+  The `BedrockSessionToken` is optional and only required when using temporary AWS credentials (e.g., from STS, assumed roles, or MFA-enabled IAM users). For permanent IAM user credentials, leave this field empty.
 
 - **Custom LLM Settings**: Used in `pkg/providers/custom/custom.go` to create a custom LLM client:
   ```go
@@ -1160,6 +1171,54 @@ The proxy setting is essential for:
 - Implementing network-level security policies
 - Enabling access to external services from restricted networks
 - Monitoring and auditing external API usage
+
+## Graphiti Knowledge Graph Settings
+
+These settings control the integration with Graphiti, a temporal knowledge graph system powered by Neo4j, for advanced semantic understanding and relationship tracking of AI agent operations.
+
+| Option | Environment Variable | Default Value | Description |
+|--------|---------------------|---------------|-------------|
+| GraphitiEnabled | `GRAPHITI_ENABLED` | `false` | Enable or disable Graphiti knowledge graph integration |
+| GraphitiURL | `GRAPHITI_URL` | `http://localhost:8001` | Base URL for Graphiti API service |
+| GraphitiTimeout | `GRAPHITI_TIMEOUT` | `30` | Timeout in seconds for Graphiti operations |
+
+### Usage Details
+
+The Graphiti settings are used in `pkg/graphiti/client.go` and integrated throughout the provider system to automatically capture agent interactions and tool executions:
+
+- **GraphitiEnabled**: Controls whether the knowledge graph integration is active:
+  ```go
+  // Check if Graphiti is enabled
+  if !cfg.GraphitiEnabled {
+      return &Client{enabled: false}, nil
+  }
+  ```
+
+- **GraphitiURL**: Specifies the Graphiti API endpoint:
+  ```go
+  client := graphiti.NewClient(cfg.GraphitiURL, timeout, cfg.GraphitiEnabled)
+  ```
+
+- **GraphitiTimeout**: Sets the maximum time for knowledge graph operations:
+  ```go
+  timeout := time.Duration(cfg.GraphitiTimeout) * time.Second
+  storeCtx, cancel := context.WithTimeout(ctx, timeout)
+  defer cancel()
+  ```
+
+The Graphiti integration captures:
+- Agent responses and reasoning for all agent types (pentester, researcher, coder, etc.)
+- Tool execution details including function name, arguments, results, and execution status
+- Context information including flow, task, and subtask IDs for hierarchical organization
+- Temporal relationships between entities, actions, and outcomes
+
+These settings enable:
+- Building a comprehensive knowledge base from agent interactions
+- Semantic memory across multiple penetration tests
+- Advanced querying of relationships between tools, targets, and techniques
+- Learning from past successful approaches and strategies
+
+The integration is designed to be non-blocking - if Graphiti operations fail, they are logged but don't interrupt the agent workflow.
 
 ## Observability Settings
 

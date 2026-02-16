@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -13,14 +14,23 @@ import (
 )
 
 const (
-	observabilityDirectory  = "observability"
-	pentagiExampleConfigLLM = "example.provider.yml"
+	observabilityDirectory        = "observability"
+	pentagiExampleCustomConfigLLM = "example.custom.provider.yml"
+	pentagiExampleOllamaConfigLLM = "example.ollama.provider.yml"
 )
 
 var filesToExcludeFromVerification = []string{
 	"observability/otel/config.yml",
 	"observability/grafana/config/grafana.ini",
-	pentagiExampleConfigLLM,
+	pentagiExampleCustomConfigLLM,
+	pentagiExampleOllamaConfigLLM,
+}
+
+var allStacks = []ProductStack{
+	ProductStackPentagi,
+	ProductStackGraphiti,
+	ProductStackLangfuse,
+	ProductStackObservability,
 }
 
 type fileSystemOperationsImpl struct {
@@ -37,23 +47,25 @@ func (fs *fileSystemOperationsImpl) ensureStackIntegrity(ctx context.Context, st
 
 	switch stack {
 	case ProductStackPentagi:
-		if err := fs.ensureFileFromEmbed(composeFilePentagi, state); err != nil {
-			return err
-		}
-		return fs.ensureFileFromEmbed(pentagiExampleConfigLLM, state)
+		errCompose := fs.ensureFileFromEmbed(composeFilePentagi, state)
+		errCustom := fs.ensureFileFromEmbed(pentagiExampleCustomConfigLLM, state)
+		errOllama := fs.ensureFileFromEmbed(pentagiExampleOllamaConfigLLM, state)
+		return errors.Join(errCompose, errCustom, errOllama)
+
+	case ProductStackGraphiti:
+		return fs.ensureFileFromEmbed(composeFileGraphiti, state)
 
 	case ProductStackLangfuse:
 		return fs.ensureFileFromEmbed(composeFileLangfuse, state)
 
 	case ProductStackObservability:
-		if err := fs.ensureFileFromEmbed(composeFileObservability, state); err != nil {
-			return err
-		}
-		return fs.ensureDirectoryFromEmbed(observabilityDirectory, state)
+		errCompose := fs.ensureFileFromEmbed(composeFileObservability, state)
+		errDirectory := fs.ensureDirectoryFromEmbed(observabilityDirectory, state)
+		return errors.Join(errCompose, errDirectory)
 
 	case ProductStackAll, ProductStackCompose:
 		// process all stacks sequentially
-		for _, s := range []ProductStack{ProductStackPentagi, ProductStackLangfuse, ProductStackObservability} {
+		for _, s := range allStacks {
 			if err := fs.ensureStackIntegrity(ctx, s, state); err != nil {
 				return err
 			}
@@ -73,6 +85,9 @@ func (fs *fileSystemOperationsImpl) verifyStackIntegrity(ctx context.Context, st
 	case ProductStackPentagi:
 		return fs.verifyFileIntegrity(composeFilePentagi, state)
 
+	case ProductStackGraphiti:
+		return fs.verifyFileIntegrity(composeFileGraphiti, state)
+
 	case ProductStackLangfuse:
 		return fs.verifyFileIntegrity(composeFileLangfuse, state)
 
@@ -84,7 +99,7 @@ func (fs *fileSystemOperationsImpl) verifyStackIntegrity(ctx context.Context, st
 
 	case ProductStackAll, ProductStackCompose:
 		// process all stacks sequentially
-		for _, s := range []ProductStack{ProductStackPentagi, ProductStackLangfuse, ProductStackObservability} {
+		for _, s := range allStacks {
 			if err := fs.verifyStackIntegrity(ctx, s, state); err != nil {
 				return err
 			}
@@ -104,6 +119,9 @@ func (fs *fileSystemOperationsImpl) checkStackIntegrity(ctx context.Context, sta
 	case ProductStackPentagi:
 		result[composeFilePentagi] = fs.checkFileIntegrity(composeFilePentagi)
 
+	case ProductStackGraphiti:
+		result[composeFileGraphiti] = fs.checkFileIntegrity(composeFileGraphiti)
+
 	case ProductStackLangfuse:
 		result[composeFileLangfuse] = fs.checkFileIntegrity(composeFileLangfuse)
 
@@ -117,7 +135,7 @@ func (fs *fileSystemOperationsImpl) checkStackIntegrity(ctx context.Context, sta
 
 	case ProductStackAll, ProductStackCompose:
 		// process all stacks sequentially
-		for _, s := range []ProductStack{ProductStackPentagi, ProductStackLangfuse, ProductStackObservability} {
+		for _, s := range allStacks {
 			if r, err := fs.checkStackIntegrity(ctx, s); err != nil {
 				return result, err // early exit after first error
 			} else {
@@ -142,7 +160,11 @@ func (fs *fileSystemOperationsImpl) cleanupStackFiles(ctx context.Context, stack
 	switch stack {
 	case ProductStackPentagi:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFilePentagi))
-		filesToRemove = append(filesToRemove, filepath.Join(workingDir, pentagiExampleConfigLLM))
+		filesToRemove = append(filesToRemove, filepath.Join(workingDir, pentagiExampleCustomConfigLLM))
+		filesToRemove = append(filesToRemove, filepath.Join(workingDir, pentagiExampleOllamaConfigLLM))
+
+	case ProductStackGraphiti:
+		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFileGraphiti))
 
 	case ProductStackLangfuse:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFileLangfuse))
@@ -152,7 +174,7 @@ func (fs *fileSystemOperationsImpl) cleanupStackFiles(ctx context.Context, stack
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, observabilityDirectory))
 
 	case ProductStackAll, ProductStackCompose:
-		for _, s := range []ProductStack{ProductStackPentagi, ProductStackLangfuse, ProductStackObservability} {
+		for _, s := range allStacks {
 			if err := fs.cleanupStackFiles(ctx, s, state); err != nil {
 				return err
 			}

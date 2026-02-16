@@ -360,7 +360,7 @@ func (d *dockerOperationsImpl) createWorkerDockerClient() (*client.Client, error
 		}
 	}
 
-	envVar, exists = d.processor.state.GetVar(client.EnvOverrideCertPath)
+	envVar, exists = d.processor.state.GetVar("PENTAGI_" + client.EnvOverrideCertPath)
 	if exists && (envVar.Value != "" || envVar.IsChanged) {
 		cfg := getTLSConfig(envVar.Value)
 		opts = append(opts, client.WithTLSClientConfig(cfg.certPath, cfg.keyPath, cfg.caPath))
@@ -386,7 +386,7 @@ func (d *dockerOperationsImpl) getWorkerDockerEnv() []string {
 		env = append(env, fmt.Sprintf("%s=%s", client.EnvOverrideHost, envVar))
 	}
 
-	envVar, exists = d.processor.state.GetVar(client.EnvOverrideCertPath)
+	envVar, exists = d.processor.state.GetVar("PENTAGI_" + client.EnvOverrideCertPath)
 	if exists && (envVar.Value != "" || envVar.IsChanged) {
 		env = append(env, fmt.Sprintf("%s=%s", client.EnvOverrideCertPath, envVar.Value))
 	} else if envVar.Default != "" {

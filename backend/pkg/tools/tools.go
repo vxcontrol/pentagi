@@ -8,6 +8,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
 
@@ -121,14 +122,15 @@ type flowToolsExecutor struct {
 	tlp    TermLogProvider
 	vslp   VectorStoreLogProvider
 
-	db         database.Querier
-	cfg        *config.Config
-	store      *pgvector.Store
-	image      string
-	docker     docker.DockerClient
-	primaryID  int64
-	primaryLID string
-	functions  *Functions
+	db             database.Querier
+	cfg            *config.Config
+	store          *pgvector.Store
+	graphitiClient *graphiti.Client
+	image          string
+	docker         docker.DockerClient
+	primaryID      int64
+	primaryLID     string
+	functions      *Functions
 
 	definitions map[string]llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
@@ -225,6 +227,13 @@ type GeneratorExecutorConfig struct {
 	SubtaskList ExecutorHandler
 }
 
+type RefinerExecutorConfig struct {
+	TaskID       int64
+	Memorist     ExecutorHandler
+	Searcher     ExecutorHandler
+	SubtaskPatch ExecutorHandler
+}
+
 type MemoristExecutorConfig struct {
 	TaskID       *int64
 	SubtaskID    *int64
@@ -257,6 +266,7 @@ type FlowToolsExecutor interface {
 	SetSearchLogProvider(slp SearchLogProvider)
 	SetTermLogProvider(tlp TermLogProvider)
 	SetVectorStoreLogProvider(vslp VectorStoreLogProvider)
+	SetGraphitiClient(client *graphiti.Client)
 
 	Prepare(ctx context.Context) error
 	Release(ctx context.Context) error
@@ -268,6 +278,7 @@ type FlowToolsExecutor interface {
 	GetPentesterExecutor(cfg PentesterExecutorConfig) (ContextToolsExecutor, error)
 	GetSearcherExecutor(cfg SearcherExecutorConfig) (ContextToolsExecutor, error)
 	GetGeneratorExecutor(cfg GeneratorExecutorConfig) (ContextToolsExecutor, error)
+	GetRefinerExecutor(cfg RefinerExecutorConfig) (ContextToolsExecutor, error)
 	GetMemoristExecutor(cfg MemoristExecutorConfig) (ContextToolsExecutor, error)
 	GetEnricherExecutor(cfg EnricherExecutorConfig) (ContextToolsExecutor, error)
 	GetReporterExecutor(cfg ReporterExecutorConfig) (ContextToolsExecutor, error)
@@ -344,6 +355,10 @@ func (fte *flowToolsExecutor) SetTermLogProvider(tlp TermLogProvider) {
 
 func (fte *flowToolsExecutor) SetVectorStoreLogProvider(vslp VectorStoreLogProvider) {
 	fte.vslp = vslp
+}
+
+func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
+	fte.graphitiClient = client
 }
 
 func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
@@ -893,6 +908,17 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		ce.handlers[StoreCodeToolName] = code.Handle
 	}
 
+	graphitiSearch := NewGraphitiSearchTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.graphitiClient,
+	)
+	if graphitiSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
+		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
+	}
+
 	return ce, nil
 }
 
@@ -992,6 +1018,17 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchGuideToolName])
 		ce.handlers[StoreGuideToolName] = guide.Handle
 		ce.handlers[SearchGuideToolName] = guide.Handle
+	}
+
+	graphitiSearch := NewGraphitiSearchTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.graphitiClient,
+	)
+	if graphitiSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
+		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
 	return ce, nil
@@ -1212,6 +1249,67 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 	return ce, nil
 }
 
+func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (ContextToolsExecutor, error) {
+	if cfg.SubtaskPatch == nil {
+		return nil, fmt.Errorf("subtask patch handler is required")
+	}
+
+	if cfg.Memorist == nil {
+		return nil, fmt.Errorf("memorist handler is required")
+	}
+
+	container, err := fte.db.GetFlowPrimaryContainer(context.Background(), fte.flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container %d: %w", fte.flowID, err)
+	}
+
+	term := &terminal{
+		flowID:       fte.flowID,
+		containerID:  container.ID,
+		containerLID: container.LocalID.String,
+		dockerClient: fte.docker,
+		tlp:          fte.tlp,
+	}
+
+	ce := &customExecutor{
+		flowID: fte.flowID,
+		taskID: &cfg.TaskID,
+		mlp:    fte.mlp,
+		vslp:   fte.vslp,
+		db:     fte.db,
+		store:  fte.store,
+		definitions: []llms.FunctionDefinition{
+			registryDefinitions[MemoristToolName],
+			registryDefinitions[SearchToolName],
+			registryDefinitions[SubtaskPatchToolName],
+			registryDefinitions[TerminalToolName],
+			registryDefinitions[FileToolName],
+		},
+		handlers: map[string]ExecutorHandler{
+			MemoristToolName:     cfg.Memorist,
+			SearchToolName:       cfg.Searcher,
+			SubtaskPatchToolName: cfg.SubtaskPatch,
+			TerminalToolName:     term.Handle,
+			FileToolName:         term.Handle,
+		},
+		barriers: map[string]struct{}{SubtaskPatchToolName: {}},
+	}
+
+	browser := &browser{
+		flowID:   fte.flowID,
+		dataDir:  fte.cfg.DataDir,
+		scPrvURL: fte.cfg.ScraperPrivateURL,
+		scPubURL: fte.cfg.ScraperPublicURL,
+		scp:      fte.scp,
+	}
+	if browser.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
+		ce.handlers[BrowserToolName] = browser.Handle
+	}
+
+	return ce, nil
+}
+
 func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (ContextToolsExecutor, error) {
 	if cfg.SearchResult == nil {
 		return nil, fmt.Errorf("search result handler is required")
@@ -1262,6 +1360,17 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 	if memory.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchInMemoryToolName])
 		ce.handlers[SearchInMemoryToolName] = memory.Handle
+	}
+
+	graphitiSearch := NewGraphitiSearchTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.graphitiClient,
+	)
+	if graphitiSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
+		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
 	return ce, nil

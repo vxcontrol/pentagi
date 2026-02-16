@@ -4,8 +4,7 @@ import { getMainDefinition } from '@apollo/client/utilities';
 import { createClient } from 'graphql-ws';
 
 // Relative URL works through both Vite dev proxy and nginx in production
-const NEO4J_GRAPHQL_URL =
-    import.meta.env.VITE_NEO4J_GRAPHQL_URL ?? '/graphql';
+const NEO4J_GRAPHQL_URL = import.meta.env.VITE_NEO4J_GRAPHQL_URL ?? '/graphql';
 
 const NEO4J_GRAPHQL_WS_URL =
     import.meta.env.VITE_NEO4J_GRAPHQL_WS_URL ??
@@ -37,10 +36,7 @@ const splitLink = split(
     ({ query }) => {
         const definition = getMainDefinition(query);
 
-        return (
-            definition.kind === 'OperationDefinition' &&
-            definition.operation === 'subscription'
-        );
+        return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
     },
     wsLink,
     httpLink,

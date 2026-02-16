@@ -95,6 +95,10 @@ func (m *ScraperFormModel) BuildForm() tea.Cmd {
 			locale.ToolsScraperPrivateURLDesc,
 			"https://scraper-internal.example.com",
 		))
+		fields = append(fields, m.createCredentialField(config, "private_username",
+			locale.ToolsScraperPrivateUsername,
+			locale.ToolsScraperPrivateUsernameDesc,
+		))
 		fields = append(fields, m.createCredentialField(config, "private_password",
 			locale.ToolsScraperPrivatePassword,
 			locale.ToolsScraperPrivatePasswordDesc,

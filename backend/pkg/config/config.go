@@ -86,18 +86,23 @@ type Config struct {
 	LLMServerLegacyReasoning bool   `env:"LLM_SERVER_LEGACY_REASONING" envDefault:"false"`
 
 	// Ollama LLM provider
-	OllamaServerURL    string `env:"OLLAMA_SERVER_URL"`
-	OllamaServerConfig string `env:"OLLAMA_SERVER_CONFIG_PATH"`
+	OllamaServerURL               string `env:"OLLAMA_SERVER_URL"`
+	OllamaServerModel             string `env:"OLLAMA_SERVER_MODEL" envDefault:"llama3.1:8b-instruct-q8_0"`
+	OllamaServerConfig            string `env:"OLLAMA_SERVER_CONFIG_PATH"`
+	OllamaServerPullModelsTimeout int    `env:"OLLAMA_SERVER_PULL_MODELS_TIMEOUT" envDefault:"600"`
+	OllamaServerPullModelsEnabled bool   `env:"OLLAMA_SERVER_PULL_MODELS_ENABLED" envDefault:"false"`
+	OllamaServerLoadModelsEnabled bool   `env:"OLLAMA_SERVER_LOAD_MODELS_ENABLED" envDefault:"false"`
 
 	// Google AI (Gemini) LLM provider
 	GeminiAPIKey    string `env:"GEMINI_API_KEY"`
 	GeminiServerURL string `env:"GEMINI_SERVER_URL" envDefault:"https://generativelanguage.googleapis.com"`
 
 	// Bedrock
-	BedrockRegion    string `env:"BEDROCK_REGION" envDefault:"us-east-1"`
-	BedrockAccessKey string `env:"BEDROCK_ACCESS_KEY_ID"`
-	BedrockSecretKey string `env:"BEDROCK_SECRET_ACCESS_KEY"`
-	BedrockServerURL string `env:"BEDROCK_SERVER_URL"`
+	BedrockRegion       string `env:"BEDROCK_REGION" envDefault:"us-east-1"`
+	BedrockAccessKey    string `env:"BEDROCK_ACCESS_KEY_ID"`
+	BedrockSecretKey    string `env:"BEDROCK_SECRET_ACCESS_KEY"`
+	BedrockSessionToken string `env:"BEDROCK_SESSION_TOKEN"`
+	BedrockServerURL    string `env:"BEDROCK_SERVER_URL"`
 
 	// DuckDuckGo search engine
 	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
@@ -160,6 +165,11 @@ type Config struct {
 	LangfuseProjectID string `env:"LANGFUSE_PROJECT_ID"`
 	LangfusePublicKey string `env:"LANGFUSE_PUBLIC_KEY"`
 	LangfuseSecretKey string `env:"LANGFUSE_SECRET_KEY"`
+
+	// Graphiti knowledge graph
+	GraphitiEnabled bool   `env:"GRAPHITI_ENABLED" envDefault:"false"`
+	GraphitiTimeout int    `env:"GRAPHITI_TIMEOUT" envDefault:"30"`
+	GraphitiURL     string `env:"GRAPHITI_URL"`
 }
 
 func NewConfig() (*Config, error) {

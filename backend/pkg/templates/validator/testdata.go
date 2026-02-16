@@ -32,6 +32,8 @@ func CreateDummyTemplateData() map[string]any {
 		"AdviceToolName":            tools.AdviceToolName,
 		"MemoristToolName":          tools.MemoristToolName,
 		"MaintenanceToolName":       tools.MaintenanceToolName,
+		"GraphitiSearchToolName":    tools.GraphitiSearchToolName,
+		"GraphitiEnabled":           true,
 		"TerminalToolName":          tools.TerminalToolName,
 		"FileToolName":              tools.FileToolName,
 		"BrowserToolName":           tools.BrowserToolName,
@@ -56,7 +58,9 @@ func CreateDummyTemplateData() map[string]any {
 		"EnricherResultToolName":    tools.EnricherResultToolName,
 		"ReportResultToolName":      tools.ReportResultToolName,
 		"SubtaskListToolName":       tools.SubtaskListToolName,
+		"SubtaskPatchToolName":      tools.SubtaskPatchToolName,
 		"AskUserToolName":           tools.AskUserToolName,
+		"AskUserEnabled":            true,
 
 		// Summarization related - using constants from proper packages
 		"SummarizationToolName":   cast.SummarizationToolName,

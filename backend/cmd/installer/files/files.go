@@ -3,10 +3,12 @@
 package files
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -58,6 +60,13 @@ type EmbeddedProvider interface {
 // embeddedProvider holds reference to generated embedded provider
 var embeddedProvider EmbeddedProvider = nil
 
+// shouldCheckPermissions returns true if OS supports meaningful file permission bits
+func shouldCheckPermissions() bool {
+	// Windows doesn't support Unix-style permission bits (rwxrwxrwx)
+	// It only has read-only attribute which is not comparable
+	return runtime.GOOS != "windows"
+}
+
 // files implements Files interface with fallback logic
 type files struct {
 	linksDir string
@@ -71,13 +80,30 @@ func NewFiles() Files {
 
 // GetContent returns file content from embedded FS or filesystem fallback
 func (f *files) GetContent(name string) ([]byte, error) {
+	var embeddedErr error
+
 	if embeddedProvider != nil {
 		if content, err := embeddedProvider.GetContent(name); err == nil {
 			return content, nil
+		} else {
+			embeddedErr = err
 		}
 	}
 
-	return f.getContentFromFS(name)
+	// try filesystem fallback only if links directory exists
+	if f.ExistsInFS(name) {
+		return f.getContentFromFS(name)
+	}
+
+	// return informative error if both methods failed
+	if embeddedProvider == nil {
+		return nil, fmt.Errorf("embedded provider not initialized and file not found in filesystem: %s", name)
+	}
+	if embeddedErr != nil {
+		return nil, fmt.Errorf("file not found in embedded FS (%w) and not accessible in filesystem (links/%s)", embeddedErr, name)
+	}
+
+	return nil, fmt.Errorf("file not found: %s", name)
 }
 
 // Exists checks if file/directory exists in embedded FS
@@ -97,24 +123,58 @@ func (f *files) ExistsInFS(name string) bool {
 
 // Stat returns file info from embedded FS or filesystem fallback
 func (f *files) Stat(name string) (fs.FileInfo, error) {
+	var embeddedErr error
+
 	if embeddedProvider != nil {
 		if info, err := embeddedProvider.Stat(name); err == nil {
 			return info, nil
+		} else {
+			embeddedErr = err
 		}
 	}
 
-	return f.statFromFS(name)
+	// try filesystem fallback only if file exists
+	if f.ExistsInFS(name) {
+		return f.statFromFS(name)
+	}
+
+	// return informative error if both methods failed
+	if embeddedProvider == nil {
+		return nil, fmt.Errorf("embedded provider not initialized and file not found in filesystem: %s", name)
+	}
+	if embeddedErr != nil {
+		return nil, fmt.Errorf("file not found in embedded FS (%w) and not accessible in filesystem (links/%s)", embeddedErr, name)
+	}
+
+	return nil, fmt.Errorf("file not found: %s", name)
 }
 
 // Copy copies file/directory from embedded FS to real filesystem
 func (f *files) Copy(src, dst string, rewrite bool) error {
+	var embeddedErr error
+
 	if embeddedProvider != nil {
 		if err := embeddedProvider.Copy(src, dst, rewrite); err == nil {
 			return nil
+		} else {
+			embeddedErr = err
 		}
 	}
 
-	return f.copyFromFS(src, dst, rewrite)
+	// try filesystem fallback only if source exists
+	if f.ExistsInFS(src) {
+		return f.copyFromFS(src, dst, rewrite)
+	}
+
+	// return informative error if both methods failed
+	if embeddedProvider == nil {
+		return fmt.Errorf("embedded provider not initialized and file not found in filesystem: %s", src)
+	}
+	if embeddedErr != nil {
+		return fmt.Errorf("cannot copy from embedded FS (%w) and not accessible in filesystem (links/%s)", embeddedErr, src)
+	}
+
+	return fmt.Errorf("file not found: %s", src)
 }
 
 // Check returns file status comparing embedded vs filesystem
@@ -130,14 +190,16 @@ func (f *files) Check(name string, workingDir string) FileStatus {
 	if embeddedProvider != nil {
 		if hashMatch, err := embeddedProvider.CheckHash(name, workingDir); err == nil {
 			if hashMatch {
-				// hash matches, also verify permission bits if available
-				if expectedMode, ok := embeddedProvider.ExpectedMode(name); ok {
-					fsInfo, err := os.Stat(targetPath)
-					if err != nil {
-						return FileStatusMissing
-					}
-					if fsInfo.Mode().Perm() != expectedMode.Perm() {
-						return FileStatusModified
+				// hash matches, also verify permission bits if available and meaningful on this OS
+				if shouldCheckPermissions() {
+					if expectedMode, ok := embeddedProvider.ExpectedMode(name); ok {
+						fsInfo, err := os.Stat(targetPath)
+						if err != nil {
+							return FileStatusMissing
+						}
+						if fsInfo.Mode().Perm() != expectedMode.Perm() {
+							return FileStatusModified
+						}
 					}
 				}
 				return FileStatusOK
@@ -164,11 +226,13 @@ func (f *files) Check(name string, workingDir string) FileStatus {
 
 	// compare contents
 	if string(embeddedContent) == string(fsContent) {
-		// also compare permission bits when using filesystem fallback
-		if infoExpected, err := f.statFromFS(name); err == nil {
-			if infoFS, err := os.Stat(targetPath); err == nil {
-				if infoFS.Mode().Perm() != infoExpected.Mode().Perm() {
-					return FileStatusModified
+		// also compare permission bits when using filesystem fallback (only on Unix-like systems)
+		if shouldCheckPermissions() {
+			if infoExpected, err := f.statFromFS(name); err == nil {
+				if infoFS, err := os.Stat(targetPath); err == nil {
+					if infoFS.Mode().Perm() != infoExpected.Mode().Perm() {
+						return FileStatusModified
+					}
 				}
 			}
 		}
@@ -252,9 +316,14 @@ func (f *files) copyFileFromFS(src, dst string, rewrite bool) error {
 		return err
 	}
 
-	// apply original permissions
+	// apply original permissions (best effort on all platforms)
+	// on Windows this may not preserve Unix-style bits, but will preserve read-only attribute
 	if err := os.Chmod(dst, srcInfo.Mode().Perm()); err != nil {
-		return err
+		// on windows chmod may fail, but file is already copied
+		// don't fail the entire operation, just log or ignore
+		if runtime.GOOS != "windows" {
+			return err
+		}
 	}
 
 	return nil
@@ -298,6 +367,9 @@ func (f *files) listFromFS(prefix string) ([]string, error) {
 		return files, nil
 	}
 
+	// normalize prefix to forward slashes for consistent comparison
+	normalizedPrefix := filepath.ToSlash(prefix)
+
 	err := filepath.Walk(f.linksDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -314,9 +386,12 @@ func (f *files) listFromFS(prefix string) ([]string, error) {
 			return err
 		}
 
+		// normalize to forward slashes for consistent comparison with embedded FS
+		normalizedRelPath := filepath.ToSlash(relPath)
+
 		// check if path starts with prefix
-		if strings.HasPrefix(relPath, prefix) {
-			files = append(files, relPath)
+		if normalizedPrefix == "" || strings.HasPrefix(normalizedRelPath, normalizedPrefix) {
+			files = append(files, normalizedRelPath)
 		}
 
 		return nil

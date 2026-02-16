@@ -490,22 +490,30 @@ Examples available: Pre-configured setups for major providers in /opt/pentagi/co
 
 // LLM Provider Form field labels and descriptions
 const (
-	LLMFormFieldBaseURL         = "Base URL"
-	LLMFormFieldAPIKey          = "API Key"
-	LLMFormFieldAccessKey       = "Access Key ID"
-	LLMFormFieldSecretKey       = "Secret Access Key"
-	LLMFormFieldRegion          = "Region"
-	LLMFormFieldModel           = "Model"
-	LLMFormFieldConfigPath      = "Config Path"
-	LLMFormFieldLegacyReasoning = "Legacy Reasoning"
-	LLMFormBaseURLDesc          = "API endpoint URL for the provider"
-	LLMFormAPIKeyDesc           = "Your API key for authentication"
-	LLMFormAccessKeyDesc        = "AWS Access Key ID for Bedrock access"
-	LLMFormSecretKeyDesc        = "AWS Secret Access Key for Bedrock access"
-	LLMFormRegionDesc           = "AWS region for Bedrock service"
-	LLMFormModelDesc            = "Default model to use for this provider"
-	LLMFormConfigPathDesc       = "Path to configuration file (optional)"
-	LLMFormLegacyReasoningDesc  = "Enable legacy reasoning mode (true/false)"
+	LLMFormFieldBaseURL           = "Base URL"
+	LLMFormFieldAPIKey            = "API Key"
+	LLMFormFieldAccessKey         = "Access Key ID"
+	LLMFormFieldSecretKey         = "Secret Access Key"
+	LLMFormFieldSessionToken      = "Session Token"
+	LLMFormFieldRegion            = "Region"
+	LLMFormFieldModel             = "Model"
+	LLMFormFieldConfigPath        = "Config Path"
+	LLMFormFieldLegacyReasoning   = "Legacy Reasoning"
+	LLMFormFieldPullTimeout       = "Model Pull Timeout"
+	LLMFormFieldPullEnabled       = "Auto-pull Models"
+	LLMFormFieldLoadModelsEnabled = "Load Models from Server"
+	LLMFormBaseURLDesc            = "API endpoint URL for the provider"
+	LLMFormAPIKeyDesc             = "Your API key for authentication"
+	LLMFormAccessKeyDesc          = "AWS Access Key ID for Bedrock access"
+	LLMFormSecretKeyDesc          = "AWS Secret Access Key for Bedrock access"
+	LLMFormSessionTokenDesc       = "AWS Session Token for Bedrock access"
+	LLMFormRegionDesc             = "AWS region for Bedrock service"
+	LLMFormModelDesc              = "Default model to use for this provider"
+	LLMFormConfigPathDesc         = "Path to configuration file (optional)"
+	LLMFormLegacyReasoningDesc    = "Enable legacy reasoning mode (true/false)"
+	LLMFormPullTimeoutDesc        = "Timeout in seconds for downloading models (default: 600)"
+	LLMFormPullEnabledDesc        = "Automatically download required models on startup"
+	LLMFormLoadModelsEnabledDesc  = "Load available models list from Ollama server"
 )
 
 // LLM Provider Form status messages
@@ -642,6 +650,97 @@ Best for: Teams using cloud services, wanting managed infrastructure, or integra
 Consider enabling for production use
 to monitor AI agent performance and
 optimize costs effectively.`
+)
+
+// Graphiti Integration constants
+const (
+	MonitoringGraphitiFormTitle       = "Graphiti Configuration (beta)"
+	MonitoringGraphitiFormDescription = "Configuration of Graphiti knowledge graph integration"
+	MonitoringGraphitiFormName        = "Graphiti (beta)"
+	MonitoringGraphitiFormOverview    = `⚠️  BETA FEATURE: This functionality is currently under active development. Please monitor updates for improvements and stability fixes.
+
+Graphiti provides temporal knowledge graph capabilities:
+• Entity and relationship extraction
+• Semantic memory for AI agents
+• Temporal context tracking
+• Knowledge reuse across flows
+
+⚠️  REQUIREMENT: Graphiti requires configured OpenAI provider (LLM Providers → OpenAI) for entity extraction.
+
+Choose between embedded instance or external connection.`
+
+	// Deployment types
+	MonitoringGraphitiEmbedded = "Embedded Stack"
+	MonitoringGraphitiExternal = "External Service"
+	MonitoringGraphitiDisabled = "Disabled"
+
+	// Form fields
+	MonitoringGraphitiDeploymentType     = "Deployment Type"
+	MonitoringGraphitiDeploymentTypeDesc = "Select the deployment type for Graphiti"
+	MonitoringGraphitiURL                = "Graphiti Server URL"
+	MonitoringGraphitiURLDesc            = "Address of the Graphiti API server"
+	MonitoringGraphitiTimeout            = "Request Timeout"
+	MonitoringGraphitiTimeoutDesc        = "Timeout in seconds for Graphiti operations"
+	MonitoringGraphitiModelName          = "Extraction Model"
+	MonitoringGraphitiModelNameDesc      = "LLM model for entity extraction (uses OpenAI provider from LLM Providers configuration)"
+	MonitoringGraphitiNeo4jUser          = "Neo4j Username"
+	MonitoringGraphitiNeo4jUserDesc      = "Username for Neo4j database access"
+	MonitoringGraphitiNeo4jPassword      = "Neo4j Password"
+	MonitoringGraphitiNeo4jPasswordDesc  = "Password for Neo4j database access"
+	MonitoringGraphitiNeo4jDatabase      = "Neo4j Database"
+	MonitoringGraphitiNeo4jDatabaseDesc  = "Neo4j database name"
+
+	// Help text
+	MonitoringGraphitiModeGuide    = "Choose deployment: Embedded (local Neo4j), External (existing Graphiti), Disabled (no knowledge graph)"
+	MonitoringGraphitiEmbeddedHelp = `⚠️  BETA: This feature is under active development. Monitor updates for improvements.
+
+Embedded deploys complete Graphiti stack:
+• Neo4j graph database
+• Graphiti API service
+• Automatic entity extraction from agent interactions
+• Temporal relationship tracking
+• Private knowledge graph on your server
+
+Prerequisites:
+• OpenAI provider must be configured (LLM Providers → OpenAI)
+• OpenAI API key is used for entity extraction
+• Configured model will be used for knowledge graph operations
+
+Resource requirements:
+• ~1.5GB RAM, 3GB disk space minimum
+• Neo4j UI: http://localhost:7474
+• Graphiti API: http://localhost:8000
+• Automatic setup and maintenance
+
+Best for: Teams wanting knowledge graph capabilities with full data control and privacy.`
+	MonitoringGraphitiExternalHelp = `⚠️  BETA: This feature is under active development. Monitor updates for improvements.
+
+External connects to your existing Graphiti server:
+
+• No local infrastructure needed
+• Managed updates and maintenance
+• Shared knowledge graph across teams
+• Data stored on external provider
+
+Setup requirements:
+• Graphiti server URL and access
+• Network connectivity required
+• External server must be configured with OpenAI API key
+• Model and extraction settings configured on external server
+
+Best for: Teams using existing Graphiti deployments or cloud services.`
+	MonitoringGraphitiDisabledHelp = `Graphiti is disabled. You will not have:
+
+• Temporal knowledge graph
+• Entity and relationship extraction
+• Semantic memory for AI agents
+• Knowledge reuse across flows
+• Advanced contextual search
+
+Note: Graphiti is currently in beta.
+Consider enabling for production use
+to build a knowledge base from
+penetration testing results.`
 )
 
 // Observability Integration constants
@@ -914,7 +1013,9 @@ Available settings:
 • Human-in-the-loop - Enable user interaction during testing
 • AI Agents Settings - Configure global behavior for AI agents
 • Search Engines - Configure external search providers
-• Scraper - Web content extraction and analysis`
+• Scraper - Web content extraction and analysis
+• Graphiti (beta) - Temporal knowledge graph for semantic memory
+• Docker - Container environment configuration`
 )
 
 // Server Settings screen strings
@@ -1811,23 +1912,28 @@ This action cannot be undone!`
 
 // environment variable descriptions (centralized)
 const (
-	EnvDesc_OPEN_AI_KEY                 = "OpenAI API Key"
-	EnvDesc_OPEN_AI_SERVER_URL          = "OpenAI Server URL"
-	EnvDesc_ANTHROPIC_API_KEY           = "Anthropic API Key"
-	EnvDesc_ANTHROPIC_SERVER_URL        = "Anthropic Server URL"
-	EnvDesc_GEMINI_API_KEY              = "Google Gemini API Key"
-	EnvDesc_GEMINI_SERVER_URL           = "Gemini Server URL"
-	EnvDesc_BEDROCK_ACCESS_KEY_ID       = "AWS Bedrock Access Key"
-	EnvDesc_BEDROCK_SECRET_ACCESS_KEY   = "AWS Bedrock Secret Key"
-	EnvDesc_BEDROCK_REGION              = "AWS Bedrock Region"
-	EnvDesc_BEDROCK_SERVER_URL          = "AWS Bedrock Server URL"
-	EnvDesc_OLLAMA_SERVER_URL           = "Ollama Server URL"
-	EnvDesc_OLLAMA_SERVER_CONFIG_PATH   = "Ollama Config Path"
-	EnvDesc_LLM_SERVER_URL              = "Custom LLM Server URL"
-	EnvDesc_LLM_SERVER_KEY              = "Custom LLM API Key"
-	EnvDesc_LLM_SERVER_MODEL            = "Custom LLM Model"
-	EnvDesc_LLM_SERVER_CONFIG_PATH      = "Custom LLM Config Path"
-	EnvDesc_LLM_SERVER_LEGACY_REASONING = "Custom LLM Legacy Reasoning"
+	EnvDesc_OPEN_AI_KEY                       = "OpenAI API Key"
+	EnvDesc_OPEN_AI_SERVER_URL                = "OpenAI Server URL"
+	EnvDesc_ANTHROPIC_API_KEY                 = "Anthropic API Key"
+	EnvDesc_ANTHROPIC_SERVER_URL              = "Anthropic Server URL"
+	EnvDesc_GEMINI_API_KEY                    = "Google Gemini API Key"
+	EnvDesc_GEMINI_SERVER_URL                 = "Gemini Server URL"
+	EnvDesc_BEDROCK_ACCESS_KEY_ID             = "AWS Bedrock Access Key"
+	EnvDesc_BEDROCK_SECRET_ACCESS_KEY         = "AWS Bedrock Secret Key"
+	EnvDesc_BEDROCK_SESSION_TOKEN             = "AWS Bedrock Session Token"
+	EnvDesc_BEDROCK_REGION                    = "AWS Bedrock Region"
+	EnvDesc_BEDROCK_SERVER_URL                = "AWS Bedrock Server URL"
+	EnvDesc_OLLAMA_SERVER_URL                 = "Ollama Server URL"
+	EnvDesc_OLLAMA_SERVER_MODEL               = "Ollama Default Model"
+	EnvDesc_OLLAMA_SERVER_CONFIG_PATH         = "Ollama Container Config Path"
+	EnvDesc_OLLAMA_SERVER_PULL_MODELS_TIMEOUT = "Ollama Model Pull Timeout"
+	EnvDesc_OLLAMA_SERVER_PULL_MODELS_ENABLED = "Ollama Auto-pull Models"
+	EnvDesc_OLLAMA_SERVER_LOAD_MODELS_ENABLED = "Ollama Load Models List"
+	EnvDesc_LLM_SERVER_URL                    = "Custom LLM Server URL"
+	EnvDesc_LLM_SERVER_KEY                    = "Custom LLM API Key"
+	EnvDesc_LLM_SERVER_MODEL                  = "Custom LLM Model"
+	EnvDesc_LLM_SERVER_CONFIG_PATH            = "Custom LLM Container Config Path"
+	EnvDesc_LLM_SERVER_LEGACY_REASONING       = "Custom LLM Legacy Reasoning"
 
 	EnvDesc_LANGFUSE_LISTEN_IP   = "Langfuse Listen IP"
 	EnvDesc_LANGFUSE_LISTEN_PORT = "Langfuse Listen Port"
@@ -1907,19 +2013,21 @@ const (
 	EnvDesc_DOCKER_TLS_VERIFY                = "Docker TLS Verify"
 	EnvDesc_DOCKER_CERT_PATH                 = "Docker Certificate Path"
 
-	EnvDesc_LICENSE_KEY                    = "PentAGI License Key"
-	EnvDesc_PENTAGI_LISTEN_IP              = "PentAGI Server Host"
-	EnvDesc_PENTAGI_LISTEN_PORT            = "PentAGI Server Port"
-	EnvDesc_PUBLIC_URL                     = "PentAGI Public URL"
-	EnvDesc_CORS_ORIGINS                   = "PentAGI CORS Origins"
-	EnvDesc_COOKIE_SIGNING_SALT            = "PentAGI Cookie Signing Salt"
-	EnvDesc_PROXY_URL                      = "HTTP/HTTPS Proxy URL"
-	EnvDesc_EXTERNAL_SSL_CA_PATH           = "Custom CA Certificate Path"
-	EnvDesc_EXTERNAL_SSL_INSECURE          = "Skip SSL Verification"
-	EnvDesc_PENTAGI_SSL_DIR                = "PentAGI SSL Directory"
-	EnvDesc_PENTAGI_DATA_DIR               = "PentAGI Data Directory"
-	EnvDesc_PENTAGI_DOCKER_SOCKET          = "Mount Docker Socket Path"
-	EnvDesc_PENTAGI_LLM_SERVER_CONFIG_PATH = "Mount Custom LLM Config Path"
+	EnvDesc_LICENSE_KEY                       = "PentAGI License Key"
+	EnvDesc_PENTAGI_LISTEN_IP                 = "PentAGI Server Host"
+	EnvDesc_PENTAGI_LISTEN_PORT               = "PentAGI Server Port"
+	EnvDesc_PUBLIC_URL                        = "PentAGI Public URL"
+	EnvDesc_CORS_ORIGINS                      = "PentAGI CORS Origins"
+	EnvDesc_COOKIE_SIGNING_SALT               = "PentAGI Cookie Signing Salt"
+	EnvDesc_PROXY_URL                         = "HTTP/HTTPS Proxy URL"
+	EnvDesc_EXTERNAL_SSL_CA_PATH              = "Custom CA Certificate Path"
+	EnvDesc_EXTERNAL_SSL_INSECURE             = "Skip SSL Verification"
+	EnvDesc_PENTAGI_SSL_DIR                   = "PentAGI SSL Directory"
+	EnvDesc_PENTAGI_DATA_DIR                  = "PentAGI Data Directory"
+	EnvDesc_PENTAGI_DOCKER_SOCKET             = "Mount Docker Socket Path"
+	EnvDesc_PENTAGI_DOCKER_CERT_PATH          = "Mount Docker Certificate Path"
+	EnvDesc_PENTAGI_LLM_SERVER_CONFIG_PATH    = "Custom LLM Host Config Path"
+	EnvDesc_PENTAGI_OLLAMA_SERVER_CONFIG_PATH = "Ollama Host Config Path"
 
 	EnvDesc_STATIC_DIR     = "Frontend Static Directory"
 	EnvDesc_STATIC_URL     = "Frontend Static URL"
@@ -1945,6 +2053,13 @@ const (
 
 	EnvDesc_LANGFUSE_EE_LICENSE_KEY   = "Langfuse Enterprise License Key"
 	EnvDesc_PENTAGI_POSTGRES_PASSWORD = "PentAGI PostgreSQL Password"
+
+	EnvDesc_GRAPHITI_URL        = "Graphiti Server URL"
+	EnvDesc_GRAPHITI_TIMEOUT    = "Graphiti Request Timeout"
+	EnvDesc_GRAPHITI_MODEL_NAME = "Graphiti Extraction Model"
+	EnvDesc_NEO4J_USER          = "Neo4j Username"
+	EnvDesc_NEO4J_DATABASE      = "Neo4j Database Name"
+	EnvDesc_NEO4J_PASSWORD      = "Neo4j Database Password"
 )
 
 // dynamic, contextual sections used in processor operation forms

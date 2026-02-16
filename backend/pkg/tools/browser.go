@@ -29,6 +29,7 @@ var localZones = []string{
 	".localdomain",
 	".local",
 	".lan",
+	".htb",
 	".dev",
 	".test",
 	".corp",
@@ -215,36 +216,50 @@ func (b *browser) resolveUrl(targetURL string) (*url.URL, error) {
 		host = u.Host
 	}
 
+	// determine if target is private or public
+	isPrivate := false
+
 	hostIP := net.ParseIP(host)
 	if hostIP != nil {
-		if hostIP.IsPrivate() {
-			return url.Parse(b.scPrvURL)
+		isPrivate = hostIP.IsPrivate() || hostIP.IsLoopback()
+	} else {
+		ip, err := net.ResolveIPAddr("ip", host)
+		if err == nil {
+			isPrivate = ip.IP.IsPrivate() || ip.IP.IsLoopback()
 		} else {
-			return url.Parse(b.scPubURL)
+			lowerHost := strings.ToLower(host)
+			if strings.Contains(lowerHost, "localhost") || !strings.Contains(lowerHost, ".") {
+				isPrivate = true
+			} else {
+				for _, zone := range localZones {
+					if strings.HasSuffix(lowerHost, zone) {
+						isPrivate = true
+						break
+					}
+				}
+			}
 		}
 	}
 
-	ip, err := net.ResolveIPAddr("ip", host)
-	if err == nil {
-		if ip.IP.IsPrivate() {
-			return url.Parse(b.scPrvURL)
-		} else {
-			return url.Parse(b.scPubURL)
+	// select appropriate scraper URL with fallback
+	var scraperURL string
+	if isPrivate {
+		scraperURL = b.scPrvURL
+		if scraperURL == "" {
+			scraperURL = b.scPubURL
+		}
+	} else {
+		scraperURL = b.scPubURL
+		if scraperURL == "" {
+			scraperURL = b.scPrvURL
 		}
 	}
 
-	lowerHost := strings.ToLower(host)
-	if strings.Contains(lowerHost, "localhost") || !strings.Contains(lowerHost, ".") {
-		return url.Parse(b.scPrvURL)
+	if scraperURL == "" {
+		return nil, fmt.Errorf("no scraper URL configured")
 	}
 
-	for _, zone := range localZones {
-		if strings.HasSuffix(lowerHost, zone) {
-			return url.Parse(b.scPrvURL)
-		}
-	}
-
-	return url.Parse(b.scPubURL)
+	return url.Parse(scraperURL)
 }
 
 func (b *browser) writeScreenshotToFile(screenshot []byte) (string, error) {

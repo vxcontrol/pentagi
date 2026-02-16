@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"pentagi/cmd/installer/state"
+	"pentagi/cmd/installer/wizard/controller"
 )
 
 func DoSyncNetworkSettings(s state.State) error {
@@ -26,6 +27,7 @@ func DoSyncNetworkSettings(s state.State) error {
 		"DOCKER_HOST",
 		"DOCKER_TLS_VERIFY",
 		"DOCKER_CERT_PATH",
+		"PENTAGI_DOCKER_CERT_PATH",
 	}
 
 	vars, exists := s.GetVars(dockerEnvVarsNames)
@@ -49,6 +51,13 @@ func DoSyncNetworkSettings(s state.State) error {
 	// do nothing if the OS docker environment variables are not set (use defaults)
 	if !isOSDockerEnvVarsSet {
 		return nil
+	}
+
+	// sync DOCKER_CERT_PATH to PENTAGI_DOCKER_CERT_PATH if it is set in the OS
+	dockerCertPath := osDockerEnvVars["DOCKER_CERT_PATH"]
+	if dockerCertPath != "" && checkPathInHostFS(dockerCertPath, directory) {
+		osDockerEnvVars["DOCKER_CERT_PATH"] = controller.DefaultDockerCertPath
+		osDockerEnvVars["PENTAGI_DOCKER_CERT_PATH"] = dockerCertPath
 	}
 
 	// sync all variables in the state at the same time to avoid inconsistencies

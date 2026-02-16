@@ -14,13 +14,13 @@ import (
 	"pentagi/pkg/database"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/html"
 )
 
 const (
 	duckduckgoMaxResults = 10
 	duckduckgoMaxRetries = 3
-	duckduckgoBaseURL    = "https://duckduckgo.com"
-	duckduckgoSearchURL  = "https://links.duckduckgo.com/d.js"
+	duckduckgoSearchURL  = "https://html.duckduckgo.com/html/"
 	duckduckgoTimeout    = 30 * time.Second
 	duckduckgoUserAgent  = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
@@ -143,29 +143,26 @@ func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessa
 
 // search performs a web search using DuckDuckGo
 func (d *duckduckgo) search(ctx context.Context, query string, maxResults int) (string, error) {
-	// Get VQD token required for DuckDuckGo search
-	vqd, err := d.getVQDToken(ctx, query)
-	if err != nil {
-		return "", fmt.Errorf("failed to get VQD token: %w", err)
-	}
-
-	// Build search URL with all parameters
-	searchURL := d.buildSearchURL(query, vqd, 1)
+	// Build form data for POST request
+	formData := d.buildFormData(query)
 
 	// Create HTTP client with proper configuration
 	client := d.createHTTPClient()
-	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create search request: %w", err)
-	}
-
-	// Add necessary headers
-	req.Header.Set("User-Agent", duckduckgoUserAgent)
-	req.Header.Set("Accept", "application/json")
 
 	// Execute request with retry logic
 	var response *searchResponse
 	for attempt := 0; attempt < duckduckgoMaxRetries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, "POST", duckduckgoSearchURL, strings.NewReader(formData))
+		if err != nil {
+			return "", fmt.Errorf("failed to create search request: %w", err)
+		}
+
+		// Add necessary headers for POST request
+		req.Header.Set("User-Agent", duckduckgoUserAgent)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+
 		resp, err := client.Do(req)
 		if err != nil {
 			if attempt == duckduckgoMaxRetries-1 {
@@ -178,9 +175,9 @@ func (d *duckduckgo) search(ctx context.Context, query string, maxResults int) (
 			}
 			continue
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
 			if attempt == duckduckgoMaxRetries-1 {
 				return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 			}
@@ -193,11 +190,12 @@ func (d *duckduckgo) search(ctx context.Context, query string, maxResults int) (
 		}
 
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			return "", fmt.Errorf("failed to read response body: %w", err)
 		}
 
-		response, err = d.parseSearchResponse(body)
+		response, err = d.parseHTMLResponse(body)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse search response: %w", err)
 		}
@@ -218,118 +216,277 @@ func (d *duckduckgo) search(ctx context.Context, query string, maxResults int) (
 	return d.formatSearchResults(response.Results), nil
 }
 
-// getVQDToken retrieves the VQD token required for DuckDuckGo search queries
-func (d *duckduckgo) getVQDToken(ctx context.Context, query string) (string, error) {
-	client := d.createHTTPClient()
-
-	// Create URL with query parameter
-	reqURL := fmt.Sprintf("%s?q=%s", duckduckgoBaseURL, url.QueryEscape(query))
-
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create VQD request: %w", err)
-	}
-
-	req.Header.Set("User-Agent", duckduckgoUserAgent)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to execute VQD request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code from VQD request: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read VQD response body: %w", err)
-	}
-
-	vqd := d.extractVQDToken(string(body))
-	if vqd == "" {
-		return "", fmt.Errorf("failed to extract VQD token")
-	}
-
-	return vqd, nil
-}
-
-// extractVQDToken extracts the VQD token from the HTML response
-func (d *duckduckgo) extractVQDToken(html string) string {
-	re := regexp.MustCompile(`vqd=["']([^"']+)["']`)
-	matches := re.FindStringSubmatch(html)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-	return ""
-}
-
-// buildSearchURL creates a properly formatted URL for DuckDuckGo search
-func (d *duckduckgo) buildSearchURL(query, vqd string, page int) string {
+// buildFormData creates form data for DuckDuckGo POST request
+func (d *duckduckgo) buildFormData(query string) string {
 	params := url.Values{}
 	params.Set("q", query)
-	params.Set("vqd", vqd)
-	params.Set("l", "us-en")
-	params.Set("dl", "en")
-	params.Set("ct", "US")
-	params.Set("ss", "1")
-	params.Set("sp", "1")
-	params.Set("sc", "1")
-	params.Set("o", "json")
+	params.Set("b", "")
+	params.Set("df", "")
 
 	if d.region != "" {
 		params.Set("kl", d.region)
+	} else {
+		params.Set("kl", RegionUS)
 	}
 
 	if d.safeSearch != "" {
-		params.Set("p", d.safeSearch)
+		switch d.safeSearch {
+		case DuckDuckGoSafeSearchStrict:
+			params.Set("kp", "1")
+		case DuckDuckGoSafeSearchModerate:
+			params.Set("kp", "0")
+		case DuckDuckGoSafeSearchOff:
+			params.Set("kp", "-1")
+		}
 	}
 
 	if d.timeRange != "" {
 		params.Set("df", d.timeRange)
 	}
 
-	if page > 1 {
-		params.Set("s", fmt.Sprintf("%d", (page-1)*25))
-	}
-
-	return duckduckgoSearchURL + "?" + params.Encode()
+	return params.Encode()
 }
 
-// parseSearchResponse parses the JSON search response from DuckDuckGo
-func (d *duckduckgo) parseSearchResponse(body []byte) (*searchResponse, error) {
-	var response struct {
-		Results []struct {
-			Title       string `json:"t"`
-			URL         string `json:"u"`
-			Description string `json:"a"`
-		} `json:"results"`
-		NoResults bool `json:"noResults"`
+// parseHTMLResponse parses the HTML search response from DuckDuckGo
+func (d *duckduckgo) parseHTMLResponse(body []byte) (*searchResponse, error) {
+	// Try structured HTML parsing first
+	results, err := d.parseHTMLStructured(body)
+	if err == nil && len(results) > 0 {
+		return &searchResponse{
+			Results:   results,
+			NoResults: false,
+		}, nil
 	}
 
-	err := json.Unmarshal(body, &response)
+	// Fallback to regex-based parsing
+	results, err = d.parseHTMLRegex(body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	results := make([]searchResult, 0, len(response.Results))
-	for _, r := range response.Results {
-		if r.Description == "" && r.URL == "" && r.Title == "" {
-			continue
-		}
-
-		results = append(results, searchResult{
-			Title:       r.Title,
-			URL:         r.URL,
-			Description: r.Description,
-		})
+		return nil, err
 	}
 
 	return &searchResponse{
 		Results:   results,
-		NoResults: response.NoResults,
+		NoResults: len(results) == 0,
 	}, nil
+}
+
+// parseHTMLStructured uses golang.org/x/net/html for structured HTML parsing
+func (d *duckduckgo) parseHTMLStructured(body []byte) ([]searchResult, error) {
+	doc, err := html.Parse(strings.NewReader(string(body)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse HTML: %w", err)
+	}
+
+	results := make([]searchResult, 0)
+	d.findResultNodes(doc, &results)
+
+	return results, nil
+}
+
+// findResultNodes recursively finds and extracts search result nodes
+func (d *duckduckgo) findResultNodes(n *html.Node, results *[]searchResult) {
+	// Look for div with class "result results_links"
+	if n.Type == html.ElementNode && n.Data == "div" {
+		if d.hasClass(n, "result") && d.hasClass(n, "results_links") {
+			result := d.extractResultFromNode(n)
+			if result.Title != "" && result.URL != "" {
+				*results = append(*results, result)
+			}
+		}
+	}
+
+	// Recurse through children
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		d.findResultNodes(c, results)
+	}
+}
+
+// extractResultFromNode extracts title, URL, and description from a result node
+func (d *duckduckgo) extractResultFromNode(n *html.Node) searchResult {
+	result := searchResult{}
+
+	// Find title link (a.result__a)
+	d.findElement(n, func(node *html.Node) bool {
+		if node.Type == html.ElementNode && node.Data == "a" && d.hasClass(node, "result__a") {
+			result.URL = d.getAttr(node, "href")
+			result.Title = d.getTextContent(node)
+			return true
+		}
+		return false
+	})
+
+	// Find snippet (a.result__snippet)
+	d.findElement(n, func(node *html.Node) bool {
+		if node.Type == html.ElementNode && node.Data == "a" && d.hasClass(node, "result__snippet") {
+			result.Description = d.getTextContent(node)
+			return true
+		}
+		return false
+	})
+
+	// Clean text
+	result.Title = d.cleanText(result.Title)
+	result.Description = d.cleanText(result.Description)
+
+	return result
+}
+
+// findElement finds the first element matching the predicate
+func (d *duckduckgo) findElement(n *html.Node, predicate func(*html.Node) bool) bool {
+	if predicate(n) {
+		return true
+	}
+
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if d.findElement(c, predicate) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// hasClass checks if a node has a specific CSS class
+func (d *duckduckgo) hasClass(n *html.Node, className string) bool {
+	for _, attr := range n.Attr {
+		if attr.Key == "class" {
+			classes := strings.Fields(attr.Val)
+			for _, c := range classes {
+				if c == className {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// getAttr gets an attribute value from a node
+func (d *duckduckgo) getAttr(n *html.Node, key string) string {
+	for _, attr := range n.Attr {
+		if attr.Key == key {
+			return attr.Val
+		}
+	}
+	return ""
+}
+
+// getTextContent extracts all text content from a node and its children
+func (d *duckduckgo) getTextContent(n *html.Node) string {
+	if n.Type == html.TextNode {
+		return n.Data
+	}
+
+	var text strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		text.WriteString(d.getTextContent(c))
+	}
+
+	return text.String()
+}
+
+// parseHTMLRegex is a fallback regex-based parser
+func (d *duckduckgo) parseHTMLRegex(body []byte) ([]searchResult, error) {
+	htmlStr := string(body)
+
+	// Check for "no results" message
+	if strings.Contains(htmlStr, "No results found") || strings.Contains(htmlStr, "noResults") {
+		return []searchResult{}, nil
+	}
+
+	results := make([]searchResult, 0)
+
+	// Pattern to find result blocks (web results)
+	// Each block starts with <div class="result results_links..."> and ends with <div class="clear"></div>
+	// followed by closing tags </div></div>
+	resultPattern := regexp.MustCompile(`(?s)<div class="result results_links[^"]*">.*?<div class="clear"></div>\s*</div>\s*</div>`)
+	resultBlocks := resultPattern.FindAllString(htmlStr, -1)
+
+	// Extract title, URL, and description from each result block
+	titlePattern := regexp.MustCompile(`<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([^<]+)</a>`)
+	snippetPattern := regexp.MustCompile(`(?s)<a[^>]+class="result__snippet"[^>]+href="[^"]*">(.+?)</a>`)
+
+	for _, block := range resultBlocks {
+		// Extract title and URL
+		titleMatches := titlePattern.FindStringSubmatch(block)
+		if len(titleMatches) < 3 {
+			continue
+		}
+
+		resultURL := titleMatches[1]
+		title := d.cleanText(titleMatches[2])
+
+		// Extract description
+		description := ""
+		snippetMatches := snippetPattern.FindStringSubmatch(block)
+		if len(snippetMatches) > 1 {
+			description = d.cleanText(snippetMatches[1])
+		}
+
+		if title == "" || resultURL == "" {
+			continue
+		}
+
+		results = append(results, searchResult{
+			Title:       title,
+			URL:         resultURL,
+			Description: description,
+		})
+	}
+
+	return results, nil
+}
+
+// cleanText removes HTML tags and decodes HTML entities
+func (d *duckduckgo) cleanText(text string) string {
+	// Remove HTML tags (like <b>, </b>, etc.)
+	re := regexp.MustCompile(`<[^>]*>`)
+	text = re.ReplaceAllString(text, "")
+
+	// Decode common HTML entities
+	text = strings.ReplaceAll(text, "&amp;", "&")
+	text = strings.ReplaceAll(text, "&lt;", "<")
+	text = strings.ReplaceAll(text, "&gt;", ">")
+	text = strings.ReplaceAll(text, "&quot;", "\"")
+	text = strings.ReplaceAll(text, "&#39;", "'")
+	text = strings.ReplaceAll(text, "&#x27;", "'")
+	text = strings.ReplaceAll(text, "&nbsp;", " ")
+	text = strings.ReplaceAll(text, "&apos;", "'")
+
+	// Decode hex HTML entities (&#xNN;)
+	hexEntityRe := regexp.MustCompile(`&#x([0-9A-Fa-f]+);`)
+	text = hexEntityRe.ReplaceAllStringFunc(text, func(match string) string {
+		// Extract hex value
+		hex := hexEntityRe.FindStringSubmatch(match)
+		if len(hex) > 1 {
+			var codePoint int
+			_, err := fmt.Sscanf(hex[1], "%x", &codePoint)
+			if err == nil && codePoint < 128 {
+				return string(rune(codePoint))
+			}
+		}
+		return match
+	})
+
+	// Decode decimal HTML entities (&#NNN;)
+	decEntityRe := regexp.MustCompile(`&#([0-9]+);`)
+	text = decEntityRe.ReplaceAllStringFunc(text, func(match string) string {
+		dec := decEntityRe.FindStringSubmatch(match)
+		if len(dec) > 1 {
+			var codePoint int
+			_, err := fmt.Sscanf(dec[1], "%d", &codePoint)
+			if err == nil && codePoint < 128 {
+				return string(rune(codePoint))
+			}
+		}
+		return match
+	})
+
+	// Trim whitespace and normalize spaces
+	text = strings.TrimSpace(text)
+	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
+
+	return text
 }
 
 // formatSearchResults formats search results in a readable text format

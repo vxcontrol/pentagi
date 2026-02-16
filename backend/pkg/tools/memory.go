@@ -152,24 +152,24 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 		_, observation = event.Observation(ctx)
 
 		buffer := strings.Builder{}
-		for _, doc := range docs {
+		for i, doc := range docs {
 			observation.Score(
 				langfuse.WithScoreComment("memory facts vector store result"),
 				langfuse.WithScoreName("memory_search_result"),
 				langfuse.WithScoreFloatValue(float64(doc.Score)),
 			)
-			buffer.WriteString(fmt.Sprintf("# Match score %f\n\n", doc.Score))
+			buffer.WriteString(fmt.Sprintf("# Retrieved Memory Fact %d Match score: %f\n\n", i+1, doc.Score))
 			if taskID, ok := doc.Metadata["task_id"]; ok {
-				buffer.WriteString(fmt.Sprintf("# Task ID %v\n\n", taskID))
+				buffer.WriteString(fmt.Sprintf("## Task ID %v\n\n", taskID))
 			}
 			if subtaskID, ok := doc.Metadata["subtask_id"]; ok {
-				buffer.WriteString(fmt.Sprintf("# Subtask ID %v\n\n", subtaskID))
+				buffer.WriteString(fmt.Sprintf("## Subtask ID %v\n\n", subtaskID))
 			}
-			buffer.WriteString(fmt.Sprintf("# Tool Name '%s'\n\n", doc.Metadata["tool_name"]))
+			buffer.WriteString(fmt.Sprintf("## Tool Name '%s'\n\n", doc.Metadata["tool_name"]))
 			if toolDescription, ok := doc.Metadata["tool_description"]; ok {
-				buffer.WriteString(fmt.Sprintf("# Tool Description\n\n%s\n\n", toolDescription))
+				buffer.WriteString(fmt.Sprintf("## Tool Description\n\n%s\n\n", toolDescription))
 			}
-			buffer.WriteString("# Chunk\n\n")
+			buffer.WriteString("## Content\n\n")
 			buffer.WriteString(doc.PageContent)
 			buffer.WriteString("\n---------------------------\n")
 		}

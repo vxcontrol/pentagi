@@ -3,8 +3,10 @@ package gemini
 import (
 	"context"
 	"embed"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
@@ -19,6 +21,8 @@ import (
 var configFS embed.FS
 
 const GeminiAgentModel = "gemini-2.5-flash"
+
+const defaultGeminiHost = "generativelanguage.googleapis.com"
 
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
@@ -54,22 +58,53 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 	return pconfig.LoadModelsConfigData(configData)
 }
 
-// apiKeyTransport adds the API key to requests
-// This is needed because the Google API library doesn't add the API key
-// when WithHTTPClient is used with WithAPIKey
+// apiKeyTransport is a custom HTTP transport wrapper that handles API key injection
+// and URL rewriting for Google Gemini API requests.
+//
+// This is needed because:
+// 1. The Google AI library doesn't properly add the API key when using WithHTTPClient
+// 2. Some versions of the library don't respect the WithEndpoint option
+// 3. LiteLLM passthrough requires both query parameter and Authorization header
 type apiKeyTransport struct {
-	wrapped http.RoundTripper
-	apiKey  string
+	wrapped   http.RoundTripper // underlying transport (may include proxy settings)
+	serverURL *url.URL          // custom server URL to replace the default Gemini endpoint
+	apiKey    string            // API key to inject into requests
 }
 
 func (t *apiKeyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Clone the request to avoid modifying the original
+	// clone the request to avoid modifying the original one
 	newReq := req.Clone(req.Context())
+
+	// preserve original query parameters before URL manipulation
 	q := newReq.URL.Query()
+
+	// replace base URL if custom server URL is configured
+	// this handles cases where the library doesn't respect WithEndpoint
+	if t.serverURL != nil {
+		// JoinPath creates a new URL with serverURL's scheme/host and appends the original path
+		// note: JoinPath doesn't copy query parameters, so we restore them below
+		newReq.URL = t.serverURL.JoinPath(newReq.URL.Path)
+		newReq.URL.RawQuery = q.Encode()
+		if newReq.URL.Path != "" && !strings.HasPrefix(newReq.URL.Path, "/") {
+			newReq.URL.Path = "/" + newReq.URL.Path
+		}
+		// update Host header to match the new URL
+		newReq.Host = newReq.URL.Host
+	}
+
+	// add API key as query parameter if not already present
+	// Google Gemini API expects: ?key=YOUR_API_KEY
 	if q.Get("key") == "" && t.apiKey != "" {
 		q.Set("key", t.apiKey)
 		newReq.URL.RawQuery = q.Encode()
 	}
+
+	// add Authorization header for LiteLLM passthrough compatibility
+	// LiteLLM can accept either query parameter or Bearer token depending on configuration
+	if t.apiKey != "" && newReq.Host != defaultGeminiHost {
+		newReq.Header.Set("Authorization", "Bearer "+t.apiKey)
+	}
+
 	return t.wrapped.RoundTrip(newReq)
 }
 
@@ -86,18 +121,33 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		googleai.WithEndpoint(cfg.GeminiServerURL),
 		googleai.WithDefaultModel(GeminiAgentModel),
 	}
-	if cfg.ProxyURL != "" {
-		opts = append(opts, googleai.WithHTTPClient(&http.Client{
-			Transport: &apiKeyTransport{
-				wrapped: &http.Transport{
-					Proxy: func(req *http.Request) (*url.URL, error) {
-						return url.Parse(cfg.ProxyURL)
-					},
-				},
-				apiKey: cfg.GeminiAPIKey,
-			},
-		}))
+
+	parsedURL, err := url.Parse(cfg.GeminiServerURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Gemini server URL: %w", err)
 	}
+
+	// always use custom transport to ensure API key injection and URL rewriting
+	var baseTransport http.RoundTripper = http.DefaultTransport
+	if cfg.ProxyURL != "" {
+		if _, err := url.Parse(cfg.ProxyURL); err != nil {
+			return nil, fmt.Errorf("failed to parse proxy URL: %w", err)
+		}
+
+		baseTransport = &http.Transport{
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				return url.Parse(cfg.ProxyURL)
+			},
+		}
+	}
+
+	opts = append(opts, googleai.WithHTTPClient(&http.Client{
+		Transport: &apiKeyTransport{
+			wrapped:   baseTransport,
+			serverURL: parsedURL,
+			apiKey:    cfg.GeminiAPIKey,
+		},
+	}))
 
 	models, err := DefaultModels()
 	if err != nil {
@@ -188,12 +238,31 @@ func (p *geminiProvider) CallWithTools(
 
 func (p *geminiProvider) GetUsage(info map[string]any) (int64, int64) {
 	var inputTokens, outputTokens int64
+
 	if value, ok := info["input_tokens"]; ok {
-		inputTokens = int64(value.(int32))
+		switch v := value.(type) {
+		case int:
+			inputTokens = int64(v)
+		case int32:
+			inputTokens = int64(v)
+		case int64:
+			inputTokens = v
+		case float64:
+			inputTokens = int64(v)
+		}
 	}
 
 	if value, ok := info["output_tokens"]; ok {
-		outputTokens = int64(value.(int32))
+		switch v := value.(type) {
+		case int:
+			outputTokens = int64(v)
+		case int32:
+			outputTokens = int64(v)
+		case int64:
+			outputTokens = v
+		case float64:
+			outputTokens = int64(v)
+		}
 	}
 
 	return inputTokens, outputTokens

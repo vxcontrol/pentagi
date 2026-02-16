@@ -21,7 +21,6 @@ networks:
     name: pentagi-network
 
 services:
-
   grafana:
     image: grafana/grafana:11.4.0
     restart: unless-stopped
@@ -44,7 +43,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - observability-network
 
@@ -72,7 +71,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - observability-network
 
@@ -98,7 +97,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - observability-network
 
@@ -106,11 +105,11 @@ services:
     image: otel/opentelemetry-collector-contrib:0.116.1
     restart: unless-stopped
     entrypoint:
-      - '/otelcol-contrib'
-      - '--config'
-      - '/etc/otel/config.yml'
-      - '--set'
-      - 'service.telemetry.logs.level=warn'
+      - "/otelcol-contrib"
+      - "--config"
+      - "/etc/otel/config.yml"
+      - "--set"
+      - "service.telemetry.logs.level=warn"
     container_name: otel
     hostname: otelcol
     expose:
@@ -126,7 +125,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - observability-network
       - langfuse-network
@@ -151,7 +150,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - observability-network
 
@@ -182,7 +181,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - observability-network
 
@@ -199,7 +198,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - observability-network
 
@@ -246,6 +245,6 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - observability-network

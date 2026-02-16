@@ -13,20 +13,26 @@ import (
 	"github.com/docker/docker/client"
 )
 
-const InstallerVersion = "0.3.0"
+const InstallerVersion = "1.0.0"
 
 const (
 	DockerComposeFile            = "docker-compose.yml"
+	GraphitiComposeFile          = "docker-compose-graphiti.yml"
 	LangfuseComposeFile          = "docker-compose-langfuse.yml"
 	ObservabilityComposeFile     = "docker-compose-observability.yml"
+	ExampleCustomConfigLLMFile   = "example.custom.provider.yml"
+	ExampleOllamaConfigLLMFile   = "example.ollama.provider.yml"
 	PentagiScriptFile            = "/usr/local/bin/pentagi"
 	PentagiContainerName         = "pentagi"
+	GraphitiContainerName        = "graphiti"
+	Neo4jContainerName           = "neo4j"
 	LangfuseWorkerContainerName  = "langfuse-worker"
 	LangfuseWebContainerName     = "langfuse-web"
 	GrafanaContainerName         = "grafana"
 	OpenTelemetryContainerName   = "otel"
 	DefaultImage                 = "debian:latest"
 	DefaultImageForPentest       = "vxcontrol/kali-linux"
+	DefaultGraphitiEndpoint      = "http://graphiti:8000"
 	DefaultLangfuseEndpoint      = "http://langfuse-web:3000"
 	DefaultObservabilityEndpoint = "otelcol:8148"
 	DefaultLangfuseOtelEndpoint  = "http://otelcol:4318"
@@ -35,6 +41,7 @@ const (
 	UserAgent                    = "PentAGI-Installer/" + InstallerVersion
 	MinFreeMemGB                 = 0.5
 	MinFreeMemGBForPentagi       = 0.5
+	MinFreeMemGBForGraphiti      = 2.0
 	MinFreeMemGBForLangfuse      = 1.5
 	MinFreeMemGBForObservability = 1.5
 	MinFreeDiskGB                = 5.0
@@ -63,11 +70,19 @@ type CheckResult struct {
 	PentagiExtracted        bool   `json:"pentagi_extracted" yaml:"pentagi_extracted"`
 	PentagiInstalled        bool   `json:"pentagi_installed" yaml:"pentagi_installed"`
 	PentagiRunning          bool   `json:"pentagi_running" yaml:"pentagi_running"`
+	PentagiVolumesExist     bool   `json:"pentagi_volumes_exist" yaml:"pentagi_volumes_exist"`
+	GraphitiConnected       bool   `json:"graphiti_connected" yaml:"graphiti_connected"`
+	GraphitiExternal        bool   `json:"graphiti_external" yaml:"graphiti_external"`
+	GraphitiExtracted       bool   `json:"graphiti_extracted" yaml:"graphiti_extracted"`
+	GraphitiInstalled       bool   `json:"graphiti_installed" yaml:"graphiti_installed"`
+	GraphitiRunning         bool   `json:"graphiti_running" yaml:"graphiti_running"`
+	GraphitiVolumesExist    bool   `json:"graphiti_volumes_exist" yaml:"graphiti_volumes_exist"`
 	LangfuseConnected       bool   `json:"langfuse_connected" yaml:"langfuse_connected"`
 	LangfuseExternal        bool   `json:"langfuse_external" yaml:"langfuse_external"`
 	LangfuseExtracted       bool   `json:"langfuse_extracted" yaml:"langfuse_extracted"`
 	LangfuseInstalled       bool   `json:"langfuse_installed" yaml:"langfuse_installed"`
 	LangfuseRunning         bool   `json:"langfuse_running" yaml:"langfuse_running"`
+	LangfuseVolumesExist    bool   `json:"langfuse_volumes_exist" yaml:"langfuse_volumes_exist"`
 	ObservabilityConnected  bool   `json:"observability_connected" yaml:"observability_connected"`
 	ObservabilityExternal   bool   `json:"observability_external" yaml:"observability_external"`
 	ObservabilityExtracted  bool   `json:"observability_extracted" yaml:"observability_extracted"`
@@ -80,6 +95,7 @@ type CheckResult struct {
 	UpdateServerAccessible  bool   `json:"update_server_accessible" yaml:"update_server_accessible"`
 	InstallerIsUpToDate     bool   `json:"installer_is_up_to_date" yaml:"installer_is_up_to_date"`
 	PentagiIsUpToDate       bool   `json:"pentagi_is_up_to_date" yaml:"pentagi_is_up_to_date"`
+	GraphitiIsUpToDate      bool   `json:"graphiti_is_up_to_date" yaml:"graphiti_is_up_to_date"`
 	LangfuseIsUpToDate      bool   `json:"langfuse_is_up_to_date" yaml:"langfuse_is_up_to_date"`
 	ObservabilityIsUpToDate bool   `json:"observability_is_up_to_date" yaml:"observability_is_up_to_date"`
 	WorkerIsUpToDate        bool   `json:"worker_is_up_to_date" yaml:"worker_is_up_to_date"`
@@ -104,6 +120,7 @@ type CheckHandler interface {
 	GatherDockerInfo(ctx context.Context, c *CheckResult) error
 	GatherWorkerInfo(ctx context.Context, c *CheckResult) error
 	GatherPentagiInfo(ctx context.Context, c *CheckResult) error
+	GatherGraphitiInfo(ctx context.Context, c *CheckResult) error
 	GatherLangfuseInfo(ctx context.Context, c *CheckResult) error
 	GatherObservabilityInfo(ctx context.Context, c *CheckResult) error
 	GatherSystemInfo(ctx context.Context, c *CheckResult) error
@@ -137,6 +154,13 @@ func (c *CheckResult) GatherPentagiInfo(ctx context.Context) error {
 		return ErrHandlerNotInitialized
 	}
 	return c.handler.GatherPentagiInfo(ctx, c)
+}
+
+func (c *CheckResult) GatherGraphitiInfo(ctx context.Context) error {
+	if c.handler == nil {
+		return ErrHandlerNotInitialized
+	}
+	return c.handler.GatherGraphitiInfo(ctx, c)
 }
 
 func (c *CheckResult) GatherLangfuseInfo(ctx context.Context) error {
@@ -189,6 +213,9 @@ func (c *CheckResult) CanStartAll() bool {
 	if c.PentagiInstalled && !c.PentagiRunning {
 		return true
 	}
+	if c.GraphitiConnected && !c.GraphitiExternal && c.GraphitiInstalled && !c.GraphitiRunning {
+		return true
+	}
 	if c.LangfuseConnected && !c.LangfuseExternal && c.LangfuseInstalled && !c.LangfuseRunning {
 		return true
 	}
@@ -200,7 +227,7 @@ func (c *CheckResult) CanStartAll() bool {
 
 // CanStopAll returns true when any compose stack is running
 func (c *CheckResult) CanStopAll() bool {
-	return c.PentagiRunning || c.LangfuseRunning || c.ObservabilityRunning
+	return c.PentagiRunning || c.GraphitiRunning || c.LangfuseRunning || c.ObservabilityRunning
 }
 
 // CanRestartAll mirrors stop logic (requires running services)
@@ -215,6 +242,9 @@ func (c *CheckResult) CanUpdateWorker() bool { return c.WorkerImageExists && !c.
 // CanUpdateAll returns true when any installed stack has updates available
 func (c *CheckResult) CanUpdateAll() bool {
 	if c.PentagiInstalled && !c.PentagiIsUpToDate {
+		return true
+	}
+	if c.GraphitiInstalled && !c.GraphitiIsUpToDate {
 		return true
 	}
 	if c.LangfuseInstalled && !c.LangfuseIsUpToDate {
@@ -233,7 +263,7 @@ func (c *CheckResult) CanUpdateInstaller() bool {
 
 // CanFactoryReset returns true when any compose stack is installed
 func (c *CheckResult) CanFactoryReset() bool {
-	return c.PentagiInstalled || c.LangfuseInstalled || c.ObservabilityInstalled
+	return c.PentagiInstalled || c.GraphitiInstalled || c.LangfuseInstalled || c.ObservabilityInstalled
 }
 
 // CanRemoveAll returns true when any compose stack is installed
@@ -274,6 +304,9 @@ func (h *defaultCheckHandler) GatherAllInfo(ctx context.Context, c *CheckResult)
 		return err
 	}
 	if err := h.GatherPentagiInfo(ctx, c); err != nil {
+		return err
+	}
+	if err := h.GatherGraphitiInfo(ctx, c); err != nil {
 		return err
 	}
 	if err := h.GatherLangfuseInfo(ctx, c); err != nil {
@@ -329,14 +362,21 @@ func (h *defaultCheckHandler) GatherWorkerInfo(ctx context.Context, c *CheckResu
 	defer h.mx.Unlock()
 
 	dockerHost := getEnvVar(h.appState, "DOCKER_HOST", "")
-	dockerCertPath := getEnvVar(h.appState, "DOCKER_CERT_PATH", "")
+	dockerCertPath := getEnvVar(h.appState, "PENTAGI_DOCKER_CERT_PATH", "")
 	dockerTLSVerify := getEnvVar(h.appState, "DOCKER_TLS_VERIFY", "") != ""
 
 	cli, err := createDockerClient(dockerHost, dockerCertPath, dockerTLSVerify)
 	if err != nil {
-		c.WorkerEnvApiAccessible = false
-		c.WorkerImageExists = false
-		return nil
+		// fallback to DOCKER_CERT_PATH for backward compatibility
+		// this handles cases where migration failed or user manually edited .env
+		// note: after migration, DOCKER_CERT_PATH contains container path, not host path
+		dockerCertPath = getEnvVar(h.appState, "DOCKER_CERT_PATH", "")
+		cli, err = createDockerClient(dockerHost, dockerCertPath, dockerTLSVerify)
+		if err != nil {
+			c.WorkerEnvApiAccessible = false
+			c.WorkerImageExists = false
+			return nil
+		}
 	}
 
 	h.workerClient = cli
@@ -354,13 +394,48 @@ func (h *defaultCheckHandler) GatherPentagiInfo(ctx context.Context, c *CheckRes
 
 	envDir := filepath.Dir(h.appState.GetEnvPath())
 	dockerComposeFile := filepath.Join(envDir, DockerComposeFile)
-	c.PentagiExtracted = checkFileExists(dockerComposeFile)
+	c.PentagiExtracted = checkFileExists(dockerComposeFile) &&
+		checkFileExists(ExampleCustomConfigLLMFile) &&
+		checkFileExists(ExampleOllamaConfigLLMFile)
 	c.PentagiScriptInstalled = checkFileExists(PentagiScriptFile)
 
 	if h.dockerClient != nil {
 		exists, running := checkContainerExists(ctx, h.dockerClient, PentagiContainerName)
 		c.PentagiInstalled = exists
 		c.PentagiRunning = running
+
+		// check if pentagi-related volumes exist (indicates previous installation)
+		pentagiVolumes := []string{"pentagi-postgres-data", "pentagi-data", "pentagi-ssl", "scraper-ssl"}
+		c.PentagiVolumesExist = checkVolumesExist(ctx, h.dockerClient, pentagiVolumes)
+	}
+
+	return nil
+}
+
+func (h *defaultCheckHandler) GatherGraphitiInfo(ctx context.Context, c *CheckResult) error {
+	h.mx.Lock()
+	defer h.mx.Unlock()
+
+	graphitiEnabled := getEnvVar(h.appState, "GRAPHITI_ENABLED", "")
+	graphitiURL := getEnvVar(h.appState, "GRAPHITI_URL", "")
+
+	c.GraphitiConnected = graphitiEnabled == "true" && graphitiURL != ""
+	c.GraphitiExternal = graphitiURL != DefaultGraphitiEndpoint
+
+	envDir := filepath.Dir(h.appState.GetEnvPath())
+	graphitiComposeFile := filepath.Join(envDir, GraphitiComposeFile)
+	c.GraphitiExtracted = checkFileExists(graphitiComposeFile)
+
+	if h.dockerClient != nil {
+		graphitiExists, graphitiRunning := checkContainerExists(ctx, h.dockerClient, GraphitiContainerName)
+		neo4jExists, neo4jRunning := checkContainerExists(ctx, h.dockerClient, Neo4jContainerName)
+
+		c.GraphitiInstalled = graphitiExists && neo4jExists
+		c.GraphitiRunning = graphitiRunning && neo4jRunning
+
+		// check if graphiti-related volumes exist (indicates previous installation)
+		graphitiVolumes := []string{"neo4j_data"}
+		c.GraphitiVolumesExist = checkVolumesExist(ctx, h.dockerClient, graphitiVolumes)
 	}
 
 	return nil
@@ -388,6 +463,10 @@ func (h *defaultCheckHandler) GatherLangfuseInfo(ctx context.Context, c *CheckRe
 
 		c.LangfuseInstalled = workerExists && webExists
 		c.LangfuseRunning = workerRunning && webRunning
+
+		// check if langfuse-related volumes exist (indicates previous installation)
+		langfuseVolumes := []string{"langfuse-postgres-data", "langfuse-clickhouse-data", "langfuse-minio-data"}
+		c.LangfuseVolumesExist = checkVolumesExist(ctx, h.dockerClient, langfuseVolumes)
 	}
 
 	return nil
@@ -423,18 +502,19 @@ func (h *defaultCheckHandler) GatherSystemInfo(ctx context.Context, c *CheckResu
 	c.SysCPUOK = checkCPUResources()
 
 	// memory check and calculations
-	needsForPentagi, needsForLangfuse, needsForObservability := determineComponentNeeds(c)
+	needsForPentagi, needsForGraphiti, needsForLangfuse, needsForObservability := determineComponentNeeds(c)
 
 	// calculate required memory using shared function
-	c.SysMemoryRequired = calculateRequiredMemoryGB(needsForPentagi, needsForLangfuse, needsForObservability)
+	c.SysMemoryRequired = calculateRequiredMemoryGB(needsForPentagi, needsForGraphiti, needsForLangfuse, needsForObservability)
 
 	// get available memory and check if sufficient
 	c.SysMemoryAvailable = getAvailableMemoryGB()
-	c.SysMemoryOK = checkMemoryResources(needsForPentagi, needsForLangfuse, needsForObservability)
+	c.SysMemoryOK = checkMemoryResources(needsForPentagi, needsForGraphiti, needsForLangfuse, needsForObservability)
 
 	// disk check and calculations
 	localComponents := countLocalComponentsToInstall(
 		c.PentagiInstalled,
+		c.GraphitiConnected, c.GraphitiExternal, c.GraphitiInstalled,
 		c.LangfuseConnected, c.LangfuseExternal, c.LangfuseInstalled,
 		c.ObservabilityConnected, c.ObservabilityExternal, c.ObservabilityInstalled,
 	)
@@ -448,6 +528,9 @@ func (h *defaultCheckHandler) GatherSystemInfo(ctx context.Context, c *CheckResu
 		ctx,
 		c.WorkerImageExists,
 		c.PentagiInstalled,
+		c.GraphitiConnected,
+		c.GraphitiExternal,
+		c.GraphitiInstalled,
 		c.LangfuseConnected,
 		c.LangfuseExternal,
 		c.LangfuseInstalled,
@@ -474,6 +557,9 @@ func (h *defaultCheckHandler) GatherUpdatesInfo(ctx context.Context, c *CheckRes
 	request := CheckUpdatesRequest{
 		InstallerOsType:        runtime.GOOS,
 		InstallerVersion:       InstallerVersion,
+		GraphitiConnected:      c.GraphitiConnected,
+		GraphitiExternal:       c.GraphitiExternal,
+		GraphitiInstalled:      c.GraphitiInstalled,
 		LangfuseConnected:      c.LangfuseConnected,
 		LangfuseExternal:       c.LangfuseExternal,
 		LangfuseInstalled:      c.LangfuseInstalled,
@@ -498,6 +584,20 @@ func (h *defaultCheckHandler) GatherUpdatesInfo(ctx context.Context, c *CheckRes
 			request.WorkerImageName = &imageInfo.Name
 			request.WorkerImageTag = &imageInfo.Tag
 			request.WorkerImageHash = &imageInfo.Hash
+		}
+	}
+
+	// get Graphiti image info if installed locally
+	if h.dockerClient != nil && c.GraphitiConnected && !c.GraphitiExternal && c.GraphitiInstalled {
+		if graphitiInfo := getContainerImageInfo(ctx, h.dockerClient, GraphitiContainerName); graphitiInfo != nil {
+			request.GraphitiImageName = &graphitiInfo.Name
+			request.GraphitiImageTag = &graphitiInfo.Tag
+			request.GraphitiImageHash = &graphitiInfo.Hash
+		}
+		if neo4jInfo := getContainerImageInfo(ctx, h.dockerClient, Neo4jContainerName); neo4jInfo != nil {
+			request.Neo4jImageName = &neo4jInfo.Name
+			request.Neo4jImageTag = &neo4jInfo.Tag
+			request.Neo4jImageHash = &neo4jInfo.Hash
 		}
 	}
 
@@ -534,6 +634,7 @@ func (h *defaultCheckHandler) GatherUpdatesInfo(ctx context.Context, c *CheckRes
 		c.UpdateServerAccessible = true
 		c.InstallerIsUpToDate = response.InstallerIsUpToDate
 		c.PentagiIsUpToDate = response.PentagiIsUpToDate
+		c.GraphitiIsUpToDate = response.GraphitiIsUpToDate
 		c.LangfuseIsUpToDate = response.LangfuseIsUpToDate
 		c.ObservabilityIsUpToDate = response.ObservabilityIsUpToDate
 		c.WorkerIsUpToDate = response.WorkerIsUpToDate
@@ -541,6 +642,7 @@ func (h *defaultCheckHandler) GatherUpdatesInfo(ctx context.Context, c *CheckRes
 		c.UpdateServerAccessible = false
 		c.InstallerIsUpToDate = false
 		c.PentagiIsUpToDate = false
+		c.GraphitiIsUpToDate = false
 		c.LangfuseIsUpToDate = false
 		c.ObservabilityIsUpToDate = false
 	}

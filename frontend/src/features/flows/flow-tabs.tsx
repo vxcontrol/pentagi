@@ -130,4 +130,3 @@ const FlowTabs = ({ activeTab, onTabChange }: FlowTabsProps) => {
 };
 
 export default FlowTabs;
-

@@ -37,8 +37,10 @@ const (
 	StoreAnswerToolName       = "store_answer"
 	SearchCodeToolName        = "search_code"
 	StoreCodeToolName         = "store_code"
+	GraphitiSearchToolName    = "graphiti_search"
 	ReportResultToolName      = "report_result"
 	SubtaskListToolName       = "subtask_list"
+	SubtaskPatchToolName      = "subtask_patch"
 	TerminalToolName          = "terminal"
 	FileToolName              = "file"
 )
@@ -85,8 +87,10 @@ var toolsTypeMapping = map[string]ToolType{
 	StoreAnswerToolName:       StoreVectorDbToolType,
 	SearchCodeToolName:        SearchVectorDbToolType,
 	StoreCodeToolName:         StoreVectorDbToolType,
+	GraphitiSearchToolName:    SearchVectorDbToolType,
 	ReportResultToolName:      StoreAgentResultToolType,
 	SubtaskListToolName:       StoreAgentResultToolType,
+	SubtaskPatchToolName:      StoreAgentResultToolType,
 	TerminalToolName:          EnvironmentToolType,
 	FileToolName:              EnvironmentToolType,
 }
@@ -138,6 +142,13 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Name:        SubtaskListToolName,
 		Description: "Send new generated subtask list to the user",
 		Parameters:  reflector.Reflect(&SubtaskList{}),
+	},
+	SubtaskPatchToolName: {
+		Name: SubtaskPatchToolName,
+		Description: "Submit delta operations to modify the current subtask list instead of regenerating all subtasks. " +
+			"Supports add (create new subtask at position), remove (delete by ID), modify (update title/description), " +
+			"and reorder (move to different position) operations. Use empty operations array if no changes needed.",
+		Parameters: reflector.Reflect(&SubtaskPatch{}),
 	},
 	SearchToolName: {
 		Name: SearchToolName,
@@ -247,6 +258,17 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Description: "Store the code sample to the vector database for future use. It's should be a sample like a one source code file for some question",
 		Parameters:  reflector.Reflect(&StoreCodeAction{}),
 	},
+	GraphitiSearchToolName: {
+		Name: GraphitiSearchToolName,
+		Description: "Search the Graphiti temporal knowledge graph for historical penetration testing context, " +
+			"including previous agent responses, tool execution records, discovered entities, and their relationships. " +
+			"Supports 7 search types: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), " +
+			"diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), " +
+			"successful_tools (proven techniques), recent_context (latest findings), and entity_by_label (type-specific entity search). " +
+			"Use this to avoid repeating failed approaches, reuse successful exploitation techniques, understand entity relationships, " +
+			"and build on previous findings within the same penetration testing engagement.",
+		Parameters: reflector.Reflect(&GraphitiSearchAction{}),
+	},
 	MemoristToolName: {
 		Name:        MemoristToolName,
 		Description: "Call to Archivist team member who remember all the information about the past work and made tasks and can answer your question about it",
@@ -313,7 +335,8 @@ func getMessageType(name string) database.MsglogType {
 	case BrowserToolName:
 		return database.MsglogTypeBrowser
 	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, TraversaalToolName,
-		PerplexityToolName, SearxngToolName, SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName:
+		PerplexityToolName, SearxngToolName, SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName,
+		GraphitiSearchToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:
 		return database.MsglogTypeAdvice

@@ -24,6 +24,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 )
 
@@ -47,6 +48,15 @@ type CheckUpdatesRequest struct {
 	WorkerImageName         *string `json:"worker_image_name,omitempty"`
 	WorkerImageTag          *string `json:"worker_image_tag,omitempty"`
 	WorkerImageHash         *string `json:"worker_image_hash,omitempty"`
+	GraphitiConnected       bool    `json:"graphiti_connected"`
+	GraphitiInstalled       bool    `json:"graphiti_installed"`
+	GraphitiExternal        bool    `json:"graphiti_external"`
+	GraphitiImageName       *string `json:"graphiti_image_name,omitempty"`
+	GraphitiImageTag        *string `json:"graphiti_image_tag,omitempty"`
+	GraphitiImageHash       *string `json:"graphiti_image_hash,omitempty"`
+	Neo4jImageName          *string `json:"neo4j_image_name,omitempty"`
+	Neo4jImageTag           *string `json:"neo4j_image_tag,omitempty"`
+	Neo4jImageHash          *string `json:"neo4j_image_hash,omitempty"`
 	LangfuseConnected       bool    `json:"langfuse_connected"`
 	LangfuseInstalled       bool    `json:"langfuse_installed"`
 	LangfuseExternal        bool    `json:"langfuse_external"`
@@ -70,6 +80,7 @@ type CheckUpdatesRequest struct {
 type CheckUpdatesResponse struct {
 	InstallerIsUpToDate     bool `json:"installer_is_up_to_date"`
 	PentagiIsUpToDate       bool `json:"pentagi_is_up_to_date"`
+	GraphitiIsUpToDate      bool `json:"graphiti_is_up_to_date"`
 	LangfuseIsUpToDate      bool `json:"langfuse_is_up_to_date"`
 	ObservabilityIsUpToDate bool `json:"observability_is_up_to_date"`
 	WorkerIsUpToDate        bool `json:"worker_is_up_to_date"`
@@ -294,23 +305,59 @@ func checkContainerExists(ctx context.Context, cli *client.Client, name string) 
 	return false, false
 }
 
+// checkVolumesExist checks if any of the specified volumes exist
+// it matches both exact names and volumes with compose project prefix (e.g., "pentagi_pentagi-data")
+func checkVolumesExist(ctx context.Context, cli *client.Client, volumeNames []string) bool {
+	if cli == nil || len(volumeNames) == 0 {
+		return false
+	}
+
+	volumes, err := cli.VolumeList(ctx, volume.ListOptions{})
+	if err != nil {
+		return false
+	}
+
+	// collect all volume names from Docker
+	existingVolumes := make([]string, 0, len(volumes.Volumes))
+	for _, vol := range volumes.Volumes {
+		existingVolumes = append(existingVolumes, vol.Name)
+	}
+
+	// check if any of the requested volumes exist
+	// matches both exact names and volumes with compose prefix (project_volume-name)
+	for _, volumeName := range volumeNames {
+		for _, existingVolume := range existingVolumes {
+			// exact match or suffix match with underscore separator
+			if existingVolume == volumeName || strings.HasSuffix(existingVolume, "_"+volumeName) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func checkCPUResources() bool {
 	return runtime.NumCPU() >= 2
 }
 
 // determineComponentNeeds checks which components need to be started based on their status
-func determineComponentNeeds(c *CheckResult) (needsForPentagi, needsForLangfuse, needsForObservability bool) {
+func determineComponentNeeds(c *CheckResult) (needsForPentagi, needsForGraphiti, needsForLangfuse, needsForObservability bool) {
 	needsForPentagi = !c.PentagiRunning
+	needsForGraphiti = c.GraphitiConnected && !c.GraphitiExternal && !c.GraphitiRunning
 	needsForLangfuse = c.LangfuseConnected && !c.LangfuseExternal && !c.LangfuseRunning
 	needsForObservability = c.ObservabilityConnected && !c.ObservabilityExternal && !c.ObservabilityRunning
 	return
 }
 
 // calculateRequiredMemoryGB calculates the total memory required based on which components need to be started
-func calculateRequiredMemoryGB(needsForPentagi, needsForLangfuse, needsForObservability bool) float64 {
+func calculateRequiredMemoryGB(needsForPentagi, needsForGraphiti, needsForLangfuse, needsForObservability bool) float64 {
 	requiredGB := MinFreeMemGB
 	if needsForPentagi {
 		requiredGB += MinFreeMemGBForPentagi
+	}
+	if needsForGraphiti {
+		requiredGB += MinFreeMemGBForGraphiti
 	}
 	if needsForLangfuse {
 		requiredGB += MinFreeMemGBForLangfuse
@@ -321,12 +368,12 @@ func calculateRequiredMemoryGB(needsForPentagi, needsForLangfuse, needsForObserv
 	return requiredGB
 }
 
-func checkMemoryResources(needsForPentagi, needsForLangfuse, needsForObservability bool) bool {
-	if !needsForPentagi && !needsForLangfuse && !needsForObservability {
+func checkMemoryResources(needsForPentagi, needsForGraphiti, needsForLangfuse, needsForObservability bool) bool {
+	if !needsForPentagi && !needsForGraphiti && !needsForLangfuse && !needsForObservability {
 		return true
 	}
 
-	requiredGB := calculateRequiredMemoryGB(needsForPentagi, needsForLangfuse, needsForObservability)
+	requiredGB := calculateRequiredMemoryGB(needsForPentagi, needsForGraphiti, needsForLangfuse, needsForObservability)
 
 	// check available memory using different methods depending on OS
 	switch runtime.GOOS {
@@ -550,11 +597,15 @@ func calculateRequiredDiskGB(workerImageExists bool, localComponents int) float6
 // countLocalComponentsToInstall counts how many components need to be installed locally
 func countLocalComponentsToInstall(
 	pentagiInstalled,
+	graphitiConnected, graphitiExternal, graphitiInstalled,
 	langfuseConnected, langfuseExternal, langfuseInstalled,
 	obsConnected, obsExternal, obsInstalled bool,
 ) int {
 	localComponents := 0
 	if !pentagiInstalled {
+		localComponents++
+	}
+	if graphitiConnected && !graphitiExternal && !graphitiInstalled {
 		localComponents++
 	}
 	if langfuseConnected && !langfuseExternal && !langfuseInstalled {
@@ -569,12 +620,14 @@ func countLocalComponentsToInstall(
 func checkDiskSpaceWithContext(
 	ctx context.Context,
 	workerImageExists, pentagiInstalled,
+	graphitiConnected, graphitiExternal, graphitiInstalled,
 	langfuseConnected, langfuseExternal, langfuseInstalled,
 	obsConnected, obsExternal, obsInstalled bool,
 ) bool {
 	// determine required disk space based on what needs to be installed locally
 	localComponents := countLocalComponentsToInstall(
 		pentagiInstalled,
+		graphitiConnected, graphitiExternal, graphitiInstalled,
 		langfuseConnected, langfuseExternal, langfuseInstalled,
 		obsConnected, obsExternal, obsInstalled,
 	)

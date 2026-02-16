@@ -36,4 +36,3 @@ const FlowVectorStoreActionIcon = ({ action, className, tooltip = action }: Flow
 };
 
 export default FlowVectorStoreActionIcon;
-

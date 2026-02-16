@@ -18,7 +18,7 @@ Processor package implements the operational engine for PentAGI installer operat
    - Handle embedded directory trees (observability) and compose files
    - YAML validation and automatic file recovery
    - Support deployment modes (embedded/external/disabled) for applicable stacks
-   - Excluded files policy for integrity verification: `observability/otel/config.yml`, `observability/grafana/config/grafana.ini`, `example.provider.yml` (presence ensured, content changes tolerated)
+   - Excluded files policy for integrity verification: `observability/otel/config.yml`, `observability/grafana/config/grafana.ini`, `example.custom.provider.yml`, `example.ollama.provider.yml` (presence ensured, content changes tolerated)
 
 2. **Docker Operations** (`docker.go`):
    - Worker and default image management with progress reporting

@@ -20,9 +20,8 @@ networks:
     name: langfuse-network
 
 services:
-
   pentagi:
-    image: vxcontrol/pentagi:latest
+    image: ${PENTAGI_IMAGE:-vxcontrol/pentagi:latest}
     restart: unless-stopped
     container_name: pentagi
     hostname: pentagi
@@ -31,8 +30,10 @@ services:
     ports:
       - ${PENTAGI_LISTEN_IP:-127.0.0.1}:${PENTAGI_LISTEN_PORT:-8443}:8443
     depends_on:
-      - pgvector
+      pgvector:
+        condition: service_started
     environment:
+      - DEBUG=${DEBUG:-false}
       - DOCKER_GID=998
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - COOKIE_SIGNING_SALT=${COOKIE_SIGNING_SALT:-}
@@ -48,6 +49,7 @@ services:
       - BEDROCK_REGION=${BEDROCK_REGION:-}
       - BEDROCK_ACCESS_KEY_ID=${BEDROCK_ACCESS_KEY_ID:-}
       - BEDROCK_SECRET_ACCESS_KEY=${BEDROCK_SECRET_ACCESS_KEY:-}
+      - BEDROCK_SESSION_TOKEN=${BEDROCK_SESSION_TOKEN:-}
       - BEDROCK_SERVER_URL=${BEDROCK_SERVER_URL:-}
       - LLM_SERVER_URL=${LLM_SERVER_URL:-}
       - LLM_SERVER_KEY=${LLM_SERVER_KEY:-}
@@ -55,7 +57,11 @@ services:
       - LLM_SERVER_CONFIG_PATH=${LLM_SERVER_CONFIG_PATH:-}
       - LLM_SERVER_LEGACY_REASONING=${LLM_SERVER_LEGACY_REASONING:-}
       - OLLAMA_SERVER_URL=${OLLAMA_SERVER_URL:-}
+      - OLLAMA_SERVER_MODEL=${OLLAMA_SERVER_MODEL:-}
       - OLLAMA_SERVER_CONFIG_PATH=${OLLAMA_SERVER_CONFIG_PATH:-}
+      - OLLAMA_SERVER_PULL_MODELS_TIMEOUT=${OLLAMA_SERVER_PULL_MODELS_TIMEOUT:-}
+      - OLLAMA_SERVER_PULL_MODELS_ENABLED=${OLLAMA_SERVER_PULL_MODELS_ENABLED:-}
+      - OLLAMA_SERVER_LOAD_MODELS_ENABLED=${OLLAMA_SERVER_LOAD_MODELS_ENABLED:-}
       - EMBEDDING_URL=${EMBEDDING_URL:-}
       - EMBEDDING_KEY=${EMBEDDING_KEY:-}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
@@ -82,6 +88,9 @@ services:
       - EXTERNAL_SSL_INSECURE=${EXTERNAL_SSL_INSECURE:-}
       - SCRAPER_PUBLIC_URL=${SCRAPER_PUBLIC_URL:-}
       - SCRAPER_PRIVATE_URL=${SCRAPER_PRIVATE_URL:-}
+      - GRAPHITI_ENABLED=${GRAPHITI_ENABLED:-}
+      - GRAPHITI_TIMEOUT=${GRAPHITI_TIMEOUT:-}
+      - GRAPHITI_URL=${GRAPHITI_URL:-}
       - PUBLIC_URL=${PUBLIC_URL:-}
       - STATIC_DIR=${STATIC_DIR:-}
       - STATIC_URL=${STATIC_URL:-}
@@ -128,13 +137,14 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     volumes:
       - ${PENTAGI_DATA_DIR:-pentagi-data}:/opt/pentagi/data
       - ${PENTAGI_SSL_DIR:-pentagi-ssl}:/opt/pentagi/ssl
       - ${PENTAGI_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
-      - ${PENTAGI_LLM_SERVER_CONFIG_PATH:-./example.provider.yml}:${PENTAGI_LLM_SERVER_CONFIG_PATH:-/opt/pentagi/conf/example.provider.yml}
-      - ${DOCKER_CERT_PATH:-./docker-ssl}:${DOCKER_CERT_PATH:-/opt/pentagi/docker-ssl}
+      - ${PENTAGI_LLM_SERVER_CONFIG_PATH:-./example.custom.provider.yml}:/opt/pentagi/conf/custom.provider.yml
+      - ${PENTAGI_OLLAMA_SERVER_CONFIG_PATH:-./example.ollama.provider.yml}:/opt/pentagi/conf/ollama.provider.yml
+      - ${PENTAGI_DOCKER_CERT_PATH:-./docker-ssl}:/opt/pentagi/docker/ssl
     user: root:root # while using docker.sock
     networks:
       - pentagi-network
@@ -149,7 +159,7 @@ services:
     expose:
       - 5432/tcp
     ports:
-      - 127.0.0.1:5432:5432
+      - ${PGVECTOR_LISTEN_IP:-127.0.0.1}:${PGVECTOR_LISTEN_PORT:-5432}:5432
     environment:
       POSTGRES_USER: ${PENTAGI_POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${PENTAGI_POSTGRES_PASSWORD:-postgres}
@@ -157,7 +167,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     volumes:
       - pentagi-postgres-data:/var/lib/postgresql/data
     networks:
@@ -173,13 +183,13 @@ services:
     expose:
       - 9187/tcp
     ports:
-      - 127.0.0.1:9187:9187
+      - ${POSTGRES_EXPORTER_LISTEN_IP:-127.0.0.1}:${POSTGRES_EXPORTER_LISTEN_PORT:-9187}:9187
     environment:
       - DATA_SOURCE_NAME=postgresql://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     networks:
       - pentagi-network
 
@@ -191,7 +201,7 @@ services:
     expose:
       - 443/tcp
     ports:
-      - 127.0.0.1:9443:443
+      - ${SCRAPER_LISTEN_IP:-127.0.0.1}:${SCRAPER_LISTEN_PORT:-9443}:443
     environment:
       - MAX_CONCURRENT_SESSIONS=${LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS:-10}
       - USERNAME=${LOCAL_SCRAPER_USERNAME:-someuser}
@@ -199,7 +209,7 @@ services:
     logging:
       options:
         max-size: 50m
-        max-file: '7'
+        max-file: "7"
     volumes:
       - scraper-ssl:/usr/src/app/ssl
     networks:

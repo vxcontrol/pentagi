@@ -6,7 +6,7 @@ function Empty({ className, ...props }: React.ComponentProps<'div'>) {
     return (
         <div
             className={cn(
-                'flex min-w-0 flex-1 flex-col items-center justify-center gap-4 text-balance rounded-lg border-dashed p-6 text-center md:p-12',
+                'flex min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-lg border-dashed p-6 text-center text-balance md:p-12',
                 className,
             )}
             data-slot="empty"
@@ -43,7 +43,7 @@ const emptyMediaVariants = cva(
 function EmptyContent({ className, ...props }: React.ComponentProps<'div'>) {
     return (
         <div
-            className={cn('flex w-full min-w-0 max-w-sm flex-col items-center gap-2 text-balance text-sm', className)}
+            className={cn('flex w-full max-w-sm min-w-0 flex-col items-center gap-2 text-sm text-balance', className)}
             data-slot="empty-content"
             {...props}
         />
@@ -54,7 +54,7 @@ function EmptyDescription({ className, ...props }: React.ComponentProps<'p'>) {
     return (
         <div
             className={cn(
-                'text-sm/relaxed text-muted-foreground [&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4',
+                'text-muted-foreground [&>a:hover]:text-primary text-sm/relaxed [&>a]:underline [&>a]:underline-offset-4',
                 className,
             )}
             data-slot="empty-description"

@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const defaultModel = "llama3.1:8b-instruct-q8_0"
+
 func TestBuildProviderConfig(t *testing.T) {
 	cfg := &config.Config{}
 	configData := []byte(`{
@@ -58,7 +60,8 @@ func TestDefaultProviderConfig(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	cfg := &config.Config{
-		OllamaServerURL: "http://localhost:11434",
+		OllamaServerURL:   "http://localhost:11434",
+		OllamaServerModel: defaultModel,
 	}
 
 	providerConfig, err := DefaultProviderConfig(cfg)

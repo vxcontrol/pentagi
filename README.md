@@ -39,6 +39,7 @@ You can watch the video **PentAGI overview**:
 - 🤖 Fully Autonomous. AI-powered agent that automatically determines and executes penetration testing steps.
 - 🔬 Professional Pentesting Tools. Built-in suite of 20+ professional security tools including nmap, metasploit, sqlmap, and more.
 - 🧠 Smart Memory System. Long-term storage of research results and successful approaches for future use.
+- 📚 Knowledge Graph Integration. Graphiti-powered knowledge graph using Neo4j for semantic relationship tracking and advanced context understanding.
 - 🔍 Web Intelligence. Built-in browser via [scraper](https://hub.docker.com/r/vxcontrol/scraper) for gathering latest information from web sources.
 - 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/), and [Searxng](https://searxng.org) for comprehensive information gathering.
 - 👥 Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks.
@@ -109,6 +110,11 @@ graph TB
         Agent[AI Agents<br/>Multi-Agent System]
     end
 
+    subgraph Knowledge Graph
+        Graphiti[Graphiti<br/>Knowledge Graph API]
+        Neo4j[(Neo4j<br/>Graph Database)]
+    end
+
     subgraph Monitoring
         Grafana[Grafana<br/>Dashboards]
         VictoriaMetrics[VictoriaMetrics<br/>Time-series DB]
@@ -133,8 +139,10 @@ graph TB
     API --> |SQL| DB
     API --> |Events| MQ
     MQ --> |Tasks| Agent
-    Agent --> |Commands| Tools
+    Agent --> |Commands| PenTest
     Agent --> |Queries| DB
+    Agent --> |Knowledge| Graphiti
+    Graphiti --> |Graph| Neo4j
 
     API --> |Telemetry| OTEL
     OTEL --> |Metrics| VictoriaMetrics
@@ -151,11 +159,13 @@ graph TB
     Langfuse --> |Files| MinIO
 
     classDef core fill:#f9f,stroke:#333,stroke-width:2px,color:#000
+    classDef knowledge fill:#ffa,stroke:#333,stroke-width:2px,color:#000
     classDef monitoring fill:#bbf,stroke:#333,stroke-width:2px,color:#000
     classDef analytics fill:#bfb,stroke:#333,stroke-width:2px,color:#000
     classDef tools fill:#fbb,stroke:#333,stroke-width:2px,color:#000
 
     class UI,API,DB,MQ,Agent core
+    class Graphiti,Neo4j knowledge
     class Grafana,VictoriaMetrics,Jaeger,Loki,OTEL monitoring
     class Langfuse,ClickHouse,Redis,MinIO analytics
     class Scraper,PenTest tools
@@ -424,25 +434,30 @@ The architecture of PentAGI is designed to be modular, scalable, and secure. Her
    - Task Queue: Async task processing system for reliable operation
    - AI Agent: Multi-agent system with specialized roles for efficient testing
 
-2. **Monitoring Stack**
+2. **Knowledge Graph**
+   - Graphiti: Knowledge graph API for semantic relationship tracking and contextual understanding
+   - Neo4j: Graph database for storing and querying relationships between entities, actions, and outcomes
+   - Automatic capturing of agent responses and tool executions for building comprehensive knowledge base
+
+3. **Monitoring Stack**
    - OpenTelemetry: Unified observability data collection and correlation
    - Grafana: Real-time visualization and alerting dashboards
    - VictoriaMetrics: High-performance time-series metrics storage
    - Jaeger: End-to-end distributed tracing for debugging
    - Loki: Scalable log aggregation and analysis
 
-3. **Analytics Platform**
+4. **Analytics Platform**
    - Langfuse: Advanced LLM observability and performance analytics
    - ClickHouse: Column-oriented analytics data warehouse
    - Redis: High-speed caching and rate limiting
    - MinIO: S3-compatible object storage for artifacts
 
-4. **Security Tools**
+5. **Security Tools**
    - Web Scraper: Isolated browser environment for safe web interaction
    - Pentesting Tools: Comprehensive suite of 20+ professional security tools
    - Sandboxed Execution: All operations run in isolated containers
 
-5. **Memory Systems**
+6. **Memory Systems**
    - Long-term Memory: Persistent storage of knowledge and experiences
    - Working Memory: Active context and goals for current operations
    - Episodic Memory: Historical actions and success patterns
@@ -543,7 +558,14 @@ mkdir pentagi && cd pentagi
 curl -o .env https://raw.githubusercontent.com/vxcontrol/pentagi/master/.env.example
 ```
 
-3. Fill in the required API keys in `.env` file.
+3. Touch examples files (`example.custom.provider.yml`, `example.ollama.provider.yml`) or download it:
+
+```bash
+curl -o example.custom.provider.yml https://raw.githubusercontent.com/vxcontrol/pentagi/master/examples/configs/custom-openai.provider.yml
+curl -o example.ollama.provider.yml https://raw.githubusercontent.com/vxcontrol/pentagi/master/examples/configs/ollama-llama318b.provider.yml
+```
+
+4. Fill in the required API keys in `.env` file.
 
 ```bash
 # Required: At least one of these LLM providers
@@ -558,6 +580,7 @@ BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
 
 # Optional: Local LLM provider (zero-cost inference)
 OLLAMA_SERVER_URL=http://localhost:11434
+OLLAMA_SERVER_MODEL=your_model_name
 
 # Optional: Additional search capabilities
 DUCKDUCKGO_ENABLED=true
@@ -576,11 +599,23 @@ SEARXNG_LANGUAGE=
 SEARXNG_SAFESEARCH=0
 SEARXNG_TIME_RANGE=
 
+## Graphiti knowledge graph settings
+GRAPHITI_ENABLED=true
+GRAPHITI_TIMEOUT=30
+GRAPHITI_URL=http://graphiti:8000
+GRAPHITI_MODEL_NAME=gpt-5-mini
+
+# Neo4j settings (used by Graphiti stack)
+NEO4J_USER=neo4j
+NEO4J_DATABASE=neo4j
+NEO4J_PASSWORD=devpassword
+NEO4J_URI=bolt://neo4j:7687
+
 # Assistant configuration
 ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating new assistants
 ```
 
-4. Change all security related environment variables in `.env` file to improve security.
+5. Change all security related environment variables in `.env` file to improve security.
 
 <details>
     <summary>Security related environment variables</summary>
@@ -596,16 +631,17 @@ ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating
 
 ### Access Credentials
 - `PENTAGI_POSTGRES_USER` and `PENTAGI_POSTGRES_PASSWORD` - PostgreSQL credentials
+- `NEO4J_USER` and `NEO4J_PASSWORD` - Neo4j credentials (for Graphiti knowledge graph)
 
 </details>
 
-5. Remove all inline comments from `.env` file if you want to use it in VSCode or other IDEs as a envFile option:
+6. Remove all inline comments from `.env` file if you want to use it in VSCode or other IDEs as a envFile option:
 
 ```bash
 perl -i -pe 's/\s+#.*$//' .env
 ```
 
-6. Run the PentAGI stack:
+7. Run the PentAGI stack:
 
 ```bash
 curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose.yml
@@ -615,7 +651,7 @@ docker compose up -d
 Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default is `admin@pentagi.com` / `admin`)
 
 > [!NOTE]
-> If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml` and `docker-compose-observability.yml` to use Langfuse and Observability services.
+> If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml`, `docker-compose-graphiti.yml`, and `docker-compose-observability.yml` to use Langfuse, Graphiti, and Observability services.
 >
 > You have to set at least one Language Model provider (OpenAI, Anthropic, Gemini, AWS Bedrock, or Ollama) to use PentAGI. AWS Bedrock provides enterprise-grade access to multiple foundation models from leading AI companies, while Ollama provides zero-cost local inference if you have sufficient computational resources. Additional API keys for search engines are optional but recommended for better results.
 >
@@ -664,25 +700,38 @@ PentAGI supports Ollama for local LLM inference, providing zero-cost operation a
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OLLAMA_SERVER_URL` | | URL of your Ollama server |
+| `OLLAMA_SERVER_MODEL` | `llama3.1:8b-instruct-q8_0` | Default model for inference |
 | `OLLAMA_SERVER_CONFIG_PATH` | | Path to custom agent configuration file |
+| `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600` | Timeout for model downloads (seconds) |
+| `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false` | Auto-download models on startup |
+| `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false` | Query server for available models |
 
 Configuration examples:
 
 ```bash
-# Basic Ollama setup
+# Basic Ollama setup with default model
 OLLAMA_SERVER_URL=http://localhost:11434
+OLLAMA_SERVER_MODEL=llama3.1:8b-instruct-q8_0
 
-# Remote Ollama server
+# Production setup with auto-pull and model discovery
 OLLAMA_SERVER_URL=http://ollama-server:11434
+OLLAMA_SERVER_PULL_MODELS_ENABLED=true
+OLLAMA_SERVER_PULL_MODELS_TIMEOUT=900
+OLLAMA_SERVER_LOAD_MODELS_ENABLED=true
 
 # Custom configuration with agent-specific models
 OLLAMA_SERVER_CONFIG_PATH=/path/to/ollama-config.yml
 
-# Default configuration file inside the docker container (just for example)
+# Default configuration file inside docker container
 OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
 ```
 
-The system automatically discovers available models from your Ollama server and provides zero-cost inference for penetration testing workflows.
+**Performance Considerations:**
+
+- **Model Discovery** (`OLLAMA_SERVER_LOAD_MODELS_ENABLED=true`): Adds 1-2s startup latency querying Ollama API
+- **Auto-pull** (`OLLAMA_SERVER_PULL_MODELS_ENABLED=true`): First startup may take several minutes downloading models
+- **Pull timeout** (`OLLAMA_SERVER_PULL_MODELS_TIMEOUT=900`): 15 minutes in seconds
+- **Static Config**: Disable both flags and specify models in config file for fastest startup
 
 #### Creating Custom Ollama Models with Extended Context
 
@@ -836,6 +885,7 @@ PentAGI integrates with Amazon Bedrock, offering access to a wide range of found
 | `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
 | `BEDROCK_ACCESS_KEY_ID` | | AWS access key ID for authentication |
 | `BEDROCK_SECRET_ACCESS_KEY` | | AWS secret access key for authentication |
+| `BEDROCK_SESSION_TOKEN` | | AWS session token as alternative way for authentication |
 | `BEDROCK_SERVER_URL` | | Optional custom Bedrock endpoint URL |
 
 Configuration examples:
@@ -983,15 +1033,92 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 > [!NOTE]
 > If you want to use Observability stack with Langfuse, you need to enable integration in `.env` file to set `LANGFUSE_OTEL_EXPORTER_OTLP_ENDPOINT` to `http://otelcol:4318`.
 >
-> And you need to run both stacks `docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d` to have all services running.
->
-> Also you can register aliases for these commands in your shell to run it faster:
+> To run all available stacks together (Langfuse, Graphiti, and Observability):
 >
 > ```bash
-> alias pentagi="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml"
-> alias pentagi-up="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml up -d"
-> alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-observability.yml down"
+> docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-graphiti.yml -f docker-compose-observability.yml up -d
 > ```
+>
+> You can also register aliases for these commands in your shell to run it faster:
+>
+> ```bash
+> alias pentagi="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-graphiti.yml -f docker-compose-observability.yml"
+> alias pentagi-up="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-graphiti.yml -f docker-compose-observability.yml up -d"
+> alias pentagi-down="docker compose -f docker-compose.yml -f docker-compose-langfuse.yml -f docker-compose-graphiti.yml -f docker-compose-observability.yml down"
+> ```
+
+### Knowledge Graph Integration (Graphiti)
+
+PentAGI integrates with [Graphiti](https://github.com/vxcontrol/pentagi-graphiti), a temporal knowledge graph system powered by Neo4j, to provide advanced semantic understanding and relationship tracking for AI agent operations. The vxcontrol fork provides custom entity and edge types that are specific to pentesting purposes.
+
+#### What is Graphiti?
+
+Graphiti automatically extracts and stores structured knowledge from agent interactions, building a graph of entities, relationships, and temporal context. This enables:
+
+- **Semantic Memory**: Store and recall relationships between tools, targets, vulnerabilities, and techniques
+- **Contextual Understanding**: Track how different pentesting actions relate to each other over time
+- **Knowledge Reuse**: Learn from past penetration tests and apply insights to new assessments
+- **Advanced Querying**: Search for complex patterns like "What tools were effective against similar targets?"
+
+#### Enabling Graphiti
+
+The Graphiti knowledge graph is **optional** and disabled by default. To enable it:
+
+1. Configure Graphiti environment variables in `.env` file:
+
+```bash
+## Graphiti knowledge graph settings
+GRAPHITI_ENABLED=true
+GRAPHITI_TIMEOUT=30
+GRAPHITI_URL=http://graphiti:8000
+GRAPHITI_MODEL_NAME=gpt-5-mini
+
+# Neo4j settings (used by Graphiti stack)
+NEO4J_USER=neo4j
+NEO4J_DATABASE=neo4j
+NEO4J_PASSWORD=devpassword
+NEO4J_URI=bolt://neo4j:7687
+
+# OpenAI API key (required by Graphiti for entity extraction)
+OPEN_AI_KEY=your_openai_api_key
+```
+
+2. Run the Graphiti stack along with the main PentAGI services:
+
+```bash
+# Download the Graphiti compose file if needed
+curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose-graphiti.yml
+
+# Start PentAGI with Graphiti
+docker compose -f docker-compose.yml -f docker-compose-graphiti.yml up -d
+```
+
+3. Verify Graphiti is running:
+
+```bash
+# Check service health
+docker compose -f docker-compose.yml -f docker-compose-graphiti.yml ps graphiti neo4j
+
+# View Graphiti logs
+docker compose -f docker-compose.yml -f docker-compose-graphiti.yml logs -f graphiti
+
+# Access Neo4j Browser (optional)
+# Visit http://localhost:7474 and login with NEO4J_USER/NEO4J_PASSWORD
+
+# Access Graphiti API (optional, for debugging)
+# Visit http://localhost:8000/docs for Swagger API documentation
+```
+
+> [!NOTE]
+> The Graphiti service is defined in `docker-compose-graphiti.yml` as a separate stack. You must run both compose files together to enable the knowledge graph functionality. The pre-built Docker image `vxcontrol/graphiti:latest` is used by default.
+
+#### What Gets Stored
+
+When enabled, PentAGI automatically captures:
+
+- **Agent Responses**: All agent reasoning, analysis, and decisions
+- **Tool Executions**: Commands executed, tools used, and their results
+- **Context Information**: Flow, task, and subtask hierarchy
 
 ### GitHub and Google OAuth Integration
 
@@ -1300,11 +1427,15 @@ GEMINI_SERVER_URL=https://generativelanguage.googleapis.com  # Google AI API end
 BEDROCK_REGION=us-east-1                         # AWS region for Bedrock service
 BEDROCK_ACCESS_KEY_ID=your_aws_access_key        # AWS access key ID
 BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key    # AWS secret access key
+BEDROCK_SESSION_TOKEN=your_aws_session_token     # AWS session token (alternative auth method)
 BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint
 
 # For Ollama (local inference)
-OLLAMA_SERVER_URL=http://localhost:11434         # Your Ollama server URL (only for test run)
-OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml  # or ollama-qwen332b-fp16-tc.provider.yml or ollama-qwq32b-fp16-tc.provider.yml
+OLLAMA_SERVER_URL=http://localhost:11434
+OLLAMA_SERVER_MODEL=llama3.1:8b-instruct-q8_0
+OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
+OLLAMA_SERVER_PULL_MODELS_ENABLED=false
+OLLAMA_SERVER_LOAD_MODELS_ENABLED=false
 ```
 
 #### Using OpenAI with Unverified Organizations

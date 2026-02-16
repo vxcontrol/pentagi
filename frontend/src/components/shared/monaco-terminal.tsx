@@ -382,11 +382,7 @@ const parseAnsiLine = (line: string, lineNumber: number): ParsedLine => {
                             position++;
 
                             break;
-                        } else if (
-                            code === 0x1b &&
-                            position + 1 < line.length &&
-                            line.charAt(position + 1) === '\\'
-                        ) {
+                        } else if (code === 0x1b && position + 1 < line.length && line.charAt(position + 1) === '\\') {
                             // ST (ESC \)
                             position += 2;
 
@@ -532,10 +528,7 @@ const MonacoTerminal = ({
     const parsedContent = useMemo(() => parseLogsWithCache(logs), [logs]);
 
     // Memoized plain text content extraction
-    const content = useMemo(
-        () => parsedContent.map((line) => line.text).join('\n'),
-        [parsedContent],
-    );
+    const content = useMemo(() => parsedContent.map((line) => line.text).join('\n'), [parsedContent]);
 
     // Monaco editor mount handler - wrapped in useCallback for stability
     const handleEditorDidMount: OnMount = useCallback((editor, monacoInstance) => {
@@ -732,7 +725,11 @@ const MonacoTerminal = ({
                                 const dynamicClass = `ansi-bg-${segment.styles.backgroundColor.replace('#', '')}`;
 
                                 classNames.push(dynamicClass);
-                                injectDynamicColorStyle(dynamicClass, 'background-color', segment.styles.backgroundColor);
+                                injectDynamicColorStyle(
+                                    dynamicClass,
+                                    'background-color',
+                                    segment.styles.backgroundColor,
+                                );
                             }
                         }
                     }

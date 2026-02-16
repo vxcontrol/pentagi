@@ -110,6 +110,9 @@ func (u *updateOperationsImpl) buildUpdateCheckRequest() checker.CheckUpdatesReq
 	return checker.CheckUpdatesRequest{
 		InstallerOsType:        runtime.GOOS,
 		InstallerVersion:       currentVersion,
+		GraphitiConnected:      u.processor.checker.GraphitiConnected,
+		GraphitiExternal:       u.processor.checker.GraphitiExternal,
+		GraphitiInstalled:      u.processor.checker.GraphitiInstalled,
 		LangfuseConnected:      u.processor.checker.LangfuseConnected,
 		LangfuseExternal:       u.processor.checker.LangfuseExternal,
 		LangfuseInstalled:      u.processor.checker.LangfuseInstalled,
@@ -266,6 +269,7 @@ func (u *updateOperationsImpl) callExistingUpdateChecker(
 	return &checker.CheckUpdatesResponse{
 		InstallerIsUpToDate:     true,
 		PentagiIsUpToDate:       true,
+		GraphitiIsUpToDate:      true,
 		LangfuseIsUpToDate:      true,
 		ObservabilityIsUpToDate: true,
 		WorkerIsUpToDate:        true,

@@ -10,6 +10,7 @@ import (
 	"pentagi/pkg/cast"
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
+	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/embeddings"
@@ -116,7 +117,8 @@ type subtasksInfo struct {
 type flowProvider struct {
 	db database.Querier
 
-	embedder embeddings.Embedder
+	embedder       embeddings.Embedder
+	graphitiClient *graphiti.Client
 
 	flowID   int64
 	publicIP string
@@ -126,6 +128,7 @@ type flowProvider struct {
 	image    string
 	title    string
 	language string
+	askUser  bool
 
 	prompter templates.Prompter
 	executor tools.FlowToolsExecutor
@@ -294,6 +297,11 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 
 	subtasksInfo := fp.getSubtasksInfo(taskID, tasksInfo.Subtasks)
 
+	logger.WithFields(logrus.Fields{
+		"planned_count":   len(subtasksInfo.Planned),
+		"completed_count": len(subtasksInfo.Completed),
+	}).Debug("retrieved subtasks info for refinement")
+
 	refinerContext := map[string]map[string]any{
 		"user": {
 			"Task":              tasksInfo.Task,
@@ -302,6 +310,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 			"CompletedSubtasks": subtasksInfo.Completed,
 		},
 		"system": {
+			"SubtaskPatchToolName":    tools.SubtaskPatchToolName,
 			"SubtaskListToolName":     tools.SubtaskListToolName,
 			"SearchToolName":          tools.SearchToolName,
 			"TerminalToolName":        tools.TerminalToolName,
@@ -366,7 +375,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task system refiner template", err)
 	}
 
-	subtasks, err := fp.performSubtasksRefiner(ctx, taskID, systemRefinerTmpl, refinerTmpl, tasksInfo.Task.Input)
+	subtasks, err := fp.performSubtasksRefiner(ctx, taskID, subtasksInfo.Planned, systemRefinerTmpl, refinerTmpl, tasksInfo.Task.Input)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to perform subtasks refiner", err)
 	}
@@ -516,6 +525,8 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 		"MaintenanceToolName":     tools.MaintenanceToolName,
 		"SummarizationToolName":   cast.SummarizationToolName,
 		"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+		"AskUserToolName":         tools.AskUserToolName,
+		"AskUserEnabled":          fp.askUser,
 		"ExecutionContext":        executionContext,
 		"Lang":                    fp.language,
 		"DockerImage":             fp.image,

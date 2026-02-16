@@ -21,7 +21,7 @@
                 // Observability (optional) uncomment to enable
                 // "OTEL_HOST": "localhost:8148",
                 // Scraper (optional) uncomment to enable
-                "SCRAPER_PRIVATE_URL": "https://someuser:somepass@localhost:9443/",
+                // "SCRAPER_PRIVATE_URL": "https://someuser:somepass@localhost:9443/",
             },
             "cwd": "${workspaceFolder}",
             "output": "${workspaceFolder}/build/__debug_bin_pentagi",
@@ -63,6 +63,7 @@
                 // "-type", "ollama",
                 "-config", "${workspaceFolder}/examples/configs/deepseek.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/ollama-llama318b.provider.yml",
+                // "-config", "${workspaceFolder}/examples/configs/ollama-llama318b-instruct.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/ollama-qwq32b-fp16-tc.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/ollama-qwen332b-fp16-tc.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/vllm-qwen332b-fp16.provider.yml",
@@ -74,6 +75,7 @@
                 // "-report", "${workspaceFolder}/examples/tests/gemini-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/bedrock-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/ollama-llama318b-report.md",
+                // "-report", "${workspaceFolder}/examples/tests/ollama-llama318b-instruct-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/ollama-qwq-32b-fp16-tc-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/ollama-qwen332b-fp16-tc-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/vllm-qwen332b-fp16-report.md",

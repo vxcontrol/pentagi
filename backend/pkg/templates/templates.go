@@ -14,6 +14,9 @@ import (
 //go:embed prompts/*.tmpl
 var promptTemplates embed.FS
 
+//go:embed graphiti/*.tmpl
+var graphitiTemplates embed.FS
+
 var ErrTemplateNotFound = errors.New("template not found")
 
 type PromptType string
@@ -66,6 +69,8 @@ var PromptVariables = map[PromptType][]string{
 		"MaintenanceToolName",
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
+		"AskUserToolName",
+		"AskUserEnabled",
 		"ExecutionContext",
 		"Lang",
 		"DockerImage",
@@ -105,6 +110,8 @@ var PromptVariables = map[PromptType][]string{
 		"HackResultToolName",
 		"SearchGuideToolName",
 		"StoreGuideToolName",
+		"GraphitiEnabled",
+		"GraphitiSearchToolName",
 		"SearchToolName",
 		"CoderToolName",
 		"AdviceToolName",
@@ -128,6 +135,8 @@ var PromptVariables = map[PromptType][]string{
 		"CodeResultToolName",
 		"SearchCodeToolName",
 		"StoreCodeToolName",
+		"GraphitiEnabled",
+		"GraphitiSearchToolName",
 		"SearchToolName",
 		"AdviceToolName",
 		"MemoristToolName",
@@ -183,6 +192,8 @@ var PromptVariables = map[PromptType][]string{
 	},
 	PromptTypeMemorist: {
 		"MemoristResultToolName",
+		"GraphitiEnabled",
+		"GraphitiSearchToolName",
 		"TerminalToolName",
 		"FileToolName",
 		"SummarizationToolName",
@@ -231,7 +242,7 @@ var PromptVariables = map[PromptType][]string{
 		"Subtasks",
 	},
 	PromptTypeRefiner: {
-		"SubtaskListToolName",
+		"SubtaskPatchToolName",
 		"SearchToolName",
 		"TerminalToolName",
 		"FileToolName",
@@ -594,4 +605,13 @@ func RenderPrompt(name, prompt string, params any) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// ReadGraphitiTemplate reads a Graphiti template by name
+func ReadGraphitiTemplate(name string) (string, error) {
+	templateBytes, err := graphitiTemplates.ReadFile(path.Join("graphiti", name))
+	if err != nil {
+		return "", fmt.Errorf("failed to read graphiti template %s: %w", name, err)
+	}
+	return string(templateBytes), nil
 }

@@ -122,14 +122,16 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 		_, observation = event.Observation(ctx)
 
 		buffer := strings.Builder{}
-		for _, doc := range docs {
+		for i, doc := range docs {
 			observation.Score(
 				langfuse.WithScoreComment("guide vector store result"),
 				langfuse.WithScoreName("guide_search_result"),
 				langfuse.WithScoreFloatValue(float64(doc.Score)),
 			)
-			buffer.WriteString(fmt.Sprintf("# Original Guide Type: %s\n\n", doc.Metadata["guide_type"]))
-			buffer.WriteString(fmt.Sprintf("# Original Guide Question\n\n%s\n\n", doc.Metadata["question"]))
+			buffer.WriteString(fmt.Sprintf("# Document %d Match score: %f\n\n", i+1, doc.Score))
+			buffer.WriteString(fmt.Sprintf("## Original Guide Type: %s\n\n", doc.Metadata["guide_type"]))
+			buffer.WriteString(fmt.Sprintf("## Original Guide Question\n\n%s\n\n", doc.Metadata["question"]))
+			buffer.WriteString("## Content\n\n")
 			buffer.WriteString(doc.PageContent)
 			buffer.WriteString("\n\n")
 		}

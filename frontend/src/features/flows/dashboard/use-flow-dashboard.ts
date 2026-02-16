@@ -177,65 +177,44 @@ export function useFlowDashboard(groupId: null | string): FlowDashboardResult {
     const variables = useMemo(() => ({ groupId: groupId ?? '' }), [groupId]);
 
     // Main query — fetches all dashboard data at once
-    const { data, error, loading, refetch } = useQuery<FullDashboardData>(
-        FULL_DASHBOARD_QUERY,
-        {
-            client: neo4jClient,
-            skip,
-            variables,
-        },
-    );
+    const { data, error, loading, refetch } = useQuery<FullDashboardData>(FULL_DASHBOARD_QUERY, {
+        client: neo4jClient,
+        skip,
+        variables,
+    });
 
     // Subscriptions — update data in real time when Neo4j data changes
-    const subscriptionOptions = useMemo(
-        () => ({ client: neo4jClient, skip, variables }),
-        [skip, variables],
-    );
+    const subscriptionOptions = useMemo(() => ({ client: neo4jClient, skip, variables }), [skip, variables]);
 
-    const { data: dashboardUpdate } = useSubscription(
-        DASHBOARD_UPDATED_SUBSCRIPTION,
-        {
-            ...subscriptionOptions,
-            onData: ({ data }) => console.log('[Sub] dashboardUpdated', data.data),
-            onError: (error) => console.error('[Sub] dashboardUpdated error', error),
-        },
-    );
+    const { data: dashboardUpdate } = useSubscription(DASHBOARD_UPDATED_SUBSCRIPTION, {
+        ...subscriptionOptions,
+        onData: ({ data }) => console.log('[Sub] dashboardUpdated', data.data),
+        onError: (error) => console.error('[Sub] dashboardUpdated error', error),
+    });
 
-    const { data: attackSurfaceUpdate } = useSubscription(
-        ATTACK_SURFACE_UPDATED_SUBSCRIPTION,
-        {
-            ...subscriptionOptions,
-            onData: ({ data }) => console.log('[Sub] attackSurfaceUpdated', data.data),
-            onError: (error) => console.error('[Sub] attackSurfaceUpdated error', error),
-        },
-    );
+    const { data: attackSurfaceUpdate } = useSubscription(ATTACK_SURFACE_UPDATED_SUBSCRIPTION, {
+        ...subscriptionOptions,
+        onData: ({ data }) => console.log('[Sub] attackSurfaceUpdated', data.data),
+        onError: (error) => console.error('[Sub] attackSurfaceUpdated error', error),
+    });
 
-    const { data: mainAttackChainUpdate } = useSubscription(
-        MAIN_ATTACK_CHAIN_UPDATED_SUBSCRIPTION,
-        {
-            ...subscriptionOptions,
-            onData: ({ data }) => console.log('[Sub] mainAttackChainUpdated', data.data),
-            onError: (error) => console.error('[Sub] mainAttackChainUpdated error', error),
-        },
-    );
+    const { data: mainAttackChainUpdate } = useSubscription(MAIN_ATTACK_CHAIN_UPDATED_SUBSCRIPTION, {
+        ...subscriptionOptions,
+        onData: ({ data }) => console.log('[Sub] mainAttackChainUpdated', data.data),
+        onError: (error) => console.error('[Sub] mainAttackChainUpdated error', error),
+    });
 
-    const { data: attackPathStatsUpdate } = useSubscription(
-        ATTACK_PATH_STATS_UPDATED_SUBSCRIPTION,
-        {
-            ...subscriptionOptions,
-            onData: ({ data }) => console.log('[Sub] attackPathStatsUpdated', data.data),
-            onError: (error) => console.error('[Sub] attackPathStatsUpdated error', error),
-        },
-    );
+    const { data: attackPathStatsUpdate } = useSubscription(ATTACK_PATH_STATS_UPDATED_SUBSCRIPTION, {
+        ...subscriptionOptions,
+        onData: ({ data }) => console.log('[Sub] attackPathStatsUpdated', data.data),
+        onError: (error) => console.error('[Sub] attackPathStatsUpdated error', error),
+    });
 
-    const { data: vulnerabilitySeverityUpdate } = useSubscription(
-        VULNERABILITY_SEVERITY_UPDATED_SUBSCRIPTION,
-        {
-            ...subscriptionOptions,
-            onData: ({ data }) => console.log('[Sub] vulnerabilitySeverityUpdated', data.data),
-            onError: (error) => console.error('[Sub] vulnerabilitySeverityUpdated error', error),
-        },
-    );
+    const { data: vulnerabilitySeverityUpdate } = useSubscription(VULNERABILITY_SEVERITY_UPDATED_SUBSCRIPTION, {
+        ...subscriptionOptions,
+        onData: ({ data }) => console.log('[Sub] vulnerabilitySeverityUpdated', data.data),
+        onError: (error) => console.error('[Sub] vulnerabilitySeverityUpdated error', error),
+    });
 
     // Refetch all data on demand (triggers full query reload)
     const handleRefetch = useCallback(() => {
@@ -252,11 +231,9 @@ export function useFlowDashboard(groupId: null | string): FlowDashboardResult {
     }, [skip, refetch]);
 
     // Merge query data with subscription updates (subscriptions take priority)
-    const dashboard: null | PentestSummary =
-        dashboardUpdate?.dashboardUpdated ?? data?.dashboard ?? null;
+    const dashboard: null | PentestSummary = dashboardUpdate?.dashboardUpdated ?? data?.dashboard ?? null;
 
-    const attackSurface: AttackSurfaceEntity[] =
-        attackSurfaceUpdate?.attackSurfaceUpdated ?? data?.attackSurface ?? [];
+    const attackSurface: AttackSurfaceEntity[] = attackSurfaceUpdate?.attackSurfaceUpdated ?? data?.attackSurface ?? [];
 
     const mainAttackChain: GraphData | null =
         mainAttackChainUpdate?.mainAttackChainUpdated ?? data?.mainAttackChain ?? null;
@@ -265,8 +242,7 @@ export function useFlowDashboard(groupId: null | string): FlowDashboardResult {
         attackPathStatsUpdate?.attackPathStatsUpdated ?? data?.attackPathStats ?? null;
 
     const vulnerabilitySeverity: VulnerabilitySeverityRecord[] =
-        vulnerabilitySeverityUpdate?.vulnerabilitySeverityUpdated ??
-        data?.vulnerabilitySeverity ?? [];
+        vulnerabilitySeverityUpdate?.vulnerabilitySeverityUpdated ?? data?.vulnerabilitySeverity ?? [];
 
     return {
         accessChainGraph: data?.accessChainGraph ?? null,

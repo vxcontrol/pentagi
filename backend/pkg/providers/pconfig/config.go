@@ -552,6 +552,30 @@ func (pc *ProviderConfig) GetRawConfig() []byte {
 	return pc.rawConfig
 }
 
+func (pc *ProviderConfig) GetModelsMap() map[ProviderOptionsType]string {
+	if pc == nil {
+		return nil
+	}
+
+	models := make(map[ProviderOptionsType]string)
+	options := pc.BuildOptionsMap()
+	for optType, options := range options {
+		if len(options) == 0 {
+			continue
+		}
+
+		var callOptions llms.CallOptions
+		for _, option := range options {
+			option(&callOptions)
+		}
+		if callOptions.Model != "" {
+			models[optType] = callOptions.Model
+		}
+	}
+
+	return models
+}
+
 func (pc *ProviderConfig) GetOptionsForType(optType ProviderOptionsType) []llms.CallOption {
 	if pc == nil {
 		return nil

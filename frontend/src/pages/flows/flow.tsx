@@ -159,7 +159,7 @@ const Flow = () => {
 
     const tabsCard = (
         <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
-            <div className="flex-1 overflow-auto py-4 pl-4 pr-0">
+            <div className="flex-1 overflow-auto py-4 pr-0 pl-4">
                 <FlowTabs
                     activeTab={activeTabsTab}
                     onTabChange={setActiveTabsTab}
@@ -170,7 +170,7 @@ const Flow = () => {
 
     return (
         <>
-            <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+            <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
                 <div className="flex w-full items-center justify-between gap-2 px-4">
                     <div className="flex items-center gap-2">
                         <SidebarTrigger className="-ml-1" />
@@ -204,7 +204,7 @@ const Flow = () => {
             </header>
             <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
                 {isFlowLoading && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50">
+                    <div className="bg-background/50 absolute inset-0 z-50 flex items-center justify-center">
                         <Loader2 className="size-16 animate-spin" />
                     </div>
                 )}
@@ -218,7 +218,7 @@ const Flow = () => {
                             minSize={30}
                         >
                             <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
-                                <div className="flex-1 overflow-auto py-4 pl-4 pr-0">
+                                <div className="flex-1 overflow-auto py-4 pr-0 pl-4">
                                     <FlowCentralTabs />
                                 </div>
                             </div>

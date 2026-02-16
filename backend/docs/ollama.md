@@ -22,11 +22,45 @@ OLLAMA_SERVER_URL=http://localhost:11434
 ### Optional Variables
 
 ```bash
+# Default model for inference (optional, default: llama3.1:8b-instruct-q8_0)
+OLLAMA_SERVER_MODEL=llama3.1:8b-instruct-q8_0
+
 # Path to custom config file (optional)
 OLLAMA_SERVER_CONFIG_PATH=/path/to/ollama_config.yml
 
+# Model management settings (optional)
+OLLAMA_SERVER_PULL_MODELS_TIMEOUT=600        # Timeout for model downloads in seconds
+OLLAMA_SERVER_PULL_MODELS_ENABLED=false      # Auto-download models on startup
+OLLAMA_SERVER_LOAD_MODELS_ENABLED=false      # Load model list from server
+
 # Proxy URL if needed
 PROXY_URL=http://proxy:8080
+```
+
+### Advanced Configuration
+
+Control how PentAGI interacts with your Ollama server:
+
+**Model Management:**
+
+- **Auto-pull Models** (`OLLAMA_SERVER_PULL_MODELS_ENABLED=true`): Automatically downloads models specified in config file on startup
+- **Pull Timeout** (`OLLAMA_SERVER_PULL_MODELS_TIMEOUT`): Maximum time to wait for model downloads (default: 600 seconds)
+- **Load Models List** (`OLLAMA_SERVER_LOAD_MODELS_ENABLED=true`): Queries Ollama server for available models via API
+
+**Performance Note:** Enabling `OLLAMA_SERVER_LOAD_MODELS_ENABLED` adds startup latency as PentAGI queries the Ollama API. Disable if you only need specific models from config file.
+
+**Recommended Settings:**
+
+```bash
+# Fast startup (static config)
+OLLAMA_SERVER_MODEL=llama3.1:8b-instruct-q8_0
+OLLAMA_SERVER_PULL_MODELS_ENABLED=false
+OLLAMA_SERVER_LOAD_MODELS_ENABLED=false
+
+# Auto-discovery (dynamic config)
+OLLAMA_SERVER_PULL_MODELS_ENABLED=true
+OLLAMA_SERVER_PULL_MODELS_TIMEOUT=900
+OLLAMA_SERVER_LOAD_MODELS_ENABLED=true
 ```
 
 ## Supported Models
@@ -36,7 +70,7 @@ The provider **dynamically loads models** from your local Ollama server. Availab
 **Popular model families include:**
 
 - **Gemma models**: `gemma3:1b`, `gemma3:2b`, `gemma3:7b`, `gemma3:27b`
-- **Llama models**: `llama3.1:7b`, `llama3.1:8b`, `llama3.1:70b`, `llama3.2:1b`, `llama3.2:3b`, `llama3.2:90b`
+- **Llama models**: `llama3.1:7b`, `llama3.1:8b`, `llama3.1:8b-instruct-q8_0`, `llama3.1:8b-instruct-fp16`, `llama3.1:70b`, `llama3.2:1b`, `llama3.2:3b`, `llama3.2:90b`
 - **Qwen models**: `qwen2.5:1.5b`, `qwen2.5:3b`, `qwen2.5:7b`, `qwen2.5:14b`, `qwen2.5:32b`, `qwen2.5:72b`
 - **DeepSeek models**: `deepseek-r1:1.5b`, `deepseek-r1:7b`, `deepseek-r1:8b`, `deepseek-r1:14b`, `deepseek-r1:32b`
 - **Embedding models**: `nomic-embed-text`
@@ -46,9 +80,10 @@ To download new models: `ollama pull <model-name>`
 
 ## Features
 
-- **Dynamic model discovery**: Automatically detects models installed on your Ollama server
+- **Dynamic model discovery**: Automatically detects models installed on your Ollama server (when enabled)
+- **Model caching**: Use only configured models without API calls (when load disabled)
 - **Local inference**: No API keys required, models run locally
-- **Auto model pulling**: Models are automatically downloaded when needed
+- **Auto model pulling**: Models are automatically downloaded when needed (when enabled)
 - **Agent specialization**: Different agent types (assistant, coder, pentester) with optimized settings
 - **Tool support**: Supports function calling for compatible models
 - **Streaming**: Real-time response streaming
@@ -74,7 +109,7 @@ Create a custom config file to override default settings:
 
 ```yaml
 simple:
-  model: "llama3.1:8b"
+  model: "llama3.1:8b-instruct-q8_0"
   temperature: 0.2
   top_p: 0.3
   n: 1

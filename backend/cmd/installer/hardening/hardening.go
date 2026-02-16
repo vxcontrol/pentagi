@@ -20,6 +20,7 @@ type HardeningArea string
 const (
 	HardeningAreaPentagi  HardeningArea = "pentagi"
 	HardeningAreaLangfuse HardeningArea = "langfuse"
+	HardeningAreaGraphiti HardeningArea = "graphiti"
 )
 
 type HardeningPolicyType string
@@ -46,6 +47,9 @@ var varsForHardening = map[HardeningArea][]string{
 		"LOCAL_SCRAPER_PASSWORD",
 		"SCRAPER_PRIVATE_URL",
 	},
+	HardeningAreaGraphiti: {
+		"NEO4J_PASSWORD",
+	},
 	HardeningAreaLangfuse: {
 		"LANGFUSE_POSTGRES_PASSWORD",
 		"LANGFUSE_CLICKHOUSE_PASSWORD",
@@ -68,6 +72,7 @@ var varsForHardening = map[HardeningArea][]string{
 var varsForHardeningDefault = map[string]string{
 	"COOKIE_SIGNING_SALT":              "salt",
 	"PENTAGI_POSTGRES_PASSWORD":        "postgres",
+	"NEO4J_PASSWORD":                   "devpassword",
 	"LOCAL_SCRAPER_USERNAME":           "someuser",
 	"LOCAL_SCRAPER_PASSWORD":           "somepass",
 	"SCRAPER_PRIVATE_URL":              "https://someuser:somepass@scraper/",
@@ -101,6 +106,9 @@ var varsHardeningPolicies = map[HardeningArea]map[string]HardeningPolicy{
 		"LOCAL_SCRAPER_USERNAME":    {Type: HardeningPolicyTypeDefault, Length: 10},
 		"LOCAL_SCRAPER_PASSWORD":    {Type: HardeningPolicyTypeDefault, Length: 12},
 		// SCRAPER_PRIVATE_URL is handled specially in DoHardening logic
+	},
+	HardeningAreaGraphiti: {
+		"NEO4J_PASSWORD": {Type: HardeningPolicyTypeDefault, Length: 18},
 	},
 	HardeningAreaLangfuse: {
 		"LANGFUSE_POSTGRES_PASSWORD":       {Type: HardeningPolicyTypeDefault, Length: 18},
@@ -141,7 +149,9 @@ func DoHardening(s state.State, c checker.CheckResult) error {
 		}
 	}
 
-	if vars, _ := s.GetVars(varsForHardening[HardeningAreaLangfuse]); !c.LangfuseInstalled {
+	// harden langfuse vars only if neither containers nor volumes exist
+	// this prevents password changes when volumes with existing credentials are present
+	if vars, _ := s.GetVars(varsForHardening[HardeningAreaLangfuse]); !c.LangfuseInstalled && !c.LangfuseVolumesExist {
 		updateDefaultValues(vars)
 
 		if isChanged, err := replaceDefaultValues(s, vars, varsHardeningPolicies[HardeningAreaLangfuse]); err != nil {
@@ -157,7 +167,21 @@ func DoHardening(s state.State, c checker.CheckResult) error {
 		}
 	}
 
-	if vars, _ := s.GetVars(varsForHardening[HardeningAreaPentagi]); !c.PentagiInstalled {
+	// harden graphiti vars only if neither containers nor volumes exist
+	// this prevents password changes when volumes with existing credentials are present
+	if vars, _ := s.GetVars(varsForHardening[HardeningAreaGraphiti]); !c.GraphitiInstalled && !c.GraphitiVolumesExist {
+		updateDefaultValues(vars)
+
+		if isChanged, err := replaceDefaultValues(s, vars, varsHardeningPolicies[HardeningAreaGraphiti]); err != nil {
+			return fmt.Errorf("failed to replace default values for graphiti: %w", err)
+		} else if isChanged {
+			haveToCommit = true
+		}
+	}
+
+	// harden pentagi vars only if neither containers nor volumes exist
+	// this prevents password changes when volumes with existing credentials are present
+	if vars, _ := s.GetVars(varsForHardening[HardeningAreaPentagi]); !c.PentagiInstalled && !c.PentagiVolumesExist {
 		updateDefaultValues(vars)
 
 		if isChanged, err := replaceDefaultValues(s, vars, varsHardeningPolicies[HardeningAreaPentagi]); err != nil {

@@ -238,7 +238,7 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
     }, [processedSearch, createComponentRenderer]);
 
     return (
-        <div className={`prose prose-sm max-w-none dark:prose-invert ${className || ''}`}>
+        <div className={`prose prose-sm dark:prose-invert max-w-none ${className || ''}`}>
             <ReactMarkdown
                 components={customComponents}
                 rehypePlugins={[
