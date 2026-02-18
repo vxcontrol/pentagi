@@ -9,7 +9,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal as XTerminal } from '@xterm/xterm';
 import debounce from 'lodash/debounce';
-import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 import { useTheme } from '@/hooks/use-theme';
 import { Log } from '@/lib/log';
@@ -340,10 +340,24 @@ const Terminal = ({
     const initTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    // Determine if current effective theme is dark (considering system preference)
+    const isDarkTheme = useCallback(() => {
+        if (theme === 'dark') {
+            return true;
+        }
+
+        if (theme === 'light') {
+            return false;
+        }
+
+        // For 'system' theme, check browser's system preference
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }, [theme]);
+
     // Get search decorations based on current theme
-    const getSearchDecorations = () => {
-        return theme === 'dark' ? darkSearchDecorations : lightSearchDecorations;
-    };
+    const getSearchDecorations = useCallback(() => {
+        return isDarkTheme() ? darkSearchDecorations : lightSearchDecorations;
+    }, [isDarkTheme]);
 
     // Expose methods to parent component via ref
     useImperativeHandle(
@@ -378,7 +392,7 @@ const Terminal = ({
                 }
             },
         }),
-        [searchValue, theme],
+        [searchValue, getSearchDecorations],
     );
 
     // Safe terminal operations
@@ -444,7 +458,7 @@ const Terminal = ({
             // Create terminal instance with optimized settings
             const terminal = new XTerminal({
                 ...terminalOptions,
-                theme: theme === 'dark' ? darkTheme : lightTheme,
+                theme: isDarkTheme() ? darkTheme : lightTheme,
             });
 
             xtermRef.current = terminal;
@@ -601,7 +615,7 @@ const Terminal = ({
 
             return;
         }
-    }, [theme]);
+    }, [isDarkTheme]);
 
     // Handle search functionality with decorations
     useEffect(() => {
@@ -627,16 +641,36 @@ const Terminal = ({
         } catch (error: unknown) {
             Log.error('Terminal search failed:', error);
         }
-    }, [searchValue, isTerminalReady, theme]);
+    }, [searchValue, isTerminalReady, getSearchDecorations]);
 
-    // Update theme
+    // Update theme and listen to system theme changes
     useEffect(() => {
-        safeTerminalOperation(() => {
-            if (xtermRef.current) {
-                xtermRef.current.options.theme = theme === 'dark' ? darkTheme : lightTheme;
-            }
-        });
-    }, [theme]);
+        const updateTerminalTheme = () => {
+            safeTerminalOperation(() => {
+                if (xtermRef.current) {
+                    xtermRef.current.options.theme = isDarkTheme() ? darkTheme : lightTheme;
+                }
+            });
+        };
+
+        // Update theme immediately
+        updateTerminalTheme();
+
+        // Listen to system theme changes only when theme is 'system'
+        if (theme === 'system') {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+            const handleSystemThemeChange = () => {
+                updateTerminalTheme();
+            };
+
+            mediaQuery.addEventListener('change', handleSystemThemeChange);
+
+            return () => {
+                mediaQuery.removeEventListener('change', handleSystemThemeChange);
+            };
+        }
+    }, [theme, isDarkTheme]);
 
     // Update logs only when terminal is fully ready
     useEffect(() => {
