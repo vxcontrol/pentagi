@@ -44,6 +44,8 @@ var frontendRoutes = []string{
 	"/chat",
 	"/oauth",
 	"/login",
+	"/flows",
+	"/settings",
 }
 
 // @title PentAGI Swagger API
@@ -254,8 +256,9 @@ func NewRouter(
 		router.NoRoute(func(c *gin.Context) {
 			if c.Request.Method == "GET" && !strings.HasPrefix(c.Request.URL.Path, baseURL) {
 				isFrontendRoute := false
+				path := c.Request.URL.Path
 				for _, prefix := range frontendRoutes {
-					if c.Request.URL.Path == prefix || strings.HasPrefix(c.Request.URL.Path, prefix+"/") {
+					if path == prefix || strings.HasPrefix(path, prefix+"/") {
 						isFrontendRoute = true
 						break
 					}
