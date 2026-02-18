@@ -1,20 +1,20 @@
 simple:
-  model: "kimi-k2-0905-preview"
+  model: "kimi-k2-turbo-preview"
   temperature: 0.5
   n: 1
   max_tokens: 4096
   price:
-    input: 0.6
-    output: 2.5
+    input: 1.15
+    output: 8.0
 
 simple_json:
-  model: "kimi-k2-0905-preview"
+  model: "kimi-k2-turbo-preview"
   temperature: 0.4
   n: 1
   max_tokens: 4096
   price:
-    input: 0.6
-    output: 2.5
+    input: 1.15
+    output: 8.0
 
 primary_agent:
   model: "kimi-k2.5"
