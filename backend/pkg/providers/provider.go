@@ -178,14 +178,14 @@ func (fp *flowProvider) GetTaskTitle(ctx context.Context, input string) (string,
 	defer span.End()
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	getterSpan := observation.Span(
-		langfuse.WithStartSpanName("get task title"),
-		langfuse.WithStartSpanInput(input),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+	getterEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("get task title"),
+		langfuse.WithEvaluatorInput(input),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
 			"lang": fp.language,
 		}),
 	)
-	ctx, _ = getterSpan.Observation(ctx)
+	ctx, _ = getterEvaluator.Observation(ctx)
 
 	titleTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeTaskDescriptor, map[string]any{
 		"Input":       input,
@@ -194,17 +194,17 @@ func (fp *flowProvider) GetTaskTitle(ctx context.Context, input string) (string,
 		"N":           150,
 	})
 	if err != nil {
-		return "", wrapErrorEndSpan(ctx, getterSpan, "failed to get flow title template", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, getterEvaluator, "failed to get flow title template", err)
 	}
 
 	title, err := fp.Call(ctx, pconfig.OptionsTypeSimple, titleTmpl)
 	if err != nil {
-		return "", wrapErrorEndSpan(ctx, getterSpan, "failed to get flow title", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, getterEvaluator, "failed to get flow title", err)
 	}
 
-	getterSpan.End(
-		langfuse.WithEndSpanStatus("success"),
-		langfuse.WithEndSpanOutput(title),
+	getterEvaluator.End(
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorOutput(title),
 	)
 
 	return title, nil
@@ -245,19 +245,19 @@ func (fp *flowProvider) GenerateSubtasks(ctx context.Context, taskID int64) ([]t
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	generatorSpan := observation.Span(
-		langfuse.WithStartSpanName("generator agent"),
-		langfuse.WithStartSpanInput(tasksInfo),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+	generatorEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("subtasks generator"),
+		langfuse.WithEvaluatorInput(tasksInfo),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
 			"user_context":   generatorContext["user"],
 			"system_context": generatorContext["system"],
 		}),
 	)
-	ctx, _ = generatorSpan.Observation(ctx)
+	ctx, _ = generatorEvaluator.Observation(ctx)
 
 	generatorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSubtasksGenerator, generatorContext["user"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, generatorSpan, "failed to get task generator template", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, generatorEvaluator, "failed to get task generator template", err)
 	}
 
 	subtasksLen := len(tasksInfo.Subtasks)
@@ -269,23 +269,23 @@ func (fp *flowProvider) GenerateSubtasks(ctx context.Context, taskID int64) ([]t
 		generatorContext["user"]["Subtasks"] = tasksInfo.Subtasks[(subtasksLen - l):]
 		generatorTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeSubtasksGenerator, generatorContext["user"])
 		if err != nil {
-			return nil, wrapErrorEndSpan(ctx, generatorSpan, "failed to get task generator template", err)
+			return nil, wrapErrorEndEvaluatorSpan(ctx, generatorEvaluator, "failed to get task generator template", err)
 		}
 	}
 
 	systemGeneratorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeGenerator, generatorContext["system"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, generatorSpan, "failed to get task system generator template", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, generatorEvaluator, "failed to get task system generator template", err)
 	}
 
 	subtasks, err := fp.performSubtasksGenerator(ctx, taskID, systemGeneratorTmpl, generatorTmpl, tasksInfo.Task.Input)
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, generatorSpan, "failed to perform subtasks generator", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, generatorEvaluator, "failed to perform subtasks generator", err)
 	}
 
-	generatorSpan.End(
-		langfuse.WithEndSpanStatus("success"),
-		langfuse.WithEndSpanOutput(subtasks),
+	generatorEvaluator.End(
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorOutput(subtasks),
 	)
 
 	return subtasks, nil
@@ -335,19 +335,19 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	refinerSpan := observation.Span(
-		langfuse.WithStartSpanName("refiner agent"),
-		langfuse.WithStartSpanInput(refinerContext),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+	refinerEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("subtasks refiner"),
+		langfuse.WithEvaluatorInput(refinerContext),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
 			"user_context":   refinerContext["user"],
 			"system_context": refinerContext["system"],
 		}),
 	)
-	ctx, _ = refinerSpan.Observation(ctx)
+	ctx, _ = refinerEvaluator.Observation(ctx)
 
 	refinerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template (1)", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to get task subtasks refiner template (1)", err)
 	}
 
 	// TODO: here need to store it in the database and use it as a cache for next runs
@@ -355,42 +355,42 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 		summarizerHandler := fp.GetSummarizeResultHandler(&taskID, nil)
 		executionState, err := fp.getTaskPrimaryAgentChainSummary(ctx, taskID, summarizerHandler)
 		if err != nil {
-			return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to prepare execution state", err)
+			return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to prepare execution state", err)
 		}
 
 		refinerContext["user"]["ExecutionState"] = executionState
 		refinerTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
 		if err != nil {
-			return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template (2)", err)
+			return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to get task subtasks refiner template (2)", err)
 		}
 
 		if len(refinerTmpl) < msgRefinerSizeLimit {
 			msgLogsSummary, err := fp.getTaskMsgLogsSummary(ctx, taskID, summarizerHandler)
 			if err != nil {
-				return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task msg logs summary", err)
+				return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to get task msg logs summary", err)
 			}
 
 			refinerContext["user"]["ExecutionLogs"] = msgLogsSummary
 			refinerTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeSubtasksRefiner, refinerContext["user"])
 			if err != nil {
-				return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task subtasks refiner template (3)", err)
+				return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to get task subtasks refiner template (3)", err)
 			}
 		}
 	}
 
 	systemRefinerTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeRefiner, refinerContext["system"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to get task system refiner template", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to get task system refiner template", err)
 	}
 
 	subtasks, err := fp.performSubtasksRefiner(ctx, taskID, subtasksInfo.Planned, systemRefinerTmpl, refinerTmpl, tasksInfo.Task.Input)
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, refinerSpan, "failed to perform subtasks refiner", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to perform subtasks refiner", err)
 	}
 
-	refinerSpan.End(
-		langfuse.WithEndSpanStatus("success"),
-		langfuse.WithEndSpanOutput(subtasks),
+	refinerEvaluator.End(
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorOutput(subtasks),
 	)
 
 	return subtasks, nil
@@ -427,61 +427,61 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	reporterSpan := observation.Span(
-		langfuse.WithStartSpanName("reporter agent"),
-		langfuse.WithStartSpanInput(reporterContext),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+	reporterEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("reporter agent"),
+		langfuse.WithEvaluatorInput(reporterContext),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
 			"user_context":   reporterContext["user"],
 			"system_context": reporterContext["system"],
 		}),
 	)
-	ctx, _ = reporterSpan.Observation(ctx)
+	ctx, _ = reporterEvaluator.Observation(ctx)
 
 	reporterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeTaskReporter, reporterContext["user"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template (1)", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to get task reporter template (1)", err)
 	}
 
 	if len(reporterTmpl) < msgReporterSizeLimit {
 		summarizerHandler := fp.GetSummarizeResultHandler(&taskID, nil)
 		executionState, err := fp.getTaskPrimaryAgentChainSummary(ctx, taskID, summarizerHandler)
 		if err != nil {
-			return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to prepare execution state", err)
+			return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to prepare execution state", err)
 		}
 
 		reporterContext["user"]["ExecutionState"] = executionState
 		reporterTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeTaskReporter, reporterContext["user"])
 		if err != nil {
-			return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template (2)", err)
+			return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to get task reporter template (2)", err)
 		}
 
 		if len(reporterTmpl) < msgReporterSizeLimit {
 			msgLogsSummary, err := fp.getTaskMsgLogsSummary(ctx, taskID, summarizerHandler)
 			if err != nil {
-				return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task msg logs summary", err)
+				return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to get task msg logs summary", err)
 			}
 
 			reporterContext["user"]["ExecutionLogs"] = msgLogsSummary
 			reporterTmpl, err = fp.prompter.RenderTemplate(templates.PromptTypeTaskReporter, reporterContext["user"])
 			if err != nil {
-				return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task reporter template (3)", err)
+				return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to get task reporter template (3)", err)
 			}
 		}
 	}
 
 	systemReporterTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeReporter, reporterContext["system"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to get task system reporter template", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to get task system reporter template", err)
 	}
 
 	result, err := fp.performTaskResultReporter(ctx, &taskID, nil, systemReporterTmpl, reporterTmpl, tasksInfo.Task.Input)
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, reporterSpan, "failed to perform task result reporter", err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to perform task result reporter", err)
 	}
 
-	reporterSpan.End(
-		langfuse.WithEndSpanStatus("success"),
-		langfuse.WithEndSpanOutput(result),
+	reporterEvaluator.End(
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorOutput(result),
 	)
 
 	return result, nil
@@ -628,10 +628,10 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	executorSpan := observation.Span(
-		langfuse.WithStartSpanName(fmt.Sprintf("primary agent for subtask %d: %s", subtaskID, subtask.Title)),
-		langfuse.WithStartSpanInput(chain),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+	executorAgent := observation.Agent(
+		langfuse.WithAgentName(fmt.Sprintf("primary agent for subtask %d: %s", subtaskID, subtask.Title)),
+		langfuse.WithAgentInput(chain),
+		langfuse.WithAgentMetadata(langfuse.Metadata{
 			"flow_id":      fp.flowID,
 			"task_id":      taskID,
 			"subtask_id":   subtaskID,
@@ -642,7 +642,7 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 			"description":  subtask.Description,
 		}),
 	)
-	ctx, _ = executorSpan.Observation(ctx)
+	ctx, _ = executorAgent.Observation(ctx)
 
 	performResult := PerformResultError
 	cfg := tools.PrimaryExecutorConfig{
@@ -673,21 +673,23 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 					"result": done.Result[:min(len(done.Result), 1000)],
 				})
 
-				opts := []langfuse.SpanEndOption{
-					langfuse.WithEndSpanOutput(done.Result),
+				opts := []langfuse.AgentOption{
+					langfuse.WithAgentOutput(done.Result),
 				}
-				defer executorSpan.End(opts...)
+				defer func() {
+					executorAgent.End(opts...)
+				}()
 
 				if !done.Success {
 					performResult = PerformResultError
 					opts = append(opts,
-						langfuse.WithEndSpanStatus("done handler: failed"),
-						langfuse.WithEndSpanLevel(langfuse.ObservationLevelWarning),
+						langfuse.WithAgentStatus("done handler: failed"),
+						langfuse.WithAgentLevel(langfuse.ObservationLevelWarning),
 					)
 				} else {
 					performResult = PerformResultDone
 					opts = append(opts,
-						langfuse.WithEndSpanStatus("done handler: success"),
+						langfuse.WithAgentStatus("done handler: success"),
 					)
 				}
 
@@ -698,8 +700,8 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 				})
 				if err != nil {
 					opts = append(opts,
-						langfuse.WithEndSpanStatus(err.Error()),
-						langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+						langfuse.WithAgentStatus(err.Error()),
+						langfuse.WithAgentLevel(langfuse.ObservationLevelError),
 					)
 					loggerFunc.WithError(err).Error("failed to update subtask result")
 					return "", fmt.Errorf("failed to update subtask %d result: %w", subtaskID, err)
@@ -715,8 +717,8 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 					)
 					if err != nil {
 						opts = append(opts,
-							langfuse.WithEndSpanStatus(err.Error()),
-							langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+							langfuse.WithAgentStatus(err.Error()),
+							langfuse.WithAgentLevel(langfuse.ObservationLevelError),
 						)
 						loggerFunc.WithError(err).Error("failed to put report msg")
 						return "", fmt.Errorf("failed to put report msg: %w", err)
@@ -729,8 +731,8 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 					)
 					if err != nil {
 						opts = append(opts,
-							langfuse.WithEndSpanStatus(err.Error()),
-							langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+							langfuse.WithAgentStatus(err.Error()),
+							langfuse.WithAgentLevel(langfuse.ObservationLevelError),
 						)
 						loggerFunc.WithError(err).Error("failed to update report msg result")
 						return "", fmt.Errorf("failed to update report msg result: %w", err)
@@ -746,9 +748,9 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 					return "", fmt.Errorf("failed to unmarshal ask user result: %w", err)
 				}
 
-				executorSpan.End(
-					langfuse.WithEndSpanOutput(askUser.Message),
-					langfuse.WithEndSpanStatus("ask user handler"),
+				executorAgent.End(
+					langfuse.WithAgentOutput(askUser.Message),
+					langfuse.WithAgentStatus("ask user handler"),
 				)
 			}
 
@@ -759,7 +761,7 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 
 	executor, err := fp.executor.GetPrimaryExecutor(cfg)
 	if err != nil {
-		return PerformResultError, wrapErrorEndSpan(ctx, executorSpan, "failed to get primary executor", err)
+		return PerformResultError, wrapErrorEndAgentSpan(ctx, executorAgent, "failed to get primary executor", err)
 	}
 
 	ctx = tools.PutAgentContext(ctx, msgChainType)
@@ -767,10 +769,10 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 		ctx, optAgentType, msgChain.ID, &taskID, &subtaskID, chain, executor, fp.summarizer,
 	)
 	if err != nil {
-		return PerformResultError, wrapErrorEndSpan(ctx, executorSpan, "failed to perform primary agent chain", err)
+		return PerformResultError, wrapErrorEndAgentSpan(ctx, executorAgent, "failed to perform primary agent chain", err)
 	}
 
-	executorSpan.End()
+	executorAgent.End()
 
 	return performResult, nil
 }

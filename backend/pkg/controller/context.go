@@ -53,8 +53,8 @@ func wrapErrorEndSpan(ctx context.Context, span langfuse.Span, msg string, err e
 	logrus.WithContext(ctx).WithError(err).Error(msg)
 	err = fmt.Errorf("%s: %w", msg, err)
 	span.End(
-		langfuse.WithEndSpanStatus(err.Error()),
-		langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+		langfuse.WithSpanStatus(err.Error()),
+		langfuse.WithSpanLevel(langfuse.ObservationLevelError),
 	)
 	return err
 }

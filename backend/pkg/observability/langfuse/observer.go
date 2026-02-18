@@ -184,7 +184,7 @@ func (o *observer) flush(ctx context.Context, batch []*api.IngestionEvent) error
 	if len(resp.Errors) > 0 {
 		for _, event := range resp.Errors {
 			logrus.WithContext(ctx).WithFields(logrus.Fields{
-				"event_id": event.Id,
+				"event_id": event.ID,
 				"status":   event.Status,
 				"message":  event.Message,
 				"error":    event.Error,
@@ -230,25 +230,25 @@ func (o *observer) sender() {
 }
 
 func (o *observer) putTraceInfo(obsCtx ObservationContext) {
-	traceCreate := api.NewIngestionEventFromIngestionEventZero(&api.IngestionEventZero{
-		Id:        newSpanID(),
+	traceCreate := &api.IngestionEvent{IngestionEventZero: &api.IngestionEventZero{
+		ID:        newSpanID(),
 		Timestamp: getCurrentTimeString(),
-		Type:      ingestionCreateTrace,
+		Type:      api.IngestionEventZeroType(ingestionCreateTrace).Ptr(),
 		Body: &api.TraceBody{
-			Id:        getStringRef(obsCtx.TraceID),
+			ID:        getStringRef(obsCtx.TraceID),
 			Timestamp: obsCtx.TraceCtx.Timestamp,
 			Name:      obsCtx.TraceCtx.Name,
-			UserId:    obsCtx.TraceCtx.UserId,
+			UserID:    obsCtx.TraceCtx.UserID,
 			Input:     obsCtx.TraceCtx.Input,
 			Output:    obsCtx.TraceCtx.Output,
-			SessionId: obsCtx.TraceCtx.SessionId,
+			SessionID: obsCtx.TraceCtx.SessionID,
 			Release:   getStringRef(o.release),
 			Version:   obsCtx.TraceCtx.Version,
 			Metadata:  obsCtx.TraceCtx.Metadata,
 			Tags:      obsCtx.TraceCtx.Tags,
 			Public:    obsCtx.TraceCtx.Public,
 		},
-	})
+	}}
 
 	o.enqueue(traceCreate)
 }

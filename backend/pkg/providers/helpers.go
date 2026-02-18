@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -13,6 +14,8 @@ import (
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -89,9 +92,18 @@ func (fp *flowProvider) getTasksInfo(ctx context.Context, taskID int64) (*tasksI
 		info tasksInfo
 	)
 
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	evaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("get tasks info"),
+		langfuse.WithEvaluatorInput(map[string]any{
+			"task_id": taskID,
+		}),
+	)
+	ctx, _ = evaluator.Observation(ctx)
+
 	info.Tasks, err = fp.db.GetFlowTasks(ctx, fp.flowID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get flow %d tasks: %w", fp.flowID, err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to get flow tasks", err)
 	}
 
 	for idx, t := range info.Tasks {
@@ -104,8 +116,19 @@ func (fp *flowProvider) getTasksInfo(ctx context.Context, taskID int64) (*tasksI
 
 	info.Subtasks, err = fp.db.GetFlowSubtasks(ctx, fp.flowID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get flow %d subtasks: %w", fp.flowID, err)
+		return nil, wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to get flow subtasks", err)
 	}
+
+	evaluator.End(
+		langfuse.WithEvaluatorOutput(map[string]any{
+			"task":           info.Task,
+			"subtasks":       info.Subtasks,
+			"tasks_count":    len(info.Tasks),
+			"subtasks_count": len(info.Subtasks),
+		}),
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorLevel(langfuse.ObservationLevelDebug),
+	)
 
 	return &info, nil
 }
@@ -193,23 +216,32 @@ func (fp *flowProvider) getTaskPrimaryAgentChainSummary(
 	taskID int64,
 	summarizerHandler tools.SummarizeHandler,
 ) (string, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	evaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("get task primary agent chain summary"),
+		langfuse.WithEvaluatorInput(map[string]any{
+			"task_id": taskID,
+		}),
+	)
+	ctx, _ = evaluator.Observation(ctx)
+
 	msgChain, err := fp.db.GetFlowTaskTypeLastMsgChain(ctx, database.GetFlowTaskTypeLastMsgChainParams{
 		FlowID: fp.flowID,
 		TaskID: database.Int64ToNullInt64(&taskID),
 		Type:   database.MsgchainTypePrimaryAgent,
 	})
 	if err != nil || isEmptyChain(msgChain.Chain) {
-		return "", fmt.Errorf("failed to get task primary agent chain: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to get task primary agent chain", err)
 	}
 
 	chain := []llms.MessageContent{}
 	if err := json.Unmarshal(msgChain.Chain, &chain); err != nil {
-		return "", fmt.Errorf("failed to unmarshal task primary agent chain: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to unmarshal task primary agent chain", err)
 	}
 
 	ast, err := cast.NewChainAST(chain, true)
 	if err != nil {
-		return "", fmt.Errorf("failed to create refiner chain ast: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to create refiner chain ast", err)
 	}
 
 	var humanMessages, aiMessages []llms.MessageContent
@@ -224,12 +256,12 @@ func (fp *flowProvider) getTaskPrimaryAgentChainSummary(
 
 	humanSummary, err := csum.GenerateSummary(ctx, summarizerHandler, humanMessages, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate human summary: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to generate human summary", err)
 	}
 
 	aiSummary, err := csum.GenerateSummary(ctx, summarizerHandler, humanMessages, aiMessages)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate ai summary: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to generate ai summary", err)
 	}
 
 	summary := fmt.Sprintf(`## Task Summary
@@ -243,6 +275,13 @@ func (fp *flowProvider) getTaskPrimaryAgentChainSummary(
 *Summarized actions and outcomes:*
 
 %s`, humanSummary, aiSummary)
+
+	evaluator.End(
+		langfuse.WithEvaluatorOutput(summary),
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorLevel(langfuse.ObservationLevelDebug),
+	)
+
 	return summary, nil
 }
 
@@ -251,12 +290,27 @@ func (fp *flowProvider) getTaskMsgLogsSummary(
 	taskID int64,
 	summarizerHandler tools.SummarizeHandler,
 ) (string, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	evaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("get task msg logs summary"),
+		langfuse.WithEvaluatorInput(map[string]any{
+			"task_id": taskID,
+			"flow_id": fp.flowID,
+		}),
+	)
+	ctx, _ = evaluator.Observation(ctx)
+
 	msgLogs, err := fp.db.GetTaskMsgLogs(ctx, database.Int64ToNullInt64(&taskID))
 	if err != nil {
-		return "", fmt.Errorf("failed to get task msg logs: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to get task msg logs", err)
 	}
 
 	if len(msgLogs) == 0 {
+		evaluator.End(
+			langfuse.WithEvaluatorOutput("no msg logs"),
+			langfuse.WithEvaluatorStatus("success"),
+			langfuse.WithEvaluatorLevel(langfuse.ObservationLevelDebug),
+		)
 		return "no msg logs", nil
 	}
 
@@ -271,7 +325,7 @@ func (fp *flowProvider) getTaskMsgLogsSummary(
 		"MsgLogs": msgLogs,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to render task msg logs template: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to render task msg logs template", err)
 	}
 
 	for l := len(msgLogs) / 2; l > 2; l /= 2 {
@@ -284,14 +338,20 @@ func (fp *flowProvider) getTaskMsgLogsSummary(
 			"MsgLogs": msgLogs,
 		})
 		if err != nil {
-			return "", fmt.Errorf("failed to render task msg logs template: %w", err)
+			return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to render task msg logs template", err)
 		}
 	}
 
 	summary, err := summarizerHandler(ctx, message)
 	if err != nil {
-		return "", fmt.Errorf("failed to summarize task msg logs: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to summarize task msg logs", err)
 	}
+
+	evaluator.End(
+		langfuse.WithEvaluatorOutput(summary),
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorLevel(langfuse.ObservationLevelDebug),
+	)
 
 	return summary, nil
 }
@@ -303,6 +363,56 @@ func (fp *flowProvider) restoreChain(
 	msgChainType database.MsgchainType,
 	systemPrompt, humanPrompt string,
 ) (int64, []llms.MessageContent, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
+
+	// Get raw chain from DB for observation input
+	msgChain, err := fp.db.GetFlowTaskTypeLastMsgChain(ctx, database.GetFlowTaskTypeLastMsgChainParams{
+		FlowID: fp.flowID,
+		TaskID: database.Int64ToNullInt64(taskID),
+		Type:   msgChainType,
+	})
+
+	var rawChain []llms.MessageContent
+	if err == nil && !isEmptyChain(msgChain.Chain) {
+		json.Unmarshal(msgChain.Chain, &rawChain)
+	}
+
+	metadata := langfuse.Metadata{
+		"msg_chain_type": string(msgChainType),
+		"msg_chain_id":   msgChain.ID,
+		"agent_type":     string(optAgentType),
+	}
+	if taskID != nil {
+		metadata["task_id"] = *taskID
+	}
+	if subtaskID != nil {
+		metadata["subtask_id"] = *subtaskID
+	}
+
+	chainObs := observation.Chain(
+		langfuse.WithChainName("restore message chain"),
+		langfuse.WithChainInput(rawChain),
+		langfuse.WithChainMetadata(metadata),
+	)
+	ctx, observation = chainObs.Observation(ctx)
+	wrapErrorWithEvent := func(msg string, err error) error {
+		observation.Event(
+			langfuse.WithEventName("error on restoring message chain"),
+			langfuse.WithEventInput(rawChain),
+			langfuse.WithEventMetadata(metadata),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+		)
+
+		if err != nil {
+			logrus.WithContext(ctx).WithError(err).Warn(msg)
+			return fmt.Errorf("%s: %w", msg, err)
+		}
+
+		logrus.WithContext(ctx).Warn(msg)
+		return errors.New(msg)
+	}
+
 	var chain []llms.MessageContent
 	fallback := func() {
 		chain = []llms.MessageContent{
@@ -313,27 +423,22 @@ func (fp *flowProvider) restoreChain(
 		}
 	}
 
-	msgChain, err := fp.db.GetFlowTaskTypeLastMsgChain(ctx, database.GetFlowTaskTypeLastMsgChainParams{
-		FlowID: fp.flowID,
-		TaskID: database.Int64ToNullInt64(taskID),
-		Type:   msgChainType,
-	})
 	if err != nil || isEmptyChain(msgChain.Chain) {
 		fallback()
 	} else {
 		err = func() error {
 			err = json.Unmarshal(msgChain.Chain, &chain)
 			if err != nil {
-				return fmt.Errorf("failed to unmarshal msg chain: %w", err)
+				return wrapErrorWithEvent("failed to unmarshal msg chain", err)
 			}
 
 			ast, err := cast.NewChainAST(chain, true)
 			if err != nil {
-				return fmt.Errorf("failed to create refiner chain ast: %w", err)
+				return wrapErrorWithEvent("failed to create refiner chain ast", err)
 			}
 
 			if len(ast.Sections) == 0 {
-				return fmt.Errorf("failed to get sections from refiner chain ast")
+				return wrapErrorWithEvent("failed to get sections from refiner chain ast", nil)
 			}
 
 			systemMessage := llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt)
@@ -354,11 +459,11 @@ func (fp *flowProvider) restoreChain(
 			}
 
 			if err := ast.NormalizeToolCallIDs(fp.tcIDTemplate); err != nil {
-				return fmt.Errorf("failed to normalize tool call IDs: %w", err)
+				return wrapErrorWithEvent("failed to normalize tool call IDs", err)
 			}
 
 			if err := ast.ClearReasoning(); err != nil {
-				return fmt.Errorf("failed to clear reasoning: %w", err)
+				return wrapErrorWithEvent("failed to clear reasoning", err)
 			}
 
 			summarizeHandler := fp.GetSummarizeResultHandler(taskID, subtaskID)
@@ -375,16 +480,21 @@ func (fp *flowProvider) restoreChain(
 
 			chain, err = summarizer.SummarizeChain(ctx, summarizeHandler, ast.Messages(), fp.tcIDTemplate)
 			if err != nil {
+				_ = wrapErrorWithEvent("failed to summarize chain", err) // non critical error, just log it
 				chain = ast.Messages()
 			}
 
 			return nil
 		}()
 		if err != nil {
-			logrus.WithContext(ctx).WithError(err).Warn("failed to restore chain")
 			fallback()
 		}
 	}
+
+	chainObs.End(
+		langfuse.WithChainOutput(chain),
+		langfuse.WithChainStatus("success"),
+	)
 
 	chainBlob, err := json.Marshal(chain)
 	if err != nil {
@@ -451,9 +561,20 @@ func (fp *flowProvider) processChain(
 }
 
 func (fp *flowProvider) prepareExecutionContext(ctx context.Context, taskID, subtaskID int64) (string, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	evaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("prepare execution context"),
+		langfuse.WithEvaluatorInput(map[string]any{
+			"task_id":    taskID,
+			"subtask_id": subtaskID,
+			"flow_id":    fp.flowID,
+		}),
+	)
+	ctx, _ = evaluator.Observation(ctx)
+
 	tasksInfo, err := fp.getTasksInfo(ctx, taskID)
 	if err != nil {
-		return "", fmt.Errorf("failed to get tasks info: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to get tasks info", err)
 	}
 
 	subtasksInfo := fp.getSubtasksInfo(taskID, tasksInfo.Subtasks)
@@ -483,14 +604,20 @@ func (fp *flowProvider) prepareExecutionContext(ctx context.Context, taskID, sub
 		"PlannedSubtasks":   subtasksInfo.Planned,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to render execution context: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to render execution context", err)
 	}
 
 	summarizeHandler := fp.GetSummarizeResultHandler(&taskID, &subtaskID)
 	executionContext, err := summarizeHandler(ctx, executionContextRaw)
 	if err != nil {
-		return "", fmt.Errorf("failed to summarize execution context: %w", err)
+		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to summarize execution context", err)
 	}
+
+	evaluator.End(
+		langfuse.WithEvaluatorOutput(executionContext),
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorLevel(langfuse.ObservationLevelDebug),
+	)
 
 	return executionContext, nil
 }

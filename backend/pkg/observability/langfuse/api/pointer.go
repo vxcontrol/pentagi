@@ -16,6 +16,11 @@ func Byte(b byte) *byte {
 	return &b
 }
 
+// Bytes returns a pointer to the given []byte value.
+func Bytes(b []byte) *[]byte {
+	return &b
+}
+
 // Complex64 returns a pointer to the given complex64 value.
 func Complex64(c complex64) *complex64 {
 	return &c

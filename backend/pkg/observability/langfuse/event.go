@@ -14,7 +14,6 @@ const (
 )
 
 type Event interface {
-	End(opts ...EventEndOption)
 	String() string
 	MarshalJSON() ([]byte, error)
 	Observation(ctx context.Context) (context.Context, Observation)
@@ -22,15 +21,14 @@ type Event interface {
 }
 
 type event struct {
-	Name      string           `json:"name"`
-	Metadata  Metadata         `json:"metadata,omitempty"`
-	Input     any              `json:"input,omitempty"`
-	Output    any              `json:"output,omitempty"`
-	StartTime *time.Time       `json:"start_time"`
-	EndTime   *time.Time       `json:"end_time"`
-	Level     ObservationLevel `json:"level"`
-	Status    *string          `json:"status,omitempty"`
-	Version   *string          `json:"version,omitempty"`
+	Name     string           `json:"name"`
+	Metadata Metadata         `json:"metadata,omitempty"`
+	Input    any              `json:"input,omitempty"`
+	Output   any              `json:"output,omitempty"`
+	Time     *time.Time       `json:"time"`
+	Level    ObservationLevel `json:"level"`
+	Status   *string          `json:"status,omitempty"`
+	Version  *string          `json:"version,omitempty"`
 
 	TraceID             string `json:"trace_id"`
 	ObservationID       string `json:"observation_id"`
@@ -39,90 +37,75 @@ type event struct {
 	observer enqueue `json:"-"`
 }
 
-type EventStartOption func(*event)
+type EventOption func(*event)
 
-func withEventTraceID(traceID string) EventStartOption {
+func withEventTraceID(traceID string) EventOption {
 	return func(e *event) {
 		e.TraceID = traceID
 	}
 }
 
-func withEventParentObservationID(parentObservationID string) EventStartOption {
+func withEventParentObservationID(parentObservationID string) EventOption {
 	return func(e *event) {
 		e.ParentObservationID = parentObservationID
 	}
 }
 
-func WithStartEventName(name string) EventStartOption {
+func WithEventName(name string) EventOption {
 	return func(e *event) {
 		e.Name = name
 	}
 }
 
-func WithStartEventMetadata(metadata Metadata) EventStartOption {
+func WithEventMetadata(metadata Metadata) EventOption {
 	return func(e *event) {
 		e.Metadata = metadata
 	}
 }
 
-func WithStartEventInput(input any) EventStartOption {
+func WithEventInput(input any) EventOption {
 	return func(e *event) {
 		e.Input = input
 	}
 }
 
-func WithStartEventOutput(output any) EventStartOption {
+func WithEventOutput(output any) EventOption {
 	return func(e *event) {
 		e.Output = output
 	}
 }
 
-func WithStartEventStartTime(time time.Time) EventStartOption {
+func WithEventTime(time time.Time) EventOption {
 	return func(e *event) {
-		e.StartTime = &time
+		e.Time = &time
 	}
 }
 
-func WithStartEventEndTime(time time.Time) EventStartOption {
-	return func(e *event) {
-		e.EndTime = &time
-	}
-}
-
-func WithStartEventLevel(level ObservationLevel) EventStartOption {
+func WithEventLevel(level ObservationLevel) EventOption {
 	return func(e *event) {
 		e.Level = level
 	}
 }
 
-func WithStartEventStatus(status string) EventStartOption {
+func WithEventStatus(status string) EventOption {
 	return func(e *event) {
 		e.Status = &status
 	}
 }
 
-func WithStartEventVersion(version string) EventStartOption {
+func WithEventVersion(version string) EventOption {
 	return func(e *event) {
 		e.Version = &version
 	}
 }
 
-type EventEndOption func(*event)
-
-func WithEndEventTime(time time.Time) EventEndOption {
-	return func(e *event) {
-		e.EndTime = &time
-	}
-}
-
-func newEvent(observer enqueue, opts ...EventStartOption) Event {
+func newEvent(observer enqueue, opts ...EventOption) Event {
 	currentTime := getCurrentTimeRef()
 	e := &event{
-		Name:          spanDefaultName,
+		Name:          eventDefaultName,
 		ObservationID: newSpanID(),
 		Version:       getStringRef(firstVersion),
-		StartTime:     currentTime,
-		EndTime:       currentTime,
+		Time:          currentTime,
 		observer:      observer,
 	}
 
@@ -130,22 +113,16 @@ func newEvent(observer enqueue, opts ...EventStartOption) Event {
 		opt(e)
 	}
 
-	if e.StartTime != currentTime && e.EndTime == currentTime {
-		e.EndTime = e.StartTime
-	}
-
-	obsCreate := api.NewIngestionEventFromIngestionEventEight(&api.IngestionEventEight{
-		Id:        newSpanID(),
-		Timestamp: getTimeRefString(e.StartTime),
-		Type:      ingestionCreateObservation,
-		Body: &api.ObservationBody{
-			Id:                  getStringRef(e.ObservationID),
-			TraceId:             getStringRef(e.TraceID),
-			ParentObservationId: getStringRef(e.ParentObservationID),
-			Type:                api.ObservationTypeEvent,
+	obsCreate := &api.IngestionEvent{IngestionEventSix: &api.IngestionEventSix{
+		ID:        newSpanID(),
+		Timestamp: getTimeRefString(e.Time),
+		Type:      api.IngestionEventSixType(ingestionCreateEvent).Ptr(),
+		Body: &api.CreateEventBody{
+			ID:                  getStringRef(e.ObservationID),
+			TraceID:             getStringRef(e.TraceID),
+			ParentObservationID: getStringRef(e.ParentObservationID),
 			Name:                getStringRef(e.Name),
-			StartTime:           e.StartTime,
-			EndTime:             e.EndTime,
+			StartTime:           e.Time,
 			Metadata:            e.Metadata,
 			Input:               e.Input,
 			Output:              e.Output,
@@ -153,31 +130,11 @@ func newEvent(observer enqueue, opts ...EventStartOption) Event {
 			StatusMessage:       e.Status,
 			Version:             e.Version,
 		},
-	})
+	}}
 
 	e.observer.enqueue(obsCreate)
 
 	return e
-}
-
-func (e *event) End(opts ...EventEndOption) {
-	e.EndTime = getCurrentTimeRef()
-	for _, opt := range opts {
-		opt(e)
-	}
-
-	obsUpdate := api.NewIngestionEventFromIngestionEventNine(&api.IngestionEventNine{
-		Id:        newSpanID(),
-		Timestamp: getTimeRefString(e.EndTime),
-		Type:      ingestionUpdateObservation,
-		Body: &api.ObservationBody{
-			Id:      getStringRef(e.ObservationID),
-			Type:    api.ObservationTypeEvent,
-			EndTime: e.EndTime,
-		},
-	})
-
-	e.observer.enqueue(obsUpdate)
 }
 
 func (e *event) String() string {
@@ -185,7 +142,8 @@ func (e *event) String() string {
 }
 
 func (e *event) MarshalJSON() ([]byte, error) {
-	return json.Marshal(e)
+	type alias event
+	return json.Marshal(alias(*e))
 }
 
 func (e *event) Observation(ctx context.Context) (context.Context, Observation) {

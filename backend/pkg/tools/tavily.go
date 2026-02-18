@@ -11,6 +11,8 @@ import (
 	"text/template"
 
 	"pentagi/pkg/database"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
 )
@@ -73,6 +75,7 @@ func NewTavilyTool(flowID int64, taskID, subtaskID *int64, apiKey, proxyURL stri
 
 func (t *tavily) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"tool": name,
 		"args": string(args),
@@ -90,6 +93,20 @@ func (t *tavily) Handle(ctx context.Context, name string, args json.RawMessage) 
 
 	result, err := t.search(ctx, action.Query, action.MaxResults.Int())
 	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("search engine error swallowed"),
+			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name":   TavilyToolName,
+				"engine":      "tavily",
+				"query":       action.Query,
+				"max_results": action.MaxResults.Int(),
+				"error":       err.Error(),
+			}),
+		)
+
 		logger.WithError(err).Error("failed to search in tavily")
 		return fmt.Sprintf("failed to search in tavily: %v", err), nil
 	}

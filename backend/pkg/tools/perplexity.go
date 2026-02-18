@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"pentagi/pkg/database"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
 )
@@ -138,6 +140,7 @@ func NewPerplexityTool(flowID int64, taskID, subtaskID *int64,
 // Handle processes a search request through Perplexity API
 func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"tool": name,
 		"args": string(args),
@@ -155,6 +158,21 @@ func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessa
 
 	result, err := t.search(ctx, action.Query)
 	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("search engine error swallowed"),
+			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name":   PerplexityToolName,
+				"engine":      "perplexity",
+				"query":       action.Query,
+				"model":       t.model,
+				"max_results": action.MaxResults.Int(),
+				"error":       err.Error(),
+			}),
+		)
+
 		logger.WithError(err).Error("failed to search in perplexity")
 		return fmt.Sprintf("failed to search in perplexity: %v", err), nil
 	}

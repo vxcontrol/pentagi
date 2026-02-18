@@ -14,7 +14,7 @@ const (
 )
 
 type Span interface {
-	End(opts ...SpanEndOption)
+	End(opts ...SpanOption)
 	String() string
 	MarshalJSON() ([]byte, error)
 	Observation(ctx context.Context) (context.Context, Observation)
@@ -39,89 +39,83 @@ type span struct {
 	observer enqueue `json:"-"`
 }
 
-type SpanStartOption func(*span)
+type SpanOption func(*span)
 
-func withSpanTraceID(traceID string) SpanStartOption {
+func withSpanTraceID(traceID string) SpanOption {
 	return func(s *span) {
 		s.TraceID = traceID
 	}
 }
 
-func withSpanParentObservationID(parentObservationID string) SpanStartOption {
+func withSpanParentObservationID(parentObservationID string) SpanOption {
 	return func(s *span) {
 		s.ParentObservationID = parentObservationID
 	}
 }
 
-func WithStartSpanID(id string) SpanStartOption {
+// WithSpanID sets on creation time
+func WithSpanID(id string) SpanOption {
 	return func(s *span) {
 		s.ObservationID = id
 	}
 }
 
-func WithStartSpanName(name string) SpanStartOption {
+func WithSpanName(name string) SpanOption {
 	return func(s *span) {
 		s.Name = name
 	}
 }
 
-func WithStartSpanMetadata(metadata Metadata) SpanStartOption {
+func WithSpanMetadata(metadata Metadata) SpanOption {
 	return func(s *span) {
-		s.Metadata = metadata
+		s.Metadata = mergeMaps(s.Metadata, metadata)
 	}
 }
 
-func WithStartSpanInput(input any) SpanStartOption {
+func WithSpanInput(input any) SpanOption {
 	return func(s *span) {
 		s.Input = input
 	}
 }
 
-func WithStartSpanTime(time time.Time) SpanStartOption {
-	return func(s *span) {
-		s.StartTime = &time
-	}
-}
-
-func WithStartSpanLevel(level ObservationLevel) SpanStartOption {
-	return func(s *span) {
-		s.Level = level
-	}
-}
-
-func WithStartSpanVersion(version string) SpanStartOption {
-	return func(s *span) {
-		s.Version = &version
-	}
-}
-
-type SpanEndOption func(*span)
-
-func WithEndSpanTime(time time.Time) SpanEndOption {
-	return func(s *span) {
-		s.EndTime = &time
-	}
-}
-
-func WithEndSpanOutput(output any) SpanEndOption {
+func WithSpanOutput(output any) SpanOption {
 	return func(s *span) {
 		s.Output = output
 	}
 }
 
-func WithEndSpanStatus(status string) SpanEndOption {
+// WithSpanStartTime sets on creation time
+func WithSpanStartTime(time time.Time) SpanOption {
 	return func(s *span) {
-		s.Status = &status
+		s.StartTime = &time
 	}
 }
 
-func WithEndSpanLevel(level ObservationLevel) SpanEndOption {
+func WithSpanEndTime(time time.Time) SpanOption {
+	return func(s *span) {
+		s.EndTime = &time
+	}
+}
+
+func WithSpanLevel(level ObservationLevel) SpanOption {
 	return func(s *span) {
 		s.Level = level
 	}
 }
 
-func newSpan(observer enqueue, opts ...SpanStartOption) Span {
+func WithSpanStatus(status string) SpanOption {
+	return func(s *span) {
+		s.Status = &status
+	}
+}
+
+func WithSpanVersion(version string) SpanOption {
+	return func(s *span) {
+		s.Version = &version
+	}
+}
+
+func newSpan(observer enqueue, opts ...SpanOption) Span {
 	s := &span{
 		Name:          spanDefaultName,
 		ObservationID: newSpanID(),
@@ -134,49 +128,59 @@ func newSpan(observer enqueue, opts ...SpanStartOption) Span {
 		opt(s)
 	}
 
-	obsCreate := api.NewIngestionEventFromIngestionEventEight(&api.IngestionEventEight{
-		Id:        newSpanID(),
+	obsCreate := &api.IngestionEvent{IngestionEventTwo: &api.IngestionEventTwo{
+		ID:        newSpanID(),
 		Timestamp: getTimeRefString(s.StartTime),
-		Type:      ingestionCreateObservation,
-		Body: &api.ObservationBody{
-			Id:                  getStringRef(s.ObservationID),
-			TraceId:             getStringRef(s.TraceID),
-			ParentObservationId: getStringRef(s.ParentObservationID),
-			Type:                api.ObservationTypeSpan,
+		Type:      api.IngestionEventTwoType(ingestionCreateSpan).Ptr(),
+		Body: &api.CreateSpanBody{
+			ID:                  getStringRef(s.ObservationID),
+			TraceID:             getStringRef(s.TraceID),
+			ParentObservationID: getStringRef(s.ParentObservationID),
 			Name:                getStringRef(s.Name),
+			Input:               convertInput(s.Input, nil),
+			Output:              convertOutput(s.Output),
 			StartTime:           s.StartTime,
+			EndTime:             s.EndTime,
 			Metadata:            s.Metadata,
-			Input:               s.Input,
 			Level:               s.Level.ToLangfuse(),
 			StatusMessage:       s.Status,
 			Version:             s.Version,
 		},
-	})
+	}}
 
 	s.observer.enqueue(obsCreate)
 
 	return s
 }
 
-func (s *span) End(opts ...SpanEndOption) {
+func (s *span) End(opts ...SpanOption) {
+	id := s.ObservationID
+	startTime := s.StartTime
 	s.EndTime = getCurrentTimeRef()
 	for _, opt := range opts {
 		opt(s)
 	}
 
-	obsUpdate := api.NewIngestionEventFromIngestionEventNine(&api.IngestionEventNine{
-		Id:        newSpanID(),
+	// preserve the original observation ID and start time
+	s.ObservationID = id
+	s.StartTime = startTime
+
+	obsUpdate := &api.IngestionEvent{IngestionEventThree: &api.IngestionEventThree{
+		ID:        newSpanID(),
 		Timestamp: getTimeRefString(s.EndTime),
-		Type:      ingestionUpdateObservation,
-		Body: &api.ObservationBody{
-			Id:            getStringRef(s.ObservationID),
-			Type:          api.ObservationTypeSpan,
+		Type:      api.IngestionEventThreeType(ingestionUpdateSpan).Ptr(),
+		Body: &api.UpdateSpanBody{
+			ID:            s.ObservationID,
+			Name:          getStringRef(s.Name),
+			Metadata:      s.Metadata,
+			Input:         convertInput(s.Input, nil),
+			Output:        convertOutput(s.Output),
 			EndTime:       s.EndTime,
-			Output:        s.Output,
-			StatusMessage: s.Status,
 			Level:         s.Level.ToLangfuse(),
+			StatusMessage: s.Status,
+			Version:       s.Version,
 		},
-	})
+	}}
 
 	s.observer.enqueue(obsUpdate)
 }

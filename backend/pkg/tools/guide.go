@@ -61,23 +61,31 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			return "", fmt.Errorf("failed to unmarshal %s search guide action arguments: %w", name, err)
 		}
 
-		opts := []langfuse.EventStartOption{
-			langfuse.WithStartEventName("retrieve guide from vector store"),
-			langfuse.WithStartEventInput(action.Question),
-			langfuse.WithStartEventMetadata(map[string]any{
-				"tool_name":  name,
-				"message":    action.Message,
-				"limit":      guideVectorStoreResultLimit,
-				"threshold":  guideVectorStoreThreshold,
-				"doc_type":   guideVectorStoreDefaultType,
-				"guide_type": action.Type,
-			}),
-		}
-
 		filters := map[string]any{
 			"doc_type":   guideVectorStoreDefaultType,
 			"guide_type": action.Type,
 		}
+
+		metadata := langfuse.Metadata{
+			"tool_name":  name,
+			"message":    action.Message,
+			"limit":      guideVectorStoreResultLimit,
+			"threshold":  guideVectorStoreThreshold,
+			"doc_type":   guideVectorStoreDefaultType,
+			"guide_type": action.Type,
+		}
+
+		retriever := observation.Retriever(
+			langfuse.WithRetrieverName("retrieve guide from vector store"),
+			langfuse.WithRetrieverInput(map[string]any{
+				"query":       action.Question,
+				"threshold":   guideVectorStoreThreshold,
+				"max_results": guideVectorStoreResultLimit,
+				"filters":     filters,
+			}),
+			langfuse.WithRetrieverMetadata(metadata),
+		)
+		ctx, observation = retriever.Observation(ctx)
 
 		logger = logger.WithFields(logrus.Fields{
 			"query": action.Question[:min(len(action.Question), 1000)],
@@ -92,20 +100,20 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			vectorstores.WithFilters(filters),
 		)
 		if err != nil {
-			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			)...)
+			retriever.End(
+				langfuse.WithRetrieverStatus(err.Error()),
+				langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
+			)
 			logger.WithError(err).Error("failed to search for similar documents")
 			return "", fmt.Errorf("failed to search for similar documents: %w", err)
 		}
 
 		if len(docs) == 0 {
-			event := observation.Event(append(opts,
-				langfuse.WithStartEventStatus("no guide found"),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelWarning),
-			)...)
-			_, observation = event.Observation(ctx)
+			retriever.End(
+				langfuse.WithRetrieverStatus("no guide found"),
+				langfuse.WithRetrieverLevel(langfuse.ObservationLevelWarning),
+				langfuse.WithRetrieverOutput([]any{}),
+			)
 			observation.Score(
 				langfuse.WithScoreComment("no guide found"),
 				langfuse.WithScoreName("guide_search_result"),
@@ -114,12 +122,14 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			return guideNotFoundMessage, nil
 		}
 
-		event := observation.Event(append(opts,
-			langfuse.WithStartEventStatus("success"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelDebug),
-			langfuse.WithStartEventOutput(docs),
-		)...)
-		_, observation = event.Observation(ctx)
+		retriever.End(
+			langfuse.WithRetrieverStatus("success"),
+			langfuse.WithRetrieverLevel(langfuse.ObservationLevelDebug),
+			langfuse.WithRetrieverOutput(docs),
+		)
+
+		// TODO: here need to rerank and filter the docs based on the question
+		// use evaluator observation type to process each document and to get a score
 
 		buffer := strings.Builder{}
 		for i, doc := range docs {
@@ -166,11 +176,11 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 
 		guide := fmt.Sprintf("Question:\n%s\n\nGuide:\n%s", action.Question, action.Guide)
 
-		opts := []langfuse.EventStartOption{
-			langfuse.WithStartEventName("store guide to vector store"),
-			langfuse.WithStartEventInput(action.Question),
-			langfuse.WithStartEventOutput(guide),
-			langfuse.WithStartEventMetadata(map[string]any{
+		opts := []langfuse.EventOption{
+			langfuse.WithEventName("store guide to vector store"),
+			langfuse.WithEventInput(action.Question),
+			langfuse.WithEventOutput(guide),
+			langfuse.WithEventMetadata(map[string]any{
 				"tool_name":  name,
 				"message":    action.Message,
 				"doc_type":   guideVectorStoreDefaultType,
@@ -187,8 +197,8 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 		docs, err := documentloaders.NewText(strings.NewReader(guide)).Load(ctx)
 		if err != nil {
 			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
+				langfuse.WithEventStatus(err.Error()),
+				langfuse.WithEventLevel(langfuse.ObservationLevelError),
 			)...)
 			logger.WithError(err).Error("failed to load document")
 			return "", fmt.Errorf("failed to load document: %w", err)
@@ -214,17 +224,17 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 
 		if _, err := g.store.AddDocuments(ctx, docs); err != nil {
 			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
+				langfuse.WithEventStatus(err.Error()),
+				langfuse.WithEventLevel(langfuse.ObservationLevelError),
 			)...)
 			logger.WithError(err).Error("failed to store guide")
 			return "", fmt.Errorf("failed to store guide: %w", err)
 		}
 
 		observation.Event(append(opts,
-			langfuse.WithStartEventStatus("success"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelDebug),
-			langfuse.WithStartEventOutput(docs),
+			langfuse.WithEventStatus("success"),
+			langfuse.WithEventLevel(langfuse.ObservationLevelDebug),
+			langfuse.WithEventOutput(docs),
 		)...)
 
 		if agentCtx, ok := GetAgentContext(ctx); ok {

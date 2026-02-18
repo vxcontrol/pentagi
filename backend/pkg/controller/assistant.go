@@ -128,10 +128,10 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow %d assistant worker", awc.flowID, assistant.ID)),
-			langfuse.WithTraceUserId(user.Mail),
+			langfuse.WithTraceUserID(user.Mail),
 			langfuse.WithTraceTags([]string{"controller", "assistant"}),
 			langfuse.WithTraceInput(awc.input),
-			langfuse.WithTraceSessionId(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
+			langfuse.WithTraceSessionID(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
 				"assistant_id":  assistant.ID,
 				"flow_id":       awc.flowID,
@@ -145,7 +145,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 			}),
 		),
 	)
-	assistantSpan := observation.Span(langfuse.WithStartSpanName("prepare assistant worker"))
+	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
 	ctx, _ = assistantSpan.Observation(ctx)
 
 	pub := awc.subs.NewFlowPublisher(awc.userID, awc.flowID)
@@ -248,7 +248,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to run assistant worker", err)
 	}
 
-	assistantSpan.End(langfuse.WithEndSpanStatus("assistant worker started"))
+	assistantSpan.End(langfuse.WithSpanStatus("assistant worker started"))
 
 	return aw, nil
 }
@@ -289,9 +289,9 @@ func LoadAssistantWorker(
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow %d assistant worker", awc.flowID, assistant.ID)),
-			langfuse.WithTraceUserId(user.Mail),
+			langfuse.WithTraceUserID(user.Mail),
 			langfuse.WithTraceTags([]string{"controller", "assistant"}),
-			langfuse.WithTraceSessionId(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
+			langfuse.WithTraceSessionID(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
 				"assistant_id":  assistant.ID,
 				"flow_id":       awc.flowID,
@@ -305,7 +305,7 @@ func LoadAssistantWorker(
 			}),
 		),
 	)
-	assistantSpan := observation.Span(langfuse.WithStartSpanName("prepare assistant worker"))
+	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
 	ctx, _ = assistantSpan.Observation(ctx)
 
 	functions := &tools.Functions{}
@@ -398,7 +398,7 @@ func LoadAssistantWorker(
 	aw.wg.Add(1)
 	go aw.worker()
 
-	assistantSpan.End(langfuse.WithEndSpanStatus("assistant worker started"))
+	assistantSpan.End(langfuse.WithSpanStatus("assistant worker started"))
 
 	return aw, nil
 }

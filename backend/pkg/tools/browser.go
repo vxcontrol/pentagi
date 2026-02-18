@@ -16,6 +16,9 @@ import (
 	"sync"
 	"time"
 
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -62,7 +65,24 @@ func NewBrowserTool(flowID int64, taskID, subtaskID *int64, dataDir, scPrvURL, s
 }
 
 func (b *browser) wrapCommandResult(ctx context.Context, name, result, url, screen string, err error) (string, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("browser tool error swallowed"),
+			langfuse.WithEventInput(map[string]any{
+				"url":    url,
+				"action": name,
+			}),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name": BrowserToolName,
+				"url":       url,
+				"screen":    screen,
+				"error":     err.Error(),
+			}),
+		)
+
 		logrus.WithContext(ctx).WithError(err).WithFields(logrus.Fields{
 			"tool":   name,
 			"url":    url,

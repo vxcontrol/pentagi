@@ -13,6 +13,8 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
@@ -54,8 +56,20 @@ func NewTerminalTool(flowID int64, taskID, subtaskID *int64,
 	}
 }
 
-func (t *terminal) wrapCommandResult(ctx context.Context, name, result string, err error) (string, error) {
+func (t *terminal) wrapCommandResult(ctx context.Context, args json.RawMessage, name, result string, err error) (string, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("terminal tool error swallowed"),
+			langfuse.WithEventInput(args),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name": name,
+				"error":     err.Error(),
+			}),
+		)
+
 		logrus.WithContext(ctx).WithError(err).WithFields(logrus.Fields{
 			"tool":   name,
 			"result": result[:min(len(result), 1000)],
@@ -80,7 +94,7 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 		}
 		timeout := time.Duration(action.Timeout)*time.Second + defaultExtraExecTimeout
 		result, err := t.ExecCommand(ctx, action.Cwd, action.Input, action.Detach.Bool(), timeout)
-		return t.wrapCommandResult(ctx, name, result, err)
+		return t.wrapCommandResult(ctx, args, name, result, err)
 	case FileToolName:
 		var action FileAction
 		if err := json.Unmarshal(args, &action); err != nil {
@@ -96,10 +110,10 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 		switch action.Action {
 		case ReadFile:
 			result, err := t.ReadFile(ctx, t.flowID, action.Path)
-			return t.wrapCommandResult(ctx, name, result, err)
+			return t.wrapCommandResult(ctx, args, name, result, err)
 		case UpdateFile:
 			result, err := t.WriteFile(ctx, t.flowID, action.Content, action.Path)
-			return t.wrapCommandResult(ctx, name, result, err)
+			return t.wrapCommandResult(ctx, args, name, result, err)
 		default:
 			logger.Error("unknown file action")
 			return "", fmt.Errorf("unknown file action: %s", action.Action)

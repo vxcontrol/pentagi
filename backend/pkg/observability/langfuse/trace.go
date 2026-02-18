@@ -3,16 +3,16 @@ package langfuse
 import "time"
 
 type TraceContext struct {
-	Timestamp *time.Time  `json:"timestamp,omitempty"`
-	Name      *string     `json:"name,omitempty"`
-	UserId    *string     `json:"user_id,omitempty"`
-	Input     interface{} `json:"input,omitempty"`
-	Output    interface{} `json:"output,omitempty"`
-	SessionId *string     `json:"session_id,omitempty"`
-	Version   *string     `json:"version,omitempty"`
-	Metadata  Metadata    `json:"metadata,omitempty"`
-	Tags      []string    `json:"tags,omitempty"`
-	Public    *bool       `json:"public,omitempty"`
+	Timestamp *time.Time `json:"timestamp,omitempty"`
+	Name      *string    `json:"name,omitempty"`
+	UserID    *string    `json:"user_id,omitempty"`
+	Input     any        `json:"input,omitempty"`
+	Output    any        `json:"output,omitempty"`
+	SessionID *string    `json:"session_id,omitempty"`
+	Version   *string    `json:"version,omitempty"`
+	Metadata  Metadata   `json:"metadata,omitempty"`
+	Tags      []string   `json:"tags,omitempty"`
+	Public    *bool      `json:"public,omitempty"`
 }
 
 type TraceContextOption func(*TraceContext)
@@ -29,27 +29,27 @@ func WithTraceName(name string) TraceContextOption {
 	}
 }
 
-func WithTraceUserId(userId string) TraceContextOption {
+func WithTraceUserID(userID string) TraceContextOption {
 	return func(t *TraceContext) {
-		t.UserId = &userId
+		t.UserID = &userID
 	}
 }
 
-func WithTraceInput(input interface{}) TraceContextOption {
+func WithTraceInput(input any) TraceContextOption {
 	return func(t *TraceContext) {
-		t.Input = input
+		t.Input = convertInput(input, nil)
 	}
 }
 
-func WithTraceOutput(output interface{}) TraceContextOption {
+func WithTraceOutput(output any) TraceContextOption {
 	return func(t *TraceContext) {
-		t.Output = output
+		t.Output = convertOutput(output)
 	}
 }
 
-func WithTraceSessionId(sessionId string) TraceContextOption {
+func WithTraceSessionID(sessionID string) TraceContextOption {
 	return func(t *TraceContext) {
-		t.SessionId = &sessionId
+		t.SessionID = &sessionID
 	}
 }
 

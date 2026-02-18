@@ -1,19 +1,24 @@
 package core
 
-import "fmt"
+import (
+	"fmt"
+	"net/http"
+)
 
 // APIError is a lightweight wrapper around the standard error
 // interface that preserves the status code from the RPC, if any.
 type APIError struct {
 	err error
 
-	StatusCode int `json:"-"`
+	StatusCode int         `json:"-"`
+	Header     http.Header `json:"-"`
 }
 
 // NewAPIError constructs a new API error.
-func NewAPIError(statusCode int, err error) *APIError {
+func NewAPIError(statusCode int, header http.Header, err error) *APIError {
 	return &APIError{
 		err:        err,
+		Header:     header,
 		StatusCode: statusCode,
 	}
 }

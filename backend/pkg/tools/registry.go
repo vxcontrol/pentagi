@@ -58,6 +58,35 @@ const (
 	BarrierToolType
 )
 
+func (t ToolType) String() string {
+	switch t {
+	case EnvironmentToolType:
+		return "environment"
+	case SearchNetworkToolType:
+		return "search_network"
+	case SearchVectorDbToolType:
+		return "search_vector_db"
+	case AgentToolType:
+		return "agent"
+	case StoreAgentResultToolType:
+		return "store_agent_result"
+	case StoreVectorDbToolType:
+		return "store_vector_db"
+	case BarrierToolType:
+		return "barrier"
+	default:
+		return "none"
+	}
+}
+
+// GetToolType returns the tool type for a given tool name
+func GetToolType(name string) ToolType {
+	if toolType, ok := toolsTypeMapping[name]; ok {
+		return toolType
+	}
+	return NoneToolType
+}
+
 var toolsTypeMapping = map[string]ToolType{
 	FinalyToolName:            BarrierToolType,
 	AskUserToolName:           BarrierToolType,

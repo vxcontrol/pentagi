@@ -105,7 +105,7 @@ func (fp *flowProvider) performAgentChain(
 
 		if len(result.funcCalls) == 0 {
 			if optAgentType == pconfig.OptionsTypeAssistant {
-				fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID)
+				fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID, chainID)
 				return fp.processAssistantResult(ctx, logger, chainID, chain, result, summarizer, summarizerHandler, rollLastUpdateTime())
 			} else {
 				// Build AI message with reasoning for reflector (universal pattern)
@@ -132,7 +132,7 @@ func (fp *flowProvider) performAgentChain(
 			}
 		}
 
-		fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID)
+		fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID, chainID)
 
 		msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
 		// Universal pattern: preserve content with or without reasoning (works for all providers thanks to deduplication)
@@ -158,7 +158,9 @@ func (fp *flowProvider) performAgentChain(
 			response, err := fp.execToolCall(ctx, chainID, idx, result, detector, executor)
 
 			if toolTypeMapping[funcName] != tools.AgentToolType {
-				fp.storeToolExecutionToGraphiti(ctx, groupID, optAgentType, toolCall, response, err, executor, taskID, subtaskID)
+				fp.storeToolExecutionToGraphiti(
+					ctx, groupID, optAgentType, toolCall, response, err, executor, taskID, subtaskID, chainID,
+				)
 			}
 
 			if err != nil {
@@ -197,6 +199,19 @@ func (fp *flowProvider) performAgentChain(
 			// it returns the same chain state if error occurs
 			chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain, fp.tcIDTemplate)
 			if err != nil {
+				// log swallowed error
+				_, observation := obs.Observer.NewObservation(ctx)
+				observation.Event(
+					langfuse.WithEventName("chain summarization error swallowed"),
+					langfuse.WithEventInput(chain),
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+					langfuse.WithEventMetadata(langfuse.Metadata{
+						"tc_id_template": fp.tcIDTemplate,
+						"msg_chain_id":   chainID,
+						"error":          err.Error(),
+					}),
+				)
 				logger.WithError(err).Warn("failed to summarize chain")
 			} else if err := fp.updateMsgChain(ctx, chainID, chain, rollLastUpdateTime()); err != nil {
 				logger.WithError(err).Error("failed to update msg chain")
@@ -240,24 +255,22 @@ func (fp *flowProvider) execToolCall(
 		"msg_chain_id": chainID,
 	})
 
-	ctx, observation := obs.Observer.NewObservation(ctx)
-	opts := []langfuse.EventStartOption{
-		langfuse.WithStartEventName(fmt.Sprintf("tool call %s", funcName)),
-		langfuse.WithStartEventInput(funcArgs),
-		langfuse.WithStartEventMetadata(map[string]any{
-			"tool_call_id": toolCall.ID,
-			"tool_name":    funcName,
-		}),
-	}
-
 	if detector.detect(toolCall) {
 		response := fmt.Sprintf("tool call '%s' is repeating, please try another tool", funcName)
 
-		observation.Event(append(opts,
-			langfuse.WithStartEventStatus("failed"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			langfuse.WithStartEventOutput(response),
-		)...)
+		_, observation := obs.Observer.NewObservation(ctx)
+		observation.Event(
+			langfuse.WithEventName("repeating tool call detected"),
+			langfuse.WithEventInput(funcArgs),
+			langfuse.WithEventMetadata(map[string]any{
+				"tool_call_id": toolCall.ID,
+				"tool_name":    funcName,
+				"msg_chain_id": chainID,
+			}),
+			langfuse.WithEventStatus("failed"),
+			langfuse.WithEventLevel(langfuse.ObservationLevelError),
+			langfuse.WithEventOutput(response),
+		)
 		logger.Warn("failed to exec function: tool call is repeating")
 
 		return response, nil
@@ -281,10 +294,6 @@ func (fp *flowProvider) execToolCall(
 				return "", err
 			}
 
-			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			)...)
 			logger.WithError(err).Warn("failed to exec function")
 
 			funcExecErr := err
@@ -303,11 +312,6 @@ func (fp *flowProvider) execToolCall(
 			break
 		}
 	}
-
-	observation.Event(append(opts,
-		langfuse.WithStartEventStatus("success"),
-		langfuse.WithStartEventOutput(response),
-	)...)
 
 	return response, nil
 }
@@ -492,11 +496,11 @@ func (fp *flowProvider) performReflector(
 		msg := "reflector called too many times"
 		_, observation := obs.Observer.NewObservation(ctx)
 		observation.Event(
-			langfuse.WithStartEventName("reflector limit calls reached"),
-			langfuse.WithStartEventInput(content),
-			langfuse.WithStartEventStatus("failed"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			langfuse.WithStartEventOutput(msg),
+			langfuse.WithEventName("reflector limit calls reached"),
+			langfuse.WithEventInput(content),
+			langfuse.WithEventStatus("failed"),
+			langfuse.WithEventLevel(langfuse.ObservationLevelError),
+			langfuse.WithEventOutput(msg),
 		)
 		logger.WithField("content", content[:min(1000, len(content))]).Warn(msg)
 		return nil, errors.New(msg)
@@ -521,25 +525,46 @@ func (fp *flowProvider) performReflector(
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	reflectorSpan := observation.Span(
-		langfuse.WithStartSpanName("reflector agent"),
-		langfuse.WithStartSpanInput(content),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+	reflectorAgent := observation.Agent(
+		langfuse.WithAgentName("reflector"),
+		langfuse.WithAgentInput(content),
+		langfuse.WithAgentMetadata(langfuse.Metadata{
 			"user_context":   reflectorContext["user"],
 			"system_context": reflectorContext["system"],
 		}),
 	)
-	ctx, _ = reflectorSpan.Observation(ctx)
+	ctx, observation = reflectorAgent.Observation(ctx)
+
+	reflectorEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("render reflector agent prompts"),
+		langfuse.WithEvaluatorInput(reflectorContext),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
+			"user_context":   reflectorContext["user"],
+			"system_context": reflectorContext["system"],
+			"lang":           fp.language,
+		}),
+	)
 
 	userReflectorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionReflector, reflectorContext["user"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, reflectorSpan, "failed to get user reflector template", err)
+		msg := "failed to get user reflector template"
+		return nil, wrapErrorEndEvaluatorSpan(ctx, reflectorEvaluator, msg, err)
 	}
 
 	systemReflectorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeReflector, reflectorContext["system"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, reflectorSpan, "failed to get system reflector template", err)
+		msg := "failed to get system reflector template"
+		return nil, wrapErrorEndEvaluatorSpan(ctx, reflectorEvaluator, msg, err)
 	}
+
+	reflectorEvaluator.End(
+		langfuse.WithEvaluatorOutput(map[string]any{
+			"user_template":   userReflectorTmpl,
+			"system_template": systemReflectorTmpl,
+		}),
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorLevel(langfuse.ObservationLevelDebug),
+	)
 
 	advice, err := fp.performSimpleChain(ctx, taskID, subtaskID, optAgentType,
 		msgChainType, systemReflectorTmpl, userReflectorTmpl)
@@ -547,28 +572,37 @@ func (fp *flowProvider) performReflector(
 		advice = ToolPlaceholder
 	}
 
-	opts := []langfuse.SpanEndOption{
-		langfuse.WithEndSpanStatus("failed"),
-		langfuse.WithEndSpanOutput(advice),
-		langfuse.WithEndSpanLevel(langfuse.ObservationLevelWarning),
+	opts := []langfuse.AgentOption{
+		langfuse.WithAgentStatus("failed"),
+		langfuse.WithAgentOutput(advice),
+		langfuse.WithAgentLevel(langfuse.ObservationLevelWarning),
 	}
-	defer reflectorSpan.End(opts...)
+	defer func() {
+		reflectorAgent.End(opts...)
+	}()
 
 	chain = append(chain, llms.TextParts(llms.ChatMessageTypeHuman, advice))
 	result, err := fp.callWithRetries(ctx, chain, optOriginType, executor)
 	if err != nil {
 		logger.WithError(err).Error("failed to call agent chain by reflector")
-		opts = append(opts, langfuse.WithEndSpanStatus(err.Error()))
+		opts = append(opts,
+			langfuse.WithAgentStatus(err.Error()),
+			langfuse.WithAgentLevel(langfuse.ObservationLevelError),
+		)
 		return nil, err
 	}
 
-	// Don't update duration delta for reflector because it's already included in the performAgentChain
+	// don't update duration delta for reflector because it's already included in the performAgentChain
 	if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, 0); err != nil {
 		logger.WithError(err).Error("failed to update msg chain usage")
+		opts = append(opts,
+			langfuse.WithAgentStatus(err.Error()),
+			langfuse.WithAgentLevel(langfuse.ObservationLevelError),
+		)
 		return nil, err
 	}
 
-	// Preserve reasoning in reflector response using universal pattern
+	// preserve reasoning in reflector response using universal pattern
 	reflectorMsg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
 	if result.content != "" || !result.thinking.IsEmpty() {
 		reflectorMsg.Parts = append(reflectorMsg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
@@ -579,7 +613,7 @@ func (fp *flowProvider) performReflector(
 			humanMessage, result.content, executionContext, executor, iteration+1)
 	}
 
-	opts = append(opts, langfuse.WithEndSpanStatus("success"))
+	opts = append(opts, langfuse.WithAgentStatus("success"))
 	return result, nil
 }
 
@@ -639,6 +673,19 @@ func (fp *flowProvider) processAssistantResult(
 		// it returns the same chain state if error occurs
 		chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain, fp.tcIDTemplate)
 		if err != nil {
+			// log swallowed error
+			_, observation := obs.Observer.NewObservation(ctx)
+			observation.Event(
+				langfuse.WithEventName("chain summarization error swallowed"),
+				langfuse.WithEventInput(chain),
+				langfuse.WithEventStatus(err.Error()),
+				langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+				langfuse.WithEventMetadata(langfuse.Metadata{
+					"tc_id_template": fp.tcIDTemplate,
+					"msg_chain_id":   chainID,
+					"error":          err.Error(),
+				}),
+			)
 			logger.WithError(err).Warn("failed to summarize chain")
 		}
 	}
@@ -717,14 +764,13 @@ func (fp *flowProvider) updateMsgChainUsage(
 // storeToGraphiti stores messages to Graphiti with timeout
 func (fp *flowProvider) storeToGraphiti(
 	ctx context.Context,
+	observation langfuse.Observation,
 	groupID string,
 	messages []graphiti.Message,
-) {
+) error {
 	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
-		return
+		return nil
 	}
-
-	ctx, observation := obs.Observer.NewObservation(ctx)
 
 	storeCtx, cancel := context.WithTimeout(ctx, fp.graphitiClient.GetTimeout())
 	defer cancel()
@@ -743,6 +789,8 @@ func (fp *flowProvider) storeToGraphiti(
 			WithField("group_id", groupID).
 			Warn("failed to store messages to graphiti")
 	}
+
+	return err
 }
 
 // storeAgentResponseToGraphiti stores agent response to Graphiti
@@ -752,6 +800,7 @@ func (fp *flowProvider) storeAgentResponseToGraphiti(
 	agentType pconfig.ProviderOptionsType,
 	result *callResult,
 	taskID, subtaskID *int64,
+	chainID int64,
 ) {
 	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
 		return
@@ -798,7 +847,31 @@ func (fp *flowProvider) storeAgentResponseToGraphiti(
 	}
 	logrus.WithField("messages", messages).Debug("storing agent response to graphiti")
 
-	fp.storeToGraphiti(ctx, groupID, messages)
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	storeEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("store messages to graphiti"),
+		langfuse.WithEvaluatorInput(messages),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
+			"group_id":     groupID,
+			"agent_type":   agentType,
+			"task_id":      taskID,
+			"subtask_id":   subtaskID,
+			"msg_chain_id": chainID,
+		}),
+	)
+
+	ctx, observation = storeEvaluator.Observation(ctx)
+	if err := fp.storeToGraphiti(ctx, observation, groupID, messages); err != nil {
+		storeEvaluator.End(
+			langfuse.WithEvaluatorStatus(err.Error()),
+			langfuse.WithEvaluatorLevel(langfuse.ObservationLevelError),
+		)
+		return
+	}
+
+	storeEvaluator.End(
+		langfuse.WithEvaluatorStatus("success"),
+	)
 }
 
 // storeToolExecutionToGraphiti stores tool execution to Graphiti
@@ -811,6 +884,7 @@ func (fp *flowProvider) storeToolExecutionToGraphiti(
 	execErr error,
 	executor tools.ContextToolsExecutor,
 	taskID, subtaskID *int64,
+	chainID int64,
 ) {
 	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
 		return
@@ -879,5 +953,31 @@ func (fp *flowProvider) storeToolExecutionToGraphiti(
 		},
 	}
 
-	fp.storeToGraphiti(ctx, groupID, messages)
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	storeEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("store tool execution to graphiti"),
+		langfuse.WithEvaluatorInput(messages),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
+			"group_id":     groupID,
+			"agent_type":   agentType,
+			"tool_name":    funcName,
+			"tool_args":    funcArgs,
+			"task_id":      taskID,
+			"subtask_id":   subtaskID,
+			"msg_chain_id": chainID,
+		}),
+	)
+
+	ctx, observation = storeEvaluator.Observation(ctx)
+	if err := fp.storeToGraphiti(ctx, observation, groupID, messages); err != nil {
+		storeEvaluator.End(
+			langfuse.WithEvaluatorStatus(err.Error()),
+			langfuse.WithEvaluatorLevel(langfuse.ObservationLevelError),
+		)
+		return
+	}
+
+	storeEvaluator.End(
+		langfuse.WithEvaluatorStatus("success"),
+	)
 }

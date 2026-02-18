@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"time"
 
 	"pentagi/pkg/observability/langfuse/api"
@@ -18,16 +19,46 @@ const (
 )
 
 var (
-	ingestionCreateTrace       = getStringRef("trace-create")
-	ingestionCreateScore       = getStringRef("score-create")
-	ingestionPutLog            = getStringRef("sdk-log")
-	ingestionCreateObservation = getStringRef("observation-create")
-	ingestionUpdateObservation = getStringRef("observation-update")
-	ingestionCreateGeneration  = getStringRef("generation-create")
-	ingestionUpdateGeneration  = getStringRef("generation-update")
+	ingestionCreateTrace      = "trace-create"
+	ingestionCreateGeneration = "generation-create"
+	ingestionUpdateGeneration = "generation-update"
+	ingestionCreateSpan       = "span-create"
+	ingestionUpdateSpan       = "span-update"
+	ingestionCreateScore      = "score-create"
+	ingestionCreateEvent      = "event-create"
+	ingestionCreateAgent      = "agent-create"
+	ingestionCreateTool       = "tool-create"
+	ingestionCreateChain      = "chain-create"
+	ingestionCreateEmbedding  = "embedding-create"
+	ingestionCreateRetriever  = "retriever-create"
+	ingestionCreateEvaluator  = "evaluator-create"
+	ingestionCreateGuardrail  = "guardrail-create"
+	ingestionPutLog           = "sdk-log"
 )
 
 type Metadata map[string]any
+
+// mergeMaps combines two maps into a new map.
+// Values from the second map (src) will override values from the first map (dst) for matching keys.
+// Returns a new map with all combined key-value pairs.
+// Handles nil values correctly: preserves original values without unnecessary allocations.
+// If src is nil, returns dst as is (might be nil). If dst is nil but src is not, creates a copy of src.
+func mergeMaps(dst, src map[string]any) map[string]any {
+	if src == nil {
+		return dst
+	}
+
+	if dst == nil {
+		result := make(map[string]any, len(src))
+		maps.Copy(result, src)
+		return result
+	}
+
+	result := make(map[string]any, len(dst)+len(src))
+	maps.Copy(result, dst)
+	maps.Copy(result, src)
+	return result
+}
 
 type ObservationLevel int
 
@@ -67,46 +98,35 @@ const (
 func (e GenerationUsageUnit) String() string {
 	switch e {
 	case GenerationUsageUnitTokens:
-		return "tokens"
+		return "TOKENS"
 	case GenerationUsageUnitCharacters:
-		return "characters"
+		return "CHARACTERS"
 	case GenerationUsageUnitMilliseconds:
-		return "milliseconds"
+		return "MILLISECONDS"
 	case GenerationUsageUnitSeconds:
 		return "seconds"
 	case GenerationUsageUnitImages:
-		return "images"
+		return "IMAGES"
 	case GenerationUsageUnitRequests:
-		return "requests"
+		return "REQUESTS"
 	}
 	return ""
 }
 
-func (e GenerationUsageUnit) ToLangfuse() *api.ModelUsageUnit {
-	var unit api.ModelUsageUnit
-	switch e {
-	case GenerationUsageUnitTokens:
-		unit = api.ModelUsageUnitTokens
-	case GenerationUsageUnitCharacters:
-		unit = api.ModelUsageUnitCharacters
-	case GenerationUsageUnitMilliseconds:
-		unit = api.ModelUsageUnitMilliseconds
-	case GenerationUsageUnitSeconds:
-		unit = api.ModelUsageUnitSeconds
-	case GenerationUsageUnitImages:
-		unit = api.ModelUsageUnitImages
-	case GenerationUsageUnitRequests:
-		unit = api.ModelUsageUnitRequests
-	default:
+func (e GenerationUsageUnit) ToLangfuse() *string {
+	unit := e.String()
+	if unit == "" {
 		return nil
 	}
 	return &unit
 }
 
 type GenerationUsage struct {
-	Input  int                 `json:"input,omitempty"`
-	Output int                 `json:"output,omitempty"`
-	Unit   GenerationUsageUnit `json:"unit,omitempty"`
+	Input      int                 `json:"input,omitempty"`
+	Output     int                 `json:"output,omitempty"`
+	InputCost  *float64            `json:"input_cost,omitempty"`
+	OutputCost *float64            `json:"output_cost,omitempty"`
+	Unit       GenerationUsageUnit `json:"unit,omitempty"`
 }
 
 func (u *GenerationUsage) ToLangfuse() *api.IngestionUsage {
@@ -114,12 +134,28 @@ func (u *GenerationUsage) ToLangfuse() *api.IngestionUsage {
 		return nil
 	}
 
-	return api.NewIngestionUsageFromUsage(&api.Usage{
-		Input:  getIntRef(u.Input),
-		Output: getIntRef(u.Output),
-		Total:  getIntRef(u.Input + u.Output),
-		Unit:   u.Unit.ToLangfuse(),
-	})
+	var totalCost *float64
+	if u.InputCost != nil {
+		total := *u.InputCost
+		totalCost = &total
+	}
+	if u.OutputCost != nil {
+		total := *u.OutputCost
+		if totalCost != nil {
+			total += *totalCost
+		}
+		totalCost = &total
+	}
+
+	return &api.IngestionUsage{Usage: &api.Usage{
+		Input:      u.Input,
+		Output:     u.Output,
+		Total:      u.Input + u.Output,
+		InputCost:  u.InputCost,
+		OutputCost: u.OutputCost,
+		TotalCost:  totalCost,
+		Unit:       u.Unit.ToLangfuse(),
+	}}
 }
 
 type ModelParameters struct {
@@ -159,7 +195,7 @@ func (m *ModelParameters) ToLangfuse() map[string]*api.MapValue {
 		return nil
 	}
 
-	parametersMap := make(map[string]interface{})
+	parametersMap := make(map[string]any)
 	parametersMap["temperature"] = fmt.Sprintf("%0.1f", m.Temperature)
 	parametersMap["top_p"] = fmt.Sprintf("%0.1f", m.TopP)
 	if m.CandidateCount != 0 {
@@ -277,6 +313,9 @@ func getTimeRefString(time *time.Time) string {
 }
 
 func getStringRef(s string) *string {
+	if s == "" {
+		return nil
+	}
 	return &s
 }
 
