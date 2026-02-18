@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/templates"
 
@@ -51,43 +54,74 @@ func DetermineToolCallIDTemplate(
 	opt pconfig.ProviderOptionsType,
 	prompter templates.Prompter,
 ) (string, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	agent := observation.Agent(
+		langfuse.WithAgentName("tool call ID template detector"),
+		langfuse.WithAgentInput(map[string]any{
+			"provider":   provider.Type(),
+			"agent_type": string(opt),
+		}),
+	)
+	ctx, _ = agent.Observation(ctx)
+	wrapEndAgentSpan := func(template, status string, err error) (string, error) {
+		if err != nil {
+			agent.End(
+				langfuse.WithAgentStatus(err.Error()),
+				langfuse.WithAgentLevel(langfuse.ObservationLevelError),
+			)
+		} else {
+			agent.End(
+				langfuse.WithAgentOutput(template),
+				langfuse.WithAgentStatus(status),
+			)
+		}
+
+		return template, err
+	}
+
 	// Step 0: Check if template is already in cache
 	if template, ok := lookupInCache(provider); ok {
-		return template, nil
+		return wrapEndAgentSpan(template, "found in cache", nil)
 	}
 
 	// Step 1: Collect 5 sample tool call IDs in parallel
 	samples, err := collectToolCallIDSamples(ctx, provider, opt, prompter)
 	if err != nil {
-		return "", fmt.Errorf("failed to collect tool call ID samples: %w", err)
+		return wrapEndAgentSpan("", "", fmt.Errorf("failed to collect tool call ID samples: %w", err))
 	}
 
 	if len(samples) == 0 {
-		return "", fmt.Errorf("no tool call ID samples collected")
+		return wrapEndAgentSpan("", "", fmt.Errorf("no tool call ID samples collected"))
 	}
 
 	// Step 2-4: Try to detect pattern using AI with retry logic
 	var previousAttempts []attemptRecord
 	for attempt := range maxRetries {
-		template, newSampleID, err := detectPatternWithAI(ctx, provider, opt, prompter, samples, previousAttempts)
+		template, newSample, err := detectPatternWithAI(ctx, provider, opt, prompter, samples, previousAttempts)
 		if err != nil {
+			// Record the failure - agent didn't call the function or other error occurred
+			previousAttempts = append(previousAttempts, attemptRecord{
+				Template: "<no template - agent failed to call function>",
+				Error:    err.Error(),
+			})
+
 			// If AI detection completely fails, use fallback
 			if attempt == maxRetries-1 {
 				template = fallbackHeuristicDetection(samples)
 				storeInCache(provider, template)
-				return template, nil
+				return wrapEndAgentSpan(template, "partially detected", nil)
 			}
 			continue
 		}
 
 		// Add new sample from detector call
-		allSamples := append(samples, newSampleID)
+		allSamples := append(samples, newSample)
 
 		// Validate template against all samples
-		validationErr := templates.ValidatePattern(template, allSamples...)
+		validationErr := templates.ValidatePattern(template, allSamples)
 		if validationErr == nil {
 			storeInCache(provider, template)
-			return template, nil
+			return wrapEndAgentSpan(template, "validated", nil)
 		}
 
 		// Validation failed, record attempt and retry
@@ -103,7 +137,7 @@ func DetermineToolCallIDTemplate(
 	// All retries exhausted, use fallback heuristic
 	template := fallbackHeuristicDetection(samples)
 	storeInCache(provider, template)
-	return template, nil
+	return wrapEndAgentSpan(template, "fallback heuristic detection", nil)
 }
 
 // collectToolCallIDSamples collects tool call ID samples in parallel
@@ -112,10 +146,10 @@ func collectToolCallIDSamples(
 	provider Provider,
 	opt pconfig.ProviderOptionsType,
 	prompter templates.Prompter,
-) ([]string, error) {
+) ([]templates.PatternSample, error) {
 	type sampleResult struct {
-		id  string
-		err error
+		samples []templates.PatternSample
+		err     error
 	}
 
 	results := make(chan sampleResult, sampleCount)
@@ -127,8 +161,8 @@ func collectToolCallIDSamples(
 		go func() {
 			defer wg.Done()
 
-			id, err := runToolCallIDCollector(ctx, provider, opt, prompter)
-			results <- sampleResult{id: id, err: err}
+			samples, err := runToolCallIDCollector(ctx, provider, opt, prompter)
+			results <- sampleResult{samples: samples, err: err}
 		}()
 	}
 
@@ -138,16 +172,28 @@ func collectToolCallIDSamples(
 		close(results)
 	}()
 
-	// Collect results
-	var samples []string
+	// Collect results - use map to deduplicate by Value
+	samplesMap := make(map[string]templates.PatternSample)
 	var errs []error
 	for result := range results {
 		if result.err != nil {
 			errs = append(errs, result.err)
 		} else {
-			samples = append(samples, result.id)
+			for _, sample := range result.samples {
+				samplesMap[sample.Value] = sample
+			}
 		}
 	}
+
+	samples := make([]templates.PatternSample, 0, len(samplesMap))
+	for _, sample := range samplesMap {
+		samples = append(samples, sample)
+	}
+
+	// Sort by value for consistency
+	sort.Slice(samples, func(i, j int) bool {
+		return samples[i].Value < samples[j].Value
+	})
 
 	// Return error only if we got no samples at all
 	if len(samples) == 0 && len(errs) > 0 {
@@ -163,7 +209,7 @@ func runToolCallIDCollector(
 	provider Provider,
 	opt pconfig.ProviderOptionsType,
 	prompter templates.Prompter,
-) (string, error) {
+) ([]templates.PatternSample, error) {
 	// Generate random context to prevent caching
 	randomContext := uuid.New().String()
 
@@ -173,7 +219,7 @@ func runToolCallIDCollector(
 		"RandomContext": randomContext,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to render collector prompt: %w", err)
+		return nil, fmt.Errorf("failed to render collector prompt: %w", err)
 	}
 
 	// Create test tool
@@ -205,19 +251,38 @@ func runToolCallIDCollector(
 
 	response, err := provider.CallWithTools(ctx, opt, messages, []llms.Tool{testTool}, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to call LLM: %w", err)
+		return nil, fmt.Errorf("failed to call LLM: %w", err)
 	}
 
-	// Extract tool call ID
+	sampleMap := make(map[string]templates.PatternSample)
+
+	// Extract tool call ID and function name
 	for _, choice := range response.Choices {
 		for _, toolCall := range choice.ToolCalls {
 			if toolCall.ID != "" {
-				return toolCall.ID, nil
+				functionName := ""
+				if toolCall.FunctionCall != nil {
+					functionName = toolCall.FunctionCall.Name
+				}
+				sampleMap[toolCall.ID] = templates.PatternSample{
+					Value:        toolCall.ID,
+					FunctionName: functionName,
+				}
 			}
 		}
 	}
 
-	return "", fmt.Errorf("no tool call ID found in response")
+	samples := make([]templates.PatternSample, 0, len(sampleMap))
+	for _, sample := range sampleMap {
+		samples = append(samples, sample)
+	}
+
+	// Sort by value for consistency
+	sort.Slice(samples, func(i, j int) bool {
+		return samples[i].Value < samples[j].Value
+	})
+
+	return samples, nil
 }
 
 // detectPatternWithAI uses AI to analyze samples and detect pattern template
@@ -226,17 +291,23 @@ func detectPatternWithAI(
 	provider Provider,
 	opt pconfig.ProviderOptionsType,
 	prompter templates.Prompter,
-	samples []string,
+	samples []templates.PatternSample,
 	previousAttempts []attemptRecord,
-) (string, string, error) {
+) (string, templates.PatternSample, error) {
+	// Extract just the values for the prompt
+	sampleValues := make([]string, len(samples))
+	for i, s := range samples {
+		sampleValues[i] = s.Value
+	}
+
 	// Render detector prompt
 	prompt, err := prompter.RenderTemplate(templates.PromptTypeToolCallIDDetector, map[string]any{
 		"FunctionName":     patternFunctionName,
-		"Samples":          samples,
+		"Samples":          sampleValues,
 		"PreviousAttempts": previousAttempts,
 	})
 	if err != nil {
-		return "", "", fmt.Errorf("failed to render detector prompt: %w", err)
+		return "", templates.PatternSample{}, fmt.Errorf("failed to render detector prompt: %w", err)
 	}
 
 	// Create pattern submission tool
@@ -250,7 +321,7 @@ func detectPatternWithAI(
 				"properties": map[string]any{
 					"template": map[string]any{
 						"type":        "string",
-						"description": "The pattern template in format like 'toolu_{r:24:b}' or 'call_{r:24:x}'",
+						"description": "The pattern template in format like 'toolu_{r:24:b}' or 'call_{r:24:x}' or '{f}:{r:1:d}'",
 					},
 				},
 				"required": []string{"template"},
@@ -268,17 +339,20 @@ func detectPatternWithAI(
 
 	response, err := provider.CallWithTools(ctx, opt, messages, []llms.Tool{patternTool}, nil)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to call LLM: %w", err)
+		return "", templates.PatternSample{}, fmt.Errorf("failed to call LLM: %w", err)
 	}
 
 	// Extract template and new tool call ID from response
 	var detectedTemplate string
-	var newToolCallID string
+	var newSample templates.PatternSample
 
 	for _, choice := range response.Choices {
 		for _, toolCall := range choice.ToolCalls {
 			if toolCall.ID != "" {
-				newToolCallID = toolCall.ID
+				newSample.Value = toolCall.ID
+				if toolCall.FunctionCall != nil {
+					newSample.FunctionName = toolCall.FunctionCall.Name
+				}
 			}
 			if toolCall.FunctionCall != nil && toolCall.FunctionCall.Name == patternFunctionName {
 				// Parse arguments to get template
@@ -293,26 +367,32 @@ func detectPatternWithAI(
 	}
 
 	if detectedTemplate == "" {
-		return "", "", fmt.Errorf("no template found in AI response")
+		return "", templates.PatternSample{}, fmt.Errorf("no template found in AI response")
 	}
-	if newToolCallID == "" {
-		return "", "", fmt.Errorf("no tool call ID found in AI response")
+	if newSample.Value == "" {
+		return "", templates.PatternSample{}, fmt.Errorf("no tool call ID found in AI response")
 	}
 
-	return detectedTemplate, newToolCallID, nil
+	return detectedTemplate, newSample, nil
 }
 
 // fallbackHeuristicDetection performs character-by-character analysis to build pattern
-func fallbackHeuristicDetection(samples []string) string {
+func fallbackHeuristicDetection(samples []templates.PatternSample) string {
 	if len(samples) == 0 {
 		return ""
 	}
 
+	// Extract values from samples
+	values := make([]string, len(samples))
+	for i, s := range samples {
+		values[i] = s.Value
+	}
+
 	// Find minimum length
-	minLen := len(samples[0])
-	for _, sample := range samples[1:] {
-		if len(sample) < minLen {
-			minLen = len(sample)
+	minLen := len(values[0])
+	for _, value := range values[1:] {
+		if len(value) < minLen {
+			minLen = len(value)
 		}
 	}
 
@@ -320,10 +400,10 @@ func fallbackHeuristicDetection(samples []string) string {
 	pos := 0
 
 	for pos < minLen {
-		// Get character at position from all samples
-		chars := make([]byte, len(samples))
-		for i, sample := range samples {
-			chars[i] = sample[pos]
+		// Get character at position from all values
+		chars := make([]byte, len(values))
+		for i, value := range values {
+			chars[i] = value[pos]
 		}
 
 		// Check if all characters are the same (literal)
@@ -339,9 +419,9 @@ func fallbackHeuristicDetection(samples []string) string {
 		if allSame {
 			// Collect all consecutive literal characters
 			for pos < minLen {
-				chars := make([]byte, len(samples))
-				for i, sample := range samples {
-					chars[i] = sample[pos]
+				chars := make([]byte, len(values))
+				for i, value := range values {
+					chars[i] = value[pos]
 				}
 
 				allSame := true
@@ -366,9 +446,9 @@ func fallbackHeuristicDetection(samples []string) string {
 
 			// Collect all random characters until we hit a literal
 			for pos < minLen {
-				chars := make([]byte, len(samples))
-				for i, sample := range samples {
-					chars[i] = sample[pos]
+				chars := make([]byte, len(values))
+				for i, value := range values {
+					chars[i] = value[pos]
 				}
 
 				// Check if this position is literal

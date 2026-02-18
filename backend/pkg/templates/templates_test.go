@@ -285,98 +285,142 @@ func TestGenerateFromPattern(t *testing.T) {
 	testCases := []struct {
 		name          string
 		pattern       string
+		functionName  string
 		expectedRegex string
 		expectedLen   int
 	}{
 		{
 			name:          "anthropic_tool_id",
 			pattern:       "toolu_{r:24:b}",
+			functionName:  "",
 			expectedRegex: `^toolu_[0-9A-Za-z]{24}$`,
 			expectedLen:   30,
 		},
 		{
 			name:          "anthropic_tooluse_id",
 			pattern:       "tooluse_{r:22:b}",
+			functionName:  "",
 			expectedRegex: `^tooluse_[0-9A-Za-z]{22}$`,
 			expectedLen:   30,
 		},
 		{
 			name:          "anthropic_bedrock_id",
 			pattern:       "toolu_bdrk_{r:24:b}",
+			functionName:  "",
 			expectedRegex: `^toolu_bdrk_[0-9A-Za-z]{24}$`,
 			expectedLen:   35,
 		},
 		{
 			name:          "openai_call_id",
 			pattern:       "call_{r:24:x}",
+			functionName:  "",
 			expectedRegex: `^call_[a-zA-Z0-9]{24}$`,
 			expectedLen:   29,
 		},
 		{
 			name:          "openai_call_id_with_prefix",
 			pattern:       "call_{r:2:d}_{r:24:x}",
+			functionName:  "",
 			expectedRegex: `^call_\d{2}_[a-zA-Z0-9]{24}$`,
 			expectedLen:   32,
 		},
 		{
 			name:          "chatgpt_tool_id",
 			pattern:       "chatcmpl-tool-{r:32:h}",
+			functionName:  "",
 			expectedRegex: `^chatcmpl-tool-[0-9a-f]{32}$`,
 			expectedLen:   46,
 		},
 		{
 			name:          "gemini_tool_id",
 			pattern:       "tool_{r:20:l}_{r:15:x}",
+			functionName:  "",
 			expectedRegex: `^tool_[a-z]{20}_[a-zA-Z0-9]{15}$`,
 			expectedLen:   41,
 		},
 		{
 			name:          "short_random_id",
 			pattern:       "{r:9:b}",
+			functionName:  "",
 			expectedRegex: `^[0-9A-Za-z]{9}$`,
 			expectedLen:   9,
 		},
 		{
 			name:          "only_digits",
 			pattern:       "id-{r:10:d}",
+			functionName:  "",
 			expectedRegex: `^id-\d{10}$`,
 			expectedLen:   13,
 		},
 		{
 			name:          "only_lowercase",
 			pattern:       "key_{r:16:l}",
+			functionName:  "",
 			expectedRegex: `^key_[a-z]{16}$`,
 			expectedLen:   20,
 		},
 		{
 			name:          "only_uppercase",
 			pattern:       "KEY_{r:8:u}",
+			functionName:  "",
 			expectedRegex: `^KEY_[A-Z]{8}$`,
 			expectedLen:   12,
 		},
 		{
 			name:          "hex_uppercase",
 			pattern:       "0x{r:16:H}",
+			functionName:  "",
 			expectedRegex: `^0x[0-9A-F]{16}$`,
 			expectedLen:   18,
 		},
 		{
 			name:          "empty_pattern",
 			pattern:       "",
+			functionName:  "",
 			expectedRegex: `^$`,
 			expectedLen:   0,
 		},
 		{
 			name:          "only_literal",
 			pattern:       "fixed_string",
+			functionName:  "",
 			expectedRegex: `^fixed_string$`,
 			expectedLen:   12,
 		},
 		{
 			name:          "multiple_random_parts",
 			pattern:       "{r:4:u}-{r:4:u}-{r:4:u}-{r:12:h}",
+			functionName:  "",
 			expectedRegex: `^[A-Z]{4}-[A-Z]{4}-[A-Z]{4}-[0-9a-f]{12}$`,
 			expectedLen:   27, // 4 + 1 + 4 + 1 + 4 + 1 + 12 = 27
+		},
+		{
+			name:          "function_with_digit",
+			pattern:       "{f}:{r:1:d}",
+			functionName:  "get_number",
+			expectedRegex: `^get_number:\d$`,
+			expectedLen:   12,
+		},
+		{
+			name:          "function_with_random",
+			pattern:       "{f}_{r:8:h}",
+			functionName:  "call_tool",
+			expectedRegex: `^call_tool_[0-9a-f]{8}$`,
+			expectedLen:   18,
+		},
+		{
+			name:          "function_only",
+			pattern:       "{f}",
+			functionName:  "test_func",
+			expectedRegex: `^test_func$`,
+			expectedLen:   9,
+		},
+		{
+			name:          "function_with_prefix_suffix",
+			pattern:       "prefix_{f}_suffix",
+			functionName:  "my_tool",
+			expectedRegex: `^prefix_my_tool_suffix$`,
+			expectedLen:   21,
 		},
 	}
 
@@ -384,7 +428,7 @@ func TestGenerateFromPattern(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Generate multiple times to ensure randomness
 			for i := 0; i < 5; i++ {
-				result := templates.GenerateFromPattern(tc.pattern)
+				result := templates.GenerateFromPattern(tc.pattern, tc.functionName)
 
 				// Check length
 				if len(result) != tc.expectedLen {
@@ -402,7 +446,7 @@ func TestGenerateFromPattern(t *testing.T) {
 			if strings.Contains(tc.pattern, "{r:") && tc.expectedLen > 0 {
 				results := make(map[string]bool)
 				for i := 0; i < 10; i++ {
-					results[templates.GenerateFromPattern(tc.pattern)] = true
+					results[templates.GenerateFromPattern(tc.pattern, tc.functionName)] = true
 				}
 				// At least some variance expected (not all identical)
 				if len(results) == 1 && tc.expectedLen > 1 {
@@ -418,118 +462,181 @@ func TestValidatePattern(t *testing.T) {
 	testCases := []struct {
 		name        string
 		pattern     string
-		values      []string
+		samples     []templates.PatternSample
 		expectError bool
 		errorSubstr string
 	}{
 		{
-			name:        "valid_anthropic_ids",
-			pattern:     "toolu_{r:24:b}",
-			values:      []string{"toolu_013wc5CxNCjWGN2rsAR82rJK", "toolu_9ZxY8WvU7tS6rQ5pO4nM3lK2"},
+			name:    "valid_anthropic_ids",
+			pattern: "toolu_{r:24:b}",
+			samples: []templates.PatternSample{
+				{Value: "toolu_013wc5CxNCjWGN2rsAR82rJK"},
+				{Value: "toolu_9ZxY8WvU7tS6rQ5pO4nM3lK2"},
+			},
 			expectError: false,
 		},
 		{
-			name:        "valid_openai_ids",
-			pattern:     "call_{r:24:x}",
-			values:      []string{"call_Z8ofZnYOCeOnpu0h2auwOgeR", "call_aBc123XyZ456MnO789PqR012"},
+			name:    "valid_openai_ids",
+			pattern: "call_{r:24:x}",
+			samples: []templates.PatternSample{
+				{Value: "call_Z8ofZnYOCeOnpu0h2auwOgeR"},
+				{Value: "call_aBc123XyZ456MnO789PqR012"},
+			},
 			expectError: false,
 		},
 		{
-			name:        "valid_hex_ids",
-			pattern:     "chatcmpl-tool-{r:32:h}",
-			values:      []string{"chatcmpl-tool-23c5c0da71854f9bbd8774f7d0113a69"},
+			name:    "valid_hex_ids",
+			pattern: "chatcmpl-tool-{r:32:h}",
+			samples: []templates.PatternSample{
+				{Value: "chatcmpl-tool-23c5c0da71854f9bbd8774f7d0113a69"},
+			},
 			expectError: false,
 		},
 		{
-			name:        "valid_mixed_pattern",
-			pattern:     "prefix_{r:4:d}_{r:8:l}_suffix",
-			values:      []string{"prefix_1234_abcdefgh_suffix", "prefix_9876_zyxwvuts_suffix"},
+			name:    "valid_mixed_pattern",
+			pattern: "prefix_{r:4:d}_{r:8:l}_suffix",
+			samples: []templates.PatternSample{
+				{Value: "prefix_1234_abcdefgh_suffix"},
+				{Value: "prefix_9876_zyxwvuts_suffix"},
+			},
 			expectError: false,
 		},
 		{
 			name:        "empty_values",
 			pattern:     "toolu_{r:24:b}",
-			values:      []string{},
+			samples:     []templates.PatternSample{},
 			expectError: false,
 		},
 		{
-			name:        "invalid_length_too_short",
-			pattern:     "toolu_{r:24:b}",
-			values:      []string{"toolu_123"},
+			name:    "invalid_length_too_short",
+			pattern: "toolu_{r:24:b}",
+			samples: []templates.PatternSample{
+				{Value: "toolu_123"},
+			},
 			expectError: true,
 			errorSubstr: "incorrect length",
 		},
 		{
-			name:        "invalid_length_too_long",
-			pattern:     "call_{r:24:x}",
-			values:      []string{"call_Z8ofZnYOCeOnpu0h2auwOgeRXXXXX"},
+			name:    "invalid_length_too_long",
+			pattern: "call_{r:24:x}",
+			samples: []templates.PatternSample{
+				{Value: "call_Z8ofZnYOCeOnpu0h2auwOgeRXXXXX"},
+			},
 			expectError: true,
 			errorSubstr: "incorrect length",
 		},
 		{
-			name:        "invalid_prefix",
-			pattern:     "toolu_{r:24:b}",
-			values:      []string{"wrong_013wc5CxNCjWGN2rsAR82rJK"},
+			name:    "invalid_prefix",
+			pattern: "toolu_{r:24:b}",
+			samples: []templates.PatternSample{
+				{Value: "wrong_013wc5CxNCjWGN2rsAR82rJK"},
+			},
 			expectError: true,
 			errorSubstr: "pattern mismatch",
 		},
 		{
-			name:        "invalid_charset_has_special_chars",
-			pattern:     "id_{r:10:d}",
-			values:      []string{"id_123abc7890"},
+			name:    "invalid_charset_has_special_chars",
+			pattern: "id_{r:10:d}",
+			samples: []templates.PatternSample{
+				{Value: "id_123abc7890"},
+			},
 			expectError: true,
 			errorSubstr: "pattern mismatch",
 		},
 		{
-			name:        "invalid_hex_has_uppercase",
-			pattern:     "hex_{r:8:h}",
-			values:      []string{"hex_ABCD1234"},
+			name:    "invalid_hex_has_uppercase",
+			pattern: "hex_{r:8:h}",
+			samples: []templates.PatternSample{
+				{Value: "hex_ABCD1234"},
+			},
 			expectError: true,
 			errorSubstr: "pattern mismatch",
 		},
 		{
-			name:        "invalid_uppercase_has_lowercase",
-			pattern:     "KEY_{r:8:u}",
-			values:      []string{"KEY_ABCDefgh"},
+			name:    "invalid_uppercase_has_lowercase",
+			pattern: "KEY_{r:8:u}",
+			samples: []templates.PatternSample{
+				{Value: "KEY_ABCDefgh"},
+			},
 			expectError: true,
 			errorSubstr: "pattern mismatch",
 		},
 		{
-			name:        "multiple_values_one_invalid",
-			pattern:     "toolu_{r:24:b}",
-			values:      []string{"toolu_013wc5CxNCjWGN2rsAR82rJK", "invalid_string"},
+			name:    "multiple_values_one_invalid",
+			pattern: "toolu_{r:24:b}",
+			samples: []templates.PatternSample{
+				{Value: "toolu_013wc5CxNCjWGN2rsAR82rJK"},
+				{Value: "invalid_string"},
+			},
 			expectError: true,
-			errorSubstr: "incorrect length", // length check happens first
+			errorSubstr: "incorrect length",
 		},
 		{
-			name:        "literal_only_pattern_valid",
-			pattern:     "fixed_string",
-			values:      []string{"fixed_string", "fixed_string"},
+			name:    "literal_only_pattern_valid",
+			pattern: "fixed_string",
+			samples: []templates.PatternSample{
+				{Value: "fixed_string"},
+				{Value: "fixed_string"},
+			},
 			expectError: false,
 		},
 		{
-			name:        "literal_only_pattern_invalid",
-			pattern:     "fixed_string",
-			values:      []string{"wrong_string"},
+			name:    "literal_only_pattern_invalid",
+			pattern: "fixed_string",
+			samples: []templates.PatternSample{
+				{Value: "wrong_string"},
+			},
 			expectError: true,
 			errorSubstr: "pattern mismatch",
 		},
 		{
-			name:        "edge_case_zero_length_random",
-			pattern:     "prefix_{r:0:b}_suffix",
-			values:      []string{"prefix__suffix"},
+			name:    "edge_case_zero_length_random",
+			pattern: "prefix_{r:0:b}_suffix",
+			samples: []templates.PatternSample{
+				{Value: "prefix__suffix"},
+			},
 			expectError: false,
 		},
 		{
-			name:        "complex_multi_part_valid",
-			pattern:     "{r:4:u}-{r:4:u}-{r:4:u}-{r:12:h}",
-			values:      []string{"ABCD-EFGH-IJKL-0123456789ab"},
+			name:    "complex_multi_part_valid",
+			pattern: "{r:4:u}-{r:4:u}-{r:4:u}-{r:12:h}",
+			samples: []templates.PatternSample{
+				{Value: "ABCD-EFGH-IJKL-0123456789ab"},
+			},
 			expectError: false,
 		},
 		{
-			name:        "complex_multi_part_invalid_section",
-			pattern:     "{r:4:u}-{r:4:u}-{r:4:u}-{r:12:h}",
-			values:      []string{"ABCD-EfGH-IJKL-0123456789ab"},
+			name:    "complex_multi_part_invalid_section",
+			pattern: "{r:4:u}-{r:4:u}-{r:4:u}-{r:12:h}",
+			samples: []templates.PatternSample{
+				{Value: "ABCD-EfGH-IJKL-0123456789ab"},
+			},
+			expectError: true,
+			errorSubstr: "pattern mismatch",
+		},
+		{
+			name:    "function_placeholder_different_names",
+			pattern: "{f}:{r:1:d}",
+			samples: []templates.PatternSample{
+				{Value: "get_number:0", FunctionName: "get_number"},
+				{Value: "submit_pattern:5", FunctionName: "submit_pattern"},
+			},
+			expectError: false,
+		},
+		{
+			name:    "function_placeholder_valid",
+			pattern: "{f}_{r:8:h}",
+			samples: []templates.PatternSample{
+				{Value: "call_tool_abc12345", FunctionName: "call_tool"},
+			},
+			expectError: false,
+		},
+		{
+			name:    "function_placeholder_mismatch",
+			pattern: "{f}:{r:1:d}",
+			samples: []templates.PatternSample{
+				{Value: "wrong_name:0", FunctionName: "get_number"},
+			},
 			expectError: true,
 			errorSubstr: "pattern mismatch",
 		},
@@ -537,7 +644,7 @@ func TestValidatePattern(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := templates.ValidatePattern(tc.pattern, tc.values...)
+			err := templates.ValidatePattern(tc.pattern, tc.samples)
 
 			if tc.expectError {
 				if err == nil {
@@ -556,28 +663,37 @@ func TestValidatePattern(t *testing.T) {
 
 // TestGenerateAndValidateRoundTrip tests that generated values validate correctly
 func TestGenerateAndValidateRoundTrip(t *testing.T) {
-	patterns := []string{
-		"toolu_{r:24:b}",
-		"call_{r:24:x}",
-		"chatcmpl-tool-{r:32:h}",
-		"prefix_{r:4:d}_{r:8:l}_suffix",
-		"{r:9:b}",
-		"KEY_{r:8:u}",
-		"{r:4:u}-{r:4:u}-{r:4:u}-{r:12:h}",
+	testCases := []struct {
+		pattern      string
+		functionName string
+	}{
+		{"toolu_{r:24:b}", ""},
+		{"call_{r:24:x}", ""},
+		{"chatcmpl-tool-{r:32:h}", ""},
+		{"prefix_{r:4:d}_{r:8:l}_suffix", ""},
+		{"{r:9:b}", ""},
+		{"KEY_{r:8:u}", ""},
+		{"{r:4:u}-{r:4:u}-{r:4:u}-{r:12:h}", ""},
+		{"{f}:{r:1:d}", "test_function"},
+		{"{f}_{r:8:h}", "my_tool"},
+		{"prefix_{f}_suffix", "tool_name"},
 	}
 
-	for _, pattern := range patterns {
-		t.Run(pattern, func(t *testing.T) {
-			// Generate multiple values
-			values := make([]string, 10)
+	for _, tc := range testCases {
+		t.Run(tc.pattern, func(t *testing.T) {
+			// Generate multiple samples
+			samples := make([]templates.PatternSample, 10)
 			for i := 0; i < 10; i++ {
-				values[i] = templates.GenerateFromPattern(pattern)
+				samples[i] = templates.PatternSample{
+					Value:        templates.GenerateFromPattern(tc.pattern, tc.functionName),
+					FunctionName: tc.functionName,
+				}
 			}
 
-			// Validate all generated values
-			err := templates.ValidatePattern(pattern, values...)
+			// Validate all generated samples
+			err := templates.ValidatePattern(tc.pattern, samples)
 			if err != nil {
-				t.Errorf("Generated values failed validation: %v\nValues: %v", err, values)
+				t.Errorf("Generated values failed validation: %v\nSamples: %v", err, samples)
 			}
 		})
 	}
@@ -588,28 +704,28 @@ func TestValidatePatternErrorDetails(t *testing.T) {
 	testCases := []struct {
 		name            string
 		pattern         string
-		value           string
+		sample          templates.PatternSample
 		expectedPos     int
 		expectedInError []string
 	}{
 		{
 			name:            "wrong_prefix",
 			pattern:         "toolu_{r:10:b}",
-			value:           "wrong_0123456789",
+			sample:          templates.PatternSample{Value: "wrong_0123456789"},
 			expectedPos:     0,
 			expectedInError: []string{"position 0", "'toolu_'"},
 		},
 		{
 			name:            "invalid_char_in_random",
 			pattern:         "id_{r:5:d}",
-			value:           "id_12a45",
+			sample:          templates.PatternSample{Value: "id_12a45"},
 			expectedPos:     5,
 			expectedInError: []string{"position 5", "0-9"},
 		},
 		{
 			name:            "length_mismatch",
 			pattern:         "key_{r:10:b}",
-			value:           "key_123",
+			sample:          templates.PatternSample{Value: "key_123"},
 			expectedPos:     -1,
 			expectedInError: []string{"incorrect length", "expected 14", "got 7"},
 		},
@@ -617,7 +733,7 @@ func TestValidatePatternErrorDetails(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := templates.ValidatePattern(tc.pattern, tc.value)
+			err := templates.ValidatePattern(tc.pattern, []templates.PatternSample{tc.sample})
 			if err == nil {
 				t.Fatal("Expected error but got nil")
 			}
@@ -643,7 +759,7 @@ func TestPatternEdgeCases(t *testing.T) {
 			name:    "empty_pattern_generates_empty",
 			pattern: "",
 			test: func(t *testing.T, pattern string) {
-				result := templates.GenerateFromPattern(pattern)
+				result := templates.GenerateFromPattern(pattern, "")
 				if result != "" {
 					t.Errorf("Expected empty string, got '%s'", result)
 				}
@@ -653,8 +769,8 @@ func TestPatternEdgeCases(t *testing.T) {
 			name:    "only_literals_no_random",
 			pattern: "completely_fixed_string",
 			test: func(t *testing.T, pattern string) {
-				result1 := templates.GenerateFromPattern(pattern)
-				result2 := templates.GenerateFromPattern(pattern)
+				result1 := templates.GenerateFromPattern(pattern, "")
+				result2 := templates.GenerateFromPattern(pattern, "")
 				if result1 != result2 {
 					t.Error("Literal-only pattern should always produce same result")
 				}
@@ -667,7 +783,7 @@ func TestPatternEdgeCases(t *testing.T) {
 			name:    "consecutive_random_parts",
 			pattern: "{r:4:d}{r:4:l}{r:4:u}",
 			test: func(t *testing.T, pattern string) {
-				result := templates.GenerateFromPattern(pattern)
+				result := templates.GenerateFromPattern(pattern, "")
 				if len(result) != 12 {
 					t.Errorf("Expected length 12, got %d", len(result))
 				}
@@ -695,10 +811,31 @@ func TestPatternEdgeCases(t *testing.T) {
 			name:    "malformed_pattern_is_treated_as_literal",
 			pattern: "{r:invalid}",
 			test: func(t *testing.T, pattern string) {
-				result := templates.GenerateFromPattern(pattern)
+				result := templates.GenerateFromPattern(pattern, "")
 				// Malformed pattern should be treated as literal
 				if result != "{r:invalid}" {
 					t.Errorf("Expected literal '{r:invalid}', got '%s'", result)
+				}
+			},
+		},
+		{
+			name:    "function_placeholder_with_empty_name",
+			pattern: "{f}:{r:1:d}",
+			test: func(t *testing.T, pattern string) {
+				result := templates.GenerateFromPattern(pattern, "")
+				// Empty function name should use "function" as fallback
+				if !strings.HasPrefix(result, "function:") {
+					t.Errorf("Expected prefix 'function:', got '%s'", result)
+				}
+			},
+		},
+		{
+			name:    "function_placeholder_only",
+			pattern: "{f}",
+			test: func(t *testing.T, pattern string) {
+				result := templates.GenerateFromPattern(pattern, "my_func")
+				if result != "my_func" {
+					t.Errorf("Expected 'my_func', got '%s'", result)
 				}
 			},
 		},

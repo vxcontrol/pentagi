@@ -2100,7 +2100,7 @@ func createLargeBodyPair(size int, content string) *cast.BodyPair {
 	// Create content of specified size
 	largeContent := strings.Repeat("x", size)
 
-	toolCallID := templates.GenerateFromPattern(cast.ToolCallIDTemplate)
+	toolCallID := templates.GenerateFromPattern(cast.ToolCallIDTemplate, "test_function")
 	aiMsg := &llms.MessageContent{
 		Role: llms.ChatMessageTypeAI,
 		Parts: []llms.ContentPart{

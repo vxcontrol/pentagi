@@ -2,86 +2,88 @@ package provider
 
 import (
 	"testing"
+
+	"pentagi/pkg/templates"
 )
 
 func TestFallbackHeuristicDetection(t *testing.T) {
 	testCases := []struct {
 		name     string
-		samples  []string
+		samples  []templates.PatternSample
 		expected string
 	}{
 		{
 			name: "anthropic_tool_ids",
-			samples: []string{
-				"toolu_013wc5CxNCjWGN2rsAR82rJK",
-				"toolu_9ZxY8WvU7tS6rQ5pO4nM3lK2",
-				"toolu_aBcDeFgHiJkLmNoPqRsTuVwX",
+			samples: []templates.PatternSample{
+				{Value: "toolu_013wc5CxNCjWGN2rsAR82rJK"},
+				{Value: "toolu_9ZxY8WvU7tS6rQ5pO4nM3lK2"},
+				{Value: "toolu_aBcDeFgHiJkLmNoPqRsTuVwX"},
 			},
 			expected: "toolu_{r:24:b}",
 		},
 		{
 			name: "openai_call_ids",
-			samples: []string{
-				"call_Z8ofZnYOCeOnpu0h2auwOgeR",
-				"call_aBc123XyZ456MnO789PqR012",
-				"call_XyZ9AbC8dEf7GhI6jKl5MnO4",
+			samples: []templates.PatternSample{
+				{Value: "call_Z8ofZnYOCeOnpu0h2auwOgeR"},
+				{Value: "call_aBc123XyZ456MnO789PqR012"},
+				{Value: "call_XyZ9AbC8dEf7GhI6jKl5MnO4"},
 			},
 			expected: "call_{r:24:b}", // Contains all: digits, lower, upper = base62
 		},
 		{
 			name: "hex_ids",
-			samples: []string{
-				"chatcmpl-tool-23c5c0da71854f9bbd8774f7d0113a69",
-				"chatcmpl-tool-456789abcdef0123456789abcdef0123",
-				"chatcmpl-tool-fedcba9876543210fedcba9876543210",
+			samples: []templates.PatternSample{
+				{Value: "chatcmpl-tool-23c5c0da71854f9bbd8774f7d0113a69"},
+				{Value: "chatcmpl-tool-456789abcdef0123456789abcdef0123"},
+				{Value: "chatcmpl-tool-fedcba9876543210fedcba9876543210"},
 			},
 			expected: "chatcmpl-tool-{r:32:h}",
 		},
 		{
 			name: "mixed_pattern",
-			samples: []string{
-				"prefix_1234_abcdefgh_suffix",
-				"prefix_5678_zyxwvuts_suffix",
-				"prefix_9012_qponmlkj_suffix",
+			samples: []templates.PatternSample{
+				{Value: "prefix_1234_abcdefgh_suffix"},
+				{Value: "prefix_5678_zyxwvuts_suffix"},
+				{Value: "prefix_9012_qponmlkj_suffix"},
 			},
 			expected: "prefix_{r:4:d}_{r:8:l}_suffix",
 		},
 		{
 			name: "short_ids",
-			samples: []string{
-				"qGGHVb8Pm",
-				"c9nzLUf4t",
-				"XyZ9AbC8d",
+			samples: []templates.PatternSample{
+				{Value: "qGGHVb8Pm"},
+				{Value: "c9nzLUf4t"},
+				{Value: "XyZ9AbC8d"},
 			},
 			expected: "{r:9:b}",
 		},
 		{
 			name: "only_digits",
-			samples: []string{
-				"id_1234567890",
-				"id_9876043210",
-				"id_5551235555",
+			samples: []templates.PatternSample{
+				{Value: "id_1234567890"},
+				{Value: "id_9876043210"},
+				{Value: "id_5551235555"},
 			},
 			expected: "id_{r:10:d}",
 		},
 		{
 			name: "uppercase_only",
-			samples: []string{
-				"KEY_ABCDEFGH",
-				"KEY_ZYXWVUTS",
-				"KEY_QPONMLKJ",
+			samples: []templates.PatternSample{
+				{Value: "KEY_ABCDEFGH"},
+				{Value: "KEY_ZYXWVUTS"},
+				{Value: "KEY_QPONMLKJ"},
 			},
 			expected: "KEY_{r:8:u}",
 		},
 		{
 			name:     "empty_samples",
-			samples:  []string{},
+			samples:  []templates.PatternSample{},
 			expected: "",
 		},
 		{
 			name: "single_sample",
-			samples: []string{
-				"test_123abc",
+			samples: []templates.PatternSample{
+				{Value: "test_123abc"},
 			},
 			expected: "test_123abc", // All literal when single sample
 		},

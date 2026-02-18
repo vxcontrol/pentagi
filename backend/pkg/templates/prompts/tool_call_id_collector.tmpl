@@ -3,13 +3,29 @@ You are a helpful assistant that calls functions when requested.
 </role>
 
 <task>
-Call the {{.FunctionName}} function with the value 42 as requested.
+Call the {{.FunctionName}} function three times in parallel with the value 42 as requested.
 </task>
+
+<mandatory_protocol>
+CRITICAL: You MUST respond ONLY by calling the {{.FunctionName}} function three times in parallel.
+
+DO NOT:
+- Write explanatory text without calling the function
+- Describe what you will do instead of doing it
+- Explain your reasoning before calling the function
+- Ask questions or request clarification
+
+REQUIRED ACTION: Call {{.FunctionName}} function exactly three times in parallel with value=42.
+
+Any response that does not include exactly three function calls will be treated as a CRITICAL ERROR.
+</mandatory_protocol>
 
 <context>
 {{.RandomContext}}
 </context>
 
 <instruction>
-Please call the {{.FunctionName}} function with the parameter value set to 42.
+Call the {{.FunctionName}} function three times in parallel with the parameter value set to 42.
+
+IMPORTANT: You must ONLY respond by calling the {{.FunctionName}} function three times. Any text-only response will be rejected as a failure.
 </instruction>

@@ -648,11 +648,15 @@ func ReadGraphitiTemplate(name string) (string, error) {
 //     - h, hex: [0-9a-f]
 //     - H, HEX: [0-9A-F]
 //     - b, base62: [0-9A-Za-z]
+// - Function placeholder: {f}
+//   - Represents the function/tool name
+//   - Used when tool call IDs contain the function name
 //
 // Examples:
 //   - "toolu_{r:24:b}" → "toolu_013wc5CxNCjWGN2rsAR82rJK"
 //   - "call_{r:24:x}" → "call_Z8ofZnYOCeOnpu0h2auwOgeR"
 //   - "chatcmpl-tool-{r:32:h}" → "chatcmpl-tool-23c5c0da71854f9bbd8774f7d0113a69"
+//   - "{f}:{r:1:d}" with function="get_number" → "get_number:0"
 
 const (
 	charsetDigit  = "0123456789"
@@ -665,13 +669,14 @@ const (
 	charsetBase62 = charsetDigit + charsetUpper + charsetLower
 )
 
-var patternRegex = regexp.MustCompile(`\{r:(\d+):(d|digit|l|lower|u|upper|a|alpha|x|alnum|h|hex|H|HEX|b|base62)\}`)
+var patternRegex = regexp.MustCompile(`\{r:(\d+):(d|digit|l|lower|u|upper|a|alpha|x|alnum|h|hex|H|HEX|b|base62)\}|\{f\}`)
 
 type patternPart struct {
-	literal  string
-	isRandom bool
-	length   int
-	charset  string
+	literal    string
+	isRandom   bool
+	isFunction bool
+	length     int
+	charset    string
 }
 
 // getCharset returns the character set for a given charset name
@@ -708,19 +713,29 @@ func parsePattern(pattern string) []patternPart {
 		// Add literal part before this match
 		if match[0] > lastIndex {
 			parts = append(parts, patternPart{
-				literal:  pattern[lastIndex:match[0]],
-				isRandom: false,
+				literal:    pattern[lastIndex:match[0]],
+				isRandom:   false,
+				isFunction: false,
 			})
 		}
 
-		// Parse random part
-		length, _ := strconv.Atoi(pattern[match[2]:match[3]])
-		charsetName := pattern[match[4]:match[5]]
-		parts = append(parts, patternPart{
-			isRandom: true,
-			length:   length,
-			charset:  getCharset(charsetName),
-		})
+		matchedText := pattern[match[0]:match[1]]
+
+		// Check if it's a function placeholder
+		if matchedText == "{f}" {
+			parts = append(parts, patternPart{
+				isFunction: true,
+			})
+		} else {
+			// Parse random part
+			length, _ := strconv.Atoi(pattern[match[2]:match[3]])
+			charsetName := pattern[match[4]:match[5]]
+			parts = append(parts, patternPart{
+				isRandom: true,
+				length:   length,
+				charset:  getCharset(charsetName),
+			})
+		}
 
 		lastIndex = match[1]
 	}
@@ -728,8 +743,9 @@ func parsePattern(pattern string) []patternPart {
 	// Add remaining literal part
 	if lastIndex < len(pattern) {
 		parts = append(parts, patternPart{
-			literal:  pattern[lastIndex:],
-			isRandom: false,
+			literal:    pattern[lastIndex:],
+			isRandom:   false,
+			isFunction: false,
 		})
 	}
 
@@ -761,21 +777,34 @@ func generateRandomString(length int, charset string) string {
 // GenerateFromPattern generates a random string matching the given pattern template.
 // This function never returns an error - it uses fallback values for invalid patterns.
 //
-// Pattern format: literal text with {r:LENGTH:CHARSET} for random parts
+// Pattern format: literal text with {r:LENGTH:CHARSET} for random parts and {f} for function name
 // Example: "toolu_{r:24:base62}" → "toolu_xK9pQw2mN5vR8tY7uI6oP3zA"
-func GenerateFromPattern(pattern string) string {
+// Example: "{f}:{r:1:d}" with functionName="get_number" → "get_number:0"
+func GenerateFromPattern(pattern string, functionName string) string {
 	parts := parsePattern(pattern)
 	var result strings.Builder
 
 	for _, part := range parts {
 		if part.isRandom {
 			result.WriteString(generateRandomString(part.length, part.charset))
+		} else if part.isFunction {
+			if functionName != "" {
+				result.WriteString(functionName)
+			} else {
+				result.WriteString("function")
+			}
 		} else {
 			result.WriteString(part.literal)
 		}
 	}
 
 	return result.String()
+}
+
+// PatternSample represents a sample value with optional function name for pattern validation
+type PatternSample struct {
+	Value        string
+	FunctionName string
 }
 
 // PatternValidationError represents a validation error for a specific value
@@ -795,39 +824,51 @@ func (e *PatternValidationError) Error() string {
 	return fmt.Sprintf("validation failed for '%s': %s", e.Value, e.Message)
 }
 
-// ValidatePattern validates that all provided values match the given pattern template.
-// Returns a detailed error if any value doesn't match, nil if all values are valid.
+// ValidatePattern validates that all provided samples match the given pattern template.
+// Returns a detailed error if any sample doesn't match, nil if all samples are valid.
 //
-// Pattern format: literal text with {r:LENGTH:CHARSET} for random parts
-// Example: ValidatePattern("call_{r:24:alnum}", "call_abc123...", "call_xyz789...")
-func ValidatePattern(pattern string, values ...string) error {
-	if len(values) == 0 {
+// Pattern format: literal text with {r:LENGTH:CHARSET} for random parts and {f} for function name
+// Example: ValidatePattern("call_{r:24:alnum}", []PatternSample{{Value: "call_abc123..."}})
+func ValidatePattern(pattern string, samples []PatternSample) error {
+	if len(samples) == 0 {
 		return nil
 	}
 
 	parts := parsePattern(pattern)
 
-	// Build expected length and regex pattern
-	var expectedLen int
-	var regexParts []string
+	// Validate each sample
+	for _, sample := range samples {
+		value := sample.Value
+		functionName := sample.FunctionName
 
-	for _, part := range parts {
-		if part.isRandom {
-			expectedLen += part.length
-			// Build character class from charset
-			charClass := buildCharClass(part.charset)
-			regexParts = append(regexParts, fmt.Sprintf("%s{%d}", charClass, part.length))
-		} else {
-			expectedLen += len(part.literal)
-			regexParts = append(regexParts, regexp.QuoteMeta(part.literal))
+		// Build expected length and regex pattern for this specific sample
+		var expectedLen int
+		var regexParts []string
+
+		for _, part := range parts {
+			if part.isRandom {
+				expectedLen += part.length
+				// Build character class from charset
+				charClass := buildCharClass(part.charset)
+				regexParts = append(regexParts, fmt.Sprintf("%s{%d}", charClass, part.length))
+			} else if part.isFunction {
+				if functionName != "" {
+					expectedLen += len(functionName)
+					regexParts = append(regexParts, regexp.QuoteMeta(functionName))
+				} else {
+					// Fallback if no function name provided
+					expectedLen += len("function")
+					regexParts = append(regexParts, regexp.QuoteMeta("function"))
+				}
+			} else {
+				expectedLen += len(part.literal)
+				regexParts = append(regexParts, regexp.QuoteMeta(part.literal))
+			}
 		}
-	}
 
-	regexPattern := "^" + strings.Join(regexParts, "") + "$"
-	re := regexp.MustCompile(regexPattern)
+		regexPattern := "^" + strings.Join(regexParts, "") + "$"
+		re := regexp.MustCompile(regexPattern)
 
-	// Validate each value
-	for _, value := range values {
 		// Check length
 		if len(value) != expectedLen {
 			return &PatternValidationError{
@@ -842,12 +883,18 @@ func ValidatePattern(pattern string, values ...string) error {
 		// Check pattern match
 		if !re.MatchString(value) {
 			// Find the exact position where it fails
-			pos := findMismatchPosition(value, parts)
-			part := getPartAtPosition(parts, pos)
+			pos := findMismatchPosition(value, parts, functionName)
+			part := getPartAtPosition(parts, pos, functionName)
 
 			var expected string
 			if part.isRandom {
 				expected = fmt.Sprintf("character from charset [%s]", describeCharset(part.charset))
+			} else if part.isFunction {
+				if functionName != "" {
+					expected = fmt.Sprintf("function name '%s'", functionName)
+				} else {
+					expected = "function name"
+				}
 			} else {
 				expected = fmt.Sprintf("'%s'", part.literal)
 			}
@@ -921,7 +968,7 @@ func describeCharset(charset string) string {
 }
 
 // findMismatchPosition finds the first position where value doesn't match the pattern
-func findMismatchPosition(value string, parts []patternPart) int {
+func findMismatchPosition(value string, parts []patternPart, functionName string) int {
 	pos := 0
 
 	for _, part := range parts {
@@ -929,6 +976,18 @@ func findMismatchPosition(value string, parts []patternPart) int {
 			// Check each character against charset
 			for i := 0; i < part.length && pos < len(value); i++ {
 				if !strings.ContainsRune(part.charset, rune(value[pos])) {
+					return pos
+				}
+				pos++
+			}
+		} else if part.isFunction {
+			// Check function name match
+			fn := functionName
+			if fn == "" {
+				fn = "function"
+			}
+			for i := 0; i < len(fn) && pos < len(value); i++ {
+				if value[pos] != fn[i] {
 					return pos
 				}
 				pos++
@@ -948,12 +1007,20 @@ func findMismatchPosition(value string, parts []patternPart) int {
 }
 
 // getPartAtPosition returns the pattern part at the given position in the generated string
-func getPartAtPosition(parts []patternPart, position int) patternPart {
+func getPartAtPosition(parts []patternPart, position int, functionName string) patternPart {
 	pos := 0
 
 	for _, part := range parts {
-		length := part.length
-		if !part.isRandom {
+		var length int
+		if part.isRandom {
+			length = part.length
+		} else if part.isFunction {
+			if functionName != "" {
+				length = len(functionName)
+			} else {
+				length = len("function")
+			}
+		} else {
 			length = len(part.literal)
 		}
 

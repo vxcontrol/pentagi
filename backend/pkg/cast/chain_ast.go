@@ -510,7 +510,7 @@ func NewBodyPairFromSummarization(
 	addFakeSignature bool,
 	reasoningMsg *llms.MessageContent,
 ) *BodyPair {
-	toolCallID := templates.GenerateFromPattern(tcIDTemplate)
+	toolCallID := templates.GenerateFromPattern(tcIDTemplate, SummarizationToolName)
 
 	toolCall := llms.ToolCall{
 		ID:   toolCallID,
@@ -932,10 +932,14 @@ func (ast *ChainAST) NormalizeToolCallIDs(newTemplate string) error {
 				}
 
 				// Validate existing ID against new template
-				err := templates.ValidatePattern(newTemplate, toolCall.ID)
+				sample := templates.PatternSample{
+					Value:        toolCall.ID,
+					FunctionName: toolCall.FunctionCall.Name,
+				}
+				err := templates.ValidatePattern(newTemplate, []templates.PatternSample{sample})
 				if err != nil {
 					// ID doesn't match the new pattern - generate a new one
-					newID := templates.GenerateFromPattern(newTemplate)
+					newID := templates.GenerateFromPattern(newTemplate, toolCall.FunctionCall.Name)
 					idMapping[toolCall.ID] = newID
 					toolCall.ID = newID
 					bodyPair.AIMessage.Parts[pdx] = toolCall

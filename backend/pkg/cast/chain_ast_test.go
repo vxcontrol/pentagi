@@ -2138,7 +2138,7 @@ func TestExtractReasoningMessage(t *testing.T) {
 
 func TestNormalizeToolCallIDs(t *testing.T) {
 	// Generate a valid ID for the "already valid" test case
-	validToolCallID := templates.GenerateFromPattern("call_{r:24:x}")
+	validToolCallID := templates.GenerateFromPattern("call_{r:24:x}", "")
 
 	tests := []struct {
 		name            string
@@ -2584,8 +2584,8 @@ func TestNormalizeToolCallIDs_IntegrationScenario(t *testing.T) {
 
 	// Step 1: Create a chain with Gemini-style tool calls
 	geminiTemplate := "call_{r:24:x}"
-	geminiToolCallID1 := templates.GenerateFromPattern(geminiTemplate)
-	geminiToolCallID2 := templates.GenerateFromPattern(geminiTemplate)
+	geminiToolCallID1 := templates.GenerateFromPattern(geminiTemplate, "search_weather")
+	geminiToolCallID2 := templates.GenerateFromPattern(geminiTemplate, "search_news")
 
 	geminiChain := []llms.MessageContent{
 		{
@@ -2678,7 +2678,11 @@ func TestNormalizeToolCallIDs_IntegrationScenario(t *testing.T) {
 						"Tool call ID should be 30 characters")
 
 					// Verify it's a valid Anthropic ID
-					err := templates.ValidatePattern(anthropicTemplate, toolCall.ID)
+					sample := templates.PatternSample{
+						Value:        toolCall.ID,
+						FunctionName: toolCall.FunctionCall.Name,
+					}
+					err := templates.ValidatePattern(anthropicTemplate, []templates.PatternSample{sample})
 					assert.NoError(t, err, "Tool call ID should be valid for Anthropic template")
 				}
 			}
