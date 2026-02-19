@@ -69,19 +69,29 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			filters["subtask_id"] = action.SubtaskID.String()
 		}
 
-		opts := []langfuse.EventStartOption{
-			langfuse.WithStartEventName("retrieve memory facts from vector store"),
-			langfuse.WithStartEventInput(action.Question),
-			langfuse.WithStartEventMetadata(map[string]any{
-				"tool_name":  name,
-				"message":    action.Message,
-				"limit":      memoryVectorStoreResultLimit,
-				"threshold":  memoryVectorStoreThreshold,
-				"doc_type":   memoryVectorStoreDefaultType,
-				"task_id":    action.TaskID,
-				"subtask_id": action.SubtaskID,
-			}),
+		isSpecificFilters, globalFilters := getGlobalFilters(filters)
+		metadata := langfuse.Metadata{
+			"tool_name":        name,
+			"message":          action.Message,
+			"limit":            memoryVectorStoreResultLimit,
+			"threshold":        memoryVectorStoreThreshold,
+			"doc_type":         memoryVectorStoreDefaultType,
+			"task_id":          action.TaskID,
+			"subtask_id":       action.SubtaskID,
+			"specific_filters": isSpecificFilters,
 		}
+
+		retriever := observation.Retriever(
+			langfuse.WithRetrieverName("retrieve memory facts from vector store"),
+			langfuse.WithRetrieverInput(map[string]any{
+				"query":       action.Question,
+				"threshold":   memoryVectorStoreThreshold,
+				"max_results": memoryVectorStoreResultLimit,
+				"filters":     filters,
+			}),
+			langfuse.WithRetrieverMetadata(metadata),
+		)
+		ctx, observation = retriever.Observation(ctx)
 
 		fields := logrus.Fields{
 			"query": action.Question[:min(len(action.Question), 1000)],
@@ -103,16 +113,16 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			vectorstores.WithFilters(filters),
 		)
 		if err != nil {
-			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			)...)
+			retriever.End(
+				langfuse.WithRetrieverStatus(err.Error()),
+				langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
+			)
 			logger.WithError(err).Error("failed to search for similar documents")
 			return "", fmt.Errorf("failed to search for similar documents: %w", err)
 		}
 
 		// fallback to search in the flow only if task or subtask id is provided
-		if isSpecificFilters, globalFilters := getGlobalFilters(filters); isSpecificFilters && len(docs) == 0 {
+		if isSpecificFilters && len(docs) == 0 {
 			docs, err = m.store.SimilaritySearch(
 				ctx,
 				action.Question,
@@ -120,22 +130,34 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 				vectorstores.WithScoreThreshold(memoryVectorStoreThreshold),
 				vectorstores.WithFilters(globalFilters),
 			)
+			observation.Event(
+				langfuse.WithEventName("memory search fallback to global filters"),
+				langfuse.WithEventInput(map[string]any{
+					"query":       action.Question,
+					"threshold":   memoryVectorStoreThreshold,
+					"max_results": memoryVectorStoreResultLimit,
+					"filters":     globalFilters,
+				}),
+				langfuse.WithEventOutput(docs),
+				langfuse.WithEventStatus("no memory facts found"),
+				langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			)
 			if err != nil {
-				observation.Event(append(opts,
-					langfuse.WithStartEventStatus(err.Error()),
-					langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-				)...)
+				retriever.End(
+					langfuse.WithRetrieverStatus(err.Error()),
+					langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
+				)
 				logger.WithError(err).Error("failed to search for similar documents by global filters")
 				return "", fmt.Errorf("failed to search for similar documents by global filters: %w", err)
 			}
 		}
 
 		if len(docs) == 0 {
-			event := observation.Event(append(opts,
-				langfuse.WithStartEventStatus("no memory facts found"),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelWarning),
-			)...)
-			_, observation = event.Observation(ctx)
+			retriever.End(
+				langfuse.WithRetrieverStatus("no memory facts found"),
+				langfuse.WithRetrieverLevel(langfuse.ObservationLevelWarning),
+				langfuse.WithRetrieverOutput([]any{}),
+			)
 			observation.Score(
 				langfuse.WithScoreComment("no memory facts found"),
 				langfuse.WithScoreName("memory_search_result"),
@@ -144,12 +166,14 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			return memoryNotFoundMessage, nil
 		}
 
-		event := observation.Event(append(opts,
-			langfuse.WithStartEventStatus("success"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelDebug),
-			langfuse.WithStartEventOutput(docs),
-		)...)
-		_, observation = event.Observation(ctx)
+		// TODO: here need to rerank and filter the docs based on the question
+		// use evaluator observation type to process each document and to get a score
+
+		retriever.End(
+			langfuse.WithRetrieverStatus("success"),
+			langfuse.WithRetrieverLevel(langfuse.ObservationLevelDebug),
+			langfuse.WithRetrieverOutput(docs),
+		)
 
 		buffer := strings.Builder{}
 		for i, doc := range docs {

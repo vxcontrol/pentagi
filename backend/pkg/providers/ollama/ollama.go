@@ -14,6 +14,7 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/system"
+	"pentagi/pkg/templates"
 
 	"github.com/ollama/ollama/api"
 	"github.com/vxcontrol/langchaingo/llms"
@@ -276,30 +277,10 @@ func (p *ollamaProvider) CallWithTools(
 	)
 }
 
-func (p *ollamaProvider) GetUsage(info map[string]any) (int64, int64) {
-	var inputTokens, outputTokens int64
+func (p *ollamaProvider) GetUsage(info map[string]any) pconfig.CallUsage {
+	return pconfig.NewCallUsage(info)
+}
 
-	if value, ok := info["PromptTokens"]; ok {
-		switch v := value.(type) {
-		case int:
-			inputTokens = int64(v)
-		case int64:
-			inputTokens = v
-		case float64:
-			inputTokens = int64(v)
-		}
-	}
-
-	if value, ok := info["CompletionTokens"]; ok {
-		switch v := value.(type) {
-		case int:
-			outputTokens = int64(v)
-		case int64:
-			outputTokens = v
-		case float64:
-			outputTokens = int64(v)
-		}
-	}
-
-	return inputTokens, outputTokens
+func (p *ollamaProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
 }

@@ -44,6 +44,8 @@ var frontendRoutes = []string{
 	"/chat",
 	"/oauth",
 	"/login",
+	"/flows",
+	"/settings",
 }
 
 // @title PentAGI Swagger API
@@ -129,6 +131,7 @@ func NewRouter(
 	termlogService := services.NewTermlogService(orm)
 	screenshotService := services.NewScreenshotService(orm, cfg.DataDir)
 	promptService := services.NewPromptService(orm)
+	analyticsService := services.NewAnalyticsService(orm)
 	graphqlService := services.NewGraphqlService(
 		db, cfg, baseURL, cfg.CorsOrigins, providers, controller, subscriptions,
 	)
@@ -210,6 +213,7 @@ func NewRouter(
 		setVecstorelogsGroup(privateGroup, vecstorelogService)
 		setScreenshotsGroup(privateGroup, screenshotService)
 		setPromptsGroup(privateGroup, promptService)
+		setAnalyticsGroup(privateGroup, analyticsService)
 	}
 
 	if cfg.StaticURL != nil && cfg.StaticURL.Scheme != "" && cfg.StaticURL.Host != "" {
@@ -252,8 +256,9 @@ func NewRouter(
 		router.NoRoute(func(c *gin.Context) {
 			if c.Request.Method == "GET" && !strings.HasPrefix(c.Request.URL.Path, baseURL) {
 				isFrontendRoute := false
+				path := c.Request.URL.Path
 				for _, prefix := range frontendRoutes {
-					if c.Request.URL.Path == prefix || strings.HasPrefix(c.Request.URL.Path, prefix+"/") {
+					if path == prefix || strings.HasPrefix(path, prefix+"/") {
 						isFrontendRoute = true
 						break
 					}
@@ -501,5 +506,20 @@ func setUsersGroup(parent *gin.RouterGroup, svc *services.UserService) {
 	userViewGroup := parent.Group("/user")
 	{
 		userViewGroup.GET("/", svc.GetCurrentUser)
+	}
+}
+
+func setAnalyticsGroup(parent *gin.RouterGroup, svc *services.AnalyticsService) {
+	// System-wide analytics
+	usageViewGroup := parent.Group("/usage")
+	{
+		usageViewGroup.GET("/", svc.GetSystemUsage)
+		usageViewGroup.GET("/:period", svc.GetPeriodUsage)
+	}
+
+	// Flow-specific analytics
+	flowUsageViewGroup := parent.Group("/flows/:flowID/usage")
+	{
+		flowUsageViewGroup.GET("/", svc.GetFlowUsage)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"pentagi/pkg/cast"
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/subscriptions"
 	obs "pentagi/pkg/observability"
@@ -105,15 +106,16 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	}
 
 	assistant, err := awc.db.CreateAssistant(ctx, database.CreateAssistantParams{
-		Title:             "untitled",
-		Status:            database.AssistantStatusCreated,
-		Model:             "unknown",
-		ModelProviderName: string(awc.prvname),
-		ModelProviderType: database.ProviderType(awc.prvtype),
-		Language:          "English",
-		Functions:         []byte("{}"),
-		FlowID:            awc.flowID,
-		UseAgents:         awc.useAgents,
+		Title:              "untitled",
+		Status:             database.AssistantStatusCreated,
+		Model:              "unknown",
+		ModelProviderName:  string(awc.prvname),
+		ModelProviderType:  database.ProviderType(awc.prvtype),
+		Language:           "English",
+		ToolCallIDTemplate: cast.ToolCallIDTemplate,
+		Functions:          []byte("{}"),
+		FlowID:             awc.flowID,
+		UseAgents:          awc.useAgents,
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to create assistant in DB")
@@ -126,10 +128,10 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow %d assistant worker", awc.flowID, assistant.ID)),
-			langfuse.WithTraceUserId(user.Mail),
+			langfuse.WithTraceUserID(user.Mail),
 			langfuse.WithTraceTags([]string{"controller", "assistant"}),
 			langfuse.WithTraceInput(awc.input),
-			langfuse.WithTraceSessionId(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
+			langfuse.WithTraceSessionID(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
 				"assistant_id":  assistant.ID,
 				"flow_id":       awc.flowID,
@@ -143,7 +145,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 			}),
 		),
 	)
-	assistantSpan := observation.Span(langfuse.WithStartSpanName("prepare assistant worker"))
+	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
 	ctx, _ = assistantSpan.Observation(ctx)
 
 	pub := awc.subs.NewFlowPublisher(awc.userID, awc.flowID)
@@ -177,13 +179,14 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	logger.Info("assistant provider prepared")
 
 	assistant, err = awc.db.UpdateAssistant(ctx, database.UpdateAssistantParams{
-		Title:      assistantProvider.Title(),
-		Model:      assistantProvider.Model(pconfig.OptionsTypePrimaryAgent),
-		Language:   assistantProvider.Language(),
-		Functions:  functionsBlob,
-		TraceID:    database.StringToNullString(observation.TraceID()),
-		MsgchainID: database.Int64ToNullInt64(&msgChainID),
-		ID:         assistant.ID,
+		Title:              assistantProvider.Title(),
+		Model:              assistantProvider.Model(pconfig.OptionsTypePrimaryAgent),
+		Language:           assistantProvider.Language(),
+		ToolCallIDTemplate: assistantProvider.ToolCallIDTemplate(),
+		Functions:          functionsBlob,
+		TraceID:            database.StringToNullString(observation.TraceID()),
+		MsgchainID:         database.Int64ToNullInt64(&msgChainID),
+		ID:                 assistant.ID,
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to create assistant in DB")
@@ -245,7 +248,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to run assistant worker", err)
 	}
 
-	assistantSpan.End(langfuse.WithEndSpanStatus("assistant worker started"))
+	assistantSpan.End(langfuse.WithSpanStatus("assistant worker started"))
 
 	return aw, nil
 }
@@ -286,9 +289,9 @@ func LoadAssistantWorker(
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow %d assistant worker", awc.flowID, assistant.ID)),
-			langfuse.WithTraceUserId(user.Mail),
+			langfuse.WithTraceUserID(user.Mail),
 			langfuse.WithTraceTags([]string{"controller", "assistant"}),
-			langfuse.WithTraceSessionId(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
+			langfuse.WithTraceSessionID(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
 				"assistant_id":  assistant.ID,
 				"flow_id":       awc.flowID,
@@ -302,7 +305,7 @@ func LoadAssistantWorker(
 			}),
 		),
 	)
-	assistantSpan := observation.Span(langfuse.WithStartSpanName("prepare assistant worker"))
+	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
 	ctx, _ = assistantSpan.Observation(ctx)
 
 	functions := &tools.Functions{}
@@ -323,7 +326,7 @@ func LoadAssistantWorker(
 	}
 	assistantProvider, err := awc.provs.LoadAssistantProvider(ctx, provider.ProviderName(assistant.ModelProviderName),
 		prompter, executor, assistant.ID, awc.flowID, awc.userID, container.Image, assistant.Language, assistant.Title,
-		aslw.StreamFlowAssistantMsg)
+		assistant.ToolCallIDTemplate, aslw.StreamFlowAssistantMsg)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to get assistant provider", err)
 	}
@@ -395,7 +398,7 @@ func LoadAssistantWorker(
 	aw.wg.Add(1)
 	go aw.worker()
 
-	assistantSpan.End(langfuse.WithEndSpanStatus("assistant worker started"))
+	assistantSpan.End(langfuse.WithSpanStatus("assistant worker started"))
 
 	return aw, nil
 }

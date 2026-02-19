@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/templates"
 
 	bconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -62,6 +64,10 @@ type bedrockProvider struct {
 	llm            *bedrock.LLM
 	models         pconfig.ModelsConfig
 	providerConfig *pconfig.ProviderConfig
+
+	toolCallIDTemplate     string
+	toolCallIDTemplateOnce sync.Once
+	toolCallIDTemplateErr  error
 }
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
@@ -186,34 +192,10 @@ func (p *bedrockProvider) CallWithTools(
 	)
 }
 
-func (p *bedrockProvider) GetUsage(info map[string]any) (int64, int64) {
-	var inputTokens, outputTokens int64
+func (p *bedrockProvider) GetUsage(info map[string]any) pconfig.CallUsage {
+	return pconfig.NewCallUsage(info)
+}
 
-	if value, ok := info["input_tokens"]; ok {
-		switch v := value.(type) {
-		case int:
-			inputTokens = int64(v)
-		case int32:
-			inputTokens = int64(v)
-		case int64:
-			inputTokens = v
-		case float64:
-			inputTokens = int64(v)
-		}
-	}
-
-	if value, ok := info["output_tokens"]; ok {
-		switch v := value.(type) {
-		case int:
-			outputTokens = int64(v)
-		case int32:
-			outputTokens = int64(v)
-		case int64:
-			outputTokens = v
-		case float64:
-			outputTokens = int64(v)
-		}
-	}
-
-	return inputTokens, outputTokens
+func (p *bedrockProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
 }

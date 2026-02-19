@@ -8,8 +8,11 @@ import (
 	"slices"
 	"strings"
 	"text/template"
+	"time"
 
 	"pentagi/pkg/database"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/schema"
 
 	"github.com/vxcontrol/langchaingo/documentloaders"
@@ -24,6 +27,106 @@ const maxArgValueLength = 1024 // 1 KB limit for argument values
 
 type dummyMessage struct {
 	Message string `json:"message"`
+}
+
+// observationWrapper wraps different observation types with unified interface
+type observationWrapper interface {
+	ctx() context.Context
+	end(result string, err error, durationSeconds float64)
+}
+
+// toolObservationWrapper wraps TOOL observation
+type toolObservationWrapper struct {
+	context     context.Context
+	observation langfuse.Tool
+}
+
+func (w *toolObservationWrapper) ctx() context.Context {
+	return w.context
+}
+
+func (w *toolObservationWrapper) end(result string, err error, durationSeconds float64) {
+	opts := []langfuse.ToolOption{
+		langfuse.WithToolOutput(result),
+	}
+	if err != nil {
+		opts = append(opts,
+			langfuse.WithToolStatus(err.Error()),
+			langfuse.WithToolLevel(langfuse.ObservationLevelError),
+		)
+	} else {
+		opts = append(opts,
+			langfuse.WithToolStatus("success"),
+		)
+	}
+	w.observation.End(opts...)
+}
+
+// agentObservationWrapper wraps AGENT observation
+type agentObservationWrapper struct {
+	context     context.Context
+	observation langfuse.Agent
+}
+
+func (w *agentObservationWrapper) ctx() context.Context {
+	return w.context
+}
+
+func (w *agentObservationWrapper) end(result string, err error, durationSeconds float64) {
+	opts := []langfuse.AgentOption{
+		langfuse.WithAgentOutput(result),
+	}
+	if err != nil {
+		opts = append(opts,
+			langfuse.WithAgentStatus(err.Error()),
+			langfuse.WithAgentLevel(langfuse.ObservationLevelError),
+		)
+	} else {
+		opts = append(opts,
+			langfuse.WithAgentStatus("success"),
+		)
+	}
+	w.observation.End(opts...)
+}
+
+// spanObservationWrapper wraps SPAN observation (used for barrier tools)
+type spanObservationWrapper struct {
+	context     context.Context
+	observation langfuse.Span
+}
+
+func (w *spanObservationWrapper) ctx() context.Context {
+	return w.context
+}
+
+func (w *spanObservationWrapper) end(result string, err error, durationSeconds float64) {
+	opts := []langfuse.SpanOption{
+		langfuse.WithSpanOutput(result),
+	}
+	if err != nil {
+		opts = append(opts,
+			langfuse.WithSpanStatus(err.Error()),
+			langfuse.WithSpanLevel(langfuse.ObservationLevelError),
+		)
+	} else {
+		opts = append(opts,
+			langfuse.WithSpanStatus("success"),
+		)
+	}
+	w.observation.End(opts...)
+}
+
+// noopObservationWrapper is a no-op wrapper for tools that create observations internally
+type noopObservationWrapper struct {
+	context context.Context
+}
+
+func (w *noopObservationWrapper) ctx() context.Context {
+	return w.context
+}
+
+func (w *noopObservationWrapper) end(result string, err error, durationSeconds float64) {
+	// no-op
 }
 
 type customExecutor struct {
@@ -55,12 +158,95 @@ func (ce *customExecutor) Tools() []llms.Tool {
 	return tools
 }
 
+func (ce *customExecutor) createToolObservation(ctx context.Context, name string, args json.RawMessage) observationWrapper {
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	metadata := langfuse.Metadata{
+		"tool_name":     name,
+		"tool_category": GetToolType(name).String(),
+		"flow_id":       ce.flowID,
+	}
+	if ce.taskID != nil {
+		metadata["task_id"] = *ce.taskID
+	}
+	if ce.subtaskID != nil {
+		metadata["subtask_id"] = *ce.subtaskID
+	}
+
+	tool := observation.Tool(
+		langfuse.WithToolName(name),
+		langfuse.WithToolInput(args),
+		langfuse.WithToolMetadata(metadata),
+	)
+	ctx, _ = tool.Observation(ctx)
+
+	return &toolObservationWrapper{
+		context:     ctx,
+		observation: tool,
+	}
+}
+
+func (ce *customExecutor) createAgentObservation(ctx context.Context, name string, args json.RawMessage) observationWrapper {
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	metadata := langfuse.Metadata{
+		"agent_name":    name,
+		"tool_category": GetToolType(name).String(),
+		"flow_id":       ce.flowID,
+	}
+	if ce.taskID != nil {
+		metadata["task_id"] = *ce.taskID
+	}
+	if ce.subtaskID != nil {
+		metadata["subtask_id"] = *ce.subtaskID
+	}
+
+	agent := observation.Agent(
+		langfuse.WithAgentName(name),
+		langfuse.WithAgentInput(args),
+		langfuse.WithAgentMetadata(metadata),
+	)
+	ctx, _ = agent.Observation(ctx)
+
+	return &agentObservationWrapper{
+		context:     ctx,
+		observation: agent,
+	}
+}
+
+func (ce *customExecutor) createSpanObservation(ctx context.Context, name string, args json.RawMessage) observationWrapper {
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	metadata := langfuse.Metadata{
+		"barrier_name":  name,
+		"tool_category": GetToolType(name).String(),
+		"flow_id":       ce.flowID,
+	}
+	if ce.taskID != nil {
+		metadata["task_id"] = *ce.taskID
+	}
+	if ce.subtaskID != nil {
+		metadata["subtask_id"] = *ce.subtaskID
+	}
+
+	span := observation.Span(
+		langfuse.WithSpanName(name),
+		langfuse.WithSpanInput(args),
+		langfuse.WithSpanMetadata(metadata),
+	)
+	ctx, _ = span.Observation(ctx)
+
+	return &spanObservationWrapper{
+		context:     ctx,
+		observation: span,
+	}
+}
+
 func (ce *customExecutor) Execute(
 	ctx context.Context,
 	streamID int64,
 	id, name, thinking string,
 	args json.RawMessage,
 ) (string, error) {
+	startTime := time.Now()
+
 	handler, ok := ce.handlers[name]
 	if !ok {
 		return fmt.Sprintf("function '%s' not found in available tools list", name), nil
@@ -70,6 +256,28 @@ func (ce *customExecutor) Execute(
 	if err := json.Unmarshal(args, &raw); err != nil {
 		return fmt.Sprintf("failed to unmarshal '%s' tool call arguments: %v: fix it", name, err), nil
 	}
+
+	// Create observation based on tool type
+	toolType := GetToolType(name)
+	var obsWrapper observationWrapper
+
+	switch toolType {
+	case EnvironmentToolType, SearchNetworkToolType, StoreAgentResultToolType, StoreVectorDbToolType:
+		obsWrapper = ce.createToolObservation(ctx, name, args)
+	case AgentToolType:
+		obsWrapper = ce.createAgentObservation(ctx, name, args)
+	case BarrierToolType:
+		obsWrapper = ce.createSpanObservation(ctx, name, args)
+	case SearchVectorDbToolType:
+		// Skip - handlers create RETRIEVER internally
+		obsWrapper = &noopObservationWrapper{context: ctx}
+	default:
+		// Unknown type - use no-op wrapper
+		obsWrapper = &noopObservationWrapper{context: ctx}
+	}
+
+	// Use context from observation wrapper
+	ctx = obsWrapper.ctx()
 
 	var err error
 	msgID, msg := int64(0), ce.getMessage(args)
@@ -91,6 +299,7 @@ func (ce *customExecutor) Execute(
 		SubtaskID: database.Int64ToNullInt64(ce.subtaskID),
 	})
 	if err != nil {
+		obsWrapper.end("", err, time.Since(startTime).Seconds())
 		return "", fmt.Errorf("failed to create toolcall: %w", err)
 	}
 
@@ -98,9 +307,11 @@ func (ce *customExecutor) Execute(
 		resultFormat := getMessageResultFormat(name)
 		result, err := handler(ctx, name, args)
 		if err != nil {
+			durationDelta := time.Since(startTime).Seconds()
 			_, _ = ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
-				Result: fmt.Sprintf("failed to execute handler: %s", err.Error()),
-				ID:     tc.ID,
+				Result:          fmt.Sprintf("failed to execute handler: %s", err.Error()),
+				DurationSeconds: durationDelta,
+				ID:              tc.ID,
 			})
 			return "", resultFormat, fmt.Errorf("failed to execute handler: %w", err)
 		}
@@ -114,18 +325,22 @@ func (ce *customExecutor) Execute(
 			}
 			result, err = ce.summarizer(ctx, summarizePrompt)
 			if err != nil {
+				durationDelta := time.Since(startTime).Seconds()
 				_, _ = ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
-					Result: fmt.Sprintf("failed to summarize result: %s", err.Error()),
-					ID:     tc.ID,
+					Result:          fmt.Sprintf("failed to summarize result: %s", err.Error()),
+					DurationSeconds: durationDelta,
+					ID:              tc.ID,
 				})
 				return "", resultFormat, fmt.Errorf("failed to summarize result: %w", err)
 			}
 			resultFormat = database.MsglogResultFormatMarkdown
 		}
 
+		durationDelta := time.Since(startTime).Seconds()
 		_, err = ce.db.UpdateToolcallFinishedResult(ctx, database.UpdateToolcallFinishedResultParams{
-			Result: result,
-			ID:     tc.ID,
+			Result:          result,
+			DurationSeconds: durationDelta,
+			ID:              tc.ID,
 		})
 		if err != nil {
 			return "", resultFormat, fmt.Errorf("failed to update toolcall result: %w", err)
@@ -136,21 +351,27 @@ func (ce *customExecutor) Execute(
 
 	if msg == "" { // no arg message to log and execute handler immediately
 		result, _, err := wrapHandler(ctx, name, args)
+		obsWrapper.end(result, err, time.Since(startTime).Seconds())
 		return result, err
 	}
 
 	result, resultFormat, err := wrapHandler(ctx, name, args)
 	if err != nil {
+		obsWrapper.end(result, err, time.Since(startTime).Seconds())
 		return "", err
 	}
 
 	if err := ce.storeToolResult(ctx, name, result, args); err != nil {
+		obsWrapper.end(result, err, time.Since(startTime).Seconds())
 		return "", fmt.Errorf("failed to store tool result in long-term memory: %w", err)
 	}
 
 	if err := ce.mlp.UpdateMsgResult(ctx, msgID, streamID, result, resultFormat); err != nil {
+		obsWrapper.end(result, err, time.Since(startTime).Seconds())
 		return "", err
 	}
+
+	obsWrapper.end(result, nil, time.Since(startTime).Seconds())
 
 	return result, nil
 }

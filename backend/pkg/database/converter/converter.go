@@ -2,12 +2,14 @@ package converter
 
 import (
 	"encoding/json"
+
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/tester"
 	"pentagi/pkg/providers/tester/testdata"
 	"pentagi/pkg/templates"
+	"pentagi/pkg/tools"
 
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -158,25 +160,29 @@ func ConvertScreenshot(screenshot database.Screenshot) *model.Screenshot {
 	return &model.Screenshot{
 		ID:        screenshot.ID,
 		FlowID:    screenshot.FlowID,
+		TaskID:    database.NullInt64ToInt64(screenshot.TaskID),
+		SubtaskID: database.NullInt64ToInt64(screenshot.SubtaskID),
 		Name:      screenshot.Name,
 		URL:       screenshot.Url,
 		CreatedAt: screenshot.CreatedAt.Time,
 	}
 }
 
-func ConvertTerminalLogs(logs []database.Termlog, flowID int64) []*model.TerminalLog {
+func ConvertTerminalLogs(logs []database.Termlog) []*model.TerminalLog {
 	glogs := make([]*model.TerminalLog, 0, len(logs))
 	for _, log := range logs {
-		glogs = append(glogs, ConvertTerminalLog(log, flowID))
+		glogs = append(glogs, ConvertTerminalLog(log))
 	}
 
 	return glogs
 }
 
-func ConvertTerminalLog(log database.Termlog, flowID int64) *model.TerminalLog {
+func ConvertTerminalLog(log database.Termlog) *model.TerminalLog {
 	return &model.TerminalLog{
 		ID:        log.ID,
-		FlowID:    flowID,
+		FlowID:    log.FlowID,
+		TaskID:    database.NullInt64ToInt64(log.TaskID),
+		SubtaskID: database.NullInt64ToInt64(log.SubtaskID),
 		Type:      model.TerminalLogType(log.Type),
 		Text:      log.Text,
 		Terminal:  log.ContainerID,
@@ -379,6 +385,8 @@ func ConvertDefaultPrompts(prompts *templates.DefaultPrompts) *model.DefaultProm
 			GetShortExecutionContext: ConvertDefaultPrompt(&prompts.ToolsPrompts.GetShortExecutionContext),
 			ChooseDockerImage:        ConvertDefaultPrompt(&prompts.ToolsPrompts.ChooseDockerImage),
 			ChooseUserLanguage:       ConvertDefaultPrompt(&prompts.ToolsPrompts.ChooseUserLanguage),
+			CollectToolCallID:        ConvertDefaultPrompt(&prompts.ToolsPrompts.CollectToolCallID),
+			DetectToolCallIDPattern:  ConvertDefaultPrompt(&prompts.ToolsPrompts.DetectToolCallIDPattern),
 		},
 	}
 }
@@ -402,8 +410,10 @@ func ConvertModels(models pconfig.ModelsConfig) []*model.ModelConfig {
 
 		if m.Price != nil {
 			modelConfig.Price = &model.ModelPrice{
-				Input:  m.Price.Input,
-				Output: m.Price.Output,
+				Input:      m.Price.Input,
+				Output:     m.Price.Output,
+				CacheRead:  m.Price.CacheRead,
+				CacheWrite: m.Price.CacheWrite,
 			}
 		}
 
@@ -509,8 +519,10 @@ func ConvertAgentConfigToGqlModel(ac *pconfig.AgentConfig) *model.AgentConfig {
 
 	if ac.Price != nil {
 		result.Price = &model.ModelPrice{
-			Input:  ac.Price.Input,
-			Output: ac.Price.Output,
+			Input:      ac.Price.Input,
+			Output:     ac.Price.Output,
+			CacheRead:  ac.Price.CacheRead,
+			CacheWrite: ac.Price.CacheWrite,
 		}
 	}
 
@@ -597,8 +609,10 @@ func ConvertAgentConfigFromGqlModel(ac *model.AgentConfig) *pconfig.AgentConfig 
 
 	if ac.Price != nil {
 		rawConfig["price"] = map[string]any{
-			"input":  ac.Price.Input,
-			"output": ac.Price.Output,
+			"input":       ac.Price.Input,
+			"output":      ac.Price.Output,
+			"cache_read":  ac.Price.CacheRead,
+			"cache_write": ac.Price.CacheWrite,
 		}
 	}
 
@@ -671,3 +685,385 @@ func ConvertProviderTestResults(results tester.ProviderTestResults) *model.Provi
 		Pentester:    ConvertTestResults(results.Pentester),
 	}
 }
+
+// UsageStatsRow constraint for generic conversion
+type UsageStatsRow interface {
+	database.GetFlowUsageStatsRow |
+		database.GetTaskUsageStatsRow |
+		database.GetSubtaskUsageStatsRow |
+		database.GetUserTotalUsageStatsRow |
+		database.GetUsageStatsByDayLastWeekRow |
+		database.GetUsageStatsByDayLastMonthRow |
+		database.GetUsageStatsByDayLast3MonthsRow |
+		database.GetUsageStatsByProviderRow |
+		database.GetUsageStatsByModelRow |
+		database.GetUsageStatsByTypeRow |
+		database.GetUsageStatsByTypeForFlowRow
+}
+
+// ToolcallsStatsRow constraint for generic conversion
+type ToolcallsStatsRow interface {
+	database.GetFlowToolcallsStatsRow |
+		database.GetTaskToolcallsStatsRow |
+		database.GetSubtaskToolcallsStatsRow |
+		database.GetUserTotalToolcallsStatsRow
+}
+
+// FlowsStatsRow constraint for generic conversion
+type FlowsStatsRow interface {
+	database.GetUserTotalFlowsStatsRow
+}
+
+// FlowStatsRow constraint for conversion of single flow stats
+type FlowStatsRow interface {
+	database.GetFlowStatsRow
+}
+
+// ConvertUsageStats converts database usage stats to GraphQL model using generics
+func ConvertUsageStats[T UsageStatsRow](stats T) *model.UsageStats {
+	var in, out, cacheIn, cacheOut int64
+	var costIn, costOut float64
+
+	// Extract fields based on type
+	switch v := any(stats).(type) {
+	case database.GetFlowUsageStatsRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetTaskUsageStatsRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetSubtaskUsageStatsRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetUserTotalUsageStatsRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetUsageStatsByDayLastWeekRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetUsageStatsByDayLastMonthRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetUsageStatsByDayLast3MonthsRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetUsageStatsByProviderRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetUsageStatsByModelRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetUsageStatsByTypeRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	case database.GetUsageStatsByTypeForFlowRow:
+		in, out = v.TotalUsageIn, v.TotalUsageOut
+		cacheIn, cacheOut = v.TotalUsageCacheIn, v.TotalUsageCacheOut
+		costIn, costOut = v.TotalUsageCostIn, v.TotalUsageCostOut
+	}
+
+	return &model.UsageStats{
+		TotalUsageIn:       int(in),
+		TotalUsageOut:      int(out),
+		TotalUsageCacheIn:  int(cacheIn),
+		TotalUsageCacheOut: int(cacheOut),
+		TotalUsageCostIn:   costIn,
+		TotalUsageCostOut:  costOut,
+	}
+}
+
+// ConvertDailyUsageStats converts daily usage stats to GraphQL model
+func ConvertDailyUsageStats(stats []database.GetUsageStatsByDayLastWeekRow) []*model.DailyUsageStats {
+	result := make([]*model.DailyUsageStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyUsageStats{
+			Date:  stat.Date,
+			Stats: ConvertUsageStats(stat),
+		})
+	}
+	return result
+}
+
+// ConvertDailyUsageStatsMonth converts monthly usage stats to GraphQL model
+func ConvertDailyUsageStatsMonth(stats []database.GetUsageStatsByDayLastMonthRow) []*model.DailyUsageStats {
+	result := make([]*model.DailyUsageStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyUsageStats{
+			Date:  stat.Date,
+			Stats: ConvertUsageStats(stat),
+		})
+	}
+	return result
+}
+
+// ConvertDailyUsageStatsQuarter converts quarterly usage stats to GraphQL model
+func ConvertDailyUsageStatsQuarter(stats []database.GetUsageStatsByDayLast3MonthsRow) []*model.DailyUsageStats {
+	result := make([]*model.DailyUsageStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyUsageStats{
+			Date:  stat.Date,
+			Stats: ConvertUsageStats(stat),
+		})
+	}
+	return result
+}
+
+// ConvertProviderUsageStats converts provider usage stats to GraphQL model
+func ConvertProviderUsageStats(stats []database.GetUsageStatsByProviderRow) []*model.ProviderUsageStats {
+	result := make([]*model.ProviderUsageStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.ProviderUsageStats{
+			Provider: stat.ModelProvider,
+			Stats:    ConvertUsageStats(stat),
+		})
+	}
+	return result
+}
+
+// ConvertModelUsageStats converts model usage stats to GraphQL model
+func ConvertModelUsageStats(stats []database.GetUsageStatsByModelRow) []*model.ModelUsageStats {
+	result := make([]*model.ModelUsageStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.ModelUsageStats{
+			Model:    stat.Model,
+			Provider: stat.ModelProvider,
+			Stats:    ConvertUsageStats(stat),
+		})
+	}
+	return result
+}
+
+// ConvertAgentTypeUsageStats converts agent type usage stats to GraphQL model
+func ConvertAgentTypeUsageStats(stats []database.GetUsageStatsByTypeRow) []*model.AgentTypeUsageStats {
+	result := make([]*model.AgentTypeUsageStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.AgentTypeUsageStats{
+			AgentType: model.AgentType(stat.Type),
+			Stats:     ConvertUsageStats(stat),
+		})
+	}
+	return result
+}
+
+// ConvertAgentTypeUsageStatsForFlow converts agent type usage stats for flow to GraphQL model
+func ConvertAgentTypeUsageStatsForFlow(stats []database.GetUsageStatsByTypeForFlowRow) []*model.AgentTypeUsageStats {
+	result := make([]*model.AgentTypeUsageStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.AgentTypeUsageStats{
+			AgentType: model.AgentType(stat.Type),
+			Stats:     ConvertUsageStats(stat),
+		})
+	}
+	return result
+}
+
+// ==================== Toolcalls Statistics Converters ====================
+
+// ConvertToolcallsStats converts database toolcalls stats to GraphQL model using generics
+func ConvertToolcallsStats[T ToolcallsStatsRow](stats T) *model.ToolcallsStats {
+	var count int64
+	var duration float64
+
+	// Extract fields based on type
+	switch v := any(stats).(type) {
+	case database.GetFlowToolcallsStatsRow:
+		count, duration = v.TotalCount, v.TotalDurationSeconds
+	case database.GetTaskToolcallsStatsRow:
+		count, duration = v.TotalCount, v.TotalDurationSeconds
+	case database.GetSubtaskToolcallsStatsRow:
+		count, duration = v.TotalCount, v.TotalDurationSeconds
+	case database.GetUserTotalToolcallsStatsRow:
+		count, duration = v.TotalCount, v.TotalDurationSeconds
+	}
+
+	return &model.ToolcallsStats{
+		TotalCount:           int(count),
+		TotalDurationSeconds: duration,
+	}
+}
+
+// ConvertDailyToolcallsStats converts daily toolcalls stats to GraphQL model
+func ConvertDailyToolcallsStatsWeek(stats []database.GetToolcallsStatsByDayLastWeekRow) []*model.DailyToolcallsStats {
+	result := make([]*model.DailyToolcallsStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyToolcallsStats{
+			Date: stat.Date,
+			Stats: &model.ToolcallsStats{
+				TotalCount:           int(stat.TotalCount),
+				TotalDurationSeconds: stat.TotalDurationSeconds,
+			},
+		})
+	}
+	return result
+}
+
+// ConvertDailyToolcallsStatsMonth converts monthly toolcalls stats to GraphQL model
+func ConvertDailyToolcallsStatsMonth(stats []database.GetToolcallsStatsByDayLastMonthRow) []*model.DailyToolcallsStats {
+	result := make([]*model.DailyToolcallsStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyToolcallsStats{
+			Date: stat.Date,
+			Stats: &model.ToolcallsStats{
+				TotalCount:           int(stat.TotalCount),
+				TotalDurationSeconds: stat.TotalDurationSeconds,
+			},
+		})
+	}
+	return result
+}
+
+// ConvertDailyToolcallsStatsQuarter converts quarterly toolcalls stats to GraphQL model
+func ConvertDailyToolcallsStatsQuarter(stats []database.GetToolcallsStatsByDayLast3MonthsRow) []*model.DailyToolcallsStats {
+	result := make([]*model.DailyToolcallsStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyToolcallsStats{
+			Date: stat.Date,
+			Stats: &model.ToolcallsStats{
+				TotalCount:           int(stat.TotalCount),
+				TotalDurationSeconds: stat.TotalDurationSeconds,
+			},
+		})
+	}
+	return result
+}
+
+// isAgentTool checks if a function name represents an agent tool
+func isAgentTool(functionName string) bool {
+	toolTypeMapping := tools.GetToolTypeMapping()
+	toolType, exists := toolTypeMapping[functionName]
+	if !exists {
+		return false
+	}
+	// Agent tools include AgentToolType and StoreAgentResultToolType
+	return toolType == tools.AgentToolType || toolType == tools.StoreAgentResultToolType
+}
+
+// ConvertFunctionToolcallsStats converts function toolcalls stats to GraphQL model
+func ConvertFunctionToolcallsStats(stats []database.GetToolcallsStatsByFunctionRow) []*model.FunctionToolcallsStats {
+	result := make([]*model.FunctionToolcallsStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.FunctionToolcallsStats{
+			FunctionName:         stat.FunctionName,
+			IsAgent:              isAgentTool(stat.FunctionName),
+			TotalCount:           int(stat.TotalCount),
+			TotalDurationSeconds: stat.TotalDurationSeconds,
+			AvgDurationSeconds:   stat.AvgDurationSeconds,
+		})
+	}
+	return result
+}
+
+// ConvertFunctionToolcallsStatsForFlow converts function toolcalls stats for flow to GraphQL model
+func ConvertFunctionToolcallsStatsForFlow(stats []database.GetToolcallsStatsByFunctionForFlowRow) []*model.FunctionToolcallsStats {
+	result := make([]*model.FunctionToolcallsStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.FunctionToolcallsStats{
+			FunctionName:         stat.FunctionName,
+			IsAgent:              isAgentTool(stat.FunctionName),
+			TotalCount:           int(stat.TotalCount),
+			TotalDurationSeconds: stat.TotalDurationSeconds,
+			AvgDurationSeconds:   stat.AvgDurationSeconds,
+		})
+	}
+	return result
+}
+
+// ==================== Flows Statistics Converters ====================
+
+// ConvertFlowsStats converts database flows stats to GraphQL model using generics
+func ConvertFlowsStats[T FlowsStatsRow](stats T) *model.FlowsStats {
+	var flowsCount, tasksCount, subtasksCount, assistantsCount int64
+
+	// Extract fields based on type
+	switch v := any(stats).(type) {
+	case database.GetUserTotalFlowsStatsRow:
+		flowsCount, tasksCount, subtasksCount, assistantsCount = v.TotalFlowsCount, v.TotalTasksCount, v.TotalSubtasksCount, v.TotalAssistantsCount
+	}
+
+	return &model.FlowsStats{
+		TotalFlowsCount:      int(flowsCount),
+		TotalTasksCount:      int(tasksCount),
+		TotalSubtasksCount:   int(subtasksCount),
+		TotalAssistantsCount: int(assistantsCount),
+	}
+}
+
+// ConvertFlowStats converts database single flow stats to GraphQL model using generics
+func ConvertFlowStats[T FlowStatsRow](stats T) *model.FlowStats {
+	var tasksCount, subtasksCount, assistantsCount int64
+
+	// Extract fields based on type
+	switch v := any(stats).(type) {
+	case database.GetFlowStatsRow:
+		tasksCount, subtasksCount, assistantsCount = v.TotalTasksCount, v.TotalSubtasksCount, v.TotalAssistantsCount
+	}
+
+	return &model.FlowStats{
+		TotalTasksCount:      int(tasksCount),
+		TotalSubtasksCount:   int(subtasksCount),
+		TotalAssistantsCount: int(assistantsCount),
+	}
+}
+
+// ConvertDailyFlowsStatsWeek converts daily flows stats to GraphQL model
+func ConvertDailyFlowsStatsWeek(stats []database.GetFlowsStatsByDayLastWeekRow) []*model.DailyFlowsStats {
+	result := make([]*model.DailyFlowsStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyFlowsStats{
+			Date: stat.Date,
+			Stats: &model.FlowsStats{
+				TotalFlowsCount:      int(stat.TotalFlowsCount),
+				TotalTasksCount:      int(stat.TotalTasksCount),
+				TotalSubtasksCount:   int(stat.TotalSubtasksCount),
+				TotalAssistantsCount: int(stat.TotalAssistantsCount),
+			},
+		})
+	}
+	return result
+}
+
+// ConvertDailyFlowsStatsMonth converts monthly flows stats to GraphQL model
+func ConvertDailyFlowsStatsMonth(stats []database.GetFlowsStatsByDayLastMonthRow) []*model.DailyFlowsStats {
+	result := make([]*model.DailyFlowsStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyFlowsStats{
+			Date: stat.Date,
+			Stats: &model.FlowsStats{
+				TotalFlowsCount:      int(stat.TotalFlowsCount),
+				TotalTasksCount:      int(stat.TotalTasksCount),
+				TotalSubtasksCount:   int(stat.TotalSubtasksCount),
+				TotalAssistantsCount: int(stat.TotalAssistantsCount),
+			},
+		})
+	}
+	return result
+}
+
+// ConvertDailyFlowsStatsQuarter converts quarterly flows stats to GraphQL model
+func ConvertDailyFlowsStatsQuarter(stats []database.GetFlowsStatsByDayLast3MonthsRow) []*model.DailyFlowsStats {
+	result := make([]*model.DailyFlowsStats, 0, len(stats))
+	for _, stat := range stats {
+		result = append(result, &model.DailyFlowsStats{
+			Date: stat.Date,
+			Stats: &model.FlowsStats{
+				TotalFlowsCount:      int(stat.TotalFlowsCount),
+				TotalTasksCount:      int(stat.TotalTasksCount),
+				TotalSubtasksCount:   int(stat.TotalSubtasksCount),
+				TotalAssistantsCount: int(stat.TotalAssistantsCount),
+			},
+		})
+	}
+	return result
+}
+
+// ==================== Flows/Tasks/Subtasks Execution Time Converters ====================

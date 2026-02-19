@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/system"
 
 	"github.com/vxcontrol/langchaingo/embeddings"
@@ -72,11 +73,22 @@ func New(cfg *config.Config) (Embedder, error) {
 }
 
 func newOpenAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
-	opts := []openai.Option{}
+	model, provider := cfg.EmbeddingModel, "openai"
+	if model == "" {
+		model = "text-embedding-ada-002"
+	}
+
+	var opts []openai.Option
+	metadata := langfuse.Metadata{
+		"strip_new_lines": cfg.EmbeddingStripNewLines,
+		"batch_size":      cfg.EmbeddingBatchSize,
+	}
 	if cfg.EmbeddingURL != "" {
 		opts = append(opts, openai.WithBaseURL(cfg.EmbeddingURL))
+		metadata["url"] = cfg.EmbeddingURL
 	} else if cfg.OpenAIServerURL != "" {
 		opts = append(opts, openai.WithBaseURL(cfg.OpenAIServerURL))
+		metadata["url"] = cfg.OpenAIServerURL
 	}
 	if cfg.EmbeddingKey != "" {
 		opts = append(opts, openai.WithToken(cfg.EmbeddingKey))
@@ -105,14 +117,26 @@ func newOpenAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder
 		return nil, fmt.Errorf("failed to create embedder: %w", err)
 	}
 
-	return e, nil
+	return &wrapper{
+		model:    model,
+		provider: provider,
+		metadata: metadata,
+		Embedder: e,
+	}, nil
 }
 
 func newOllama(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
 	// EmbeddingKey is not supported for ollama
+	model, provider := cfg.EmbeddingModel, "ollama"
+
 	var opts []ollama.Option
+	metadata := langfuse.Metadata{
+		"strip_new_lines": cfg.EmbeddingStripNewLines,
+		"batch_size":      cfg.EmbeddingBatchSize,
+	}
 	if cfg.EmbeddingURL != "" {
 		opts = append(opts, ollama.WithServerURL(cfg.EmbeddingURL))
+		metadata["url"] = cfg.EmbeddingURL
 	}
 	if cfg.EmbeddingModel != "" {
 		opts = append(opts, ollama.WithModel(cfg.EmbeddingModel))
@@ -136,15 +160,27 @@ func newOllama(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder
 		return nil, fmt.Errorf("failed to create embedder: %w", err)
 	}
 
-	return e, nil
+	return &wrapper{
+		model:    model,
+		provider: provider,
+		metadata: metadata,
+		Embedder: e,
+	}, nil
 }
 
 func newMistral(cfg *config.Config, _ *http.Client) (embeddings.Embedder, error) {
 	// EmbeddingModel is not supported for mistral
 	// Custom HTTP client is not supported for mistral
-	opts := []mistral.Option{}
+	model, provider := "mistral-embed", "mistral"
+
+	var opts []mistral.Option
+	metadata := langfuse.Metadata{
+		"strip_new_lines": cfg.EmbeddingStripNewLines,
+		"batch_size":      cfg.EmbeddingBatchSize,
+	}
 	if cfg.EmbeddingURL != "" {
 		opts = append(opts, mistral.WithEndpoint(cfg.EmbeddingURL))
+		metadata["url"] = cfg.EmbeddingURL
 	}
 	if cfg.EmbeddingKey != "" {
 		opts = append(opts, mistral.WithAPIKey(cfg.EmbeddingKey))
@@ -165,17 +201,33 @@ func newMistral(cfg *config.Config, _ *http.Client) (embeddings.Embedder, error)
 		return nil, fmt.Errorf("failed to create embedder: %w", err)
 	}
 
-	return e, nil
+	return &wrapper{
+		model:    model,
+		provider: provider,
+		metadata: metadata,
+		Embedder: e,
+	}, nil
 }
 
 func newJina(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
 	// Custom HTTP client is not supported for jina
-	opts := []jina.Option{
+	model, provider := cfg.EmbeddingModel, "jina"
+	if model == "" {
+		model = "jina-embeddings-v2-small-en"
+	}
+
+	var opts []jina.Option
+	metadata := langfuse.Metadata{
+		"strip_new_lines": cfg.EmbeddingStripNewLines,
+		"batch_size":      cfg.EmbeddingBatchSize,
+	}
+	opts = append(opts,
 		jina.WithStripNewLines(cfg.EmbeddingStripNewLines),
 		jina.WithBatchSize(cfg.EmbeddingBatchSize),
-	}
+	)
 	if cfg.EmbeddingURL != "" {
 		opts = append(opts, jina.WithAPIBaseURL(cfg.EmbeddingURL))
+		metadata["url"] = cfg.EmbeddingURL
 	}
 	if cfg.EmbeddingKey != "" {
 		opts = append(opts, jina.WithAPIKey(cfg.EmbeddingKey))
@@ -189,17 +241,32 @@ func newJina(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, 
 		return nil, fmt.Errorf("failed to create jina embedder: %w", err)
 	}
 
-	return e, nil
+	return &wrapper{
+		model:    model,
+		provider: provider,
+		metadata: metadata,
+		Embedder: e,
+	}, nil
 }
 
 func newHuggingface(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
 	// Custom HTTP client is not supported for huggingface
-	opts := []hgclient.Option{}
-	if cfg.EmbeddingKey != "" {
-		opts = append(opts, hgclient.WithToken(cfg.EmbeddingKey))
+	model, provider := cfg.EmbeddingModel, "huggingface"
+	if model == "" {
+		model = "BAAI/bge-small-en-v1.5"
+	}
+
+	var opts []hgclient.Option
+	metadata := langfuse.Metadata{
+		"strip_new_lines": cfg.EmbeddingStripNewLines,
+		"batch_size":      cfg.EmbeddingBatchSize,
 	}
 	if cfg.EmbeddingURL != "" {
 		opts = append(opts, hgclient.WithURL(cfg.EmbeddingURL))
+		metadata["url"] = cfg.EmbeddingURL
+	}
+	if cfg.EmbeddingKey != "" {
+		opts = append(opts, hgclient.WithToken(cfg.EmbeddingKey))
 	}
 	if cfg.EmbeddingModel != "" {
 		opts = append(opts, hgclient.WithModel(cfg.EmbeddingModel))
@@ -226,12 +293,26 @@ func newHuggingface(cfg *config.Config, httpClient *http.Client) (embeddings.Emb
 		return nil, fmt.Errorf("failed to create huggingface embedder: %w", err)
 	}
 
-	return e, nil
+	return &wrapper{
+		model:    model,
+		provider: provider,
+		metadata: metadata,
+		Embedder: e,
+	}, nil
 }
 
 func newGoogleAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
 	// EmbeddingURL is not supported for googleai
-	opts := []googleai.Option{}
+	model, provider := cfg.EmbeddingModel, "googleai"
+	if model == "" {
+		model = "embedding-001"
+	}
+
+	var opts []googleai.Option
+	metadata := langfuse.Metadata{
+		"strip_new_lines": cfg.EmbeddingStripNewLines,
+		"batch_size":      cfg.EmbeddingBatchSize,
+	}
 	if cfg.EmbeddingKey != "" {
 		opts = append(opts, googleai.WithAPIKey(cfg.EmbeddingKey))
 	}
@@ -257,15 +338,30 @@ func newGoogleAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedd
 		return nil, fmt.Errorf("failed to create embedder: %w", err)
 	}
 
-	return e, nil
+	return &wrapper{
+		model:    model,
+		provider: provider,
+		metadata: metadata,
+		Embedder: e,
+	}, nil
 }
 
 func newVoyageAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
 	// EmbeddingURL client is not supported for voyageai
-	opts := []voyageai.Option{
+	model, provider := cfg.EmbeddingModel, "voyageai"
+	if model == "" {
+		model = "voyage-4"
+	}
+
+	var opts []voyageai.Option
+	metadata := langfuse.Metadata{
+		"strip_new_lines": cfg.EmbeddingStripNewLines,
+		"batch_size":      cfg.EmbeddingBatchSize,
+	}
+	opts = append(opts,
 		voyageai.WithStripNewLines(cfg.EmbeddingStripNewLines),
 		voyageai.WithBatchSize(cfg.EmbeddingBatchSize),
-	}
+	)
 	if cfg.EmbeddingKey != "" {
 		opts = append(opts, voyageai.WithToken(cfg.EmbeddingKey))
 	}
@@ -281,5 +377,10 @@ func newVoyageAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedd
 		return nil, fmt.Errorf("failed to create voyageai embedder: %w", err)
 	}
 
-	return e, nil
+	return &wrapper{
+		model:    model,
+		provider: provider,
+		metadata: metadata,
+		Embedder: e,
+	}, nil
 }

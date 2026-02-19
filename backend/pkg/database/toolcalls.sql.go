@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 )
 
 const createToolcall = `-- name: CreateToolcall :one
@@ -23,7 +24,7 @@ INSERT INTO toolcalls (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, call_id, status, name, args, result, flow_id, task_id, subtask_id, created_at, updated_at
+RETURNING id, call_id, status, name, args, result, flow_id, task_id, subtask_id, created_at, updated_at, duration_seconds
 `
 
 type CreateToolcallParams struct {
@@ -59,13 +60,58 @@ func (q *Queries) CreateToolcall(ctx context.Context, arg CreateToolcallParams) 
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DurationSeconds,
 	)
 	return i, err
 }
 
+const getAllFlowsToolcallsStats = `-- name: GetAllFlowsToolcallsStats :many
+SELECT
+  COALESCE(tc.flow_id, t.flow_id) AS flow_id,
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
+FROM toolcalls tc
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
+INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+WHERE f.deleted_at IS NULL
+GROUP BY COALESCE(tc.flow_id, t.flow_id)
+ORDER BY COALESCE(tc.flow_id, t.flow_id)
+`
+
+type GetAllFlowsToolcallsStatsRow struct {
+	FlowID               int64   `json:"flow_id"`
+	TotalCount           int64   `json:"total_count"`
+	TotalDurationSeconds float64 `json:"total_duration_seconds"`
+}
+
+// Get toolcalls stats for all flows
+func (q *Queries) GetAllFlowsToolcallsStats(ctx context.Context) ([]GetAllFlowsToolcallsStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllFlowsToolcallsStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllFlowsToolcallsStatsRow
+	for rows.Next() {
+		var i GetAllFlowsToolcallsStatsRow
+		if err := rows.Scan(&i.FlowID, &i.TotalCount, &i.TotalDurationSeconds); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCallToolcall = `-- name: GetCallToolcall :one
 SELECT
-  tc.id, tc.call_id, tc.status, tc.name, tc.args, tc.result, tc.flow_id, tc.task_id, tc.subtask_id, tc.created_at, tc.updated_at
+  tc.id, tc.call_id, tc.status, tc.name, tc.args, tc.result, tc.flow_id, tc.task_id, tc.subtask_id, tc.created_at, tc.updated_at, tc.duration_seconds
 FROM toolcalls tc
 WHERE tc.call_id = $1
 `
@@ -85,18 +131,47 @@ func (q *Queries) GetCallToolcall(ctx context.Context, callID string) (Toolcall,
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DurationSeconds,
 	)
+	return i, err
+}
+
+const getFlowToolcallsStats = `-- name: GetFlowToolcallsStats :one
+
+SELECT
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
+FROM toolcalls tc
+LEFT JOIN tasks t ON tc.task_id = t.id
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+INNER JOIN flows f ON tc.flow_id = f.id
+WHERE tc.flow_id = $1 AND f.deleted_at IS NULL 
+  AND (tc.task_id IS NULL OR t.id IS NOT NULL)
+  AND (tc.subtask_id IS NULL OR s.id IS NOT NULL)
+`
+
+type GetFlowToolcallsStatsRow struct {
+	TotalCount           int64   `json:"total_count"`
+	TotalDurationSeconds float64 `json:"total_duration_seconds"`
+}
+
+// ==================== Toolcalls Analytics Queries ====================
+// Get total execution time and count of toolcalls for a specific flow
+func (q *Queries) GetFlowToolcallsStats(ctx context.Context, flowID int64) (GetFlowToolcallsStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getFlowToolcallsStats, flowID)
+	var i GetFlowToolcallsStatsRow
+	err := row.Scan(&i.TotalCount, &i.TotalDurationSeconds)
 	return i, err
 }
 
 const getSubtaskToolcalls = `-- name: GetSubtaskToolcalls :many
 SELECT
-  tc.id, tc.call_id, tc.status, tc.name, tc.args, tc.result, tc.flow_id, tc.task_id, tc.subtask_id, tc.created_at, tc.updated_at
+  tc.id, tc.call_id, tc.status, tc.name, tc.args, tc.result, tc.flow_id, tc.task_id, tc.subtask_id, tc.created_at, tc.updated_at, tc.duration_seconds
 FROM toolcalls tc
 INNER JOIN subtasks s ON tc.subtask_id = s.id
 INNER JOIN tasks t ON s.task_id = t.id
 INNER JOIN flows f ON t.flow_id = f.id
-WHERE tc.subtask_id = $1
+WHERE tc.subtask_id = $1 AND f.deleted_at IS NULL
 ORDER BY tc.created_at DESC
 `
 
@@ -121,6 +196,7 @@ func (q *Queries) GetSubtaskToolcalls(ctx context.Context, subtaskID sql.NullInt
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -135,20 +211,333 @@ func (q *Queries) GetSubtaskToolcalls(ctx context.Context, subtaskID sql.NullInt
 	return items, nil
 }
 
+const getSubtaskToolcallsStats = `-- name: GetSubtaskToolcallsStats :one
+SELECT
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
+FROM toolcalls tc
+INNER JOIN subtasks s ON tc.subtask_id = s.id
+INNER JOIN tasks t ON s.task_id = t.id
+INNER JOIN flows f ON t.flow_id = f.id
+WHERE tc.subtask_id = $1 AND f.deleted_at IS NULL AND s.id IS NOT NULL AND t.id IS NOT NULL
+`
+
+type GetSubtaskToolcallsStatsRow struct {
+	TotalCount           int64   `json:"total_count"`
+	TotalDurationSeconds float64 `json:"total_duration_seconds"`
+}
+
+// Get total execution time and count of toolcalls for a specific subtask
+func (q *Queries) GetSubtaskToolcallsStats(ctx context.Context, subtaskID sql.NullInt64) (GetSubtaskToolcallsStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getSubtaskToolcallsStats, subtaskID)
+	var i GetSubtaskToolcallsStatsRow
+	err := row.Scan(&i.TotalCount, &i.TotalDurationSeconds)
+	return i, err
+}
+
+const getTaskToolcallsStats = `-- name: GetTaskToolcallsStats :one
+SELECT
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
+FROM toolcalls tc
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+INNER JOIN tasks t ON tc.task_id = t.id OR s.task_id = t.id
+INNER JOIN flows f ON t.flow_id = f.id
+WHERE (tc.task_id = $1 OR s.task_id = $1) AND f.deleted_at IS NULL
+  AND (tc.subtask_id IS NULL OR s.id IS NOT NULL)
+`
+
+type GetTaskToolcallsStatsRow struct {
+	TotalCount           int64   `json:"total_count"`
+	TotalDurationSeconds float64 `json:"total_duration_seconds"`
+}
+
+// Get total execution time and count of toolcalls for a specific task
+func (q *Queries) GetTaskToolcallsStats(ctx context.Context, taskID sql.NullInt64) (GetTaskToolcallsStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getTaskToolcallsStats, taskID)
+	var i GetTaskToolcallsStatsRow
+	err := row.Scan(&i.TotalCount, &i.TotalDurationSeconds)
+	return i, err
+}
+
+const getToolcallsStatsByDayLast3Months = `-- name: GetToolcallsStatsByDayLast3Months :many
+SELECT
+  DATE(tc.created_at) AS date,
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
+FROM toolcalls tc
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
+INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+WHERE tc.created_at >= NOW() - INTERVAL '90 days' AND f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY DATE(tc.created_at)
+ORDER BY date DESC
+`
+
+type GetToolcallsStatsByDayLast3MonthsRow struct {
+	Date                 time.Time `json:"date"`
+	TotalCount           int64     `json:"total_count"`
+	TotalDurationSeconds float64   `json:"total_duration_seconds"`
+}
+
+// Get toolcalls stats by day for the last 3 months
+func (q *Queries) GetToolcallsStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLast3MonthsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByDayLast3Months, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetToolcallsStatsByDayLast3MonthsRow
+	for rows.Next() {
+		var i GetToolcallsStatsByDayLast3MonthsRow
+		if err := rows.Scan(&i.Date, &i.TotalCount, &i.TotalDurationSeconds); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getToolcallsStatsByDayLastMonth = `-- name: GetToolcallsStatsByDayLastMonth :many
+SELECT
+  DATE(tc.created_at) AS date,
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
+FROM toolcalls tc
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
+INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+WHERE tc.created_at >= NOW() - INTERVAL '30 days' AND f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY DATE(tc.created_at)
+ORDER BY date DESC
+`
+
+type GetToolcallsStatsByDayLastMonthRow struct {
+	Date                 time.Time `json:"date"`
+	TotalCount           int64     `json:"total_count"`
+	TotalDurationSeconds float64   `json:"total_duration_seconds"`
+}
+
+// Get toolcalls stats by day for the last month
+func (q *Queries) GetToolcallsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLastMonthRow, error) {
+	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByDayLastMonth, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetToolcallsStatsByDayLastMonthRow
+	for rows.Next() {
+		var i GetToolcallsStatsByDayLastMonthRow
+		if err := rows.Scan(&i.Date, &i.TotalCount, &i.TotalDurationSeconds); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getToolcallsStatsByDayLastWeek = `-- name: GetToolcallsStatsByDayLastWeek :many
+SELECT
+  DATE(tc.created_at) AS date,
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
+FROM toolcalls tc
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
+INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+WHERE tc.created_at >= NOW() - INTERVAL '7 days' AND f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY DATE(tc.created_at)
+ORDER BY date DESC
+`
+
+type GetToolcallsStatsByDayLastWeekRow struct {
+	Date                 time.Time `json:"date"`
+	TotalCount           int64     `json:"total_count"`
+	TotalDurationSeconds float64   `json:"total_duration_seconds"`
+}
+
+// Get toolcalls stats by day for the last week
+func (q *Queries) GetToolcallsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLastWeekRow, error) {
+	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByDayLastWeek, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetToolcallsStatsByDayLastWeekRow
+	for rows.Next() {
+		var i GetToolcallsStatsByDayLastWeekRow
+		if err := rows.Scan(&i.Date, &i.TotalCount, &i.TotalDurationSeconds); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getToolcallsStatsByFunction = `-- name: GetToolcallsStatsByFunction :many
+SELECT
+  tc.name AS function_name,
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds,
+  COALESCE(AVG(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE NULL END), 0.0)::double precision AS avg_duration_seconds
+FROM toolcalls tc
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
+INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+WHERE f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY tc.name
+ORDER BY total_duration_seconds DESC
+`
+
+type GetToolcallsStatsByFunctionRow struct {
+	FunctionName         string  `json:"function_name"`
+	TotalCount           int64   `json:"total_count"`
+	TotalDurationSeconds float64 `json:"total_duration_seconds"`
+	AvgDurationSeconds   float64 `json:"avg_duration_seconds"`
+}
+
+// Get toolcalls stats grouped by function name for a user
+func (q *Queries) GetToolcallsStatsByFunction(ctx context.Context, userID int64) ([]GetToolcallsStatsByFunctionRow, error) {
+	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByFunction, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetToolcallsStatsByFunctionRow
+	for rows.Next() {
+		var i GetToolcallsStatsByFunctionRow
+		if err := rows.Scan(
+			&i.FunctionName,
+			&i.TotalCount,
+			&i.TotalDurationSeconds,
+			&i.AvgDurationSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getToolcallsStatsByFunctionForFlow = `-- name: GetToolcallsStatsByFunctionForFlow :many
+SELECT
+  tc.name AS function_name,
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds,
+  COALESCE(AVG(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE NULL END), 0.0)::double precision AS avg_duration_seconds
+FROM toolcalls tc
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
+INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+WHERE (tc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+GROUP BY tc.name
+ORDER BY total_duration_seconds DESC
+`
+
+type GetToolcallsStatsByFunctionForFlowRow struct {
+	FunctionName         string  `json:"function_name"`
+	TotalCount           int64   `json:"total_count"`
+	TotalDurationSeconds float64 `json:"total_duration_seconds"`
+	AvgDurationSeconds   float64 `json:"avg_duration_seconds"`
+}
+
+// Get toolcalls stats grouped by function name for a specific flow
+func (q *Queries) GetToolcallsStatsByFunctionForFlow(ctx context.Context, flowID int64) ([]GetToolcallsStatsByFunctionForFlowRow, error) {
+	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByFunctionForFlow, flowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetToolcallsStatsByFunctionForFlowRow
+	for rows.Next() {
+		var i GetToolcallsStatsByFunctionForFlowRow
+		if err := rows.Scan(
+			&i.FunctionName,
+			&i.TotalCount,
+			&i.TotalDurationSeconds,
+			&i.AvgDurationSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserTotalToolcallsStats = `-- name: GetUserTotalToolcallsStats :one
+SELECT
+  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
+  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
+FROM toolcalls tc
+LEFT JOIN subtasks s ON tc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
+INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+WHERE f.deleted_at IS NULL AND f.user_id = $1
+  AND (tc.task_id IS NULL OR t.id IS NOT NULL)
+  AND (tc.subtask_id IS NULL OR s.id IS NOT NULL)
+`
+
+type GetUserTotalToolcallsStatsRow struct {
+	TotalCount           int64   `json:"total_count"`
+	TotalDurationSeconds float64 `json:"total_duration_seconds"`
+}
+
+// Get total toolcalls stats for a user
+func (q *Queries) GetUserTotalToolcallsStats(ctx context.Context, userID int64) (GetUserTotalToolcallsStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserTotalToolcallsStats, userID)
+	var i GetUserTotalToolcallsStatsRow
+	err := row.Scan(&i.TotalCount, &i.TotalDurationSeconds)
+	return i, err
+}
+
 const updateToolcallFailedResult = `-- name: UpdateToolcallFailedResult :one
 UPDATE toolcalls
-SET status = 'failed', result = $1
-WHERE id = $2
-RETURNING id, call_id, status, name, args, result, flow_id, task_id, subtask_id, created_at, updated_at
+SET 
+  status = 'failed', 
+  result = $1,
+  duration_seconds = duration_seconds + $2
+WHERE id = $3
+RETURNING id, call_id, status, name, args, result, flow_id, task_id, subtask_id, created_at, updated_at, duration_seconds
 `
 
 type UpdateToolcallFailedResultParams struct {
-	Result string `json:"result"`
-	ID     int64  `json:"id"`
+	Result          string  `json:"result"`
+	DurationSeconds float64 `json:"duration_seconds"`
+	ID              int64   `json:"id"`
 }
 
 func (q *Queries) UpdateToolcallFailedResult(ctx context.Context, arg UpdateToolcallFailedResultParams) (Toolcall, error) {
-	row := q.db.QueryRowContext(ctx, updateToolcallFailedResult, arg.Result, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateToolcallFailedResult, arg.Result, arg.DurationSeconds, arg.ID)
 	var i Toolcall
 	err := row.Scan(
 		&i.ID,
@@ -162,24 +551,29 @@ func (q *Queries) UpdateToolcallFailedResult(ctx context.Context, arg UpdateTool
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DurationSeconds,
 	)
 	return i, err
 }
 
 const updateToolcallFinishedResult = `-- name: UpdateToolcallFinishedResult :one
 UPDATE toolcalls
-SET status = 'finished', result = $1
-WHERE id = $2
-RETURNING id, call_id, status, name, args, result, flow_id, task_id, subtask_id, created_at, updated_at
+SET 
+  status = 'finished', 
+  result = $1,
+  duration_seconds = duration_seconds + $2
+WHERE id = $3
+RETURNING id, call_id, status, name, args, result, flow_id, task_id, subtask_id, created_at, updated_at, duration_seconds
 `
 
 type UpdateToolcallFinishedResultParams struct {
-	Result string `json:"result"`
-	ID     int64  `json:"id"`
+	Result          string  `json:"result"`
+	DurationSeconds float64 `json:"duration_seconds"`
+	ID              int64   `json:"id"`
 }
 
 func (q *Queries) UpdateToolcallFinishedResult(ctx context.Context, arg UpdateToolcallFinishedResultParams) (Toolcall, error) {
-	row := q.db.QueryRowContext(ctx, updateToolcallFinishedResult, arg.Result, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateToolcallFinishedResult, arg.Result, arg.DurationSeconds, arg.ID)
 	var i Toolcall
 	err := row.Scan(
 		&i.ID,
@@ -193,24 +587,28 @@ func (q *Queries) UpdateToolcallFinishedResult(ctx context.Context, arg UpdateTo
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DurationSeconds,
 	)
 	return i, err
 }
 
 const updateToolcallStatus = `-- name: UpdateToolcallStatus :one
 UPDATE toolcalls
-SET status = $1
-WHERE id = $2
-RETURNING id, call_id, status, name, args, result, flow_id, task_id, subtask_id, created_at, updated_at
+SET 
+  status = $1,
+  duration_seconds = duration_seconds + $2
+WHERE id = $3
+RETURNING id, call_id, status, name, args, result, flow_id, task_id, subtask_id, created_at, updated_at, duration_seconds
 `
 
 type UpdateToolcallStatusParams struct {
-	Status ToolcallStatus `json:"status"`
-	ID     int64          `json:"id"`
+	Status          ToolcallStatus `json:"status"`
+	DurationSeconds float64        `json:"duration_seconds"`
+	ID              int64          `json:"id"`
 }
 
 func (q *Queries) UpdateToolcallStatus(ctx context.Context, arg UpdateToolcallStatusParams) (Toolcall, error) {
-	row := q.db.QueryRowContext(ctx, updateToolcallStatus, arg.Status, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateToolcallStatus, arg.Status, arg.DurationSeconds, arg.ID)
 	var i Toolcall
 	err := row.Scan(
 		&i.ID,
@@ -224,6 +622,7 @@ func (q *Queries) UpdateToolcallStatus(ctx context.Context, arg UpdateToolcallSt
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DurationSeconds,
 	)
 	return i, err
 }

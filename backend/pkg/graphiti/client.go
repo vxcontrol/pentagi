@@ -10,6 +10,7 @@ import (
 
 // Re-export types from the graphiti-go-client package for convenience
 type (
+	Observation        = graphiti.Observation
 	Message            = graphiti.Message
 	AddMessagesRequest = graphiti.AddMessagesRequest
 

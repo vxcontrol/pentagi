@@ -72,7 +72,7 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
     const [error, setError] = useState<null | string>(null);
     const [passwordChangeRequired, setPasswordChangeRequired] = useState(false);
     const navigate = useNavigate();
-    const { authInfo, login, loginWithOAuth, setAuth } = useUser();
+    const { authInfo, isAuthenticated, login, loginWithOAuth, setAuth } = useUser();
 
     const handleSubmit = async (values: z.infer<typeof formSchema>) => {
         setError(null);
@@ -142,8 +142,21 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
         }
     };
 
-    // If password change is required, show password change form
-    if (passwordChangeRequired && authInfo?.user?.type === 'local') {
+    // If password change is required, show password change form.
+    // Also check isAuthenticated() to ensure the user has a valid session.
+    // If the session expired and user refreshed the page, the old authInfo may still
+    // be in memory (race condition between clearAuth() and navigate()), but we must
+    // NOT show the password change form because:
+    //   1. The API endpoint /user/password requires authentication (returns 403 if not)
+    //   2. The user must first re-login to establish a new valid session
+    // Also check authInfo directly to handle page refresh scenarios where passwordChangeRequired
+    // local state is lost but authInfo.user.password_change_required is still true.
+    const shouldShowPasswordChange =
+        (passwordChangeRequired || authInfo?.user?.password_change_required) &&
+        authInfo?.user?.type === 'local' &&
+        isAuthenticated();
+
+    if (shouldShowPasswordChange) {
         return (
             <div className="mx-auto flex w-[350px] flex-col gap-6">
                 <h1 className="text-center text-3xl font-bold">Update Password</h1>

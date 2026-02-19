@@ -29,6 +29,7 @@
       - [Context Propagation in Tracing](#context-propagation-in-tracing)
     - [Metrics](#metrics)
     - [Langfuse Integration](#langfuse-integration)
+      - [Advanced Observation Types](#advanced-observation-types)
     - [Profiling](#profiling)
   - [Application Instrumentation Patterns](#application-instrumentation-patterns)
     - [HTTP Server Instrumentation](#http-server-instrumentation)
@@ -554,7 +555,7 @@ latencyHistogram.Record(ctx, duration,
 
 ### Langfuse Integration
 
-Langfuse provides specialized observability for LLM operations:
+Langfuse provides specialized observability for LLM operations and agentic workflows with automatic data conversion to OpenAI-compatible format:
 
 ```go
 // Create a new observation for an LLM operation
@@ -565,23 +566,161 @@ ctx, observation := obs.Observer.NewObservation(ctx,
     ),
 )
 
+// LangChainGo messages are automatically converted to OpenAI format
+messages := []*llms.MessageContent{
+    {
+        Role: llms.ChatMessageTypeHuman,
+        Parts: []llms.ContentPart{
+            llms.TextContent{Text: "Analyze this vulnerability"},
+        },
+    },
+}
+
 // Create a generation for an LLM request
 generation := observation.Generation(
-    langfuse.WithStartGenerationName("content-generation"),
-    langfuse.WithStartGenerationModel("gpt-4"),
-    langfuse.WithStartGenerationInput(prompt),
+    langfuse.WithGenerationName("content-generation"),
+    langfuse.WithGenerationModel("gpt-4"),
+    langfuse.WithGenerationInput(messages),  // Auto-converted to OpenAI format
 )
 
 // Complete the generation with result
+output := &llms.ContentChoice{
+    Content: "Based on analysis...",
+    ToolCalls: []llms.ToolCall{...},
+}
+
 generation.End(
-    langfuse.WithEndGenerationOutput(response),
-    langfuse.WithEndGenerationUsage(&langfuse.GenerationUsage{
+    langfuse.WithGenerationOutput(output),  // Auto-converted to OpenAI format
+    langfuse.WithGenerationUsage(&langfuse.GenerationUsage{
         Input: promptTokens,
         Output: responseTokens,
         Unit: langfuse.GenerationUsageUnitTokens,
     }),
 )
 ```
+
+**Key Features:**
+
+- **Automatic Conversion**: LangChainGo messages automatically convert to OpenAI format
+- **Rich UI Rendering**: Tool calls, images, and reasoning display correctly in Langfuse UI
+- **Tool Call Linking**: Function names automatically added to tool responses
+- **Table Rendering**: Complex tool responses (3+ keys or nested) shown as expandable tables
+- **Thinking Support**: Reasoning content extracted and displayed separately
+
+#### Advanced Observation Types
+
+Langfuse supports additional observation types for comprehensive agentic system monitoring:
+
+**Agent Observations** for autonomous reasoning processes:
+
+```go
+agent := observation.Agent(
+    langfuse.WithAgentName("task-executor"),
+    langfuse.WithAgentInput(taskDescription),
+    langfuse.WithAgentMetadata(langfuse.Metadata{
+        "agent_type": "executor",
+        "capabilities": []string{"code_execution", "file_operations"},
+    }),
+)
+result := executeTask(ctx, taskDescription)
+agent.End(
+    langfuse.WithAgentOutput(result),
+    langfuse.WithAgentStatus("completed"),
+)
+```
+
+**Tool Observations** for tracking tool executions:
+
+```go
+tool := observation.Tool(
+    langfuse.WithToolName("search-tool"),
+    langfuse.WithToolInput(searchQuery),
+)
+results := performSearch(ctx, searchQuery)
+tool.End(
+    langfuse.WithToolOutput(results),
+    langfuse.WithToolStatus("success"),
+)
+```
+
+**Chain Observations** for multi-step reasoning:
+
+```go
+chain := observation.Chain(
+    langfuse.WithChainName("reasoning-chain"),
+    langfuse.WithChainInput(messages),
+    langfuse.WithChainMetadata(langfuse.Metadata{
+        "steps": 3,
+        "model": "gpt-4",
+    }),
+)
+finalAnswer := executeChain(ctx, messages)
+chain.End(
+    langfuse.WithChainOutput(finalAnswer),
+    langfuse.WithChainStatus("completed"),
+)
+```
+
+**Retriever Observations** for information retrieval:
+
+```go
+retriever := observation.Retriever(
+    langfuse.WithRetrieverName("vector-search"),
+    langfuse.WithRetrieverInput(query),
+)
+documents := vectorStore.Search(ctx, query)
+retriever.End(
+    langfuse.WithRetrieverOutput(documents),
+    langfuse.WithRetrieverStatus("success"),
+)
+```
+
+**Evaluator Observations** for quality assessment:
+
+```go
+evaluator := observation.Evaluator(
+    langfuse.WithEvaluatorName("quality-check"),
+    langfuse.WithEvaluatorInput(response),
+)
+score := evaluateQuality(ctx, response)
+evaluator.End(
+    langfuse.WithEvaluatorOutput(score),
+    langfuse.WithEvaluatorStatus("completed"),
+)
+```
+
+**Embedding Observations** for vector generation:
+
+```go
+embedding := observation.Embedding(
+    langfuse.WithEmbeddingName("text-embedding"),
+    langfuse.WithEmbeddingInput(text),
+)
+vector := generateEmbedding(ctx, text)
+embedding.End(
+    langfuse.WithEmbeddingOutput(vector),
+    langfuse.WithEmbeddingStatus("success"),
+)
+```
+
+**Guardrail Observations** for safety checks:
+
+```go
+guardrail := observation.Guardrail(
+    langfuse.WithGuardrailName("safety-filter"),
+    langfuse.WithGuardrailInput(userInput),
+)
+passed, violations := checkSafety(ctx, userInput)
+guardrail.End(
+    langfuse.WithGuardrailOutput(map[string]any{
+        "passed": passed,
+        "violations": violations,
+    }),
+    langfuse.WithGuardrailStatus(fmt.Sprintf("passed=%t", passed)),
+)
+```
+
+For detailed information about Langfuse integration, data conversion, and advanced patterns, see [Langfuse Integration Documentation](langfuse.md).
 
 ### Profiling
 

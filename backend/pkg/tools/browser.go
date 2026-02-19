@@ -16,6 +16,9 @@ import (
 	"sync"
 	"time"
 
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -40,25 +43,46 @@ var localZones = []string{
 }
 
 type browser struct {
-	flowID   int64
-	dataDir  string
-	scPrvURL string
-	scPubURL string
-	scp      ScreenshotProvider
+	flowID    int64
+	taskID    *int64
+	subtaskID *int64
+	dataDir   string
+	scPrvURL  string
+	scPubURL  string
+	scp       ScreenshotProvider
 }
 
-func NewBrowserTool(flowID int64, dataDir, scPrvURL, scPubURL string, scp ScreenshotProvider) Tool {
+func NewBrowserTool(flowID int64, taskID, subtaskID *int64, dataDir, scPrvURL, scPubURL string, scp ScreenshotProvider) Tool {
 	return &browser{
-		flowID:   flowID,
-		dataDir:  dataDir,
-		scPrvURL: scPrvURL,
-		scPubURL: scPubURL,
-		scp:      scp,
+		flowID:    flowID,
+		taskID:    taskID,
+		subtaskID: subtaskID,
+		dataDir:   dataDir,
+		scPrvURL:  scPrvURL,
+		scPubURL:  scPubURL,
+		scp:       scp,
 	}
 }
 
 func (b *browser) wrapCommandResult(ctx context.Context, name, result, url, screen string, err error) (string, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("browser tool error swallowed"),
+			langfuse.WithEventInput(map[string]any{
+				"url":    url,
+				"action": name,
+			}),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name": BrowserToolName,
+				"url":       url,
+				"screen":    screen,
+				"error":     err.Error(),
+			}),
+		)
+
 		logrus.WithContext(ctx).WithError(err).WithFields(logrus.Fields{
 			"tool":   name,
 			"url":    url,
@@ -67,7 +91,7 @@ func (b *browser) wrapCommandResult(ctx context.Context, name, result, url, scre
 		}).Error("browser tool failed")
 		return fmt.Sprintf("browser tool '%s' handled with error: %v", name, err), nil
 	}
-	_, _ = b.scp.PutScreenshot(ctx, screen, url)
+	_, _ = b.scp.PutScreenshot(ctx, screen, url, b.taskID, b.subtaskID)
 	return result, nil
 }
 

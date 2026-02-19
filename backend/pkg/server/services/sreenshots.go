@@ -27,11 +27,13 @@ type screenshotsGrouped struct {
 }
 
 var screenshotsSQLMappers = map[string]interface{}{
-	"id":      "{{table}}.id",
-	"name":    "{{table}}.name",
-	"url":     "{{table}}.url",
-	"flow_id": "{{table}}.flow_id",
-	"data":    "({{table}}.name || ' ' || {{table}}.url)",
+	"id":         "{{table}}.id",
+	"name":       "{{table}}.name",
+	"url":        "{{table}}.url",
+	"flow_id":    "{{table}}.flow_id",
+	"task_id":    "{{table}}.task_id",
+	"subtask_id": "{{table}}.subtask_id",
+	"data":       "({{table}}.name || ' ' || {{table}}.url)",
 }
 
 type ScreenshotService struct {

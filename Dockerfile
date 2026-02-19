@@ -71,7 +71,7 @@ RUN go build -trimpath -o /ftester ./cmd/ftester
 RUN go build -trimpath -o /etester ./cmd/etester
 
 # STEP 3: Build the final image
-FROM alpine:3.22.1
+FROM alpine:3.23.3
 
 # Create non-root user and docker group with specific GID
 RUN addgroup -g 998 docker && \
@@ -101,15 +101,16 @@ COPY --from=be-build /etester /opt/pentagi/bin/etester
 COPY --from=fe-build /frontend/dist /opt/pentagi/fe
 
 # Copy provider configuration files
-COPY examples/configs/vllm-qwen332b-fp16.provider.yml /opt/pentagi/conf/
-COPY examples/configs/ollama-qwen332b-fp16-tc.provider.yml /opt/pentagi/conf/
-COPY examples/configs/ollama-qwq32b-fp16-tc.provider.yml /opt/pentagi/conf/
-COPY examples/configs/ollama-llama318b.provider.yml /opt/pentagi/conf/
-COPY examples/configs/openrouter.provider.yml /opt/pentagi/conf/
+COPY examples/configs/custom-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepinfra.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepseek.provider.yml /opt/pentagi/conf/
-COPY examples/configs/custom-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/moonshot.provider.yml /opt/pentagi/conf/
+COPY examples/configs/ollama-llama318b-instruct.provider.yml /opt/pentagi/conf/
+COPY examples/configs/ollama-llama318b.provider.yml /opt/pentagi/conf/
+COPY examples/configs/ollama-qwen332b-fp16-tc.provider.yml /opt/pentagi/conf/
+COPY examples/configs/ollama-qwq32b-fp16-tc.provider.yml /opt/pentagi/conf/
+COPY examples/configs/openrouter.provider.yml /opt/pentagi/conf/
+COPY examples/configs/vllm-qwen332b-fp16.provider.yml /opt/pentagi/conf/
 
 COPY LICENSE /opt/pentagi/LICENSE
 COPY NOTICE /opt/pentagi/NOTICE

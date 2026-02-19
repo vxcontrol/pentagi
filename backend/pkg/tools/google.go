@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"pentagi/pkg/database"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
 	customsearch "google.golang.org/api/customsearch/v1"
@@ -56,6 +58,7 @@ func (g *google) parseGoogleSearchResult(res *customsearch.Search) string {
 
 func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"tool": name,
 		"args": string(args),
@@ -84,6 +87,20 @@ func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) 
 
 	resp, err := svc.Cse.List().Context(ctx).Cx(g.cxKey).Q(action.Query).Lr(g.lrKey).Num(numResults).Do()
 	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("search engine error swallowed"),
+			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name":   GoogleToolName,
+				"engine":      "google",
+				"query":       action.Query,
+				"max_results": numResults,
+				"error":       err.Error(),
+			}),
+		)
+
 		logger.WithError(err).Error("failed to call tool to search in google results")
 		return fmt.Sprintf("failed to call tool %s to search in google results: %v", name, err), nil
 	}

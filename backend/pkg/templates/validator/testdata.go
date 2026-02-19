@@ -277,6 +277,30 @@ func CreateDummyTemplateData() map[string]any {
 		"ToolCallArgs":   `{"param1": "value1", "param2": "value2"}`,
 		"ToolCallSchema": `{"type": "object", "properties": {"param1": {"type": "string"}, "param2": {"type": "string"}}}`,
 		"ToolCallError":  "Test tool call error: invalid argument format",
+
+		// Tool call ID collector variables
+		"RandomContext": "Test random context",
+		"FunctionName":  "test_function",
+		"Samples": []string{
+			"Test sample 1",
+			"Test sample 2",
+			"Test sample 3",
+		},
+		"PreviousAttempts": []struct {
+			Template string
+			Error    string
+		}{
+			{
+				Template: "Test previous attempt 1",
+				Error:    "Test previous attempt error 1",
+			}, {
+				Template: "Test previous attempt 2",
+				Error:    "Test previous attempt error 2",
+			}, {
+				Template: "Test previous attempt 3",
+				Error:    "Test previous attempt error 3",
+			},
+		},
 	}
 }
 

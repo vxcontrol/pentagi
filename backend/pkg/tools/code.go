@@ -61,23 +61,31 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			return "", fmt.Errorf("failed to unmarshal %s search code action arguments: %w", name, err)
 		}
 
-		opts := []langfuse.EventStartOption{
-			langfuse.WithStartEventName("retrieve code samples from vector store"),
-			langfuse.WithStartEventInput(action.Question),
-			langfuse.WithStartEventMetadata(map[string]any{
-				"tool_name": name,
-				"code_lang": action.Lang,
-				"message":   action.Message,
-				"limit":     codeVectorStoreResultLimit,
-				"threshold": codeVectorStoreThreshold,
-				"doc_type":  codeVectorStoreDefaultType,
-			}),
-		}
-
 		filters := map[string]any{
 			"doc_type":  codeVectorStoreDefaultType,
 			"code_lang": action.Lang,
 		}
+
+		metadata := langfuse.Metadata{
+			"tool_name": name,
+			"code_lang": action.Lang,
+			"message":   action.Message,
+			"limit":     codeVectorStoreResultLimit,
+			"threshold": codeVectorStoreThreshold,
+			"doc_type":  codeVectorStoreDefaultType,
+		}
+
+		retriever := observation.Retriever(
+			langfuse.WithRetrieverName("retrieve code samples from vector store"),
+			langfuse.WithRetrieverInput(map[string]any{
+				"query":       action.Question,
+				"threshold":   codeVectorStoreThreshold,
+				"max_results": codeVectorStoreResultLimit,
+				"filters":     filters,
+			}),
+			langfuse.WithRetrieverMetadata(metadata),
+		)
+		ctx, observation = retriever.Observation(ctx)
 
 		logger = logger.WithFields(logrus.Fields{
 			"query":   action.Question[:min(len(action.Question), 1000)],
@@ -93,20 +101,20 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			vectorstores.WithFilters(filters),
 		)
 		if err != nil {
-			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			)...)
+			retriever.End(
+				langfuse.WithRetrieverStatus(err.Error()),
+				langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
+			)
 			logger.WithError(err).Error("failed to search code samples for question")
 			return "", fmt.Errorf("failed to search code samples for question: %w", err)
 		}
 
 		if len(docs) == 0 {
-			event := observation.Event(append(opts,
-				langfuse.WithStartEventStatus("no code samples found"),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelWarning),
-			)...)
-			_, observation = event.Observation(ctx)
+			retriever.End(
+				langfuse.WithRetrieverStatus("no code samples found"),
+				langfuse.WithRetrieverLevel(langfuse.ObservationLevelWarning),
+				langfuse.WithRetrieverOutput([]any{}),
+			)
 			observation.Score(
 				langfuse.WithScoreComment("no code samples found"),
 				langfuse.WithScoreName("code_search_result"),
@@ -115,12 +123,14 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			return codeNotFoundMessage, nil
 		}
 
-		event := observation.Event(append(opts,
-			langfuse.WithStartEventStatus("success"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelDebug),
-			langfuse.WithStartEventOutput(docs),
-		)...)
-		_, observation = event.Observation(ctx)
+		retriever.End(
+			langfuse.WithRetrieverStatus("success"),
+			langfuse.WithRetrieverLevel(langfuse.ObservationLevelDebug),
+			langfuse.WithRetrieverOutput(docs),
+		)
+
+		// TODO: here need to rerank and filter the docs based on the question
+		// use evaluator observation type to process each document and to get a score
 
 		buffer := strings.Builder{}
 		for i, doc := range docs {
@@ -171,11 +181,11 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 		buffer.WriteString(action.Code)
 		buffer.WriteString("\n```")
 
-		opts := []langfuse.EventStartOption{
-			langfuse.WithStartEventName("store code samples to vector store"),
-			langfuse.WithStartEventInput(action.Question),
-			langfuse.WithStartEventOutput(buffer.String()),
-			langfuse.WithStartEventMetadata(map[string]any{
+		opts := []langfuse.EventOption{
+			langfuse.WithEventName("store code samples to vector store"),
+			langfuse.WithEventInput(action.Question),
+			langfuse.WithEventOutput(buffer.String()),
+			langfuse.WithEventMetadata(map[string]any{
 				"tool_name": name,
 				"code_lang": action.Lang,
 				"message":   action.Message,
@@ -192,8 +202,8 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 		docs, err := documentloaders.NewText(strings.NewReader(buffer.String())).Load(ctx)
 		if err != nil {
 			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
+				langfuse.WithEventStatus(err.Error()),
+				langfuse.WithEventLevel(langfuse.ObservationLevelError),
 			)...)
 			logger.WithError(err).Error("failed to load document")
 			return "", fmt.Errorf("failed to load document: %w", err)
@@ -220,17 +230,17 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 
 		if _, err := c.store.AddDocuments(ctx, docs); err != nil {
 			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
+				langfuse.WithEventStatus(err.Error()),
+				langfuse.WithEventLevel(langfuse.ObservationLevelError),
 			)...)
 			logger.WithError(err).Error("failed to store code sample")
 			return "", fmt.Errorf("failed to store code sample: %w", err)
 		}
 
 		observation.Event(append(opts,
-			langfuse.WithStartEventStatus("success"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelDebug),
-			langfuse.WithStartEventOutput(docs),
+			langfuse.WithEventStatus("success"),
+			langfuse.WithEventLevel(langfuse.ObservationLevelDebug),
+			langfuse.WithEventOutput(docs),
 		)...)
 
 		if agentCtx, ok := GetAgentContext(ctx); ok {

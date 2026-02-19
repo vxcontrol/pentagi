@@ -11,6 +11,7 @@ import (
 	"pentagi/pkg/providers"
 
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 const (
@@ -135,7 +136,7 @@ func (aslw *flowAssistantLogWorker) UpdateMsgResult(
 			Type:         providers.StreamMessageChunkTypeResult,
 			MsgType:      msgLog.Type,
 			Content:      msgLog.Message,
-			Thinking:     msgLog.Thinking.String,
+			Thinking:     aslw.getThinkingStructure(msgLog.Thinking.String),
 			Result:       result,
 			ResultFormat: resultFormat,
 			StreamID:     streamID,
@@ -176,7 +177,7 @@ func (aslw *flowAssistantLogWorker) putMsg(
 			Type:     providers.StreamMessageChunkTypeUpdate,
 			MsgType:  msgType,
 			Content:  msg,
-			Thinking: thinking,
+			Thinking: aslw.getThinkingStructure(thinking),
 			StreamID: streamID,
 		}
 		return msgID, nil
@@ -322,7 +323,7 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 		case providers.StreamMessageChunkTypeUpdate:
 			thinkingBuf.Reset()
 			contentBuf.Reset()
-			thinkingBuf.WriteString(chunk.Thinking)
+			thinkingBuf.WriteString(aslw.getThinkingString(chunk.Thinking))
 			contentBuf.WriteString(chunk.Content)
 			fallthrough // update both thinking and content, send it via publisher
 
@@ -343,8 +344,8 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 			aslw.pub.AssistantLogUpdated(ctx, newLog(chunk.MsgType, chunk.Content, ""), true)
 
 		case providers.StreamMessageChunkTypeThinking:
-			thinkingBuf.WriteString(chunk.Thinking)
-			aslw.pub.AssistantLogUpdated(ctx, newLog(chunk.MsgType, "", chunk.Thinking), true)
+			thinkingBuf.WriteString(aslw.getThinkingString(chunk.Thinking))
+			aslw.pub.AssistantLogUpdated(ctx, newLog(chunk.MsgType, "", aslw.getThinkingString(chunk.Thinking)), true)
 
 		case providers.StreamMessageChunkTypeResult:
 			result = chunk.Result
@@ -396,5 +397,21 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 
 			processChunk(chunk)
 		}
+	}
+}
+
+func (aslw *flowAssistantLogWorker) getThinkingString(thinking *reasoning.ContentReasoning) string {
+	if thinking == nil {
+		return ""
+	}
+	return thinking.Content
+}
+
+func (aslw *flowAssistantLogWorker) getThinkingStructure(thinking string) *reasoning.ContentReasoning {
+	if thinking == "" {
+		return nil
+	}
+	return &reasoning.ContentReasoning{
+		Content: thinking,
 	}
 }

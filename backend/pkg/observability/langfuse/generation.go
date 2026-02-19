@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"pentagi/pkg/observability/langfuse/api"
+
+	"github.com/vxcontrol/langchaingo/llms"
 )
 
 const (
@@ -14,7 +16,7 @@ const (
 )
 
 type Generation interface {
-	End(opts ...GenerationEndOption)
+	End(opts ...GenerationOption)
 	String() string
 	MarshalJSON() ([]byte, error)
 	Observation(ctx context.Context) (context.Context, Observation)
@@ -37,6 +39,7 @@ type generation struct {
 	Usage               *GenerationUsage `json:"usage,omitempty" url:"usage,omitempty"`
 	PromptName          *string          `json:"promptName,omitempty" url:"promptName,omitempty"`
 	PromptVersion       *int             `json:"promptVersion,omitempty" url:"promptVersion,omitempty"`
+	Tools               []llms.Tool      `json:"tools,omitempty"`
 
 	TraceID             string `json:"trace_id"`
 	ObservationID       string `json:"observation_id"`
@@ -45,129 +48,129 @@ type generation struct {
 	observer enqueue `json:"-"`
 }
 
-type GenerationStartOption func(*generation)
+type GenerationOption func(*generation)
 
-func withGenerationTraceID(traceID string) GenerationStartOption {
+func withGenerationTraceID(traceID string) GenerationOption {
 	return func(g *generation) {
 		g.TraceID = traceID
 	}
 }
 
-func withGenerationParentObservationID(parentObservationID string) GenerationStartOption {
+func withGenerationParentObservationID(parentObservationID string) GenerationOption {
 	return func(g *generation) {
 		g.ParentObservationID = parentObservationID
 	}
 }
 
-func WithStartGenerationID(id string) GenerationStartOption {
+// WithGenerationID sets on creation time
+func WithGenerationID(id string) GenerationOption {
 	return func(g *generation) {
 		g.ObservationID = id
 	}
 }
 
-func WithStartGenerationName(name string) GenerationStartOption {
+func WithGenerationName(name string) GenerationOption {
 	return func(g *generation) {
 		g.Name = name
 	}
 }
 
-func WithStartGenerationMetadata(metadata Metadata) GenerationStartOption {
+func WithGenerationMetadata(metadata Metadata) GenerationOption {
 	return func(g *generation) {
-		g.Metadata = metadata
+		g.Metadata = mergeMaps(g.Metadata, metadata)
 	}
 }
 
-func WithStartGenerationInput(input any) GenerationStartOption {
+func WithGenerationInput(input any) GenerationOption {
 	return func(g *generation) {
 		g.Input = input
 	}
 }
 
-func WithStartGenerationTime(time time.Time) GenerationStartOption {
-	return func(g *generation) {
-		g.StartTime = &time
-	}
-}
-
-func WithStartGenerationCompletionStartTime(time time.Time) GenerationStartOption {
-	return func(g *generation) {
-		g.CompletionStartTime = &time
-	}
-}
-
-func WithStartGenerationModel(model string) GenerationStartOption {
-	return func(g *generation) {
-		g.Model = &model
-	}
-}
-
-func WithStartGenerationModelParameters(parameters *ModelParameters) GenerationStartOption {
-	return func(g *generation) {
-		g.ModelParameters = parameters
-	}
-}
-
-func WithStartGenerationLevel(level ObservationLevel) GenerationStartOption {
-	return func(g *generation) {
-		g.Level = level
-	}
-}
-
-func WithStartGenerationVersion(version string) GenerationStartOption {
-	return func(g *generation) {
-		g.Version = &version
-	}
-}
-
-func WithStartGenerationPromptName(name string) GenerationStartOption {
-	return func(g *generation) {
-		g.PromptName = &name
-	}
-}
-
-func WithStartGenerationPromptVersion(version int) GenerationStartOption {
-	return func(g *generation) {
-		g.PromptVersion = &version
-	}
-}
-
-type GenerationEndOption func(*generation)
-
-func WithEndGenerationTime(time time.Time) GenerationEndOption {
-	return func(g *generation) {
-		g.EndTime = &time
-	}
-}
-
-func WithEndGenerationOutput(output any) GenerationEndOption {
+func WithGenerationOutput(output any) GenerationOption {
 	return func(g *generation) {
 		g.Output = output
 	}
 }
 
-func WithEndGenerationStatus(status string) GenerationEndOption {
+// WithGenerationStartTime sets on creation time
+func WithGenerationStartTime(time time.Time) GenerationOption {
 	return func(g *generation) {
-		g.Status = &status
+		g.StartTime = &time
 	}
 }
 
-func WithEndGenerationLevel(level ObservationLevel) GenerationEndOption {
+func WithGenerationEndTime(time time.Time) GenerationOption {
+	return func(g *generation) {
+		g.EndTime = &time
+	}
+}
+
+func WithGenerationCompletionStartTime(time time.Time) GenerationOption {
+	return func(g *generation) {
+		g.CompletionStartTime = &time
+	}
+}
+
+func WithGenerationLevel(level ObservationLevel) GenerationOption {
 	return func(g *generation) {
 		g.Level = level
 	}
 }
 
-func WithEndGenerationUsage(usage *GenerationUsage) GenerationEndOption {
+func WithGenerationStatus(status string) GenerationOption {
+	return func(g *generation) {
+		g.Status = &status
+	}
+}
+
+func WithGenerationVersion(version string) GenerationOption {
+	return func(g *generation) {
+		g.Version = &version
+	}
+}
+
+func WithGenerationModel(model string) GenerationOption {
+	return func(g *generation) {
+		g.Model = &model
+	}
+}
+
+func WithGenerationModelParameters(parameters *ModelParameters) GenerationOption {
+	return func(g *generation) {
+		g.ModelParameters = parameters
+	}
+}
+
+func WithGenerationUsage(usage *GenerationUsage) GenerationOption {
 	return func(g *generation) {
 		g.Usage = usage
 	}
 }
 
-func newGeneration(observer enqueue, opts ...GenerationStartOption) Generation {
+func WithGenerationPromptName(name string) GenerationOption {
+	return func(g *generation) {
+		g.PromptName = &name
+	}
+}
+
+func WithGenerationPromptVersion(version int) GenerationOption {
+	return func(g *generation) {
+		g.PromptVersion = &version
+	}
+}
+
+func WithGenerationTools(tools []llms.Tool) GenerationOption {
+	return func(g *generation) {
+		g.Tools = tools
+	}
+}
+
+func newGeneration(observer enqueue, opts ...GenerationOption) Generation {
 	currentTime := getCurrentTimeRef()
 	g := &generation{
 		Name:                generationDefaultName,
-		ObservationID:       newID(),
+		ObservationID:       newSpanID(),
 		Version:             getStringRef(firstVersion),
 		StartTime:           currentTime,
 		CompletionStartTime: currentTime,
@@ -182,52 +185,71 @@ func newGeneration(observer enqueue, opts ...GenerationStartOption) Generation {
 		g.CompletionStartTime = g.StartTime
 	}
 
-	genCreate := api.NewIngestionEventFromIngestionEventFour(&api.IngestionEventFour{
-		Id:        newID(),
+	genCreate := &api.IngestionEvent{IngestionEventFour: &api.IngestionEventFour{
+		ID:        newSpanID(),
 		Timestamp: getTimeRefString(g.StartTime),
-		Type:      ingestionCreateGeneration,
+		Type:      api.IngestionEventFourType(ingestionCreateGeneration).Ptr(),
 		Body: &api.CreateGenerationBody{
-			Id:                  getStringRef(g.ObservationID),
-			TraceId:             getStringRef(g.TraceID),
-			ParentObservationId: getStringRef(g.ParentObservationID),
+			ID:                  getStringRef(g.ObservationID),
+			TraceID:             getStringRef(g.TraceID),
+			ParentObservationID: getStringRef(g.ParentObservationID),
 			Name:                getStringRef(g.Name),
-			StartTime:           g.StartTime,
-			CompletionStartTime: g.CompletionStartTime,
 			Metadata:            g.Metadata,
-			Input:               g.Input,
+			Input:               convertInput(g.Input, g.Tools),
+			Output:              convertOutput(g.Output),
+			StartTime:           g.StartTime,
+			EndTime:             g.EndTime,
+			CompletionStartTime: g.CompletionStartTime,
 			Level:               g.Level.ToLangfuse(),
+			StatusMessage:       g.Status,
+			Version:             g.Version,
 			Model:               g.Model,
 			ModelParameters:     g.ModelParameters.ToLangfuse(),
 			PromptName:          g.PromptName,
 			PromptVersion:       g.PromptVersion,
-			Version:             g.Version,
+			Usage:               g.Usage.ToLangfuse(),
 		},
-	})
+	}}
 
 	g.observer.enqueue(genCreate)
 
 	return g
 }
 
-func (g *generation) End(opts ...GenerationEndOption) {
+func (g *generation) End(opts ...GenerationOption) {
+	id := g.ObservationID
+	startTime := g.StartTime
 	g.EndTime = getCurrentTimeRef()
 	for _, opt := range opts {
 		opt(g)
 	}
 
-	genUpdate := api.NewIngestionEventFromIngestionEventFive(&api.IngestionEventFive{
-		Id:        newID(),
+	// preserve the original observation ID and start time
+	g.ObservationID = id
+	g.StartTime = startTime
+
+	genUpdate := &api.IngestionEvent{IngestionEventFive: &api.IngestionEventFive{
+		ID:        newSpanID(),
 		Timestamp: getTimeRefString(g.EndTime),
-		Type:      ingestionUpdateGeneration,
+		Type:      api.IngestionEventFiveType(ingestionUpdateGeneration).Ptr(),
 		Body: &api.UpdateGenerationBody{
-			Id:            g.ObservationID,
-			EndTime:       g.EndTime,
-			Output:        g.Output,
-			StatusMessage: g.Status,
-			Level:         g.Level.ToLangfuse(),
-			Usage:         g.Usage.ToLangfuse(),
+			ID:                  g.ObservationID,
+			Name:                getStringRef(g.Name),
+			Metadata:            g.Metadata,
+			Input:               convertInput(g.Input, g.Tools),
+			Output:              convertOutput(g.Output),
+			EndTime:             g.EndTime,
+			CompletionStartTime: g.CompletionStartTime,
+			Level:               g.Level.ToLangfuse(),
+			StatusMessage:       g.Status,
+			Version:             g.Version,
+			Model:               g.Model,
+			ModelParameters:     g.ModelParameters.ToLangfuse(),
+			PromptName:          g.PromptName,
+			PromptVersion:       g.PromptVersion,
+			Usage:               g.Usage.ToLangfuse(),
 		},
-	})
+	}}
 
 	g.observer.enqueue(genUpdate)
 }

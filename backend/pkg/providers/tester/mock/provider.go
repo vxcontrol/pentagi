@@ -8,8 +8,10 @@ import (
 
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/templates"
 
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
@@ -67,13 +69,18 @@ func (p *Provider) Model(opt pconfig.ProviderOptionsType) string {
 }
 
 // GetUsage implements provider.Provider
-func (p *Provider) GetUsage(info map[string]any) (int64, int64) {
-	return 100, 50 // Mock token counts
+func (p *Provider) GetUsage(info map[string]any) pconfig.CallUsage {
+	return pconfig.CallUsage{Input: 100, Output: 50} // Mock token counts
 }
 
 // GetModels implements provider.Provider
 func (p *Provider) GetModels() pconfig.ModelsConfig {
 	return pconfig.ModelsConfig{}
+}
+
+// GetToolCallIDTemplate implements provider.Provider
+func (p *Provider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
+	return "toolu_{r:24:b}", nil
 }
 
 // Call implements provider.Provider for simple prompt calls
@@ -274,7 +281,7 @@ func (p *Provider) handleStreamingResponse(
 
 	// Simulate streaming by sending content in chunks
 	content := choice.Content
-	reasoning := choice.ReasoningContent
+	thinking := choice.Reasoning
 	chunkSize := 5
 
 	for i := 0; i < len(content); i += chunkSize {
@@ -294,8 +301,12 @@ func (p *Provider) handleStreamingResponse(
 		}
 
 		// Add reasoning content to first chunk
-		if i == 0 && reasoning != "" {
-			chunk.ReasoningContent = reasoning
+		if i == 0 && !thinking.IsEmpty() {
+			chunk.Reasoning = &reasoning.ContentReasoning{
+				Content:         thinking.Content,
+				Signature:       thinking.Signature,
+				RedactedContent: thinking.RedactedContent,
+			}
 		}
 
 		if err := streamCb(ctx, chunk); err != nil {

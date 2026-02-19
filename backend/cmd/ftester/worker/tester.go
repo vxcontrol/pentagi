@@ -145,9 +145,9 @@ func (t *tester) initFlowProviderController() error {
 		langfuse.WithObservationTraceID(flow.TraceID.String),
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
-			langfuse.WithTraceUserId(user.Mail),
+			langfuse.WithTraceUserID(user.Mail),
 			langfuse.WithTraceTags([]string{"controller"}),
-			langfuse.WithTraceSessionId(fmt.Sprintf("flow-%d", flow.ID)),
+			langfuse.WithTraceSessionID(fmt.Sprintf("flow-%d", flow.ID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
 				"flow_id":       flow.ID,
 				"user_id":       flow.UserID,
@@ -162,7 +162,7 @@ func (t *tester) initFlowProviderController() error {
 	)
 
 	// Create a span for tracking the entire worker lifecycle
-	flowSpan := observation.Span(langfuse.WithStartSpanName("run tester flow worker"))
+	flowSpan := observation.Span(langfuse.WithSpanName("run tester flow worker"))
 	t.ctx, _ = flowSpan.Observation(ctx)
 
 	// Each flow has its own JSON configuration of allowed functions
@@ -191,6 +191,7 @@ func (t *tester) initFlowProviderController() error {
 		container.Image,
 		flow.Language,
 		flow.Title,
+		flow.ToolCallIDTemplate,
 	)
 	if err != nil {
 		return wrapErrorEndSpan(t.ctx, flowSpan, "failed to load flow provider", err)
@@ -672,8 +673,8 @@ func wrapErrorEndSpan(ctx context.Context, span langfuse.Span, msg string, err e
 	logrus.WithContext(ctx).WithError(err).Error(msg)
 	err = fmt.Errorf("%s: %w", msg, err)
 	span.End(
-		langfuse.WithEndSpanStatus(err.Error()),
-		langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+		langfuse.WithSpanStatus(err.Error()),
+		langfuse.WithSpanLevel(langfuse.ObservationLevelError),
 	)
 	return err
 }

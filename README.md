@@ -375,29 +375,29 @@ The algorithm operates on a structured representation of conversation chains (Ch
 
 ### Global Summarizer Configuration Options
 
-| Parameter | Environment Variable | Default | Description |
-|-----------|----------------------|---------|-------------|
-| Preserve Last | `SUMMARIZER_PRESERVE_LAST` | `true` | Whether to keep all messages in the last section intact |
-| Use QA Pairs | `SUMMARIZER_USE_QA` | `true` | Whether to use QA pair summarization strategy |
-| Summarize Human in QA | `SUMMARIZER_SUM_MSG_HUMAN_IN_QA` | `false` | Whether to summarize human messages in QA pairs |
-| Last Section Size | `SUMMARIZER_LAST_SEC_BYTES` | `51200` | Maximum byte size for last section (50KB) |
-| Max Body Pair Size | `SUMMARIZER_MAX_BP_BYTES` | `16384` | Maximum byte size for a single body pair (16KB) |
-| Max QA Sections | `SUMMARIZER_MAX_QA_SECTIONS` | `10` | Maximum QA pair sections to preserve |
-| Max QA Size | `SUMMARIZER_MAX_QA_BYTES` | `65536` | Maximum byte size for QA pair sections (64KB) |
-| Keep QA Sections | `SUMMARIZER_KEEP_QA_SECTIONS` | `1` | Number of recent QA sections to keep without summarization |
+| Parameter             | Environment Variable             | Default | Description                                                |
+| --------------------- | -------------------------------- | ------- | ---------------------------------------------------------- |
+| Preserve Last         | `SUMMARIZER_PRESERVE_LAST`       | `true`  | Whether to keep all messages in the last section intact    |
+| Use QA Pairs          | `SUMMARIZER_USE_QA`              | `true`  | Whether to use QA pair summarization strategy              |
+| Summarize Human in QA | `SUMMARIZER_SUM_MSG_HUMAN_IN_QA` | `false` | Whether to summarize human messages in QA pairs            |
+| Last Section Size     | `SUMMARIZER_LAST_SEC_BYTES`      | `51200` | Maximum byte size for last section (50KB)                  |
+| Max Body Pair Size    | `SUMMARIZER_MAX_BP_BYTES`        | `16384` | Maximum byte size for a single body pair (16KB)            |
+| Max QA Sections       | `SUMMARIZER_MAX_QA_SECTIONS`     | `10`    | Maximum QA pair sections to preserve                       |
+| Max QA Size           | `SUMMARIZER_MAX_QA_BYTES`        | `65536` | Maximum byte size for QA pair sections (64KB)              |
+| Keep QA Sections      | `SUMMARIZER_KEEP_QA_SECTIONS`    | `1`     | Number of recent QA sections to keep without summarization |
 
 ### Assistant Summarizer Configuration Options
 
 Assistant instances can use customized summarization settings to fine-tune context management behavior:
 
-| Parameter | Environment Variable | Default | Description |
-|-----------|----------------------|---------|-------------|
-| Preserve Last | `ASSISTANT_SUMMARIZER_PRESERVE_LAST` | `true` | Whether to preserve all messages in the assistant's last section |
-| Last Section Size | `ASSISTANT_SUMMARIZER_LAST_SEC_BYTES` | `76800` | Maximum byte size for assistant's last section (75KB) |
-| Max Body Pair Size | `ASSISTANT_SUMMARIZER_MAX_BP_BYTES` | `16384` | Maximum byte size for a single body pair in assistant context (16KB) |
-| Max QA Sections | `ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS` | `7` | Maximum QA sections to preserve in assistant context |
-| Max QA Size | `ASSISTANT_SUMMARIZER_MAX_QA_BYTES` | `76800` | Maximum byte size for assistant's QA sections (75KB) |
-| Keep QA Sections | `ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS` | `3` | Number of recent QA sections to preserve without summarization |
+| Parameter          | Environment Variable                    | Default | Description                                                          |
+| ------------------ | --------------------------------------- | ------- | -------------------------------------------------------------------- |
+| Preserve Last      | `ASSISTANT_SUMMARIZER_PRESERVE_LAST`    | `true`  | Whether to preserve all messages in the assistant's last section     |
+| Last Section Size  | `ASSISTANT_SUMMARIZER_LAST_SEC_BYTES`   | `76800` | Maximum byte size for assistant's last section (75KB)                |
+| Max Body Pair Size | `ASSISTANT_SUMMARIZER_MAX_BP_BYTES`     | `16384` | Maximum byte size for a single body pair in assistant context (16KB) |
+| Max QA Sections    | `ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS`  | `7`     | Maximum QA sections to preserve in assistant context                 |
+| Max QA Size        | `ASSISTANT_SUMMARIZER_MAX_QA_BYTES`     | `76800` | Maximum byte size for assistant's QA sections (75KB)                 |
+| Keep QA Sections   | `ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS` | `3`     | Number of recent QA sections to preserve without summarization       |
 
 The assistant summarizer configuration provides more memory for context retention compared to the global settings, preserving more recent conversation history while still ensuring efficient token usage.
 
@@ -665,8 +665,8 @@ Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default
 
 PentAGI allows you to configure default behavior for assistants:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
+| Variable               | Default | Description                                                             |
+| ---------------------- | ------- | ----------------------------------------------------------------------- |
 | `ASSISTANT_USE_AGENTS` | `false` | Controls the default value for agent usage when creating new assistants |
 
 The `ASSISTANT_USE_AGENTS` setting affects the initial state of the "Use Agents" toggle when creating a new assistant in the UI:
@@ -679,13 +679,17 @@ Note that users can always override this setting by toggling the "Use Agents" bu
 
 When using custom LLM providers with the `LLM_SERVER_*` variables, you can fine-tune the reasoning format used in requests:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LLM_SERVER_URL` | | Base URL for the custom LLM API endpoint |
-| `LLM_SERVER_KEY` | | API key for the custom LLM provider |
-| `LLM_SERVER_MODEL` | | Default model to use (can be overridden in provider config) |
-| `LLM_SERVER_CONFIG_PATH` | | Path to the YAML configuration file for agent-specific models |
-| `LLM_SERVER_LEGACY_REASONING` | `false` | Controls reasoning format in API requests |
+| Variable                        | Default | Description                                                                             |
+| ------------------------------- | ------- | --------------------------------------------------------------------------------------- |
+| `LLM_SERVER_URL`                |         | Base URL for the custom LLM API endpoint                                                |
+| `LLM_SERVER_KEY`                |         | API key for the custom LLM provider                                                     |
+| `LLM_SERVER_MODEL`              |         | Default model to use (can be overridden in provider config)                             |
+| `LLM_SERVER_CONFIG_PATH`        |         | Path to the YAML configuration file for agent-specific models                           |
+| `LLM_SERVER_PROVIDER`           |         | Provider name prefix for model names (e.g., `openrouter`, `deepseek` for LiteLLM proxy) |
+| `LLM_SERVER_LEGACY_REASONING`   | `false` | Controls reasoning format in API requests                                               |
+| `LLM_SERVER_PRESERVE_REASONING` | `false` | Preserve reasoning content in multi-turn conversations (required by some providers)     |
+
+The `LLM_SERVER_PROVIDER` setting is particularly useful when using **LiteLLM proxy**, which adds a provider prefix to model names. For example, when connecting to Moonshot API through LiteLLM, models like `kimi-2.5` become `moonshot/kimi-2.5`. By setting `LLM_SERVER_PROVIDER=moonshot`, you can use the same provider configuration file for both direct API access and LiteLLM proxy access without modifications.
 
 The `LLM_SERVER_LEGACY_REASONING` setting affects how reasoning parameters are sent to the LLM:
 - `false` (default): Uses modern format where reasoning is sent as a structured object with `max_tokens` parameter
@@ -693,18 +697,24 @@ The `LLM_SERVER_LEGACY_REASONING` setting affects how reasoning parameters are s
 
 This setting is important when working with different LLM providers as they may expect different reasoning formats in their API requests. If you encounter reasoning-related errors with custom providers, try changing this setting.
 
+The `LLM_SERVER_PRESERVE_REASONING` setting controls whether reasoning content is preserved in multi-turn conversations:
+- `false` (default): Reasoning content is not preserved in conversation history
+- `true`: Reasoning content is preserved and sent in subsequent API calls
+
+This setting is required by some LLM providers (e.g., Moonshot) that return errors like "thinking is enabled but reasoning_content is missing in assistant tool call message" when reasoning content is not included in multi-turn conversations. Enable this setting if your provider requires reasoning content to be preserved.
+
 ### Local LLM Provider Configuration
 
 PentAGI supports Ollama for local LLM inference, providing zero-cost operation and enhanced privacy:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OLLAMA_SERVER_URL` | | URL of your Ollama server |
-| `OLLAMA_SERVER_MODEL` | `llama3.1:8b-instruct-q8_0` | Default model for inference |
-| `OLLAMA_SERVER_CONFIG_PATH` | | Path to custom agent configuration file |
-| `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600` | Timeout for model downloads (seconds) |
-| `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false` | Auto-download models on startup |
-| `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false` | Query server for available models |
+| Variable                            | Default                     | Description                             |
+| ----------------------------------- | --------------------------- | --------------------------------------- |
+| `OLLAMA_SERVER_URL`                 |                             | URL of your Ollama server               |
+| `OLLAMA_SERVER_MODEL`               | `llama3.1:8b-instruct-q8_0` | Default model for inference             |
+| `OLLAMA_SERVER_CONFIG_PATH`         |                             | Path to custom agent configuration file |
+| `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600`                       | Timeout for model downloads (seconds)   |
+| `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false`                     | Auto-download models on startup         |
+| `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false`                     | Query server for available models       |
 
 Configuration examples:
 
@@ -787,10 +797,10 @@ These custom models are referenced in the pre-built provider configuration files
 
 PentAGI supports OpenAI's advanced language models, including the latest reasoning-capable o-series models designed for complex analytical tasks:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPEN_AI_KEY` | | API key for OpenAI services |
-| `OPEN_AI_SERVER_URL` | `https://api.openai.com/v1` | OpenAI API endpoint |
+| Variable             | Default                     | Description                 |
+| -------------------- | --------------------------- | --------------------------- |
+| `OPEN_AI_KEY`        |                             | API key for OpenAI services |
+| `OPEN_AI_SERVER_URL` | `https://api.openai.com/v1` | OpenAI API endpoint         |
 
 Configuration examples:
 
@@ -818,10 +828,10 @@ The system automatically selects appropriate OpenAI models based on task complex
 
 PentAGI integrates with Anthropic's Claude models, known for their exceptional safety, reasoning capabilities, and sophisticated understanding of complex security contexts:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | | API key for Anthropic services |
-| `ANTHROPIC_SERVER_URL` | `https://api.anthropic.com/v1` | Anthropic API endpoint |
+| Variable               | Default                        | Description                    |
+| ---------------------- | ------------------------------ | ------------------------------ |
+| `ANTHROPIC_API_KEY`    |                                | API key for Anthropic services |
+| `ANTHROPIC_SERVER_URL` | `https://api.anthropic.com/v1` | Anthropic API endpoint         |
 
 Configuration examples:
 
@@ -849,10 +859,10 @@ The system leverages Claude's advanced understanding of security contexts to pro
 
 PentAGI supports Google's Gemini models through the Google AI API, offering state-of-the-art reasoning capabilities and multimodal features:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GEMINI_API_KEY` | | API key for Google AI services |
-| `GEMINI_SERVER_URL` | `https://generativelanguage.googleapis.com` | Google AI API endpoint |
+| Variable            | Default                                     | Description                    |
+| ------------------- | ------------------------------------------- | ------------------------------ |
+| `GEMINI_API_KEY`    |                                             | API key for Google AI services |
+| `GEMINI_SERVER_URL` | `https://generativelanguage.googleapis.com` | Google AI API endpoint         |
 
 Configuration examples:
 
@@ -880,13 +890,13 @@ The system automatically selects appropriate Gemini models based on agent requir
 
 PentAGI integrates with Amazon Bedrock, offering access to a wide range of foundation models from leading AI companies including Anthropic, AI21, Cohere, Meta, and Amazon's own models:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BEDROCK_REGION` | `us-east-1` | AWS region for Bedrock service |
-| `BEDROCK_ACCESS_KEY_ID` | | AWS access key ID for authentication |
-| `BEDROCK_SECRET_ACCESS_KEY` | | AWS secret access key for authentication |
-| `BEDROCK_SESSION_TOKEN` | | AWS session token as alternative way for authentication |
-| `BEDROCK_SERVER_URL` | | Optional custom Bedrock endpoint URL |
+| Variable                    | Default     | Description                                             |
+| --------------------------- | ----------- | ------------------------------------------------------- |
+| `BEDROCK_REGION`            | `us-east-1` | AWS region for Bedrock service                          |
+| `BEDROCK_ACCESS_KEY_ID`     |             | AWS access key ID for authentication                    |
+| `BEDROCK_SECRET_ACCESS_KEY` |             | AWS secret access key for authentication                |
+| `BEDROCK_SESSION_TOKEN`     |             | AWS session token as alternative way for authentication |
+| `BEDROCK_SERVER_URL`        |             | Optional custom Bedrock endpoint URL                    |
 
 Configuration examples:
 
@@ -1137,9 +1147,9 @@ For using Google OAuth you need to create a new OAuth application in your Google
 
 PentAGI allows you to configure Docker image selection for executing various tasks. The system automatically chooses the most appropriate image based on the task type, but you can constrain this selection by specifying your preferred images:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DOCKER_DEFAULT_IMAGE` | `debian:latest` | Default Docker image for general tasks and ambiguous cases |
+| Variable                           | Default                | Description                                                 |
+| ---------------------------------- | ---------------------- | ----------------------------------------------------------- |
+| `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for general tasks and ambiguous cases  |
 | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for security/penetration testing tasks |
 
 When these environment variables are set, AI agents will be limited to the image choices you specify. This is particularly useful for:
@@ -1409,7 +1419,9 @@ LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/
 LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
 LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml or moonshot.provider.yml
+LLM_SERVER_PROVIDER=                             # Provider name for LiteLLM proxy (e.g., openrouter, deepseek, moonshot)
 LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
+LLM_SERVER_PRESERVE_REASONING=false              # Preserve reasoning content in multi-turn conversations (required by Moonshot, default: false)
 
 # For OpenAI (official API)
 OPEN_AI_KEY=your_openai_api_key                  # Your OpenAI API key
@@ -1465,6 +1477,41 @@ docker run --rm \
 
 > [!NOTE]
 > The `LLM_SERVER_LEGACY_REASONING=true` setting is crucial for OpenAI compatibility as it ensures reasoning parameters are sent in the format expected by OpenAI's API.
+
+#### Using LiteLLM Proxy
+
+When using LiteLLM proxy to access various LLM providers, model names are prefixed with the provider name (e.g., `moonshot/kimi-2.5` instead of `kimi-2.5`). To use the same provider configuration files with both direct API access and LiteLLM proxy, set the `LLM_SERVER_PROVIDER` variable:
+
+```bash
+# Direct access to Moonshot API
+LLM_SERVER_URL=https://api.moonshot.ai/v1
+LLM_SERVER_KEY=your_moonshot_api_key
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/moonshot.provider.yml
+LLM_SERVER_PROVIDER=                             # Empty for direct access
+
+# Access via LiteLLM proxy
+LLM_SERVER_URL=http://litellm-proxy:4000
+LLM_SERVER_KEY=your_litellm_api_key
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/moonshot.provider.yml
+LLM_SERVER_PROVIDER=moonshot                     # Provider prefix for LiteLLM
+```
+
+With `LLM_SERVER_PROVIDER=moonshot`, the system automatically prefixes all model names from the configuration file with `moonshot/`, making them compatible with LiteLLM's model naming convention.
+
+**Supported provider names for LiteLLM:**
+- `openai` - for OpenAI models via LiteLLM
+- `anthropic` - for Anthropic/Claude models via LiteLLM
+- `gemini` - for Google Gemini models via LiteLLM
+- `openrouter` - for OpenRouter aggregator
+- `deepseek` - for DeepSeek models
+- `deepinfra` - for DeepInfra hosting
+- `moonshot` - for Moonshot AI (Kimi)
+- Any other provider name configured in your LiteLLM instance
+
+This approach allows you to:
+- Use the same configuration files for both direct and proxied access
+- Switch between providers without modifying configuration files
+- Easily test different routing strategies with LiteLLM
 
 #### Running Tests in a Production Environment
 

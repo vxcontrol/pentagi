@@ -296,7 +296,7 @@ interface FormModelComboboxItemProps extends BaseFieldProps, BaseInputProps {
 
 interface ModelOption {
     name: string;
-    price?: null | { input: number; output: number };
+    price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number };
     thinking?: boolean;
 }
 
@@ -328,7 +328,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
     const displayValue = field.value ?? '';
 
     // Format price for display
-    const formatPrice = (price?: null | { input: number; output: number }): string => {
+    const formatPrice = (price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number }): string => {
         if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
             return 'free';
         }
@@ -337,7 +337,26 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
             return value.toFixed(6).replace(/\.?0+$/, '');
         };
 
-        return `$${formatValue(price.input)}/$${formatValue(price.output)}`;
+        const basePrice = `$${formatValue(price.input)}/$${formatValue(price.output)}`;
+        
+        // Add cache prices if available
+        const hasCachePrices = (price.cacheRead && price.cacheRead > 0) || (price.cacheWrite && price.cacheWrite > 0);
+
+        if (hasCachePrices) {
+            const cacheParts: string[] = [];
+
+            if (price.cacheRead && price.cacheRead > 0) {
+                cacheParts.push(`R:$${formatValue(price.cacheRead)}`);
+            }
+
+            if (price.cacheWrite && price.cacheWrite > 0) {
+                cacheParts.push(`W:$${formatValue(price.cacheWrite)}`);
+            }
+
+            return `${basePrice} (${cacheParts.join(', ')})`;
+        }
+
+        return basePrice;
     };
 
     return (
@@ -471,6 +490,14 @@ const agentConfigSchema = z
         ),
         price: z
             .object({
+                cacheRead: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.number().nullable().optional(),
+                ),
+                cacheWrite: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.number().nullable().optional(),
+                ),
                 input: z.preprocess(
                     (value) => (value === '' || value === undefined ? null : value),
                     z.number().nullable().optional(),
@@ -577,13 +604,15 @@ const transformFormToGraphQL = (
                 presencePenalty: data?.presencePenalty ?? null,
                 price:
                     data?.price &&
-                    data?.price.input !== null &&
-                    data?.price.output !== null &&
                     typeof data?.price.input === 'number' &&
-                    typeof data?.price.output === 'number'
+                    typeof data?.price.output === 'number' &&
+                    typeof data?.price.cacheRead === 'number' &&
+                    typeof data?.price.cacheWrite === 'number'
                         ? {
-                              input: data?.price.input,
-                              output: data?.price.output,
+                              cacheRead: data.price.cacheRead,
+                              cacheWrite: data.price.cacheWrite,
+                              input: data.price.input,
+                              output: data.price.output,
                           }
                         : null,
                 reasoning: data?.reasoning
@@ -920,7 +949,14 @@ const SettingsProvider = () => {
         return providerModels
             .map((model: any) => ({
                 name: model.name,
-                price: model.price,
+                price: model.price
+                    ? {
+                          cacheRead: model.price.cacheRead ?? 0,
+                          cacheWrite: model.price.cacheWrite ?? 0,
+                          input: model.price.input ?? 0,
+                          output: model.price.output ?? 0,
+                      }
+                    : null,
                 thinking: model.thinking,
             }))
             .filter((model) => model.name) // Remove any models without names
@@ -1482,6 +1518,14 @@ const SettingsProvider = () => {
                                                             `agents.${agentKey}.price.output` as const,
                                                             price?.output ?? null,
                                                         );
+                                                        setValue(
+                                                            `agents.${agentKey}.price.cacheRead` as const,
+                                                            price?.cacheRead ?? null,
+                                                        );
+                                                        setValue(
+                                                            `agents.${agentKey}.price.cacheWrite` as const,
+                                                            price?.cacheWrite ?? null,
+                                                        );
                                                     }}
                                                     options={availableModels}
                                                     placeholder="Select or enter model name"
@@ -1660,6 +1704,7 @@ const SettingsProvider = () => {
                                                         {/* Price Input field */}
                                                         <FormInputNumberItem
                                                             control={control}
+                                                            description="Price per 1M input tokens"
                                                             disabled={isLoading}
                                                             label="Input Price"
                                                             min="0"
@@ -1671,11 +1716,36 @@ const SettingsProvider = () => {
                                                         {/* Price Output field */}
                                                         <FormInputNumberItem
                                                             control={control}
+                                                            description="Price per 1M output tokens"
                                                             disabled={isLoading}
                                                             label="Output Price"
                                                             min="0"
                                                             name={`agents.${agentKey}.price.output`}
                                                             placeholder="0.002"
+                                                            step="0.000001"
+                                                        />
+
+                                                        {/* Cache Read Price field */}
+                                                        <FormInputNumberItem
+                                                            control={control}
+                                                            description="Price per 1M cached read tokens"
+                                                            disabled={isLoading}
+                                                            label="Cache Read Price"
+                                                            min="0"
+                                                            name={`agents.${agentKey}.price.cacheRead`}
+                                                            placeholder="0.0001"
+                                                            step="0.000001"
+                                                        />
+
+                                                        {/* Cache Write Price field */}
+                                                        <FormInputNumberItem
+                                                            control={control}
+                                                            description="Price per 1M cache write tokens"
+                                                            disabled={isLoading}
+                                                            label="Cache Write Price"
+                                                            min="0"
+                                                            name={`agents.${agentKey}.price.cacheWrite`}
+                                                            placeholder="0.00015"
                                                             step="0.000001"
                                                         />
                                                     </div>

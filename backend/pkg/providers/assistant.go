@@ -28,6 +28,7 @@ type AssistantProvider interface {
 	Model(opt pconfig.ProviderOptionsType) string
 	Title() string
 	Language() string
+	ToolCallIDTemplate() string
 	Embedder() embeddings.Embedder
 
 	SetMsgChainID(msgChainID int64)
@@ -61,6 +62,10 @@ func (ap *assistantProvider) Title() string {
 
 func (ap *assistantProvider) Language() string {
 	return ap.fp.language
+}
+
+func (ap *assistantProvider) ToolCallIDTemplate() string {
+	return ap.fp.tcIDTemplate
 }
 
 func (ap *assistantProvider) Embedder() embeddings.Embedder {
@@ -174,10 +179,10 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	executorSpan := observation.Span(
-		langfuse.WithStartSpanName(fmt.Sprintf("assistant %d for flow %d: %s", ap.id, ap.fp.flowID, ap.fp.title)),
-		langfuse.WithStartSpanInput(chain),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+	executorAgent := observation.Agent(
+		langfuse.WithAgentName(fmt.Sprintf("assistant %d for flow %d: %s", ap.id, ap.fp.flowID, ap.fp.title)),
+		langfuse.WithAgentInput(chain),
+		langfuse.WithAgentMetadata(langfuse.Metadata{
 			"assistant_id": ap.id,
 			"flow_id":      ap.fp.flowID,
 			"msg_chain_id": ap.msgChainID,
@@ -186,7 +191,7 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 			"lang":         ap.fp.language,
 		}),
 	)
-	ctx, _ = executorSpan.Observation(ctx)
+	ctx, _ = executorAgent.Observation(ctx)
 
 	cfg := tools.AssistantExecutorConfig{
 		UseAgents:  useAgents,
@@ -201,7 +206,7 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 
 	executor, err := ap.fp.executor.GetAssistantExecutor(cfg)
 	if err != nil {
-		return wrapErrorEndSpan(ctx, executorSpan, "failed to get assistant executor", err)
+		return wrapErrorEndAgentSpan(ctx, executorAgent, "failed to get assistant executor", err)
 	}
 
 	ctx = tools.PutAgentContext(ctx, database.MsgchainTypeAssistant)
@@ -209,10 +214,10 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 		ctx, pconfig.OptionsTypeAssistant, msgChain.ID, nil, nil, chain, executor, ap.summarizer,
 	)
 	if err != nil {
-		return wrapErrorEndSpan(ctx, executorSpan, "failed to perform assistant agent chain", err)
+		return wrapErrorEndAgentSpan(ctx, executorAgent, "failed to perform assistant agent chain", err)
 	}
 
-	executorSpan.End()
+	executorAgent.End()
 
 	return nil
 }

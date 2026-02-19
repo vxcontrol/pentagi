@@ -68,10 +68,18 @@ func (p *proxyProviders) GetVectorStoreLogProvider() tools.VectorStoreLogProvide
 type proxyScreenshotProvider struct{}
 
 // PutScreenshot implements the ScreenshotProvider interface
-func (p *proxyScreenshotProvider) PutScreenshot(ctx context.Context, name, url string) (int64, error) {
+func (p *proxyScreenshotProvider) PutScreenshot(ctx context.Context, name, url string, taskID, subtaskID *int64) (int64, error) {
 	terminal.PrintInfo("Screenshot saved:")
 	terminal.PrintKeyValue("Name", name)
 	terminal.PrintKeyValue("URL", url)
+
+	if taskID != nil {
+		terminal.PrintKeyValueFormat("Task ID", "%d", *taskID)
+	}
+	if subtaskID != nil {
+		terminal.PrintKeyValueFormat("Subtask ID", "%d", *subtaskID)
+	}
+
 	return 0, nil
 }
 
@@ -197,10 +205,18 @@ func (p *proxyTermLogProvider) PutMsg(
 	msgType database.TermlogType,
 	msg string,
 	containerID int64,
+	taskID, subtaskID *int64,
 ) (int64, error) {
 	terminal.PrintInfo("Terminal log saved:")
 	terminal.PrintKeyValue("Type", string(msgType))
 	terminal.PrintKeyValueFormat("Container ID", "%d", containerID)
+
+	if taskID != nil {
+		terminal.PrintKeyValueFormat("Task ID", "%d", *taskID)
+	}
+	if subtaskID != nil {
+		terminal.PrintKeyValueFormat("Subtask ID", "%d", *subtaskID)
+	}
 
 	if len(msg) > 0 {
 		terminal.PrintResultWithKey("Terminal Output", msg)

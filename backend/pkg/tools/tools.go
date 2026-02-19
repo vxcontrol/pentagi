@@ -51,7 +51,7 @@ type Tool interface {
 }
 
 type ScreenshotProvider interface {
-	PutScreenshot(ctx context.Context, name, url string) (int64, error)
+	PutScreenshot(ctx context.Context, name, url string, taskID, subtaskID *int64) (int64, error)
 }
 
 type AgentLogProvider interface {
@@ -96,7 +96,13 @@ type SearchLogProvider interface {
 }
 
 type TermLogProvider interface {
-	PutMsg(ctx context.Context, msgType database.TermlogType, msg string, containerID int64) (int64, error)
+	PutMsg(
+		ctx context.Context,
+		msgType database.TermlogType,
+		msg string,
+		containerID int64,
+		taskID, subtaskID *int64,
+	) (int64, error)
 }
 
 type VectorStoreLogProvider interface {
@@ -768,6 +774,8 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 
 	term := &terminal{
 		flowID:       fte.flowID,
+		taskID:       cfg.TaskID,
+		subtaskID:    cfg.SubtaskID,
 		containerID:  container.ID,
 		containerLID: container.LocalID.String,
 		dockerClient: fte.docker,
@@ -805,11 +813,13 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 	}
 
 	browser := &browser{
-		flowID:   fte.flowID,
-		dataDir:  fte.cfg.DataDir,
-		scPrvURL: fte.cfg.ScraperPrivateURL,
-		scPubURL: fte.cfg.ScraperPublicURL,
-		scp:      fte.scp,
+		flowID:    fte.flowID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
+		dataDir:   fte.cfg.DataDir,
+		scPrvURL:  fte.cfg.ScraperPrivateURL,
+		scPubURL:  fte.cfg.ScraperPublicURL,
+		scp:       fte.scp,
 	}
 	if browser.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
@@ -883,11 +893,13 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 	}
 
 	browser := &browser{
-		flowID:   fte.flowID,
-		dataDir:  fte.cfg.DataDir,
-		scPrvURL: fte.cfg.ScraperPrivateURL,
-		scPubURL: fte.cfg.ScraperPublicURL,
-		scp:      fte.scp,
+		flowID:    fte.flowID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
+		dataDir:   fte.cfg.DataDir,
+		scPrvURL:  fte.cfg.ScraperPrivateURL,
+		scPubURL:  fte.cfg.ScraperPublicURL,
+		scp:       fte.scp,
 	}
 	if browser.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
@@ -954,6 +966,8 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 
 	term := &terminal{
 		flowID:       fte.flowID,
+		taskID:       cfg.TaskID,
+		subtaskID:    cfg.SubtaskID,
 		containerID:  container.ID,
 		containerLID: container.LocalID.String,
 		dockerClient: fte.docker,
@@ -995,11 +1009,13 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 	}
 
 	browser := &browser{
-		flowID:   fte.flowID,
-		dataDir:  fte.cfg.DataDir,
-		scPrvURL: fte.cfg.ScraperPrivateURL,
-		scPubURL: fte.cfg.ScraperPublicURL,
-		scp:      fte.scp,
+		flowID:    fte.flowID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
+		dataDir:   fte.cfg.DataDir,
+		scPrvURL:  fte.cfg.ScraperPrivateURL,
+		scPubURL:  fte.cfg.ScraperPublicURL,
+		scp:       fte.scp,
 	}
 	if browser.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
@@ -1066,11 +1082,13 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	}
 
 	browser := &browser{
-		flowID:   fte.flowID,
-		dataDir:  fte.cfg.DataDir,
-		scPrvURL: fte.cfg.ScraperPrivateURL,
-		scPubURL: fte.cfg.ScraperPublicURL,
-		scp:      fte.scp,
+		flowID:    fte.flowID,
+		taskID:    cfg.TaskID,
+		subtaskID: cfg.SubtaskID,
+		dataDir:   fte.cfg.DataDir,
+		scPrvURL:  fte.cfg.ScraperPrivateURL,
+		scPubURL:  fte.cfg.ScraperPublicURL,
+		scp:       fte.scp,
 	}
 	if browser.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
@@ -1204,6 +1222,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 
 	term := &terminal{
 		flowID:       fte.flowID,
+		taskID:       &cfg.TaskID,
 		containerID:  container.ID,
 		containerLID: container.LocalID.String,
 		dockerClient: fte.docker,
@@ -1236,6 +1255,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 
 	browser := &browser{
 		flowID:   fte.flowID,
+		taskID:   &cfg.TaskID,
 		dataDir:  fte.cfg.DataDir,
 		scPrvURL: fte.cfg.ScraperPrivateURL,
 		scPubURL: fte.cfg.ScraperPublicURL,
@@ -1265,6 +1285,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 
 	term := &terminal{
 		flowID:       fte.flowID,
+		taskID:       &cfg.TaskID,
 		containerID:  container.ID,
 		containerLID: container.LocalID.String,
 		dockerClient: fte.docker,
@@ -1297,6 +1318,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 
 	browser := &browser{
 		flowID:   fte.flowID,
+		taskID:   &cfg.TaskID,
 		dataDir:  fte.cfg.DataDir,
 		scPrvURL: fte.cfg.ScraperPrivateURL,
 		scPubURL: fte.cfg.ScraperPublicURL,
@@ -1322,6 +1344,8 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 
 	term := &terminal{
 		flowID:       fte.flowID,
+		taskID:       cfg.TaskID,
+		subtaskID:    cfg.SubtaskID,
 		containerID:  container.ID,
 		containerLID: container.LocalID.String,
 		dockerClient: fte.docker,

@@ -43,16 +43,16 @@ WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: CreateAssistant :one
 INSERT INTO assistants (
-  title, status, model, model_provider_name, model_provider_type, language, functions, flow_id, use_agents
+  title, status, model, model_provider_name, model_provider_type, language, tool_call_id_template, functions, flow_id, use_agents
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 )
 RETURNING *;
 
 -- name: UpdateAssistant :one
 UPDATE assistants
-SET title = $1, model = $2, language = $3, functions = $4, trace_id = $5, msgchain_id = $6
-WHERE id = $7
+SET title = $1, model = $2, language = $3, tool_call_id_template = $4, functions = $5, trace_id = $6, msgchain_id = $7
+WHERE id = $8
 RETURNING *;
 
 -- name: UpdateAssistantUseAgents :one
@@ -82,6 +82,12 @@ RETURNING *;
 -- name: UpdateAssistantLanguage :one
 UPDATE assistants
 SET language = $1
+WHERE id = $2
+RETURNING *;
+
+-- name: UpdateAssistantToolCallIDTemplate :one
+UPDATE assistants
+SET tool_call_id_template = $1
 WHERE id = $2
 RETURNING *;
 

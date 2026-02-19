@@ -85,9 +85,9 @@ func TestNew(t *testing.T) {
 		"PromptTokens":     100,
 		"CompletionTokens": 50,
 	}
-	inputTokens, outputTokens := prov.GetUsage(info)
-	assert.Equal(t, int64(100), inputTokens)
-	assert.Equal(t, int64(50), outputTokens)
+	usage := prov.GetUsage(info)
+	assert.Equal(t, int64(100), usage.Input)
+	assert.Equal(t, int64(50), usage.Output)
 }
 
 func TestOllamaProviderWithProxy(t *testing.T) {
@@ -167,21 +167,21 @@ func TestGetUsageEdgeCases(t *testing.T) {
 	require.NoError(t, err)
 
 	// test empty info
-	inputTokens, outputTokens := prov.GetUsage(map[string]any{})
-	assert.Equal(t, int64(0), inputTokens)
-	assert.Equal(t, int64(0), outputTokens)
+	usage := prov.GetUsage(map[string]any{})
+	assert.Equal(t, int64(0), usage.Input)
+	assert.Equal(t, int64(0), usage.Output)
 
 	// test nil info
-	inputTokens, outputTokens = prov.GetUsage(nil)
-	assert.Equal(t, int64(0), inputTokens)
-	assert.Equal(t, int64(0), outputTokens)
+	usage = prov.GetUsage(nil)
+	assert.Equal(t, int64(0), usage.Input)
+	assert.Equal(t, int64(0), usage.Output)
 
 	// test with different field names (should return 0)
 	info := map[string]any{
 		"InputTokens":  100,
 		"OutputTokens": 50,
 	}
-	inputTokens, outputTokens = prov.GetUsage(info)
-	assert.Equal(t, int64(0), inputTokens)
-	assert.Equal(t, int64(0), outputTokens)
+	usage = prov.GetUsage(info)
+	assert.Equal(t, int64(0), usage.Input)
+	assert.Equal(t, int64(0), usage.Output)
 }

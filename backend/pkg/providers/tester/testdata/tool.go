@@ -101,7 +101,9 @@ func (t *testCaseTool) StreamingCallback() streaming.Callback {
 		defer t.mu.Unlock()
 
 		t.content.WriteString(chunk.Content)
-		t.reasoning.WriteString(chunk.ReasoningContent)
+		if !chunk.Reasoning.IsEmpty() {
+			t.reasoning.WriteString(chunk.Reasoning.Content)
+		}
 		return nil
 	}
 }
@@ -143,7 +145,7 @@ func (t *testCaseTool) Execute(response any, latency time.Duration) TestResult {
 				result.Reasoning = true
 			}
 		}
-		if len(choice.ReasoningContent) > 0 {
+		if !choice.Reasoning.IsEmpty() {
 			result.Reasoning = true
 		}
 

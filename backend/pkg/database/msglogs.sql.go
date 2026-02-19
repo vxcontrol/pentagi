@@ -162,7 +162,9 @@ SELECT
   ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format, ml.thinking
 FROM msglogs ml
 INNER JOIN subtasks s ON ml.subtask_id = s.id
-WHERE ml.subtask_id = $1
+INNER JOIN tasks t ON s.task_id = t.id
+INNER JOIN flows f ON t.flow_id = f.id
+WHERE ml.subtask_id = $1 AND f.deleted_at IS NULL
 ORDER BY ml.created_at ASC
 `
 
@@ -205,7 +207,8 @@ SELECT
   ml.id, ml.type, ml.message, ml.result, ml.flow_id, ml.task_id, ml.subtask_id, ml.created_at, ml.result_format, ml.thinking
 FROM msglogs ml
 INNER JOIN tasks t ON ml.task_id = t.id
-WHERE ml.task_id = $1
+INNER JOIN flows f ON t.flow_id = f.id
+WHERE ml.task_id = $1 AND f.deleted_at IS NULL
 ORDER BY ml.created_at ASC
 `
 

@@ -471,6 +471,8 @@ Ready-to-use Configurations:
 • OpenRouter: Access 200+ models from multiple providers through single API with competitive pricing
 • DeepInfra: Serverless inference for popular open models with pay-per-use pricing
 • Together AI, Groq, Fireworks: Alternative cloud providers with specialized performance optimizations
+• LiteLLM Proxy: Universal gateway to 100+ providers with load balancing and unified interface (use LLM_SERVER_PROVIDER for model prefixing)
+• Some reasoning models and LLM providers may require preserving reasoning content while using tool calls (LLM_SERVER_PRESERVE_REASONING=true)
 
 Popular On-Premises Options:
 • vLLM: Production-grade serving for Qwen, Llama, Mistral models with batching and GPU optimization
@@ -485,6 +487,7 @@ Key Advantages:
 • Custom fine-tuning: Deploy specialized models trained on your security testing scenarios
 
 Best for: Teams with specific model requirements, cost optimization needs, or existing LLM infrastructure
+LiteLLM Integration: Set LLM_SERVER_PROVIDER to match your provider name (e.g., "openrouter", "moonshot") to use the same config files with both direct API access and LiteLLM proxy
 Examples available: Pre-configured setups for major providers in /opt/pentagi/conf/ directory inside the container`
 )
 
@@ -499,6 +502,8 @@ const (
 	LLMFormFieldModel             = "Model"
 	LLMFormFieldConfigPath        = "Config Path"
 	LLMFormFieldLegacyReasoning   = "Legacy Reasoning"
+	LLMFormFieldPreserveReasoning = "Preserve Reasoning"
+	LLMFormFieldProviderName      = "Provider Name"
 	LLMFormFieldPullTimeout       = "Model Pull Timeout"
 	LLMFormFieldPullEnabled       = "Auto-pull Models"
 	LLMFormFieldLoadModelsEnabled = "Load Models from Server"
@@ -511,6 +516,8 @@ const (
 	LLMFormModelDesc              = "Default model to use for this provider"
 	LLMFormConfigPathDesc         = "Path to configuration file (optional)"
 	LLMFormLegacyReasoningDesc    = "Enable legacy reasoning mode (true/false)"
+	LLMFormPreserveReasoningDesc  = "Preserve reasoning content in multi-turn conversations (required by some providers)"
+	LLMFormProviderNameDesc       = "Provider name prefix for model names (useful for LiteLLM proxy)"
 	LLMFormPullTimeoutDesc        = "Timeout in seconds for downloading models (default: 600)"
 	LLMFormPullEnabledDesc        = "Automatically download required models on startup"
 	LLMFormLoadModelsEnabledDesc  = "Load available models list from Ollama server"
@@ -1934,6 +1941,8 @@ const (
 	EnvDesc_LLM_SERVER_MODEL                  = "Custom LLM Model"
 	EnvDesc_LLM_SERVER_CONFIG_PATH            = "Custom LLM Container Config Path"
 	EnvDesc_LLM_SERVER_LEGACY_REASONING       = "Custom LLM Legacy Reasoning"
+	EnvDesc_LLM_SERVER_PRESERVE_REASONING     = "Custom LLM Preserve Reasoning Content"
+	EnvDesc_LLM_SERVER_PROVIDER               = "Custom LLM Provider Name"
 
 	EnvDesc_LANGFUSE_LISTEN_IP   = "Langfuse Listen IP"
 	EnvDesc_LANGFUSE_LISTEN_PORT = "Langfuse Listen Port"

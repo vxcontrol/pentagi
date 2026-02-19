@@ -6,6 +6,8 @@
   price:
     input: 0.8
     output: 4.0
+    cache_read: 0.08
+    cache_write: 1
 
 - name: claude-3-5-sonnet-latest
   description: High-intelligence balanced model with superior comprehension and robust function calling. Excellent for complex threat hunting, comprehensive vulnerability analysis, sophisticated penetration testing, and multi-tool security workflows requiring deep contextual understanding.
@@ -14,6 +16,8 @@
   price:
     input: 3.0
     output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
 
 # Claude 3.7 series - Advanced models with extended thinking capabilities
 - name: claude-3-7-sonnet-latest
@@ -23,6 +27,8 @@
   price:
     input: 3.0
     output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
 
 # Claude 4 series - Most capable models for advanced security operations
 - name: claude-haiku-4-5
@@ -32,6 +38,8 @@
   price:
     input: 1.0
     output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
 
 - name: claude-sonnet-4-0
   description: High-performance reasoning model with exceptional analytical capabilities (superseded by sonnet-4-5). Strong at complex threat modeling, multi-tool coordination, and advanced penetration testing. Maintains excellent function calling and autonomous agent performance.
@@ -40,6 +48,8 @@
   price:
     input: 3.0
     output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
 
 - name: claude-sonnet-4-5
   description: State-of-the-art reasoning model with superior analytical depth and enhanced tool integration. Premier choice for sophisticated penetration testing, advanced threat analysis, complex exploit development, and autonomous security research requiring deep reasoning and precise tool orchestration.
@@ -48,6 +58,8 @@
   price:
     input: 3.0
     output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
 
 - name: claude-opus-4-5
   description: Ultimate reasoning model with unparalleled analytical depth and comprehensive security expertise. Designed for critical security research, advanced zero-day discovery, sophisticated red team operations, and complex autonomous penetration testing requiring maximum intelligence and reasoning capability.
@@ -56,3 +68,5 @@
   price:
     input: 5.0
     output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25

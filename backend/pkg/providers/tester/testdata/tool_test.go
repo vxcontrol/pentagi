@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -151,8 +153,10 @@ func TestToolTestCase(t *testing.T) {
 	response = &llms.ContentResponse{
 		Choices: []*llms.ContentChoice{
 			{
-				Content:          "",
-				ReasoningContent: "Let me think about this...",
+				Content: "",
+				Reasoning: &reasoning.ContentReasoning{
+					Content: "Let me think about this...",
+				},
 				ToolCalls: []llms.ToolCall{
 					{
 						FunctionCall: &llms.FunctionCall{

@@ -11,15 +11,16 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
+	"pentagi/pkg/observability/langfuse/api/core"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"pentagi/pkg/observability/langfuse/api/core"
 )
 
-// TestCase represents a single test case.
-type TestCase struct {
+// InternalTestCase represents a single test case.
+type InternalTestCase struct {
 	description string
 
 	// Server-side assertions.
@@ -28,46 +29,47 @@ type TestCase struct {
 	giveResponseIsOptional bool
 	giveHeader             http.Header
 	giveErrorDecoder       ErrorDecoder
-	giveRequest            *Request
+	giveRequest            *InternalTestRequest
 	giveQueryParams        url.Values
 	giveBodyProperties     map[string]interface{}
 
 	// Client-side assertions.
-	wantResponse *Response
+	wantResponse *InternalTestResponse
+	wantHeaders  http.Header
 	wantError    error
 }
 
-// Request a simple request body.
-type Request struct {
+// InternalTestRequest a simple request body.
+type InternalTestRequest struct {
 	Id string `json:"id"`
 }
 
-// Response a simple response body.
-type Response struct {
+// InternalTestResponse a simple response body.
+type InternalTestResponse struct {
 	Id                  string                 `json:"id"`
 	ExtraBodyProperties map[string]interface{} `json:"extraBodyProperties,omitempty"`
 	QueryParameters     url.Values             `json:"queryParameters,omitempty"`
 }
 
-// NotFoundError represents a 404.
-type NotFoundError struct {
+// InternalTestNotFoundError represents a 404.
+type InternalTestNotFoundError struct {
 	*core.APIError
 
 	Message string `json:"message"`
 }
 
 func TestCall(t *testing.T) {
-	tests := []*TestCase{
+	tests := []*InternalTestCase{
 		{
 			description: "GET success",
 			giveMethod:  http.MethodGet,
 			giveHeader: http.Header{
 				"X-API-Status": []string{"success"},
 			},
-			giveRequest: &Request{
+			giveRequest: &InternalTestRequest{
 				Id: "123",
 			},
-			wantResponse: &Response{
+			wantResponse: &InternalTestResponse{
 				Id: "123",
 			},
 		},
@@ -78,10 +80,10 @@ func TestCall(t *testing.T) {
 			giveHeader: http.Header{
 				"X-API-Status": []string{"success"},
 			},
-			giveRequest: &Request{
+			giveRequest: &InternalTestRequest{
 				Id: "123",
 			},
-			wantResponse: &Response{
+			wantResponse: &InternalTestResponse{
 				Id: "123",
 				QueryParameters: url.Values{
 					"limit": []string{"1"},
@@ -94,13 +96,14 @@ func TestCall(t *testing.T) {
 			giveHeader: http.Header{
 				"X-API-Status": []string{"fail"},
 			},
-			giveRequest: &Request{
+			giveRequest: &InternalTestRequest{
 				Id: strconv.Itoa(http.StatusNotFound),
 			},
 			giveErrorDecoder: newTestErrorDecoder(t),
-			wantError: &NotFoundError{
+			wantError: &InternalTestNotFoundError{
 				APIError: core.NewAPIError(
 					http.StatusNotFound,
+					http.Header{},
 					errors.New(`{"message":"ID \"404\" not found"}`),
 				),
 			},
@@ -114,6 +117,7 @@ func TestCall(t *testing.T) {
 			giveRequest: nil,
 			wantError: core.NewAPIError(
 				http.StatusBadRequest,
+				http.Header{},
 				errors.New("invalid request"),
 			),
 		},
@@ -123,7 +127,7 @@ func TestCall(t *testing.T) {
 			giveHeader: http.Header{
 				"X-API-Status": []string{"success"},
 			},
-			giveRequest: &Request{
+			giveRequest: &InternalTestRequest{
 				Id: "123",
 			},
 			giveResponseIsOptional: true,
@@ -134,11 +138,12 @@ func TestCall(t *testing.T) {
 			giveHeader: http.Header{
 				"X-API-Status": []string{"fail"},
 			},
-			giveRequest: &Request{
+			giveRequest: &InternalTestRequest{
 				Id: strconv.Itoa(http.StatusInternalServerError),
 			},
 			wantError: core.NewAPIError(
 				http.StatusInternalServerError,
+				http.Header{},
 				errors.New("failed to process request"),
 			),
 		},
@@ -148,11 +153,11 @@ func TestCall(t *testing.T) {
 			giveHeader: http.Header{
 				"X-API-Status": []string{"success"},
 			},
-			giveRequest: new(Request),
+			giveRequest: new(InternalTestRequest),
 			giveBodyProperties: map[string]interface{}{
 				"key": "value",
 			},
-			wantResponse: &Response{
+			wantResponse: &InternalTestResponse{
 				ExtraBodyProperties: map[string]interface{}{
 					"key": "value",
 				},
@@ -167,10 +172,10 @@ func TestCall(t *testing.T) {
 			giveQueryParams: url.Values{
 				"extra": []string{"true"},
 			},
-			giveRequest: &Request{
+			giveRequest: &InternalTestRequest{
 				Id: "123",
 			},
-			wantResponse: &Response{
+			wantResponse: &InternalTestResponse{
 				Id: "123",
 				QueryParameters: url.Values{
 					"extra": []string{"true"},
@@ -184,13 +189,13 @@ func TestCall(t *testing.T) {
 			giveHeader: http.Header{
 				"X-API-Status": []string{"success"},
 			},
-			giveRequest: &Request{
+			giveRequest: &InternalTestRequest{
 				Id: "123",
 			},
 			giveQueryParams: url.Values{
 				"extra": []string{"true"},
 			},
-			wantResponse: &Response{
+			wantResponse: &InternalTestResponse{
 				Id: "123",
 				QueryParameters: url.Values{
 					"limit": []string{"1"},
@@ -210,8 +215,8 @@ func TestCall(t *testing.T) {
 					Client: client,
 				},
 			)
-			var response *Response
-			err := caller.Call(
+			var response *InternalTestResponse
+			_, err := caller.Call(
 				context.Background(),
 				&CallParams{
 					URL:                server.URL + test.givePathSuffix,
@@ -299,7 +304,7 @@ func TestMergeHeaders(t *testing.T) {
 
 // newTestServer returns a new *httptest.Server configured with the
 // given test parameters.
-func newTestServer(t *testing.T, tc *TestCase) *httptest.Server {
+func newTestServer(t *testing.T, tc *InternalTestCase) *httptest.Server {
 	return httptest.NewServer(
 		http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
@@ -309,7 +314,7 @@ func newTestServer(t *testing.T, tc *TestCase) *httptest.Server {
 					assert.Equal(t, value, r.Header.Values(header))
 				}
 
-				request := new(Request)
+				request := new(InternalTestRequest)
 
 				bytes, err := io.ReadAll(r.Body)
 				if tc.giveRequest == nil {
@@ -324,7 +329,7 @@ func newTestServer(t *testing.T, tc *TestCase) *httptest.Server {
 
 				switch request.Id {
 				case strconv.Itoa(http.StatusNotFound):
-					notFoundError := &NotFoundError{
+					notFoundError := &InternalTestNotFoundError{
 						APIError: &core.APIError{
 							StatusCode: http.StatusNotFound,
 						},
@@ -354,7 +359,7 @@ func newTestServer(t *testing.T, tc *TestCase) *httptest.Server {
 				require.NoError(t, json.Unmarshal(bytes, &extraBodyProperties))
 				delete(extraBodyProperties, "id")
 
-				response := &Response{
+				response := &InternalTestResponse{
 					Id:                  request.Id,
 					ExtraBodyProperties: extraBodyProperties,
 					QueryParameters:     r.URL.Query(),
@@ -369,18 +374,92 @@ func newTestServer(t *testing.T, tc *TestCase) *httptest.Server {
 	)
 }
 
+func TestIsNil(t *testing.T) {
+	t.Run("nil interface", func(t *testing.T) {
+		assert.True(t, isNil(nil))
+	})
+
+	t.Run("nil pointer", func(t *testing.T) {
+		var ptr *string
+		assert.True(t, isNil(ptr))
+	})
+
+	t.Run("non-nil pointer", func(t *testing.T) {
+		s := "test"
+		assert.False(t, isNil(&s))
+	})
+
+	t.Run("nil slice", func(t *testing.T) {
+		var slice []string
+		assert.True(t, isNil(slice))
+	})
+
+	t.Run("non-nil slice", func(t *testing.T) {
+		slice := []string{}
+		assert.False(t, isNil(slice))
+	})
+
+	t.Run("nil map", func(t *testing.T) {
+		var m map[string]string
+		assert.True(t, isNil(m))
+	})
+
+	t.Run("non-nil map", func(t *testing.T) {
+		m := make(map[string]string)
+		assert.False(t, isNil(m))
+	})
+
+	t.Run("string value", func(t *testing.T) {
+		assert.False(t, isNil("test"))
+	})
+
+	t.Run("empty string value", func(t *testing.T) {
+		assert.False(t, isNil(""))
+	})
+
+	t.Run("int value", func(t *testing.T) {
+		assert.False(t, isNil(42))
+	})
+
+	t.Run("zero int value", func(t *testing.T) {
+		assert.False(t, isNil(0))
+	})
+
+	t.Run("bool value", func(t *testing.T) {
+		assert.False(t, isNil(true))
+	})
+
+	t.Run("false bool value", func(t *testing.T) {
+		assert.False(t, isNil(false))
+	})
+
+	t.Run("struct value", func(t *testing.T) {
+		type testStruct struct {
+			Field string
+		}
+		assert.False(t, isNil(testStruct{Field: "test"}))
+	})
+
+	t.Run("empty struct value", func(t *testing.T) {
+		type testStruct struct {
+			Field string
+		}
+		assert.False(t, isNil(testStruct{}))
+	})
+}
+
 // newTestErrorDecoder returns an error decoder suitable for tests.
-func newTestErrorDecoder(t *testing.T) func(int, io.Reader) error {
-	return func(statusCode int, body io.Reader) error {
+func newTestErrorDecoder(t *testing.T) func(int, http.Header, io.Reader) error {
+	return func(statusCode int, header http.Header, body io.Reader) error {
 		raw, err := io.ReadAll(body)
 		require.NoError(t, err)
 
 		var (
-			apiError = core.NewAPIError(statusCode, errors.New(string(raw)))
+			apiError = core.NewAPIError(statusCode, header, errors.New(string(raw)))
 			decoder  = json.NewDecoder(bytes.NewReader(raw))
 		)
 		if statusCode == http.StatusNotFound {
-			value := new(NotFoundError)
+			value := new(InternalTestNotFoundError)
 			value.APIError = apiError
 			require.NoError(t, decoder.Decode(value))
 
@@ -388,4 +467,240 @@ func newTestErrorDecoder(t *testing.T) func(int, io.Reader) error {
 		}
 		return apiError
 	}
+}
+
+// FormURLEncodedTestRequest is a test struct for form URL encoding tests.
+type FormURLEncodedTestRequest struct {
+	ClientID     string  `json:"client_id"`
+	ClientSecret string  `json:"client_secret"`
+	GrantType    string  `json:"grant_type,omitempty"`
+	Scope        *string `json:"scope,omitempty"`
+	NilPointer   *string `json:"nil_pointer,omitempty"`
+}
+
+func TestNewFormURLEncodedBody(t *testing.T) {
+	t.Run("simple key-value pairs", func(t *testing.T) {
+		bodyProperties := map[string]interface{}{
+			"client_id":     "test_client_id",
+			"client_secret": "test_client_secret",
+			"grant_type":    "client_credentials",
+		}
+		reader := newFormURLEncodedBody(bodyProperties)
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		// Parse the body and verify values
+		values, err := url.ParseQuery(string(body))
+		require.NoError(t, err)
+
+		assert.Equal(t, "test_client_id", values.Get("client_id"))
+		assert.Equal(t, "test_client_secret", values.Get("client_secret"))
+		assert.Equal(t, "client_credentials", values.Get("grant_type"))
+
+		// Verify it's not JSON
+		bodyStr := string(body)
+		assert.False(t, strings.HasPrefix(strings.TrimSpace(bodyStr), "{"),
+			"Body should not be JSON, got: %s", bodyStr)
+	})
+
+	t.Run("special characters requiring URL encoding", func(t *testing.T) {
+		bodyProperties := map[string]interface{}{
+			"value_with_space":     "hello world",
+			"value_with_ampersand": "a&b",
+			"value_with_equals":    "a=b",
+			"value_with_plus":      "a+b",
+		}
+		reader := newFormURLEncodedBody(bodyProperties)
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		// Parse the body and verify values are correctly decoded
+		values, err := url.ParseQuery(string(body))
+		require.NoError(t, err)
+
+		assert.Equal(t, "hello world", values.Get("value_with_space"))
+		assert.Equal(t, "a&b", values.Get("value_with_ampersand"))
+		assert.Equal(t, "a=b", values.Get("value_with_equals"))
+		assert.Equal(t, "a+b", values.Get("value_with_plus"))
+	})
+
+	t.Run("empty map", func(t *testing.T) {
+		bodyProperties := map[string]interface{}{}
+		reader := newFormURLEncodedBody(bodyProperties)
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		assert.Empty(t, string(body))
+	})
+}
+
+func TestNewFormURLEncodedRequestBody(t *testing.T) {
+	t.Run("struct with json tags", func(t *testing.T) {
+		scope := "read write"
+		request := &FormURLEncodedTestRequest{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			GrantType:    "client_credentials",
+			Scope:        &scope,
+			NilPointer:   nil,
+		}
+		reader, err := newFormURLEncodedRequestBody(request, nil)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		// Parse the body and verify values
+		values, err := url.ParseQuery(string(body))
+		require.NoError(t, err)
+
+		assert.Equal(t, "test_client_id", values.Get("client_id"))
+		assert.Equal(t, "test_client_secret", values.Get("client_secret"))
+		assert.Equal(t, "client_credentials", values.Get("grant_type"))
+		assert.Equal(t, "read write", values.Get("scope"))
+		// nil_pointer should not be present (nil pointer with omitempty)
+		assert.Empty(t, values.Get("nil_pointer"))
+
+		// Verify it's not JSON
+		bodyStr := string(body)
+		assert.False(t, strings.HasPrefix(strings.TrimSpace(bodyStr), "{"),
+			"Body should not be JSON, got: %s", bodyStr)
+	})
+
+	t.Run("struct with omitempty and zero values", func(t *testing.T) {
+		request := &FormURLEncodedTestRequest{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			GrantType:    "", // empty string with omitempty should be omitted
+			Scope:        nil,
+			NilPointer:   nil,
+		}
+		reader, err := newFormURLEncodedRequestBody(request, nil)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		values, err := url.ParseQuery(string(body))
+		require.NoError(t, err)
+
+		assert.Equal(t, "test_client_id", values.Get("client_id"))
+		assert.Equal(t, "test_client_secret", values.Get("client_secret"))
+		// grant_type should not be present (empty string with omitempty)
+		assert.Empty(t, values.Get("grant_type"))
+		assert.Empty(t, values.Get("scope"))
+	})
+
+	t.Run("struct with extra body properties", func(t *testing.T) {
+		request := &FormURLEncodedTestRequest{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+		}
+		bodyProperties := map[string]interface{}{
+			"extra_param": "extra_value",
+		}
+		reader, err := newFormURLEncodedRequestBody(request, bodyProperties)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		values, err := url.ParseQuery(string(body))
+		require.NoError(t, err)
+
+		assert.Equal(t, "test_client_id", values.Get("client_id"))
+		assert.Equal(t, "test_client_secret", values.Get("client_secret"))
+		assert.Equal(t, "extra_value", values.Get("extra_param"))
+	})
+
+	t.Run("special characters in struct fields", func(t *testing.T) {
+		scope := "read&write=all+permissions"
+		request := &FormURLEncodedTestRequest{
+			ClientID:     "client with spaces",
+			ClientSecret: "secret&with=special+chars",
+			Scope:        &scope,
+		}
+		reader, err := newFormURLEncodedRequestBody(request, nil)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		values, err := url.ParseQuery(string(body))
+		require.NoError(t, err)
+
+		assert.Equal(t, "client with spaces", values.Get("client_id"))
+		assert.Equal(t, "secret&with=special+chars", values.Get("client_secret"))
+		assert.Equal(t, "read&write=all+permissions", values.Get("scope"))
+	})
+}
+
+func TestNewRequestBodyFormURLEncoded(t *testing.T) {
+	t.Run("selects form encoding when content-type is form-urlencoded", func(t *testing.T) {
+		request := &FormURLEncodedTestRequest{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			GrantType:    "client_credentials",
+		}
+		reader, err := newRequestBody(request, nil, contentTypeFormURLEncoded)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		// Verify it's form-urlencoded, not JSON
+		bodyStr := string(body)
+		assert.False(t, strings.HasPrefix(strings.TrimSpace(bodyStr), "{"),
+			"Body should not be JSON when Content-Type is form-urlencoded, got: %s", bodyStr)
+
+		// Parse and verify values
+		values, err := url.ParseQuery(bodyStr)
+		require.NoError(t, err)
+
+		assert.Equal(t, "test_client_id", values.Get("client_id"))
+		assert.Equal(t, "test_client_secret", values.Get("client_secret"))
+		assert.Equal(t, "client_credentials", values.Get("grant_type"))
+	})
+
+	t.Run("selects JSON encoding when content-type is application/json", func(t *testing.T) {
+		request := &FormURLEncodedTestRequest{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+		}
+		reader, err := newRequestBody(request, nil, contentType)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		// Verify it's JSON
+		bodyStr := string(body)
+		assert.True(t, strings.HasPrefix(strings.TrimSpace(bodyStr), "{"),
+			"Body should be JSON when Content-Type is application/json, got: %s", bodyStr)
+
+		// Parse and verify it's valid JSON
+		var parsed map[string]interface{}
+		err = json.Unmarshal(body, &parsed)
+		require.NoError(t, err)
+
+		assert.Equal(t, "test_client_id", parsed["client_id"])
+		assert.Equal(t, "test_client_secret", parsed["client_secret"])
+	})
+
+	t.Run("form encoding with body properties only (nil request)", func(t *testing.T) {
+		bodyProperties := map[string]interface{}{
+			"client_id":     "test_client_id",
+			"client_secret": "test_client_secret",
+		}
+		reader, err := newRequestBody(nil, bodyProperties, contentTypeFormURLEncoded)
+		require.NoError(t, err)
+
+		body, err := io.ReadAll(reader)
+		require.NoError(t, err)
+
+		values, err := url.ParseQuery(string(body))
+		require.NoError(t, err)
+
+		assert.Equal(t, "test_client_id", values.Get("client_id"))
+		assert.Equal(t, "test_client_secret", values.Get("client_secret"))
+	})
 }

@@ -15,7 +15,9 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/system"
+	"pentagi/pkg/templates"
 
+	"github.com/stretchr/testify/assert/yaml"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/openai"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
@@ -55,8 +57,15 @@ func BuildProviderConfig(cfg *config.Config, configData []byte) (*pconfig.Provid
 	}
 
 	if cfg.LLMServerModel != "" {
-		defaultOptions = append(defaultOptions, llms.WithModel(cfg.LLMServerModel))
+		model := cfg.LLMServerModel
+		if cfg.LLMServerProvider != "" {
+			model = cfg.LLMServerProvider + "/" + model
+		}
+		defaultOptions = append(defaultOptions, llms.WithModel(model))
 	}
+
+	// patch provider config with provider name
+	configData = patchProviderConfigWithProviderName(configData, cfg.LLMServerProvider)
 
 	providerConfig, err := pconfig.LoadConfigData(configData, defaultOptions)
 	if err != nil {
@@ -64,6 +73,50 @@ func BuildProviderConfig(cfg *config.Config, configData []byte) (*pconfig.Provid
 	}
 
 	return providerConfig, nil
+}
+
+func patchProviderConfigWithProviderName(configData []byte, providerName string) []byte {
+	if providerName == "" {
+		return configData
+	}
+
+	var config pconfig.ProviderConfig
+
+	// Try JSON first (more strict), then YAML (since JSON is valid YAML but not vice versa)
+	if err := json.Unmarshal(configData, &config); err != nil {
+		if err := yaml.Unmarshal(configData, &config); err != nil {
+			return configData
+		}
+	}
+
+	patchModelName := func(cfg *pconfig.AgentConfig) {
+		if cfg != nil && cfg.Model != "" {
+			cfg.Model = providerName + "/" + cfg.Model
+			// Clear raw map to force marshal to use updated field values
+			cfg.ClearRaw()
+		}
+	}
+
+	patchModelName(config.Simple)
+	patchModelName(config.SimpleJSON)
+	patchModelName(config.PrimaryAgent)
+	patchModelName(config.Assistant)
+	patchModelName(config.Generator)
+	patchModelName(config.Refiner)
+	patchModelName(config.Adviser)
+	patchModelName(config.Reflector)
+	patchModelName(config.Searcher)
+	patchModelName(config.Enricher)
+	patchModelName(config.Coder)
+	patchModelName(config.Installer)
+	patchModelName(config.Pentester)
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		return configData
+	}
+
+	return data
 }
 
 func DefaultProviderConfig(cfg *config.Config) (*pconfig.ProviderConfig, error) {
@@ -105,6 +158,11 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		opts = append(opts,
 			openai.WithUsingReasoningMaxTokens(),
 			openai.WithModernReasoningFormat(),
+		)
+	}
+	if cfg.LLMServerPreserveReasoning {
+		opts = append(opts,
+			openai.WithPreserveReasoningContent(),
 		)
 	}
 	client, err := openai.New(opts...)
@@ -192,32 +250,12 @@ func (p *customProvider) CallWithTools(
 	)
 }
 
-func (p *customProvider) GetUsage(info map[string]any) (int64, int64) {
-	var inputTokens, outputTokens int64
+func (p *customProvider) GetUsage(info map[string]any) pconfig.CallUsage {
+	return pconfig.NewCallUsage(info)
+}
 
-	if value, ok := info["PromptTokens"]; ok {
-		switch v := value.(type) {
-		case int:
-			inputTokens = int64(v)
-		case int64:
-			inputTokens = v
-		case float64:
-			inputTokens = int64(v)
-		}
-	}
-
-	if value, ok := info["CompletionTokens"]; ok {
-		switch v := value.(type) {
-		case int:
-			outputTokens = int64(v)
-		case int64:
-			outputTokens = v
-		case float64:
-			outputTokens = int64(v)
-		}
-	}
-
-	return inputTokens, outputTokens
+func (p *customProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
 }
 
 func loadModelsFromServer(baseURL, baseKey string, client *http.Client) pconfig.ModelsConfig {

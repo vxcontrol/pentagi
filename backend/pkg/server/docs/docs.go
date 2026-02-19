@@ -2980,6 +2980,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/flows/{flowID}/usage": {
+            "get": {
+                "description": "Get comprehensive analytics for a single flow including all breakdowns",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Flows",
+                    "Usage"
+                ],
+                "summary": "Retrieve analytics for specific flow",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "flow analytics received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.FlowUsageResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid flow id",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting flow analytics not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting flow analytics",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/flows/{flowID}/vecstorelogs/": {
             "get": {
                 "produces": [
@@ -4222,6 +4289,114 @@ const docTemplate = `{
                 }
             }
         },
+        "/usage": {
+            "get": {
+                "description": "Get comprehensive analytics for all user's flows including usage, toolcalls, and structural stats",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Usage"
+                ],
+                "summary": "Retrieve system-wide analytics",
+                "responses": {
+                    "200": {
+                        "description": "analytics received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.SystemUsageResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting analytics not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting analytics",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/usage/{period}": {
+            "get": {
+                "description": "Get time-series analytics data for week, month, or quarter",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Usage"
+                ],
+                "summary": "Retrieve analytics for specific time period",
+                "parameters": [
+                    {
+                        "enum": [
+                            "week",
+                            "month",
+                            "quarter"
+                        ],
+                        "type": "string",
+                        "description": "period",
+                        "name": "period",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "period analytics received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.PeriodUsageResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid period parameter",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting analytics not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting analytics",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/user/": {
             "get": {
                 "produces": [
@@ -4919,6 +5094,21 @@ const docTemplate = `{
                 }
             }
         },
+        "models.AgentTypeUsageStats": {
+            "type": "object",
+            "required": [
+                "agent_type",
+                "stats"
+            ],
+            "properties": {
+                "agent_type": {
+                    "type": "string"
+                },
+                "stats": {
+                    "$ref": "#/definitions/models.UsageStats"
+                }
+            }
+        },
         "models.Agentlog": {
             "type": "object",
             "required": [
@@ -5221,6 +5411,51 @@ const docTemplate = `{
                 }
             }
         },
+        "models.DailyFlowsStats": {
+            "type": "object",
+            "required": [
+                "date",
+                "stats"
+            ],
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "stats": {
+                    "$ref": "#/definitions/models.FlowsStats"
+                }
+            }
+        },
+        "models.DailyToolcallsStats": {
+            "type": "object",
+            "required": [
+                "date",
+                "stats"
+            ],
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "stats": {
+                    "$ref": "#/definitions/models.ToolcallsStats"
+                }
+            }
+        },
+        "models.DailyUsageStats": {
+            "type": "object",
+            "required": [
+                "date",
+                "stats"
+            ],
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "stats": {
+                    "$ref": "#/definitions/models.UsageStats"
+                }
+            }
+        },
         "models.Flow": {
             "type": "object",
             "required": [
@@ -5270,6 +5505,56 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "user_id": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "models.FlowExecutionStats": {
+            "type": "object",
+            "required": [
+                "flow_title"
+            ],
+            "properties": {
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "flow_title": {
+                    "type": "string"
+                },
+                "tasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.TaskExecutionStats"
+                    }
+                },
+                "total_assistants_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_duration_seconds": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "total_toolcalls_count": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "models.FlowStats": {
+            "type": "object",
+            "properties": {
+                "total_assistants_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_subtasks_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_tasks_count": {
                     "type": "integer",
                     "minimum": 0
                 }
@@ -5336,6 +5621,88 @@ const docTemplate = `{
                 }
             }
         },
+        "models.FlowUsageResponse": {
+            "type": "object",
+            "required": [
+                "flow_stats_by_flow",
+                "toolcalls_stats_by_flow",
+                "usage_stats_by_flow"
+            ],
+            "properties": {
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "flow_stats_by_flow": {
+                    "$ref": "#/definitions/models.FlowStats"
+                },
+                "toolcalls_stats_by_flow": {
+                    "$ref": "#/definitions/models.ToolcallsStats"
+                },
+                "toolcalls_stats_by_function_for_flow": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.FunctionToolcallsStats"
+                    }
+                },
+                "usage_stats_by_agent_type_for_flow": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.AgentTypeUsageStats"
+                    }
+                },
+                "usage_stats_by_flow": {
+                    "$ref": "#/definitions/models.UsageStats"
+                }
+            }
+        },
+        "models.FlowsStats": {
+            "type": "object",
+            "properties": {
+                "total_assistants_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_flows_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_subtasks_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_tasks_count": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "models.FunctionToolcallsStats": {
+            "type": "object",
+            "required": [
+                "function_name"
+            ],
+            "properties": {
+                "avg_duration_seconds": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "function_name": {
+                    "type": "string"
+                },
+                "is_agent": {
+                    "type": "boolean"
+                },
+                "total_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_duration_seconds": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
         "models.Login": {
             "type": "object",
             "required": [
@@ -5351,6 +5718,25 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 4
+                }
+            }
+        },
+        "models.ModelUsageStats": {
+            "type": "object",
+            "required": [
+                "model",
+                "provider",
+                "stats"
+            ],
+            "properties": {
+                "model": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "stats": {
+                    "$ref": "#/definitions/models.UsageStats"
                 }
             }
         },
@@ -5473,6 +5859,41 @@ const docTemplate = `{
                 }
             }
         },
+        "models.PeriodUsageResponse": {
+            "type": "object",
+            "required": [
+                "period"
+            ],
+            "properties": {
+                "flows_execution_stats_by_period": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.FlowExecutionStats"
+                    }
+                },
+                "flows_stats_by_period": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DailyFlowsStats"
+                    }
+                },
+                "period": {
+                    "type": "string"
+                },
+                "toolcalls_stats_by_period": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DailyToolcallsStats"
+                    }
+                },
+                "usage_stats_by_period": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.DailyUsageStats"
+                    }
+                }
+            }
+        },
         "models.Privilege": {
             "type": "object",
             "required": [
@@ -5581,6 +6002,21 @@ const docTemplate = `{
                 }
             }
         },
+        "models.ProviderUsageStats": {
+            "type": "object",
+            "required": [
+                "provider",
+                "stats"
+            ],
+            "properties": {
+                "provider": {
+                    "type": "string"
+                },
+                "stats": {
+                    "$ref": "#/definitions/models.UsageStats"
+                }
+            }
+        },
         "models.Role": {
             "type": "object",
             "required": [
@@ -5641,6 +6077,14 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "subtask_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "task_id": {
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "url": {
                     "type": "string"
@@ -5729,6 +6173,72 @@ const docTemplate = `{
                 }
             }
         },
+        "models.SubtaskExecutionStats": {
+            "type": "object",
+            "required": [
+                "subtask_title"
+            ],
+            "properties": {
+                "subtask_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "subtask_title": {
+                    "type": "string"
+                },
+                "total_duration_seconds": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "total_toolcalls_count": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "models.SystemUsageResponse": {
+            "type": "object",
+            "required": [
+                "flows_stats_total",
+                "toolcalls_stats_total",
+                "usage_stats_total"
+            ],
+            "properties": {
+                "flows_stats_total": {
+                    "$ref": "#/definitions/models.FlowsStats"
+                },
+                "toolcalls_stats_by_function": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.FunctionToolcallsStats"
+                    }
+                },
+                "toolcalls_stats_total": {
+                    "$ref": "#/definitions/models.ToolcallsStats"
+                },
+                "usage_stats_by_agent_type": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.AgentTypeUsageStats"
+                    }
+                },
+                "usage_stats_by_model": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ModelUsageStats"
+                    }
+                },
+                "usage_stats_by_provider": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ProviderUsageStats"
+                    }
+                },
+                "usage_stats_total": {
+                    "$ref": "#/definitions/models.UsageStats"
+                }
+            }
+        },
         "models.Task": {
             "type": "object",
             "required": [
@@ -5762,6 +6272,35 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "models.TaskExecutionStats": {
+            "type": "object",
+            "required": [
+                "task_title"
+            ],
+            "properties": {
+                "subtasks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.SubtaskExecutionStats"
+                    }
+                },
+                "task_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "task_title": {
+                    "type": "string"
+                },
+                "total_duration_seconds": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "total_toolcalls_count": {
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },
@@ -5812,6 +6351,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "container_id",
+                "flow_id",
                 "text",
                 "type"
             ],
@@ -5823,7 +6363,19 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
                 "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "subtask_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "task_id": {
                     "type": "integer",
                     "minimum": 0
                 },
@@ -5832,6 +6384,48 @@ const docTemplate = `{
                 },
                 "type": {
                     "type": "string"
+                }
+            }
+        },
+        "models.ToolcallsStats": {
+            "type": "object",
+            "properties": {
+                "total_count": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_duration_seconds": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            }
+        },
+        "models.UsageStats": {
+            "type": "object",
+            "properties": {
+                "total_usage_cache_in": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_usage_cache_out": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_usage_cost_in": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "total_usage_cost_out": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "total_usage_in": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "total_usage_out": {
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },

@@ -7,28 +7,42 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createTermLog = `-- name: CreateTermLog :one
 INSERT INTO termlogs (
   type,
   text,
-  container_id
+  container_id,
+  flow_id,
+  task_id,
+  subtask_id
 )
 VALUES (
-  $1, $2, $3
+  $1, $2, $3, $4, $5, $6
 )
-RETURNING id, type, text, container_id, created_at
+RETURNING id, type, text, container_id, created_at, flow_id, task_id, subtask_id
 `
 
 type CreateTermLogParams struct {
-	Type        TermlogType `json:"type"`
-	Text        string      `json:"text"`
-	ContainerID int64       `json:"container_id"`
+	Type        TermlogType   `json:"type"`
+	Text        string        `json:"text"`
+	ContainerID int64         `json:"container_id"`
+	FlowID      int64         `json:"flow_id"`
+	TaskID      sql.NullInt64 `json:"task_id"`
+	SubtaskID   sql.NullInt64 `json:"subtask_id"`
 }
 
 func (q *Queries) CreateTermLog(ctx context.Context, arg CreateTermLogParams) (Termlog, error) {
-	row := q.db.QueryRowContext(ctx, createTermLog, arg.Type, arg.Text, arg.ContainerID)
+	row := q.db.QueryRowContext(ctx, createTermLog,
+		arg.Type,
+		arg.Text,
+		arg.ContainerID,
+		arg.FlowID,
+		arg.TaskID,
+		arg.SubtaskID,
+	)
 	var i Termlog
 	err := row.Scan(
 		&i.ID,
@@ -36,17 +50,60 @@ func (q *Queries) CreateTermLog(ctx context.Context, arg CreateTermLogParams) (T
 		&i.Text,
 		&i.ContainerID,
 		&i.CreatedAt,
+		&i.FlowID,
+		&i.TaskID,
+		&i.SubtaskID,
 	)
 	return i, err
 }
 
+const getContainerTermLogs = `-- name: GetContainerTermLogs :many
+SELECT
+  tl.id, tl.type, tl.text, tl.container_id, tl.created_at, tl.flow_id, tl.task_id, tl.subtask_id
+FROM termlogs tl
+INNER JOIN flows f ON tl.flow_id = f.id
+WHERE tl.container_id = $1 AND f.deleted_at IS NULL
+ORDER BY tl.created_at ASC
+`
+
+func (q *Queries) GetContainerTermLogs(ctx context.Context, containerID int64) ([]Termlog, error) {
+	rows, err := q.db.QueryContext(ctx, getContainerTermLogs, containerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Termlog
+	for rows.Next() {
+		var i Termlog
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Text,
+			&i.ContainerID,
+			&i.CreatedAt,
+			&i.FlowID,
+			&i.TaskID,
+			&i.SubtaskID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFlowTermLogs = `-- name: GetFlowTermLogs :many
 SELECT
-  tl.id, tl.type, tl.text, tl.container_id, tl.created_at
+  tl.id, tl.type, tl.text, tl.container_id, tl.created_at, tl.flow_id, tl.task_id, tl.subtask_id
 FROM termlogs tl
-INNER JOIN containers c ON tl.container_id = c.id
-INNER JOIN flows f ON c.flow_id = f.id
-WHERE c.flow_id = $1
+INNER JOIN flows f ON tl.flow_id = f.id
+WHERE tl.flow_id = $1 AND f.deleted_at IS NULL
 ORDER BY tl.created_at ASC
 `
 
@@ -65,6 +122,91 @@ func (q *Queries) GetFlowTermLogs(ctx context.Context, flowID int64) ([]Termlog,
 			&i.Text,
 			&i.ContainerID,
 			&i.CreatedAt,
+			&i.FlowID,
+			&i.TaskID,
+			&i.SubtaskID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSubtaskTermLogs = `-- name: GetSubtaskTermLogs :many
+SELECT
+  tl.id, tl.type, tl.text, tl.container_id, tl.created_at, tl.flow_id, tl.task_id, tl.subtask_id
+FROM termlogs tl
+INNER JOIN flows f ON tl.flow_id = f.id
+WHERE tl.subtask_id = $1 AND f.deleted_at IS NULL
+ORDER BY tl.created_at ASC
+`
+
+func (q *Queries) GetSubtaskTermLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Termlog, error) {
+	rows, err := q.db.QueryContext(ctx, getSubtaskTermLogs, subtaskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Termlog
+	for rows.Next() {
+		var i Termlog
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Text,
+			&i.ContainerID,
+			&i.CreatedAt,
+			&i.FlowID,
+			&i.TaskID,
+			&i.SubtaskID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTaskTermLogs = `-- name: GetTaskTermLogs :many
+SELECT
+  tl.id, tl.type, tl.text, tl.container_id, tl.created_at, tl.flow_id, tl.task_id, tl.subtask_id
+FROM termlogs tl
+INNER JOIN flows f ON tl.flow_id = f.id
+WHERE tl.task_id = $1 AND f.deleted_at IS NULL
+ORDER BY tl.created_at ASC
+`
+
+func (q *Queries) GetTaskTermLogs(ctx context.Context, taskID sql.NullInt64) ([]Termlog, error) {
+	rows, err := q.db.QueryContext(ctx, getTaskTermLogs, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Termlog
+	for rows.Next() {
+		var i Termlog
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Text,
+			&i.ContainerID,
+			&i.CreatedAt,
+			&i.FlowID,
+			&i.TaskID,
+			&i.SubtaskID,
 		); err != nil {
 			return nil, err
 		}
@@ -81,7 +223,7 @@ func (q *Queries) GetFlowTermLogs(ctx context.Context, flowID int64) ([]Termlog,
 
 const getTermLog = `-- name: GetTermLog :one
 SELECT
-  tl.id, tl.type, tl.text, tl.container_id, tl.created_at
+  tl.id, tl.type, tl.text, tl.container_id, tl.created_at, tl.flow_id, tl.task_id, tl.subtask_id
 FROM termlogs tl
 WHERE tl.id = $1
 `
@@ -95,18 +237,20 @@ func (q *Queries) GetTermLog(ctx context.Context, id int64) (Termlog, error) {
 		&i.Text,
 		&i.ContainerID,
 		&i.CreatedAt,
+		&i.FlowID,
+		&i.TaskID,
+		&i.SubtaskID,
 	)
 	return i, err
 }
 
 const getUserFlowTermLogs = `-- name: GetUserFlowTermLogs :many
 SELECT
-  tl.id, tl.type, tl.text, tl.container_id, tl.created_at
+  tl.id, tl.type, tl.text, tl.container_id, tl.created_at, tl.flow_id, tl.task_id, tl.subtask_id
 FROM termlogs tl
-INNER JOIN containers c ON tl.container_id = c.id
-INNER JOIN flows f ON c.flow_id = f.id
+INNER JOIN flows f ON tl.flow_id = f.id
 INNER JOIN users u ON f.user_id = u.id
-WHERE c.flow_id = $1 AND f.user_id = $2
+WHERE tl.flow_id = $1 AND f.user_id = $2 AND f.deleted_at IS NULL
 ORDER BY tl.created_at ASC
 `
 
@@ -130,6 +274,9 @@ func (q *Queries) GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLo
 			&i.Text,
 			&i.ContainerID,
 			&i.CreatedAt,
+			&i.FlowID,
+			&i.TaskID,
+			&i.SubtaskID,
 		); err != nil {
 			return nil, err
 		}

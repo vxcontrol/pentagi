@@ -1,12 +1,13 @@
 package cast
 
 import (
-	"crypto/rand"
 	"fmt"
+	"pentagi/pkg/templates"
 	"sort"
 	"strings"
 
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 // Constants for common operations in chainAST
@@ -15,7 +16,11 @@ const (
 	FallbackResponseContent = "the call was not handled, please try again"
 	SummarizationToolName   = "execute_task_and_return_summary"
 	SummarizationToolArgs   = `{"question": "delegate and execute the task, then return the summary of the result"}`
-	toolCallIdCharset       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	ToolCallIDTemplate      = "call_{r:24:x}"
+
+	// Fake reasoning signatures for different providers when summarizing content
+	// that originally contained reasoning signatures
+	FakeReasoningSignatureGemini = "skip_thought_signature_validator"
 )
 
 // BodyPairType represents the type of body pair in the chain
@@ -494,21 +499,53 @@ func NewBodyPairFromMessages(messages []llms.MessageContent) (*BodyPair, error) 
 }
 
 // NewBodyPairFromSummarization creates a new BodyPair from a summarization tool call
-func NewBodyPairFromSummarization(text string) *BodyPair {
-	toolCallID := newToolCallID()
+// If addFakeSignature is true, adds a fake reasoning signature to the tool call
+// This is required when summarizing content that originally contained reasoning signatures
+// to satisfy provider requirements (e.g., Gemini's thought_signature requirement)
+// If reasoningMsg is not nil, its parts are prepended to the AI message before the ToolCall
+// This preserves reasoning content for providers like Kimi (Moonshot) that require reasoning_content
+func NewBodyPairFromSummarization(
+	text string,
+	tcIDTemplate string,
+	addFakeSignature bool,
+	reasoningMsg *llms.MessageContent,
+) *BodyPair {
+	toolCallID := templates.GenerateFromPattern(tcIDTemplate, SummarizationToolName)
+
+	toolCall := llms.ToolCall{
+		ID:   toolCallID,
+		Type: "function",
+		FunctionCall: &llms.FunctionCall{
+			Name:      SummarizationToolName,
+			Arguments: SummarizationToolArgs,
+		},
+	}
+
+	// Add fake reasoning signature if requested
+	// This preserves the reasoning signature requirement for providers like Gemini
+	// while replacing the actual content with a summary
+	if addFakeSignature {
+		toolCall.Reasoning = &reasoning.ContentReasoning{
+			Signature: []byte(FakeReasoningSignatureGemini),
+		}
+	}
+
+	// Build AI message parts
+	var aiParts []llms.ContentPart
+
+	// If reasoning message is provided, prepend its parts before the ToolCall
+	// This is required for providers like Kimi (Moonshot) that need reasoning_content before ToolCall
+	if reasoningMsg != nil {
+		aiParts = append(aiParts, reasoningMsg.Parts...)
+	}
+
+	// Add the summarization ToolCall
+	aiParts = append(aiParts, toolCall)
+
 	return NewBodyPair(
 		&llms.MessageContent{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   toolCallID,
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      SummarizationToolName,
-						Arguments: SummarizationToolArgs,
-					},
-				},
-			},
+			Role:  llms.ChatMessageTypeAI,
+			Parts: aiParts,
 		},
 		[]*llms.MessageContent{
 			{
@@ -863,15 +900,193 @@ func (ast *ChainAST) Size() int {
 	return totalSize
 }
 
-// newToolCallID generates a random tool call ID
-func newToolCallID() string {
-	b := make([]byte, 24)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic("failed to generate random tool call ID")
+// NormalizeToolCallIDs validates and replaces tool call IDs that don't match the new template.
+// This is useful when switching between different LLM providers that use different ID formats.
+// For example, switching from Gemini to Anthropic requires converting IDs from one format to another.
+//
+// The function:
+// 1. Validates each tool call ID against the new template using ValidatePattern
+// 2. If validation fails, generates a new ID and creates a mapping
+// 3. Updates all tool call responses to use the new IDs
+// 4. Preserves IDs that already match the template
+func (ast *ChainAST) NormalizeToolCallIDs(newTemplate string) error {
+	// Mapping from old tool call IDs to new ones
+	idMapping := make(map[string]string)
+
+	for _, section := range ast.Sections {
+		for _, bodyPair := range section.Body {
+			// Only process RequestResponse and Summarization types
+			if bodyPair.Type != RequestResponse && bodyPair.Type != Summarization {
+				continue
+			}
+
+			if bodyPair.AIMessage == nil {
+				continue
+			}
+
+			// Check and replace tool call IDs in AI message
+			for pdx, part := range bodyPair.AIMessage.Parts {
+				toolCall, ok := part.(llms.ToolCall)
+				if !ok || toolCall.FunctionCall == nil {
+					continue
+				}
+
+				// Validate existing ID against new template
+				sample := templates.PatternSample{
+					Value:        toolCall.ID,
+					FunctionName: toolCall.FunctionCall.Name,
+				}
+				err := templates.ValidatePattern(newTemplate, []templates.PatternSample{sample})
+				if err != nil {
+					// ID doesn't match the new pattern - generate a new one
+					newID := templates.GenerateFromPattern(newTemplate, toolCall.FunctionCall.Name)
+					idMapping[toolCall.ID] = newID
+					toolCall.ID = newID
+					bodyPair.AIMessage.Parts[pdx] = toolCall
+				}
+				// If err == nil, ID is already valid for the new template
+			}
+
+			// Update corresponding tool call responses with new IDs
+			for _, toolMsg := range bodyPair.ToolMessages {
+				if toolMsg == nil {
+					continue
+				}
+
+				for pdx, part := range toolMsg.Parts {
+					resp, ok := part.(llms.ToolCallResponse)
+					if !ok {
+						continue
+					}
+
+					// Check if this response ID needs to be updated
+					if newID, exists := idMapping[resp.ToolCallID]; exists {
+						resp.ToolCallID = newID
+						toolMsg.Parts[pdx] = resp
+					}
+				}
+			}
+		}
 	}
-	for i := range b {
-		b[i] = toolCallIdCharset[int(b[i])%len(toolCallIdCharset)]
+
+	return nil
+}
+
+// ClearReasoning removes all reasoning data from the chain.
+// This is necessary when switching between providers because reasoning content
+// (especially cryptographic signatures) is provider-specific and will cause
+// API errors if sent to a different provider.
+//
+// The function clears reasoning from:
+// - TextContent parts (may contain extended thinking signatures)
+// - ToolCall parts (may contain per-tool reasoning)
+func (ast *ChainAST) ClearReasoning() error {
+	for _, section := range ast.Sections {
+		if section.Header == nil {
+			continue
+		}
+
+		// Clear reasoning from header messages
+		if section.Header.SystemMessage != nil {
+			clearMessageReasoning(section.Header.SystemMessage)
+		}
+		if section.Header.HumanMessage != nil {
+			clearMessageReasoning(section.Header.HumanMessage)
+		}
+
+		// Clear reasoning from body pairs
+		for _, bodyPair := range section.Body {
+			if bodyPair.AIMessage != nil {
+				clearMessageReasoning(bodyPair.AIMessage)
+			}
+
+			// Tool messages don't typically have reasoning, but clear them anyway
+			for _, toolMsg := range bodyPair.ToolMessages {
+				if toolMsg != nil {
+					clearMessageReasoning(toolMsg)
+				}
+			}
+		}
 	}
-	return "call_" + string(b)
+
+	return nil
+}
+
+// clearMessageReasoning clears reasoning from all parts of a message
+func clearMessageReasoning(msg *llms.MessageContent) {
+	if msg == nil {
+		return
+	}
+
+	for idx, part := range msg.Parts {
+		switch p := part.(type) {
+		case llms.TextContent:
+			if p.Reasoning != nil {
+				p.Reasoning = nil
+				msg.Parts[idx] = p
+			}
+		case llms.ToolCall:
+			if p.Reasoning != nil {
+				p.Reasoning = nil
+				msg.Parts[idx] = p
+			}
+		}
+	}
+}
+
+// ContainsToolCallReasoning checks if any message in the slice contains Reasoning signatures
+// in ToolCall parts. This function is useful for determining whether summarized content should include
+// fake reasoning signatures to satisfy provider requirements (e.g., Gemini's thought_signature)
+func ContainsToolCallReasoning(messages []llms.MessageContent) bool {
+	if len(messages) == 0 {
+		return false
+	}
+
+	for _, msg := range messages {
+		for _, part := range msg.Parts {
+			switch p := part.(type) {
+			case llms.ToolCall:
+				if p.Reasoning != nil {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// ExtractReasoningMessage extracts the first AI message that contains reasoning content
+// in a TextContent part. This is useful for preserving reasoning messages when summarizing
+// content for providers like Kimi (Moonshot) that require reasoning_content before ToolCall.
+// Returns nil if no reasoning message is found.
+func ExtractReasoningMessage(messages []llms.MessageContent) *llms.MessageContent {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	for _, msg := range messages {
+		// Only look at AI messages
+		if msg.Role != llms.ChatMessageTypeAI {
+			continue
+		}
+
+		// Check if this message has TextContent with Reasoning
+		for _, part := range msg.Parts {
+			if textContent, ok := part.(llms.TextContent); ok {
+				if !textContent.Reasoning.IsEmpty() {
+					// Found a reasoning message - create a copy with only the reasoning part
+					reasoningMsg := &llms.MessageContent{
+						Role: llms.ChatMessageTypeAI,
+						Parts: []llms.ContentPart{
+							textContent,
+						},
+					}
+					return reasoningMsg
+				}
+			}
+		}
+	}
+
+	return nil
 }

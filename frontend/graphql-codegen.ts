@@ -16,6 +16,9 @@ const config: CodegenConfig = {
             plugins: ['typescript', 'typescript-operations', 'typescript-react-apollo'],
         },
     },
+    hooks: {
+        afterOneFileWrite: ['npx prettier --write'],
+    },
     schema: '../backend/pkg/graph/schema.graphqls',
 };
 

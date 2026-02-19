@@ -26,12 +26,17 @@ export const ThemeProviderContext = createContext<ThemeProviderState>(initialSta
 
 export const ThemeProvider = ({
     children,
-    defaultTheme = 'dark',
+    defaultTheme = 'system',
     storageKey = 'theme',
     ...props
 }: ThemeProviderProps) => {
     const [theme, setTheme] = useState<Theme>(() => {
         const storedTheme = localStorage.getItem(storageKey);
+
+        // If no stored theme, use system (default)
+        if (!storedTheme) {
+            return 'system';
+        }
 
         return isThemeValid(storedTheme) ? storedTheme : defaultTheme;
     });
@@ -54,7 +59,13 @@ export const ThemeProvider = ({
 
     const value = {
         setTheme: (theme: Theme) => {
-            localStorage.setItem(storageKey, theme);
+            if (theme === 'system') {
+                // Remove from localStorage when system is selected
+                localStorage.removeItem(storageKey);
+            } else {
+                // Store only light or dark themes
+                localStorage.setItem(storageKey, theme);
+            }
             setTheme(theme);
         },
         theme,

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"pentagi/pkg/database"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/html"
@@ -95,6 +97,7 @@ func NewDuckDuckGoTool(flowID int64, taskID, subtaskID *int64, enabled bool,
 // Handle processes the search request from an AI agent
 func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"tool": name,
 		"args": string(args),
@@ -120,6 +123,21 @@ func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessa
 	// Perform search
 	result, err := d.search(ctx, action.Query, numResults)
 	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("search engine error swallowed"),
+			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name":   DuckDuckGoToolName,
+				"engine":      "duckduckgo",
+				"query":       action.Query,
+				"max_results": numResults,
+				"region":      d.region,
+				"error":       err.Error(),
+			}),
+		)
+
 		logger.WithError(err).Error("failed to search in DuckDuckGo")
 		return fmt.Sprintf("failed to search in DuckDuckGo: %v", err), nil
 	}

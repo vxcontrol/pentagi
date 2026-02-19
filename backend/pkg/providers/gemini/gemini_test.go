@@ -11,6 +11,8 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+
+	"github.com/vxcontrol/langchaingo/httputil"
 )
 
 func TestConfigLoading(t *testing.T) {
@@ -157,98 +159,92 @@ func TestGetUsage(t *testing.T) {
 
 	// Test usage parsing with Google AI format
 	usageInfo := map[string]any{
-		"input_tokens":  int32(100),
-		"output_tokens": int32(50),
+		"PromptTokens":     int32(100),
+		"CompletionTokens": int32(50),
 	}
 
-	inputTokens, outputTokens := prov.GetUsage(usageInfo)
-	if inputTokens != 100 {
-		t.Errorf("Expected input tokens 100, got %d", inputTokens)
+	usage := prov.GetUsage(usageInfo)
+	if usage.Input != 100 {
+		t.Errorf("Expected input tokens 100, got %d", usage.Input)
 	}
-	if outputTokens != 50 {
-		t.Errorf("Expected output tokens 50, got %d", outputTokens)
+	if usage.Output != 50 {
+		t.Errorf("Expected output tokens 50, got %d", usage.Output)
 	}
 
 	// Test with missing usage info
 	emptyInfo := map[string]any{}
-	inputTokens, outputTokens = prov.GetUsage(emptyInfo)
-	if inputTokens != 0 || outputTokens != 0 {
-		t.Errorf("Expected zero tokens with empty usage info, got input: %d, output: %d", inputTokens, outputTokens)
+	usage = prov.GetUsage(emptyInfo)
+	if !usage.IsZero() {
+		t.Errorf("Expected zero tokens with empty usage info, got %s", usage.String())
 	}
 }
 
 func TestAPIKeyTransportRoundTrip(t *testing.T) {
 	tests := []struct {
-		name               string
-		serverURL          string
-		apiKey             string
-		requestURL         string
-		requestQuery       string
-		expectedScheme     string
-		expectedHost       string
-		expectedPath       string
-		expectedQueryKey   string
-		expectedAuthHeader string
+		name             string
+		serverURL        string
+		apiKey           string
+		requestURL       string
+		requestQuery     string
+		expectedScheme   string
+		expectedHost     string
+		expectedPath     string
+		expectedQueryKey string
 	}{
 		{
-			name:               "no custom server, adds API key to query and header",
-			serverURL:          "",
-			apiKey:             "test-api-key-123",
-			requestURL:         "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-			requestQuery:       "",
-			expectedScheme:     "https",
-			expectedHost:       "generativelanguage.googleapis.com",
-			expectedPath:       "/v1beta/models/gemini-pro:generateContent",
-			expectedQueryKey:   "test-api-key-123",
-			expectedAuthHeader: "Bearer test-api-key-123",
+			name:             "no custom server, adds API key to query only (no auth header for default host)",
+			serverURL:        "",
+			apiKey:           "test-api-key-123",
+			requestURL:       "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+			requestQuery:     "",
+			expectedScheme:   "https",
+			expectedHost:     "generativelanguage.googleapis.com",
+			expectedPath:     "/v1beta/models/gemini-pro:generateContent",
+			expectedQueryKey: "test-api-key-123",
 		},
 		{
-			name:               "custom server URL replaces base URL",
-			serverURL:          "https://proxy.example.com/gemini",
-			apiKey:             "my-key",
-			requestURL:         "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-			requestQuery:       "",
-			expectedScheme:     "https",
-			expectedHost:       "proxy.example.com",
-			expectedPath:       "/gemini/v1beta/models/gemini-pro:generateContent",
-			expectedQueryKey:   "my-key",
-			expectedAuthHeader: "Bearer my-key",
+			name:             "custom server URL replaces base URL",
+			serverURL:        "https://proxy.example.com/gemini",
+			apiKey:           "my-key",
+			requestURL:       "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+			requestQuery:     "",
+			expectedScheme:   "https",
+			expectedHost:     "proxy.example.com",
+			expectedPath:     "/gemini/v1beta/models/gemini-pro:generateContent",
+			expectedQueryKey: "my-key",
 		},
 		{
-			name:               "custom server URL with trailing slash replaces base URL",
-			serverURL:          "https://proxy.example.com/gemini/",
-			apiKey:             "my-key",
-			requestURL:         "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-			requestQuery:       "",
-			expectedScheme:     "https",
-			expectedHost:       "proxy.example.com",
-			expectedPath:       "/gemini/v1beta/models/gemini-pro:generateContent",
-			expectedQueryKey:   "my-key",
-			expectedAuthHeader: "Bearer my-key",
+			name:             "custom server URL with trailing slash replaces base URL",
+			serverURL:        "https://proxy.example.com/gemini/",
+			apiKey:           "my-key",
+			requestURL:       "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+			requestQuery:     "",
+			expectedScheme:   "https",
+			expectedHost:     "proxy.example.com",
+			expectedPath:     "/gemini/v1beta/models/gemini-pro:generateContent",
+			expectedQueryKey: "my-key",
 		},
 		{
-			name:               "preserves existing query parameters",
-			serverURL:          "https://proxy.example.com",
-			apiKey:             "api-key",
-			requestURL:         "https://generativelanguage.googleapis.com/v1/models",
-			requestQuery:       "foo=bar&baz=qux",
-			expectedScheme:     "https",
-			expectedHost:       "proxy.example.com",
-			expectedPath:       "/v1/models",
-			expectedQueryKey:   "api-key",
-			expectedAuthHeader: "Bearer api-key",
+			name:             "preserves existing query parameters",
+			serverURL:        "https://proxy.example.com",
+			apiKey:           "api-key",
+			requestURL:       "https://generativelanguage.googleapis.com/v1/models",
+			requestQuery:     "foo=bar&baz=qux",
+			expectedScheme:   "https",
+			expectedHost:     "proxy.example.com",
+			expectedPath:     "/v1/models",
+			expectedQueryKey: "api-key",
 		},
 		{
-			name:               "does not override existing API key in query",
-			serverURL:          "",
-			apiKey:             "new-key",
-			requestURL:         "https://generativelanguage.googleapis.com/v1/models",
-			requestQuery:       "key=existing-key",
-			expectedScheme:     "https",
-			expectedHost:       "generativelanguage.googleapis.com",
-			expectedPath:       "/v1/models",
-			expectedQueryKey:   "existing-key", // should keep existing
-			expectedAuthHeader: "Bearer new-key",
+			name:             "does not override existing API key in query",
+			serverURL:        "",
+			apiKey:           "new-key",
+			requestURL:       "https://generativelanguage.googleapis.com/v1/models",
+			requestQuery:     "key=existing-key",
+			expectedScheme:   "https",
+			expectedHost:     "generativelanguage.googleapis.com",
+			expectedPath:     "/v1/models",
+			expectedQueryKey: "existing-key", // should keep existing
 		},
 	}
 
@@ -267,20 +263,11 @@ func TestAPIKeyTransportRoundTrip(t *testing.T) {
 				},
 			}
 
-			// create apiKeyTransport
-			var serverURL *url.URL
-			if tt.serverURL != "" {
-				var err error
-				serverURL, err = url.Parse(tt.serverURL)
-				if err != nil {
-					t.Fatalf("Failed to parse server URL: %v", err)
-				}
-			}
-
-			transport := &apiKeyTransport{
-				wrapped:   mockRT,
-				serverURL: serverURL,
-				apiKey:    tt.apiKey,
+			transport := &httputil.ApiKeyTransport{
+				Transport: mockRT,
+				APIKey:    tt.apiKey,
+				BaseURL:   tt.serverURL,
+				ProxyURL:  "",
 			}
 
 			// create test request
@@ -319,11 +306,6 @@ func TestAPIKeyTransportRoundTrip(t *testing.T) {
 			queryKey := capturedReq.URL.Query().Get("key")
 			if queryKey != tt.expectedQueryKey {
 				t.Errorf("Expected query key %s, got %s", tt.expectedQueryKey, queryKey)
-			}
-
-			authHeader := capturedReq.Header.Get("Authorization")
-			if authHeader != tt.expectedAuthHeader {
-				t.Errorf("Expected Authorization header %s, got %s", tt.expectedAuthHeader, authHeader)
 			}
 
 			// verify original query parameters are preserved
@@ -375,10 +357,11 @@ func TestAPIKeyTransportWithMockServer(t *testing.T) {
 	}
 
 	// create transport with custom server
-	transport := &apiKeyTransport{
-		wrapped:   http.DefaultTransport,
-		serverURL: serverURL,
-		apiKey:    "test-api-key-789",
+	transport := &httputil.ApiKeyTransport{
+		Transport: http.DefaultTransport,
+		APIKey:    "test-api-key-789",
+		BaseURL:   testServer.URL,
+		ProxyURL:  "",
 	}
 
 	// create HTTP client with our transport
@@ -414,11 +397,6 @@ func TestAPIKeyTransportWithMockServer(t *testing.T) {
 	// verify API key was added
 	if key := capturedReq.URL.Query().Get("key"); key != "test-api-key-789" {
 		t.Errorf("Expected API key test-api-key-789, got %s", key)
-	}
-
-	// verify Authorization header
-	if auth := capturedReq.Header.Get("Authorization"); auth != "Bearer test-api-key-789" {
-		t.Errorf("Expected Authorization Bearer test-api-key-789, got %s", auth)
 	}
 
 	// verify original path was preserved
@@ -463,12 +441,6 @@ func TestGeminiProviderWithProxyConfiguration(t *testing.T) {
 			name:      "invalid server URL",
 			proxyURL:  "",
 			serverURL: "://invalid-url",
-			wantErr:   true,
-		},
-		{
-			name:      "invalid proxy URL",
-			proxyURL:  "://invalid-url",
-			serverURL: "https://generativelanguage.googleapis.com",
 			wantErr:   true,
 		},
 	}

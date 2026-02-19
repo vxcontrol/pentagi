@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 )
 
 const createMsgChain = `-- name: CreateMsgChain :one
@@ -18,26 +19,36 @@ INSERT INTO msgchains (
   model_provider,
   usage_in,
   usage_out,
+  usage_cache_in,
+  usage_cache_out,
+  usage_cost_in,
+  usage_cost_out,
+  duration_seconds,
   chain,
   flow_id,
   task_id,
   subtask_id
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
-RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at
+RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at, usage_cache_in, usage_cache_out, usage_cost_in, usage_cost_out, duration_seconds
 `
 
 type CreateMsgChainParams struct {
-	Type          MsgchainType    `json:"type"`
-	Model         string          `json:"model"`
-	ModelProvider string          `json:"model_provider"`
-	UsageIn       int64           `json:"usage_in"`
-	UsageOut      int64           `json:"usage_out"`
-	Chain         json.RawMessage `json:"chain"`
-	FlowID        int64           `json:"flow_id"`
-	TaskID        sql.NullInt64   `json:"task_id"`
-	SubtaskID     sql.NullInt64   `json:"subtask_id"`
+	Type            MsgchainType    `json:"type"`
+	Model           string          `json:"model"`
+	ModelProvider   string          `json:"model_provider"`
+	UsageIn         int64           `json:"usage_in"`
+	UsageOut        int64           `json:"usage_out"`
+	UsageCacheIn    int64           `json:"usage_cache_in"`
+	UsageCacheOut   int64           `json:"usage_cache_out"`
+	UsageCostIn     float64         `json:"usage_cost_in"`
+	UsageCostOut    float64         `json:"usage_cost_out"`
+	DurationSeconds float64         `json:"duration_seconds"`
+	Chain           json.RawMessage `json:"chain"`
+	FlowID          int64           `json:"flow_id"`
+	TaskID          sql.NullInt64   `json:"task_id"`
+	SubtaskID       sql.NullInt64   `json:"subtask_id"`
 }
 
 func (q *Queries) CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) (Msgchain, error) {
@@ -47,6 +58,11 @@ func (q *Queries) CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) 
 		arg.ModelProvider,
 		arg.UsageIn,
 		arg.UsageOut,
+		arg.UsageCacheIn,
+		arg.UsageCacheOut,
+		arg.UsageCostIn,
+		arg.UsageCostOut,
+		arg.DurationSeconds,
 		arg.Chain,
 		arg.FlowID,
 		arg.TaskID,
@@ -66,13 +82,77 @@ func (q *Queries) CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) 
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UsageCacheIn,
+		&i.UsageCacheOut,
+		&i.UsageCostIn,
+		&i.UsageCostOut,
+		&i.DurationSeconds,
 	)
 	return i, err
 }
 
+const getAllFlowsUsageStats = `-- name: GetAllFlowsUsageStats :many
+SELECT
+  COALESCE(mc.flow_id, t.flow_id) AS flow_id,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE f.deleted_at IS NULL
+GROUP BY COALESCE(mc.flow_id, t.flow_id)
+ORDER BY COALESCE(mc.flow_id, t.flow_id)
+`
+
+type GetAllFlowsUsageStatsRow struct {
+	FlowID             int64   `json:"flow_id"`
+	TotalUsageIn       int64   `json:"total_usage_in"`
+	TotalUsageOut      int64   `json:"total_usage_out"`
+	TotalUsageCacheIn  int64   `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64   `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64 `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64 `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetAllFlowsUsageStats(ctx context.Context) ([]GetAllFlowsUsageStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllFlowsUsageStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAllFlowsUsageStatsRow
+	for rows.Next() {
+		var i GetAllFlowsUsageStatsRow
+		if err := rows.Scan(
+			&i.FlowID,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFlowMsgChains = `-- name: GetFlowMsgChains :many
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 LEFT JOIN subtasks s ON mc.subtask_id = s.id
 LEFT JOIN tasks t ON s.task_id = t.id
@@ -102,6 +182,11 @@ func (q *Queries) GetFlowMsgChains(ctx context.Context, flowID int64) ([]Msgchai
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UsageCacheIn,
+			&i.UsageCacheOut,
+			&i.UsageCostIn,
+			&i.UsageCostOut,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -118,7 +203,7 @@ func (q *Queries) GetFlowMsgChains(ctx context.Context, flowID int64) ([]Msgchai
 
 const getFlowTaskTypeLastMsgChain = `-- name: GetFlowTaskTypeLastMsgChain :one
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 WHERE mc.flow_id = $1 AND (mc.task_id = $2 OR $2 IS NULL) AND mc.type = $3
 ORDER BY mc.created_at DESC
@@ -147,13 +232,18 @@ func (q *Queries) GetFlowTaskTypeLastMsgChain(ctx context.Context, arg GetFlowTa
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UsageCacheIn,
+		&i.UsageCacheOut,
+		&i.UsageCostIn,
+		&i.UsageCostOut,
+		&i.DurationSeconds,
 	)
 	return i, err
 }
 
 const getFlowTypeMsgChains = `-- name: GetFlowTypeMsgChains :many
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 LEFT JOIN subtasks s ON mc.subtask_id = s.id
 LEFT JOIN tasks t ON s.task_id = t.id
@@ -188,6 +278,11 @@ func (q *Queries) GetFlowTypeMsgChains(ctx context.Context, arg GetFlowTypeMsgCh
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UsageCacheIn,
+			&i.UsageCacheOut,
+			&i.UsageCostIn,
+			&i.UsageCostOut,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -202,9 +297,47 @@ func (q *Queries) GetFlowTypeMsgChains(ctx context.Context, arg GetFlowTypeMsgCh
 	return items, nil
 }
 
+const getFlowUsageStats = `-- name: GetFlowUsageStats :one
+SELECT
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+`
+
+type GetFlowUsageStatsRow struct {
+	TotalUsageIn       int64   `json:"total_usage_in"`
+	TotalUsageOut      int64   `json:"total_usage_out"`
+	TotalUsageCacheIn  int64   `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64   `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64 `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64 `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetFlowUsageStats(ctx context.Context, flowID int64) (GetFlowUsageStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getFlowUsageStats, flowID)
+	var i GetFlowUsageStatsRow
+	err := row.Scan(
+		&i.TotalUsageIn,
+		&i.TotalUsageOut,
+		&i.TotalUsageCacheIn,
+		&i.TotalUsageCacheOut,
+		&i.TotalUsageCostIn,
+		&i.TotalUsageCostOut,
+	)
+	return i, err
+}
+
 const getMsgChain = `-- name: GetMsgChain :one
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 WHERE mc.id = $1
 `
@@ -225,13 +358,18 @@ func (q *Queries) GetMsgChain(ctx context.Context, id int64) (Msgchain, error) {
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UsageCacheIn,
+		&i.UsageCacheOut,
+		&i.UsageCostIn,
+		&i.UsageCostOut,
+		&i.DurationSeconds,
 	)
 	return i, err
 }
 
 const getSubtaskMsgChains = `-- name: GetSubtaskMsgChains :many
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 WHERE mc.subtask_id = $1
 ORDER BY mc.created_at DESC
@@ -259,6 +397,11 @@ func (q *Queries) GetSubtaskMsgChains(ctx context.Context, subtaskID sql.NullInt
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UsageCacheIn,
+			&i.UsageCacheOut,
+			&i.UsageCostIn,
+			&i.UsageCostOut,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -275,7 +418,7 @@ func (q *Queries) GetSubtaskMsgChains(ctx context.Context, subtaskID sql.NullInt
 
 const getSubtaskPrimaryMsgChains = `-- name: GetSubtaskPrimaryMsgChains :many
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 WHERE mc.subtask_id = $1 AND mc.type = 'primary_agent'
 ORDER BY mc.created_at DESC
@@ -303,6 +446,11 @@ func (q *Queries) GetSubtaskPrimaryMsgChains(ctx context.Context, subtaskID sql.
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UsageCacheIn,
+			&i.UsageCacheOut,
+			&i.UsageCostIn,
+			&i.UsageCostOut,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -319,7 +467,7 @@ func (q *Queries) GetSubtaskPrimaryMsgChains(ctx context.Context, subtaskID sql.
 
 const getSubtaskTypeMsgChains = `-- name: GetSubtaskTypeMsgChains :many
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 WHERE mc.subtask_id = $1 AND mc.type = $2
 ORDER BY mc.created_at DESC
@@ -352,6 +500,11 @@ func (q *Queries) GetSubtaskTypeMsgChains(ctx context.Context, arg GetSubtaskTyp
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UsageCacheIn,
+			&i.UsageCacheOut,
+			&i.UsageCostIn,
+			&i.UsageCostOut,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -366,9 +519,47 @@ func (q *Queries) GetSubtaskTypeMsgChains(ctx context.Context, arg GetSubtaskTyp
 	return items, nil
 }
 
+const getSubtaskUsageStats = `-- name: GetSubtaskUsageStats :one
+SELECT
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE mc.subtask_id = $1 AND f.deleted_at IS NULL
+`
+
+type GetSubtaskUsageStatsRow struct {
+	TotalUsageIn       int64   `json:"total_usage_in"`
+	TotalUsageOut      int64   `json:"total_usage_out"`
+	TotalUsageCacheIn  int64   `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64   `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64 `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64 `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetSubtaskUsageStats(ctx context.Context, subtaskID sql.NullInt64) (GetSubtaskUsageStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getSubtaskUsageStats, subtaskID)
+	var i GetSubtaskUsageStatsRow
+	err := row.Scan(
+		&i.TotalUsageIn,
+		&i.TotalUsageOut,
+		&i.TotalUsageCacheIn,
+		&i.TotalUsageCacheOut,
+		&i.TotalUsageCostIn,
+		&i.TotalUsageCostOut,
+	)
+	return i, err
+}
+
 const getTaskMsgChains = `-- name: GetTaskMsgChains :many
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 LEFT JOIN subtasks s ON mc.subtask_id = s.id
 WHERE mc.task_id = $1 OR s.task_id = $1
@@ -397,6 +588,11 @@ func (q *Queries) GetTaskMsgChains(ctx context.Context, taskID sql.NullInt64) ([
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UsageCacheIn,
+			&i.UsageCacheOut,
+			&i.UsageCostIn,
+			&i.UsageCostOut,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -450,7 +646,7 @@ func (q *Queries) GetTaskPrimaryMsgChainIDs(ctx context.Context, taskID sql.Null
 
 const getTaskPrimaryMsgChains = `-- name: GetTaskPrimaryMsgChains :many
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 LEFT JOIN subtasks s ON mc.subtask_id = s.id
 WHERE (mc.task_id = $1 OR s.task_id = $1) AND mc.type = 'primary_agent'
@@ -479,6 +675,11 @@ func (q *Queries) GetTaskPrimaryMsgChains(ctx context.Context, taskID sql.NullIn
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UsageCacheIn,
+			&i.UsageCacheOut,
+			&i.UsageCostIn,
+			&i.UsageCostOut,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -495,7 +696,7 @@ func (q *Queries) GetTaskPrimaryMsgChains(ctx context.Context, taskID sql.NullIn
 
 const getTaskTypeMsgChains = `-- name: GetTaskTypeMsgChains :many
 SELECT
-  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
 FROM msgchains mc
 LEFT JOIN subtasks s ON mc.subtask_id = s.id
 WHERE (mc.task_id = $1 OR s.task_id = $1) AND mc.type = $2
@@ -529,6 +730,11 @@ func (q *Queries) GetTaskTypeMsgChains(ctx context.Context, arg GetTaskTypeMsgCh
 			&i.SubtaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UsageCacheIn,
+			&i.UsageCacheOut,
+			&i.UsageCostIn,
+			&i.UsageCostOut,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -543,20 +749,513 @@ func (q *Queries) GetTaskTypeMsgChains(ctx context.Context, arg GetTaskTypeMsgCh
 	return items, nil
 }
 
+const getTaskUsageStats = `-- name: GetTaskUsageStats :one
+SELECT
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON mc.task_id = t.id OR s.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE (mc.task_id = $1 OR s.task_id = $1) AND f.deleted_at IS NULL
+`
+
+type GetTaskUsageStatsRow struct {
+	TotalUsageIn       int64   `json:"total_usage_in"`
+	TotalUsageOut      int64   `json:"total_usage_out"`
+	TotalUsageCacheIn  int64   `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64   `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64 `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64 `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetTaskUsageStats(ctx context.Context, taskID sql.NullInt64) (GetTaskUsageStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getTaskUsageStats, taskID)
+	var i GetTaskUsageStatsRow
+	err := row.Scan(
+		&i.TotalUsageIn,
+		&i.TotalUsageOut,
+		&i.TotalUsageCacheIn,
+		&i.TotalUsageCacheOut,
+		&i.TotalUsageCostIn,
+		&i.TotalUsageCostOut,
+	)
+	return i, err
+}
+
+const getUsageStatsByDayLast3Months = `-- name: GetUsageStatsByDayLast3Months :many
+SELECT
+  DATE(mc.created_at) AS date,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE mc.created_at >= NOW() - INTERVAL '90 days' AND f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY DATE(mc.created_at)
+ORDER BY date DESC
+`
+
+type GetUsageStatsByDayLast3MonthsRow struct {
+	Date               time.Time `json:"date"`
+	TotalUsageIn       int64     `json:"total_usage_in"`
+	TotalUsageOut      int64     `json:"total_usage_out"`
+	TotalUsageCacheIn  int64     `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64     `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64   `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64   `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUsageStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetUsageStatsByDayLast3MonthsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByDayLast3Months, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageStatsByDayLast3MonthsRow
+	for rows.Next() {
+		var i GetUsageStatsByDayLast3MonthsRow
+		if err := rows.Scan(
+			&i.Date,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageStatsByDayLastMonth = `-- name: GetUsageStatsByDayLastMonth :many
+SELECT
+  DATE(mc.created_at) AS date,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE mc.created_at >= NOW() - INTERVAL '30 days' AND f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY DATE(mc.created_at)
+ORDER BY date DESC
+`
+
+type GetUsageStatsByDayLastMonthRow struct {
+	Date               time.Time `json:"date"`
+	TotalUsageIn       int64     `json:"total_usage_in"`
+	TotalUsageOut      int64     `json:"total_usage_out"`
+	TotalUsageCacheIn  int64     `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64     `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64   `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64   `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUsageStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastMonthRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByDayLastMonth, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageStatsByDayLastMonthRow
+	for rows.Next() {
+		var i GetUsageStatsByDayLastMonthRow
+		if err := rows.Scan(
+			&i.Date,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageStatsByDayLastWeek = `-- name: GetUsageStatsByDayLastWeek :many
+SELECT
+  DATE(mc.created_at) AS date,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE mc.created_at >= NOW() - INTERVAL '7 days' AND f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY DATE(mc.created_at)
+ORDER BY date DESC
+`
+
+type GetUsageStatsByDayLastWeekRow struct {
+	Date               time.Time `json:"date"`
+	TotalUsageIn       int64     `json:"total_usage_in"`
+	TotalUsageOut      int64     `json:"total_usage_out"`
+	TotalUsageCacheIn  int64     `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64     `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64   `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64   `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUsageStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastWeekRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByDayLastWeek, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageStatsByDayLastWeekRow
+	for rows.Next() {
+		var i GetUsageStatsByDayLastWeekRow
+		if err := rows.Scan(
+			&i.Date,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageStatsByModel = `-- name: GetUsageStatsByModel :many
+SELECT
+  mc.model,
+  mc.model_provider,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY mc.model, mc.model_provider
+ORDER BY mc.model, mc.model_provider
+`
+
+type GetUsageStatsByModelRow struct {
+	Model              string  `json:"model"`
+	ModelProvider      string  `json:"model_provider"`
+	TotalUsageIn       int64   `json:"total_usage_in"`
+	TotalUsageOut      int64   `json:"total_usage_out"`
+	TotalUsageCacheIn  int64   `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64   `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64 `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64 `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUsageStatsByModel(ctx context.Context, userID int64) ([]GetUsageStatsByModelRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByModel, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageStatsByModelRow
+	for rows.Next() {
+		var i GetUsageStatsByModelRow
+		if err := rows.Scan(
+			&i.Model,
+			&i.ModelProvider,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageStatsByProvider = `-- name: GetUsageStatsByProvider :many
+SELECT
+  mc.model_provider,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY mc.model_provider
+ORDER BY mc.model_provider
+`
+
+type GetUsageStatsByProviderRow struct {
+	ModelProvider      string  `json:"model_provider"`
+	TotalUsageIn       int64   `json:"total_usage_in"`
+	TotalUsageOut      int64   `json:"total_usage_out"`
+	TotalUsageCacheIn  int64   `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64   `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64 `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64 `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUsageStatsByProvider(ctx context.Context, userID int64) ([]GetUsageStatsByProviderRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByProvider, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageStatsByProviderRow
+	for rows.Next() {
+		var i GetUsageStatsByProviderRow
+		if err := rows.Scan(
+			&i.ModelProvider,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageStatsByType = `-- name: GetUsageStatsByType :many
+SELECT
+  mc.type,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE f.deleted_at IS NULL AND f.user_id = $1
+GROUP BY mc.type
+ORDER BY mc.type
+`
+
+type GetUsageStatsByTypeRow struct {
+	Type               MsgchainType `json:"type"`
+	TotalUsageIn       int64        `json:"total_usage_in"`
+	TotalUsageOut      int64        `json:"total_usage_out"`
+	TotalUsageCacheIn  int64        `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64        `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64      `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64      `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUsageStatsByType(ctx context.Context, userID int64) ([]GetUsageStatsByTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByType, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageStatsByTypeRow
+	for rows.Next() {
+		var i GetUsageStatsByTypeRow
+		if err := rows.Scan(
+			&i.Type,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageStatsByTypeForFlow = `-- name: GetUsageStatsByTypeForFlow :many
+SELECT
+  mc.type,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+GROUP BY mc.type
+ORDER BY mc.type
+`
+
+type GetUsageStatsByTypeForFlowRow struct {
+	Type               MsgchainType `json:"type"`
+	TotalUsageIn       int64        `json:"total_usage_in"`
+	TotalUsageOut      int64        `json:"total_usage_out"`
+	TotalUsageCacheIn  int64        `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64        `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64      `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64      `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUsageStatsByTypeForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByTypeForFlowRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByTypeForFlow, flowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageStatsByTypeForFlowRow
+	for rows.Next() {
+		var i GetUsageStatsByTypeForFlowRow
+		if err := rows.Scan(
+			&i.Type,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserTotalUsageStats = `-- name: GetUserTotalUsageStats :one
+SELECT
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE f.deleted_at IS NULL AND f.user_id = $1
+`
+
+type GetUserTotalUsageStatsRow struct {
+	TotalUsageIn       int64   `json:"total_usage_in"`
+	TotalUsageOut      int64   `json:"total_usage_out"`
+	TotalUsageCacheIn  int64   `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64   `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64 `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64 `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUserTotalUsageStats(ctx context.Context, userID int64) (GetUserTotalUsageStatsRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserTotalUsageStats, userID)
+	var i GetUserTotalUsageStatsRow
+	err := row.Scan(
+		&i.TotalUsageIn,
+		&i.TotalUsageOut,
+		&i.TotalUsageCacheIn,
+		&i.TotalUsageCacheOut,
+		&i.TotalUsageCostIn,
+		&i.TotalUsageCostOut,
+	)
+	return i, err
+}
+
 const updateMsgChain = `-- name: UpdateMsgChain :one
 UPDATE msgchains
-SET chain = $1
-WHERE id = $2
-RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at
+SET chain = $1, duration_seconds = duration_seconds + $2
+WHERE id = $3
+RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at, usage_cache_in, usage_cache_out, usage_cost_in, usage_cost_out, duration_seconds
 `
 
 type UpdateMsgChainParams struct {
-	Chain json.RawMessage `json:"chain"`
-	ID    int64           `json:"id"`
+	Chain           json.RawMessage `json:"chain"`
+	DurationSeconds float64         `json:"duration_seconds"`
+	ID              int64           `json:"id"`
 }
 
 func (q *Queries) UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error) {
-	row := q.db.QueryRowContext(ctx, updateMsgChain, arg.Chain, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateMsgChain, arg.Chain, arg.DurationSeconds, arg.ID)
 	var i Msgchain
 	err := row.Scan(
 		&i.ID,
@@ -571,25 +1270,51 @@ func (q *Queries) UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) 
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UsageCacheIn,
+		&i.UsageCacheOut,
+		&i.UsageCostIn,
+		&i.UsageCostOut,
+		&i.DurationSeconds,
 	)
 	return i, err
 }
 
 const updateMsgChainUsage = `-- name: UpdateMsgChainUsage :one
 UPDATE msgchains
-SET usage_in = usage_in + $1, usage_out = usage_out + $2
-WHERE id = $3
-RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at
+SET 
+  usage_in = usage_in + $1, 
+  usage_out = usage_out + $2,
+  usage_cache_in = usage_cache_in + $3,
+  usage_cache_out = usage_cache_out + $4,
+  usage_cost_in = usage_cost_in + $5,
+  usage_cost_out = usage_cost_out + $6,
+  duration_seconds = duration_seconds + $7
+WHERE id = $8
+RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at, usage_cache_in, usage_cache_out, usage_cost_in, usage_cost_out, duration_seconds
 `
 
 type UpdateMsgChainUsageParams struct {
-	UsageIn  int64 `json:"usage_in"`
-	UsageOut int64 `json:"usage_out"`
-	ID       int64 `json:"id"`
+	UsageIn         int64   `json:"usage_in"`
+	UsageOut        int64   `json:"usage_out"`
+	UsageCacheIn    int64   `json:"usage_cache_in"`
+	UsageCacheOut   int64   `json:"usage_cache_out"`
+	UsageCostIn     float64 `json:"usage_cost_in"`
+	UsageCostOut    float64 `json:"usage_cost_out"`
+	DurationSeconds float64 `json:"duration_seconds"`
+	ID              int64   `json:"id"`
 }
 
 func (q *Queries) UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsageParams) (Msgchain, error) {
-	row := q.db.QueryRowContext(ctx, updateMsgChainUsage, arg.UsageIn, arg.UsageOut, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateMsgChainUsage,
+		arg.UsageIn,
+		arg.UsageOut,
+		arg.UsageCacheIn,
+		arg.UsageCacheOut,
+		arg.UsageCostIn,
+		arg.UsageCostOut,
+		arg.DurationSeconds,
+		arg.ID,
+	)
 	var i Msgchain
 	err := row.Scan(
 		&i.ID,
@@ -604,6 +1329,11 @@ func (q *Queries) UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsa
 		&i.SubtaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UsageCacheIn,
+		&i.UsageCacheOut,
+		&i.UsageCostIn,
+		&i.UsageCostOut,
+		&i.DurationSeconds,
 	)
 	return i, err
 }

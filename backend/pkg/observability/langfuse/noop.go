@@ -30,7 +30,7 @@ func (o *noopObserver) NewObservation(
 				obsCtx.ObservationID = parentObsCtx.ObservationID
 			}
 		} else {
-			obsCtx.TraceID = newID()
+			obsCtx.TraceID = newTraceID()
 		}
 	}
 

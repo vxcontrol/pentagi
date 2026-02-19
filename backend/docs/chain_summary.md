@@ -9,11 +9,14 @@
   - [Fundamental Concepts](#fundamental-concepts)
     - [ChainAST Structure with Size Tracking](#chainast-structure-with-size-tracking)
     - [ChainAST Construction Process](#chainast-construction-process)
+    - [Tool Call ID Normalization](#tool-call-id-normalization)
+    - [Reasoning Content Cleanup](#reasoning-content-cleanup)
     - [Summarization Types](#summarization-types)
   - [Configuration Parameters](#configuration-parameters)
   - [Algorithm Operation](#algorithm-operation)
   - [Key Algorithm Components](#key-algorithm-components)
     - [1. Section Summarization](#1-section-summarization)
+      - [Reasoning Signature Handling](#reasoning-signature-handling)
     - [2. Individual Body Pair Size Management](#2-individual-body-pair-size-management)
     - [3. Last Section Rotation](#3-last-section-rotation)
     - [4. QA Pair Management](#4-qa-pair-management)
@@ -34,12 +37,14 @@ The Enhanced Chain Summarization Algorithm manages context growth in conversatio
 Key features of the enhanced algorithm:
 
 - **Size-aware processing** - Tracks byte size of all content to make optimal retention decisions
-- **Section summarization** - Ensures all sections except the last ones consist of a header and a single body pair
+- **Section summarization** - Ensures all sections except the last `KeepQASections` ones consist of a header and a single body pair
 - **Last section rotation** - Intelligently manages active conversation sections with size limits
-- **QA pair summarization** - Focuses on question-answer sections when enabled
+- **QA pair summarization** - Focuses on question-answer sections when enabled, **preserving last `KeepQASections` sections unconditionally**
 - **Body pair type preservation** - Maintains appropriate type for summarized content based on original types
-- **Keep QA Sections** - Preserves a configurable number of recent QA sections without summarization
+- **Keep QA Sections** - Preserves a configurable number of recent QA sections without summarization, **even if they exceed `MaxQABytes`** (critical for agent state preservation)
 - **Concurrent processing** - Uses goroutines for efficient parallel summarization of sections and body pairs
+- **Idempotent operation** - Multiple consecutive calls do not modify already summarized content
+- **Last BodyPair protection** - The last BodyPair in a section is never summarized to preserve reasoning signatures
 
 ## Architectural Overview
 
@@ -162,6 +167,134 @@ flowchart TD
     K --> L[Return Populated ChainAST]
 ```
 
+The ChainAST construction process analyzes the roles and types of messages in the chain, grouping them into logical sections with headers and body pairs.
+
+### Tool Call ID Normalization
+
+When switching between different LLM providers (e.g., from Gemini to Anthropic), tool call IDs may have different formats that are incompatible with the new provider's API. The `NormalizeToolCallIDs` method addresses this by validating and replacing incompatible IDs:
+
+```mermaid
+flowchart TD
+    A[ChainAST with Tool Calls] --> B[Iterate Through Sections]
+    B --> C{Has RequestResponse or\nSummarization?}
+    C -->|No| D[Skip Section]
+    C -->|Yes| E[Extract Tool Call IDs]
+    E --> F{Validate ID Against\nNew Template}
+    F -->|Valid| G[Keep Existing ID]
+    F -->|Invalid| H[Generate New ID]
+    H --> I[Create ID Mapping]
+    I --> J[Update Tool Call ID]
+    J --> K[Update Corresponding\nTool Response IDs]
+    G --> L[Continue to Next]
+    K --> L
+    D --> L
+    L --> M{More Sections?}
+    M -->|Yes| B
+    M -->|No| N[Return Normalized AST]
+```
+
+The normalization process:
+1. **Validates** each tool call ID against the new provider's template using `ValidatePattern`
+2. **Generates** new IDs only for those that don't match the template
+3. **Preserves** IDs that already match to avoid unnecessary changes
+4. **Updates** both tool calls and their corresponding responses to maintain consistency
+5. **Supports** all body pair types: RequestResponse and Summarization
+
+**Example Usage:**
+
+```go
+// After restoring a chain that may contain tool calls from a different provider
+ast, err := cast.NewChainAST(chain, true)
+if err != nil {
+    return err
+}
+
+// Normalize to new provider's format (e.g., from "call_*" to "toolu_*")
+err = ast.NormalizeToolCallIDs("toolu_{r:24:b}")
+if err != nil {
+    return err
+}
+
+// Chain now has compatible tool call IDs
+normalizedChain := ast.Messages()
+```
+
+**Template Format Examples:**
+
+| Provider | Template Format | Example ID |
+|----------|----------------|------------|
+| OpenAI/Gemini | `call_{r:24:x}` | `call_abc123def456ghi789jkl` |
+| Anthropic | `toolu_{r:24:b}` | `toolu_A1b2C3d4E5f6G7h8I9j0K1l2` |
+| Custom | `{prefix}_{r:N:charset}` | Defined per provider |
+
+This feature is critical for assistant providers that may switch between different LLM providers while maintaining conversation history.
+
+### Reasoning Content Cleanup
+
+When switching between providers, reasoning content must also be cleared because it contains provider-specific data:
+
+```mermaid
+flowchart TD
+    A[ChainAST with Reasoning] --> B[Iterate Through Sections]
+    B --> C[Process Header Messages]
+    C --> D[Clear SystemMessage Reasoning]
+    D --> E[Clear HumanMessage Reasoning]
+    E --> F[Process Body Pairs]
+    F --> G[Clear AI Message Reasoning]
+    G --> H[Clear Tool Messages Reasoning]
+    H --> I{More Sections?}
+    I -->|Yes| B
+    I -->|No| J[Return Cleaned AST]
+```
+
+The cleanup process:
+1. **Iterates** through all sections, headers, and body pairs
+2. **Clears** `Reasoning` field from `TextContent` parts
+3. **Clears** `Reasoning` field from `ToolCall` parts
+4. **Preserves** all other content (text, arguments, function names, etc.)
+
+**Why this is needed:**
+- Reasoning content includes cryptographic signatures (especially Anthropic's extended thinking)
+- These signatures are validated by the provider and will fail if sent to a different provider
+- Reasoning blocks may contain provider-specific metadata
+
+**Example Usage:**
+
+```go
+// After restoring and normalizing a chain
+ast, err := cast.NewChainAST(chain, true)
+if err != nil {
+    return err
+}
+
+// First normalize tool call IDs
+err = ast.NormalizeToolCallIDs(newTemplate)
+if err != nil {
+    return err
+}
+
+// Then clear provider-specific reasoning
+err = ast.ClearReasoning()
+if err != nil {
+    return err
+}
+
+// Chain is now safe to use with the new provider
+cleanedChain := ast.Messages()
+```
+
+**What gets cleared:**
+- `TextContent.Reasoning` - Extended thinking signatures and content
+- `ToolCall.Reasoning` - Per-tool reasoning (used by some providers)
+
+**What stays preserved:**
+- All text content
+- Tool call IDs (after normalization)
+- Function names and arguments
+- Tool responses
+
+This operation is automatically performed in `restoreChain()` when switching providers, ensuring compatibility across different LLM providers.
+
 ### Summarization Types
 
 The algorithm supports three types of summarization:
@@ -199,7 +332,7 @@ These parameters have default values defined as constants:
 | Max QA byte size | `MaxQABytes` | `maxQAPairByteSize` | 64 KB | Maximum size for QA sections |
 | Summarize human in QA | `SummHumanInQA` | `summarizeHumanMessagesInQAPairs` | false | Whether to summarize human messages in QA pairs |
 | Last section reserve percentage | N/A | `lastSectionReservePercentage` | 25% | Percentage of section size to reserve for future messages |
-| Keep QA sections | `KeepQASections` | `keepMinLastQASections` | 1 | Number of most recent QA sections to preserve without summarization |
+| Keep QA sections | `KeepQASections` | `keepMinLastQASections` | 1 | Number of most recent QA sections to preserve without summarization, even if they exceed MaxQABytes |
 
 ## Algorithm Operation
 
@@ -208,8 +341,13 @@ The enhanced algorithm operates in these sequential phases:
 1. Convert input chain to ChainAST with size tracking
 2. Apply section summarization to all sections except the last `KeepQASections` sections (with concurrent processing)
 3. Apply last section rotation to multiple recent sections if enabled and size limits are exceeded
-4. Apply QA pair summarization if enabled and limits are exceeded
+4. Apply QA pair summarization if enabled and limits are exceeded, **preserving the last `KeepQASections` sections**
 5. Return the modified chain if it saves space
+
+**Critical Guarantees:**
+- The last `KeepQASections` sections are **NEVER** summarized by section or QA summarization, even if they exceed `MaxQABytes`
+- The last BodyPair in a section is **NEVER** summarized by `summarizeOversizedBodyPairs` or `summarizeLastSection` to preserve reasoning signatures
+- **Idempotent**: calling `SummarizeChain` multiple times on already summarized content does not change it further
 
 The primary algorithm is implemented through the `Summarizer` interface in the `pentagi/pkg/csum` package:
 
@@ -297,7 +435,7 @@ func (s *summarizer) SummarizeChain(
 
     // 2. QA-pair summarization - focus on question-answer sections
     if cfg.UseQA {
-        err = summarizeQAPairs(ctx, ast, handler, cfg.MaxQASections, cfg.MaxQABytes, cfg.SummHumanInQA)
+        err = summarizeQAPairs(ctx, ast, handler, cfg.KeepQASections, cfg.MaxQASections, cfg.MaxQABytes, cfg.SummHumanInQA)
         if err != nil {
             return chain, fmt.Errorf("failed to summarize QA pairs: %w", err)
         }
@@ -437,15 +575,57 @@ func determineTypeToSummarizedSection(section *cast.ChainSection) cast.BodyPairT
 }
 ```
 
+#### Reasoning Signature Handling
+
+When summarizing content that originally contained reasoning, the algorithm:
+
+1. **Detects ToolCall Reasoning**: Uses `cast.ContainsToolCallReasoning()` to check if messages contain reasoning in ToolCall parts (NOT TextContent)
+2. **Extracts TextContent Reasoning**: Uses `cast.ExtractReasoningMessage()` to preserve reasoning TextContent for providers like Kimi/Moonshot
+3. **Adds Fake Signatures**: Adds a fake signature to the summarized ToolCall if ToolCall reasoning was present
+4. **Preserves Reasoning Message**: Prepends reasoning TextContent before ToolCall in the summarized content
+5. **Provider Compatibility**: Ensures the summarized chain remains compatible with all provider APIs
+
+```go
+// Check if the original pair contained reasoning signatures in ToolCall parts
+addFakeSignature := cast.ContainsToolCallReasoning(pairMessages)
+
+// Extract reasoning message for Kimi/Moonshot compatibility
+reasoningMsg := cast.ExtractReasoningMessage(pairMessages)
+
+// Create summarization with conditional fake signature AND preserved reasoning
+bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature, reasoningMsg)
+```
+
+**Why this is needed:**
+
+- **Gemini**: Validates `thought_signature` presence for function calls in the current turn. Removing signatures would cause 400 errors: "Function call is missing a thought_signature". Fake signatures satisfy the API validation.
+- **Kimi/Moonshot**: Requires `reasoning_content` in TextContent before ToolCall when thinking is enabled. Without it: "thinking is enabled but reasoning_content is missing". Preserving reasoning message satisfies this requirement.
+- **Anthropic**: Extended thinking with cryptographic signatures, automatically removed from previous turns.
+
+**Important:** This reasoning preservation is **only applied to current turn** (last section). Previous turns are summarized without fake signatures to save tokens, as they are not validated by provider APIs.
+
 ### 2. Individual Body Pair Size Management
 
 Before handling the overall last section size, manage individual oversized body pairs:
+
+**CRITICAL PRESERVATION RULES**:
+
+1. **Never Summarize Last Pair**: The last (most recent) body pair in a section is **NEVER** summarized to preserve reasoning signatures required by providers like Gemini (thought_signature) and Anthropic (cryptographic signatures). Summarizing the last pair would remove these signatures and cause API errors.
+
+2. **Preserve Reasoning Requirements**: When summarizing body pairs that contain reasoning signatures:
+   - The algorithm checks if the original content contained reasoning using `cast.ContainsReasoning()`
+   - If reasoning was present, a fake signature is added to the summarized content
+   - For Gemini: uses `"skip_thought_signature_validator"`
+   - This ensures API compatibility when the chain continues with the same provider
 
 ```mermaid
 flowchart TD
     A[Start with Section's Body Pairs] --> B[Initialize concurrent processing]
     B --> C[For each body pair]
-    C --> D{Is pair oversized AND\nnot already summarized?}
+    C --> CA{Is this the\nlast body pair?}
+    CA -->|Yes| CB[SKIP - Never summarize last pair]
+    CA -->|No| D{Is pair oversized AND\nnot already summarized?}
+    CB --> C
     D -->|Yes| E[Start goroutine for pair processing]
     D -->|No| C
     E --> F[Get messages from pair]
@@ -472,20 +652,27 @@ func summarizeOversizedBodyPairs(
     section *cast.ChainSection,
     handler tools.SummarizeHandler,
     maxBodyPairBytes int,
+    tcIDTemplate string,
 ) error {
     if len(section.Body) == 0 {
         return nil
     }
 
     // Concurrent processing of body pairs summarization
+    // CRITICAL: Never summarize the last body pair to preserve reasoning signatures
     mx := sync.Mutex{}
     wg := sync.WaitGroup{}
 
     // Map of body pairs that have been summarized
     bodyPairsSummarized := make(map[int]*cast.BodyPair)
 
-    // Process each body pair
+    // Process each body pair EXCEPT the last one
     for i, pair := range section.Body {
+        // Always skip the last body pair to preserve reasoning signatures
+        if i == len(section.Body)-1 {
+            continue
+        }
+
         // Skip pairs that are already summarized content or under the size limit
         if pair.Size() <= maxBodyPairBytes || containsSummarizedContent(pair) {
             continue
@@ -546,6 +733,11 @@ func summarizeOversizedBodyPairs(
 ### 3. Last Section Rotation
 
 For the specified section (which can be any of the last N sections in the active conversation), when it exceeds size limits:
+
+**CRITICAL PRESERVATION RULE**: The last (most recent) body pair in a section is **ALWAYS** kept without summarization. This ensures:
+1. **Reasoning signatures** (Gemini's thought_signature, Anthropic's cryptographic signatures) are preserved
+2. **Latest tool calls** maintain their complete context including thinking content
+3. **API compatibility** when the chain continues with the same provider
 
 ```mermaid
 flowchart TD
@@ -683,7 +875,10 @@ func determineLastSectionPairs(
 
 ### 4. QA Pair Management
 
-When QA pair summarization is enabled:
+When QA pair summarization is enabled, the algorithm **preserves the last `KeepQASections` sections** without summarization, even if they exceed `MaxQABytes`. This ensures that:
+- Recent reasoning blocks are preserved for AI agent continuation
+- Tool calls in the most recent sections maintain their full context
+- Agent state remains intact for multi-turn conversations
 
 ```mermaid
 flowchart TD
@@ -717,6 +912,7 @@ func summarizeQAPairs(
     ctx context.Context,
     ast *cast.ChainAST,
     handler tools.SummarizeHandler,
+    keepQASections int,  // CRITICAL: Number of recent sections to keep unconditionally
     maxQASections int,
     maxQABytes int,
     summarizeHuman bool,
@@ -1126,8 +1322,10 @@ for _, msg := range newChain {
 | Last section over size limit | Create a new section with summary pair followed by recent pairs |
 | QA pairs over limit | Create summary section and keep most recent sections |
 | KeepQASections larger than number of sections | No summarization performed, preserves all sections |
+| Last KeepQASections sections exceed MaxQABytes | Sections are kept anyway to preserve reasoning and agent state |
 | Summary generation fails | Keep the most recent content and log the error |
-| Chain with already summarized content | Detected during processing and handled appropriately |
+| Chain with already summarized content | Detected during processing and handled appropriately (idempotent) |
+| Multiple consecutive summarization calls | Idempotent - no changes after first summarization |
 
 ## Performance Considerations
 

@@ -106,6 +106,8 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 	case tools.TerminalToolName:
 		return tools.NewTerminalTool(
 			te.flowID,
+			te.taskID,
+			te.subtaskID,
 			containerID,
 			containerLID,
 			te.dockerClient,
@@ -116,6 +118,8 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 		// For file operations - uses the same terminal tool
 		return tools.NewTerminalTool(
 			te.flowID,
+			te.taskID,
+			te.subtaskID,
 			containerID,
 			containerLID,
 			te.dockerClient,
@@ -125,6 +129,8 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 	case tools.BrowserToolName:
 		return tools.NewBrowserTool(
 			te.flowID,
+			te.taskID,
+			te.subtaskID,
 			te.cfg.DataDir,
 			te.cfg.ScraperPrivateURL,
 			te.cfg.ScraperPublicURL,

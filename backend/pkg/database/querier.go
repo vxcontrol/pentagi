@@ -38,9 +38,15 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
 	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
+	// Get toolcalls stats for all flows
+	GetAllFlowsToolcallsStats(ctx context.Context) ([]GetAllFlowsToolcallsStatsRow, error)
+	GetAllFlowsUsageStats(ctx context.Context) ([]GetAllFlowsUsageStatsRow, error)
 	GetAssistant(ctx context.Context, id int64) (Assistant, error)
 	GetAssistantUseAgents(ctx context.Context, id int64) (bool, error)
+	// Get total count of assistants for a specific flow
+	GetAssistantsCountForFlow(ctx context.Context, flowID int64) (int64, error)
 	GetCallToolcall(ctx context.Context, callID string) (Toolcall, error)
+	GetContainerTermLogs(ctx context.Context, containerID int64) ([]Termlog, error)
 	GetContainers(ctx context.Context) ([]Container, error)
 	GetFlow(ctx context.Context, id int64) (Flow, error)
 	GetFlowAgentLog(ctx context.Context, arg GetFlowAgentLogParams) (Agentlog, error)
@@ -56,6 +62,9 @@ type Querier interface {
 	GetFlowScreenshots(ctx context.Context, flowID int64) ([]Screenshot, error)
 	GetFlowSearchLog(ctx context.Context, arg GetFlowSearchLogParams) (Searchlog, error)
 	GetFlowSearchLogs(ctx context.Context, flowID int64) ([]Searchlog, error)
+	// ==================== Flows Analytics Queries ====================
+	// Get total count of tasks, subtasks, and assistants for a specific flow
+	GetFlowStats(ctx context.Context, id int64) (GetFlowStatsRow, error)
 	GetFlowSubtask(ctx context.Context, arg GetFlowSubtaskParams) (Subtask, error)
 	GetFlowSubtasks(ctx context.Context, flowID int64) ([]Subtask, error)
 	GetFlowTask(ctx context.Context, arg GetFlowTaskParams) (Task, error)
@@ -63,11 +72,29 @@ type Querier interface {
 	GetFlowTaskTypeLastMsgChain(ctx context.Context, arg GetFlowTaskTypeLastMsgChainParams) (Msgchain, error)
 	GetFlowTasks(ctx context.Context, flowID int64) ([]Task, error)
 	GetFlowTermLogs(ctx context.Context, flowID int64) ([]Termlog, error)
+	// ==================== Toolcalls Analytics Queries ====================
+	// Get total execution time and count of toolcalls for a specific flow
+	GetFlowToolcallsStats(ctx context.Context, flowID int64) (GetFlowToolcallsStatsRow, error)
 	GetFlowTypeMsgChains(ctx context.Context, arg GetFlowTypeMsgChainsParams) ([]Msgchain, error)
+	GetFlowUsageStats(ctx context.Context, flowID int64) (GetFlowUsageStatsRow, error)
 	GetFlowVectorStoreLog(ctx context.Context, arg GetFlowVectorStoreLogParams) (Vecstorelog, error)
 	GetFlowVectorStoreLogs(ctx context.Context, flowID int64) ([]Vecstorelog, error)
 	GetFlows(ctx context.Context) ([]Flow, error)
+	// Get flow IDs created in the last 3 months for analytics
+	GetFlowsForPeriodLast3Months(ctx context.Context, userID int64) ([]GetFlowsForPeriodLast3MonthsRow, error)
+	// Get flow IDs created in the last month for analytics
+	GetFlowsForPeriodLastMonth(ctx context.Context, userID int64) ([]GetFlowsForPeriodLastMonthRow, error)
+	// Get flow IDs created in the last week for analytics
+	GetFlowsForPeriodLastWeek(ctx context.Context, userID int64) ([]GetFlowsForPeriodLastWeekRow, error)
+	// Get flows stats by day for the last 3 months
+	GetFlowsStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLast3MonthsRow, error)
+	// Get flows stats by day for the last month
+	GetFlowsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastMonthRow, error)
+	// Get flows stats by day for the last week
+	GetFlowsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastWeekRow, error)
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
+	// Get all msgchains for a flow (including task and subtask level)
+	GetMsgchainsForFlow(ctx context.Context, flowID int64) ([]GetMsgchainsForFlowRow, error)
 	GetPrompts(ctx context.Context) ([]Prompt, error)
 	GetProvider(ctx context.Context, id int64) (Provider, error)
 	GetProviders(ctx context.Context) ([]Provider, error)
@@ -82,10 +109,17 @@ type Querier interface {
 	GetSubtaskMsgChains(ctx context.Context, subtaskID sql.NullInt64) ([]Msgchain, error)
 	GetSubtaskMsgLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Msglog, error)
 	GetSubtaskPrimaryMsgChains(ctx context.Context, subtaskID sql.NullInt64) ([]Msgchain, error)
+	GetSubtaskScreenshots(ctx context.Context, subtaskID sql.NullInt64) ([]Screenshot, error)
 	GetSubtaskSearchLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Searchlog, error)
+	GetSubtaskTermLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Termlog, error)
 	GetSubtaskToolcalls(ctx context.Context, subtaskID sql.NullInt64) ([]Toolcall, error)
+	// Get total execution time and count of toolcalls for a specific subtask
+	GetSubtaskToolcallsStats(ctx context.Context, subtaskID sql.NullInt64) (GetSubtaskToolcallsStatsRow, error)
 	GetSubtaskTypeMsgChains(ctx context.Context, arg GetSubtaskTypeMsgChainsParams) ([]Msgchain, error)
+	GetSubtaskUsageStats(ctx context.Context, subtaskID sql.NullInt64) (GetSubtaskUsageStatsRow, error)
 	GetSubtaskVectorStoreLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Vecstorelog, error)
+	// Get all subtasks for multiple tasks
+	GetSubtasksForTasks(ctx context.Context, taskIds []int64) ([]GetSubtasksForTasksRow, error)
 	GetTask(ctx context.Context, id int64) (Task, error)
 	GetTaskAgentLogs(ctx context.Context, taskID sql.NullInt64) ([]Agentlog, error)
 	GetTaskCompletedSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
@@ -94,11 +128,37 @@ type Querier interface {
 	GetTaskPlannedSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
 	GetTaskPrimaryMsgChainIDs(ctx context.Context, taskID sql.NullInt64) ([]GetTaskPrimaryMsgChainIDsRow, error)
 	GetTaskPrimaryMsgChains(ctx context.Context, taskID sql.NullInt64) ([]Msgchain, error)
+	GetTaskScreenshots(ctx context.Context, taskID sql.NullInt64) ([]Screenshot, error)
 	GetTaskSearchLogs(ctx context.Context, taskID sql.NullInt64) ([]Searchlog, error)
 	GetTaskSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)
+	GetTaskTermLogs(ctx context.Context, taskID sql.NullInt64) ([]Termlog, error)
+	// Get total execution time and count of toolcalls for a specific task
+	GetTaskToolcallsStats(ctx context.Context, taskID sql.NullInt64) (GetTaskToolcallsStatsRow, error)
 	GetTaskTypeMsgChains(ctx context.Context, arg GetTaskTypeMsgChainsParams) ([]Msgchain, error)
+	GetTaskUsageStats(ctx context.Context, taskID sql.NullInt64) (GetTaskUsageStatsRow, error)
 	GetTaskVectorStoreLogs(ctx context.Context, taskID sql.NullInt64) ([]Vecstorelog, error)
+	// Get all tasks for a flow
+	GetTasksForFlow(ctx context.Context, flowID int64) ([]GetTasksForFlowRow, error)
 	GetTermLog(ctx context.Context, id int64) (Termlog, error)
+	// Get all toolcalls for a flow
+	GetToolcallsForFlow(ctx context.Context, flowID int64) ([]GetToolcallsForFlowRow, error)
+	// Get toolcalls stats by day for the last 3 months
+	GetToolcallsStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLast3MonthsRow, error)
+	// Get toolcalls stats by day for the last month
+	GetToolcallsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLastMonthRow, error)
+	// Get toolcalls stats by day for the last week
+	GetToolcallsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLastWeekRow, error)
+	// Get toolcalls stats grouped by function name for a user
+	GetToolcallsStatsByFunction(ctx context.Context, userID int64) ([]GetToolcallsStatsByFunctionRow, error)
+	// Get toolcalls stats grouped by function name for a specific flow
+	GetToolcallsStatsByFunctionForFlow(ctx context.Context, flowID int64) ([]GetToolcallsStatsByFunctionForFlowRow, error)
+	GetUsageStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetUsageStatsByDayLast3MonthsRow, error)
+	GetUsageStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastMonthRow, error)
+	GetUsageStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastWeekRow, error)
+	GetUsageStatsByModel(ctx context.Context, userID int64) ([]GetUsageStatsByModelRow, error)
+	GetUsageStatsByProvider(ctx context.Context, userID int64) ([]GetUsageStatsByProviderRow, error)
+	GetUsageStatsByType(ctx context.Context, userID int64) ([]GetUsageStatsByTypeRow, error)
+	GetUsageStatsByTypeForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByTypeForFlowRow, error)
 	GetUser(ctx context.Context, id int64) (GetUserRow, error)
 	GetUserByHash(ctx context.Context, hash string) (GetUserByHashRow, error)
 	GetUserContainers(ctx context.Context, userID int64) ([]Container, error)
@@ -125,6 +185,11 @@ type Querier interface {
 	GetUserProviderByName(ctx context.Context, arg GetUserProviderByNameParams) (Provider, error)
 	GetUserProviders(ctx context.Context, userID int64) ([]Provider, error)
 	GetUserProvidersByType(ctx context.Context, arg GetUserProvidersByTypeParams) ([]Provider, error)
+	// Get total count of flows, tasks, subtasks, and assistants for a user
+	GetUserTotalFlowsStats(ctx context.Context, userID int64) (GetUserTotalFlowsStatsRow, error)
+	// Get total toolcalls stats for a user
+	GetUserTotalToolcallsStats(ctx context.Context, userID int64) (GetUserTotalToolcallsStatsRow, error)
+	GetUserTotalUsageStats(ctx context.Context, userID int64) (GetUserTotalUsageStatsRow, error)
 	GetUsers(ctx context.Context) ([]GetUsersRow, error)
 	UpdateAssistant(ctx context.Context, arg UpdateAssistantParams) (Assistant, error)
 	UpdateAssistantLanguage(ctx context.Context, arg UpdateAssistantLanguageParams) (Assistant, error)
@@ -134,6 +199,7 @@ type Querier interface {
 	UpdateAssistantModel(ctx context.Context, arg UpdateAssistantModelParams) (Assistant, error)
 	UpdateAssistantStatus(ctx context.Context, arg UpdateAssistantStatusParams) (Assistant, error)
 	UpdateAssistantTitle(ctx context.Context, arg UpdateAssistantTitleParams) (Assistant, error)
+	UpdateAssistantToolCallIDTemplate(ctx context.Context, arg UpdateAssistantToolCallIDTemplateParams) (Assistant, error)
 	UpdateAssistantUseAgents(ctx context.Context, arg UpdateAssistantUseAgentsParams) (Assistant, error)
 	UpdateContainerImage(ctx context.Context, arg UpdateContainerImageParams) (Container, error)
 	UpdateContainerLocalDir(ctx context.Context, arg UpdateContainerLocalDirParams) (Container, error)
@@ -144,6 +210,7 @@ type Querier interface {
 	UpdateFlowLanguage(ctx context.Context, arg UpdateFlowLanguageParams) (Flow, error)
 	UpdateFlowStatus(ctx context.Context, arg UpdateFlowStatusParams) (Flow, error)
 	UpdateFlowTitle(ctx context.Context, arg UpdateFlowTitleParams) (Flow, error)
+	UpdateFlowToolCallIDTemplate(ctx context.Context, arg UpdateFlowToolCallIDTemplateParams) (Flow, error)
 	UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error)
 	UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsageParams) (Msgchain, error)
 	UpdateMsgLogResult(ctx context.Context, arg UpdateMsgLogResultParams) (Msglog, error)

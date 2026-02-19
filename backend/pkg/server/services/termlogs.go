@@ -29,6 +29,9 @@ var termlogsSQLMappers = map[string]interface{}{
 	"type":         "{{table}}.type",
 	"text":         "{{table}}.text",
 	"container_id": "{{table}}.container_id",
+	"flow_id":      "{{table}}.flow_id",
+	"task_id":      "{{table}}.task_id",
+	"subtask_id":   "{{table}}.subtask_id",
 	"data":         "({{table}}.type || ' ' || {{table}}.text)",
 }
 
@@ -71,14 +74,12 @@ func (s *TermlogService) GetTermlogs(c *gin.Context) {
 	if slices.Contains(privs, "termlogs.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN containers c ON c.id = container_id").
-				Joins("INNER JOIN flows f ON f.id = c.flow_id")
+				Joins("INNER JOIN flows f ON f.id = {{table}}.flow_id")
 		}
 	} else if slices.Contains(privs, "termlogs.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN containers c ON c.id = container_id").
-				Joins("INNER JOIN flows f ON f.id = c.flow_id").
+				Joins("INNER JOIN flows f ON f.id = {{table}}.flow_id").
 				Where("f.user_id = ?", uid)
 		}
 	} else {
@@ -155,15 +156,13 @@ func (s *TermlogService) GetFlowTermlogs(c *gin.Context) {
 	if slices.Contains(privs, "termlogs.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN containers c ON c.id = container_id").
-				Joins("INNER JOIN flows f ON f.id = c.flow_id").
+				Joins("INNER JOIN flows f ON f.id = {{table}}.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "termlogs.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN containers c ON c.id = container_id").
-				Joins("INNER JOIN flows f ON f.id = c.flow_id").
+				Joins("INNER JOIN flows f ON f.id = {{table}}.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {

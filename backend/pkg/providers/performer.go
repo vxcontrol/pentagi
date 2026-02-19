@@ -21,6 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
@@ -36,7 +37,7 @@ type callResult struct {
 	streamID  int64
 	funcCalls []llms.ToolCall
 	info      map[string]any
-	thinking  string
+	thinking  *reasoning.ContentReasoning
 	content   string
 }
 
@@ -73,6 +74,14 @@ func (fp *flowProvider) performAgentChain(
 
 	logger := logrus.WithContext(ctx).WithFields(fields)
 
+	// Track execution time for duration calculation
+	lastUpdateTime := time.Now()
+	rollLastUpdateTime := func() float64 {
+		durationDelta := time.Since(lastUpdateTime).Seconds()
+		lastUpdateTime = time.Now()
+		return durationDelta
+	}
+
 	executionContext, err := fp.getExecutionContext(ctx, taskID, subtaskID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get execution context")
@@ -89,25 +98,32 @@ func (fp *flowProvider) performAgentChain(
 			return err
 		}
 
-		if err := fp.updateMsgChainUsage(ctx, chainID, result.info); err != nil {
+		if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, rollLastUpdateTime()); err != nil {
 			logger.WithError(err).Error("failed to update msg chain usage")
 			return err
 		}
 
 		if len(result.funcCalls) == 0 {
 			if optAgentType == pconfig.OptionsTypeAssistant {
-				fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID)
-				return fp.processAssistantResult(ctx, logger, chainID, chain, result, summarizer, summarizerHandler)
+				fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID, chainID)
+				return fp.processAssistantResult(ctx, logger, chainID, chain, result, summarizer, summarizerHandler, rollLastUpdateTime())
 			} else {
+				// Build AI message with reasoning for reflector (universal pattern)
+				reflectorMsg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+				if result.content != "" || !result.thinking.IsEmpty() {
+					reflectorMsg.Parts = append(reflectorMsg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+				}
 				result, err = fp.performReflector(
 					ctx, optAgentType, chainID, taskID, subtaskID,
-					append(chain, llms.TextParts(llms.ChatMessageTypeAI, result.content)),
+					append(chain, reflectorMsg),
 					fp.getLastHumanMessage(chain), result.content, executionContext, executor, 1)
 				if err != nil {
 					fields := make(logrus.Fields)
 					if result != nil {
 						fields["content"] = result.content[:min(1000, len(result.content))]
-						fields["thinking"] = result.thinking[:min(1000, len(result.thinking))]
+						if !result.thinking.IsEmpty() {
+							fields["thinking"] = result.thinking.Content[:min(1000, len(result.thinking.Content))]
+						}
 						fields["execution"] = executionContext[:min(1000, len(executionContext))]
 					}
 					logger.WithError(err).WithFields(fields).Error("failed to perform reflector")
@@ -116,15 +132,19 @@ func (fp *flowProvider) performAgentChain(
 			}
 		}
 
-		fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID)
+		fp.storeAgentResponseToGraphiti(ctx, groupID, optAgentType, result, taskID, subtaskID, chainID)
 
 		msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+		// Universal pattern: preserve content with or without reasoning (works for all providers thanks to deduplication)
+		if result.content != "" || !result.thinking.IsEmpty() {
+			msg.Parts = append(msg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+		}
 		for _, toolCall := range result.funcCalls {
 			msg.Parts = append(msg.Parts, toolCall)
 		}
 		chain = append(chain, msg)
 
-		if err := fp.updateMsgChain(ctx, chainID, chain); err != nil {
+		if err := fp.updateMsgChain(ctx, chainID, chain, rollLastUpdateTime()); err != nil {
 			logger.WithError(err).Error("failed to update msg chain")
 			return err
 		}
@@ -138,7 +158,9 @@ func (fp *flowProvider) performAgentChain(
 			response, err := fp.execToolCall(ctx, chainID, idx, result, detector, executor)
 
 			if toolTypeMapping[funcName] != tools.AgentToolType {
-				fp.storeToolExecutionToGraphiti(ctx, groupID, optAgentType, toolCall, response, err, executor, taskID, subtaskID)
+				fp.storeToolExecutionToGraphiti(
+					ctx, groupID, optAgentType, toolCall, response, err, executor, taskID, subtaskID, chainID,
+				)
 			}
 
 			if err != nil {
@@ -159,7 +181,7 @@ func (fp *flowProvider) performAgentChain(
 					},
 				},
 			})
-			if err := fp.updateMsgChain(ctx, chainID, chain); err != nil {
+			if err := fp.updateMsgChain(ctx, chainID, chain, rollLastUpdateTime()); err != nil {
 				logger.WithError(err).Error("failed to update msg chain")
 				return err
 			}
@@ -175,10 +197,23 @@ func (fp *flowProvider) performAgentChain(
 
 		if summarizer != nil {
 			// it returns the same chain state if error occurs
-			chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain)
+			chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain, fp.tcIDTemplate)
 			if err != nil {
+				// log swallowed error
+				_, observation := obs.Observer.NewObservation(ctx)
+				observation.Event(
+					langfuse.WithEventName("chain summarization error swallowed"),
+					langfuse.WithEventInput(chain),
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+					langfuse.WithEventMetadata(langfuse.Metadata{
+						"tc_id_template": fp.tcIDTemplate,
+						"msg_chain_id":   chainID,
+						"error":          err.Error(),
+					}),
+				)
 				logger.WithError(err).Warn("failed to summarize chain")
-			} else if err := fp.updateMsgChain(ctx, chainID, chain); err != nil {
+			} else if err := fp.updateMsgChain(ctx, chainID, chain, rollLastUpdateTime()); err != nil {
 				logger.WithError(err).Error("failed to update msg chain")
 				return err
 			}
@@ -202,7 +237,9 @@ func (fp *flowProvider) execToolCall(
 	// use streamID and thinking only for first tool call to minimize content
 	if toolCallIDx == 0 {
 		streamID = result.streamID
-		thinking = result.thinking
+		if !result.thinking.IsEmpty() {
+			thinking = result.thinking.Content
+		}
 	}
 
 	toolCall := result.funcCalls[toolCallIDx]
@@ -218,24 +255,22 @@ func (fp *flowProvider) execToolCall(
 		"msg_chain_id": chainID,
 	})
 
-	ctx, observation := obs.Observer.NewObservation(ctx)
-	opts := []langfuse.EventStartOption{
-		langfuse.WithStartEventName(fmt.Sprintf("tool call %s", funcName)),
-		langfuse.WithStartEventInput(funcArgs),
-		langfuse.WithStartEventMetadata(map[string]any{
-			"tool_call_id": toolCall.ID,
-			"tool_name":    funcName,
-		}),
-	}
-
 	if detector.detect(toolCall) {
 		response := fmt.Sprintf("tool call '%s' is repeating, please try another tool", funcName)
 
-		observation.Event(append(opts,
-			langfuse.WithStartEventStatus("failed"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			langfuse.WithStartEventOutput(response),
-		)...)
+		_, observation := obs.Observer.NewObservation(ctx)
+		observation.Event(
+			langfuse.WithEventName("repeating tool call detected"),
+			langfuse.WithEventInput(funcArgs),
+			langfuse.WithEventMetadata(map[string]any{
+				"tool_call_id": toolCall.ID,
+				"tool_name":    funcName,
+				"msg_chain_id": chainID,
+			}),
+			langfuse.WithEventStatus("failed"),
+			langfuse.WithEventLevel(langfuse.ObservationLevelError),
+			langfuse.WithEventOutput(response),
+		)
 		logger.Warn("failed to exec function: tool call is repeating")
 
 		return response, nil
@@ -259,10 +294,6 @@ func (fp *flowProvider) execToolCall(
 				return "", err
 			}
 
-			observation.Event(append(opts,
-				langfuse.WithStartEventStatus(err.Error()),
-				langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			)...)
 			logger.WithError(err).Warn("failed to exec function")
 
 			funcExecErr := err
@@ -281,11 +312,6 @@ func (fp *flowProvider) execToolCall(
 			break
 		}
 	}
-
-	observation.Event(append(opts,
-		langfuse.WithStartEventStatus("success"),
-		langfuse.WithStartEventOutput(response),
-	)...)
 
 	return response, nil
 }
@@ -320,12 +346,22 @@ func (fp *flowProvider) callWithRetries(
 				stopReason = choice.StopReason
 			}
 
-			if strings.TrimSpace(choice.Content) != "" {
-				parts = append(parts, choice.Content)
-			}
-
 			if choice.GenerationInfo != nil {
 				result.info = choice.GenerationInfo
+			}
+
+			// Extract reasoning for logging/analytics (provider-aware)
+			if result.thinking.IsEmpty() {
+				if !choice.Reasoning.IsEmpty() {
+					result.thinking = choice.Reasoning
+				} else if len(choice.ToolCalls) > 0 && !choice.ToolCalls[0].Reasoning.IsEmpty() {
+					// Gemini puts reasoning in first tool call when tools are used
+					result.thinking = choice.ToolCalls[0].Reasoning
+				}
+			}
+
+			if strings.TrimSpace(choice.Content) != "" {
+				parts = append(parts, choice.Content)
 			}
 
 			for _, toolCall := range choice.ToolCalls {
@@ -333,10 +369,6 @@ func (fp *flowProvider) callWithRetries(
 					continue
 				}
 				result.funcCalls = append(result.funcCalls, toolCall)
-			}
-
-			if choice.ReasoningContent != "" {
-				result.thinking = choice.ReasoningContent
 			}
 		}
 
@@ -360,10 +392,13 @@ func (fp *flowProvider) callWithRetries(
 			streamCb = func(ctx context.Context, chunk streaming.Chunk) error {
 				switch chunk.Type {
 				case streaming.ChunkTypeReasoning:
+					if chunk.Reasoning.IsEmpty() {
+						return nil
+					}
 					return fp.streamCb(ctx, &StreamMessageChunk{
 						Type:     StreamMessageChunkTypeThinking,
 						MsgType:  msgType,
-						Thinking: chunk.ReasoningContent,
+						Thinking: chunk.Reasoning,
 						StreamID: result.streamID,
 					})
 				case streaming.ChunkTypeText:
@@ -416,7 +451,6 @@ func (fp *flowProvider) callWithRetries(
 		// because we stored thinking and content into standalone messages
 		if len(result.funcCalls) > 0 && result.content != "" {
 			result.streamID = 0
-			result.thinking = ""
 		}
 	}
 
@@ -462,11 +496,11 @@ func (fp *flowProvider) performReflector(
 		msg := "reflector called too many times"
 		_, observation := obs.Observer.NewObservation(ctx)
 		observation.Event(
-			langfuse.WithStartEventName("reflector limit calls reached"),
-			langfuse.WithStartEventInput(content),
-			langfuse.WithStartEventStatus("failed"),
-			langfuse.WithStartEventLevel(langfuse.ObservationLevelError),
-			langfuse.WithStartEventOutput(msg),
+			langfuse.WithEventName("reflector limit calls reached"),
+			langfuse.WithEventInput(content),
+			langfuse.WithEventStatus("failed"),
+			langfuse.WithEventLevel(langfuse.ObservationLevelError),
+			langfuse.WithEventOutput(msg),
 		)
 		logger.WithField("content", content[:min(1000, len(content))]).Warn(msg)
 		return nil, errors.New(msg)
@@ -491,25 +525,46 @@ func (fp *flowProvider) performReflector(
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	reflectorSpan := observation.Span(
-		langfuse.WithStartSpanName("reflector agent"),
-		langfuse.WithStartSpanInput(content),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+	reflectorAgent := observation.Agent(
+		langfuse.WithAgentName("reflector"),
+		langfuse.WithAgentInput(content),
+		langfuse.WithAgentMetadata(langfuse.Metadata{
 			"user_context":   reflectorContext["user"],
 			"system_context": reflectorContext["system"],
 		}),
 	)
-	ctx, _ = reflectorSpan.Observation(ctx)
+	ctx, observation = reflectorAgent.Observation(ctx)
+
+	reflectorEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("render reflector agent prompts"),
+		langfuse.WithEvaluatorInput(reflectorContext),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
+			"user_context":   reflectorContext["user"],
+			"system_context": reflectorContext["system"],
+			"lang":           fp.language,
+		}),
+	)
 
 	userReflectorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionReflector, reflectorContext["user"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, reflectorSpan, "failed to get user reflector template", err)
+		msg := "failed to get user reflector template"
+		return nil, wrapErrorEndEvaluatorSpan(ctx, reflectorEvaluator, msg, err)
 	}
 
 	systemReflectorTmpl, err := fp.prompter.RenderTemplate(templates.PromptTypeReflector, reflectorContext["system"])
 	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, reflectorSpan, "failed to get system reflector template", err)
+		msg := "failed to get system reflector template"
+		return nil, wrapErrorEndEvaluatorSpan(ctx, reflectorEvaluator, msg, err)
 	}
+
+	reflectorEvaluator.End(
+		langfuse.WithEvaluatorOutput(map[string]any{
+			"user_template":   userReflectorTmpl,
+			"system_template": systemReflectorTmpl,
+		}),
+		langfuse.WithEvaluatorStatus("success"),
+		langfuse.WithEvaluatorLevel(langfuse.ObservationLevelDebug),
+	)
 
 	advice, err := fp.performSimpleChain(ctx, taskID, subtaskID, optAgentType,
 		msgChainType, systemReflectorTmpl, userReflectorTmpl)
@@ -517,33 +572,48 @@ func (fp *flowProvider) performReflector(
 		advice = ToolPlaceholder
 	}
 
-	opts := []langfuse.SpanEndOption{
-		langfuse.WithEndSpanStatus("failed"),
-		langfuse.WithEndSpanOutput(advice),
-		langfuse.WithEndSpanLevel(langfuse.ObservationLevelWarning),
+	opts := []langfuse.AgentOption{
+		langfuse.WithAgentStatus("failed"),
+		langfuse.WithAgentOutput(advice),
+		langfuse.WithAgentLevel(langfuse.ObservationLevelWarning),
 	}
-	defer reflectorSpan.End(opts...)
+	defer func() {
+		reflectorAgent.End(opts...)
+	}()
 
 	chain = append(chain, llms.TextParts(llms.ChatMessageTypeHuman, advice))
 	result, err := fp.callWithRetries(ctx, chain, optOriginType, executor)
 	if err != nil {
 		logger.WithError(err).Error("failed to call agent chain by reflector")
-		opts = append(opts, langfuse.WithEndSpanStatus(err.Error()))
+		opts = append(opts,
+			langfuse.WithAgentStatus(err.Error()),
+			langfuse.WithAgentLevel(langfuse.ObservationLevelError),
+		)
 		return nil, err
 	}
 
-	if err := fp.updateMsgChainUsage(ctx, chainID, result.info); err != nil {
+	// don't update duration delta for reflector because it's already included in the performAgentChain
+	if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, 0); err != nil {
 		logger.WithError(err).Error("failed to update msg chain usage")
+		opts = append(opts,
+			langfuse.WithAgentStatus(err.Error()),
+			langfuse.WithAgentLevel(langfuse.ObservationLevelError),
+		)
 		return nil, err
 	}
 
-	chain = append(chain, llms.TextParts(llms.ChatMessageTypeAI, result.content))
+	// preserve reasoning in reflector response using universal pattern
+	reflectorMsg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+	if result.content != "" || !result.thinking.IsEmpty() {
+		reflectorMsg.Parts = append(reflectorMsg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+	}
+	chain = append(chain, reflectorMsg)
 	if len(result.funcCalls) == 0 {
 		return fp.performReflector(ctx, optOriginType, chainID, taskID, subtaskID, chain,
 			humanMessage, result.content, executionContext, executor, iteration+1)
 	}
 
-	opts = append(opts, langfuse.WithEndSpanStatus("success"))
+	opts = append(opts, langfuse.WithAgentStatus("success"))
 	return result, nil
 }
 
@@ -577,8 +647,11 @@ func (fp *flowProvider) processAssistantResult(
 	result *callResult,
 	summarizer csum.Summarizer,
 	summarizerHandler tools.SummarizeHandler,
+	durationDelta float64,
 ) error {
 	var err error
+
+	processAssistantResultStartTime := time.Now()
 
 	if fp.streamCb != nil {
 		if result.streamID == 0 {
@@ -598,29 +671,54 @@ func (fp *flowProvider) processAssistantResult(
 
 	if summarizer != nil {
 		// it returns the same chain state if error occurs
-		chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain)
+		chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain, fp.tcIDTemplate)
 		if err != nil {
+			// log swallowed error
+			_, observation := obs.Observer.NewObservation(ctx)
+			observation.Event(
+				langfuse.WithEventName("chain summarization error swallowed"),
+				langfuse.WithEventInput(chain),
+				langfuse.WithEventStatus(err.Error()),
+				langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+				langfuse.WithEventMetadata(langfuse.Metadata{
+					"tc_id_template": fp.tcIDTemplate,
+					"msg_chain_id":   chainID,
+					"error":          err.Error(),
+				}),
+			)
 			logger.WithError(err).Warn("failed to summarize chain")
 		}
 	}
 
-	chain = append(chain, llms.TextParts(llms.ChatMessageTypeAI, result.content))
-	if err := fp.updateMsgChain(ctx, chainID, chain); err != nil {
+	// Preserve reasoning for assistant responses using universal pattern
+	msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
+	if result.content != "" || !result.thinking.IsEmpty() {
+		msg.Parts = append(msg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+	}
+	chain = append(chain, msg)
+	durationDelta += time.Since(processAssistantResultStartTime).Seconds()
+	if err := fp.updateMsgChain(ctx, chainID, chain, durationDelta); err != nil {
 		return fmt.Errorf("failed to update msg chain: %w", err)
 	}
 
 	return nil
 }
 
-func (fp *flowProvider) updateMsgChain(ctx context.Context, chainID int64, chain []llms.MessageContent) error {
+func (fp *flowProvider) updateMsgChain(
+	ctx context.Context,
+	chainID int64,
+	chain []llms.MessageContent,
+	durationDelta float64,
+) error {
 	chainBlob, err := json.Marshal(chain)
 	if err != nil {
 		return fmt.Errorf("failed to marshal msg chain: %w", err)
 	}
 
 	_, err = fp.db.UpdateMsgChain(ctx, database.UpdateMsgChainParams{
-		Chain: chainBlob,
-		ID:    chainID,
+		Chain:           chainBlob,
+		DurationSeconds: durationDelta,
+		ID:              chainID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update msg chain in DB: %w", err)
@@ -629,16 +727,32 @@ func (fp *flowProvider) updateMsgChain(ctx context.Context, chainID int64, chain
 	return nil
 }
 
-func (fp *flowProvider) updateMsgChainUsage(ctx context.Context, chainID int64, info map[string]any) error {
-	inputTokens, outputTokens := int64(0), int64(0)
-	if info != nil {
-		inputTokens, outputTokens = fp.GetUsage(info)
+func (fp *flowProvider) updateMsgChainUsage(
+	ctx context.Context,
+	chainID int64,
+	optAgentType pconfig.ProviderOptionsType,
+	info map[string]any,
+	durationDelta float64,
+) error {
+	usage := fp.GetUsage(info)
+	if usage.IsZero() {
+		return nil
+	}
+
+	price := fp.GetPriceInfo(optAgentType)
+	if price != nil {
+		usage.UpdateCost(price)
 	}
 
 	_, err := fp.db.UpdateMsgChainUsage(ctx, database.UpdateMsgChainUsageParams{
-		UsageIn:  inputTokens,
-		UsageOut: outputTokens,
-		ID:       chainID,
+		UsageIn:         usage.Input,
+		UsageOut:        usage.Output,
+		UsageCacheIn:    usage.CacheRead,
+		UsageCacheOut:   usage.CacheWrite,
+		UsageCostIn:     usage.CostInput,
+		UsageCostOut:    usage.CostOutput,
+		DurationSeconds: durationDelta,
+		ID:              chainID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update msg chain usage in DB: %w", err)
@@ -650,11 +764,12 @@ func (fp *flowProvider) updateMsgChainUsage(ctx context.Context, chainID int64, 
 // storeToGraphiti stores messages to Graphiti with timeout
 func (fp *flowProvider) storeToGraphiti(
 	ctx context.Context,
+	observation langfuse.Observation,
 	groupID string,
 	messages []graphiti.Message,
-) {
+) error {
 	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
-		return
+		return nil
 	}
 
 	storeCtx, cancel := context.WithTimeout(ctx, fp.graphitiClient.GetTimeout())
@@ -663,12 +778,19 @@ func (fp *flowProvider) storeToGraphiti(
 	err := fp.graphitiClient.AddMessages(storeCtx, graphiti.AddMessagesRequest{
 		GroupID:  groupID,
 		Messages: messages,
+		Observation: &graphiti.Observation{
+			ID:      observation.ID(),
+			TraceID: observation.TraceID(),
+			Time:    time.Now().UTC(),
+		},
 	})
 	if err != nil {
 		logrus.WithError(err).
 			WithField("group_id", groupID).
 			Warn("failed to store messages to graphiti")
 	}
+
+	return err
 }
 
 // storeAgentResponseToGraphiti stores agent response to Graphiti
@@ -678,6 +800,7 @@ func (fp *flowProvider) storeAgentResponseToGraphiti(
 	agentType pconfig.ProviderOptionsType,
 	result *callResult,
 	taskID, subtaskID *int64,
+	chainID int64,
 ) {
 	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
 		return
@@ -704,21 +827,51 @@ func (fp *flowProvider) storeAgentResponseToGraphiti(
 		return
 	}
 
+	parts := []string{fmt.Sprintf("PentAGI %s agent execution in flow %d", agentType, fp.flowID)}
+	if taskID != nil {
+		parts = append(parts, fmt.Sprintf("task %d", *taskID))
+	}
+	if subtaskID != nil {
+		parts = append(parts, fmt.Sprintf("subtask %d", *subtaskID))
+	}
+	sourceDescription := strings.Join(parts, ", ")
+
 	messages := []graphiti.Message{
 		{
-			Content:   content,
-			Author:    fmt.Sprintf("%s Agent", string(agentType)),
-			Timestamp: time.Now(),
-			Name:      "agent_response",
-			SourceDescription: fmt.Sprintf(
-				"Pentagi %s agent execution in flow %d, task %v, subtask %v",
-				agentType, fp.flowID, taskID, subtaskID,
-			),
+			Content:           content,
+			Author:            fmt.Sprintf("%s Agent", string(agentType)),
+			Timestamp:         time.Now(),
+			Name:              "agent_response",
+			SourceDescription: sourceDescription,
 		},
 	}
 	logrus.WithField("messages", messages).Debug("storing agent response to graphiti")
 
-	fp.storeToGraphiti(ctx, groupID, messages)
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	storeEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("store messages to graphiti"),
+		langfuse.WithEvaluatorInput(messages),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
+			"group_id":     groupID,
+			"agent_type":   agentType,
+			"task_id":      taskID,
+			"subtask_id":   subtaskID,
+			"msg_chain_id": chainID,
+		}),
+	)
+
+	ctx, observation = storeEvaluator.Observation(ctx)
+	if err := fp.storeToGraphiti(ctx, observation, groupID, messages); err != nil {
+		storeEvaluator.End(
+			langfuse.WithEvaluatorStatus(err.Error()),
+			langfuse.WithEvaluatorLevel(langfuse.ObservationLevelError),
+		)
+		return
+	}
+
+	storeEvaluator.End(
+		langfuse.WithEvaluatorStatus("success"),
+	)
 }
 
 // storeToolExecutionToGraphiti stores tool execution to Graphiti
@@ -731,6 +884,7 @@ func (fp *flowProvider) storeToolExecutionToGraphiti(
 	execErr error,
 	executor tools.ContextToolsExecutor,
 	taskID, subtaskID *int64,
+	chainID int64,
 ) {
 	if fp.graphitiClient == nil || !fp.graphitiClient.IsEnabled() {
 		return
@@ -780,18 +934,50 @@ func (fp *flowProvider) storeToolExecutionToGraphiti(
 		return
 	}
 
+	parts := []string{fmt.Sprintf("PentAGI tool execution in flow %d", fp.flowID)}
+	if taskID != nil {
+		parts = append(parts, fmt.Sprintf("task %d", *taskID))
+	}
+	if subtaskID != nil {
+		parts = append(parts, fmt.Sprintf("subtask %d", *subtaskID))
+	}
+	sourceDescription := strings.Join(parts, ", ")
+
 	messages := []graphiti.Message{
 		{
-			Content:   toolExecContent,
-			Author:    fmt.Sprintf("%s Agent", string(agentType)),
-			Timestamp: time.Now(),
-			Name:      fmt.Sprintf("tool_execution_%s", funcName),
-			SourceDescription: fmt.Sprintf(
-				"Pentagi tool execution in flow %d, task %v, subtask %v",
-				fp.flowID, taskID, subtaskID,
-			),
+			Content:           toolExecContent,
+			Author:            fmt.Sprintf("%s Agent", string(agentType)),
+			Timestamp:         time.Now(),
+			Name:              fmt.Sprintf("tool_execution_%s", funcName),
+			SourceDescription: sourceDescription,
 		},
 	}
 
-	fp.storeToGraphiti(ctx, groupID, messages)
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	storeEvaluator := observation.Evaluator(
+		langfuse.WithEvaluatorName("store tool execution to graphiti"),
+		langfuse.WithEvaluatorInput(messages),
+		langfuse.WithEvaluatorMetadata(langfuse.Metadata{
+			"group_id":     groupID,
+			"agent_type":   agentType,
+			"tool_name":    funcName,
+			"tool_args":    funcArgs,
+			"task_id":      taskID,
+			"subtask_id":   subtaskID,
+			"msg_chain_id": chainID,
+		}),
+	)
+
+	ctx, observation = storeEvaluator.Observation(ctx)
+	if err := fp.storeToGraphiti(ctx, observation, groupID, messages); err != nil {
+		storeEvaluator.End(
+			langfuse.WithEvaluatorStatus(err.Error()),
+			langfuse.WithEvaluatorLevel(langfuse.ObservationLevelError),
+		)
+		return
+	}
+
+	storeEvaluator.End(
+		langfuse.WithEvaluatorStatus("success"),
+	)
 }

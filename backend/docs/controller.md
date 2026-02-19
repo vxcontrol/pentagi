@@ -1142,7 +1142,7 @@ func wrapErrorEndSpan(ctx context.Context, span langfuse.Span, msg string, err e
     err = fmt.Errorf("%s: %w", msg, err)
     span.End(
         langfuse.WithEndSpanStatus(err.Error()),
-        langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+        langfuse.WithSpanLevel(langfuse.ObservationLevelError),
     )
     return err
 }

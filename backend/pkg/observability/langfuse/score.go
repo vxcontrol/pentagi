@@ -13,11 +13,13 @@ const (
 type score struct {
 	ID        string                `json:"id"`
 	Name      string                `json:"name"`
+	Metadata  Metadata              `json:"metadata,omitempty"`
 	StartTime *time.Time            `json:"start_time,omitempty"`
 	Value     *api.CreateScoreValue `json:"value,omitempty"`
 	DataType  *api.ScoreDataType    `json:"data_type,omitempty"`
 	Comment   *string               `json:"comment,omitempty"`
-	ConfigId  *string               `json:"config_id,omitempty"`
+	ConfigID  *string               `json:"config_id,omitempty"`
+	QueueID   *string               `json:"queue_id,omitempty"`
 
 	TraceID             string `json:"trace_id"`
 	ObservationID       string `json:"observation_id"`
@@ -52,6 +54,12 @@ func WithScoreName(name string) ScoreOption {
 	}
 }
 
+func WithScoreMetadata(metadata Metadata) ScoreOption {
+	return func(e *score) {
+		e.Metadata = mergeMaps(e.Metadata, metadata)
+	}
+}
+
 func WithScoreTime(time time.Time) ScoreOption {
 	return func(e *score) {
 		e.StartTime = &time
@@ -60,14 +68,14 @@ func WithScoreTime(time time.Time) ScoreOption {
 
 func WithScoreFloatValue(value float64) ScoreOption {
 	return func(e *score) {
-		e.Value = api.NewCreateScoreValueFromDouble(value)
+		e.Value = &api.CreateScoreValue{Double: value}
 		e.DataType = api.ScoreDataTypeNumeric.Ptr()
 	}
 }
 
 func WithScoreStringValue(value string) ScoreOption {
 	return func(e *score) {
-		e.Value = api.NewCreateScoreValueFromString(value)
+		e.Value = &api.CreateScoreValue{String: value}
 		e.DataType = api.ScoreDataTypeCategorical.Ptr()
 	}
 }
@@ -78,19 +86,25 @@ func WithScoreComment(comment string) ScoreOption {
 	}
 }
 
-func WithScoreConfigId(configId string) ScoreOption {
+func WithScoreConfigID(configID string) ScoreOption {
 	return func(e *score) {
-		e.ConfigId = &configId
+		e.ConfigID = &configID
+	}
+}
+
+func WithScoreQueueID(queueID string) ScoreOption {
+	return func(e *score) {
+		e.QueueID = &queueID
 	}
 }
 
 func newScore(observer enqueue, opts ...ScoreOption) {
 	s := &score{
-		ID:            newID(),
+		ID:            newSpanID(),
 		Name:          scoreDefaultName,
-		ObservationID: newID(),
+		ObservationID: newSpanID(),
 		StartTime:     getCurrentTimeRef(),
-		Value:         api.NewCreateScoreValueFromDouble(0),
+		Value:         &api.CreateScoreValue{},
 		DataType:      api.ScoreDataTypeCategorical.Ptr(),
 		observer:      observer,
 	}
@@ -99,21 +113,23 @@ func newScore(observer enqueue, opts ...ScoreOption) {
 		opt(s)
 	}
 
-	obsCreate := api.NewIngestionEventFromIngestionEventOne(&api.IngestionEventOne{
-		Id:        newID(),
+	obsCreate := &api.IngestionEvent{IngestionEventOne: &api.IngestionEventOne{
+		ID:        newSpanID(),
 		Timestamp: getTimeRefString(s.StartTime),
-		Type:      ingestionCreateScore,
+		Type:      api.IngestionEventOneType(ingestionCreateScore).Ptr(),
 		Body: &api.ScoreBody{
-			Id:            getStringRef(s.ObservationID),
-			ObservationId: getStringRef(s.ParentObservationID),
-			TraceId:       s.TraceID,
+			ID:            getStringRef(s.ObservationID),
+			ObservationID: getStringRef(s.ParentObservationID),
+			TraceID:       getStringRef(s.TraceID),
 			Name:          s.Name,
+			Metadata:      s.Metadata,
 			Value:         s.Value,
 			DataType:      s.DataType,
 			Comment:       s.Comment,
-			ConfigId:      s.ConfigId,
+			ConfigID:      s.ConfigID,
+			QueueID:       s.QueueID,
 		},
-	})
+	}}
 
 	s.observer.enqueue(obsCreate)
 }

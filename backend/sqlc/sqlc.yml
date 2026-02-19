@@ -11,5 +11,10 @@ sql:
         sql_package: "database/sql"
         emit_interface: true
         emit_json_tags: true
+        overrides:
+          - db_type: "pg_catalog.numeric"
+            go_type: "float64"
+          - db_type: "bigint"
+            go_type: "int64"
     database:
       uri: ${DATABASE_URL}

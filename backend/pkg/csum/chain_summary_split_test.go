@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"pentagi/pkg/cast"
+	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 // SummarizerChecks contains text validation checks for text passed to summarizer
@@ -211,6 +213,11 @@ func (m *mockSummarizer) SummarizerHandler() tools.SummarizeHandler {
 	return m.Summarize
 }
 
+// createMockSummarizeHandler creates a simple mock handler for testing
+func createMockSummarizeHandler() tools.SummarizeHandler {
+	return newMockSummarizer("Summarized content", nil, nil).SummarizerHandler()
+}
+
 // Helper to count summarized pairs in a section
 func countSummarizedPairs(section *cast.ChainSection) int {
 	count := 0
@@ -376,7 +383,7 @@ func TestSummarizeSections(t *testing.T) {
 				cast.NewChainSection(
 					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 2")),
 					[]*cast.BodyPair{
-						cast.NewBodyPairFromSummarization("Answer 2"),
+						cast.NewBodyPairFromSummarization("Answer 2", cast.ToolCallIDTemplate, false, nil),
 					},
 				),
 				cast.NewChainSection(
@@ -570,6 +577,37 @@ func TestSummarizeSections(t *testing.T) {
 			expectedNoChange: true, // No changes when keepQASections > section count
 			keepQASections:   5,    // More than the number of sections
 		},
+		{
+			// Test for the bug fix: when last QA section exceeds MaxQABytes,
+			// it should NOT be summarized together with previous sections
+			name: "Last QA section exceeds MaxQABytes - should not be summarized",
+			sections: []*cast.ChainSection{
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 1")),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 1a"),
+						cast.NewBodyPairFromCompletion("Answer 1b"),
+					},
+				),
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 2")),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 2a"),
+						cast.NewBodyPairFromCompletion("Answer 2b"),
+					},
+				),
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 3")),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 3a"),
+						cast.NewBodyPairFromCompletion("Answer 3b"),
+					},
+				),
+			},
+			returnText:       "Summarized content",
+			expectedNoChange: false,
+			keepQASections:   1, // Keep last 1 section
+		},
 	}
 
 	for _, tt := range tests {
@@ -590,7 +628,7 @@ func TestSummarizeSections(t *testing.T) {
 			mockSum := newMockSummarizer(tt.returnText, tt.returnError, tt.summarizerChecks)
 
 			// Call the function with keepQASections parameter
-			err := summarizeSections(ctx, ast, mockSum.SummarizerHandler(), tt.keepQASections)
+			err := summarizeSections(ctx, ast, mockSum.SummarizerHandler(), tt.keepQASections, cast.ToolCallIDTemplate)
 
 			// Check error if expected
 			if tt.expectedErrorCheck != nil {
@@ -985,7 +1023,7 @@ func TestSummarizeLastSection(t *testing.T) {
 					[]*cast.BodyPair{
 						// Create a pair with already summarized but large content
 						func() *cast.BodyPair {
-							return cast.NewBodyPairFromSummarization(strings.Repeat("S", 20*1024))
+							return cast.NewBodyPairFromSummarization(strings.Repeat("S", 20*1024), cast.ToolCallIDTemplate, false, nil)
 						}(),
 						cast.NewBodyPairFromCompletion("Normal response"),
 					},
@@ -1127,7 +1165,7 @@ func TestSummarizeLastSection(t *testing.T) {
 			// Call summarizeLastSection with the correct arguments, including reserve percent
 			var err error
 			err = summarizeLastSection(ctx, ast, mockSum.SummarizerHandler(),
-				len(ast.Sections)-1, tt.maxBytes, tt.maxBodyPairBytes, tt.reservePercent)
+				len(ast.Sections)-1, tt.maxBytes, tt.maxBodyPairBytes, tt.reservePercent, cast.ToolCallIDTemplate)
 
 			// Check error if expected
 			if tt.expectedErrorCheck != nil {
@@ -1228,6 +1266,7 @@ func TestSummarizeQAPairs(t *testing.T) {
 	tests := []struct {
 		name                string
 		sections            []*cast.ChainSection
+		keepQASections      int
 		maxSections         int
 		maxBytes            int
 		summarizeHuman      bool
@@ -1237,6 +1276,7 @@ func TestSummarizeQAPairs(t *testing.T) {
 		expectedNoChange    bool
 		expectedErrorCheck  func(error) bool
 		expectedQAPairCheck func(*cast.ChainAST) bool
+		skipSizeChecks      bool // Skip size checks when last section exceeds limits due to KeepQASections
 	}{
 		{
 			// Test with empty chain - should return without changes
@@ -1477,6 +1517,73 @@ func TestSummarizeQAPairs(t *testing.T) {
 				return err != nil && strings.Contains(err.Error(), "QA (ai) summary generation failed")
 			},
 		},
+		{
+			// Test for bug fix: Last QA section with large content should be preserved
+			// This reproduces the issue from msgchain_coder_8572_clear.json
+			name: "Last QA section with large content exceeds MaxQABytes",
+			sections: []*cast.ChainSection{
+				cast.NewChainSection(
+					cast.NewHeader(
+						newTextMsg(llms.ChatMessageTypeSystem, "System message"),
+						newTextMsg(llms.ChatMessageTypeHuman, "Question 1"),
+					),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 1"),
+					},
+				),
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 2")),
+					[]*cast.BodyPair{
+						cast.NewBodyPairFromCompletion("Answer 2"),
+					},
+				),
+				// Last section with very large content (simulates search_code response with 90KB)
+				cast.NewChainSection(
+					cast.NewHeader(nil, newTextMsg(llms.ChatMessageTypeHuman, "Question 3")),
+					[]*cast.BodyPair{
+						// Create a large body pair that exceeds MaxQABytes
+						func() *cast.BodyPair {
+							largeContent := strings.Repeat("X", 100*1024) // 100KB content
+							return cast.NewBodyPairFromCompletion(largeContent)
+						}(),
+					},
+				),
+			},
+			keepQASections: 1,     // Keep last 1 section (critical for bug fix)
+			maxSections:    5,     // High limit - not the limiting factor
+			maxBytes:       64000, // 64KB - last section exceeds this
+			summarizeHuman: false,
+			summarizerChecks: &SummarizerChecks{
+				ExpectedStrings:   []string{"Answer 1", "Answer 2"}, // Should summarize first two sections
+				UnexpectedStrings: []string{"XXX"},                  // Should NOT summarize the large last section
+				ExpectedCallCount: 1,                                // One call to summarize first two sections
+			},
+			returnText:       "Summarized older sections",
+			expectedNoChange: false,
+			skipSizeChecks:   true, // Skip size checks - last section exceeds maxBytes but is kept due to KeepQASections
+			expectedQAPairCheck: func(ast *cast.ChainAST) bool {
+				// Should have: 1 summary section + 1 last section kept
+				if len(ast.Sections) != 2 {
+					return false
+				}
+				// First section should be summarized
+				if !containsSummarizedContent(ast.Sections[0].Body[0]) {
+					return false
+				}
+				// Last section should NOT be summarized - should have original large content
+				lastSection := ast.Sections[1]
+				if len(lastSection.Body) != 1 {
+					return false
+				}
+				// Check that the last section contains the large content (not summarized)
+				lastPair := lastSection.Body[0]
+				if lastPair.Type == cast.Summarization {
+					return false // Should NOT be Summarization type
+				}
+				// The content should still be large (>50KB indicates it wasn't summarized)
+				return lastPair.Size() > 50*1024
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1499,7 +1606,7 @@ func TestSummarizeQAPairs(t *testing.T) {
 
 			// Call the function
 			err := summarizeQAPairs(ctx, ast, mockSum.SummarizerHandler(),
-				tt.maxSections, tt.maxBytes, tt.summarizeHuman)
+				tt.keepQASections, tt.maxSections, tt.maxBytes, tt.summarizeHuman, cast.ToolCallIDTemplate)
 
 			// Check error if expected
 			if tt.expectedErrorCheck != nil {
@@ -1552,20 +1659,472 @@ func TestSummarizeQAPairs(t *testing.T) {
 				assert.LessOrEqual(t, len(ast.Sections), tt.maxSections+1, // +1 for summary section
 					"Section count should be within limit after summarization")
 
-				// Approximate size check - rebuilding would be more precise
-				totalSize := 0
-				for _, section := range ast.Sections {
-					totalSize += section.Size()
+				// Skip size checks if requested (e.g., when last section exceeds limits but is kept due to KeepQASections)
+				if !tt.skipSizeChecks {
+					// Approximate size check - rebuilding would be more precise
+					totalSize := 0
+					for _, section := range ast.Sections {
+						totalSize += section.Size()
+					}
+					assert.LessOrEqual(t, totalSize, tt.maxBytes+200, // Allow some overhead
+						"Total size should be approximately within limits")
+
+					// Verify size reduction if applicable
+					verifySizeReduction(t, originalSize, ast)
 				}
-				assert.LessOrEqual(t, totalSize, tt.maxBytes+200, // Allow some overhead
-					"Total size should be approximately within limits")
 
 				// Verify summarization patterns
 				verifySummarizationPatterns(t, ast, "qaPair", 1)
-
-				// Verify size reduction if applicable
-				verifySizeReduction(t, originalSize, ast)
 			}
 		})
 	}
+}
+
+func TestLastBodyPairNeverSummarized(t *testing.T) {
+	// This test ensures that the last body pair is NEVER summarized
+	// to preserve reasoning signatures (critical for Gemini's thought_signature)
+
+	ctx := context.Background()
+	handler := createMockSummarizeHandler()
+
+	// Create a section with multiple large body pairs
+	// All pairs are oversized, but the last one should NOT be summarized
+	largePair1 := createLargeBodyPair(20*1024, "Large response 1")
+	largePair2 := createLargeBodyPair(20*1024, "Large response 2")
+	largePair3 := createLargeBodyPair(20*1024, "Large response 3 - LAST")
+
+	header := cast.NewHeader(
+		newTextMsg(llms.ChatMessageTypeSystem, "System"),
+		newTextMsg(llms.ChatMessageTypeHuman, "Question"),
+	)
+	section := cast.NewChainSection(header, []*cast.BodyPair{largePair1, largePair2, largePair3})
+
+	// Verify initial state
+	assert.Equal(t, 3, len(section.Body))
+	initialLastPair := section.Body[2]
+	assert.NotNil(t, initialLastPair)
+
+	// Test 1: summarizeOversizedBodyPairs should NOT summarize the last pair
+	err := summarizeOversizedBodyPairs(ctx, section, handler, 16*1024, cast.ToolCallIDTemplate)
+	assert.NoError(t, err)
+
+	// Verify the last pair was NOT summarized
+	assert.Equal(t, 3, len(section.Body))
+	lastPair := section.Body[2]
+	assert.Equal(t, cast.RequestResponse, lastPair.Type, "Last pair type should remain RequestResponse")
+	assert.False(t, containsSummarizedContent(lastPair), "Last pair should NOT be summarized")
+
+	// Verify the first two pairs WERE summarized
+	assert.True(t, containsSummarizedContent(section.Body[0]) || section.Body[0].Type == cast.Summarization,
+		"First pair should be summarized")
+	assert.True(t, containsSummarizedContent(section.Body[1]) || section.Body[1].Type == cast.Summarization,
+		"Second pair should be summarized")
+
+	// Test 2: Create AST and test summarizeLastSection
+	ast := &cast.ChainAST{Sections: []*cast.ChainSection{section}}
+
+	err = summarizeLastSection(ctx, ast, handler, 0, 30*1024, 16*1024, 25, cast.ToolCallIDTemplate)
+	assert.NoError(t, err)
+
+	// The last pair should still be preserved (not summarized)
+	finalSection := ast.Sections[0]
+	finalLastPair := finalSection.Body[len(finalSection.Body)-1]
+	assert.Equal(t, cast.RequestResponse, finalLastPair.Type,
+		"Last pair should remain RequestResponse after summarizeLastSection")
+	assert.False(t, containsSummarizedContent(finalLastPair),
+		"Last pair should NOT be summarized even after summarizeLastSection")
+}
+
+func TestLastBodyPairWithReasoning(t *testing.T) {
+	// Test that last body pair with reasoning signatures is preserved
+	// This covers both Gemini and Anthropic reasoning patterns
+
+	tests := []struct {
+		name        string
+		createPair  func() *cast.BodyPair
+		description string
+		validate    func(t *testing.T, pair *cast.BodyPair)
+	}{
+		{
+			name: "Gemini pattern - reasoning in ToolCall",
+			createPair: func() *cast.BodyPair {
+				// Gemini stores reasoning directly in ToolCall.Reasoning
+				toolCallWithReasoning := llms.ToolCall{
+					ID:   "fcall_test123gemini",
+					Type: "function",
+					FunctionCall: &llms.FunctionCall{
+						Name:      "execute_task_and_return_summary",
+						Arguments: `{"question": "test"}`,
+					},
+					Reasoning: &reasoning.ContentReasoning{
+						Content:   "Thinking about the task from Gemini",
+						Signature: []byte("gemini_thought_signature_data"),
+					},
+				}
+
+				aiMsg := &llms.MessageContent{
+					Role: llms.ChatMessageTypeAI,
+					Parts: []llms.ContentPart{
+						llms.TextContent{Text: "Let me execute this"},
+						toolCallWithReasoning,
+					},
+				}
+
+				// Simulate large tool response (common scenario that triggers summarization)
+				largeResponse := strings.Repeat("Data row: extensive output\n", 2000) // ~50KB
+
+				toolMsg := &llms.MessageContent{
+					Role: llms.ChatMessageTypeTool,
+					Parts: []llms.ContentPart{
+						llms.ToolCallResponse{
+							ToolCallID: "fcall_test123gemini",
+							Name:       "execute_task_and_return_summary",
+							Content:    largeResponse,
+						},
+					},
+				}
+
+				return cast.NewBodyPair(aiMsg, []*llms.MessageContent{toolMsg})
+			},
+			description: "Gemini: reasoning in ToolCall with large response",
+			validate: func(t *testing.T, pair *cast.BodyPair) {
+				// Verify reasoning is still present in ToolCall
+				for _, part := range pair.AIMessage.Parts {
+					if toolCall, ok := part.(llms.ToolCall); ok && toolCall.FunctionCall != nil {
+						assert.NotNil(t, toolCall.Reasoning, "Gemini ToolCall reasoning should be preserved")
+						if toolCall.Reasoning != nil {
+							assert.Equal(t, "Thinking about the task from Gemini", toolCall.Reasoning.Content)
+							assert.Equal(t, []byte("gemini_thought_signature_data"), toolCall.Reasoning.Signature)
+						}
+					}
+				}
+			},
+		},
+		{
+			name: "Anthropic pattern - reasoning in separate TextContent",
+			createPair: func() *cast.BodyPair {
+				// Anthropic stores reasoning in a separate TextContent BEFORE the ToolCall
+				aiMsg := &llms.MessageContent{
+					Role: llms.ChatMessageTypeAI,
+					Parts: []llms.ContentPart{
+						// Reasoning comes first in a TextContent part
+						llms.TextContent{
+							Text: "", // Empty text, only reasoning
+							Reasoning: &reasoning.ContentReasoning{
+								Content:   "The data isn't reflected. Let me try examining send.php more carefully.",
+								Signature: []byte("anthropic_crypto_signature_base64"),
+							},
+						},
+						// Then the actual tool call WITHOUT reasoning in it
+						llms.ToolCall{
+							ID:   "toolu_011qigRrFEuu5dHKE78v3CuN",
+							Type: "function",
+							FunctionCall: &llms.FunctionCall{
+								Name:      "terminal",
+								Arguments: `{"cwd":"/work","input":"curl -s http://example.com"}`,
+							},
+							// No Reasoning field here for Anthropic
+						},
+					},
+				}
+
+				// Large tool response
+				largeResponse := strings.Repeat("Response data: ", 3000) // ~45KB
+
+				toolMsg := &llms.MessageContent{
+					Role: llms.ChatMessageTypeTool,
+					Parts: []llms.ContentPart{
+						llms.ToolCallResponse{
+							ToolCallID: "toolu_011qigRrFEuu5dHKE78v3CuN",
+							Name:       "terminal",
+							Content:    largeResponse,
+						},
+					},
+				}
+
+				return cast.NewBodyPair(aiMsg, []*llms.MessageContent{toolMsg})
+			},
+			description: "Anthropic: reasoning in TextContent with large response",
+			validate: func(t *testing.T, pair *cast.BodyPair) {
+				// Verify reasoning is still present in TextContent
+				foundReasoning := false
+				for _, part := range pair.AIMessage.Parts {
+					if textContent, ok := part.(llms.TextContent); ok && textContent.Reasoning != nil {
+						foundReasoning = true
+						assert.Equal(t, "The data isn't reflected. Let me try examining send.php more carefully.",
+							textContent.Reasoning.Content)
+						assert.Equal(t, []byte("anthropic_crypto_signature_base64"),
+							textContent.Reasoning.Signature)
+					}
+				}
+				assert.True(t, foundReasoning, "Anthropic TextContent reasoning should be preserved")
+
+				// Verify tool call exists without reasoning
+				foundToolCall := false
+				for _, part := range pair.AIMessage.Parts {
+					if toolCall, ok := part.(llms.ToolCall); ok && toolCall.FunctionCall != nil {
+						foundToolCall = true
+						assert.Nil(t, toolCall.Reasoning, "Anthropic ToolCall should not have reasoning")
+					}
+				}
+				assert.True(t, foundToolCall, "Tool call should be present")
+			},
+		},
+		{
+			name: "Mixed pattern - both Gemini and Anthropic styles",
+			createPair: func() *cast.BodyPair {
+				// Some providers might use both patterns
+				aiMsg := &llms.MessageContent{
+					Role: llms.ChatMessageTypeAI,
+					Parts: []llms.ContentPart{
+						llms.TextContent{
+							Text: "Analyzing the situation",
+							Reasoning: &reasoning.ContentReasoning{
+								Content:   "Top-level reasoning",
+								Signature: []byte("top_level_signature"),
+							},
+						},
+						llms.ToolCall{
+							ID:   "call_mixed123",
+							Type: "function",
+							FunctionCall: &llms.FunctionCall{
+								Name:      "analyze",
+								Arguments: `{"data": "test"}`,
+							},
+							Reasoning: &reasoning.ContentReasoning{
+								Content:   "Per-tool reasoning",
+								Signature: []byte("tool_level_signature"),
+							},
+						},
+					},
+				}
+
+				// Very large response to trigger size limits
+				veryLargeResponse := strings.Repeat("Analysis result line\n", 5000) // ~100KB
+
+				toolMsg := &llms.MessageContent{
+					Role: llms.ChatMessageTypeTool,
+					Parts: []llms.ContentPart{
+						llms.ToolCallResponse{
+							ToolCallID: "call_mixed123",
+							Name:       "analyze",
+							Content:    veryLargeResponse,
+						},
+					},
+				}
+
+				return cast.NewBodyPair(aiMsg, []*llms.MessageContent{toolMsg})
+			},
+			description: "Mixed: both TextContent and ToolCall reasoning with very large response",
+			validate: func(t *testing.T, pair *cast.BodyPair) {
+				// Verify both reasoning types are preserved
+				foundTextReasoning := false
+				foundToolReasoning := false
+
+				for _, part := range pair.AIMessage.Parts {
+					if textContent, ok := part.(llms.TextContent); ok && textContent.Reasoning != nil {
+						foundTextReasoning = true
+						assert.NotNil(t, textContent.Reasoning.Signature)
+					}
+					if toolCall, ok := part.(llms.ToolCall); ok && toolCall.FunctionCall != nil && toolCall.Reasoning != nil {
+						foundToolReasoning = true
+						assert.NotNil(t, toolCall.Reasoning.Signature)
+					}
+				}
+
+				assert.True(t, foundTextReasoning, "TextContent reasoning should be preserved")
+				assert.True(t, foundToolReasoning, "ToolCall reasoning should be preserved")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			handler := createMockSummarizeHandler()
+
+			t.Logf("Testing: %s", tt.description)
+
+			lastPair := tt.createPair()
+
+			// Create section with this as the ONLY pair (making it the last one)
+			header := cast.NewHeader(
+				newTextMsg(llms.ChatMessageTypeSystem, "System"),
+				newTextMsg(llms.ChatMessageTypeHuman, "Question"),
+			)
+			section := cast.NewChainSection(header, []*cast.BodyPair{lastPair})
+
+			initialSize := lastPair.Size()
+			t.Logf("Initial last pair size: %d bytes", initialSize)
+
+			// Test that the last pair is NOT summarized even if it's very large
+			err := summarizeOversizedBodyPairs(ctx, section, handler, 16*1024, cast.ToolCallIDTemplate)
+			assert.NoError(t, err)
+
+			// Verify the pair was NOT summarized (because it's the last one)
+			assert.Equal(t, 1, len(section.Body), "Should still have exactly one body pair")
+			preservedPair := section.Body[0]
+
+			// The type should remain the same (RequestResponse or Summarization)
+			assert.Equal(t, lastPair.Type, preservedPair.Type,
+				"Last pair type should not change when it's preserved")
+
+			// If the original pair was already Summarization type, that's OK
+			// What matters is that it wasn't RE-summarized (size should be the same)
+			// For other types, it should not be converted to summarized content
+			if lastPair.Type != cast.Summarization {
+				assert.False(t, containsSummarizedContent(preservedPair),
+					"Last pair should NOT be converted to summarized content")
+			}
+
+			// Verify the pair size is still the same (not summarized)
+			assert.Equal(t, initialSize, preservedPair.Size(),
+				"Last pair size should remain unchanged when preserved")
+
+			// Run custom validation for this test case
+			tt.validate(t, preservedPair)
+
+			t.Logf("✓ Last pair preserved with size: %d bytes", preservedPair.Size())
+		})
+	}
+}
+
+func TestLastBodyPairWithLargeResponse_MultiPair(t *testing.T) {
+	// Test the scenario where:
+	// 1. We have multiple body pairs in a section
+	// 2. The last pair has a large tool response with reasoning
+	// 3. Previous pairs can be summarized, but the last one must be preserved
+
+	ctx := context.Background()
+	handler := createMockSummarizeHandler()
+
+	// Create first pair (normal size, can be summarized)
+	normalPair1 := createLargeBodyPair(18*1024, "Normal pair 1")
+
+	// Create second pair (oversized, can be summarized)
+	largePair2 := createLargeBodyPair(25*1024, "Large pair 2")
+
+	// Create last pair with Anthropic-style reasoning and large response (should NOT be summarized)
+	anthropicStyleLastPair := func() *cast.BodyPair {
+		aiMsg := &llms.MessageContent{
+			Role: llms.ChatMessageTypeAI,
+			Parts: []llms.ContentPart{
+				// Anthropic pattern: reasoning in separate TextContent
+				llms.TextContent{
+					Text: "",
+					Reasoning: &reasoning.ContentReasoning{
+						Content:   "Let me try a different approach. Maybe the SQL injection is in one of the POST parameters.",
+						Signature: []byte("anthropic_signature_RXVJQ0NrWUlEeGdDS2tCdjU2enZVOGNJaER0U0pKM2ZSRlJFeU5y"),
+					},
+				},
+				llms.ToolCall{
+					ID:   "toolu_01QG5rJ5q3uoYNRB483Mp5tX",
+					Type: "function",
+					FunctionCall: &llms.FunctionCall{
+						Name:      "pentester",
+						Arguments: `{"message":"Delegating to pentester","question":"I need help with SQL injection"}`,
+					},
+					// No reasoning in ToolCall for Anthropic
+				},
+			},
+		}
+
+		// Large tool response (50KB+)
+		largeResponse := strings.Repeat("SQL injection test result: parameter X shows no delay\n", 1000)
+
+		toolMsg := &llms.MessageContent{
+			Role: llms.ChatMessageTypeTool,
+			Parts: []llms.ContentPart{
+				llms.ToolCallResponse{
+					ToolCallID: "toolu_01QG5rJ5q3uoYNRB483Mp5tX",
+					Name:       "pentester",
+					Content:    largeResponse,
+				},
+			},
+		}
+
+		return cast.NewBodyPair(aiMsg, []*llms.MessageContent{toolMsg})
+	}()
+
+	header := cast.NewHeader(
+		newTextMsg(llms.ChatMessageTypeSystem, "System"),
+		newTextMsg(llms.ChatMessageTypeHuman, "Find SQL injection"),
+	)
+	section := cast.NewChainSection(header, []*cast.BodyPair{normalPair1, largePair2, anthropicStyleLastPair})
+
+	// Verify initial state
+	assert.Equal(t, 3, len(section.Body))
+	initialLastPairSize := section.Body[2].Size()
+	t.Logf("Initial last pair size: %d bytes", initialLastPairSize)
+
+	// Test summarizeOversizedBodyPairs
+	err := summarizeOversizedBodyPairs(ctx, section, handler, 16*1024, cast.ToolCallIDTemplate)
+	assert.NoError(t, err)
+
+	// Verify results
+	assert.Equal(t, 3, len(section.Body), "Should still have 3 body pairs")
+
+	// First two pairs should be summarized (they're oversized and not last)
+	assert.True(t, containsSummarizedContent(section.Body[0]) || section.Body[0].Type == cast.Summarization,
+		"First pair should be summarized (oversized and not last)")
+	assert.True(t, containsSummarizedContent(section.Body[1]) || section.Body[1].Type == cast.Summarization,
+		"Second pair should be summarized (oversized and not last)")
+
+	// CRITICAL: Last pair should NOT be summarized
+	lastPair := section.Body[2]
+	assert.Equal(t, cast.RequestResponse, lastPair.Type,
+		"Last pair type should remain RequestResponse")
+	assert.False(t, containsSummarizedContent(lastPair),
+		"Last pair should NOT be summarized even though it's large")
+	assert.Equal(t, initialLastPairSize, lastPair.Size(),
+		"Last pair size should remain unchanged")
+
+	// Verify Anthropic reasoning signature is preserved
+	foundAnthropicReasoning := false
+	for _, part := range lastPair.AIMessage.Parts {
+		if textContent, ok := part.(llms.TextContent); ok && textContent.Reasoning != nil {
+			foundAnthropicReasoning = true
+			assert.Contains(t, textContent.Reasoning.Content, "SQL injection")
+			assert.NotEmpty(t, textContent.Reasoning.Signature,
+				"Anthropic signature should be preserved in last pair")
+		}
+	}
+	assert.True(t, foundAnthropicReasoning,
+		"Anthropic-style reasoning should be preserved in last pair")
+
+	t.Log("✓ Last pair with Anthropic reasoning and large response preserved correctly")
+}
+
+// Helper to create a large body pair for testing
+func createLargeBodyPair(size int, content string) *cast.BodyPair {
+	// Create content of specified size
+	largeContent := strings.Repeat("x", size)
+
+	toolCallID := templates.GenerateFromPattern(cast.ToolCallIDTemplate, "test_function")
+	aiMsg := &llms.MessageContent{
+		Role: llms.ChatMessageTypeAI,
+		Parts: []llms.ContentPart{
+			llms.ToolCall{
+				ID:   toolCallID,
+				Type: "function",
+				FunctionCall: &llms.FunctionCall{
+					Name:      "test_function",
+					Arguments: fmt.Sprintf(`{"data": "%s"}`, content),
+				},
+			},
+		},
+	}
+
+	toolMsg := &llms.MessageContent{
+		Role: llms.ChatMessageTypeTool,
+		Parts: []llms.ContentPart{
+			llms.ToolCallResponse{
+				ToolCallID: toolCallID,
+				Name:       "test_function",
+				Content:    largeContent,
+			},
+		},
+	}
+
+	return cast.NewBodyPair(aiMsg, []*llms.MessageContent{toolMsg})
 }

@@ -13,6 +13,8 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
@@ -31,17 +33,22 @@ type execResult struct {
 
 type terminal struct {
 	flowID       int64
+	taskID       *int64
+	subtaskID    *int64
 	containerID  int64
 	containerLID string
 	dockerClient docker.DockerClient
 	tlp          TermLogProvider
 }
 
-func NewTerminalTool(flowID int64, containerID int64, containerLID string,
+func NewTerminalTool(flowID int64, taskID, subtaskID *int64,
+	containerID int64, containerLID string,
 	dockerClient docker.DockerClient, tlp TermLogProvider,
 ) Tool {
 	return &terminal{
 		flowID:       flowID,
+		taskID:       taskID,
+		subtaskID:    subtaskID,
 		containerID:  containerID,
 		containerLID: containerLID,
 		dockerClient: dockerClient,
@@ -49,8 +56,20 @@ func NewTerminalTool(flowID int64, containerID int64, containerLID string,
 	}
 }
 
-func (t *terminal) wrapCommandResult(ctx context.Context, name, result string, err error) (string, error) {
+func (t *terminal) wrapCommandResult(ctx context.Context, args json.RawMessage, name, result string, err error) (string, error) {
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("terminal tool error swallowed"),
+			langfuse.WithEventInput(args),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name": name,
+				"error":     err.Error(),
+			}),
+		)
+
 		logrus.WithContext(ctx).WithError(err).WithFields(logrus.Fields{
 			"tool":   name,
 			"result": result[:min(len(result), 1000)],
@@ -75,7 +94,7 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 		}
 		timeout := time.Duration(action.Timeout)*time.Second + defaultExtraExecTimeout
 		result, err := t.ExecCommand(ctx, action.Cwd, action.Input, action.Detach.Bool(), timeout)
-		return t.wrapCommandResult(ctx, name, result, err)
+		return t.wrapCommandResult(ctx, args, name, result, err)
 	case FileToolName:
 		var action FileAction
 		if err := json.Unmarshal(args, &action); err != nil {
@@ -91,10 +110,10 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 		switch action.Action {
 		case ReadFile:
 			result, err := t.ReadFile(ctx, t.flowID, action.Path)
-			return t.wrapCommandResult(ctx, name, result, err)
+			return t.wrapCommandResult(ctx, args, name, result, err)
 		case UpdateFile:
 			result, err := t.WriteFile(ctx, t.flowID, action.Content, action.Path)
-			return t.wrapCommandResult(ctx, name, result, err)
+			return t.wrapCommandResult(ctx, args, name, result, err)
 		default:
 			logger.Error("unknown file action")
 			return "", fmt.Errorf("unknown file action: %s", action.Action)
@@ -133,7 +152,7 @@ func (t *terminal) ExecCommand(
 	}
 
 	formattedCommand := FormatTerminalInput(cwd, command)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (stdin): %w", err)
 	}
@@ -216,7 +235,7 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 
 	results := dst.String()
 	formattedResults := FormatTerminalSystemOutput(results)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, formattedResults, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, formattedResults, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (stdout): %w", err)
 	}
@@ -241,7 +260,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 
 	cwd := docker.WorkFolderPathInContainer
 	formattedCommand := FormatTerminalInput(cwd, fmt.Sprintf("cat %s", path))
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (read file cmd): %w", err)
 	}
@@ -290,7 +309,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 
 	content := buffer.String()
 	formattedContent := FormatTerminalSystemOutput(content)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, formattedContent, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, formattedContent, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (read file content): %w", err)
 	}
@@ -337,7 +356,7 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	}
 
 	formattedCommand := FormatTerminalSystemOutput(fmt.Sprintf("Wrote to %s", path))
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (write file cmd): %w", err)
 	}

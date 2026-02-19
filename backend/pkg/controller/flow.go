@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"pentagi/pkg/cast"
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
@@ -113,14 +114,15 @@ func NewFlowWorker(
 	defer span.End()
 
 	flow, err := fwc.db.CreateFlow(ctx, database.CreateFlowParams{
-		Title:             "untitled",
-		Status:            database.FlowStatusCreated,
-		Model:             "unknown",
-		ModelProviderName: fwc.prvname.String(),
-		ModelProviderType: database.ProviderType(fwc.prvtype),
-		Language:          "English",
-		Functions:         []byte("{}"),
-		UserID:            fwc.userID,
+		Title:              "untitled",
+		Status:             database.FlowStatusCreated,
+		Model:              "unknown",
+		ModelProviderName:  fwc.prvname.String(),
+		ModelProviderType:  database.ProviderType(fwc.prvtype),
+		Language:           "English",
+		ToolCallIDTemplate: cast.ToolCallIDTemplate,
+		Functions:          []byte("{}"),
+		UserID:             fwc.userID,
 	})
 	if err != nil {
 		logrus.WithError(err).Error("failed to create flow in DB")
@@ -144,10 +146,10 @@ func NewFlowWorker(
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
-			langfuse.WithTraceUserId(user.Mail),
+			langfuse.WithTraceUserID(user.Mail),
 			langfuse.WithTraceTags([]string{"controller", "flow"}),
 			langfuse.WithTraceInput(fwc.input),
-			langfuse.WithTraceSessionId(fmt.Sprintf("flow-%d", flow.ID)),
+			langfuse.WithTraceSessionID(fmt.Sprintf("flow-%d", flow.ID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
 				"flow_id":       flow.ID,
 				"user_id":       fwc.userID,
@@ -160,7 +162,7 @@ func NewFlowWorker(
 			}),
 		),
 	)
-	flowSpan := observation.Span(langfuse.WithStartSpanName("prepare flow worker"))
+	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
 	ctx, _ = flowSpan.Observation(ctx)
 
 	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
@@ -181,12 +183,13 @@ func NewFlowWorker(
 	}
 
 	flow, err = fwc.db.UpdateFlow(ctx, database.UpdateFlowParams{
-		Title:     flowProvider.Title(),
-		Model:     flowProvider.Model(pconfig.OptionsTypePrimaryAgent),
-		Language:  flowProvider.Language(),
-		Functions: functionsBlob,
-		TraceID:   database.StringToNullString(observation.TraceID()),
-		ID:        flow.ID,
+		Title:              flowProvider.Title(),
+		Model:              flowProvider.Model(pconfig.OptionsTypePrimaryAgent),
+		Language:           flowProvider.Language(),
+		ToolCallIDTemplate: flowProvider.ToolCallIDTemplate(),
+		Functions:          functionsBlob,
+		TraceID:            database.StringToNullString(observation.TraceID()),
+		ID:                 flow.ID,
 	})
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to update flow in DB", err)
@@ -265,7 +268,7 @@ func NewFlowWorker(
 		}
 	}
 
-	flowSpan.End(langfuse.WithEndSpanStatus("flow worker started"))
+	flowSpan.End(langfuse.WithSpanStatus("flow worker started"))
 
 	return fw, nil
 }
@@ -305,9 +308,9 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		langfuse.WithObservationTraceID(flow.TraceID.String),
 		langfuse.WithObservationTraceContext(
 			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
-			langfuse.WithTraceUserId(user.Mail),
+			langfuse.WithTraceUserID(user.Mail),
 			langfuse.WithTraceTags([]string{"controller", "flow"}),
-			langfuse.WithTraceSessionId(fmt.Sprintf("flow-%d", flow.ID)),
+			langfuse.WithTraceSessionID(fmt.Sprintf("flow-%d", flow.ID)),
 			langfuse.WithTraceMetadata(langfuse.Metadata{
 				"flow_id":       flow.ID,
 				"user_id":       flow.UserID,
@@ -320,7 +323,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 			}),
 		),
 	)
-	flowSpan := observation.Span(langfuse.WithStartSpanName("prepare flow worker"))
+	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
 	ctx, _ = flowSpan.Observation(ctx)
 
 	functions := &tools.Functions{}
@@ -336,7 +339,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	flowProvider, err := fwc.provs.LoadFlowProvider(
 		ctx, provider.ProviderName(flow.ModelProviderName),
 		prompter, executor, flow.ID, flow.UserID, fwc.cfg.AskUser,
-		container.Image, flow.Language, flow.Title,
+		container.Image, flow.Language, flow.Title, flow.ToolCallIDTemplate,
 	)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow provider", err)
@@ -436,7 +439,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	fw.wg.Add(1)
 	go fw.worker()
 
-	flowSpan.End(langfuse.WithEndSpanStatus("flow worker restored"))
+	flowSpan.End(langfuse.WithSpanStatus("flow worker restored"))
 
 	return fw, nil
 }
@@ -754,9 +757,9 @@ func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
 func (fw *flowWorker) runTask(spanName, input string, task TaskWorker) error {
 	_, observation := obs.Observer.NewObservation(fw.ctx)
 	span := observation.Span(
-		langfuse.WithStartSpanName(spanName),
-		langfuse.WithStartSpanInput(input),
-		langfuse.WithStartSpanMetadata(langfuse.Metadata{
+		langfuse.WithSpanName(spanName),
+		langfuse.WithSpanInput(input),
+		langfuse.WithSpanMetadata(langfuse.Metadata{
 			"task_id": task.GetTaskID(),
 		}),
 	)
@@ -777,14 +780,14 @@ func (fw *flowWorker) runTask(spanName, input string, task TaskWorker) error {
 		// if task is stopped by user and it's not finished yet
 		if errors.Is(err, context.Canceled) && fw.ctx.Err() == nil {
 			span.End(
-				langfuse.WithEndSpanStatus("stopped"),
-				langfuse.WithEndSpanLevel(langfuse.ObservationLevelWarning),
+				langfuse.WithSpanStatus("stopped"),
+				langfuse.WithSpanLevel(langfuse.ObservationLevelWarning),
 			)
 			return nil
 		}
 		span.End(
-			langfuse.WithEndSpanStatus(err.Error()),
-			langfuse.WithEndSpanLevel(langfuse.ObservationLevelError),
+			langfuse.WithSpanStatus(err.Error()),
+			langfuse.WithSpanLevel(langfuse.ObservationLevelError),
 		)
 		return fmt.Errorf("failed to run task %d: %w", task.GetTaskID(), err)
 	}
@@ -793,14 +796,14 @@ func (fw *flowWorker) runTask(spanName, input string, task TaskWorker) error {
 	status, _ := task.GetStatus(fw.ctx)
 	if status == database.TaskStatusFailed {
 		span.End(
-			langfuse.WithEndSpanOutput(result),
-			langfuse.WithEndSpanStatus("failed"),
-			langfuse.WithEndSpanLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithSpanOutput(result),
+			langfuse.WithSpanStatus("failed"),
+			langfuse.WithSpanLevel(langfuse.ObservationLevelWarning),
 		)
 	} else {
 		span.End(
-			langfuse.WithEndSpanOutput(result),
-			langfuse.WithEndSpanStatus("success"),
+			langfuse.WithSpanOutput(result),
+			langfuse.WithSpanStatus("success"),
 		)
 	}
 
