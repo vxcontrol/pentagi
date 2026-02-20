@@ -9,7 +9,6 @@ import (
 	"github.com/caarlos0/env/v10"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
-	"github.com/vxcontrol/cloud/sdk"
 )
 
 type Config struct {
@@ -28,10 +27,10 @@ type Config struct {
 	DockerNetAdmin               bool   `env:"DOCKER_NET_ADMIN" envDefault:"false"`
 	DockerSocket                 string `env:"DOCKER_SOCKET"`
 	DockerNetwork                string `env:"DOCKER_NETWORK"`
-	DockerPublicIP               string `env:"DOCKER_PUBLIC_IP" envDefault:"0.0.0.0"`
+	DockerPublicIP               string `env:"DOCKER_PUBLIC_IP" envDefault:"127.0.0.1"`
 	DockerWorkDir                string `env:"DOCKER_WORK_DIR"`
 	DockerDefaultImage           string `env:"DOCKER_DEFAULT_IMAGE" envDefault:"debian:latest"`
-	DockerDefaultImageForPentest string `env:"DOCKER_DEFAULT_IMAGE_FOR_PENTEST" envDefault:"vxcontrol/kali-linux"`
+	DockerDefaultImageForPentest string `env:"DOCKER_DEFAULT_IMAGE_FOR_PENTEST" envDefault:"kalilinux/kali-rolling"`
 
 	// HTTP and GraphQL server settings
 	ServerPort   int    `env:"SERVER_PORT" envDefault:"8080"`
@@ -43,7 +42,7 @@ type Config struct {
 	// Frontend static URL
 	StaticURL   *url.URL `env:"STATIC_URL"`
 	StaticDir   string   `env:"STATIC_DIR" envDefault:"./fe"`
-	CorsOrigins []string `env:"CORS_ORIGINS" envDefault:"*"`
+	CorsOrigins []string `env:"CORS_ORIGINS" envDefault:"https://localhost:8443"`
 
 	// Cookie signing salt
 	CookieSigningSalt string `env:"COOKIE_SIGNING_SALT"`
@@ -220,16 +219,7 @@ func ensureInstallationID(config *Config) {
 }
 
 func ensureLicenseKey(config *Config) {
-	// validate current license key from environment
-	if config.LicenseKey == "" {
-		return
-	}
-
-	// check license key validity, if invalid, set to empty
-	info, err := sdk.IntrospectLicenseKey(config.LicenseKey)
-	if err != nil {
-		config.LicenseKey = ""
-	} else if !info.IsValid() {
-		config.LicenseKey = ""
-	}
+	// License validation removed — closed-source vxcontrol/cloud SDK stripped for OPSEC.
+	// License key field is retained but ignored.
+	config.LicenseKey = ""
 }

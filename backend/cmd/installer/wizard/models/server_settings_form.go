@@ -13,7 +13,6 @@ import (
 	"pentagi/cmd/installer/wizard/window"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/vxcontrol/cloud/sdk"
 )
 
 // ServerSettingsFormModel represents the PentAGI server settings configuration form
@@ -375,14 +374,8 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 
 		switch field.Key {
 		case "pentagi_license_key":
-			if value != "" {
-				if info, err := sdk.IntrospectLicenseKey(value); err != nil {
-					return fmt.Errorf("invalid license key: %v", err)
-				} else if !info.IsValid() {
-					return fmt.Errorf("invalid license key")
-				}
-			}
-			newCfg.LicenseKey.Value = value
+			// License validation removed — closed-source SDK stripped for OPSEC
+			newCfg.LicenseKey.Value = ""
 		case "pentagi_server_host":
 			newCfg.ListenIP.Value = value
 		case "pentagi_server_port":

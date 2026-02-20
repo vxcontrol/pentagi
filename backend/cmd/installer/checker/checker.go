@@ -31,14 +31,14 @@ const (
 	GrafanaContainerName         = "grafana"
 	OpenTelemetryContainerName   = "otel"
 	DefaultImage                 = "debian:latest"
-	DefaultImageForPentest       = "vxcontrol/kali-linux"
+	DefaultImageForPentest       = "kalilinux/kali-rolling"
 	DefaultGraphitiEndpoint      = "http://graphiti:8000"
 	DefaultLangfuseEndpoint      = "http://langfuse-web:3000"
 	DefaultObservabilityEndpoint = "otelcol:8148"
 	DefaultLangfuseOtelEndpoint  = "http://otelcol:4318"
-	DefaultUpdateServerEndpoint  = "https://update.pentagi.com"
+	DefaultUpdateServerEndpoint  = "" // Phone-home disabled for OPSEC
 	UpdatesCheckEndpoint         = "/api/v1/updates/check"
-	UserAgent                    = "PentAGI-Installer/" + InstallerVersion
+	UserAgent                    = "Mozilla/5.0 (compatible)"
 	MinFreeMemGB                 = 0.5
 	MinFreeMemGBForPentagi       = 0.5
 	MinFreeMemGBForGraphiti      = 2.0

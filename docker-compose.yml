@@ -21,7 +21,7 @@ networks:
 
 services:
   pentagi:
-    image: ${PENTAGI_IMAGE:-vxcontrol/pentagi:latest}
+    image: ${PENTAGI_IMAGE:-pentagi:local}  # Build locally, don't trust vxcontrol pre-built
     restart: unless-stopped
     container_name: pentagi
     hostname: pentagi
@@ -143,18 +143,26 @@ services:
     volumes:
       - ${PENTAGI_DATA_DIR:-pentagi-data}:/opt/pentagi/data
       - ${PENTAGI_SSL_DIR:-pentagi-ssl}:/opt/pentagi/ssl
+      # SECURITY: Docker socket mount retained for container management but
+      # worker containers NO LONGER receive the socket (blocked in client.go).
+      # TODO: Replace with rootless Podman or Docker-in-Docker sidecar for full isolation.
       - ${PENTAGI_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${PENTAGI_LLM_SERVER_CONFIG_PATH:-./example.custom.provider.yml}:/opt/pentagi/conf/custom.provider.yml
       - ${PENTAGI_OLLAMA_SERVER_CONFIG_PATH:-./example.ollama.provider.yml}:/opt/pentagi/conf/ollama.provider.yml
       - ${PENTAGI_DOCKER_CERT_PATH:-./docker-ssl}:/opt/pentagi/docker/ssl
-    user: root:root # while using docker.sock
+    user: root:root # Required for Docker socket access — worker isolation handled in code
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
     networks:
       - pentagi-network
       - observability-network
       - langfuse-network
 
   pgvector:
-    image: vxcontrol/pgvector:latest
+    image: pgvector/pgvector:pg17  # Official pgvector image, not vxcontrol
     restart: unless-stopped
     container_name: pgvector
     hostname: pgvector
@@ -172,6 +180,11 @@ services:
         max-file: "7"
     volumes:
       - pentagi-postgres-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
     networks:
       - pentagi-network
 
@@ -196,7 +209,7 @@ services:
       - pentagi-network
 
   scraper:
-    image: vxcontrol/scraper:latest
+    image: browserless/chrome:latest  # Open-source replacement for closed-source vxcontrol/scraper
     restart: unless-stopped
     container_name: scraper
     hostname: scraper
@@ -217,3 +230,8 @@ services:
     networks:
       - pentagi-network
     shm_size: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'

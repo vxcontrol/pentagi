@@ -14,7 +14,8 @@ import (
 	"pentagi/cmd/installer/checker"
 )
 
-const updateServerURL = "https://update.pentagi.com"
+// Phone-home to vxcontrol update server disabled for OPSEC
+const updateServerURL = ""
 
 type updateOperationsImpl struct {
 	processor *processor
@@ -153,7 +154,7 @@ func (u *updateOperationsImpl) getInstallerDownloadURL(ctx context.Context) (str
 		return "", fmt.Errorf("no update available")
 	}
 
-	return "https://update.pentagi.com/installer", nil
+	return "", fmt.Errorf("update server disabled for OPSEC — build from source instead")
 }
 
 func (u *updateOperationsImpl) downloadBinaryToTemp(ctx context.Context, downloadURL string) (string, error) {
@@ -229,7 +230,7 @@ func (u *updateOperationsImpl) getUpdateServerURL() string {
 		return serverVar.Value
 	}
 
-	return "https://update.pentagi.com"
+	return "" // Phone-home disabled for OPSEC
 }
 
 func (u *updateOperationsImpl) getProxyURL() string {

@@ -211,7 +211,7 @@ func (s *SearxngTool) performSearxngSearch(ctx context.Context, query string, ma
 	}
 
 	// Set user agent
-	req.Header.Set("User-Agent", "PentAGI/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
 
 	logrus.WithFields(logrus.Fields{
 		"url":    apiURL.String(),

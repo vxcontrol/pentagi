@@ -154,7 +154,8 @@ func (s *AuthService) AuthLogin(c *gin.Context) {
 	session.Set("uname", user.Name)
 	session.Options(sessions.Options{
 		HttpOnly: true,
-		Secure:   c.Request.TLS != nil,
+		Secure:   true, // Always set Secure — should always be behind TLS
+		SameSite: http.SameSiteLaxMode,
 		Path:     s.cfg.BaseURL,
 		MaxAge:   int(expires),
 	})

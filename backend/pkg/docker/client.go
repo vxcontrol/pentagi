@@ -263,9 +263,12 @@ func (dc *dockerClient) SpawnContainer(
 	}
 	hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", hostDir, WorkFolderPathInContainer))
 
-	if dc.inside {
-		hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", dc.socket, defaultDockerSocketPath))
-	}
+	// SECURITY: Docker socket forwarding to worker containers DISABLED.
+	// This was the primary container escape vector — worker containers could
+	// use the socket to create privileged containers and escape to the host.
+	// if dc.inside {
+	// 	hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", dc.socket, defaultDockerSocketPath))
+	// }
 
 	hostConfig.LogConfig = container.LogConfig{
 		Type: "json-file",
@@ -559,7 +562,38 @@ func (dc *dockerClient) CopyFromContainer(
 	return dc.client.CopyFromContainer(ctx, containerID, srcPath)
 }
 
+// allowedImagePrefixes defines the whitelist of Docker images the AI agent is
+// permitted to pull. Any image not matching a prefix here is rejected.
+// Add your own trusted images/registries as needed.
+var allowedImagePrefixes = []string{
+	"debian:",
+	"ubuntu:",
+	"alpine:",
+	"kalilinux/kali-rolling",
+	"kalilinux/kali-last-release",
+	"python:",
+	"node:",
+	"golang:",
+	"rust:",
+	"ghcr.io/",      // GitHub Container Registry — for your own images
+	"localhost:5000", // local registry
+}
+
+func isImageAllowed(imageName string) bool {
+	for _, prefix := range allowedImagePrefixes {
+		if strings.HasPrefix(imageName, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (dc *dockerClient) pullImage(ctx context.Context, imageName string) error {
+	// SECURITY: Validate image against allowlist before pulling
+	if !isImageAllowed(imageName) {
+		return fmt.Errorf("image %q is not in the allowed image list — edit allowedImagePrefixes in client.go to permit it", imageName)
+	}
+
 	filters := filters.NewArgs()
 	filters.Add("reference", imageName)
 	images, err := dc.client.ImageList(ctx, image.ListOptions{

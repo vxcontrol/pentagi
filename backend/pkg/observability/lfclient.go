@@ -69,7 +69,7 @@ func NewLangfuseClient(ctx context.Context, cfg *config.Config) (LangfuseClient,
 			MaxIdleConns:        10,
 			IdleConnTimeout:     30 * time.Second,
 			TLSHandshakeTimeout: 10 * time.Second,
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: false},
 		},
 	}
 

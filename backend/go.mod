@@ -48,9 +48,9 @@ require (
 	github.com/swaggo/gin-swagger v1.3.0
 	github.com/swaggo/swag v1.8.7
 	github.com/vektah/gqlparser/v2 v2.5.19
-	github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1
+	// github.com/vxcontrol/cloud REMOVED — closed-source SDK stripped for OPSEC
 	github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f
-	github.com/vxcontrol/langchaingo v0.1.15-0.20260203101354-ef220222bded
+	github.com/vxcontrol/langchaingo v0.1.15-0.20260203101354-ef220222bded // TODO: diff against upstream tmc/langchaingo and replace
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.opentelemetry.io/otel v1.36.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.9.0

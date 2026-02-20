@@ -6,7 +6,7 @@ import (
 )
 
 func GetHostID() string {
-	salt := "acfee3b28d2d95904730177369171ac430c08bab050350f173d92b14563eccee"
+	salt := "b7e4d9f1a2c8063e5d1af94b72c3e81d6f09a5b4e7d2c13860fa9b4d5e6c7f82" // Regenerated — unique to IZonGroup fork
 	id, err := getMachineID()
 	if err != nil || id == "" {
 		id = getHostname() + ":" + id

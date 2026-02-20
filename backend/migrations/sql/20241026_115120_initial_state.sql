@@ -82,11 +82,13 @@ CREATE TABLE users (
 CREATE INDEX users_role_id_idx ON users(role_id);
 CREATE INDEX users_hash_idx ON users(hash);
 
+-- Default admin password: mrqO1OCa998tHH7C (CHANGE THIS IMMEDIATELY)
+-- bcrypt cost factor raised from 10 to 12
 INSERT INTO users (mail, name, password, status, role_id, password_change_required) VALUES
     (
       'admin@pentagi.com',
       'admin',
-      '$2a$10$deVOk0o1nYRHpaVXjIcyCuRmaHvtoMN/2RUT7w5XbZTeiWKEbXx9q',
+      '$2b$12$XwYNzlV5v3M1f9DscL7n/O0UmQHmLrSI0of0xbIApE72MKXuU8e3u',
       'active',
       1,
       true

@@ -174,7 +174,9 @@ func NewRouter(
 	{
 		publicGroup.GET("/info", authService.Info)
 
-		developerGroup := publicGroup.Group("/")
+		// SECURITY: Developer tools now require authentication
+		developerGroup := api.Group("/")
+		developerGroup.Use(authMiddleware.AuthRequired)
 		{
 			developerGroup.GET("/graphql/playground", graphqlService.ServeGraphqlPlayground)
 			developerGroup.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
