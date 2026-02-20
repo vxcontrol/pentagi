@@ -1,23 +1,25 @@
 simple:
-  model: gemini-2.0-flash-lite
+  model: gemini-2.5-flash-lite
   temperature: 0.7
   top_p: 0.95
   n: 1
   max_tokens: 4000
   price:
-    input: 0.075
-    output: 0.3
+    input: 0.1
+    output: 0.4
+    cache_read: 0.01
 
 simple_json:
-  model: gemini-2.0-flash-lite
+  model: gemini-2.5-flash-lite
   temperature: 0.7
   top_p: 0.95
   n: 1
   max_tokens: 3000
   json: true
   price:
-    input: 0.075
-    output: 0.3
+    input: 0.1
+    output: 0.4
+    cache_read: 0.01
 
 primary_agent:
   model: gemini-3-pro-preview
