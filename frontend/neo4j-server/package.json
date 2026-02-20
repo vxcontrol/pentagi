@@ -5,7 +5,7 @@
     "description": "Small Node.js server that queries Neo4j and exposes pentest metrics for the frontend",
     "main": "index.js",
     "scripts": {
-        "start": "node index.js",
+        "start": "node --max-old-space-size=2048 index.js",
         "dev": "node --watch index.js"
     },
     "dependencies": {

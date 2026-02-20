@@ -10,18 +10,30 @@
 // ---------------------------------------------------------------------------
 
 /** Main Attack Chain — all primary entities and relationships for graph visualization.
+ * Uses UNION ALL with intermediate dedup to avoid cartesian product.
  * @param {string} groupId
  * @returns {CypherQuery}
  */
 export const mainAttackChain = (groupId) => ({
     text: `
-    MATCH (h:Host {group_id: $group_id})-[r1:HAS_PORT]->(p:Port)
-    OPTIONAL MATCH (p)-[r2:RUNS_SERVICE|LEADS_TO]->(s:Service)
-    OPTIONAL MATCH (s)-[r3:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(v:Vulnerability)
-    OPTIONAL MATCH (va:ValidAccess {group_id: $group_id})-[r4:ON_HOST]->(h)
-    OPTIONAL MATCH (va)-[r5:AS_ACCOUNT]->(a:Account)
-    RETURN *
-    LIMIT 500
+    MATCH (source:Host {group_id: $group_id})-[rel:HAS_PORT]->(target:Port)
+    RETURN source, rel, target
+    UNION ALL
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(p:Port)
+    WITH DISTINCT p
+    MATCH (p)-[rel:RUNS_SERVICE|LEADS_TO]->(target:Service)
+    RETURN p AS source, rel, target
+    UNION ALL
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(:Port)-[:RUNS_SERVICE|LEADS_TO]->(s:Service)
+    WITH DISTINCT s
+    MATCH (s)-[rel:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(target:Vulnerability)
+    RETURN s AS source, rel, target
+    UNION ALL
+    MATCH (source:ValidAccess {group_id: $group_id})-[rel:ON_HOST]->(target:Host)
+    RETURN source, rel, target
+    UNION ALL
+    MATCH (source:ValidAccess {group_id: $group_id})-[rel:AS_ACCOUNT]->(target:Account)
+    RETURN source, rel, target
   `,
     params: { group_id: groupId },
 });
@@ -293,32 +305,56 @@ export const pentestSummary = (groupId) => ({
 // ---------------------------------------------------------------------------
 
 /** 6a: Full Attack Chain — Host → Port → Service → Vulnerability + ValidAccess.
+ * Uses UNION ALL with intermediate dedup to avoid cartesian product.
  * @param {string} groupId
  * @returns {CypherQuery}
  */
 export const fullAttackChain = (groupId) => ({
     text: `
-    MATCH (h:Host {group_id: $group_id})-[r1:HAS_PORT]->(p:Port)
-    MATCH (p)-[r2:RUNS_SERVICE|LEADS_TO]->(s:Service)
-    OPTIONAL MATCH (s)-[r3:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(v:Vulnerability)
-    OPTIONAL MATCH (va:ValidAccess {group_id: $group_id})-[r4:VIA_SERVICE]->(s)
-    OPTIONAL MATCH (va)-[r5:ON_HOST]->(h)
-    OPTIONAL MATCH (va)-[r6:AS_ACCOUNT]->(a:Account)
-    RETURN *
+    MATCH (source:Host {group_id: $group_id})-[rel:HAS_PORT]->(target:Port)
+    RETURN source, rel, target
+    UNION ALL
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(p:Port)
+    WITH DISTINCT p
+    MATCH (p)-[rel:RUNS_SERVICE|LEADS_TO]->(target:Service)
+    RETURN p AS source, rel, target
+    UNION ALL
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(:Port)-[:RUNS_SERVICE|LEADS_TO]->(s:Service)
+    WITH DISTINCT s
+    MATCH (s)-[rel:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(target:Vulnerability)
+    RETURN s AS source, rel, target
+    UNION ALL
+    MATCH (source:ValidAccess {group_id: $group_id})-[rel:VIA_SERVICE]->(target:Service)
+    RETURN source, rel, target
+    UNION ALL
+    MATCH (source:ValidAccess {group_id: $group_id})-[rel:ON_HOST]->(target:Host)
+    RETURN source, rel, target
+    UNION ALL
+    MATCH (source:ValidAccess {group_id: $group_id})-[rel:AS_ACCOUNT]->(target:Account)
+    RETURN source, rel, target
   `,
     params: { group_id: groupId },
 });
 
 /** 6b: Infrastructure Only — Host → Port → Service → Vulnerability (no ValidAccess).
+ * Uses UNION ALL with intermediate dedup to avoid cartesian product.
  * @param {string} groupId
  * @returns {CypherQuery}
  */
 export const infrastructureOnly = (groupId) => ({
     text: `
-    MATCH (h:Host {group_id: $group_id})-[:HAS_PORT]->(p:Port)
-    OPTIONAL MATCH (p)-[:RUNS_SERVICE|LEADS_TO]->(s:Service)
-    OPTIONAL MATCH (s)-[:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(v:Vulnerability)
-    RETURN *
+    MATCH (source:Host {group_id: $group_id})-[rel:HAS_PORT]->(target:Port)
+    RETURN source, rel, target
+    UNION ALL
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(p:Port)
+    WITH DISTINCT p
+    MATCH (p)-[rel:RUNS_SERVICE|LEADS_TO]->(target:Service)
+    RETURN p AS source, rel, target
+    UNION ALL
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(:Port)-[:RUNS_SERVICE|LEADS_TO]->(s:Service)
+    WITH DISTINCT s
+    MATCH (s)-[rel:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(target:Vulnerability)
+    RETURN s AS source, rel, target
   `,
     params: { group_id: groupId },
 });
@@ -355,25 +391,19 @@ export const shortestPath = (groupId) => ({
 // ---------------------------------------------------------------------------
 
 /** Attack Path Stats — counts along the attack chain.
+ * Uses CALL subqueries to avoid cartesian product when counting.
  * @param {string} groupId
  * @returns {CypherQuery}
  */
 export const attackPathStats = (groupId) => ({
     text: `
-    MATCH (h:Host {group_id: $group_id})
-    OPTIONAL MATCH (h)-[:HAS_PORT]->(p:Port)
-    OPTIONAL MATCH (p)-[:RUNS_SERVICE|LEADS_TO]->(s:Service)
-    OPTIONAL MATCH (s)-[:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(v:Vulnerability)
-    OPTIONAL MATCH (va:ValidAccess {group_id: $group_id})-[:ON_HOST]->(h)
-    OPTIONAL MATCH (va)-[:VIA_SERVICE]->(s)
-    OPTIONAL MATCH (va)-[:AS_ACCOUNT]->(a:Account)
-    RETURN
-        count(DISTINCT h) AS Hosts,
-        count(DISTINCT p) AS Ports,
-        count(DISTINCT s) AS Services,
-        count(DISTINCT v) AS Vulnerabilities,
-        count(DISTINCT va) AS ValidAccess,
-        count(DISTINCT a) AS Accounts
+    CALL { MATCH (h:Host {group_id: $group_id}) RETURN count(h) AS Hosts }
+    CALL { MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(p:Port) RETURN count(DISTINCT p) AS Ports }
+    CALL { MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(:Port)-[:RUNS_SERVICE|LEADS_TO]->(s:Service) RETURN count(DISTINCT s) AS Services }
+    CALL { MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(:Port)-[:RUNS_SERVICE|LEADS_TO]->(:Service)-[:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(v:Vulnerability) RETURN count(DISTINCT v) AS Vulnerabilities }
+    CALL { MATCH (va:ValidAccess {group_id: $group_id}) RETURN count(va) AS ValidAccess }
+    CALL { MATCH (va:ValidAccess {group_id: $group_id})-[:AS_ACCOUNT]->(a:Account) RETURN count(DISTINCT a) AS Accounts }
+    RETURN Hosts, Ports, Services, Vulnerabilities, ValidAccess, Accounts
   `,
     params: { group_id: groupId },
 });
