@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"pentagi/pkg/server/models"
 	"pentagi/pkg/server/response"
@@ -102,6 +103,14 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 	prms, ok := prm.([]string)
 	if !ok {
 		return authResultFail, errors.New("no pemissions granted")
+	}
+
+	expVal, ok := exp.(int64)
+	if !ok {
+		return authResultFail, errors.New("token claim invalid")
+	}
+	if time.Now().Unix() > expVal {
+		return authResultFail, errors.New("session expired")
 	}
 
 	c.Set("prm", prms)

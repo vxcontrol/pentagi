@@ -181,7 +181,7 @@ func (s *UserService) GetUsers(c *gin.Context) {
 	uid := c.GetUint64("uid")
 	privs := c.GetStringSlice("prm")
 	scope := func(db *gorm.DB) *gorm.DB {
-		if !slices.Contains(privs, "users.view'") {
+		if !slices.Contains(privs, "users.view") {
 			return db.Where("id = ?", uid)
 		}
 		return db
@@ -257,7 +257,7 @@ func (s *UserService) GetUser(c *gin.Context) {
 
 	uhash := c.GetString("uhash")
 	privs := c.GetStringSlice("prm")
-	if !slices.Contains(privs, "users.view'") && uhash != hash {
+	if !slices.Contains(privs, "users.view") && uhash != hash {
 		logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
 		response.Error(c, response.ErrNotPermitted, nil)
 		return
@@ -318,7 +318,7 @@ func (s *UserService) CreateUser(c *gin.Context) {
 
 	rid := c.GetUint64("rid")
 	privs := c.GetStringSlice("prm")
-	if !slices.Contains(privs, "users.create'") {
+	if !slices.Contains(privs, "users.create") {
 		logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
 		response.Error(c, response.ErrNotPermitted, nil)
 		return
@@ -423,13 +423,13 @@ func (s *UserService) PatchUser(c *gin.Context) {
 	uhash := c.GetString("uhash")
 	privs := c.GetStringSlice("prm")
 	scope := func(db *gorm.DB) *gorm.DB {
-		if slices.Contains(privs, "users.edit'") {
+		if slices.Contains(privs, "users.edit") {
 			return db.Where("hash = ?", hash)
 		} else {
 			return db.Where("hash = ? AND id = ?", hash, uid)
 		}
 	}
-	if !slices.Contains(privs, "users.edit'") && uhash != hash {
+	if !slices.Contains(privs, "users.edit") && uhash != hash {
 		logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
 		response.Error(c, response.ErrNotPermitted, nil)
 		return
@@ -510,13 +510,13 @@ func (s *UserService) DeleteUser(c *gin.Context) {
 	uhash := c.GetString("uhash")
 	privs := c.GetStringSlice("prm")
 	scope := func(db *gorm.DB) *gorm.DB {
-		if slices.Contains(privs, "users.delete'") {
+		if slices.Contains(privs, "users.delete") {
 			return db.Where("hash = ?", hash)
 		} else {
 			return db.Where("hash = ? AND id = ?", hash, uid)
 		}
 	}
-	if !slices.Contains(privs, "users.delete'") && uhash != hash {
+	if !slices.Contains(privs, "users.delete") && uhash != hash {
 		logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
 		response.Error(c, response.ErrNotPermitted, nil)
 		return

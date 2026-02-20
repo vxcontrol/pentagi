@@ -124,6 +124,12 @@ func (s *AuthService) AuthLogin(c *gin.Context) {
 		return
 	}
 
+	if user.PasswordChangeRequired {
+		logger.FromContext(c).Warnf("password change required for user '%s'", user.Hash)
+		response.Error(c, response.ErrAuthPasswordChangeRequired, fmt.Errorf("password change required"))
+		return
+	}
+
 	var privs []string
 	err := s.db.Table("privileges").
 		Where("role_id = ?", user.RoleID).
@@ -155,6 +161,7 @@ func (s *AuthService) AuthLogin(c *gin.Context) {
 	session.Options(sessions.Options{
 		HttpOnly: true,
 		Secure:   c.Request.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 		Path:     s.cfg.BaseURL,
 		MaxAge:   int(expires),
 	})
@@ -195,6 +202,7 @@ func (s *AuthService) refreshCookie(c *gin.Context, resp *info, privs []string) 
 	session.Options(sessions.Options{
 		HttpOnly: true,
 		Secure:   c.Request.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 		Path:     s.cfg.BaseURL,
 		MaxAge:   expires,
 	})
@@ -322,6 +330,12 @@ func (s *AuthService) AuthLoginGetCallback(c *gin.Context) {
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting state from cookie")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
+		return
+	}
+
+	if queryState := c.Query("state"); queryState != "" && queryState != state.Value {
+		logger.FromContext(c).Errorf("error matching received state to stored one")
+		response.Error(c, response.ErrAuthInvalidAuthorizationState, nil)
 		return
 	}
 
@@ -546,6 +560,7 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 	session.Options(sessions.Options{
 		HttpOnly: true,
 		Secure:   c.Request.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 		Path:     s.cfg.BaseURL,
 		MaxAge:   expires,
 	})
@@ -597,13 +612,13 @@ func (s *AuthService) parseState(c *gin.Context, state string) (map[string]strin
 	}
 
 	signatureLen := 32
-	stateSignature := stateJSON[:signatureLen]
 	if len(stateJSON) <= signatureLen {
 		logger.FromContext(c).Errorf("error on parsing state from json data")
 		err := fmt.Errorf("unexpected state length")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
 		return nil, err
 	}
+	stateSignature := stateJSON[:signatureLen]
 	stateJSON = stateJSON[signatureLen:]
 
 	mac := hmac.New(sha256.New, s.key)
@@ -646,6 +661,7 @@ func (s *AuthService) setCallbackCookie(w http.ResponseWriter, r *http.Request, 
 		Value:    value,
 		HttpOnly: true,
 		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 		Path:     path.Join(s.cfg.BaseURL, s.cfg.LoginCallbackURL),
 		MaxAge:   maxAge,
 	}
@@ -660,6 +676,7 @@ func (s *AuthService) resetSession(c *gin.Context) {
 	session.Options(sessions.Options{
 		HttpOnly: true,
 		Secure:   c.Request.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
 		Path:     s.cfg.BaseURL,
 		MaxAge:   -1,
 	})

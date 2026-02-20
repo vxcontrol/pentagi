@@ -422,9 +422,12 @@ func (b *browser) getScreenshot(targetURL string) (string, error) {
 }
 
 func (b *browser) callScraper(url string) ([]byte, error) {
-	client := &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch data by scraper '%s': %w", url, err)
