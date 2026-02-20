@@ -9,30 +9,150 @@
 // ⭐ PRESET: Main Attack Chain Dashboard
 // ---------------------------------------------------------------------------
 
-/** Main Attack Chain — all primary entities and relationships for graph visualization.
- * Uses UNION ALL with intermediate dedup to avoid cartesian product.
+/** Main Attack Chain — only infrastructure with findings + access chain.
+ * Shows Host→Port→Service ONLY when Service/WebApp has Vuln or Misconfig.
+ * Deduplicates edges via WITH DISTINCT + head(collect(rel)).
+ * Ends with access (ValidAccess/Credential/Account/PrivChange).
  * @param {string} groupId
  * @returns {CypherQuery}
  */
 export const mainAttackChain = (groupId) => ({
     text: `
-    MATCH (source:Host {group_id: $group_id})-[rel:HAS_PORT]->(target:Port)
+    MATCH (h:Host {group_id: $group_id})-[:HAS_PORT]->(p:Port)-[:RUNS_SERVICE]->(s:Service)
+    WHERE (s)-[:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->()
+       OR (s)-[:HAS_MISCONFIGURATION]->()
+       OR (s)-[:HOSTS_APP]->()-[:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->()
+       OR (s)-[:HOSTS_APP]->()-[:HAS_MISCONFIGURATION]->()
+    WITH DISTINCT h, p
+    MATCH (h)-[rel:HAS_PORT]->(p)
+    WITH h AS source, head(collect(rel)) AS rel, p AS target
     RETURN source, rel, target
+
     UNION ALL
-    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(p:Port)
-    WITH DISTINCT p
-    MATCH (p)-[rel:RUNS_SERVICE]->(target:Service)
-    RETURN p AS source, rel, target
+
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(p:Port)-[:RUNS_SERVICE]->(s:Service)
+    WHERE (s)-[:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->()
+       OR (s)-[:HAS_MISCONFIGURATION]->()
+       OR (s)-[:HOSTS_APP]->()-[:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->()
+       OR (s)-[:HOSTS_APP]->()-[:HAS_MISCONFIGURATION]->()
+    WITH DISTINCT p, s
+    MATCH (p)-[rel:RUNS_SERVICE]->(s)
+    With p AS source, head(collect(rel)) AS rel, s AS target
+    RETURN source, rel, target
+
     UNION ALL
+
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(:Port)-[:RUNS_SERVICE]->(svc:Service)-[:HOSTS_APP]->(w:WebApp)
+    WHERE (w)-[:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->()
+       OR (w)-[:HAS_MISCONFIGURATION]->()
+    WITH DISTINCT svc, w
+    MATCH (svc)-[rel:HOSTS_APP]->(w)
+    WITH svc AS source, head(collect(rel)) AS rel, w AS target
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (h:Host {group_id: $group_id})-[:HAS_VHOST]->(v:VHost)-[:HOSTS_APP]->(w:WebApp)
+    WHERE (w)-[:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->()
+       OR (w)-[:HAS_MISCONFIGURATION]->()
+    WITH DISTINCT h, v
+    MATCH (h)-[rel:HAS_VHOST]->(v)
+    WITH h AS source, head(collect(rel)) AS rel, v AS target
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (:Host {group_id: $group_id})-[:HAS_VHOST]->(v:VHost)-[:HOSTS_APP]->(w:WebApp)
+    WHERE (w)-[:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->()
+       OR (w)-[:HAS_MISCONFIGURATION]->()
+    WITH DISTINCT v, w
+    MATCH (v)-[rel:HOSTS_APP]->(w)
+    WITH v AS source, head(collect(rel)) AS rel, w AS target
+    RETURN source, rel, target
+
+    UNION ALL
+
     MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(:Port)-[:RUNS_SERVICE]->(s:Service)
     WITH DISTINCT s
-    MATCH (s)-[rel:HAS_VULNERABILITY|DETECTED_VULNERABILITY]->(target:Vulnerability)
+    MATCH (s)-[rel:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->(target:Vulnerability)
     RETURN s AS source, rel, target
+
     UNION ALL
-    MATCH (source:ValidAccess {group_id: $group_id})-[rel:ON_HOST]->(target:Host)
+
+    MATCH (source:WebApp {group_id: $group_id})-[rel:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->(target:Vulnerability)
     RETURN source, rel, target
+
     UNION ALL
+
+    MATCH (source:Endpoint {group_id: $group_id})-[rel:DETECTED_VULNERABILITY|CONFIRMED_VULNERABILITY|HAS_VULNERABILITY]->(target:Vulnerability)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:Host {group_id: $group_id})-[rel:HAS_MISCONFIGURATION]->(target:Misconfiguration)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (:Host {group_id: $group_id})-[:HAS_PORT]->(:Port)-[:RUNS_SERVICE]->(s:Service)
+    WITH DISTINCT s
+    MATCH (s)-[rel:HAS_MISCONFIGURATION]->(target:Misconfiguration)
+    RETURN s AS source, rel, target
+
+    UNION ALL
+
+    MATCH (source:WebApp {group_id: $group_id})-[rel:HAS_MISCONFIGURATION]->(target:Misconfiguration)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:ValidAccess {group_id: $group_id})-[rel:ON_HOST|PIVOTED_TO]->(target:Host)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:ValidAccess {group_id: $group_id})-[rel:VIA_SERVICE]->(target:Service)
+    RETURN source, rel, target
+
+    UNION ALL
+
     MATCH (source:ValidAccess {group_id: $group_id})-[rel:AS_ACCOUNT]->(target:Account)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:ValidAccess {group_id: $group_id})-[rel:ESCALATED_VIA]->(target:PrivChange)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:PrivChange {group_id: $group_id})-[rel:YIELDED_PRIV_ACCESS]->(target:ValidAccess)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:Credential {group_id: $group_id})-[rel:AUTHENTICATES_TO]->(target)
+    WHERE labels(target)[1] IN ['Service', 'Account']
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:Credential {group_id: $group_id})-[rel:YIELDED_ACCESS]->(target:ValidAccess)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:Attempt {group_id: $group_id})-[rel:YIELDED_ACCESS]->(target:ValidAccess)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:Artifact {group_id: $group_id})-[rel:REVEALED]->(target:Credential)
+    RETURN source, rel, target
+
+    UNION ALL
+
+    MATCH (source:WebApp {group_id: $group_id})-[rel:REVEALED]->(target:Credential)
     RETURN source, rel, target
   `,
     params: { group_id: groupId },
