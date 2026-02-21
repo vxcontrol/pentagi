@@ -1,6 +1,7 @@
 frontend/coverage
 frontend/dist
 frontend/node_modules
+frontend/neo4j-server/node_modules
 frontend/ssl
 
 **/*.log

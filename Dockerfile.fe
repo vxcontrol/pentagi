@@ -1,0 +1,104 @@
+# syntax=docker/dockerfile:1.4
+
+# ============================================================
+# STEP 1: Build the frontend (Vite → static files)
+# ============================================================
+FROM node:23-slim AS frontend-builder
+
+ENV NODE_ENV=production
+ENV VITE_BUILD_MEMORY_LIMIT=4096
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    tzdata \
+    gcc \
+    g++ \
+    make \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY ./backend/pkg/graph/schema.graphqls ../backend/pkg/graph/
+COPY frontend/ .
+
+# Install dependencies (including devDependencies for the build)
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --include=dev
+
+# Build frontend with optimizations
+RUN npm run build -- \
+    --mode production \
+    --minify esbuild \
+    --outDir dist \
+    --emptyOutDir \
+    --sourcemap false \
+    --target es2020
+
+# ============================================================
+# STEP 2: Install neo4j-server dependencies
+# ============================================================
+FROM node:23-slim AS neo4j-server-builder
+
+WORKDIR /neo4j-server
+
+COPY frontend/neo4j-server/package.json frontend/neo4j-server/package-lock.json ./
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev
+
+# ============================================================
+# STEP 3: Production image — Nginx + Node.js
+# ============================================================
+FROM node:23-slim
+
+RUN apt-get update && apt-get install -y \
+    nginx \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy built frontend static files
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+
+# Copy Nginx config
+COPY nginx.fe.conf /etc/nginx/conf.d/default.conf
+
+# Remove default Nginx site config if it exists
+RUN rm -f /etc/nginx/sites-enabled/default
+
+# Copy neo4j-server application
+WORKDIR /neo4j-server
+COPY --from=neo4j-server-builder /neo4j-server/node_modules ./node_modules
+COPY frontend/neo4j-server/index.js frontend/neo4j-server/queries.js frontend/neo4j-server/schema.js frontend/neo4j-server/types.ts ./
+COPY frontend/neo4j-server/package.json ./
+
+# Copy entrypoint script
+COPY entrypoint.fe.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# ---------------------------------------------------------------------------
+# Runtime environment variables (all optional, shown with defaults)
+# ---------------------------------------------------------------------------
+
+# Nginx
+ENV NGINX_PORT=3000
+
+# Neo4j GraphQL server
+ENV PORT=4000
+ENV NEO4J_URI=bolt://localhost:7687
+ENV NEO4J_USER=neo4j
+ENV NEO4J_PASSWORD=neo4j
+ENV NEO4J_DATABASE=neo4j
+ENV NEO4J_ENCRYPTED=false
+ENV POLL_INTERVAL_MS=5000
+
+EXPOSE 3000
+
+# Start both Nginx and Node.js
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Image Metadata
+LABEL org.opencontainers.image.source="https://github.com/vxcontrol/pentagi"
+LABEL org.opencontainers.image.description="PentAGI Frontend — Nginx (static) + Neo4j API server"
+LABEL org.opencontainers.image.authors="PentAGI Development Team"
+LABEL org.opencontainers.image.licenses="MIT License"
