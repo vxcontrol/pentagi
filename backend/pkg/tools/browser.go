@@ -423,7 +423,7 @@ func (b *browser) getScreenshot(targetURL string) (string, error) {
 
 func (b *browser) callScraper(url string) ([]byte, error) {
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 65 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},

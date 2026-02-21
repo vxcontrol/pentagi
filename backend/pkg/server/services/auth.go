@@ -124,12 +124,6 @@ func (s *AuthService) AuthLogin(c *gin.Context) {
 		return
 	}
 
-	if user.PasswordChangeRequired {
-		logger.FromContext(c).Warnf("password change required for user '%s'", user.Hash)
-		response.Error(c, response.ErrAuthPasswordChangeRequired, fmt.Errorf("password change required"))
-		return
-	}
-
 	var privs []string
 	err := s.db.Table("privileges").
 		Where("role_id = ?", user.RoleID).

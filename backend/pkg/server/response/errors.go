@@ -24,7 +24,6 @@ var ErrAuthInvalidAuthorizationNonce = NewHttpError(400, "Auth.InvalidAuthorizat
 var ErrAuthInvalidCredentials = NewHttpError(401, "Auth.InvalidCredentials", "invalid login or password")
 var ErrAuthInvalidUserData = NewHttpError(500, "Auth.InvalidUserData", "invalid user data")
 var ErrAuthInactiveUser = NewHttpError(403, "Auth.InactiveUser", "user is inactive")
-var ErrAuthPasswordChangeRequired = NewHttpError(403, "Auth.PasswordChangeRequired", "password change required")
 var ErrAuthExchangeTokenFail = NewHttpError(403, "Auth.ExchangeTokenFail", "error on exchanging token")
 var ErrAuthTokenExpired = NewHttpError(403, "Auth.TokenExpired", "token is expired")
 var ErrAuthVerificationTokenFail = NewHttpError(403, "Auth.VerificationTokenFail", "error on verifying token")
