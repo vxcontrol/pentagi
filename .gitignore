@@ -22,3 +22,5 @@ build/*
 data/*
 .bak/*
 !.gitkeep
+.claude/
+
