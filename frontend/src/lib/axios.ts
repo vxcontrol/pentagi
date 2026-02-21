@@ -7,13 +7,56 @@ import { AUTH_STORAGE_KEY } from '@/providers/user-provider';
 import { Log } from './log';
 import { getReturnUrlParam } from './utils/auth';
 
+/**
+ * Gets CSRF token from cookies
+ * @param name - The cookie name to retrieve
+ * @returns The cookie value or null if not found
+ */
+function getCookie(name: string): null | string {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+
+    if (parts.length === 2) {
+        return parts.pop()?.split(';').shift() || null;
+    }
+
+    return null;
+}
+
 const axios = Axios.create({
     baseURL: '/api/v1',
     headers: {
         'Content-Type': 'application/json',
     },
     withCredentials: true,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
 });
+
+// Request interceptor to add CSRF token for state-changing operations
+axios.interceptors.request.use(
+    (config) => {
+        // Add CSRF token for state-changing methods (POST, PUT, PATCH, DELETE)
+        const method = config.method?.toUpperCase();
+
+        if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            // Try to get CSRF token from cookie
+            const csrfToken = getCookie('XSRF-TOKEN') || getCookie('csrf_token') || getCookie('csrftoken');
+
+            if (csrfToken) {
+                // Add CSRF token to headers
+                config.headers['X-XSRF-TOKEN'] = csrfToken;
+                config.headers['X-CSRF-Token'] = csrfToken;
+            }
+        }
+
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    },
+);
+
 axios.interceptors.response.use(
     (res) => {
         return res.data;
