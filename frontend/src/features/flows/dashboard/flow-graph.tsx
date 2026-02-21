@@ -113,7 +113,7 @@ function computeFitTransform(nodes: GraphNode[], viewportWidth: number, viewport
     };
 }
 
-// Hierarchical left-to-right layout (BFS levels from root nodes)
+// Semantic left-to-right layout (fixed levels per entity type)
 function computeLayout(rawNodes: GraphNode[], rawLinks: GraphLink[]): { links: GraphLink[]; nodes: GraphNode[] } {
     const nodes: GraphNode[] = rawNodes.map((node) => ({ ...node }));
     const links: GraphLink[] = rawLinks.map((link) => ({ ...link }));
@@ -143,88 +143,95 @@ function computeLayout(rawNodes: GraphNode[], rawLinks: GraphLink[]): { links: G
         parentIds.get(targetId)?.push(sourceId);
     }
 
-    // Roots = nodes with no incoming edges; fall back to first node
-    const roots = nodes.filter((node) => !parentIds.get(node.id)?.length);
+    const SEMANTIC_LEVEL: Record<string, number> = {
+        Host: 0,
+        Port: 1,
+        Service: 2,
+        VHost: 2,
+        WebApp: 3,
+        Endpoint: 4,
+        Vulnerability: 5,
+        Misconfiguration: 5,
+        Credential: 6,
+        Artifact: 6,
+        Attempt: 6,
+        ValidAccess: 7,
+        Account: 8,
+        PrivChange: 8,
+        Capability: 9,
+        AttackTechnique: 9,
+    };
 
-    if (!roots.length && nodes[0]) {
-        roots.push(nodes[0]);
-    }
+    const DEFAULT_LEVEL = 5;
 
-    // BFS to assign depth (shortest distance from a root)
+    // Assign level by entity type
     const depth = new Map<string, number>();
-    const queue: string[] = [];
 
-    for (const root of roots) {
-        depth.set(root.id, 0);
-        queue.push(root.id);
-    }
-
-    while (queue.length) {
-        const currentId = queue.shift()!;
-        const currentDepth = depth.get(currentId)!;
-
-        for (const childId of childrenIds.get(currentId) ?? []) {
-            if (!depth.has(childId)) {
-                depth.set(childId, currentDepth + 1);
-                queue.push(childId);
-            }
-        }
-    }
-
-    // Assign disconnected nodes to depth 0
     for (const node of nodes) {
-        if (!depth.has(node.id)) {
-            depth.set(node.id, 0);
-        }
+        depth.set(node.id, SEMANTIC_LEVEL[node.entityType] ?? DEFAULT_LEVEL);
     }
 
-    // Group nodes by depth level
+    // Group nodes by semantic level
     const maxDepth = Math.max(...Array.from(depth.values()));
-    const levels: GraphNode[][] = Array.from({ length: maxDepth + 1 }, () => []);
+    const allLevels: GraphNode[][] = Array.from({ length: maxDepth + 1 }, () => []);
 
     for (const node of nodes) {
-        const nodeDepth = depth.get(node.id) ?? 0;
-        levels[nodeDepth]?.push(node);
+        allLevels[depth.get(node.id) ?? 0]?.push(node);
     }
 
-    // Reduce edge crossings: sort each level by average parent position (barycenter heuristic)
-    for (let level = 1; level <= maxDepth; level++) {
-        const previousIndexes = new Map<string, number>();
-        const previousLevel = levels[level - 1];
+    // Compact: remove empty levels
+    const levels = allLevels.filter((group) => group.length > 0);
 
-        if (previousLevel) {
-            for (const [index, node] of previousLevel.entries()) {
-                previousIndexes.set(node.id, index);
+    // Sort within each level by average neighbor position (barycenter heuristic)
+    for (let levelIdx = 0; levelIdx < levels.length; levelIdx++) {
+        const groupNodes = levels[levelIdx];
+
+        if (!groupNodes || levelIdx === 0) {
+            // First level: assign positions without sorting
+            if (groupNodes) {
+                const groupHeight = (groupNodes.length - 1) * VERTICAL_SPACING;
+
+                for (const [index, node] of groupNodes.entries()) {
+                    node.x = 0;
+                    node.y = -groupHeight / 2 + index * VERTICAL_SPACING;
+                }
             }
-        }
 
-        levels[level]?.sort((nodeA, nodeB) => {
-            const parentsA = parentIds.get(nodeA.id) ?? [];
-            const parentsB = parentIds.get(nodeB.id) ?? [];
-
-            const centerA = parentsA.length
-                ? parentsA.reduce((sum, parentId) => sum + (previousIndexes.get(parentId) ?? 0), 0) / parentsA.length
-                : 0;
-            const centerB = parentsB.length
-                ? parentsB.reduce((sum, parentId) => sum + (previousIndexes.get(parentId) ?? 0), 0) / parentsB.length
-                : 0;
-
-            return centerA - centerB;
-        });
-    }
-
-    // Assign positions: x grows with depth (left-to-right), y spreads vertically centered
-    for (let level = 0; level <= maxDepth; level++) {
-        const groupNodes = levels[level];
-
-        if (!groupNodes) {
             continue;
         }
+
+        // Collect y positions of all already-positioned nodes
+        const positionedY = new Map<string, number>();
+
+        for (let prev = 0; prev < levelIdx; prev++) {
+            for (const node of levels[prev]!) {
+                if (node.y != null) {
+                    positionedY.set(node.id, node.y);
+                }
+            }
+        }
+
+        // Sort by average y of all connected neighbors in previous levels
+        groupNodes.sort((a, b) => {
+            const avgY = (nodeId: string): number => {
+                const neighbors = [...(parentIds.get(nodeId) ?? []), ...(childrenIds.get(nodeId) ?? [])].filter(
+                    (id) => positionedY.has(id),
+                );
+
+                if (!neighbors.length) {
+                    return 0;
+                }
+
+                return neighbors.reduce((sum, id) => sum + (positionedY.get(id) ?? 0), 0) / neighbors.length;
+            };
+
+            return avgY(a.id) - avgY(b.id);
+        });
 
         const groupHeight = (groupNodes.length - 1) * VERTICAL_SPACING;
 
         for (const [index, node] of groupNodes.entries()) {
-            node.x = level * HORIZONTAL_SPACING;
+            node.x = levelIdx * HORIZONTAL_SPACING;
             node.y = -groupHeight / 2 + index * VERTICAL_SPACING;
         }
     }
