@@ -78,7 +78,7 @@ paths:
             application/json:
               schema: {}
       security:
-        - BasicAuth: []
+        - BearerAuth: []
     post:
       description: Create an annotation queue
       operationId: annotationQueues_createQueue
