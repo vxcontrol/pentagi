@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -24,7 +25,7 @@ type assistantlogsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var assistantlogsSQLMappers = map[string]interface{}{
+var assistantlogsSQLMappers = map[string]any{
 	"id":            "{{table}}.id",
 	"type":          "{{table}}.type",
 	"message":       "{{table}}.message",
@@ -32,6 +33,7 @@ var assistantlogsSQLMappers = map[string]interface{}{
 	"result_format": "{{table}}.result_format",
 	"flow_id":       "{{table}}.flow_id",
 	"assistant_id":  "{{table}}.assistant_id",
+	"created_at":    "{{table}}.created_at",
 	"data":          "({{table}}.type || ' ' || {{table}}.message || ' ' || {{table}}.result)",
 }
 
@@ -49,6 +51,7 @@ func NewAssistantlogService(db *gorm.DB) *AssistantlogService {
 // @Summary Retrieve assistantlogs list
 // @Tags Assistantlogs
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=assistantlogs} "assistantlogs list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -91,6 +94,12 @@ func (s *AssistantlogService) GetAssistantlogs(c *gin.Context) {
 	query.Init("assistantlogs", assistantlogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := assistantlogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding assistantlogs grouped: group field not found")
+			response.Error(c, response.ErrAssistantlogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped assistantlogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding assistantlogs grouped")
@@ -123,6 +132,7 @@ func (s *AssistantlogService) GetAssistantlogs(c *gin.Context) {
 // @Summary Retrieve assistantlogs list by flow id
 // @Tags Assistantlogs
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=assistantlogs} "assistantlogs list received successful"
@@ -174,6 +184,12 @@ func (s *AssistantlogService) GetFlowAssistantlogs(c *gin.Context) {
 	query.Init("assistantlogs", assistantlogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := assistantlogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding assistantlogs grouped: group field not found")
+			response.Error(c, response.ErrAssistantlogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped assistantlogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding assistantlogs grouped")

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -27,13 +28,19 @@ type assistantsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var assistantsSQLMappers = map[string]interface{}{
-	"id":          "{{table}}.id",
-	"status":      "{{table}}.status",
-	"title":       "{{table}}.title",
-	"flow_id":     "{{table}}.flow_id",
-	"msgchain_id": "{{table}}.msgchain_id",
-	"data":        "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.flow_id)",
+var assistantsSQLMappers = map[string]any{
+	"id":                  "{{table}}.id",
+	"status":              "{{table}}.status",
+	"title":               "{{table}}.title",
+	"model":               "{{table}}.model",
+	"model_provider_name": "{{table}}.model_provider_name",
+	"model_provider_type": "{{table}}.model_provider_type",
+	"language":            "{{table}}.language",
+	"flow_id":             "{{table}}.flow_id",
+	"msgchain_id":         "{{table}}.msgchain_id",
+	"created_at":          "{{table}}.created_at",
+	"updated_at":          "{{table}}.updated_at",
+	"data":                "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.flow_id)",
 }
 
 type AssistantService struct {
@@ -54,6 +61,7 @@ func NewAssistantService(db *gorm.DB, pc providers.ProviderController, fc contro
 // @Summary Retrieve assistants list
 // @Tags Assistants
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=assistants} "assistants list received successful"
@@ -87,13 +95,13 @@ func (s *AssistantService) GetFlowAssistants(c *gin.Context) {
 	if slices.Contains(privs, "assistants.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = assistants.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "assistants.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = assistants.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {
@@ -105,6 +113,12 @@ func (s *AssistantService) GetFlowAssistants(c *gin.Context) {
 	query.Init("assistants", assistantsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := assistantsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding assistants grouped: group field not found")
+			response.Error(c, response.ErrAssistantsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped assistantsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding assistants grouped")
@@ -137,6 +151,7 @@ func (s *AssistantService) GetFlowAssistants(c *gin.Context) {
 // @Summary Retrieve flow assistant by id
 // @Tags Assistants
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param assistantID path int true "assistant id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.Assistant} "flow assistant received successful"
@@ -170,13 +185,13 @@ func (s *AssistantService) GetFlowAssistant(c *gin.Context) {
 	if slices.Contains(privs, "assistants.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = assistants.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "assistants.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = assistants.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {
@@ -187,7 +202,7 @@ func (s *AssistantService) GetFlowAssistant(c *gin.Context) {
 
 	err = s.db.Model(&resp).
 		Scopes(scope).
-		Where("id = ?", assistantID).
+		Where("assistants.id = ?", assistantID).
 		Take(&resp).Error
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error on getting flow assistant by id")
@@ -207,6 +222,7 @@ func (s *AssistantService) GetFlowAssistant(c *gin.Context) {
 // @Tags Assistants
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param json body models.CreateAssistant true "assistant model to create"
 // @Success 201 {object} response.successResp{data=models.AssistantFlow} "assistant created successful"
@@ -289,6 +305,7 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 // @Tags Assistants
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param assistantID path int true "assistant id" minimum(0)
 // @Param json body models.PatchAssistant true "assistant model to patch"
@@ -321,6 +338,13 @@ func (s *AssistantService) PatchAssistant(c *gin.Context) {
 	flowID, err = strconv.ParseUint(c.Param("flowID"), 10, 64)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error parsing flow id")
+		response.Error(c, response.ErrAssistantsInvalidRequest, err)
+		return
+	}
+
+	assistantID, err = strconv.ParseUint(c.Param("assistantID"), 10, 64)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error parsing assistant id")
 		response.Error(c, response.ErrAssistantsInvalidRequest, err)
 		return
 	}
@@ -409,6 +433,7 @@ func (s *AssistantService) PatchAssistant(c *gin.Context) {
 // DeleteAssistant is a function to delete assistant by id
 // @Summary Delete assistant by id
 // @Tags Assistants
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param assistantID path int true "assistant id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.AssistantFlow} "assistant deleted successful"

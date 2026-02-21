@@ -303,6 +303,49 @@ type Screenshot {
   createdAt: Time!
 }
 
+# =================== API Tokens types ===================
+
+enum TokenStatus {
+  active
+  revoked
+  expired
+}
+
+type APIToken {
+  id: ID!
+  tokenId: String!
+  userId: ID!
+  roleId: ID!
+  name: String
+  ttl: Int!
+  status: TokenStatus!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type APITokenWithSecret {
+  id: ID!
+  tokenId: String!
+  userId: ID!
+  roleId: ID!
+  name: String
+  ttl: Int!
+  status: TokenStatus!
+  createdAt: Time!
+  updatedAt: Time!
+  token: String!
+}
+
+input CreateAPITokenInput {
+  name: String
+  ttl: Int!
+}
+
+input UpdateAPITokenInput {
+  name: String
+  status: TokenStatus
+}
+
 # ==================== Prompt Management Types ====================
 
 # Validation error types for user-provided prompts
@@ -749,6 +792,10 @@ type Query {
   settings: Settings!
   settingsProviders: ProvidersConfig!
   settingsPrompts: PromptsConfig!
+
+  # API Tokens management
+  apiToken(tokenId: String!): APIToken
+  apiTokens: [APIToken!]!
 }
 
 type Mutation {
@@ -777,6 +824,11 @@ type Mutation {
   createPrompt(type: PromptType!, template: String!): UserPrompt!
   updatePrompt(promptId: ID!, template: String!): UserPrompt!
   deletePrompt(promptId: ID!): ResultType!
+
+  # API Tokens management
+  createAPIToken(input: CreateAPITokenInput!): APITokenWithSecret!
+  updateAPIToken(tokenId: String!, input: UpdateAPITokenInput!): APIToken!
+  deleteAPIToken(tokenId: String!): Boolean!
 }
 
 type Subscription {
@@ -807,4 +859,9 @@ type Subscription {
   providerCreated: ProviderConfig!
   providerUpdated: ProviderConfig!
   providerDeleted: ProviderConfig!
+
+  # API token events
+  apiTokenCreated: APIToken!
+  apiTokenUpdated: APIToken!
+  apiTokenDeleted: APIToken!
 }

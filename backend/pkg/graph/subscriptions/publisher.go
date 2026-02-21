@@ -115,3 +115,15 @@ func (p *flowPublisher) ProviderUpdated(ctx context.Context, provider database.P
 func (p *flowPublisher) ProviderDeleted(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
 	p.ctrl.providerDeleted.Publish(ctx, p.userID, converter.ConvertProvider(provider, cfg))
 }
+
+func (p *flowPublisher) APITokenCreated(ctx context.Context, apiToken database.APITokenWithSecret) {
+	p.ctrl.apiTokenCreated.Publish(ctx, p.userID, converter.ConvertAPITokenRemoveSecret(apiToken))
+}
+
+func (p *flowPublisher) APITokenUpdated(ctx context.Context, apiToken database.ApiToken) {
+	p.ctrl.apiTokenUpdated.Publish(ctx, p.userID, converter.ConvertAPIToken(apiToken))
+}
+
+func (p *flowPublisher) APITokenDeleted(ctx context.Context, apiToken database.ApiToken) {
+	p.ctrl.apiTokenDeleted.Publish(ctx, p.userID, converter.ConvertAPIToken(apiToken))
+}

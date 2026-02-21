@@ -331,6 +331,31 @@ fragment promptValidationResultFragment on PromptValidationResult {
     details
 }
 
+fragment apiTokenFragment on APIToken {
+    id
+    tokenId
+    userId
+    roleId
+    name
+    ttl
+    status
+    createdAt
+    updatedAt
+}
+
+fragment apiTokenWithSecretFragment on APITokenWithSecret {
+    id
+    tokenId
+    userId
+    roleId
+    name
+    ttl
+    status
+    createdAt
+    updatedAt
+    token
+}
+
 fragment usageStatsFragment on UsageStats {
     totalUsageIn
     totalUsageOut
@@ -815,6 +840,18 @@ query flowsExecutionStatsByPeriod($period: UsageStatsPeriod!) {
     }
 }
 
+query apiTokens {
+    apiTokens {
+        ...apiTokenFragment
+    }
+}
+
+query apiToken($tokenId: String!) {
+    apiToken(tokenId: $tokenId) {
+        ...apiTokenFragment
+    }
+}
+
 # ==================== Mutations ====================
 
 mutation createFlow($modelProvider: String!, $input: String!) {
@@ -912,6 +949,22 @@ mutation updatePrompt($promptId: ID!, $template: String!) {
 
 mutation deletePrompt($promptId: ID!) {
     deletePrompt(promptId: $promptId)
+}
+
+mutation createAPIToken($input: CreateAPITokenInput!) {
+    createAPIToken(input: $input) {
+        ...apiTokenWithSecretFragment
+    }
+}
+
+mutation updateAPIToken($tokenId: String!, $input: UpdateAPITokenInput!) {
+    updateAPIToken(tokenId: $tokenId, input: $input) {
+        ...apiTokenFragment
+    }
+}
+
+mutation deleteAPIToken($tokenId: String!) {
+    deleteAPIToken(tokenId: $tokenId)
 }
 
 # ==================== Subscriptions ====================
@@ -1057,5 +1110,23 @@ subscription providerUpdated {
 subscription providerDeleted {
     providerDeleted {
         ...providerConfigFragment
+    }
+}
+
+subscription apiTokenCreated {
+    apiTokenCreated {
+        ...apiTokenFragment
+    }
+}
+
+subscription apiTokenUpdated {
+    apiTokenUpdated {
+        ...apiTokenFragment
+    }
+}
+
+subscription apiTokenDeleted {
+    apiTokenDeleted {
+        ...apiTokenFragment
     }
 }

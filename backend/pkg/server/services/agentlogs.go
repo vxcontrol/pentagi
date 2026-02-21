@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -24,7 +25,7 @@ type agentlogsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var agentlogsSQLMappers = map[string]interface{}{
+var agentlogsSQLMappers = map[string]any{
 	"id":         "{{table}}.id",
 	"initiator":  "{{table}}.initiator",
 	"executor":   "{{table}}.executor",
@@ -33,6 +34,7 @@ var agentlogsSQLMappers = map[string]interface{}{
 	"flow_id":    "{{table}}.flow_id",
 	"task_id":    "{{table}}.task_id",
 	"subtask_id": "{{table}}.subtask_id",
+	"created_at": "{{table}}.created_at",
 	"data":       "({{table}}.task || ' ' || {{table}}.result)",
 }
 
@@ -50,6 +52,7 @@ func NewAgentlogService(db *gorm.DB) *AgentlogService {
 // @Summary Retrieve agentlogs list
 // @Tags Agentlogs
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=agentlogs} "agentlogs list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -92,6 +95,12 @@ func (s *AgentlogService) GetAgentlogs(c *gin.Context) {
 	query.Init("agentlogs", agentlogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := agentlogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding agentlogs grouped: group field not found")
+			response.Error(c, response.ErrAgentlogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped agentlogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding agentlogs grouped")
@@ -124,6 +133,7 @@ func (s *AgentlogService) GetAgentlogs(c *gin.Context) {
 // @Summary Retrieve agentlogs list by flow id
 // @Tags Agentlogs
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=agentlogs} "agentlogs list received successful"
@@ -175,6 +185,12 @@ func (s *AgentlogService) GetFlowAgentlogs(c *gin.Context) {
 	query.Init("agentlogs", agentlogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := agentlogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding agentlogs grouped: group field not found")
+			response.Error(c, response.ErrAgentlogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped agentlogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding agentlogs grouped")

@@ -1,4 +1,4 @@
-import { ArrowLeft, FileText, Plug, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, FileText, Key, Plug, Settings as SettingsIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
 
@@ -44,6 +44,12 @@ const menuItems: readonly MenuItem[] = [
         id: 'prompts',
         path: '/settings/prompts',
         title: 'Prompts',
+    },
+    {
+        icon: <Key className="size-4" />,
+        id: 'api-tokens',
+        path: '/settings/api-tokens',
+        title: 'PentAGI API',
     },
     // {
     //     id: 'mcp-servers',
@@ -106,6 +112,10 @@ const SettingsHeader = () => {
 
         if (path.startsWith('/settings/prompts/') && params.promptId && params.promptId !== 'new') {
             return 'Edit Prompt';
+        }
+
+        if (path === '/settings/api-tokens') {
+            return 'PentAGI API';
         }
 
         // Find matching main section

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -24,14 +25,17 @@ type subtasksGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var subtasksSQLMappers = map[string]interface{}{
+var subtasksSQLMappers = map[string]any{
 	"id":          "{{table}}.id",
 	"status":      "{{table}}.status",
 	"title":       "{{table}}.title",
 	"description": "{{table}}.description",
+	"context":     "{{table}}.context",
 	"result":      "{{table}}.result",
 	"task_id":     "{{table}}.task_id",
-	"data":        "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.description || ' ' || {{table}}.result)",
+	"created_at":  "{{table}}.created_at",
+	"updated_at":  "{{table}}.updated_at",
+	"data":        "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.description || ' ' || {{table}}.context || ' ' || {{table}}.result)",
 }
 
 type SubtaskService struct {
@@ -48,6 +52,7 @@ func NewSubtaskService(db *gorm.DB) *SubtaskService {
 // @Summary Retrieve flow subtasks list
 // @Tags Subtasks
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=subtasks} "flow subtasks list received successful"
@@ -81,14 +86,14 @@ func (s *SubtaskService) GetFlowSubtasks(c *gin.Context) {
 	if slices.Contains(privs, "subtasks.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN tasks t ON t.id = task_id").
+				Joins("INNER JOIN tasks t ON t.id = subtasks.task_id").
 				Joins("INNER JOIN flows f ON f.id = t.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "subtasks.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN tasks t ON t.id = task_id").
+				Joins("INNER JOIN tasks t ON t.id = subtasks.task_id").
 				Joins("INNER JOIN flows f ON f.id = t.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
@@ -101,6 +106,12 @@ func (s *SubtaskService) GetFlowSubtasks(c *gin.Context) {
 	query.Init("subtasks", subtasksSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := subtasksSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding subtasks grouped: group field not found")
+			response.Error(c, response.ErrSubtasksInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped subtasksGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding subtasks grouped")
@@ -133,6 +144,7 @@ func (s *SubtaskService) GetFlowSubtasks(c *gin.Context) {
 // @Summary Retrieve flow task subtasks list
 // @Tags Subtasks
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param taskID path int true "task id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
@@ -174,14 +186,14 @@ func (s *SubtaskService) GetFlowTaskSubtasks(c *gin.Context) {
 	if slices.Contains(privs, "subtasks.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN tasks t ON t.id = task_id").
+				Joins("INNER JOIN tasks t ON t.id = subtasks.task_id").
 				Joins("INNER JOIN flows f ON f.id = t.flow_id").
 				Where("f.id = ? AND t.id = ?", flowID, taskID)
 		}
 	} else if slices.Contains(privs, "subtasks.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN tasks t ON t.id = task_id").
+				Joins("INNER JOIN tasks t ON t.id = subtasks.task_id").
 				Joins("INNER JOIN flows f ON f.id = t.flow_id").
 				Where("f.id = ? AND f.user_id = ? AND t.id = ?", flowID, uid, taskID)
 		}
@@ -194,6 +206,12 @@ func (s *SubtaskService) GetFlowTaskSubtasks(c *gin.Context) {
 	query.Init("subtasks", subtasksSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := subtasksSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding subtasks grouped: group field not found")
+			response.Error(c, response.ErrSubtasksInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped subtasksGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding subtasks grouped")
@@ -226,6 +244,7 @@ func (s *SubtaskService) GetFlowTaskSubtasks(c *gin.Context) {
 // @Summary Retrieve flow task subtask by id
 // @Tags Subtasks
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param taskID path int true "task id" minimum(0)
 // @Param subtaskID path int true "subtask id" minimum(0)
@@ -240,7 +259,7 @@ func (s *SubtaskService) GetFlowTaskSubtask(c *gin.Context) {
 		flowID    uint64
 		taskID    uint64
 		subtaskID uint64
-		resp      models.Task
+		resp      models.Subtask
 	)
 
 	if flowID, err = strconv.ParseUint(c.Param("flowID"), 10, 64); err != nil {
@@ -267,14 +286,14 @@ func (s *SubtaskService) GetFlowTaskSubtask(c *gin.Context) {
 	if slices.Contains(privs, "subtasks.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN tasks t ON t.id = task_id").
+				Joins("INNER JOIN tasks t ON t.id = subtasks.task_id").
 				Joins("INNER JOIN flows f ON f.id = t.flow_id").
 				Where("f.id = ? AND t.id = ?", flowID, taskID)
 		}
 	} else if slices.Contains(privs, "subtasks.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN tasks t ON t.id = task_id").
+				Joins("INNER JOIN tasks t ON t.id = subtasks.task_id").
 				Joins("INNER JOIN flows f ON f.id = t.flow_id").
 				Where("f.id = ? AND f.user_id = ? AND t.id = ?", flowID, uid, taskID)
 		}
@@ -286,7 +305,7 @@ func (s *SubtaskService) GetFlowTaskSubtask(c *gin.Context) {
 
 	err = s.db.Model(&resp).
 		Scopes(scope).
-		Where("id = ?", subtaskID).
+		Where("subtasks.id = ?", subtaskID).
 		Take(&resp).Error
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error on getting flow task subtask by id")

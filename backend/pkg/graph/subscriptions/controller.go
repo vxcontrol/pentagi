@@ -51,6 +51,9 @@ type FlowSubscriber interface {
 	ProviderCreated(ctx context.Context) (<-chan *model.ProviderConfig, error)
 	ProviderUpdated(ctx context.Context) (<-chan *model.ProviderConfig, error)
 	ProviderDeleted(ctx context.Context) (<-chan *model.ProviderConfig, error)
+	APITokenCreated(ctx context.Context) (<-chan *model.APIToken, error)
+	APITokenUpdated(ctx context.Context) (<-chan *model.APIToken, error)
+	APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error)
 	FlowContext
 }
 
@@ -75,6 +78,9 @@ type FlowPublisher interface {
 	ProviderCreated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
 	ProviderUpdated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
 	ProviderDeleted(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
+	APITokenCreated(ctx context.Context, apiToken database.APITokenWithSecret)
+	APITokenUpdated(ctx context.Context, apiToken database.ApiToken)
+	APITokenDeleted(ctx context.Context, apiToken database.ApiToken)
 	FlowContext
 }
 
@@ -102,6 +108,9 @@ type controller struct {
 	providerCreated     Channel[*model.ProviderConfig]
 	providerUpdated     Channel[*model.ProviderConfig]
 	providerDeleted     Channel[*model.ProviderConfig]
+	apiTokenCreated     Channel[*model.APIToken]
+	apiTokenUpdated     Channel[*model.APIToken]
+	apiTokenDeleted     Channel[*model.APIToken]
 }
 
 func NewSubscriptionsController() SubscriptionsController {
@@ -129,6 +138,9 @@ func NewSubscriptionsController() SubscriptionsController {
 		providerCreated:     NewChannel[*model.ProviderConfig](),
 		providerUpdated:     NewChannel[*model.ProviderConfig](),
 		providerDeleted:     NewChannel[*model.ProviderConfig](),
+		apiTokenCreated:     NewChannel[*model.APIToken](),
+		apiTokenUpdated:     NewChannel[*model.APIToken](),
+		apiTokenDeleted:     NewChannel[*model.APIToken](),
 	}
 }
 

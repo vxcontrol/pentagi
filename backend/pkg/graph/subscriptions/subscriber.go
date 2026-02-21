@@ -119,3 +119,15 @@ func (s *flowSubscriber) ProviderUpdated(ctx context.Context) (<-chan *model.Pro
 func (s *flowSubscriber) ProviderDeleted(ctx context.Context) (<-chan *model.ProviderConfig, error) {
 	return s.ctrl.providerDeleted.Subscribe(ctx, s.userID), nil
 }
+
+func (s *flowSubscriber) APITokenCreated(ctx context.Context) (<-chan *model.APIToken, error) {
+	return s.ctrl.apiTokenCreated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *flowSubscriber) APITokenUpdated(ctx context.Context) (<-chan *model.APIToken, error) {
+	return s.ctrl.apiTokenUpdated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *flowSubscriber) APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error) {
+	return s.ctrl.apiTokenDeleted.Subscribe(ctx, s.userID), nil
+}

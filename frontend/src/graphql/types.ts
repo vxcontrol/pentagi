@@ -18,6 +18,31 @@ export type Scalars = {
     Time: { input: any; output: any };
 };
 
+export type ApiToken = {
+    createdAt: Scalars['Time']['output'];
+    id: Scalars['ID']['output'];
+    name?: Maybe<Scalars['String']['output']>;
+    roleId: Scalars['ID']['output'];
+    status: TokenStatus;
+    tokenId: Scalars['String']['output'];
+    ttl: Scalars['Int']['output'];
+    updatedAt: Scalars['Time']['output'];
+    userId: Scalars['ID']['output'];
+};
+
+export type ApiTokenWithSecret = {
+    createdAt: Scalars['Time']['output'];
+    id: Scalars['ID']['output'];
+    name?: Maybe<Scalars['String']['output']>;
+    roleId: Scalars['ID']['output'];
+    status: TokenStatus;
+    token: Scalars['String']['output'];
+    tokenId: Scalars['String']['output'];
+    ttl: Scalars['Int']['output'];
+    updatedAt: Scalars['Time']['output'];
+    userId: Scalars['ID']['output'];
+};
+
 export type AgentConfig = {
     frequencyPenalty?: Maybe<Scalars['Float']['output']>;
     maxLength?: Maybe<Scalars['Int']['output']>;
@@ -186,6 +211,11 @@ export type AssistantLog = {
     type: MessageLogType;
 };
 
+export type CreateApiTokenInput = {
+    name?: InputMaybe<Scalars['String']['input']>;
+    ttl: Scalars['Int']['input'];
+};
+
 export type DailyFlowsStats = {
     date: Scalars['Time']['output'];
     stats: FlowsStats;
@@ -323,10 +353,12 @@ export type ModelUsageStats = {
 
 export type Mutation = {
     callAssistant: ResultType;
+    createAPIToken: ApiTokenWithSecret;
     createAssistant: FlowAssistant;
     createFlow: Flow;
     createPrompt: UserPrompt;
     createProvider: ProviderConfig;
+    deleteAPIToken: Scalars['Boolean']['output'];
     deleteAssistant: ResultType;
     deleteFlow: ResultType;
     deletePrompt: ResultType;
@@ -337,6 +369,7 @@ export type Mutation = {
     stopFlow: ResultType;
     testAgent: AgentTestResult;
     testProvider: ProviderTestResult;
+    updateAPIToken: ApiToken;
     updatePrompt: UserPrompt;
     updateProvider: ProviderConfig;
     validatePrompt: PromptValidationResult;
@@ -347,6 +380,10 @@ export type MutationCallAssistantArgs = {
     flowId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
     useAgents: Scalars['Boolean']['input'];
+};
+
+export type MutationCreateApiTokenArgs = {
+    input: CreateApiTokenInput;
 };
 
 export type MutationCreateAssistantArgs = {
@@ -370,6 +407,10 @@ export type MutationCreateProviderArgs = {
     agents: AgentsConfigInput;
     name: Scalars['String']['input'];
     type: ProviderType;
+};
+
+export type MutationDeleteApiTokenArgs = {
+    tokenId: Scalars['String']['input'];
 };
 
 export type MutationDeleteAssistantArgs = {
@@ -416,6 +457,11 @@ export type MutationTestAgentArgs = {
 export type MutationTestProviderArgs = {
     agents: AgentsConfigInput;
     type: ProviderType;
+};
+
+export type MutationUpdateApiTokenArgs = {
+    input: UpdateApiTokenInput;
+    tokenId: Scalars['String']['input'];
 };
 
 export type MutationUpdatePromptArgs = {
@@ -566,6 +612,8 @@ export type ProvidersReadinessStatus = {
 
 export type Query = {
     agentLogs?: Maybe<Array<AgentLog>>;
+    apiToken?: Maybe<ApiToken>;
+    apiTokens: Array<ApiToken>;
     assistantLogs?: Maybe<Array<AssistantLog>>;
     assistants?: Maybe<Array<Assistant>>;
     flow: Flow;
@@ -600,6 +648,10 @@ export type Query = {
 
 export type QueryAgentLogsArgs = {
     flowId: Scalars['ID']['input'];
+};
+
+export type QueryApiTokenArgs = {
+    tokenId: Scalars['String']['input'];
 };
 
 export type QueryAssistantLogsArgs = {
@@ -742,6 +794,9 @@ export enum StatusType {
 
 export type Subscription = {
     agentLogAdded: AgentLog;
+    apiTokenCreated: ApiToken;
+    apiTokenDeleted: ApiToken;
+    apiTokenUpdated: ApiToken;
     assistantCreated: Assistant;
     assistantDeleted: Assistant;
     assistantLogAdded: AssistantLog;
@@ -898,6 +953,12 @@ export type TestResult = {
     type: Scalars['String']['output'];
 };
 
+export enum TokenStatus {
+    Active = 'active',
+    Expired = 'expired',
+    Revoked = 'revoked',
+}
+
 export type ToolcallsStats = {
     totalCount: Scalars['Int']['output'];
     totalDurationSeconds: Scalars['Float']['output'];
@@ -913,6 +974,11 @@ export type ToolsPrompts = {
     getFullExecutionContext: DefaultPrompt;
     getShortExecutionContext: DefaultPrompt;
     getTaskDescription: DefaultPrompt;
+};
+
+export type UpdateApiTokenInput = {
+    name?: InputMaybe<Scalars['String']['input']>;
+    status?: InputMaybe<TokenStatus>;
 };
 
 export type UsageStats = {
@@ -1198,6 +1264,31 @@ export type PromptValidationResultFragmentFragment = {
     details?: string | null;
 };
 
+export type ApiTokenFragmentFragment = {
+    id: string;
+    tokenId: string;
+    userId: string;
+    roleId: string;
+    name?: string | null;
+    ttl: number;
+    status: TokenStatus;
+    createdAt: any;
+    updatedAt: any;
+};
+
+export type ApiTokenWithSecretFragmentFragment = {
+    id: string;
+    tokenId: string;
+    userId: string;
+    roleId: string;
+    name?: string | null;
+    ttl: number;
+    status: TokenStatus;
+    createdAt: any;
+    updatedAt: any;
+    token: string;
+};
+
 export type UsageStatsFragmentFragment = {
     totalUsageIn: number;
     totalUsageOut: number;
@@ -1476,6 +1567,16 @@ export type FlowsExecutionStatsByPeriodQuery = {
     flowsExecutionStatsByPeriod: Array<FlowExecutionStatsFragmentFragment>;
 };
 
+export type ApiTokensQueryVariables = Exact<{ [key: string]: never }>;
+
+export type ApiTokensQuery = { apiTokens: Array<ApiTokenFragmentFragment> };
+
+export type ApiTokenQueryVariables = Exact<{
+    tokenId: Scalars['String']['input'];
+}>;
+
+export type ApiTokenQuery = { apiToken?: ApiTokenFragmentFragment | null };
+
 export type CreateFlowMutationVariables = Exact<{
     modelProvider: Scalars['String']['input'];
     input: Scalars['String']['input'];
@@ -1605,6 +1706,25 @@ export type DeletePromptMutationVariables = Exact<{
 }>;
 
 export type DeletePromptMutation = { deletePrompt: ResultType };
+
+export type CreateApiTokenMutationVariables = Exact<{
+    input: CreateApiTokenInput;
+}>;
+
+export type CreateApiTokenMutation = { createAPIToken: ApiTokenWithSecretFragmentFragment };
+
+export type UpdateApiTokenMutationVariables = Exact<{
+    tokenId: Scalars['String']['input'];
+    input: UpdateApiTokenInput;
+}>;
+
+export type UpdateApiTokenMutation = { updateAPIToken: ApiTokenFragmentFragment };
+
+export type DeleteApiTokenMutationVariables = Exact<{
+    tokenId: Scalars['String']['input'];
+}>;
+
+export type DeleteApiTokenMutation = { deleteAPIToken: boolean };
 
 export type TerminalLogAddedSubscriptionVariables = Exact<{
     flowId: Scalars['ID']['input'];
@@ -1739,6 +1859,18 @@ export type ProviderUpdatedSubscription = { providerUpdated: ProviderConfigFragm
 export type ProviderDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
 export type ProviderDeletedSubscription = { providerDeleted: ProviderConfigFragmentFragment };
+
+export type ApiTokenCreatedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type ApiTokenCreatedSubscription = { apiTokenCreated: ApiTokenFragmentFragment };
+
+export type ApiTokenUpdatedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type ApiTokenUpdatedSubscription = { apiTokenUpdated: ApiTokenFragmentFragment };
+
+export type ApiTokenDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type ApiTokenDeletedSubscription = { apiTokenDeleted: ApiTokenFragmentFragment };
 
 export const FlowOverviewFragmentFragmentDoc = gql`
     fragment flowOverviewFragment on Flow {
@@ -2094,6 +2226,33 @@ export const PromptValidationResultFragmentFragmentDoc = gql`
         message
         line
         details
+    }
+`;
+export const ApiTokenFragmentFragmentDoc = gql`
+    fragment apiTokenFragment on APIToken {
+        id
+        tokenId
+        userId
+        roleId
+        name
+        ttl
+        status
+        createdAt
+        updatedAt
+    }
+`;
+export const ApiTokenWithSecretFragmentFragmentDoc = gql`
+    fragment apiTokenWithSecretFragment on APITokenWithSecret {
+        id
+        tokenId
+        userId
+        roleId
+        name
+        ttl
+        status
+        createdAt
+        updatedAt
+        token
     }
 `;
 export const UsageStatsFragmentFragmentDoc = gql`
@@ -3907,6 +4066,96 @@ export type FlowsExecutionStatsByPeriodQueryResult = Apollo.QueryResult<
     FlowsExecutionStatsByPeriodQuery,
     FlowsExecutionStatsByPeriodQueryVariables
 >;
+export const ApiTokensDocument = gql`
+    query apiTokens {
+        apiTokens {
+            ...apiTokenFragment
+        }
+    }
+    ${ApiTokenFragmentFragmentDoc}
+`;
+
+/**
+ * __useApiTokensQuery__
+ *
+ * To run a query within a React component, call `useApiTokensQuery` and pass it any options that fit your needs.
+ * When your component renders, `useApiTokensQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useApiTokensQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useApiTokensQuery(baseOptions?: Apollo.QueryHookOptions<ApiTokensQuery, ApiTokensQueryVariables>) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ApiTokensQuery, ApiTokensQueryVariables>(ApiTokensDocument, options);
+}
+export function useApiTokensLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<ApiTokensQuery, ApiTokensQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ApiTokensQuery, ApiTokensQueryVariables>(ApiTokensDocument, options);
+}
+export function useApiTokensSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<ApiTokensQuery, ApiTokensQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ApiTokensQuery, ApiTokensQueryVariables>(ApiTokensDocument, options);
+}
+export type ApiTokensQueryHookResult = ReturnType<typeof useApiTokensQuery>;
+export type ApiTokensLazyQueryHookResult = ReturnType<typeof useApiTokensLazyQuery>;
+export type ApiTokensSuspenseQueryHookResult = ReturnType<typeof useApiTokensSuspenseQuery>;
+export type ApiTokensQueryResult = Apollo.QueryResult<ApiTokensQuery, ApiTokensQueryVariables>;
+export const ApiTokenDocument = gql`
+    query apiToken($tokenId: String!) {
+        apiToken(tokenId: $tokenId) {
+            ...apiTokenFragment
+        }
+    }
+    ${ApiTokenFragmentFragmentDoc}
+`;
+
+/**
+ * __useApiTokenQuery__
+ *
+ * To run a query within a React component, call `useApiTokenQuery` and pass it any options that fit your needs.
+ * When your component renders, `useApiTokenQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useApiTokenQuery({
+ *   variables: {
+ *      tokenId: // value for 'tokenId'
+ *   },
+ * });
+ */
+export function useApiTokenQuery(
+    baseOptions: Apollo.QueryHookOptions<ApiTokenQuery, ApiTokenQueryVariables> &
+        ({ variables: ApiTokenQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ApiTokenQuery, ApiTokenQueryVariables>(ApiTokenDocument, options);
+}
+export function useApiTokenLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<ApiTokenQuery, ApiTokenQueryVariables>) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ApiTokenQuery, ApiTokenQueryVariables>(ApiTokenDocument, options);
+}
+export function useApiTokenSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<ApiTokenQuery, ApiTokenQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ApiTokenQuery, ApiTokenQueryVariables>(ApiTokenDocument, options);
+}
+export type ApiTokenQueryHookResult = ReturnType<typeof useApiTokenQuery>;
+export type ApiTokenLazyQueryHookResult = ReturnType<typeof useApiTokenLazyQuery>;
+export type ApiTokenSuspenseQueryHookResult = ReturnType<typeof useApiTokenSuspenseQuery>;
+export type ApiTokenQueryResult = Apollo.QueryResult<ApiTokenQuery, ApiTokenQueryVariables>;
 export const CreateFlowDocument = gql`
     mutation createFlow($modelProvider: String!, $input: String!) {
         createFlow(modelProvider: $modelProvider, input: $input) {
@@ -4619,6 +4868,121 @@ export type DeletePromptMutationResult = Apollo.MutationResult<DeletePromptMutat
 export type DeletePromptMutationOptions = Apollo.BaseMutationOptions<
     DeletePromptMutation,
     DeletePromptMutationVariables
+>;
+export const CreateApiTokenDocument = gql`
+    mutation createAPIToken($input: CreateAPITokenInput!) {
+        createAPIToken(input: $input) {
+            ...apiTokenWithSecretFragment
+        }
+    }
+    ${ApiTokenWithSecretFragmentFragmentDoc}
+`;
+export type CreateApiTokenMutationFn = Apollo.MutationFunction<CreateApiTokenMutation, CreateApiTokenMutationVariables>;
+
+/**
+ * __useCreateApiTokenMutation__
+ *
+ * To run a mutation, you first call `useCreateApiTokenMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateApiTokenMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createApiTokenMutation, { data, loading, error }] = useCreateApiTokenMutation({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useCreateApiTokenMutation(
+    baseOptions?: Apollo.MutationHookOptions<CreateApiTokenMutation, CreateApiTokenMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<CreateApiTokenMutation, CreateApiTokenMutationVariables>(CreateApiTokenDocument, options);
+}
+export type CreateApiTokenMutationHookResult = ReturnType<typeof useCreateApiTokenMutation>;
+export type CreateApiTokenMutationResult = Apollo.MutationResult<CreateApiTokenMutation>;
+export type CreateApiTokenMutationOptions = Apollo.BaseMutationOptions<
+    CreateApiTokenMutation,
+    CreateApiTokenMutationVariables
+>;
+export const UpdateApiTokenDocument = gql`
+    mutation updateAPIToken($tokenId: String!, $input: UpdateAPITokenInput!) {
+        updateAPIToken(tokenId: $tokenId, input: $input) {
+            ...apiTokenFragment
+        }
+    }
+    ${ApiTokenFragmentFragmentDoc}
+`;
+export type UpdateApiTokenMutationFn = Apollo.MutationFunction<UpdateApiTokenMutation, UpdateApiTokenMutationVariables>;
+
+/**
+ * __useUpdateApiTokenMutation__
+ *
+ * To run a mutation, you first call `useUpdateApiTokenMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateApiTokenMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateApiTokenMutation, { data, loading, error }] = useUpdateApiTokenMutation({
+ *   variables: {
+ *      tokenId: // value for 'tokenId'
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useUpdateApiTokenMutation(
+    baseOptions?: Apollo.MutationHookOptions<UpdateApiTokenMutation, UpdateApiTokenMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<UpdateApiTokenMutation, UpdateApiTokenMutationVariables>(UpdateApiTokenDocument, options);
+}
+export type UpdateApiTokenMutationHookResult = ReturnType<typeof useUpdateApiTokenMutation>;
+export type UpdateApiTokenMutationResult = Apollo.MutationResult<UpdateApiTokenMutation>;
+export type UpdateApiTokenMutationOptions = Apollo.BaseMutationOptions<
+    UpdateApiTokenMutation,
+    UpdateApiTokenMutationVariables
+>;
+export const DeleteApiTokenDocument = gql`
+    mutation deleteAPIToken($tokenId: String!) {
+        deleteAPIToken(tokenId: $tokenId)
+    }
+`;
+export type DeleteApiTokenMutationFn = Apollo.MutationFunction<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>;
+
+/**
+ * __useDeleteApiTokenMutation__
+ *
+ * To run a mutation, you first call `useDeleteApiTokenMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useDeleteApiTokenMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [deleteApiTokenMutation, { data, loading, error }] = useDeleteApiTokenMutation({
+ *   variables: {
+ *      tokenId: // value for 'tokenId'
+ *   },
+ * });
+ */
+export function useDeleteApiTokenMutation(
+    baseOptions?: Apollo.MutationHookOptions<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>(DeleteApiTokenDocument, options);
+}
+export type DeleteApiTokenMutationHookResult = ReturnType<typeof useDeleteApiTokenMutation>;
+export type DeleteApiTokenMutationResult = Apollo.MutationResult<DeleteApiTokenMutation>;
+export type DeleteApiTokenMutationOptions = Apollo.BaseMutationOptions<
+    DeleteApiTokenMutation,
+    DeleteApiTokenMutationVariables
 >;
 export const TerminalLogAddedDocument = gql`
     subscription terminalLogAdded($flowId: ID!) {
@@ -5388,3 +5752,108 @@ export function useProviderDeletedSubscription(
 }
 export type ProviderDeletedSubscriptionHookResult = ReturnType<typeof useProviderDeletedSubscription>;
 export type ProviderDeletedSubscriptionResult = Apollo.SubscriptionResult<ProviderDeletedSubscription>;
+export const ApiTokenCreatedDocument = gql`
+    subscription apiTokenCreated {
+        apiTokenCreated {
+            ...apiTokenFragment
+        }
+    }
+    ${ApiTokenFragmentFragmentDoc}
+`;
+
+/**
+ * __useApiTokenCreatedSubscription__
+ *
+ * To run a query within a React component, call `useApiTokenCreatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useApiTokenCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useApiTokenCreatedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useApiTokenCreatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ApiTokenCreatedSubscription, ApiTokenCreatedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ApiTokenCreatedSubscription, ApiTokenCreatedSubscriptionVariables>(
+        ApiTokenCreatedDocument,
+        options,
+    );
+}
+export type ApiTokenCreatedSubscriptionHookResult = ReturnType<typeof useApiTokenCreatedSubscription>;
+export type ApiTokenCreatedSubscriptionResult = Apollo.SubscriptionResult<ApiTokenCreatedSubscription>;
+export const ApiTokenUpdatedDocument = gql`
+    subscription apiTokenUpdated {
+        apiTokenUpdated {
+            ...apiTokenFragment
+        }
+    }
+    ${ApiTokenFragmentFragmentDoc}
+`;
+
+/**
+ * __useApiTokenUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useApiTokenUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useApiTokenUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useApiTokenUpdatedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useApiTokenUpdatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ApiTokenUpdatedSubscription, ApiTokenUpdatedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ApiTokenUpdatedSubscription, ApiTokenUpdatedSubscriptionVariables>(
+        ApiTokenUpdatedDocument,
+        options,
+    );
+}
+export type ApiTokenUpdatedSubscriptionHookResult = ReturnType<typeof useApiTokenUpdatedSubscription>;
+export type ApiTokenUpdatedSubscriptionResult = Apollo.SubscriptionResult<ApiTokenUpdatedSubscription>;
+export const ApiTokenDeletedDocument = gql`
+    subscription apiTokenDeleted {
+        apiTokenDeleted {
+            ...apiTokenFragment
+        }
+    }
+    ${ApiTokenFragmentFragmentDoc}
+`;
+
+/**
+ * __useApiTokenDeletedSubscription__
+ *
+ * To run a query within a React component, call `useApiTokenDeletedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useApiTokenDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useApiTokenDeletedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useApiTokenDeletedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ApiTokenDeletedSubscription, ApiTokenDeletedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ApiTokenDeletedSubscription, ApiTokenDeletedSubscriptionVariables>(
+        ApiTokenDeletedDocument,
+        options,
+    );
+}
+export type ApiTokenDeletedSubscriptionHookResult = ReturnType<typeof useApiTokenDeletedSubscription>;
+export type ApiTokenDeletedSubscriptionResult = Apollo.SubscriptionResult<ApiTokenDeletedSubscription>;

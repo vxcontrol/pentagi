@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"pentagi/pkg/server/models"
+	"pentagi/pkg/server/rdb"
 	"pentagi/pkg/server/response"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/jinzhu/gorm"
 )
 
 type authResult int
@@ -26,24 +27,28 @@ const (
 
 type AuthMiddleware struct {
 	globalSalt string
+	tokenCache *TokenCache
+	userCache  *UserCache
 }
 
-func NewAuthMiddleware(baseURL, globalSalt string) *AuthMiddleware {
+func NewAuthMiddleware(baseURL, globalSalt string, tokenCache *TokenCache, userCache *UserCache) *AuthMiddleware {
 	return &AuthMiddleware{
 		globalSalt: globalSalt,
+		tokenCache: tokenCache,
+		userCache:  userCache,
 	}
 }
 
-func (p *AuthMiddleware) AuthRequired(c *gin.Context) {
+func (p *AuthMiddleware) AuthUserRequired(c *gin.Context) {
 	p.tryAuth(c, true, p.tryUserCookieAuthentication)
 }
 
-func (p *AuthMiddleware) AuthTokenProtoRequired(c *gin.Context) {
+func (p *AuthMiddleware) AuthTokenRequired(c *gin.Context) {
 	p.tryAuth(c, true, p.tryProtoTokenAuthentication, p.tryUserCookieAuthentication)
 }
 
 func (p *AuthMiddleware) TryAuth(c *gin.Context) {
-	p.tryAuth(c, false, p.tryUserCookieAuthentication)
+	p.tryAuth(c, false, p.tryProtoTokenAuthentication, p.tryUserCookieAuthentication)
 }
 
 func (p *AuthMiddleware) tryAuth(
@@ -94,9 +99,9 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 	tid := session.Get("tid")
 	uname := session.Get("uname")
 
-	for _, attr := range []interface{}{uid, rid, prm, exp, gtm, uname, tid} {
+	for _, attr := range []any{uid, rid, prm, exp, gtm, uname, uhash, tid} {
 		if attr == nil {
-			return authResultFail, errors.New("token claim invalid")
+			return authResultFail, errors.New("cookie claim invalid")
 		}
 	}
 
@@ -105,6 +110,7 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 		return authResultFail, errors.New("no pemissions granted")
 	}
 
+	// Verify session expiration
 	expVal, ok := exp.(int64)
 	if !ok {
 		return authResultFail, errors.New("token claim invalid")
@@ -113,9 +119,33 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 		return authResultFail, errors.New("session expired")
 	}
 
+	// Verify user hash matches database
+	userID := uid.(uint64)
+	sessionHash := uhash.(string)
+
+	dbHash, userStatus, err := p.userCache.GetUserHash(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return authResultFail, errors.New("user has been deleted")
+		}
+		return authResultFail, fmt.Errorf("error checking user status: %w", err)
+	}
+
+	switch userStatus {
+	case models.UserStatusBlocked:
+		return authResultFail, errors.New("user has been blocked")
+	case models.UserStatusCreated:
+		return authResultFail, errors.New("user is not ready")
+	case models.UserStatusActive:
+	}
+
+	if dbHash != sessionHash {
+		return authResultFail, errors.New("user hash mismatch - session invalid for this installation")
+	}
+
 	c.Set("prm", prms)
-	c.Set("uid", uid.(uint64))
-	c.Set("uhash", uhash.(string))
+	c.Set("uid", userID)
+	c.Set("uhash", sessionHash)
 	c.Set("rid", rid.(uint64))
 	c.Set("exp", exp.(int64))
 	c.Set("gtm", gtm.(int64))
@@ -145,45 +175,63 @@ func (p *AuthMiddleware) tryProtoTokenAuthentication(c *gin.Context) (authResult
 		return authResultSkip, errors.New("token can't be empty")
 	}
 
-	claims, err := ValidateToken(token, p.globalSalt)
-	if err != nil {
+	// skip validation if using default salt (for backward compatibility)
+	if p.globalSalt == "" || p.globalSalt == "salt" {
+		return authResultSkip, errors.New("token validation disabled with default salt")
+	}
+
+	// try to validate as API token first (new format with JWT signing key)
+	apiClaims, apiErr := ValidateAPIToken(token, p.globalSalt)
+	if apiErr != nil {
 		return authResultFail, errors.New("token is invalid")
 	}
 
-	c.Set("uid", claims.UID)
-	c.Set("tid", claims.TID)
-	c.Set("uhash", claims.UHASH)
-	c.Set("rid", claims.RID)
-	c.Set("cpt", claims.CPT)
-	c.Set("prm", []string{PrivilegeAutomation})
+	// check token status and get privileges through cache
+	status, privileges, err := p.tokenCache.GetStatus(apiClaims.TokenID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return authResultFail, errors.New("token not found in database")
+		}
+		return authResultFail, fmt.Errorf("error checking token status: %w", err)
+	}
+	if status != models.TokenStatusActive {
+		return authResultFail, errors.New("token has been revoked")
+	}
 
-	c.Next()
+	// Verify user hash matches database
+	dbHash, userStatus, err := p.userCache.GetUserHash(apiClaims.UID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return authResultFail, errors.New("user has been deleted")
+		}
+		return authResultFail, fmt.Errorf("error checking user status: %w", err)
+	}
+
+	if userStatus == models.UserStatusBlocked {
+		return authResultFail, errors.New("user has been blocked")
+	}
+
+	if dbHash != apiClaims.UHASH {
+		return authResultFail, errors.New("user hash mismatch - token invalid for this installation")
+	}
+
+	// generate UUID from user hash (fallback to empty string if hash is invalid)
+	uuid, err := rdb.MakeUuidStrFromHash(apiClaims.UHASH)
+	if err != nil {
+		// Use empty UUID for invalid hashes (e.g., in tests)
+		uuid = ""
+	}
+
+	// set session fields similar to regular login
+	c.Set("uid", apiClaims.UID)
+	c.Set("uhash", apiClaims.UHASH)
+	c.Set("rid", apiClaims.RID)
+	c.Set("tid", models.UserTypeAPI.String())
+	c.Set("prm", privileges)
+	c.Set("gtm", time.Now().Unix())
+	c.Set("exp", apiClaims.ExpiresAt.Unix())
+	c.Set("uuid", uuid)
+	c.Set("cpt", "automation")
 
 	return authResultOk, nil
-}
-
-func ValidateToken(tokenString, globalSalt string) (*models.ProtoAuthTokenClaims, error) {
-	var claims models.ProtoAuthTokenClaims
-	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
-		// verify signing algorithm to prevent "alg: none"
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return MakeCookieStoreKey(globalSalt)[1], nil
-	})
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenMalformed) {
-			return nil, fmt.Errorf("token is malformed")
-		} else if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet) {
-			return nil, fmt.Errorf("token is either expired or not active yet")
-		} else {
-			return nil, fmt.Errorf("token invalid: %w", err)
-		}
-	}
-
-	if !token.Valid {
-		return nil, fmt.Errorf("token is invalid")
-	}
-
-	return &claims, nil
 }

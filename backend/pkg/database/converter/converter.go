@@ -401,6 +401,72 @@ func ConvertPrompt(prompt database.Prompt) *model.UserPrompt {
 	}
 }
 
+func ConvertAPIToken(token database.ApiToken) *model.APIToken {
+	var name *string
+	if token.Name.Valid {
+		name = &token.Name.String
+	}
+
+	return &model.APIToken{
+		ID:        token.ID,
+		TokenID:   token.TokenID,
+		UserID:    token.UserID,
+		RoleID:    token.RoleID,
+		Name:      name,
+		TTL:       int(token.Ttl),
+		Status:    model.TokenStatus(token.Status),
+		CreatedAt: token.CreatedAt.Time,
+		UpdatedAt: token.UpdatedAt.Time,
+	}
+}
+
+func ConvertAPITokenRemoveSecret(token database.APITokenWithSecret) *model.APIToken {
+	var name *string
+	if token.Name.Valid {
+		name = &token.Name.String
+	}
+
+	return &model.APIToken{
+		ID:        token.ID,
+		TokenID:   token.TokenID,
+		UserID:    token.UserID,
+		RoleID:    token.RoleID,
+		Name:      name,
+		TTL:       int(token.Ttl),
+		Status:    model.TokenStatus(token.Status),
+		CreatedAt: token.CreatedAt.Time,
+		UpdatedAt: token.UpdatedAt.Time,
+	}
+}
+
+func ConvertAPITokenWithSecret(token database.APITokenWithSecret) *model.APITokenWithSecret {
+	var name *string
+	if token.Name.Valid {
+		name = &token.Name.String
+	}
+
+	return &model.APITokenWithSecret{
+		ID:        token.ID,
+		TokenID:   token.TokenID,
+		UserID:    token.UserID,
+		RoleID:    token.RoleID,
+		Name:      name,
+		TTL:       int(token.Ttl),
+		Status:    model.TokenStatus(token.Status),
+		CreatedAt: token.CreatedAt.Time,
+		UpdatedAt: token.UpdatedAt.Time,
+		Token:     token.Token,
+	}
+}
+
+func ConvertAPITokens(tokens []database.ApiToken) []*model.APIToken {
+	result := make([]*model.APIToken, 0, len(tokens))
+	for _, token := range tokens {
+		result = append(result, ConvertAPIToken(token))
+	}
+	return result
+}
+
 func ConvertModels(models pconfig.ModelsConfig) []*model.ModelConfig {
 	gmodels := make([]*model.ModelConfig, 0, len(models))
 	for _, m := range models {

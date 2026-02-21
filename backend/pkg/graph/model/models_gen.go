@@ -9,6 +9,31 @@ import (
 	"time"
 )
 
+type APIToken struct {
+	ID        int64       `json:"id"`
+	TokenID   string      `json:"tokenId"`
+	UserID    int64       `json:"userId"`
+	RoleID    int64       `json:"roleId"`
+	Name      *string     `json:"name,omitempty"`
+	TTL       int         `json:"ttl"`
+	Status    TokenStatus `json:"status"`
+	CreatedAt time.Time   `json:"createdAt"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+}
+
+type APITokenWithSecret struct {
+	ID        int64       `json:"id"`
+	TokenID   string      `json:"tokenId"`
+	UserID    int64       `json:"userId"`
+	RoleID    int64       `json:"roleId"`
+	Name      *string     `json:"name,omitempty"`
+	TTL       int         `json:"ttl"`
+	Status    TokenStatus `json:"status"`
+	CreatedAt time.Time   `json:"createdAt"`
+	UpdatedAt time.Time   `json:"updatedAt"`
+	Token     string      `json:"token"`
+}
+
 type AgentConfig struct {
 	Model             string           `json:"model"`
 	MaxTokens         *int             `json:"maxTokens,omitempty"`
@@ -110,6 +135,11 @@ type AssistantLog struct {
 	FlowID       int64          `json:"flowId"`
 	AssistantID  int64          `json:"assistantId"`
 	CreatedAt    time.Time      `json:"createdAt"`
+}
+
+type CreateAPITokenInput struct {
+	Name *string `json:"name,omitempty"`
+	TTL  int     `json:"ttl"`
 }
 
 type DailyFlowsStats struct {
@@ -426,6 +456,11 @@ type ToolsPrompts struct {
 	ChooseUserLanguage       *DefaultPrompt `json:"chooseUserLanguage"`
 	CollectToolCallID        *DefaultPrompt `json:"collectToolCallID"`
 	DetectToolCallIDPattern  *DefaultPrompt `json:"detectToolCallIDPattern"`
+}
+
+type UpdateAPITokenInput struct {
+	Name   *string      `json:"name,omitempty"`
+	Status *TokenStatus `json:"status,omitempty"`
 }
 
 type UsageStats struct {
@@ -1110,6 +1145,49 @@ func (e *TerminalType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e TerminalType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type TokenStatus string
+
+const (
+	TokenStatusActive  TokenStatus = "active"
+	TokenStatusRevoked TokenStatus = "revoked"
+	TokenStatusExpired TokenStatus = "expired"
+)
+
+var AllTokenStatus = []TokenStatus{
+	TokenStatusActive,
+	TokenStatusRevoked,
+	TokenStatusExpired,
+}
+
+func (e TokenStatus) IsValid() bool {
+	switch e {
+	case TokenStatusActive, TokenStatusRevoked, TokenStatusExpired:
+		return true
+	}
+	return false
+}
+
+func (e TokenStatus) String() string {
+	return string(e)
+}
+
+func (e *TokenStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TokenStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TokenStatus", str)
+	}
+	return nil
+}
+
+func (e TokenStatus) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

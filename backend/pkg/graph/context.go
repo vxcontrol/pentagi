@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"pentagi/pkg/database"
 	"regexp"
 	"slices"
+
+	"pentagi/pkg/database"
 )
 
 // This file will not be regenerated automatically.
@@ -15,10 +16,13 @@ import (
 
 var permAdminRegexp = regexp.MustCompile(`^(.+)\.[a-z]+$`)
 
+var userSessionTypes = []string{"local", "oauth"}
+
 type GqlContextKey string
 
 const (
 	UserIDKey       GqlContextKey = "userID"
+	UserTypeKey     GqlContextKey = "userType"
 	UserPermissions GqlContextKey = "userPermissions"
 )
 
@@ -34,6 +38,18 @@ func SetUserID(ctx context.Context, userID uint64) context.Context {
 	return context.WithValue(ctx, UserIDKey, userID)
 }
 
+func GetUserType(ctx context.Context) (string, error) {
+	userType, ok := ctx.Value(UserTypeKey).(string)
+	if !ok {
+		return "", errors.New("user type not found")
+	}
+	return userType, nil
+}
+
+func SetUserType(ctx context.Context, userType string) context.Context {
+	return context.WithValue(ctx, UserTypeKey, userType)
+}
+
 func GetUserPermissions(ctx context.Context) ([]string, error) {
 	userPermissions, ok := ctx.Value(UserPermissions).([]string)
 	if !ok {
@@ -44,6 +60,19 @@ func GetUserPermissions(ctx context.Context) ([]string, error) {
 
 func SetUserPermissions(ctx context.Context, userPermissions []string) context.Context {
 	return context.WithValue(ctx, UserPermissions, userPermissions)
+}
+
+func validateUserType(ctx context.Context, userTypes ...string) (bool, error) {
+	userType, err := GetUserType(ctx)
+	if err != nil {
+		return false, fmt.Errorf("unauthorized: invalid user type: %v", err)
+	}
+
+	if !slices.Contains(userTypes, userType) {
+		return false, fmt.Errorf("unauthorized: invalid user type: %s", userType)
+	}
+
+	return true, nil
 }
 
 func validatePermission(ctx context.Context, perm string) (int64, bool, error) {

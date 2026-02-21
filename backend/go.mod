@@ -163,6 +163,7 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
+	github.com/mattn/go-sqlite3 v1.14.24 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

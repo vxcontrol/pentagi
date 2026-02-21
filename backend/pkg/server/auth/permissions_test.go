@@ -1,6 +1,7 @@
-package auth
+package auth_test
 
 import (
+	"pentagi/pkg/server/auth"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -8,8 +9,13 @@ import (
 )
 
 func TestPrivilegesRequired(t *testing.T) {
-	authMiddleware := NewAuthMiddleware("/base/url", "test")
-	server := newTestServer(t, "/test", authMiddleware.AuthRequired, PrivilegesRequired("priv1", "priv2"))
+	db := setupTestDB(t)
+	defer db.Close()
+
+	tokenCache := auth.NewTokenCache(db)
+	userCache := auth.NewUserCache(db)
+	authMiddleware := auth.NewAuthMiddleware("/base/url", "test", tokenCache, userCache)
+	server := newTestServer(t, "/test", db, authMiddleware.AuthTokenRequired, auth.PrivilegesRequired("priv1", "priv2"))
 	defer server.Close()
 
 	server.SetSessionCheckFunc(func(t *testing.T, c *gin.Context) {

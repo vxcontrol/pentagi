@@ -62,6 +62,11 @@ var frontendRoutes = []string{
 
 // @query.collection.format multi
 
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
 // @BasePath /api/v1
 func NewRouter(
 	db *database.Queries,
@@ -78,7 +83,9 @@ func NewRouter(
 
 	gob.Register([]string{})
 
-	authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.CookieSigningSalt)
+	tokenCache := auth.NewTokenCache(orm)
+	userCache := auth.NewUserCache(orm)
+	authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.CookieSigningSalt, tokenCache, userCache)
 	oauthClients := make(map[string]oauth.OAuthClient)
 	oauthLoginCallbackURL := "/auth/login-callback"
 
@@ -115,7 +122,7 @@ func NewRouter(
 		orm,
 		oauthClients,
 	)
-	userService := services.NewUserService(orm)
+	userService := services.NewUserService(orm, userCache)
 	roleService := services.NewRoleService(orm)
 	providerService := services.NewProviderService(providers)
 	flowService := services.NewFlowService(orm, providers, controller)
@@ -132,8 +139,9 @@ func NewRouter(
 	screenshotService := services.NewScreenshotService(orm, cfg.DataDir)
 	promptService := services.NewPromptService(orm)
 	analyticsService := services.NewAnalyticsService(orm)
+	tokenService := services.NewTokenService(orm, cfg.CookieSigningSalt, tokenCache)
 	graphqlService := services.NewGraphqlService(
-		db, cfg, baseURL, cfg.CorsOrigins, providers, controller, subscriptions,
+		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions,
 	)
 
 	router := gin.Default()
@@ -165,7 +173,7 @@ func NewRouter(
 
 	// Special case for local user own password change
 	changePasswordGroup := api.Group("/user")
-	changePasswordGroup.Use(authMiddleware.AuthRequired)
+	changePasswordGroup.Use(authMiddleware.AuthUserRequired)
 	changePasswordGroup.Use(localUserRequired())
 	changePasswordGroup.PUT("/password", userService.ChangePasswordCurrentUser)
 
@@ -192,12 +200,9 @@ func NewRouter(
 	}
 
 	privateGroup := api.Group("/")
-	privateGroup.Use(authMiddleware.AuthRequired)
+	privateGroup.Use(authMiddleware.AuthTokenRequired)
 	{
 		setGraphqlGroup(privateGroup, graphqlService)
-
-		setRolesGroup(privateGroup, roleService)
-		setUsersGroup(privateGroup, userService)
 
 		setProvidersGroup(privateGroup, providerService)
 		setFlowsGroup(privateGroup, flowService)
@@ -214,6 +219,14 @@ func NewRouter(
 		setScreenshotsGroup(privateGroup, screenshotService)
 		setPromptsGroup(privateGroup, promptService)
 		setAnalyticsGroup(privateGroup, analyticsService)
+	}
+
+	privateUserGroup := api.Group("/")
+	privateUserGroup.Use(authMiddleware.AuthUserRequired)
+	{
+		setRolesGroup(privateGroup, roleService)
+		setUsersGroup(privateGroup, userService)
+		setTokensGroup(privateGroup, tokenService)
 	}
 
 	if cfg.StaticURL != nil && cfg.StaticURL.Scheme != "" && cfg.StaticURL.Host != "" {
@@ -294,7 +307,7 @@ func setGraphqlGroup(parent *gin.RouterGroup, svc *services.GraphqlService) {
 func setSubtasksGroup(parent *gin.RouterGroup, svc *services.SubtaskService) {
 	flowSubtasksViewGroup := parent.Group("/flows/:flowID/subtasks")
 	{
-		flowSubtasksViewGroup.GET("/", svc.GetFlowTaskSubtasks)
+		flowSubtasksViewGroup.GET("/", svc.GetFlowSubtasks)
 	}
 
 	flowTaskSubtasksViewGroup := parent.Group("/flows/:flowID/tasks/:taskID/subtasks")
@@ -470,6 +483,7 @@ func setPromptsGroup(parent *gin.RouterGroup, svc *services.PromptService) {
 	{
 		promptsEditGroup.PUT("/:promptType", svc.PatchPrompt)
 		promptsEditGroup.POST("/:promptType/default", svc.ResetPrompt)
+		promptsEditGroup.DELETE("/:promptType", svc.DeletePrompt)
 	}
 }
 
@@ -521,5 +535,16 @@ func setAnalyticsGroup(parent *gin.RouterGroup, svc *services.AnalyticsService) 
 	flowUsageViewGroup := parent.Group("/flows/:flowID/usage")
 	{
 		flowUsageViewGroup.GET("/", svc.GetFlowUsage)
+	}
+}
+
+func setTokensGroup(parent *gin.RouterGroup, svc *services.TokenService) {
+	tokensGroup := parent.Group("/tokens")
+	{
+		tokensGroup.POST("/", svc.CreateToken)
+		tokensGroup.GET("/", svc.ListTokens)
+		tokensGroup.GET("/:tokenID", svc.GetToken)
+		tokensGroup.PUT("/:tokenID", svc.UpdateToken)
+		tokensGroup.DELETE("/:tokenID", svc.DeleteToken)
 	}
 }

@@ -87,6 +87,79 @@ definitions:
         type: string
       type: array
     type: object
+  models.APIToken:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        minimum: 0
+        type: integer
+      name:
+        maxLength: 100
+        type: string
+      role_id:
+        minimum: 0
+        type: integer
+      status:
+        type: string
+      token_id:
+        type: string
+      ttl:
+        maximum: 94608000
+        minimum: 60
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        minimum: 0
+        type: integer
+    required:
+    - created_at
+    - status
+    - token_id
+    - ttl
+    - updated_at
+    type: object
+  models.APITokenWithSecret:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        minimum: 0
+        type: integer
+      name:
+        maxLength: 100
+        type: string
+      role_id:
+        minimum: 0
+        type: integer
+      status:
+        type: string
+      token:
+        type: string
+      token_id:
+        type: string
+      ttl:
+        maximum: 94608000
+        minimum: 60
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        minimum: 0
+        type: integer
+    required:
+    - created_at
+    - status
+    - token
+    - token_id
+    - ttl
+    - updated_at
+    type: object
   models.AgentTypeUsageStats:
     properties:
       agent_type:
@@ -114,13 +187,16 @@ definitions:
       result:
         type: string
       subtask_id:
+        minimum: 0
         type: integer
       task:
         type: string
       task_id:
+        minimum: 0
         type: integer
     required:
     - executor
+    - flow_id
     - initiator
     - task
     type: object
@@ -156,6 +232,7 @@ definitions:
       updated_at:
         type: string
     required:
+    - flow_id
     - language
     - model
     - model_provider_name
@@ -197,6 +274,7 @@ definitions:
       updated_at:
         type: string
     required:
+    - flow_id
     - language
     - model
     - model_provider_name
@@ -228,7 +306,8 @@ definitions:
       type:
         type: string
     required:
-    - message
+    - assistant_id
+    - flow_id
     - result_format
     - type
     type: object
@@ -273,12 +352,26 @@ definitions:
       updated_at:
         type: string
     required:
+    - flow_id
     - image
     - local_dir
     - local_id
     - name
     - status
     - type
+    type: object
+  models.CreateAPITokenRequest:
+    properties:
+      name:
+        maxLength: 100
+        type: string
+      ttl:
+        description: from 1 minute to 3 years
+        maximum: 94608000
+        minimum: 60
+        type: integer
+    required:
+    - ttl
     type: object
   models.CreateAssistant:
     properties:
@@ -379,6 +472,7 @@ definitions:
     - model_provider_type
     - status
     - title
+    - user_id
     type: object
   models.FlowExecutionStats:
     properties:
@@ -458,6 +552,7 @@ definitions:
     - status
     - tasks
     - title
+    - user_id
     type: object
   models.FlowUsageResponse:
     properties:
@@ -559,14 +654,17 @@ definitions:
       result_format:
         type: string
       subtask_id:
+        minimum: 0
         type: integer
       task_id:
+        minimum: 0
         type: integer
       thinking:
         type: string
       type:
         type: string
     required:
+    - flow_id
     - message
     - result_format
     - type
@@ -682,36 +780,6 @@ definitions:
     - prompt
     - type
     type: object
-  models.ProtoAuthToken:
-    properties:
-      created_date:
-        type: string
-      token:
-        type: string
-      ttl:
-        maximum: 94608000
-        minimum: 1
-        type: integer
-    required:
-    - token
-    - ttl
-    type: object
-  models.ProtoAuthTokenRequest:
-    properties:
-      ttl:
-        default: 31536000
-        maximum: 94608000
-        minimum: 1
-        type: integer
-      type:
-        default: automation
-        enum:
-        - automation
-        type: string
-    required:
-    - ttl
-    - type
-    type: object
   models.ProviderInfo:
     properties:
       name:
@@ -807,12 +875,15 @@ definitions:
       result:
         type: string
       subtask_id:
+        minimum: 0
         type: integer
       task_id:
+        minimum: 0
         type: integer
     required:
     - engine
     - executor
+    - flow_id
     - initiator
     - query
     type: object
@@ -841,6 +912,7 @@ definitions:
     required:
     - description
     - status
+    - task_id
     - title
     type: object
   models.SubtaskExecutionStats:
@@ -909,6 +981,7 @@ definitions:
       updated_at:
         type: string
     required:
+    - flow_id
     - input
     - status
     - title
@@ -958,6 +1031,7 @@ definitions:
       updated_at:
         type: string
     required:
+    - flow_id
     - input
     - status
     - subtasks
@@ -1000,6 +1074,14 @@ definitions:
       total_duration_seconds:
         minimum: 0
         type: number
+    type: object
+  models.UpdateAPITokenRequest:
+    properties:
+      name:
+        maxLength: 100
+        type: string
+      status:
+        type: string
     type: object
   models.UsageStats:
     properties:
@@ -1049,8 +1131,8 @@ definitions:
       type:
         type: string
     required:
-    - created_at
     - mail
+    - role_id
     - status
     - type
     type: object
@@ -1084,9 +1166,9 @@ definitions:
       type:
         type: string
     required:
-    - created_at
     - mail
     - password
+    - role_id
     - status
     - type
     type: object
@@ -1119,8 +1201,8 @@ definitions:
       type:
         type: string
     required:
-    - created_at
     - mail
+    - role_id
     - status
     - type
     type: object
@@ -1153,8 +1235,8 @@ definitions:
       type:
         type: string
     required:
-    - created_at
     - mail
+    - role_id
     - status
     - type
     type: object
@@ -1181,16 +1263,18 @@ definitions:
       result:
         type: string
       subtask_id:
+        minimum: 0
         type: integer
       task_id:
+        minimum: 0
         type: integer
     required:
     - action
     - executor
     - filter
+    - flow_id
     - initiator
     - query
-    - result
     type: object
   services.agentlogs:
     properties:
@@ -1334,6 +1418,15 @@ definitions:
       total:
         type: integer
     type: object
+  services.tokens:
+    properties:
+      tokens:
+        items:
+          $ref: '#/definitions/models.APIToken'
+        type: array
+      total:
+        type: integer
+    type: object
   services.users:
     properties:
       total:
@@ -1418,8 +1511,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -1442,16 +1538,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -1488,6 +1585,8 @@ paths:
           description: internal error on getting agentlogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve agentlogs list
       tags:
       - Agentlogs
@@ -1496,8 +1595,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -1520,16 +1622,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -1566,6 +1669,8 @@ paths:
           description: internal error on getting assistantlogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve assistantlogs list
       tags:
       - Assistantlogs
@@ -1739,8 +1844,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -1763,16 +1871,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -1809,6 +1918,8 @@ paths:
           description: internal error on getting containers
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve containers list
       tags:
       - Containers
@@ -1817,8 +1928,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -1841,16 +1955,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -1887,6 +2002,8 @@ paths:
           description: internal error on getting flows
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flows list
       tags:
       - Flows
@@ -1924,6 +2041,8 @@ paths:
           description: internal error on creating flow
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Create new flow with custom functions
       tags:
       - Flows
@@ -1958,6 +2077,8 @@ paths:
           description: internal error on deleting flow
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Delete flow by id
       tags:
       - Flows
@@ -1993,6 +2114,8 @@ paths:
           description: internal error on getting flow
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow by id
       tags:
       - Flows
@@ -2036,6 +2159,8 @@ paths:
           description: internal error on patching flow
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Patch flow
       tags:
       - Flows
@@ -2050,8 +2175,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -2074,16 +2202,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -2120,6 +2249,8 @@ paths:
           description: internal error on getting agentlogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve agentlogs list by flow id
       tags:
       - Agentlogs
@@ -2134,8 +2265,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -2158,16 +2292,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -2204,6 +2339,8 @@ paths:
           description: internal error on getting assistantlogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve assistantlogs list by flow id
       tags:
       - Assistantlogs
@@ -2218,8 +2355,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -2242,16 +2382,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -2288,6 +2429,8 @@ paths:
           description: internal error on getting assistants
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve assistants list
       tags:
       - Assistants
@@ -2331,6 +2474,8 @@ paths:
           description: internal error on creating assistant
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Create new assistant with custom functions
       tags:
       - Assistants
@@ -2371,6 +2516,8 @@ paths:
           description: internal error on deleting assistant
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Delete assistant by id
       tags:
       - Assistants
@@ -2412,6 +2559,8 @@ paths:
           description: internal error on getting flow assistant
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow assistant by id
       tags:
       - Assistants
@@ -2461,6 +2610,8 @@ paths:
           description: internal error on patching assistant
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Patch assistant
       tags:
       - Assistants
@@ -2475,8 +2626,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -2499,16 +2653,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -2545,6 +2700,8 @@ paths:
           description: internal error on getting containers
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve containers list by flow id
       tags:
       - Containers
@@ -2587,6 +2744,8 @@ paths:
           description: internal error on getting container
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve container info by id and flow id
       tags:
       - Containers
@@ -2623,6 +2782,8 @@ paths:
           description: internal error on getting flow graph
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow graph by id
       tags:
       - Flows
@@ -2637,8 +2798,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -2661,16 +2825,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -2707,6 +2872,8 @@ paths:
           description: internal error on getting msglogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve msglogs list by flow id
       tags:
       - Msglogs
@@ -2721,8 +2888,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -2745,16 +2915,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -2791,6 +2962,8 @@ paths:
           description: internal error on getting screenshots
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve screenshots list by flow id
       tags:
       - Screenshots
@@ -2833,6 +3006,8 @@ paths:
           description: internal error on getting screenshot
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve screenshot info by id and flow id
       tags:
       - Screenshots
@@ -2867,6 +3042,8 @@ paths:
           description: internal error on getting screenshot
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve screenshot file by id and flow id
       tags:
       - Screenshots
@@ -2881,8 +3058,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -2905,16 +3085,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -2951,6 +3132,8 @@ paths:
           description: internal error on getting searchlogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve searchlogs list by flow id
       tags:
       - Searchlogs
@@ -2965,8 +3148,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -2989,16 +3175,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -3035,6 +3222,8 @@ paths:
           description: internal error on getting flow subtasks
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow subtasks list
       tags:
       - Subtasks
@@ -3049,8 +3238,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -3073,16 +3265,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -3119,6 +3312,8 @@ paths:
           description: internal error on getting flow tasks
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow tasks list
       tags:
       - Tasks
@@ -3161,6 +3356,8 @@ paths:
           description: internal error on getting flow task
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow task by id
       tags:
       - Tasks
@@ -3203,6 +3400,8 @@ paths:
           description: internal error on getting flow task graph
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow task graph by id
       tags:
       - Tasks
@@ -3223,8 +3422,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -3247,16 +3449,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -3293,6 +3496,8 @@ paths:
           description: internal error on getting flow subtasks
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow task subtasks list
       tags:
       - Subtasks
@@ -3341,6 +3546,8 @@ paths:
           description: internal error on getting flow task subtask
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve flow task subtask by id
       tags:
       - Subtasks
@@ -3355,8 +3562,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -3379,16 +3589,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -3425,6 +3636,8 @@ paths:
           description: internal error on getting termlogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve termlogs list by flow id
       tags:
       - Termlogs
@@ -3466,6 +3679,8 @@ paths:
           description: internal error on getting flow analytics
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve analytics for specific flow
       tags:
       - Flows
@@ -3481,8 +3696,11 @@ paths:
         type: integer
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -3505,16 +3723,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -3551,6 +3770,8 @@ paths:
           description: internal error on getting vecstorelogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve vecstorelogs list by flow id
       tags:
       - Vecstorelogs
@@ -3584,6 +3805,8 @@ paths:
           description: internal error on graphql request
           schema:
             $ref: '#/definitions/graphql.Response'
+      security:
+      - BearerAuth: []
       summary: Perform graphql requests
       tags:
       - GraphQL
@@ -3618,6 +3841,8 @@ paths:
           description: internal error on getting information about system and config
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve current user and system settings
       tags:
       - Public
@@ -3626,8 +3851,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -3650,16 +3878,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -3696,6 +3925,8 @@ paths:
           description: internal error on getting msglogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve msglogs list
       tags:
       - Msglogs
@@ -3704,8 +3935,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -3728,16 +3962,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -3774,10 +4009,47 @@ paths:
           description: internal error on getting prompts
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve prompts list
       tags:
       - Prompts
   /prompts/{promptType}:
+    delete:
+      parameters:
+      - description: prompt type
+        in: path
+        name: promptType
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: prompt deleted successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid prompt request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: deleting prompt not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: prompt not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting prompt
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete prompt by type
+      tags:
+      - Prompts
     get:
       parameters:
       - description: prompt type
@@ -3813,6 +4085,8 @@ paths:
           description: internal error on getting prompt
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve prompt by type
       tags:
       - Prompts
@@ -3843,6 +4117,15 @@ paths:
                 data:
                   $ref: '#/definitions/models.Prompt'
               type: object
+        "201":
+          description: prompt created successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Prompt'
+              type: object
         "400":
           description: invalid prompt request data
           schema:
@@ -3859,6 +4142,8 @@ paths:
           description: internal error on updating prompt
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Update prompt
       tags:
       - Prompts
@@ -3884,6 +4169,15 @@ paths:
                 data:
                   $ref: '#/definitions/models.Prompt'
               type: object
+        "201":
+          description: prompt created with default value successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Prompt'
+              type: object
         "400":
           description: invalid prompt request data
           schema:
@@ -3900,6 +4194,8 @@ paths:
           description: internal error on resetting prompt
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Reset prompt by type to default value
       tags:
       - Prompts
@@ -3921,6 +4217,8 @@ paths:
           description: getting providers not permitted
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve providers list
       tags:
       - Providers
@@ -3929,8 +4227,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -3953,16 +4254,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -4042,8 +4344,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -4066,16 +4371,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -4112,6 +4418,8 @@ paths:
           description: internal error on getting screenshots
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve screenshots list
       tags:
       - Screenshots
@@ -4120,8 +4428,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -4144,16 +4455,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -4190,6 +4502,8 @@ paths:
           description: internal error on getting searchlogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve searchlogs list
       tags:
       - Searchlogs
@@ -4198,8 +4512,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -4222,16 +4539,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -4268,20 +4586,46 @@ paths:
           description: internal error on getting termlogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve termlogs list
       tags:
       - Termlogs
-  /token:
+  /tokens:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: tokens retrieved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.tokens'
+              type: object
+        "403":
+          description: listing tokens not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on listing tokens
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: List API tokens
+      tags:
+      - Tokens
     post:
       consumes:
       - application/json
       parameters:
-      - description: Proto auth token request JSON data
+      - description: Token creation request
         in: body
         name: json
         required: true
         schema:
-          $ref: '#/definitions/models.ProtoAuthTokenRequest'
+          $ref: '#/definitions/models.CreateAPITokenRequest'
       produces:
       - application/json
       responses:
@@ -4292,10 +4636,10 @@ paths:
             - $ref: '#/definitions/SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.ProtoAuthToken'
+                  $ref: '#/definitions/models.APITokenWithSecret'
               type: object
         "400":
-          description: invalid requested token info
+          description: invalid token request or default salt
           schema:
             $ref: '#/definitions/ErrorResponse'
         "403":
@@ -4306,9 +4650,119 @@ paths:
           description: internal error on creating token
           schema:
             $ref: '#/definitions/ErrorResponse'
-      summary: Create new JWT token to use it into automation connections
+      summary: Create new API token for automation
       tags:
-      - Proto
+      - Tokens
+  /tokens/{tokenID}:
+    delete:
+      parameters:
+      - description: Token ID
+        in: path
+        name: tokenID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: token deleted successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "403":
+          description: deleting token not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: token not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting token
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Delete API token
+      tags:
+      - Tokens
+    get:
+      parameters:
+      - description: Token ID
+        in: path
+        name: tokenID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: token retrieved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.APIToken'
+              type: object
+        "403":
+          description: accessing token not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: token not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting token
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Get API token details
+      tags:
+      - Tokens
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Token ID
+        in: path
+        name: tokenID
+        required: true
+        type: string
+      - description: Token update request
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateAPITokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: token updated successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.APIToken'
+              type: object
+        "400":
+          description: invalid update request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: updating token not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: token not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on updating token
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Update API token
+      tags:
+      - Tokens
   /usage:
     get:
       description: Get comprehensive analytics for all user's flows including usage,
@@ -4333,6 +4787,8 @@ paths:
           description: internal error on getting analytics
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve system-wide analytics
       tags:
       - Usage
@@ -4373,6 +4829,8 @@ paths:
           description: internal error on getting analytics
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve analytics for specific time period
       tags:
       - Usage
@@ -4447,8 +4905,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -4471,16 +4932,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -4678,8 +5140,11 @@ paths:
       parameters:
       - collectionFormat: multi
         description: |-
-          Filtering result on server e.g. {"value":[...],"field":"..."}
-            field value should be integer or string or array type
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
         in: query
         items:
           type: string
@@ -4702,16 +5167,17 @@ paths:
         maximum: 1000
         minimum: -1
         name: pageSize
-        required: true
         type: integer
-      - default: '{}'
+      - collectionFormat: multi
         description: |-
           Sorting result on server e.g. {"prop":"...","order":"..."}
             field order is "ascending" or "descending" value
+            order is required if prop is not empty
         in: query
-        name: sort
-        required: true
-        type: string
+        items:
+          type: string
+        name: sort[]
+        type: array
       - default: init
         description: Type of request
         enum:
@@ -4748,7 +5214,15 @@ paths:
           description: internal error on getting vecstorelogs
           schema:
             $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
       summary: Retrieve vecstorelogs list
       tags:
       - Vecstorelogs
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

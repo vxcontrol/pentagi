@@ -4,7 +4,7 @@ import (
 	"crypto/md5" //nolint:gosec
 	"encoding/hex"
 	"errors"
-	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,15 +18,15 @@ import (
 //
 //nolint:lll
 type TableFilter struct {
-	Value    interface{} `form:"value" json:"value,omitempty" binding:"required" swaggertype:"object"`
-	Field    string      `form:"field" json:"field,omitempty" binding:"required"`
-	Operator string      `form:"operator" json:"operator,omitempty" binding:"oneof=<,<=,>=,>,=,!=,like,not like,in,omitempty" default:"like" enums:"<,<=,>=,>,=,!=,like,not like,in"`
+	Value    any    `form:"value" json:"value,omitempty" binding:"required" swaggertype:"object"`
+	Field    string `form:"field" json:"field,omitempty" binding:"required"`
+	Operator string `form:"operator" json:"operator,omitempty" binding:"oneof='<' '<=' '>=' '>' '=' '!=' 'like' 'not like' 'in',omitempty" default:"like" enums:"<,<=,>=,>,=,!=,like,not like,in"`
 }
 
 // TableSort is auxiliary struct to contain method of sorting
 type TableSort struct {
 	Prop  string `form:"prop" json:"prop,omitempty" binding:"omitempty"`
-	Order string `form:"order" json:"order,omitempty" binding:"omitempty"`
+	Order string `form:"order" json:"order,omitempty" binding:"oneof=ascending descending,required_with=Prop,omitempty" enums:"ascending,descending"`
 }
 
 // TableQuery is main struct to contain input params
@@ -36,35 +36,39 @@ type TableQuery struct {
 	// Number of page (since 1)
 	Page int `form:"page" json:"page" binding:"min=1,required" default:"1" minimum:"1"`
 	// Amount items per page (min -1, max 1000, -1 means unlimited)
-	Size int `form:"pageSize" json:"pageSize" binding:"min=-1,max=1000,required" default:"5" minimum:"-1" maximum:"1000"`
+	Size int `form:"pageSize" json:"pageSize" binding:"min=-1,max=1000" default:"5" minimum:"-1" maximum:"1000"`
 	// Type of request
 	Type string `form:"type" json:"type" binding:"oneof=sort filter init page size,required" default:"init" enums:"sort,filter,init,page,size"`
 	// Sorting result on server e.g. {"prop":"...","order":"..."}
 	//   field order is "ascending" or "descending" value
-	Sort TableSort `form:"sort" json:"sort" binding:"required" swaggertype:"string" default:"{}"`
-	// Filtering result on server e.g. {"value":[...],"field":"..."}
-	//   field value should be integer or string or array type
-	Filters []TableFilter `form:"filters[]" json:"filters[],omitempty" binding:"omitempty" swaggertype:"array,string"`
+	//   order is required if prop is not empty
+	Sort []TableSort `form:"sort[]" json:"sort[],omitempty" binding:"omitempty,dive" swaggertype:"array,string"`
+	// Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+	//   field is the unique identifier of the table column, different for each endpoint
+	//   value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+	//   operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+	//   default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
+	Filters []TableFilter `form:"filters[]" json:"filters[],omitempty" binding:"omitempty,dive" swaggertype:"array,string"`
 	// Field to group results by
 	Group string `form:"group" json:"group,omitempty" binding:"omitempty" swaggertype:"string"`
 	// non input arguments
-	table      string                                        `form:"-" json:"-"`
-	groupField string                                        `form:"-" json:"-"`
-	sqlMappers map[string]interface{}                        `form:"-" json:"-"`
-	sqlFind    func(out interface{}) func(*gorm.DB) *gorm.DB `form:"-" json:"-"`
-	sqlFilters []func(*gorm.DB) *gorm.DB                     `form:"-" json:"-"`
-	sqlOrders  []func(*gorm.DB) *gorm.DB                     `form:"-" json:"-"`
+	table      string                                `form:"-" json:"-"`
+	groupField string                                `form:"-" json:"-"`
+	sqlMappers map[string]any                        `form:"-" json:"-"`
+	sqlFind    func(out any) func(*gorm.DB) *gorm.DB `form:"-" json:"-"`
+	sqlFilters []func(*gorm.DB) *gorm.DB             `form:"-" json:"-"`
+	sqlOrders  []func(*gorm.DB) *gorm.DB             `form:"-" json:"-"`
 }
 
 // Init is function to set table name and sql mapping to data columns
-func (q *TableQuery) Init(table string, sqlMappers map[string]interface{}) error {
+func (q *TableQuery) Init(table string, sqlMappers map[string]any) error {
 	q.table = table
-	q.sqlFind = func(out interface{}) func(db *gorm.DB) *gorm.DB {
+	q.sqlFind = func(out any) func(db *gorm.DB) *gorm.DB {
 		return func(db *gorm.DB) *gorm.DB {
 			return db.Find(out)
 		}
 	}
-	q.sqlMappers = make(map[string]interface{})
+	q.sqlMappers = make(map[string]any)
 	q.sqlOrders = append(q.sqlOrders, func(db *gorm.DB) *gorm.DB {
 		return db.Order("id DESC")
 	})
@@ -72,12 +76,12 @@ func (q *TableQuery) Init(table string, sqlMappers map[string]interface{}) error
 		switch t := v.(type) {
 		case string:
 			t = q.DoConditionFormat(t)
-			if strings.HasSuffix(t, "id") || strings.HasSuffix(t, "date") || k == "ngroups" || strings.HasPrefix(t, "count(") {
+			if isNumbericField(k) {
 				q.sqlMappers[k] = t
 			} else {
-				q.sqlMappers[k] = "LOWER(" + t + ")"
+				q.sqlMappers[k] = "LOWER(" + t + "::text)"
 			}
-		case func(q *TableQuery, db *gorm.DB, value interface{}) *gorm.DB:
+		case func(q *TableQuery, db *gorm.DB, value any) *gorm.DB:
 			q.sqlMappers[k] = t
 		default:
 			continue
@@ -108,7 +112,7 @@ func (q *TableQuery) SetFilters(sqlFilters []func(*gorm.DB) *gorm.DB) {
 }
 
 // SetFind is function to set custom find function to build target SQL query
-func (q *TableQuery) SetFind(find func(out interface{}) func(*gorm.DB) *gorm.DB) {
+func (q *TableQuery) SetFind(find func(out any) func(*gorm.DB) *gorm.DB) {
 	q.sqlFind = find
 }
 
@@ -118,12 +122,12 @@ func (q *TableQuery) SetOrders(sqlOrders []func(*gorm.DB) *gorm.DB) {
 }
 
 // Mappers is getter for private field (SQL find funcction to use it in custom query)
-func (q *TableQuery) Find(out interface{}) func(*gorm.DB) *gorm.DB {
+func (q *TableQuery) Find(out any) func(*gorm.DB) *gorm.DB {
 	return q.sqlFind(out)
 }
 
 // Mappers is getter for private field (SQL mappers fields to table ones)
-func (q *TableQuery) Mappers() map[string]interface{} {
+func (q *TableQuery) Mappers() map[string]any {
 	return q.sqlMappers
 }
 
@@ -134,22 +138,34 @@ func (q *TableQuery) Table() string {
 
 // Ordering is function to get order of data rows according with input params
 func (q *TableQuery) Ordering() func(db *gorm.DB) *gorm.DB {
-	field := ""
-	arrow := ""
-	switch q.Sort.Order {
-	case "ascending":
-		arrow = "ASC"
-	case "descending":
-		arrow = "DESC"
-	}
-	if v, ok := q.sqlMappers[q.Sort.Prop]; ok {
-		if s, ok := v.(string); ok {
-			field = s
+	var sortItems []TableSort
+
+	for _, sort := range q.Sort {
+		var t TableSort
+
+		switch sort.Order {
+		case "ascending":
+			t.Order = "ASC"
+		case "descending":
+			t.Order = "DESC"
+		}
+
+		if v, ok := q.sqlMappers[sort.Prop]; ok {
+			if s, ok := v.(string); ok {
+				t.Prop = s
+			}
+		}
+
+		if t.Prop != "" && t.Order != "" {
+			sortItems = append(sortItems, t)
 		}
 	}
+
 	return func(db *gorm.DB) *gorm.DB {
-		if field != "" && arrow != "" {
-			db = db.Order(field + " " + arrow)
+		for _, sort := range sortItems {
+			// sort.Prop comes from server-side whitelist (q.sqlMappers)
+			// sort.Order is validated to be only "ASC" or "DESC"
+			db = db.Order(sort.Prop + " " + sort.Order)
 		}
 		for _, order := range q.sqlOrders {
 			db = order(db)
@@ -161,9 +177,9 @@ func (q *TableQuery) Ordering() func(db *gorm.DB) *gorm.DB {
 // Paginate is function to navigate between pages according with input params
 func (q *TableQuery) Paginate() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		if q.Page <= 0 && q.Size > 0 {
+		if q.Page <= 0 && q.Size >= 0 {
 			return db.Limit(q.Size)
-		} else if q.Page > 0 && q.Size > 0 {
+		} else if q.Page > 0 && q.Size >= 0 {
 			offset := (q.Page - 1) * q.Size
 			return db.Offset(offset).Limit(q.Size)
 		}
@@ -172,7 +188,7 @@ func (q *TableQuery) Paginate() func(db *gorm.DB) *gorm.DB {
 }
 
 // GroupBy is function to group results by some field
-func (q *TableQuery) GroupBy(total *uint64, result interface{}) func(db *gorm.DB) *gorm.DB {
+func (q *TableQuery) GroupBy(total *uint64, result any) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		return db.Group(q.groupField).Where(q.groupField+" IS NOT NULL").Count(total).Pluck(q.groupField, result)
 	}
@@ -182,11 +198,11 @@ func (q *TableQuery) GroupBy(total *uint64, result interface{}) func(db *gorm.DB
 func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 	type item struct {
 		op string
-		v  interface{}
+		v  any
 	}
 
 	fl := make(map[string][]item)
-	setFilter := func(field, operator string, value interface{}) {
+	setFilter := func(field, operator string, value any) {
 		if operator == "" {
 			operator = "like" // nolint:goconst
 		}
@@ -197,16 +213,20 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 		switch tvalue := value.(type) {
 		case string, float64, bool:
 			fl[field] = append(fvalue, item{operator, tvalue})
-		case []interface{}:
+		case []any:
 			fl[field] = append(fvalue, item{operator, tvalue})
 		}
 	}
 	patchOperator := func(f *TableFilter) {
 		switch f.Operator {
-		case "<", "<=", ">=", ">", "=", "!=", "like", "not like", "in":
+		case "<", "<=", ">=", ">", "=", "!=", "in":
+		case "not like":
+			if isNumbericField(f.Field) {
+				f.Operator = "!="
+			}
 		default:
 			f.Operator = "like"
-			if strings.HasSuffix(f.Field, "id") || f.Field == "ngroups" {
+			if isNumbericField(f.Field) {
 				f.Operator = "="
 			}
 		}
@@ -219,7 +239,7 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 		if _, ok := q.sqlMappers[f.Field]; ok {
 			if v, ok := f.Value.(string); ok && v != "" {
 				vs := v
-				if StringInSlice(f.Operator, []string{"like", "not like"}) {
+				if slices.Contains([]string{"like", "not like"}, f.Operator) {
 					vs = "%" + strings.ToLower(vs) + "%"
 				}
 				setFilter(f.Field, f.Operator, vs)
@@ -230,8 +250,8 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 			if v, ok := f.Value.(bool); ok {
 				setFilter(f.Field, f.Operator, v)
 			}
-			if v, ok := f.Value.([]interface{}); ok && len(v) != 0 {
-				var vi []interface{}
+			if v, ok := f.Value.([]any); ok && len(v) != 0 {
+				var vi []any
 				for _, ti := range v {
 					if ts, ok := ti.(string); ok {
 						vi = append(vi, strings.ToLower(ts))
@@ -251,11 +271,11 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 	}
 
 	return func(db *gorm.DB) *gorm.DB {
-		doFilter := func(db *gorm.DB, k, s string, v interface{}) *gorm.DB {
+		doFilter := func(db *gorm.DB, k, s string, v any) *gorm.DB {
 			switch t := q.sqlMappers[k].(type) {
 			case string:
 				return db.Where(t+s, v)
-			case func(q *TableQuery, db *gorm.DB, value interface{}) *gorm.DB:
+			case func(q *TableQuery, db *gorm.DB, value any) *gorm.DB:
 				return t(q, db, v)
 			default:
 				return db
@@ -263,7 +283,7 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 		}
 		for k, f := range fl {
 			for _, it := range f {
-				if _, ok := it.v.([]interface{}); ok {
+				if _, ok := it.v.([]any); ok {
 					db = doFilter(db, k, " "+it.op+" (?)", it.v)
 				} else {
 					db = doFilter(db, k, " "+it.op+" ?", it.v)
@@ -278,7 +298,7 @@ func (q *TableQuery) DataFilter() func(db *gorm.DB) *gorm.DB {
 }
 
 // Query is function to retrieve table data according with input params
-func (q *TableQuery) Query(db *gorm.DB, result interface{},
+func (q *TableQuery) Query(db *gorm.DB, result any,
 	funcs ...func(*gorm.DB) *gorm.DB) (uint64, error) {
 	var total uint64
 	err := ApplyToChainDB(
@@ -291,8 +311,12 @@ func (q *TableQuery) Query(db *gorm.DB, result interface{},
 }
 
 // QueryGrouped is function to retrieve grouped data according with input params
-func (q *TableQuery) QueryGrouped(db *gorm.DB, result interface{},
+func (q *TableQuery) QueryGrouped(db *gorm.DB, result any,
 	funcs ...func(*gorm.DB) *gorm.DB) (uint64, error) {
+	if _, ok := q.sqlMappers[q.Group]; !ok {
+		return 0, errors.New("group field not found")
+	}
+
 	var total uint64
 	err := ApplyToChainDB(
 		ApplyToChainDB(db.Table(q.Table()), funcs...).Scopes(q.DataFilter()),
@@ -313,92 +337,6 @@ func ApplyToChainDB(db *gorm.DB, funcs ...func(*gorm.DB) *gorm.DB) (tx *gorm.DB)
 func EncryptPassword(password string) (hpass []byte, err error) {
 	hpass, err = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	return
-}
-
-// TagsMapper is function to make tags field mapper for common tables
-func TagsMapper(q *TableQuery, db *gorm.DB, value interface{}) *gorm.DB {
-	return JsonArrayMapper(q, db, value, "{{table}}.info", "$.tags[*]")
-}
-
-// JsonDictMapper is function to make json dict field mapper for common tables
-func JsonDictMapper(q *TableQuery, db *gorm.DB, value interface{}, sre, scond string) *gorm.DB {
-	vs := make([]interface{}, 0)
-	re := regexp.MustCompile(sre)
-	cond := q.DoConditionFormat(scond)
-	buildArray := func() *gorm.DB {
-		var conds []string
-		for i := 0; i < len(vs)/2; i++ {
-			conds = append(conds, cond)
-		}
-		return db.Where(strings.Join(conds, " OR "), vs...)
-	}
-	parseOSArch := func(v string) []interface{} {
-		list := re.FindStringSubmatch(v)
-		if len(list) == 3 {
-			return []interface{}{list[1], list[2]}
-		}
-		return []interface{}{}
-	}
-
-	switch v := value.(type) {
-	case string:
-		vs = append(vs, parseOSArch(v)...)
-		return buildArray()
-	case []interface{}:
-		for _, t := range v {
-			if ts, ok := t.(string); ok {
-				vs = append(vs, parseOSArch(ts)...)
-			}
-		}
-		return buildArray()
-	default:
-		return db
-	}
-}
-
-// JsonArrayMapper is function to make json array field mapper for common tables
-func JsonArrayMapper(q *TableQuery, db *gorm.DB, value interface{}, column, path string) *gorm.DB {
-	cond := q.DoConditionFormat(
-		"(jsonb_path_query_array(lower(" + column + "::text)::jsonb, '" + path + "')::jsonb) $$$ lower(?)",
-	)
-	buildArray := func(vs []interface{}) *gorm.DB {
-		var conds []string
-		for i := 0; i < len(vs); i++ {
-			conds = append(conds, cond)
-		}
-		return db.Where(strings.Join(conds, " OR "), vs...)
-	}
-
-	switch v := value.(type) {
-	case string, float64:
-		return db.Where(cond, v)
-	case []interface{}:
-		return buildArray(v)
-	default:
-		return db
-	}
-}
-
-func JsonArrayKeysMapper(q *TableQuery, db *gorm.DB, value interface{}, column, path string) *gorm.DB {
-	cond := q.DoConditionFormat(
-		"(jsonb_path_query_first(lower(" + column + "::text)::jsonb, '" + path + "')::jsonb) $$$ lower(?)",
-	)
-	buildArray := func(vs []interface{}) *gorm.DB {
-		var conds []string
-		for i := 0; i < len(vs); i++ {
-			conds = append(conds, cond)
-		}
-		return db.Where(strings.Join(conds, " OR "), vs...)
-	}
-
-	switch v := value.(type) {
-	case string, float64:
-		return db.Where(cond, v)
-	case []interface{}:
-		return buildArray(v)
-	default:
-		return db
-	}
 }
 
 // MakeMD5Hash is function to generate common hash by value
@@ -427,11 +365,6 @@ func MakeUuidStrFromHash(hash string) (string, error) {
 	return userIdUuid.String(), nil
 }
 
-func StringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
+func isNumbericField(field string) bool {
+	return strings.HasSuffix(field, "_id") || strings.HasSuffix(field, "_at") || field == "id"
 }

@@ -6,6 +6,7 @@ package graph
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/server/auth"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/templates/validator"
 	"time"
@@ -620,6 +622,190 @@ func (r *mutationResolver) DeletePrompt(ctx context.Context, promptID int64) (mo
 	}
 
 	return model.ResultTypeSuccess, nil
+}
+
+// CreateAPIToken is the resolver for the createAPIToken field.
+func (r *mutationResolver) CreateAPIToken(ctx context.Context, input model.CreateAPITokenInput) (*model.APITokenWithSecret, error) {
+	uid, _, err := validatePermission(ctx, "settings.tokens.create")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to create API tokens")
+	}
+
+	if r.Config.CookieSigningSalt == "" || r.Config.CookieSigningSalt == "salt" {
+		return nil, fmt.Errorf("token creation is disabled with default salt")
+	}
+
+	if input.TTL < 60 || input.TTL > 94608000 {
+		return nil, fmt.Errorf("invalid TTL: must be between 60 and 94608000 seconds")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"name": input.Name,
+		"ttl":  input.TTL,
+	}).Debug("create api token")
+
+	user, err := r.DB.GetUser(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenID, err := auth.GenerateTokenID()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token ID: %w", err)
+	}
+
+	claims := auth.MakeAPITokenClaims(tokenID, user.Hash, uint64(uid), uint64(user.RoleID), uint64(input.TTL))
+
+	tokenString, err := auth.MakeAPIToken(r.Config.CookieSigningSalt, claims)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token: %w", err)
+	}
+
+	var nameStr sql.NullString
+	if input.Name != nil && *input.Name != "" {
+		nameStr = sql.NullString{String: *input.Name, Valid: true}
+	}
+
+	apiToken, err := r.DB.CreateAPIToken(ctx, database.CreateAPITokenParams{
+		TokenID: tokenID,
+		UserID:  uid,
+		RoleID:  user.RoleID,
+		Name:    nameStr,
+		Ttl:     int64(input.TTL),
+		Status:  database.TokenStatusActive,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token in database: %w", err)
+	}
+
+	tokenWithSecret := database.APITokenWithSecret{
+		ApiToken: apiToken,
+		Token:    tokenString,
+	}
+
+	r.TokenCache.Invalidate(tokenID)
+	r.TokenCache.InvalidateUser(uint64(uid))
+
+	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenCreated(ctx, tokenWithSecret)
+
+	return converter.ConvertAPITokenWithSecret(tokenWithSecret), nil
+}
+
+// UpdateAPIToken is the resolver for the updateAPIToken field.
+func (r *mutationResolver) UpdateAPIToken(ctx context.Context, tokenID string, input model.UpdateAPITokenInput) (*model.APIToken, error) {
+	uid, _, err := validatePermission(ctx, "settings.tokens.edit")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to update API tokens")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":     uid,
+		"tokenID": tokenID,
+	}).Debug("update api token")
+
+	token, err := r.DB.GetUserAPITokenByTokenID(ctx, database.GetUserAPITokenByTokenIDParams{
+		TokenID: tokenID,
+		UserID:  uid,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("token not found: %w", err)
+	}
+
+	var nameStr sql.NullString
+	if input.Name != nil {
+		if *input.Name != "" {
+			nameStr = sql.NullString{String: *input.Name, Valid: true}
+		}
+	} else {
+		nameStr = token.Name
+	}
+
+	status := token.Status
+	if input.Status != nil {
+		switch s := *input.Status; s {
+		case model.TokenStatusActive:
+			status = database.TokenStatusActive
+		case model.TokenStatusRevoked:
+			status = database.TokenStatusRevoked
+		default:
+			return nil, fmt.Errorf("invalid token status: %s", s.String())
+		}
+	}
+
+	updatedToken, err := r.DB.UpdateUserAPIToken(ctx, database.UpdateUserAPITokenParams{
+		ID:     token.ID,
+		UserID: uid,
+		Name:   nameStr,
+		Status: status,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update token: %w", err)
+	}
+
+	if input.Status != nil {
+		r.TokenCache.Invalidate(tokenID)
+		r.TokenCache.InvalidateUser(uint64(uid))
+	}
+
+	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenUpdated(ctx, updatedToken)
+
+	return converter.ConvertAPIToken(updatedToken), nil
+}
+
+// DeleteAPIToken is the resolver for the deleteAPIToken field.
+func (r *mutationResolver) DeleteAPIToken(ctx context.Context, tokenID string) (bool, error) {
+	uid, _, err := validatePermission(ctx, "settings.tokens.delete")
+	if err != nil {
+		return false, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return false, err
+	}
+
+	if !isUserSession {
+		return false, fmt.Errorf("unauthorized: non-user session is not allowed to delete API tokens")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":     uid,
+		"tokenID": tokenID,
+	}).Debug("delete api token")
+
+	token, err := r.DB.DeleteUserAPITokenByTokenID(ctx, database.DeleteUserAPITokenByTokenIDParams{
+		TokenID: tokenID,
+		UserID:  uid,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to delete token: %w", err)
+	}
+
+	r.TokenCache.Invalidate(tokenID)
+	r.TokenCache.InvalidateUser(uint64(uid))
+
+	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenDeleted(ctx, token)
+
+	return true, nil
 }
 
 // Providers is the resolver for the providers field.
@@ -1505,6 +1691,78 @@ func (r *queryResolver) SettingsPrompts(ctx context.Context) (*model.PromptsConf
 	return &promptsConfig, nil
 }
 
+// APIToken is the resolver for the apiToken field.
+func (r *queryResolver) APIToken(ctx context.Context, tokenID string) (*model.APIToken, error) {
+	uid, admin, err := validatePermission(ctx, "settings.tokens.view")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to get API tokens")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":     uid,
+		"tokenID": tokenID,
+	}).Debug("get api token")
+
+	var token database.ApiToken
+
+	if admin {
+		token, err = r.DB.GetAPITokenByTokenID(ctx, tokenID)
+	} else {
+		token, err = r.DB.GetUserAPITokenByTokenID(ctx, database.GetUserAPITokenByTokenIDParams{
+			TokenID: tokenID,
+			UserID:  uid,
+		})
+	}
+	if err != nil {
+		return nil, fmt.Errorf("token not found: %w", err)
+	}
+
+	return converter.ConvertAPIToken(token), nil
+}
+
+// APITokens is the resolver for the apiTokens field.
+func (r *queryResolver) APITokens(ctx context.Context) ([]*model.APIToken, error) {
+	uid, admin, err := validatePermission(ctx, "settings.tokens.view")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to get API tokens")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid": uid,
+	}).Debug("get api tokens")
+
+	var tokens []database.ApiToken
+
+	if admin {
+		tokens, err = r.DB.GetAPITokens(ctx)
+	} else {
+		tokens, err = r.DB.GetUserAPITokens(ctx, uid)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tokens: %w", err)
+	}
+
+	return converter.ConvertAPITokens(tokens), nil
+}
+
 // FlowCreated is the resolver for the flowCreated field.
 func (r *subscriptionResolver) FlowCreated(ctx context.Context) (<-chan *model.Flow, error) {
 	uid, admin, err := validatePermission(ctx, "flows.subscribe")
@@ -1718,6 +1976,63 @@ func (r *subscriptionResolver) ProviderDeleted(ctx context.Context) (<-chan *mod
 	}
 
 	return r.Subscriptions.NewFlowSubscriber(uid, 0).ProviderDeleted(ctx)
+}
+
+// APITokenCreated is the resolver for the apiTokenCreated field.
+func (r *subscriptionResolver) APITokenCreated(ctx context.Context) (<-chan *model.APIToken, error) {
+	uid, _, err := validatePermission(ctx, "settings.tokens.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenCreated(ctx)
+}
+
+// APITokenUpdated is the resolver for the apiTokenUpdated field.
+func (r *subscriptionResolver) APITokenUpdated(ctx context.Context) (<-chan *model.APIToken, error) {
+	uid, _, err := validatePermission(ctx, "settings.tokens.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenUpdated(ctx)
+}
+
+// APITokenDeleted is the resolver for the apiTokenDeleted field.
+func (r *subscriptionResolver) APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error) {
+	uid, _, err := validatePermission(ctx, "settings.tokens.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenDeleted(ctx)
 }
 
 // Mutation returns MutationResolver implementation.

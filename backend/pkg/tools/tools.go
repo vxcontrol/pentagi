@@ -27,6 +27,18 @@ type Functions struct {
 	Function []ExternalFunction `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid"`
 }
 
+func (f *Functions) Scan(input any) error {
+	switch v := input.(type) {
+	case string:
+		return json.Unmarshal([]byte(v), f)
+	case []byte:
+		return json.Unmarshal(v, f)
+	case json.RawMessage:
+		return json.Unmarshal(v, f)
+	}
+	return fmt.Errorf("unsupported type of input value to scan")
+}
+
 type DisableFunction struct {
 	Name    string   `form:"name" json:"name" validate:"required"`
 	Context []string `form:"context,omitempty" json:"context,omitempty" validate:"omitempty,dive,oneof=agent adviser coder searcher generator memorist enricher reporter assistant,required"`

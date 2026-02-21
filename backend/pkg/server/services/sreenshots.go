@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -26,13 +27,14 @@ type screenshotsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var screenshotsSQLMappers = map[string]interface{}{
+var screenshotsSQLMappers = map[string]any{
 	"id":         "{{table}}.id",
 	"name":       "{{table}}.name",
 	"url":        "{{table}}.url",
 	"flow_id":    "{{table}}.flow_id",
 	"task_id":    "{{table}}.task_id",
 	"subtask_id": "{{table}}.subtask_id",
+	"created_at": "{{table}}.created_at",
 	"data":       "({{table}}.name || ' ' || {{table}}.url)",
 }
 
@@ -52,6 +54,7 @@ func NewScreenshotService(db *gorm.DB, dataDir string) *ScreenshotService {
 // @Summary Retrieve screenshots list
 // @Tags Screenshots
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=screenshots} "screenshots list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -77,12 +80,12 @@ func (s *ScreenshotService) GetScreenshots(c *gin.Context) {
 	if slices.Contains(privs, "screenshots.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id")
+				Joins("INNER JOIN flows f ON f.id = screenshots.flow_id")
 		}
 	} else if slices.Contains(privs, "screenshots.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = screenshots.flow_id").
 				Where("f.user_id = ?", uid)
 		}
 	} else {
@@ -94,6 +97,12 @@ func (s *ScreenshotService) GetScreenshots(c *gin.Context) {
 	query.Init("screenshots", screenshotsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := screenshotsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding screenshots grouped: group field not found")
+			response.Error(c, response.ErrScreenshotsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped screenshotsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding screenshots grouped")
@@ -126,6 +135,7 @@ func (s *ScreenshotService) GetScreenshots(c *gin.Context) {
 // @Summary Retrieve screenshots list by flow id
 // @Tags Screenshots
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=screenshots} "screenshots list received successful"
@@ -159,13 +169,13 @@ func (s *ScreenshotService) GetFlowScreenshots(c *gin.Context) {
 	if slices.Contains(privs, "screenshots.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = screenshots.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "screenshots.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = screenshots.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {
@@ -177,6 +187,12 @@ func (s *ScreenshotService) GetFlowScreenshots(c *gin.Context) {
 	query.Init("screenshots", screenshotsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := screenshotsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding screenshots grouped: group field not found")
+			response.Error(c, response.ErrScreenshotsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped screenshotsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding screenshots grouped")
@@ -209,6 +225,7 @@ func (s *ScreenshotService) GetFlowScreenshots(c *gin.Context) {
 // @Summary Retrieve screenshot info by id and flow id
 // @Tags Screenshots
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param screenshotID path int true "screenshot id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.Screenshot} "screenshot info received successful"
@@ -255,7 +272,7 @@ func (s *ScreenshotService) GetFlowScreenshot(c *gin.Context) {
 	err = s.db.Model(&resp).
 		Joins("INNER JOIN flows f ON f.id = flow_id").
 		Scopes(scope).
-		Where("id = ?", screenshotID).
+		Where("screenshots.id = ?", screenshotID).
 		Take(&resp).Error
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error on getting screenshot by id")
@@ -274,6 +291,7 @@ func (s *ScreenshotService) GetFlowScreenshot(c *gin.Context) {
 // @Summary Retrieve screenshot file by id and flow id
 // @Tags Screenshots
 // @Produce png,json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param screenshotID path int true "screenshot id" minimum(0)
 // @Success 200 {file} file "screenshot file"

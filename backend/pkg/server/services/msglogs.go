@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -24,16 +25,18 @@ type msglogsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var msglogsSQLMappers = map[string]interface{}{
+var msglogsSQLMappers = map[string]any{
 	"id":            "{{table}}.id",
 	"type":          "{{table}}.type",
 	"message":       "{{table}}.message",
+	"thinking":      "{{table}}.thinking",
 	"result":        "{{table}}.result",
 	"result_format": "{{table}}.result_format",
 	"flow_id":       "{{table}}.flow_id",
 	"task_id":       "{{table}}.task_id",
 	"subtask_id":    "{{table}}.subtask_id",
-	"data":          "({{table}}.type || ' ' || {{table}}.message || ' ' || {{table}}.result)",
+	"created_at":    "{{table}}.created_at",
+	"data":          "({{table}}.type || ' ' || {{table}}.message || ' ' || {{table}}.thinking || ' ' || {{table}}.result)",
 }
 
 type MsglogService struct {
@@ -50,6 +53,7 @@ func NewMsglogService(db *gorm.DB) *MsglogService {
 // @Summary Retrieve msglogs list
 // @Tags Msglogs
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=msglogs} "msglogs list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -75,12 +79,12 @@ func (s *MsglogService) GetMsglogs(c *gin.Context) {
 	if slices.Contains(privs, "msglogs.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id")
+				Joins("INNER JOIN flows f ON f.id = msglogs.flow_id")
 		}
 	} else if slices.Contains(privs, "msglogs.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = msglogs.flow_id").
 				Where("f.user_id = ?", uid)
 		}
 	} else {
@@ -92,6 +96,12 @@ func (s *MsglogService) GetMsglogs(c *gin.Context) {
 	query.Init("msglogs", msglogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := msglogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding msglogs grouped: group field not found")
+			response.Error(c, response.ErrMsglogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped msglogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding msglogs grouped")
@@ -124,6 +134,7 @@ func (s *MsglogService) GetMsglogs(c *gin.Context) {
 // @Summary Retrieve msglogs list by flow id
 // @Tags Msglogs
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=msglogs} "msglogs list received successful"
@@ -157,13 +168,13 @@ func (s *MsglogService) GetFlowMsglogs(c *gin.Context) {
 	if slices.Contains(privs, "msglogs.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = msglogs.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "msglogs.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = msglogs.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {
@@ -175,6 +186,12 @@ func (s *MsglogService) GetFlowMsglogs(c *gin.Context) {
 	query.Init("msglogs", msglogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := msglogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding msglogs grouped: group field not found")
+			response.Error(c, response.ErrMsglogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped msglogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding msglogs grouped")

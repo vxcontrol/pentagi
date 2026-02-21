@@ -50,7 +50,7 @@ type Task struct {
 	Title     string     `form:"title" json:"title" validate:"required" gorm:"type:TEXT;NOT NULL;default:'untitled'"`
 	Input     string     `form:"input" json:"input" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	Result    string     `form:"result" json:"result" validate:"omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
-	FlowID    uint64     `form:"flow_id" json:"flow_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`
+	FlowID    uint64     `form:"flow_id" json:"flow_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
 	CreatedAt time.Time  `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 	UpdatedAt time.Time  `form:"updated_at,omitempty" json:"updated_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 }

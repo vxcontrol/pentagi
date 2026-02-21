@@ -43,6 +43,7 @@ type UserType string
 const (
 	UserTypeLocal UserType = "local"
 	UserTypeOAuth UserType = "oauth"
+	UserTypeAPI   UserType = "api"
 )
 
 func (s UserType) String() string {
@@ -52,7 +53,7 @@ func (s UserType) String() string {
 // Valid is function to control input/output data
 func (s UserType) Valid() error {
 	switch s {
-	case UserTypeLocal, UserTypeOAuth:
+	case UserTypeLocal, UserTypeOAuth, UserTypeAPI:
 		return nil
 	default:
 		return fmt.Errorf("invalid UserType: %s", s)
@@ -75,10 +76,10 @@ type User struct {
 	Mail                   string     `form:"mail" json:"mail" validate:"max=50,vmail,required" gorm:"type:TEXT;NOT NULL;UNIQUE_INDEX"`
 	Name                   string     `form:"name" json:"name" validate:"max=70,omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
 	Status                 UserStatus `form:"status" json:"status" validate:"valid,required" gorm:"type:USER_STATUS;NOT NULL;default:'created'"`
-	RoleID                 uint64     `form:"role_id" json:"role_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;default:2"`
+	RoleID                 uint64     `form:"role_id" json:"role_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL;default:2"`
 	PasswordChangeRequired bool       `form:"password_change_required" json:"password_change_required" gorm:"type:BOOL;NOT NULL;default:false"`
 	Provider               *string    `form:"provider,omitempty" json:"provider,omitempty" validate:"omitempty" gorm:"type:TEXT"`
-	CreatedAt              time.Time  `form:"created_at" json:"created_at" validate:"required" gorm:"type:TIMESTAMPTZ;NOT NULL;default:CURRENT_TIMESTAMP"`
+	CreatedAt              time.Time  `form:"created_at" json:"created_at" validate:"omitempty" gorm:"type:TIMESTAMPTZ;NOT NULL;default:CURRENT_TIMESTAMP"`
 }
 
 // TableName returns the table name string to guaranty use correct table

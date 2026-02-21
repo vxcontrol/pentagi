@@ -80,7 +80,7 @@ type Container struct {
 	Status    ContainerStatus `form:"status" json:"status" validate:"valid,required" gorm:"type:CONTAINER_STATUS;NOT NULL;default:'starting'"`
 	LocalID   string          `form:"local_id" json:"local_id" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	LocalDir  string          `form:"local_dir" json:"local_dir" validate:"required" gorm:"type:TEXT;NOT NULL"`
-	FlowID    uint64          `form:"flow_id" json:"flow_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`
+	FlowID    uint64          `form:"flow_id" json:"flow_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
 	CreatedAt time.Time       `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 	UpdatedAt time.Time       `form:"updated_at,omitempty" json:"updated_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 }
