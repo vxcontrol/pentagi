@@ -47,23 +47,14 @@
             "cwd": "${workspaceFolder}/frontend",
         },
         {
-            "type": "node",
+            "type": "pwa-chrome",
             "request": "launch",
             "name": "Launch Browser",
-            // original purpose was to open the frontend in a browser, but
-            // the chrome debug type isn’t available in this container. Use
-            // a generic Node launch (or remove this configuration) if you
-            // only need to start the frontend server.
-            "runtimeExecutable": "npm",
-            "runtimeArgs": ["run", "dev"],
-            "cwd": "${workspaceFolder}/frontend",
-            "env": {
-                "VITE_APP_LOG_LEVEL": "DEBUG",
-                "VITE_API_URL": "localhost:8080",
-                "VITE_USE_HTTPS": "false",
-                "VITE_PORT": "8000",
-                "VITE_HOST": "0.0.0.0",
-            }
+            "url": "http://localhost:8000",
+            "webRoot": "${workspaceFolder}/frontend/src",
+            // this configuration will start Chrome and attach the debugger
+            // to your frontend code; run the "Launch Frontend" config
+            // separately when you need to start the vite dev server.
         },
         {
             "type": "node",
