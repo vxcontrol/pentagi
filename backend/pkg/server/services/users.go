@@ -165,10 +165,14 @@ func (s *UserService) ChangePasswordCurrentUser(c *gin.Context) {
 		response.Error(c, response.ErrChangePasswordCurrentUserInvalidNewPassword, err)
 		return
 	}
-	user.Password = string(encPass)
-	user.PasswordChangeRequired = false
 
-	if err = s.db.Model(&user).Scopes(scope).Select("password", "password_change_required").Updates(&user).Error; err != nil {
+	// Use map to update fields to avoid GORM ignoring zero values (false for bool)
+	updates := map[string]any{
+		"password":                 string(encPass),
+		"password_change_required": false,
+	}
+
+	if err = s.db.Model(&user).Scopes(scope).Updates(updates).Error; err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error updating password for current user")
 		response.Error(c, response.ErrInternal, err)
 		return
@@ -496,7 +500,6 @@ func (s *UserService) PatchUser(c *gin.Context) {
 		return
 	}
 
-	public_info := []any{"name", "status"}
 	if user.Password != "" {
 		var encPassword []byte
 		encPassword, err = rdb.EncryptPassword(user.Password)
@@ -505,12 +508,20 @@ func (s *UserService) PatchUser(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
-		user.Password = string(encPassword)
-		user.PasswordChangeRequired = false
-		public_info = append(public_info, "password", "password_change_required")
-		err = s.db.Model(&existingUser).Select("", public_info...).Updates(&user).Error
+		// Use map to update fields to avoid GORM ignoring zero values (false for bool)
+		updates := map[string]any{
+			"name":                     user.Name,
+			"status":                   user.Status,
+			"password":                 string(encPassword),
+			"password_change_required": false,
+		}
+		err = s.db.Model(&existingUser).Updates(updates).Error
 	} else {
-		err = s.db.Model(&existingUser).Select("", public_info...).Updates(&user.User).Error
+		updates := map[string]any{
+			"name":   user.Name,
+			"status": user.Status,
+		}
+		err = s.db.Model(&existingUser).Updates(updates).Error
 	}
 
 	if err != nil {

@@ -22,6 +22,7 @@ axios.interceptors.response.use(
         const error = {
             message: err.message,
             name: err.name,
+            response: err.response,
             stack: err.stack,
             statusCode: err.response?.status,
             statusText: err.response?.statusText,
@@ -55,10 +56,8 @@ axios.interceptors.response.use(
                     break;
                 }
 
-                case 401:
-
-                case 403: {
-                    Log.warn('You do not have permission to execute the api.');
+                case 401: {
+                    Log.warn('Authentication required.');
                     localStorage.removeItem(AUTH_STORAGE_KEY);
 
                     // Redirect to login with current URL preserved
@@ -67,6 +66,34 @@ axios.interceptors.response.use(
                     if (currentPath !== '/login') {
                         const returnParam = getReturnUrlParam(currentPath);
                         window.location.href = `/login${returnParam}`;
+                    }
+
+                    break;
+                }
+
+                case 403: {
+                    const responseData = err.response?.data as undefined | { code?: string };
+
+                    // Only redirect to login for auth-related 403 errors
+                    if (
+                        responseData?.code === 'AuthRequired' ||
+                        responseData?.code === 'NotPermitted' ||
+                        responseData?.code === 'PrivilegesRequired' ||
+                        responseData?.code === 'AdminRequired' ||
+                        responseData?.code === 'SuperRequired'
+                    ) {
+                        Log.warn('You do not have permission to execute the api.');
+                        localStorage.removeItem(AUTH_STORAGE_KEY);
+
+                        const currentPath = window.location.pathname;
+
+                        if (currentPath !== '/login') {
+                            const returnParam = getReturnUrlParam(currentPath);
+                            window.location.href = `/login${returnParam}`;
+                        }
+                    } else {
+                        // For other 403 errors (like invalid password), just log
+                        Log.warn(err.response?.data);
                     }
 
                     break;

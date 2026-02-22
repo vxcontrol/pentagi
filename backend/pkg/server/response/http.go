@@ -37,13 +37,14 @@ func (h *HttpError) Error() string {
 }
 
 func Error(c *gin.Context, err *HttpError, original error) {
-	body := gin.H{"status": "error", "code": err.Code()}
+	body := gin.H{
+		"status": "error",
+		"code":   err.Code(),
+		"msg":    err.Msg(),
+	}
 
-	if version.IsDevelopMode() {
-		body["msg"] = err.Msg()
-		if original != nil {
-			body["error"] = original.Error()
-		}
+	if version.IsDevelopMode() && original != nil {
+		body["error"] = original.Error()
 	}
 
 	fields := logrus.Fields{
@@ -55,14 +56,14 @@ func Error(c *gin.Context, err *HttpError, original error) {
 	c.AbortWithStatusJSON(err.HttpCode(), body)
 }
 
-func Success(c *gin.Context, code int, data interface{}) {
+func Success(c *gin.Context, code int, data any) {
 	c.JSON(code, gin.H{"status": "success", "data": data})
 }
 
 //lint:ignore U1000 successResp
 type successResp struct {
-	Status string      `json:"status" example:"success"`
-	Data   interface{} `json:"data" swaggertype:"object"`
+	Status string `json:"status" example:"success"`
+	Data   any    `json:"data" swaggertype:"object"`
 } // @name SuccessResponse
 
 //lint:ignore U1000 errorResp
