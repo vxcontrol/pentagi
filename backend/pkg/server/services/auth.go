@@ -302,7 +302,7 @@ func (s *AuthService) AuthAuthorize(c *gin.Context) {
 		http.StatusTemporaryRedirect)
 }
 
-// AuthLoginGetCallback is function to catch login callback from OAuth applacation with code only
+// AuthLoginGetCallback is function to catch login callback from OAuth application with code only
 // @Summary Login user from external OAuth application
 // @Tags Public
 // @Accept json
@@ -342,7 +342,7 @@ func (s *AuthService) AuthLoginGetCallback(c *gin.Context) {
 	s.authLoginCallback(c, stateData, code)
 }
 
-// AuthLoginPostCallback is function to catch login callback from OAuth applacation
+// AuthLoginPostCallback is function to catch login callback from OAuth application
 // @Summary Login user from external OAuth application
 // @Tags Public
 // @Accept json
@@ -390,7 +390,7 @@ func (s *AuthService) AuthLoginPostCallback(c *gin.Context) {
 	s.authLoginCallback(c, stateData, data.Code)
 }
 
-// AuthLogoutCallback is function to catch logout callback from OAuth applacation
+// AuthLogoutCallback is function to catch logout callback from OAuth application
 // @Summary Logout current user from external OAuth application
 // @Tags Public
 // @Accept json
