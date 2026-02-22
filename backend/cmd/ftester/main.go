@@ -60,7 +60,11 @@ func main() {
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
 		log.Fatalf("Unable to create langfuse client: %v\n", err)
 	}
-	defer lfclient.ForceFlush(context.Background())
+	defer func() {
+		if lfclient != nil {
+			lfclient.ForceFlush(context.Background())
+		}
+	}()
 
 	otelclient, err := obs.NewTelemetryClient(ctx, cfg)
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
