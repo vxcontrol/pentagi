@@ -133,6 +133,9 @@ const streamingLink = new ApolloLink((operation: Operation, forward) => {
 // Mapping of subscription names to their corresponding cache field names
 const subscriptionToCacheFieldMap: Record<string, string> = {
     agentLogAdded: 'agentLogs',
+    apiTokenCreated: 'apiTokens',
+    apiTokenDeleted: 'apiTokens',
+    apiTokenUpdated: 'apiTokens',
     assistantCreated: 'assistants',
     assistantDeleted: 'assistants',
     assistantLogAdded: 'assistantLogs',
@@ -143,6 +146,9 @@ const subscriptionToCacheFieldMap: Record<string, string> = {
     flowUpdated: 'flows',
     messageLogAdded: 'messageLogs',
     messageLogUpdated: 'messageLogs',
+    providerCreated: 'settingsProviders',
+    providerDeleted: 'settingsProviders',
+    providerUpdated: 'settingsProviders',
     screenshotAdded: 'screenshots',
     searchLogAdded: 'searchLogs',
     taskCreated: 'tasks',
@@ -287,6 +293,9 @@ const cache = new InMemoryCache({
         AgentLog: {
             keyFields: ['id'],
         },
+        APIToken: {
+            keyFields: ['tokenId'],
+        },
         Assistant: {
             keyFields: ['id'],
         },
@@ -317,6 +326,12 @@ const cache = new InMemoryCache({
                 // Agent logs - cache by flowId argument
                 agentLogs: {
                     keyArgs: ['flowId'],
+                    merge(_existing, incoming) {
+                        return incoming;
+                    },
+                },
+                // API tokens - always use latest
+                apiTokens: {
                     merge(_existing, incoming) {
                         return incoming;
                     },

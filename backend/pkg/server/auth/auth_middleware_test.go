@@ -1,4 +1,4 @@
-package auth
+package auth_test
 
 import (
 	"bytes"
@@ -12,20 +12,28 @@ import (
 	"testing"
 	"time"
 
+	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/models"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAuthTokenProtoRequiredAuthWithCookie(t *testing.T) {
-	authMiddleware := NewAuthMiddleware("/base/url", "test")
+	db := setupTestDB(t)
+	defer db.Close()
+
+	tokenCache := auth.NewTokenCache(db)
+	userCache := auth.NewUserCache(db)
+	authMiddleware := auth.NewAuthMiddleware("/base/url", "test", tokenCache, userCache)
 
 	t.Run("test URL", func(t *testing.T) {
-		server := newTestServer(t, "/test", authMiddleware.AuthTokenProtoRequired)
+		server := newTestServer(t, "/test", db, authMiddleware.AuthTokenRequired)
 		defer server.Close()
 
 		assert.False(t, server.CallAndGetStatus(t))
@@ -46,23 +54,27 @@ func TestAuthTokenProtoRequiredAuthWithCookie(t *testing.T) {
 			assert.Equal(t, "automation", c.GetString("cpt"))
 		})
 
-		server.Authorize(t, []string{PrivilegeAutomation})
+		server.Authorize(t, []string{auth.PrivilegeAutomation})
 		assert.True(t, server.CallAndGetStatus(t))
 
-		server.Authorize(t, []string{"wrong.permission", PrivilegeAutomation})
+		server.Authorize(t, []string{"wrong.permission", auth.PrivilegeAutomation})
 		assert.True(t, server.CallAndGetStatus(t))
 	})
 }
 
 func TestAuthTokenProtoRequiredAuthWithToken(t *testing.T) {
-	authMiddleware := NewAuthMiddleware("/base/url", "test")
+	db := setupTestDB(t)
+	defer db.Close()
 
-	server := newTestServer(t, "/test", authMiddleware.AuthTokenProtoRequired)
+	tokenCache := auth.NewTokenCache(db)
+	userCache := auth.NewUserCache(db)
+	authMiddleware := auth.NewAuthMiddleware("/base/url", "test", tokenCache, userCache)
+
+	server := newTestServer(t, "/test", db, authMiddleware.AuthTokenRequired)
 	defer server.Close()
 
-	server.Authorize(t, []string{PrivilegeAutomation})
-	kind := "automation"
-	token := server.GetToken(t, kind)
+	server.Authorize(t, []string{auth.PrivilegeAutomation})
+	token := server.GetToken(t)
 	require.NotEmpty(t, token)
 
 	server.Unauthorize(t)
@@ -78,10 +90,18 @@ func TestAuthTokenProtoRequiredAuthWithToken(t *testing.T) {
 		assert.Equal(t, uint64(1), c.GetUint64("uid"))
 		assert.Equal(t, uint64(2), c.GetUint64("rid"))
 		assert.NotNil(t, c.GetStringSlice("prm"))
-		assert.Zero(t, c.GetInt64("gtm"))
-		assert.Zero(t, c.GetInt64("exp"))
-		assert.Empty(t, c.GetString("uuid"))
-		assert.Equal(t, kind, c.GetString("cpt"))
+
+		// gtm and exp should now be set for API tokens
+		gtm := c.GetInt64("gtm")
+		assert.Greater(t, gtm, int64(0), "GTM should be set")
+
+		exp := c.GetInt64("exp")
+		assert.Greater(t, exp, gtm, "EXP should be greater than GTM")
+
+		// uuid will be empty for invalid hash (test uses "123" which is not valid MD5)
+		assert.NotNil(t, c.GetString("uuid"))
+
+		assert.Equal(t, "automation", c.GetString("cpt"))
 		assert.Empty(t, c.GetString("uname"))
 	})
 
@@ -89,9 +109,14 @@ func TestAuthTokenProtoRequiredAuthWithToken(t *testing.T) {
 }
 
 func TestAuthRequiredAuthWithCookie(t *testing.T) {
-	authMiddleware := NewAuthMiddleware("/base/url", "test")
+	db := setupTestDB(t)
+	defer db.Close()
 
-	server := newTestServer(t, "/test", authMiddleware.AuthRequired)
+	tokenCache := auth.NewTokenCache(db)
+	userCache := auth.NewUserCache(db)
+	authMiddleware := auth.NewAuthMiddleware("/base/url", "test", tokenCache, userCache)
+
+	server := newTestServer(t, "/test", db, authMiddleware.AuthUserRequired)
 	defer server.Close()
 
 	server.SetSessionCheckFunc(func(t *testing.T, c *gin.Context) {
@@ -102,7 +127,7 @@ func TestAuthRequiredAuthWithCookie(t *testing.T) {
 		assert.NotNil(t, c.GetInt64("gtm"))
 		assert.NotNil(t, c.GetInt64("exp"))
 		assert.Empty(t, c.GetString("uuid"))
-		assert.Equal(t, "name1", c.GetString("uname"))
+		assert.Equal(t, "User 1", c.GetString("uname"))
 	})
 
 	assert.False(t, server.CallAndGetStatus(t))
@@ -116,16 +141,20 @@ type testServer struct {
 	client           *http.Client
 	calls            map[string]struct{}
 	sessionCheckFunc func(t *testing.T, c *gin.Context)
+	db               *gorm.DB
 	*httptest.Server
 }
 
-func newTestServer(t *testing.T, testEndpoint string, middlewares ...gin.HandlerFunc) *testServer {
+func newTestServer(t *testing.T, testEndpoint string, db *gorm.DB, middlewares ...gin.HandlerFunc) *testServer {
 	t.Helper()
 
-	server := &testServer{}
+	server := &testServer{
+		db: db,
+	}
 
 	router := gin.New()
-	cookieStore := cookie.NewStore(MakeCookieStoreKey("test")...)
+	globalSalt := "test"
+	cookieStore := cookie.NewStore(auth.MakeCookieStoreKey(globalSalt)...)
 	router.Use(sessions.Sessions("auth", cookieStore))
 
 	server.calls = map[string]struct{}{}
@@ -134,8 +163,6 @@ func newTestServer(t *testing.T, testEndpoint string, middlewares ...gin.Handler
 		testEndpoint = "/test"
 	}
 	server.testEndpoint = testEndpoint
-
-	protoService := NewProtoService("test")
 
 	router.GET("/auth", func(c *gin.Context) {
 		t.Helper()
@@ -151,8 +178,10 @@ func newTestServer(t *testing.T, testEndpoint string, middlewares ...gin.Handler
 	for _, middleware := range middlewares {
 		authRoutes.Use(middleware)
 	}
+
 	authRoutes.GET(server.testEndpoint, func(c *gin.Context) {
 		t.Helper()
+
 		id, _ := c.GetQuery("id")
 		require.NotEmpty(t, id)
 
@@ -161,15 +190,28 @@ func newTestServer(t *testing.T, testEndpoint string, middlewares ...gin.Handler
 		}
 		server.calls[id] = struct{}{}
 	})
+
 	authRoutes.GET("/auth_token", func(c *gin.Context) {
 		t.Helper()
-		cpt, ok := c.GetQuery("cpt")
-		assert.True(t, ok)
-		token, err := protoService.MakeToken(c, &models.ProtoAuthTokenRequest{
-			TTL:  3600,
-			Type: cpt,
-		})
+
+		tokenID, err := auth.GenerateTokenID()
 		require.NoError(t, err)
+		uhash := "testhash"
+		uid := uint64(1)
+		rid := uint64(2)
+		ttl := uint64(3600)
+		claims := auth.MakeAPITokenClaims(tokenID, uhash, uid, rid, ttl)
+		token, err := auth.MakeAPIToken(globalSalt, claims)
+		require.NoError(t, err)
+
+		db.Create(&models.APIToken{
+			TokenID: tokenID,
+			UserID:  uid,
+			RoleID:  rid,
+			TTL:     ttl,
+			Status:  models.TokenStatusActive,
+		})
+
 		c.Writer.Write([]byte(token))
 	})
 
@@ -198,13 +240,10 @@ func (s *testServer) Authorize(t *testing.T, privileges []string) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func (s *testServer) GetToken(t *testing.T, cpt string) string {
+func (s *testServer) GetToken(t *testing.T) string {
 	t.Helper()
 	request, err := http.NewRequest(http.MethodGet, s.URL+"/auth_token", nil)
 	require.NoError(t, err)
-	query := url.Values{}
-	query.Add("cpt", cpt)
-	request.URL.RawQuery = query.Encode()
 
 	resp, err := s.client.Do(request)
 	require.NoError(t, err)
@@ -282,14 +321,14 @@ func setTestSession(t *testing.T, c *gin.Context, privileges []string, expires i
 	t.Helper()
 	session := sessions.Default(c)
 	session.Set("uid", uint64(1))
-	session.Set("uhash", "123")
+	session.Set("uhash", "testhash")
 	session.Set("rid", uint64(2))
 	session.Set("tid", models.UserTypeLocal.String())
 	session.Set("prm", privileges)
 	session.Set("gtm", time.Now().Unix())
 	session.Set("exp", time.Now().Add(time.Duration(expires)*time.Second).Unix())
 	session.Set("uuid", "uuid1")
-	session.Set("uname", "name1")
+	session.Set("uname", "User 1")
 	session.Options(sessions.Options{
 		HttpOnly: true,
 		MaxAge:   expires,

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -24,16 +25,18 @@ type searchlogsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var searchlogsSQLMappers = map[string]interface{}{
+var searchlogsSQLMappers = map[string]any{
 	"id":         "{{table}}.id",
 	"initiator":  "{{table}}.initiator",
 	"executor":   "{{table}}.executor",
-	"task":       "{{table}}.task",
+	"engine":     "{{table}}.engine",
+	"query":      "{{table}}.query",
 	"result":     "{{table}}.result",
 	"flow_id":    "{{table}}.flow_id",
 	"task_id":    "{{table}}.task_id",
 	"subtask_id": "{{table}}.subtask_id",
-	"data":       "({{table}}.task || ' ' || {{table}}.result)",
+	"created_at": "{{table}}.created_at",
+	"data":       "({{table}}.query || ' ' || {{table}}.result)",
 }
 
 type SearchlogService struct {
@@ -50,6 +53,7 @@ func NewSearchlogService(db *gorm.DB) *SearchlogService {
 // @Summary Retrieve searchlogs list
 // @Tags Searchlogs
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=searchlogs} "searchlogs list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -92,6 +96,12 @@ func (s *SearchlogService) GetSearchlogs(c *gin.Context) {
 	query.Init("searchlogs", searchlogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := searchlogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding searchlogs grouped: group field not found")
+			response.Error(c, response.ErrSearchlogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped searchlogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding searchlogs grouped")
@@ -124,6 +134,7 @@ func (s *SearchlogService) GetSearchlogs(c *gin.Context) {
 // @Summary Retrieve searchlogs list by flow id
 // @Tags Searchlogs
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=searchlogs} "searchlogs list received successful"
@@ -175,6 +186,12 @@ func (s *SearchlogService) GetFlowSearchlogs(c *gin.Context) {
 	query.Init("searchlogs", searchlogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := searchlogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding searchlogs grouped: group field not found")
+			response.Error(c, response.ErrSearchlogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped searchlogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding searchlogs grouped")

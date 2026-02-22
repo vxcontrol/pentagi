@@ -44,8 +44,8 @@ type Termlog struct {
 	Text        string      `form:"text" json:"text" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	ContainerID uint64      `form:"container_id" json:"container_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
 	FlowID      uint64      `form:"flow_id" json:"flow_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
-	TaskID      *uint64     `form:"task_id,omitempty" json:"task_id,omitempty" validate:"omitempty,min=0,numeric" gorm:"type:BIGINT"`
-	SubtaskID   *uint64     `form:"subtask_id,omitempty" json:"subtask_id,omitempty" validate:"omitempty,min=0,numeric" gorm:"type:BIGINT"`
+	TaskID      *uint64     `form:"task_id,omitempty" json:"task_id,omitempty" validate:"omitnil,min=0" gorm:"type:BIGINT"`
+	SubtaskID   *uint64     `form:"subtask_id,omitempty" json:"subtask_id,omitempty" validate:"omitnil,min=0" gorm:"type:BIGINT"`
 	CreatedAt   time.Time   `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 }
 

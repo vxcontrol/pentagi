@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -24,7 +25,7 @@ type termlogsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var termlogsSQLMappers = map[string]interface{}{
+var termlogsSQLMappers = map[string]any{
 	"id":           "{{table}}.id",
 	"type":         "{{table}}.type",
 	"text":         "{{table}}.text",
@@ -32,6 +33,7 @@ var termlogsSQLMappers = map[string]interface{}{
 	"flow_id":      "{{table}}.flow_id",
 	"task_id":      "{{table}}.task_id",
 	"subtask_id":   "{{table}}.subtask_id",
+	"created_at":   "{{table}}.created_at",
 	"data":         "({{table}}.type || ' ' || {{table}}.text)",
 }
 
@@ -49,6 +51,7 @@ func NewTermlogService(db *gorm.DB) *TermlogService {
 // @Summary Retrieve termlogs list
 // @Tags Termlogs
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=termlogs} "termlogs list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -74,12 +77,12 @@ func (s *TermlogService) GetTermlogs(c *gin.Context) {
 	if slices.Contains(privs, "termlogs.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = {{table}}.flow_id")
+				Joins("INNER JOIN flows f ON f.id = flow_id")
 		}
 	} else if slices.Contains(privs, "termlogs.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = {{table}}.flow_id").
+				Joins("INNER JOIN flows f ON f.id = flow_id").
 				Where("f.user_id = ?", uid)
 		}
 	} else {
@@ -91,6 +94,12 @@ func (s *TermlogService) GetTermlogs(c *gin.Context) {
 	query.Init("termlogs", termlogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := termlogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding termlogs grouped: group field not found")
+			response.Error(c, response.ErrTermlogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped termlogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding termlogs grouped")
@@ -123,6 +132,7 @@ func (s *TermlogService) GetTermlogs(c *gin.Context) {
 // @Summary Retrieve termlogs list by flow id
 // @Tags Termlogs
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=termlogs} "termlogs list received successful"
@@ -156,13 +166,13 @@ func (s *TermlogService) GetFlowTermlogs(c *gin.Context) {
 	if slices.Contains(privs, "termlogs.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = {{table}}.flow_id").
+				Joins("INNER JOIN flows f ON f.id = flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "termlogs.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = {{table}}.flow_id").
+				Joins("INNER JOIN flows f ON f.id = flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {
@@ -174,6 +184,12 @@ func (s *TermlogService) GetFlowTermlogs(c *gin.Context) {
 	query.Init("termlogs", termlogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := termlogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding termlogs grouped: group field not found")
+			response.Error(c, response.ErrTermlogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped termlogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding termlogs grouped")

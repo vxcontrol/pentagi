@@ -10,6 +10,7 @@ import (
 )
 
 type Querier interface {
+	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateAgentLog(ctx context.Context, arg CreateAgentLogParams) (Agentlog, error)
 	CreateAssistant(ctx context.Context, arg CreateAssistantParams) (Assistant, error)
 	CreateAssistantLog(ctx context.Context, arg CreateAssistantLogParams) (Assistantlog, error)
@@ -29,6 +30,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserPrompt(ctx context.Context, arg CreateUserPromptParams) (Prompt, error)
 	CreateVectorStoreLog(ctx context.Context, arg CreateVectorStoreLogParams) (Vecstorelog, error)
+	DeleteAPIToken(ctx context.Context, id int64) (ApiToken, error)
 	DeleteAssistant(ctx context.Context, id int64) (Assistant, error)
 	DeleteFlow(ctx context.Context, id int64) (Flow, error)
 	DeletePrompt(ctx context.Context, id int64) error
@@ -36,8 +38,13 @@ type Querier interface {
 	DeleteSubtask(ctx context.Context, id int64) error
 	DeleteSubtasks(ctx context.Context, ids []int64) error
 	DeleteUser(ctx context.Context, id int64) error
+	DeleteUserAPIToken(ctx context.Context, arg DeleteUserAPITokenParams) (ApiToken, error)
+	DeleteUserAPITokenByTokenID(ctx context.Context, arg DeleteUserAPITokenByTokenIDParams) (ApiToken, error)
 	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
 	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
+	GetAPIToken(ctx context.Context, id int64) (ApiToken, error)
+	GetAPITokenByTokenID(ctx context.Context, tokenID string) (ApiToken, error)
+	GetAPITokens(ctx context.Context) ([]ApiToken, error)
 	// Get toolcalls stats for all flows
 	GetAllFlowsToolcallsStats(ctx context.Context) ([]GetAllFlowsToolcallsStatsRow, error)
 	GetAllFlowsUsageStats(ctx context.Context) ([]GetAllFlowsUsageStatsRow, error)
@@ -160,6 +167,9 @@ type Querier interface {
 	GetUsageStatsByType(ctx context.Context, userID int64) ([]GetUsageStatsByTypeRow, error)
 	GetUsageStatsByTypeForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByTypeForFlowRow, error)
 	GetUser(ctx context.Context, id int64) (GetUserRow, error)
+	GetUserAPIToken(ctx context.Context, arg GetUserAPITokenParams) (ApiToken, error)
+	GetUserAPITokenByTokenID(ctx context.Context, arg GetUserAPITokenByTokenIDParams) (ApiToken, error)
+	GetUserAPITokens(ctx context.Context, userID int64) ([]ApiToken, error)
 	GetUserByHash(ctx context.Context, hash string) (GetUserByHashRow, error)
 	GetUserContainers(ctx context.Context, userID int64) ([]Container, error)
 	GetUserFlow(ctx context.Context, arg GetUserFlowParams) (Flow, error)
@@ -191,6 +201,7 @@ type Querier interface {
 	GetUserTotalToolcallsStats(ctx context.Context, userID int64) (GetUserTotalToolcallsStatsRow, error)
 	GetUserTotalUsageStats(ctx context.Context, userID int64) (GetUserTotalUsageStatsRow, error)
 	GetUsers(ctx context.Context) ([]GetUsersRow, error)
+	UpdateAPIToken(ctx context.Context, arg UpdateAPITokenParams) (ApiToken, error)
 	UpdateAssistant(ctx context.Context, arg UpdateAssistantParams) (Assistant, error)
 	UpdateAssistantLanguage(ctx context.Context, arg UpdateAssistantLanguageParams) (Assistant, error)
 	UpdateAssistantLog(ctx context.Context, arg UpdateAssistantLogParams) (Assistantlog, error)
@@ -228,6 +239,7 @@ type Querier interface {
 	UpdateToolcallFailedResult(ctx context.Context, arg UpdateToolcallFailedResultParams) (Toolcall, error)
 	UpdateToolcallFinishedResult(ctx context.Context, arg UpdateToolcallFinishedResultParams) (Toolcall, error)
 	UpdateToolcallStatus(ctx context.Context, arg UpdateToolcallStatusParams) (Toolcall, error)
+	UpdateUserAPIToken(ctx context.Context, arg UpdateUserAPITokenParams) (ApiToken, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
 	UpdateUserPasswordChangeRequired(ctx context.Context, arg UpdateUserPasswordChangeRequiredParams) (User, error)

@@ -51,7 +51,7 @@ type Subtask struct {
 	Description string        `form:"description" json:"description" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	Context     string        `form:"context" json:"context" validate:"omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
 	Result      string        `form:"result" json:"result" validate:"omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
-	TaskID      uint64        `form:"task_id" json:"task_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`
+	TaskID      uint64        `form:"task_id" json:"task_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
 	CreatedAt   time.Time     `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 	UpdatedAt   time.Time     `form:"updated_at,omitempty" json:"updated_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 }

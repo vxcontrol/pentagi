@@ -55,7 +55,7 @@ type Flow struct {
 	ModelProviderType ProviderType     `form:"model_provider_type" json:"model_provider_type" validate:"valid,required" gorm:"type:PROVIDER_TYPE;NOT NULL"`
 	Language          string           `form:"language" json:"language" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
 	Functions         *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid" gorm:"type:JSON;NOT NULL;default:'{}'"`
-	UserID            uint64           `form:"user_id" json:"user_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`
+	UserID            uint64           `form:"user_id" json:"user_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
 	CreatedAt         time.Time        `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 	UpdatedAt         time.Time        `form:"updated_at,omitempty" json:"updated_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 	DeletedAt         *time.Time       `form:"deleted_at,omitempty" json:"deleted_at,omitempty" validate:"omitempty" sql:"index" gorm:"type:TIMESTAMPTZ"`
@@ -94,7 +94,7 @@ func (cf CreateFlow) Valid() error {
 // PatchFlow is model to contain flow patching paylaod
 // nolint:lll
 type PatchFlow struct {
-	Action string  `form:"action" json:"action" validate:"required,oneof=stop,finish,input" enums:"stop,finish,input" default:"stop"`
+	Action string  `form:"action" json:"action" validate:"required,oneof=stop finish input" enums:"stop,finish,input" default:"stop"`
 	Input  *string `form:"input,omitempty" json:"input,omitempty" validate:"required_if=Action input" example:"user input for waiting flow"`
 }
 

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -20,20 +21,22 @@ type containers struct {
 }
 
 type containersGrouped struct {
-	Grouped []containers `json:"grouped"`
-	Total   uint64       `json:"total"`
+	Grouped []string `json:"grouped"`
+	Total   uint64   `json:"total"`
 }
 
-var containersSQLMappers = map[string]interface{}{
-	"id":        "{{table}}.id",
-	"type":      "{{table}}.type",
-	"name":      "{{table}}.name",
-	"image":     "{{table}}.image",
-	"status":    "{{table}}.status",
-	"local_id":  "{{table}}.local_id",
-	"local_dir": "{{table}}.local_dir",
-	"flow_id":   "{{table}}.flow_id",
-	"data":      "({{table}}.type || ' ' || {{table}}.name || ' ' || {{table}}.status || ' ' || {{table}}.local_id || ' ' || {{table}}.local_dir)",
+var containersSQLMappers = map[string]any{
+	"id":         "{{table}}.id",
+	"type":       "{{table}}.type",
+	"name":       "{{table}}.name",
+	"image":      "{{table}}.image",
+	"status":     "{{table}}.status",
+	"local_id":   "{{table}}.local_id",
+	"local_dir":  "{{table}}.local_dir",
+	"flow_id":    "{{table}}.flow_id",
+	"created_at": "{{table}}.created_at",
+	"updated_at": "{{table}}.updated_at",
+	"data":       "({{table}}.type || ' ' || {{table}}.name || ' ' || {{table}}.status || ' ' || {{table}}.local_id || ' ' || {{table}}.local_dir)",
 }
 
 type ContainerService struct {
@@ -50,6 +53,7 @@ func NewContainerService(db *gorm.DB) *ContainerService {
 // @Summary Retrieve containers list
 // @Tags Containers
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=containers} "containers list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -75,12 +79,12 @@ func (s *ContainerService) GetContainers(c *gin.Context) {
 	if slices.Contains(privs, "containers.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id")
+				Joins("INNER JOIN flows f ON f.id = containers.flow_id")
 		}
 	} else if slices.Contains(privs, "containers.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = containers.flow_id").
 				Where("f.user_id = ?", uid)
 		}
 	} else {
@@ -92,6 +96,12 @@ func (s *ContainerService) GetContainers(c *gin.Context) {
 	query.Init("containers", containersSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := containersSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding containers grouped: group field not found")
+			response.Error(c, response.ErrContainersInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped containersGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding containers grouped")
@@ -124,6 +134,7 @@ func (s *ContainerService) GetContainers(c *gin.Context) {
 // @Summary Retrieve containers list by flow id
 // @Tags Containers
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=containers} "containers list received successful"
@@ -157,13 +168,13 @@ func (s *ContainerService) GetFlowContainers(c *gin.Context) {
 	if slices.Contains(privs, "containers.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = containers.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "containers.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = containers.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {
@@ -175,6 +186,12 @@ func (s *ContainerService) GetFlowContainers(c *gin.Context) {
 	query.Init("containers", containersSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := containersSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding containers grouped: group field not found")
+			response.Error(c, response.ErrContainersInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped containersGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding containers grouped")
@@ -207,6 +224,7 @@ func (s *ContainerService) GetFlowContainers(c *gin.Context) {
 // @Summary Retrieve container info by id and flow id
 // @Tags Containers
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param containerID path int true "container id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.Container} "container info received successful"
@@ -253,7 +271,7 @@ func (s *ContainerService) GetFlowContainer(c *gin.Context) {
 	err = s.db.Model(&resp).
 		Joins("INNER JOIN flows f ON f.id = flow_id").
 		Scopes(scope).
-		Where("id = ?", containerID).
+		Where("containers.id = ?", containerID).
 		Take(&resp).Error
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error on getting container by id")

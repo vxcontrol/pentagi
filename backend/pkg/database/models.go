@@ -639,6 +639,48 @@ func (ns NullTermlogType) Value() (driver.Value, error) {
 	return string(ns.TermlogType), nil
 }
 
+type TokenStatus string
+
+const (
+	TokenStatusActive  TokenStatus = "active"
+	TokenStatusRevoked TokenStatus = "revoked"
+)
+
+func (e *TokenStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TokenStatus(s)
+	case string:
+		*e = TokenStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TokenStatus: %T", src)
+	}
+	return nil
+}
+
+type NullTokenStatus struct {
+	TokenStatus TokenStatus `json:"token_status"`
+	Valid       bool        `json:"valid"` // Valid is true if TokenStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTokenStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.TokenStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TokenStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTokenStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TokenStatus), nil
+}
+
 type ToolcallStatus string
 
 const (
@@ -820,6 +862,19 @@ type Agentlog struct {
 	TaskID    sql.NullInt64 `json:"task_id"`
 	SubtaskID sql.NullInt64 `json:"subtask_id"`
 	CreatedAt sql.NullTime  `json:"created_at"`
+}
+
+type ApiToken struct {
+	ID        int64          `json:"id"`
+	TokenID   string         `json:"token_id"`
+	UserID    int64          `json:"user_id"`
+	RoleID    int64          `json:"role_id"`
+	Name      sql.NullString `json:"name"`
+	Ttl       int64          `json:"ttl"`
+	Status    TokenStatus    `json:"status"`
+	CreatedAt sql.NullTime   `json:"created_at"`
+	UpdatedAt sql.NullTime   `json:"updated_at"`
+	DeletedAt sql.NullTime   `json:"deleted_at"`
 }
 
 type Assistant struct {

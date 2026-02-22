@@ -25,6 +25,7 @@ const Flows = lazy(() => import('@/pages/flows/flows'));
 const NewFlow = lazy(() => import('@/pages/flows/new-flow'));
 const Login = lazy(() => import('@/pages/login'));
 const OAuthResult = lazy(() => import('@/pages/oauth-result'));
+const SettingsAPITokens = lazy(() => import('@/pages/settings/settings-api-tokens'));
 const SettingsPrompt = lazy(() => import('@/pages/settings/settings-prompt'));
 const SettingsPrompts = lazy(() => import('@/pages/settings/settings-prompts'));
 const SettingsProvider = lazy(() => import('@/pages/settings/settings-provider'));
@@ -112,6 +113,10 @@ const App = () => {
                                             <Route
                                                 element={<SettingsPrompt />}
                                                 path="prompts/:promptId"
+                                            />
+                                            <Route
+                                                element={<SettingsAPITokens />}
+                                                path="api-tokens"
                                             />
                                             {/* <Route
                                         path="mcp-servers"

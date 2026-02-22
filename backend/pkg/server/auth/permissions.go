@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"slices"
 
 	"pentagi/pkg/server/response"
 
@@ -29,7 +30,7 @@ func PrivilegesRequired(privs ...string) gin.HandlerFunc {
 			return
 		}
 
-		for _, priv := range append([]string{}, privs...) {
+		for _, priv := range privs {
 			if !LookupPerm(prms, priv) {
 				response.Error(c, response.ErrPrivilegesRequired, fmt.Errorf("'%s' is not set", priv))
 				c.Abort()
@@ -41,10 +42,5 @@ func PrivilegesRequired(privs ...string) gin.HandlerFunc {
 }
 
 func LookupPerm(prm []string, perm string) bool {
-	for _, p := range prm {
-		if p == perm {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(prm, perm)
 }

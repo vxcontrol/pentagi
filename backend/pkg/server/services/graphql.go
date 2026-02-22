@@ -14,6 +14,7 @@ import (
 	"pentagi/pkg/graph"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
+	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/logger"
 	"pentagi/pkg/templates"
 
@@ -51,6 +52,7 @@ func NewGraphqlService(
 	cfg *config.Config,
 	baseURL string,
 	origins []string,
+	tokenCache *auth.TokenCache,
 	providers providers.ProviderController,
 	controller controller.FlowController,
 	subscriptions subscriptions.SubscriptionsController,
@@ -59,6 +61,7 @@ func NewGraphqlService(
 		DB:              db,
 		Config:          cfg,
 		Logger:          logrus.StandardLogger().WithField("component", "pentagi-gql-bl"),
+		TokenCache:      tokenCache,
 		DefaultPrompter: templates.NewDefaultPrompter(),
 		ProvidersCtrl:   providers,
 		Controller:      controller,
@@ -117,6 +120,7 @@ func NewGraphqlService(
 // @Tags GraphQL
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param json body graphql.RawParams true "graphql request"
 // @Success 200 {object} graphql.Response "graphql response"
 // @Failure 400 {object} graphql.Response "invalid graphql request data"
@@ -125,6 +129,7 @@ func NewGraphqlService(
 // @Router /graphql [post]
 func (s *GraphqlService) ServeGraphql(c *gin.Context) {
 	uid := c.GetUint64("uid")
+	tid := c.GetString("tid")
 	privs := c.GetStringSlice("prm")
 
 	savedCtx := c.Request.Context()
@@ -134,6 +139,7 @@ func (s *GraphqlService) ServeGraphql(c *gin.Context) {
 
 	ctx := savedCtx
 	ctx = graph.SetUserID(ctx, uid)
+	ctx = graph.SetUserType(ctx, tid)
 	ctx = graph.SetUserPermissions(ctx, privs)
 	c.Request = c.Request.WithContext(ctx)
 

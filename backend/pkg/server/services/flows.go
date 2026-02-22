@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -27,15 +28,17 @@ type flowsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var flowsSQLMappers = map[string]interface{}{
-	"id":             "{{table}}.id",
-	"status":         "{{table}}.status",
-	"title":          "{{table}}.title",
-	"model":          "{{table}}.model",
-	"model_provider": "{{table}}.model_provider",
-	"language":       "{{table}}.language",
-	"user_id":        "{{table}}.user_id",
-	"data":           "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.model || ' ' || {{table}}.model_provider || ' ' || {{table}}.language)",
+var flowsSQLMappers = map[string]any{
+	"id":                  "{{table}}.id",
+	"status":              "{{table}}.status",
+	"title":               "{{table}}.title",
+	"model":               "{{table}}.model",
+	"model_provider_name": "{{table}}.model_provider_name",
+	"model_provider_type": "{{table}}.model_provider_type",
+	"language":            "{{table}}.language",
+	"created_at":          "{{table}}.created_at",
+	"updated_at":          "{{table}}.updated_at",
+	"data":                "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.model || ' ' || {{table}}.model_provider || ' ' || {{table}}.language)",
 }
 
 type FlowService struct {
@@ -56,6 +59,7 @@ func NewFlowService(db *gorm.DB, pc providers.ProviderController, fc controller.
 // @Summary Retrieve flows list
 // @Tags Flows
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=flows} "flows list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -95,6 +99,12 @@ func (s *FlowService) GetFlows(c *gin.Context) {
 	query.Init("flows", flowsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := flowsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding flows grouped: group field not found")
+			response.Error(c, response.ErrFlowsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped flowsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding flows grouped")
@@ -127,6 +137,7 @@ func (s *FlowService) GetFlows(c *gin.Context) {
 // @Summary Retrieve flow by id
 // @Tags Flows
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.Flow} "flow received successful"
 // @Failure 403 {object} response.errorResp "getting flow not permitted"
@@ -180,6 +191,7 @@ func (s *FlowService) GetFlow(c *gin.Context) {
 // @Summary Retrieve flow graph by id
 // @Tags Flows
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.FlowTasksSubtasks} "flow graph received successful"
 // @Failure 403 {object} response.errorResp "getting flow graph not permitted"
@@ -291,6 +303,7 @@ func (s *FlowService) GetFlowGraph(c *gin.Context) {
 // @Tags Flows
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param json body models.CreateFlow true "flow model to create"
 // @Success 201 {object} response.successResp{data=models.Flow} "flow created successful"
 // @Failure 400 {object} response.errorResp "invalid flow request data"
@@ -356,6 +369,7 @@ func (s *FlowService) CreateFlow(c *gin.Context) {
 // @Tags Flows
 // @Accept json
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param json body models.PatchFlow true "flow model to patch"
 // @Success 200 {object} response.successResp{data=models.Flow} "flow patched successful"
@@ -471,6 +485,7 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 // DeleteFlow is a function to delete flow by id
 // @Summary Delete flow by id
 // @Tags Flows
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.Flow} "flow deleted successful"
 // @Failure 403 {object} response.errorResp "deleting flow not permitted"

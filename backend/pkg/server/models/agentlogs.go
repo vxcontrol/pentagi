@@ -14,9 +14,9 @@ type Agentlog struct {
 	Executor  MsgchainType `json:"executor" validate:"valid,required" gorm:"type:MSGCHAIN_TYPE;NOT NULL"`
 	Task      string       `json:"task" validate:"required" gorm:"type:TEXT;NOT NULL"`
 	Result    string       `json:"result" validate:"omitempty" gorm:"type:TEXT;NOT NULL;default:''"`
-	FlowID    uint64       `form:"flow_id" json:"flow_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`
-	TaskID    *uint64      `form:"task_id,omitempty" json:"task_id,omitempty" validate:"numeric,omitempty" gorm:"type:BIGINT;NOT NULL"`
-	SubtaskID *uint64      `form:"subtask_id,omitempty" json:"subtask_id,omitempty" validate:"numeric,omitempty" gorm:"type:BIGINT;NOT NULL"`
+	FlowID    uint64       `form:"flow_id" json:"flow_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
+	TaskID    *uint64      `form:"task_id,omitempty" json:"task_id,omitempty" validate:"omitnil,min=0" gorm:"type:BIGINT;NOT NULL"`
+	SubtaskID *uint64      `form:"subtask_id,omitempty" json:"subtask_id,omitempty" validate:"omitnil,min=0" gorm:"type:BIGINT;NOT NULL"`
 	CreatedAt time.Time    `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 }
 

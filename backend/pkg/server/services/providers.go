@@ -26,6 +26,7 @@ func NewProviderService(providers providers.ProviderController) *ProviderService
 // @Summary Retrieve providers list
 // @Tags Providers
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} response.successResp{data=models.ProviderInfo} "providers list received successful"
 // @Failure 403 {object} response.errorResp "getting providers not permitted"
 // @Router /providers/ [get]

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -24,7 +25,7 @@ type vecstorelogsGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var vecstorelogsSQLMappers = map[string]interface{}{
+var vecstorelogsSQLMappers = map[string]any{
 	"id":         "{{table}}.id",
 	"initiator":  "{{table}}.initiator",
 	"executor":   "{{table}}.executor",
@@ -35,6 +36,7 @@ var vecstorelogsSQLMappers = map[string]interface{}{
 	"flow_id":    "{{table}}.flow_id",
 	"task_id":    "{{table}}.task_id",
 	"subtask_id": "{{table}}.subtask_id",
+	"created_at": "{{table}}.created_at",
 	"data":       "({{table}}.filter || ' ' || {{table}}.query || ' ' || {{table}}.result)",
 }
 
@@ -52,6 +54,7 @@ func NewVecstorelogService(db *gorm.DB) *VecstorelogService {
 // @Summary Retrieve vecstorelogs list
 // @Tags Vecstorelogs
 // @Produce json
+// @Security BearerAuth
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=vecstorelogs} "vecstorelogs list received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
@@ -94,6 +97,12 @@ func (s *VecstorelogService) GetVecstorelogs(c *gin.Context) {
 	query.Init("vecstorelogs", vecstorelogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := vecstorelogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding vecstorelogs grouped: group field not found")
+			response.Error(c, response.ErrVecstorelogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped vecstorelogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding vecstorelogs grouped")
@@ -126,6 +135,7 @@ func (s *VecstorelogService) GetVecstorelogs(c *gin.Context) {
 // @Summary Retrieve vecstorelogs list by flow id
 // @Tags Vecstorelogs
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=vecstorelogs} "vecstorelogs list received successful"
@@ -177,6 +187,12 @@ func (s *VecstorelogService) GetFlowVecstorelogs(c *gin.Context) {
 	query.Init("vecstorelogs", vecstorelogsSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := vecstorelogsSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding vecstorelogs grouped: group field not found")
+			response.Error(c, response.ErrVecstorelogsInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped vecstorelogsGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding vecstorelogs grouped")

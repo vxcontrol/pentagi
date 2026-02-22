@@ -27,6 +27,11 @@ const docTemplate = `{
     "paths": {
         "/agentlogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -41,7 +46,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -67,16 +72,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -136,6 +142,11 @@ const docTemplate = `{
         },
         "/assistantlogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -150,7 +161,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -176,16 +187,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -499,6 +511,11 @@ const docTemplate = `{
         },
         "/containers/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -513,7 +530,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -539,16 +556,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -608,6 +626,11 @@ const docTemplate = `{
         },
         "/flows/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -622,7 +645,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -648,16 +671,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -715,6 +739,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
@@ -778,6 +807,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -835,6 +869,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
@@ -904,6 +943,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "tags": [
                     "Flows"
                 ],
@@ -960,6 +1004,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/agentlogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -982,7 +1031,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -1008,16 +1057,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -1077,6 +1127,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/assistantlogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1099,7 +1154,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -1125,16 +1180,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -1194,6 +1250,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/assistants/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1216,7 +1277,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -1242,16 +1303,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -1309,6 +1371,11 @@ const docTemplate = `{
                 }
             },
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
@@ -1380,6 +1447,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/assistants/{assistantID}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1445,6 +1517,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
@@ -1522,6 +1599,11 @@ const docTemplate = `{
                 }
             },
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "tags": [
                     "Assistants"
                 ],
@@ -1586,6 +1668,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/containers/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1608,7 +1695,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -1634,16 +1721,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -1703,6 +1791,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/containers/{containerID}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1770,6 +1863,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/graph": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1829,6 +1927,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/msglogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1851,7 +1954,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -1877,16 +1980,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -1946,6 +2050,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/screenshots/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -1968,7 +2077,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -1994,16 +2103,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -2063,6 +2173,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/screenshots/{screenshotID}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2130,6 +2245,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/screenshots/{screenshotID}/file": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "image/png",
                     "application/json"
@@ -2180,6 +2300,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/searchlogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2202,7 +2327,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -2228,16 +2353,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -2297,6 +2423,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/subtasks/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2319,7 +2450,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -2345,16 +2476,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -2414,6 +2546,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/tasks/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2436,7 +2573,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -2462,16 +2599,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -2531,6 +2669,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/tasks/{taskID}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2598,6 +2741,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/tasks/{taskID}/graph": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2665,6 +2813,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/tasks/{taskID}/subtasks/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2695,7 +2848,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -2721,16 +2874,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -2790,6 +2944,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/tasks/{taskID}/subtasks/{subtaskID}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2865,6 +3024,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/termlogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -2887,7 +3051,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -2913,16 +3077,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -2982,6 +3147,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/usage": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get comprehensive analytics for a single flow including all breakdowns",
                 "produces": [
                     "application/json"
@@ -3049,6 +3219,11 @@ const docTemplate = `{
         },
         "/flows/{flowID}/vecstorelogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3071,7 +3246,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -3097,16 +3272,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -3166,6 +3342,11 @@ const docTemplate = `{
         },
         "/graphql": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
@@ -3217,6 +3398,11 @@ const docTemplate = `{
         },
         "/info": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3274,6 +3460,11 @@ const docTemplate = `{
         },
         "/msglogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3288,7 +3479,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -3314,16 +3505,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -3383,6 +3575,11 @@ const docTemplate = `{
         },
         "/prompts/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3397,7 +3594,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -3423,16 +3620,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -3492,6 +3690,11 @@ const docTemplate = `{
         },
         "/prompts/{promptType}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3554,6 +3757,11 @@ const docTemplate = `{
                 }
             },
             "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
@@ -3601,6 +3809,24 @@ const docTemplate = `{
                             ]
                         }
                     },
+                    "201": {
+                        "description": "prompt created successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Prompt"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
                     "400": {
                         "description": "invalid prompt request data",
                         "schema": {
@@ -3626,10 +3852,70 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Prompts"
+                ],
+                "summary": "Delete prompt by type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "prompt type",
+                        "name": "promptType",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "prompt deleted successful",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid prompt request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "deleting prompt not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "prompt not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on deleting prompt",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/prompts/{promptType}/default": {
             "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "consumes": [
                     "application/json"
                 ],
@@ -3652,6 +3938,24 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "prompt reset successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Prompt"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "201": {
+                        "description": "prompt created with default value successful",
                         "schema": {
                             "allOf": [
                                 {
@@ -3697,6 +4001,11 @@ const docTemplate = `{
         },
         "/providers/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3748,7 +4057,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -3774,16 +4083,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -3901,6 +4211,11 @@ const docTemplate = `{
         },
         "/screenshots/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3915,7 +4230,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -3941,16 +4256,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -4010,6 +4326,11 @@ const docTemplate = `{
         },
         "/searchlogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4024,7 +4345,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -4050,16 +4371,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -4119,6 +4441,11 @@ const docTemplate = `{
         },
         "/termlogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4133,7 +4460,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -4159,16 +4486,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -4226,7 +4554,48 @@ const docTemplate = `{
                 }
             }
         },
-        "/token": {
+        "/tokens": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tokens"
+                ],
+                "summary": "List API tokens",
+                "responses": {
+                    "200": {
+                        "description": "tokens retrieved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.tokens"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "listing tokens not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on listing tokens",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
             "post": {
                 "consumes": [
                     "application/json"
@@ -4235,17 +4604,17 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Proto"
+                    "Tokens"
                 ],
-                "summary": "Create new JWT token to use it into automation connections",
+                "summary": "Create new API token for automation",
                 "parameters": [
                     {
-                        "description": "Proto auth token request JSON data",
+                        "description": "Token creation request",
                         "name": "json",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/models.ProtoAuthTokenRequest"
+                            "$ref": "#/definitions/models.CreateAPITokenRequest"
                         }
                     }
                 ],
@@ -4261,7 +4630,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.ProtoAuthToken"
+                                            "$ref": "#/definitions/models.APITokenWithSecret"
                                         }
                                     }
                                 }
@@ -4269,7 +4638,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "invalid requested token info",
+                        "description": "invalid token request or default salt",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -4289,8 +4658,189 @@ const docTemplate = `{
                 }
             }
         },
+        "/tokens/{tokenID}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tokens"
+                ],
+                "summary": "Get API token details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Token ID",
+                        "name": "tokenID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "token retrieved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.APIToken"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "accessing token not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "token not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting token",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tokens"
+                ],
+                "summary": "Update API token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Token ID",
+                        "name": "tokenID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Token update request",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.UpdateAPITokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "token updated successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.APIToken"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid update request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "updating token not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "token not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on updating token",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tokens"
+                ],
+                "summary": "Delete API token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Token ID",
+                        "name": "tokenID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "token deleted successful",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "deleting token not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "token not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on deleting token",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/usage": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get comprehensive analytics for all user's flows including usage, toolcalls, and structural stats",
                 "produces": [
                     "application/json"
@@ -4335,6 +4885,11 @@ const docTemplate = `{
         },
         "/usage/{period}": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Get time-series analytics data for week, month, or quarter",
                 "produces": [
                     "application/json"
@@ -4519,7 +5074,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -4545,16 +5100,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -4857,6 +5413,11 @@ const docTemplate = `{
         },
         "/vecstorelogs/": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4871,7 +5432,7 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "multi",
-                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\"}\n  field value should be integer or string or array type",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
                         "name": "filters[]",
                         "in": "query"
                     },
@@ -4897,16 +5458,17 @@ const docTemplate = `{
                         "default": 5,
                         "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
                         "name": "pageSize",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
-                        "type": "string",
-                        "default": "{}",
-                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value",
-                        "name": "sort",
-                        "in": "query",
-                        "required": true
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
                     },
                     {
                         "enum": [
@@ -5094,6 +5656,106 @@ const docTemplate = `{
                 }
             }
         },
+        "models.APIToken": {
+            "type": "object",
+            "required": [
+                "created_at",
+                "status",
+                "token_id",
+                "ttl",
+                "updated_at"
+            ],
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "role_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "status": {
+                    "type": "string"
+                },
+                "token_id": {
+                    "type": "string"
+                },
+                "ttl": {
+                    "type": "integer",
+                    "maximum": 94608000,
+                    "minimum": 60
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "models.APITokenWithSecret": {
+            "type": "object",
+            "required": [
+                "created_at",
+                "status",
+                "token",
+                "token_id",
+                "ttl",
+                "updated_at"
+            ],
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "role_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "status": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "token_id": {
+                    "type": "string"
+                },
+                "ttl": {
+                    "type": "integer",
+                    "maximum": 94608000,
+                    "minimum": 60
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
         "models.AgentTypeUsageStats": {
             "type": "object",
             "required": [
@@ -5113,6 +5775,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "executor",
+                "flow_id",
                 "initiator",
                 "task"
             ],
@@ -5138,19 +5801,22 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subtask_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "task": {
                     "type": "string"
                 },
                 "task_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },
         "models.Assistant": {
             "type": "object",
             "required": [
+                "flow_id",
                 "language",
                 "model",
                 "model_provider_name",
@@ -5205,6 +5871,7 @@ const docTemplate = `{
         "models.AssistantFlow": {
             "type": "object",
             "required": [
+                "flow_id",
                 "language",
                 "model",
                 "model_provider_name",
@@ -5262,7 +5929,8 @@ const docTemplate = `{
         "models.Assistantlog": {
             "type": "object",
             "required": [
-                "message",
+                "assistant_id",
+                "flow_id",
                 "result_format",
                 "type"
             ],
@@ -5325,6 +5993,7 @@ const docTemplate = `{
         "models.Container": {
             "type": "object",
             "required": [
+                "flow_id",
                 "image",
                 "local_dir",
                 "local_id",
@@ -5364,6 +6033,24 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "models.CreateAPITokenRequest": {
+            "type": "object",
+            "required": [
+                "ttl"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "ttl": {
+                    "description": "from 1 minute to 3 years",
+                    "type": "integer",
+                    "maximum": 94608000,
+                    "minimum": 60
                 }
             }
         },
@@ -5464,7 +6151,8 @@ const docTemplate = `{
                 "model_provider_name",
                 "model_provider_type",
                 "status",
-                "title"
+                "title",
+                "user_id"
             ],
             "properties": {
                 "created_at": {
@@ -5569,7 +6257,8 @@ const docTemplate = `{
                 "model_provider_type",
                 "status",
                 "tasks",
-                "title"
+                "title",
+                "user_id"
             ],
             "properties": {
                 "created_at": {
@@ -5743,6 +6432,7 @@ const docTemplate = `{
         "models.Msglog": {
             "type": "object",
             "required": [
+                "flow_id",
                 "message",
                 "result_format",
                 "type"
@@ -5769,10 +6459,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subtask_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "task_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "thinking": {
                     "type": "string"
@@ -5943,48 +6635,6 @@ const docTemplate = `{
                 }
             }
         },
-        "models.ProtoAuthToken": {
-            "type": "object",
-            "required": [
-                "token",
-                "ttl"
-            ],
-            "properties": {
-                "created_date": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "ttl": {
-                    "type": "integer",
-                    "maximum": 94608000,
-                    "minimum": 1
-                }
-            }
-        },
-        "models.ProtoAuthTokenRequest": {
-            "type": "object",
-            "required": [
-                "ttl",
-                "type"
-            ],
-            "properties": {
-                "ttl": {
-                    "type": "integer",
-                    "default": 31536000,
-                    "maximum": 94608000,
-                    "minimum": 1
-                },
-                "type": {
-                    "type": "string",
-                    "default": "automation",
-                    "enum": [
-                        "automation"
-                    ]
-                }
-            }
-        },
         "models.ProviderInfo": {
             "type": "object",
             "required": [
@@ -6096,6 +6746,7 @@ const docTemplate = `{
             "required": [
                 "engine",
                 "executor",
+                "flow_id",
                 "initiator",
                 "query"
             ],
@@ -6127,10 +6778,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subtask_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "task_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },
@@ -6139,6 +6792,7 @@ const docTemplate = `{
             "required": [
                 "description",
                 "status",
+                "task_id",
                 "title"
             ],
             "properties": {
@@ -6242,6 +6896,7 @@ const docTemplate = `{
         "models.Task": {
             "type": "object",
             "required": [
+                "flow_id",
                 "input",
                 "status",
                 "title"
@@ -6307,6 +6962,7 @@ const docTemplate = `{
         "models.TaskSubtasks": {
             "type": "object",
             "required": [
+                "flow_id",
                 "input",
                 "status",
                 "subtasks",
@@ -6400,6 +7056,18 @@ const docTemplate = `{
                 }
             }
         },
+        "models.UpdateAPITokenRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "models.UsageStats": {
             "type": "object",
             "properties": {
@@ -6432,8 +7100,8 @@ const docTemplate = `{
         "models.User": {
             "type": "object",
             "required": [
-                "created_at",
                 "mail",
+                "role_id",
                 "status",
                 "type"
             ],
@@ -6477,9 +7145,9 @@ const docTemplate = `{
         "models.UserPassword": {
             "type": "object",
             "required": [
-                "created_at",
                 "mail",
                 "password",
+                "role_id",
                 "status",
                 "type"
             ],
@@ -6527,8 +7195,8 @@ const docTemplate = `{
         "models.UserRole": {
             "type": "object",
             "required": [
-                "created_at",
                 "mail",
+                "role_id",
                 "status",
                 "type"
             ],
@@ -6575,8 +7243,8 @@ const docTemplate = `{
         "models.UserRolePrivileges": {
             "type": "object",
             "required": [
-                "created_at",
                 "mail",
+                "role_id",
                 "status",
                 "type"
             ],
@@ -6626,9 +7294,9 @@ const docTemplate = `{
                 "action",
                 "executor",
                 "filter",
+                "flow_id",
                 "initiator",
-                "query",
-                "result"
+                "query"
             ],
             "properties": {
                 "action": {
@@ -6661,10 +7329,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subtask_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 },
                 "task_id": {
-                    "type": "integer"
+                    "type": "integer",
+                    "minimum": 0
                 }
             }
         },
@@ -6888,6 +7558,20 @@ const docTemplate = `{
                 }
             }
         },
+        "services.tokens": {
+            "type": "object",
+            "properties": {
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.APIToken"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "services.users": {
             "type": "object",
             "properties": {
@@ -6985,6 +7669,14 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Type \"Bearer\" followed by a space and JWT token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

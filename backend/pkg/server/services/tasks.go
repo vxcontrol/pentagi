@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -24,14 +25,16 @@ type tasksGrouped struct {
 	Total   uint64   `json:"total"`
 }
 
-var tasksSQLMappers = map[string]interface{}{
-	"id":      "{{table}}.id",
-	"status":  "{{table}}.status",
-	"title":   "{{table}}.title",
-	"input":   "{{table}}.input",
-	"result":  "{{table}}.result",
-	"flow_id": "{{table}}.flow_id",
-	"data":    "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.input || ' ' || {{table}}.result)",
+var tasksSQLMappers = map[string]any{
+	"id":         "{{table}}.id",
+	"status":     "{{table}}.status",
+	"title":      "{{table}}.title",
+	"input":      "{{table}}.input",
+	"result":     "{{table}}.result",
+	"flow_id":    "{{table}}.flow_id",
+	"created_at": "{{table}}.created_at",
+	"updated_at": "{{table}}.updated_at",
+	"data":       "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.input || ' ' || {{table}}.result)",
 }
 
 type TaskService struct {
@@ -48,6 +51,7 @@ func NewTaskService(db *gorm.DB) *TaskService {
 // @Summary Retrieve flow tasks list
 // @Tags Tasks
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param request query rdb.TableQuery true "query table params"
 // @Success 200 {object} response.successResp{data=tasks} "flow tasks list received successful"
@@ -81,13 +85,13 @@ func (s *TaskService) GetFlowTasks(c *gin.Context) {
 	if slices.Contains(privs, "tasks.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = tasks.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "tasks.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = tasks.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {
@@ -99,6 +103,12 @@ func (s *TaskService) GetFlowTasks(c *gin.Context) {
 	query.Init("tasks", tasksSQLMappers)
 
 	if query.Group != "" {
+		if _, ok := tasksSQLMappers[query.Group]; !ok {
+			logger.FromContext(c).Errorf("error finding tasks grouped: group field not found")
+			response.Error(c, response.ErrTasksInvalidRequest, errors.New("group field not found"))
+			return
+		}
+
 		var respGrouped tasksGrouped
 		if respGrouped.Total, err = query.QueryGrouped(s.db, &respGrouped.Grouped, scope); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finding tasks grouped")
@@ -131,6 +141,7 @@ func (s *TaskService) GetFlowTasks(c *gin.Context) {
 // @Summary Retrieve flow task by id
 // @Tags Tasks
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param taskID path int true "task id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.Task} "flow task received successful"
@@ -164,13 +175,13 @@ func (s *TaskService) GetFlowTask(c *gin.Context) {
 	if slices.Contains(privs, "tasks.admin") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = tasks.flow_id").
 				Where("f.id = ?", flowID)
 		}
 	} else if slices.Contains(privs, "tasks.view") {
 		scope = func(db *gorm.DB) *gorm.DB {
 			return db.
-				Joins("INNER JOIN flows f ON f.id = flow_id").
+				Joins("INNER JOIN flows f ON f.id = tasks.flow_id").
 				Where("f.id = ? AND f.user_id = ?", flowID, uid)
 		}
 	} else {
@@ -181,7 +192,7 @@ func (s *TaskService) GetFlowTask(c *gin.Context) {
 
 	err = s.db.Model(&resp).
 		Scopes(scope).
-		Where("id = ?", taskID).
+		Where("tasks.id = ?", taskID).
 		Take(&resp).Error
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error on getting flow task by id")
@@ -200,6 +211,7 @@ func (s *TaskService) GetFlowTask(c *gin.Context) {
 // @Summary Retrieve flow task graph by id
 // @Tags Tasks
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param taskID path int true "task id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.FlowTasksSubtasks} "flow task graph received successful"
@@ -246,12 +258,23 @@ func (s *TaskService) GetFlowTaskGraph(c *gin.Context) {
 	}
 
 	err = s.db.Model(&resp).
-		Joins("INNER JOIN flows f ON f.id = flow_id").
+		Joins("INNER JOIN flows f ON f.id = tasks.flow_id").
 		Scopes(scope).
-		Where("id = ?", taskID).
-		Take(&resp).Related(&flow).Error
+		Where("tasks.id = ?", taskID).
+		Take(&resp).Error
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error on getting flow task by id")
+		if gorm.IsRecordNotFoundError(err) {
+			response.Error(c, response.ErrTasksNotFound, err)
+		} else {
+			response.Error(c, response.ErrInternal, err)
+		}
+		return
+	}
+
+	err = s.db.Where("id = ?", resp.FlowID).Take(&flow).Error
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error on getting flow by id")
 		if gorm.IsRecordNotFoundError(err) {
 			response.Error(c, response.ErrTasksNotFound, err)
 		} else {

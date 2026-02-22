@@ -36,12 +36,6 @@ var ErrInfoUserNotFound = NewHttpError(404, "Info.UserNotFound", "user not found
 var ErrInfoInvalidUserData = NewHttpError(500, "Info.InvalidUserData", "invalid user data")
 var ErrInfoInvalidServiceData = NewHttpError(500, "Info.InvalidServiceData", "invalid service data")
 
-// proto
-
-var ErrProtoInvalidRequest = NewHttpError(400, "Proto.InvalidRequest", "failed to validate auth token request")
-var ErrProtoCreateTokenFail = NewHttpError(400, "Proto.CreateTokenFail", "failed to make auth token")
-var ErrProtoInvalidToken = NewHttpError(400, "Proto.InvalidToken", "failed to valid auth token")
-
 // users
 
 var ErrUsersNotFound = NewHttpError(404, "Users.NotFound", "user not found")
@@ -132,3 +126,11 @@ var ErrSubtasksInvalidData = NewHttpError(500, "Subtasks.InvalidData", "invalid 
 var ErrAssistantsInvalidRequest = NewHttpError(400, "Assistants.InvalidRequest", "invalid assistant request data")
 var ErrAssistantsNotFound = NewHttpError(404, "Assistants.NotFound", "assistant not found")
 var ErrAssistantsInvalidData = NewHttpError(500, "Assistants.InvalidData", "invalid assistant data")
+
+// tokens
+
+var ErrTokenCreationDisabled = NewHttpError(400, "Token.CreationDisabled", "token creation is disabled with default configuration")
+var ErrTokenNotFound = NewHttpError(404, "Token.NotFound", "token not found")
+var ErrTokenUnauthorized = NewHttpError(403, "Token.Unauthorized", "not authorized to manage this token")
+var ErrTokenInvalidRequest = NewHttpError(400, "Token.InvalidRequest", "invalid token request data")
+var ErrTokenInvalidData = NewHttpError(500, "Token.InvalidData", "invalid token data")

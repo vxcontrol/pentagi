@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -713,6 +714,7 @@ type info struct {
 // @Summary Retrieve current user and system settings
 // @Tags Public
 // @Produce json
+// @Security BearerAuth
 // @Param refresh_cookie query boolean false "boolean arg to refresh current cookie, use explicit false"
 // @Success 200 {object} response.successResp{data=info} "info received successful"
 // @Failure 403 {object} response.errorResp "getting info not permitted"
@@ -729,6 +731,7 @@ func (s *AuthService) Info(c *gin.Context) {
 	tid := c.GetString("tid")
 	exp := c.GetInt64("exp")
 	gtm := c.GetInt64("gtm")
+	cpt := c.GetString("cpt")
 	privs := c.GetStringSlice("prm")
 
 	resp.Privs = privs
@@ -741,7 +744,16 @@ func (s *AuthService) Info(c *gin.Context) {
 	}
 
 	logger.FromContext(c).WithFields(logrus.Fields(
-		map[string]interface{}{"exp": exp, "gtm": gtm, "uhash": uhash, "now": now})).Trace("AuthService.Info")
+		map[string]any{
+			"exp":   exp,
+			"gtm":   gtm,
+			"uhash": uhash,
+			"now":   now,
+			"cpt":   cpt,
+			"uid":   uid,
+			"tid":   tid,
+		},
+	)).Trace("AuthService.Info")
 
 	if uhash == "" || exp == 0 || gtm == 0 || now > exp {
 		resp.Type = "guest"
@@ -749,8 +761,6 @@ func (s *AuthService) Info(c *gin.Context) {
 		response.Success(c, http.StatusOK, resp)
 		return
 	}
-
-	resp.Type = "user"
 
 	err := s.db.Take(&resp.User, "id = ?", uid).Related(&resp.Role).Error
 	if err != nil {
@@ -766,6 +776,21 @@ func (s *AuthService) Info(c *gin.Context) {
 		response.Error(c, response.ErrInfoInvalidUserData, err)
 		return
 	}
+
+	if cpt == "automation" {
+		resp.Type = models.UserTypeAPI.String()
+		// filter out privileges that are not supported for API tokens
+		privs = slices.DeleteFunc(privs, func(priv string) bool {
+			return strings.HasPrefix(priv, "users.") ||
+				strings.HasPrefix(priv, "roles.") ||
+				strings.HasPrefix(priv, "settings.tokens.")
+		})
+		resp.Privs = privs
+		response.Success(c, http.StatusOK, resp)
+		return
+	}
+
+	resp.Type = "user"
 
 	// check 5 minutes timeout to refresh current token
 	var fiveMins int64 = 5 * 60

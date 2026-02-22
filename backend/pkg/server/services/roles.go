@@ -20,7 +20,7 @@ type roles struct {
 	Total uint64                  `json:"total"`
 }
 
-var rolesSQLMappers = map[string]interface{}{
+var rolesSQLMappers = map[string]any{
 	"id":   "{{table}}.id",
 	"name": "{{table}}.name",
 	"data": "{{table}}.name",

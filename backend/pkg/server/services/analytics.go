@@ -31,6 +31,7 @@ func NewAnalyticsService(db *gorm.DB) *AnalyticsService {
 // @Description Get comprehensive analytics for all user's flows including usage, toolcalls, and structural stats
 // @Tags Usage
 // @Produce json
+// @Security BearerAuth
 // @Success 200 {object} response.successResp{data=models.SystemUsageResponse} "analytics received successful"
 // @Failure 403 {object} response.errorResp "getting analytics not permitted"
 // @Failure 500 {object} response.errorResp "internal error on getting analytics"
@@ -359,6 +360,7 @@ func (s *AnalyticsService) GetSystemUsage(c *gin.Context) {
 // @Description Get time-series analytics data for week, month, or quarter
 // @Tags Usage
 // @Produce json
+// @Security BearerAuth
 // @Param period path string true "period" Enums(week, month, quarter)
 // @Success 200 {object} response.successResp{data=models.PeriodUsageResponse} "period analytics received successful"
 // @Failure 400 {object} response.errorResp "invalid period parameter"
@@ -774,6 +776,7 @@ func (s *AnalyticsService) GetPeriodUsage(c *gin.Context) {
 // @Description Get comprehensive analytics for a single flow including all breakdowns
 // @Tags Flows, Usage
 // @Produce json
+// @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Success 200 {object} response.successResp{data=models.FlowUsageResponse} "flow analytics received successful"
 // @Failure 400 {object} response.errorResp "invalid flow id"

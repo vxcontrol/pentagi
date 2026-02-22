@@ -6,6 +6,7 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
+	"pentagi/pkg/server/auth"
 	"pentagi/pkg/templates"
 
 	"github.com/sirupsen/logrus"
@@ -19,6 +20,7 @@ type Resolver struct {
 	DB              database.Querier
 	Config          *config.Config
 	Logger          *logrus.Entry
+	TokenCache      *auth.TokenCache
 	DefaultPrompter templates.Prompter
 	ProvidersCtrl   providers.ProviderController
 	Controller      controller.FlowController
