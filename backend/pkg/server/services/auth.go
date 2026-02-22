@@ -328,7 +328,14 @@ func (s *AuthService) AuthLoginGetCallback(c *gin.Context) {
 		return
 	}
 
-	if queryState := c.Query("state"); queryState != "" && queryState != state.Value {
+	queryState := c.Query("state")
+	if queryState == "" {
+		logger.FromContext(c).Errorf("error missing state parameter in OAuth callback")
+		response.Error(c, response.ErrAuthInvalidAuthorizationState, fmt.Errorf("state parameter is required"))
+		return
+	}
+
+	if queryState != state.Value {
 		logger.FromContext(c).Errorf("error matching received state to stored one")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, nil)
 		return
