@@ -1,6 +1,8 @@
 {
     "version": "0.2.0",
     "configurations": [
+        
+
         {
             "type": "node",
             "request": "launch",
@@ -104,7 +106,7 @@
             "request": "attach",
             "name": "Attach Installer",
             "processId": "${command:PickProcess}",
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}"
         },
         {
             "type": "node",
