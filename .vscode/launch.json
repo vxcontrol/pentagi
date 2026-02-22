@@ -7,6 +7,7 @@
 
 
 
+
         {
             "type": "node",
             "request": "launch",
@@ -47,7 +48,7 @@
             "cwd": "${workspaceFolder}/frontend",
         },
         {
-            "type": "pwa-pwa-chrome",
+            "type": "chrome",
             "request": "launch",
             "name": "Launch Browser",
             "url": "http://localhost:8000",
