@@ -1,8 +1,15 @@
 {
     "version": "0.2.0",
     "configurations": [
+
+
+
+
+
+
+
         {
-            "type": "go",
+            "type": "node",
             "request": "launch",
             "name": "Launch Go Backend",
             "program": "${workspaceFolder}/backend/cmd/pentagi/main.go",
@@ -23,8 +30,7 @@
                 // Scraper (optional) uncomment to enable
                 // "SCRAPER_PRIVATE_URL": "https://someuser:somepass@localhost:9443/",
             },
-            "cwd": "${workspaceFolder}",
-            "output": "${workspaceFolder}/build/__debug_bin_pentagi",
+            "cwd": "${workspaceFolder}"
         },
         {
             "type": "node",
@@ -47,9 +53,12 @@
             "name": "Launch Browser",
             "url": "http://localhost:8000",
             "webRoot": "${workspaceFolder}/frontend/src",
+            // this configuration will start Chrome and attach the debugger
+            // to your frontend code; run the "Launch Frontend" config
+            // separately when you need to start the vite dev server.
         },
         {
-            "type": "go",
+            "type": "node",
             "request": "launch",
             "name": "Launch Agents Tests",
             "program": "${workspaceFolder}/backend/cmd/ctester/",
@@ -90,28 +99,25 @@
                 "-workers", "8",
                 "-verbose",
             ],
-            "cwd": "${workspaceFolder}",
-            "output": "${workspaceFolder}/build/__debug_bin_ctester",
+            "cwd": "${workspaceFolder}"
         },
         {
-            "type": "go",
+            "type": "node",
             "request": "launch",
             "name": "Launch Installer",
             "program": "${workspaceFolder}/backend/cmd/installer/",
             "args": ["-e", "${workspaceFolder}/.env_test.example"],
-            "cwd": "${workspaceFolder}",
-            "output": "${workspaceFolder}/build/__debug_bin_installer",
+            "cwd": "${workspaceFolder}"
         },
         {
-            "type": "go",
+            "type": "node",
             "request": "attach",
             "name": "Attach Installer",
-            "mode": "local",
             "processId": "${command:PickProcess}",
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}"
         },
         {
-            "type": "go",
+            "type": "node",
             "request": "launch",
             "name": "Launch Tools Tests",
             "program": "${workspaceFolder}/backend/cmd/ftester/",
@@ -129,11 +135,10 @@
                 // "describe", "-verbose",
                 "perplexity", "-query", "how I can install burp suite on Kali Linux?", "-max_results", "10",
             ],
-            "cwd": "${workspaceFolder}",
-            "output": "${workspaceFolder}/build/__debug_bin_ftester",
+            "cwd": "${workspaceFolder}"
         },
         {
-            "type": "go",
+            "type": "node",
             "request": "launch",
             "name": "Launch Embedding Tests",
             "program": "${workspaceFolder}/backend/cmd/etester/",
@@ -144,8 +149,7 @@
             "args": [
                 "info", "-verbose",
             ],
-            "cwd": "${workspaceFolder}",
-            "output": "${workspaceFolder}/build/__debug_bin_etester",
+            "cwd": "${workspaceFolder}"
         },
     ]
 }
