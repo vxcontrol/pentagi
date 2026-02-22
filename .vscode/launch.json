@@ -47,7 +47,7 @@
             "cwd": "${workspaceFolder}/frontend",
         },
         {
-            "type": "chrome",
+            "type": "pwa-pwa-chrome",
             "request": "launch",
             "name": "Launch Browser",
             "url": "http://localhost:8000",
