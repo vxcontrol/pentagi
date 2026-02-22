@@ -1,10 +1,10 @@
-# PentAGi Configuration Guide
+# PentAGI Configuration Guide
 
-This document serves as a comprehensive guide to the configuration system in PentAGi, primarily aimed at developers. It details all available configuration options, their purposes, default values, and how they're used throughout the application.
+This document serves as a comprehensive guide to the configuration system in PentAGI, primarily aimed at developers. It details all available configuration options, their purposes, default values, and how they're used throughout the application.
 
 ## Table of Contents
 
-- [PentAGi Configuration Guide](#pentagi-configuration-guide)
+- [PentAGI Configuration Guide](#pentagi-configuration-guide)
   - [Table of Contents](#table-of-contents)
   - [Configuration Basics](#configuration-basics)
   - [General Settings](#general-settings)
@@ -58,7 +58,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
 
 ## Configuration Basics
 
-PentAGi uses environment variables for configuration, with support for `.env` files through the `godotenv` package. The configuration is defined in the `Config` struct in `pkg/config/config.go` and is loaded using the `NewConfig()` function.
+PentAGI uses environment variables for configuration, with support for `.env` files through the `godotenv` package. The configuration is defined in the `Config` struct in `pkg/config/config.go` and is loaded using the `NewConfig()` function.
 
 ```go
 func NewConfig() (*Config, error) {
@@ -128,7 +128,7 @@ if cfg.Debug {
 }
 ```
 
-- **DataDir**: Specifies where PentAGi stores persistent data. This is used across multiple components:
+- **DataDir**: Specifies where PentAGI stores persistent data. This is used across multiple components:
   - In `docker/client.go` for container volume mapping
   - For screenshots storage in `services.NewScreenshotService`
   - In tools for file operations and data persistence
@@ -181,7 +181,7 @@ if cfg.LicenseKey != "" {
 
 ## Docker Settings
 
-These settings control how PentAGi interacts with Docker, which is used for terminal isolation and executing commands in a controlled environment. They're crucial for the security and functionality of tool execution.
+These settings control how PentAGI interacts with Docker, which is used for terminal isolation and executing commands in a controlled environment. They're crucial for the security and functionality of tool execution.
 
 | Option                       | Environment Variable               | Default Value          | Description                                                                                |
 | ---------------------------- | ---------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------ |
@@ -199,7 +199,7 @@ These settings control how PentAGi interacts with Docker, which is used for term
 
 The Docker settings are primarily used in `pkg/docker/client.go` which implements the Docker client interface used throughout the application. This client is responsible for creating, managing, and executing commands in Docker containers:
 
-- **DockerInside**: Signals whether PentAGi is running inside a Docker container itself, which affects how volumes and sockets are mounted:
+- **DockerInside**: Signals whether PentAGI is running inside a Docker container itself, which affects how volumes and sockets are mounted:
   ```go
   inside := cfg.DockerInside
   ```
@@ -255,7 +255,7 @@ This client is used by the tools executor to run commands in isolated containers
 
 ## Server Settings
 
-These settings control the HTTP and GraphQL server that forms the backend API of PentAGi.
+These settings control the HTTP and GraphQL server that forms the backend API of PentAGI.
 
 | Option       | Environment Variable | Default Value | Description                      |
 | ------------ | -------------------- | ------------- | -------------------------------- |
@@ -690,7 +690,7 @@ These settings are critical for:
 
 ## Embedding Settings
 
-These settings control the vector embedding service used for semantic search and similarity matching, which is fundamental for PentAGi's intelligent search capabilities.
+These settings control the vector embedding service used for semantic search and similarity matching, which is fundamental for PentAGI's intelligent search capabilities.
 
 | Option                 | Environment Variable        | Default Value | Description                                                                |
 | ---------------------- | --------------------------- | ------------- | -------------------------------------------------------------------------- |
@@ -757,7 +757,7 @@ These settings are essential for:
 
 ## Summarizer Settings
 
-These settings control the text summarization behavior used for condensing long conversations and improving context management in AI interactions. The summarization system is a critical component that allows PentAGi to maintain coherent, long-running conversations while managing token usage effectively.
+These settings control the text summarization behavior used for condensing long conversations and improving context management in AI interactions. The summarization system is a critical component that allows PentAGI to maintain coherent, long-running conversations while managing token usage effectively.
 
 | Option                   | Environment Variable             | Default Value | Description                                                |
 | ------------------------ | -------------------------------- | ------------- | ---------------------------------------------------------- |

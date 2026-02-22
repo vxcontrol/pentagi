@@ -1442,9 +1442,9 @@ OAuth integration with GitHub and Google allows users to authenticate using thei
 - Access to user profile information from GitHub/Google accounts
 - Seamless integration with existing development workflows
 
-For using GitHub OAuth you need to create a new OAuth application in your GitHub account and set the `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in `.env` file.
+For using GitHub OAuth you need to create a new OAuth application in your GitHub account and set the `OAUTH_GITHUB_CLIENT_ID` and `OAUTH_GITHUB_CLIENT_SECRET` in `.env` file.
 
-For using Google OAuth you need to create a new OAuth application in your Google account and set the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` file.
+For using Google OAuth you need to create a new OAuth application in your Google account and set the `OAUTH_GOOGLE_CLIENT_ID` and `OAUTH_GOOGLE_CLIENT_SECRET` in `.env` file.
 
 ### Docker Image Configuration
 
