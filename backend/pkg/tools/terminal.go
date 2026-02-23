@@ -208,8 +208,6 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 	if err != nil {
 		return "", fmt.Errorf("failed to attach to exec process: %w", err)
 	}
-	defer resp.Close()
-
 	dst := bytes.Buffer{}
 	done := make(chan struct{})
 	go func() {
@@ -219,7 +217,12 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 
 	select {
 	case <-done:
+		resp.Close()
 	case <-ctx.Done():
+		// Close the connection first to unblock the io.Copy goroutine,
+		// then wait for it to finish to prevent a goroutine leak.
+		resp.Close()
+		<-done
 		result := fmt.Sprintf("temporary output: %s", dst.String())
 		err = fmt.Errorf("timeout value is too low, use greater value if you need so: %w: %s", ctx.Err(), result)
 	}
