@@ -14,6 +14,7 @@ import client from '@/lib/apollo';
 import { FavoritesProvider } from '@/providers/favorites-provider';
 import { FlowProvider } from '@/providers/flow-provider';
 import { ProvidersProvider } from '@/providers/providers-provider';
+import { TemplatesProvider } from '@/providers/templates-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { UserProvider } from '@/providers/user-provider';
 
@@ -24,6 +25,8 @@ const FlowReport = lazy(() => import('@/pages/flows/flow-report'));
 const Flows = lazy(() => import('@/pages/flows/flows'));
 const NewFlow = lazy(() => import('@/pages/flows/new-flow'));
 const Login = lazy(() => import('@/pages/login'));
+const Template = lazy(() => import('@/pages/templates/template'));
+const Templates = lazy(() => import('@/pages/templates/templates'));
 const OAuthResult = lazy(() => import('@/pages/oauth-result'));
 const SettingsAPITokens = lazy(() => import('@/pages/settings/settings-api-tokens'));
 const SettingsPrompt = lazy(() => import('@/pages/settings/settings-prompt'));
@@ -55,7 +58,8 @@ const App = () => {
                 <BrowserRouter>
                     <UserProvider>
                         <FavoritesProvider>
-                            <Suspense fallback={<PageLoader />}>
+                            <TemplatesProvider>
+                                <Suspense fallback={<PageLoader />}>
                                 <Routes>
                                     {/* private routes */}
                                     <Route element={renderProtectedRoute()}>
@@ -81,7 +85,14 @@ const App = () => {
                                                 />
                                             </Route>
 
-                                            {/* Other pages can be added here without FlowsProvider */}
+                                            <Route
+                                                element={<Templates />}
+                                                path="templates"
+                                            />
+                                            <Route
+                                                element={<Template />}
+                                                path="templates/:templateId"
+                                            />
                                         </Route>
 
                                         {/* Settings with nested routes */}
@@ -176,7 +187,8 @@ const App = () => {
                                         path="*"
                                     />
                                 </Routes>
-                            </Suspense>
+                                </Suspense>
+                            </TemplatesProvider>
                         </FavoritesProvider>
                     </UserProvider>
                 </BrowserRouter>

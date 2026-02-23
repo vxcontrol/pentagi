@@ -14,6 +14,7 @@ import {
     UserIcon,
     X,
 } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useMatch } from 'react-router-dom';
 
@@ -53,6 +54,7 @@ const MainSidebar = () => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const isFlowsActive = useMatch('/flows/*');
+    const isTemplatesActive = useMatch('/templates/*');
     const isSettingsActive = useMatch('/settings/*');
 
     const { authInfo, logout } = useUser();
@@ -109,6 +111,17 @@ const MainSidebar = () => {
                                         <Plus />
                                     </Link>
                                 </SidebarMenuAction>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={!!isTemplatesActive}
+                                >
+                                    <Link to="/templates">
+                                        <FileText />
+                                        Templates
+                                    </Link>
+                                </SidebarMenuButton>
                             </SidebarMenuItem>
                         </SidebarMenu>
                     </SidebarGroupContent>

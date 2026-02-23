@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUpIcon, Check, ChevronDown, Square, X } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, Square, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -305,7 +305,7 @@ export const FlowForm = ({
                                             type="submit"
                                             variant="default"
                                         >
-                                            {isSubmitting ? <Spinner variant="circle" /> : <ArrowUpIcon />}
+                                            {isSubmitting ? <Spinner variant="circle" /> : <ArrowUp />}
                                         </InputGroupButton>
                                     ) : (
                                         <InputGroupButton

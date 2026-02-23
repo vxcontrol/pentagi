@@ -1,18 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import {
-    ArrowDown,
-    ArrowUp,
-    Eye,
-    FileText,
-    GitFork,
-    Loader2,
-    MoreHorizontal,
-    Pause,
-    Plus,
-    Star,
-    Trash,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, GitFork, Loader2, MoreHorizontal, Pause, Plus, Star, Trash } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -342,12 +330,12 @@ const Flows = () => {
                                 onClick={() => navigate('/flows/new')}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 New Flow
                             </Button>
                         }
                         description="Get started by creating your first conversation flow"
-                        icon={<FileText className="text-muted-foreground size-8" />}
+                        icon={<GitFork className="text-muted-foreground size-8" />}
                         title="No flows found"
                     />
                 </div>
