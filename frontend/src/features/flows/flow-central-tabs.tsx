@@ -15,7 +15,7 @@ const FlowCentralTabs = () => {
             value={resolvedTab}
         >
             <div className="max-w-full">
-                <ScrollArea className="w-full pb-2">
+                <ScrollArea className="w-full pb-3">
                     <TabsList className="flex w-fit">
                         <TabsTrigger value="automation">Automation</TabsTrigger>
                         <TabsTrigger value="assistant">Assistant</TabsTrigger>
@@ -26,19 +26,19 @@ const FlowCentralTabs = () => {
             </div>
 
             <TabsContent
-                className="mt-2 flex-1 overflow-auto pr-4"
+                className="mt-1 flex-1 overflow-auto pr-4"
                 value="automation"
             >
                 <FlowAutomationMessages />
             </TabsContent>
             <TabsContent
-                className="mt-2 flex-1 overflow-auto pr-4"
+                className="mt-1 flex-1 overflow-auto pr-4"
                 value="assistant"
             >
                 <FlowAssistantMessages />
             </TabsContent>
             <TabsContent
-                className="mt-2 flex-1 overflow-auto pr-4"
+                className="mt-1 flex-1 overflow-auto pr-4"
                 value="dashboard"
             >
                 <FlowDashboard />
