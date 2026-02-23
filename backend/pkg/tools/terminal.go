@@ -223,6 +223,7 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 			err = fmt.Errorf("failed to copy output: %w", copyErr)
 		}
 	case <-ctx.Done():
+		resp.Close() // Force unblock io.Copy
 		// Wait for goroutine to complete with a grace period
 		select {
 		case copyErr := <-errChan:
