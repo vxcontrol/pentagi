@@ -211,15 +211,27 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 	defer resp.Close()
 
 	dst := bytes.Buffer{}
-	done := make(chan struct{})
+	errChan := make(chan error, 1)
 	go func() {
-		_, err = io.Copy(&dst, resp.Reader)
-		close(done)
+		_, copyErr := io.Copy(&dst, resp.Reader)
+		errChan <- copyErr
 	}()
 
 	select {
-	case <-done:
+	case copyErr := <-errChan:
+		if copyErr != nil && copyErr != io.EOF {
+			err = fmt.Errorf("failed to copy output: %w", copyErr)
+		}
 	case <-ctx.Done():
+		// Wait for goroutine to complete with a grace period
+		select {
+		case copyErr := <-errChan:
+			if copyErr != nil && copyErr != io.EOF {
+				err = fmt.Errorf("failed to copy output: %w", copyErr)
+			}
+		case <-time.After(defaultExtraExecTimeout):
+			// Goroutine still blocked, but we've given it time to finish
+		}
 		result := fmt.Sprintf("temporary output: %s", dst.String())
 		err = fmt.Errorf("timeout value is too low, use greater value if you need so: %w: %s", ctx.Err(), result)
 	}
