@@ -1,4 +1,4 @@
-import { Focus, Maximize, Minimize, Minus, Plus } from 'lucide-react';
+import { ArrowDown, Focus, Maximize, Minimize, Minus, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,11 @@ interface GraphNode {
     summary?: string;
     x?: number;
     y?: number;
+}
+
+interface RoutePoint {
+    x: number;
+    y: number;
 }
 
 interface ViewTransform {
@@ -77,8 +82,205 @@ const NODE_BORDER_RADIUS = 16;
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 1.15;
+const EDGE_NODE_PADDING = 15;
+const EDGE_NODE_GAP = 0;
+const EDGE_SIMPLIFY_CLEARANCE = 40;
+const EDGE_STUB_LENGTH = 20;
+const ARROW_LENGTH = 14;
+const ARROW_HALF_WIDTH = 5;
 
 // --- Helpers ---
+
+// Route a single edge around intermediate nodes between source and target levels
+function computeEdgeRoute(
+    source: GraphNode,
+    target: GraphNode,
+    levelXPositions: number[],
+    nodesByLevelX: Map<number, GraphNode[]>,
+): RoutePoint[] {
+    const sourceX = source.x!;
+    const targetX = target.x!;
+    const sourceY = source.y!;
+    const targetY = target.y!;
+
+    const isForward = sourceX <= targetX;
+    const startX = isForward ? sourceX + NODE_HALF_WIDTH + EDGE_NODE_GAP : sourceX - NODE_HALF_WIDTH - EDGE_NODE_GAP;
+    const endX = isForward ? targetX - NODE_HALF_WIDTH - EDGE_NODE_GAP : targetX + NODE_HALF_WIDTH + EDGE_NODE_GAP;
+
+    if (sourceX === targetX) {
+        const arcOffset = NODE_HALF_WIDTH + EDGE_NODE_GAP + 60;
+
+        return [
+            { x: sourceX + NODE_HALF_WIDTH + EDGE_NODE_GAP, y: sourceY },
+            { x: sourceX + NODE_HALF_WIDTH + EDGE_NODE_GAP + EDGE_STUB_LENGTH, y: sourceY },
+            { x: sourceX + arcOffset, y: (sourceY + targetY) / 2 },
+            { x: targetX + NODE_HALF_WIDTH + EDGE_NODE_GAP + EDGE_STUB_LENGTH, y: targetY },
+            { x: targetX + NODE_HALF_WIDTH + EDGE_NODE_GAP, y: targetY },
+        ];
+    }
+
+    const stubDirection = isForward ? 1 : -1;
+
+    const minLevelX = Math.min(sourceX, targetX);
+    const maxLevelX = Math.max(sourceX, targetX);
+    const intermediateLevelXs = levelXPositions.filter((x) => x > minLevelX && x < maxLevelX);
+
+    if (!intermediateLevelXs.length) {
+        return [
+            { x: startX, y: sourceY },
+            { x: startX + EDGE_STUB_LENGTH * stubDirection, y: sourceY },
+            { x: endX - EDGE_STUB_LENGTH * stubDirection, y: targetY },
+            { x: endX, y: targetY },
+        ];
+    }
+
+    const points: RoutePoint[] = [
+        { x: startX, y: sourceY },
+        { x: startX + EDGE_STUB_LENGTH * stubDirection, y: sourceY },
+    ];
+    const orderedLevelXs = isForward ? intermediateLevelXs : [...intermediateLevelXs].reverse();
+
+    for (const levelX of orderedLevelXs) {
+        const nodesAtLevel = (nodesByLevelX.get(levelX) ?? []).filter(
+            (node) => node.id !== source.id && node.id !== target.id && node.y != null,
+        );
+
+        if (!nodesAtLevel.length) {
+            continue;
+        }
+
+        const lastPoint = points[points.length - 1]!;
+        const denominator = endX - lastPoint.x;
+
+        if (Math.abs(denominator) < 1) {
+            continue;
+        }
+
+        const interpolation = (levelX - lastPoint.x) / denominator;
+
+        if (interpolation <= 0 || interpolation >= 1) {
+            continue;
+        }
+
+        const naturalY = lastPoint.y + interpolation * (targetY - lastPoint.y);
+        const curveDeviation = Math.abs(targetY - lastPoint.y) * 0.25;
+
+        let hasCollision = false;
+
+        for (const node of nodesAtLevel) {
+            const top = node.y! - NODE_HALF_HEIGHT - EDGE_NODE_PADDING;
+            const bottom = node.y! + NODE_HALF_HEIGHT + EDGE_NODE_PADDING;
+
+            if (naturalY + curveDeviation >= top && naturalY - curveDeviation <= bottom) {
+                hasCollision = true;
+                break;
+            }
+        }
+
+        if (!hasCollision) {
+            continue;
+        }
+
+        const sortedLevelNodes = [...nodesAtLevel].sort((a, b) => a.y! - b.y!);
+        const gaps: number[] = [];
+
+        gaps.push(sortedLevelNodes[0]!.y! - NODE_HALF_HEIGHT - EDGE_NODE_PADDING * 2);
+
+        for (let i = 0; i < sortedLevelNodes.length - 1; i++) {
+            const bottomEdge = sortedLevelNodes[i]!.y! + NODE_HALF_HEIGHT + EDGE_NODE_PADDING;
+            const topEdge = sortedLevelNodes[i + 1]!.y! - NODE_HALF_HEIGHT - EDGE_NODE_PADDING;
+
+            if (topEdge > bottomEdge) {
+                gaps.push((bottomEdge + topEdge) / 2);
+            }
+        }
+
+        gaps.push(sortedLevelNodes[sortedLevelNodes.length - 1]!.y! + NODE_HALF_HEIGHT + EDGE_NODE_PADDING * 2);
+
+        let bestGapY = gaps[0]!;
+        let bestDistance = Math.abs(bestGapY - naturalY);
+
+        for (const gapY of gaps) {
+            const distance = Math.abs(gapY - naturalY);
+
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestGapY = gapY;
+            }
+        }
+
+        points.push({ x: levelX, y: bestGapY });
+    }
+
+    points.push({ x: endX - EDGE_STUB_LENGTH * stubDirection, y: targetY });
+    points.push({ x: endX, y: targetY });
+
+    // Simplify: remove intermediate waypoints that aren't necessary to avoid collisions
+    let routeChanged = true;
+
+    while (routeChanged) {
+        routeChanged = false;
+
+        for (let i = 2; i < points.length - 2; i++) {
+            const previous = points[i - 1]!;
+            const next = points[i + 1]!;
+            const segmentMinX = Math.min(previous.x, next.x);
+            const segmentMaxX = Math.max(previous.x, next.x);
+            let collisionFound = false;
+
+            for (const checkLevelX of levelXPositions) {
+                if (checkLevelX <= segmentMinX || checkLevelX >= segmentMaxX) {
+                    continue;
+                }
+
+                const nodesAtCheck = (nodesByLevelX.get(checkLevelX) ?? []).filter(
+                    (node) => node.id !== source.id && node.id !== target.id && node.y != null,
+                );
+
+                if (!nodesAtCheck.length) {
+                    continue;
+                }
+
+                const denominator = next.x - previous.x;
+
+                if (Math.abs(denominator) < 1) {
+                    continue;
+                }
+
+                const interpolation = (checkLevelX - previous.x) / denominator;
+
+                if (interpolation <= 0 || interpolation >= 1) {
+                    continue;
+                }
+
+                const interpolatedY = previous.y + interpolation * (next.y - previous.y);
+                const segmentDeviation = Math.abs(next.y - previous.y) * 0.25;
+
+                for (const node of nodesAtCheck) {
+                    const top = node.y! - NODE_HALF_HEIGHT - EDGE_SIMPLIFY_CLEARANCE;
+                    const bottom = node.y! + NODE_HALF_HEIGHT + EDGE_SIMPLIFY_CLEARANCE;
+
+                    if (interpolatedY + segmentDeviation >= top && interpolatedY - segmentDeviation <= bottom) {
+                        collisionFound = true;
+                        break;
+                    }
+                }
+
+                if (collisionFound) {
+                    break;
+                }
+            }
+
+            if (!collisionFound) {
+                points.splice(i, 1);
+                routeChanged = true;
+                break;
+            }
+        }
+    }
+
+    return points;
+}
 
 // Calculate a transform that centers and fits the graph within the viewport
 function computeFitTransform(nodes: GraphNode[], viewportWidth: number, viewportHeight: number): ViewTransform {
@@ -117,16 +319,24 @@ function computeFitTransform(nodes: GraphNode[], viewportWidth: number, viewport
 }
 
 // Semantic left-to-right layout (fixed levels per entity type)
-function computeLayout(rawNodes: GraphNode[], rawLinks: GraphLink[]): { links: GraphLink[]; nodes: GraphNode[] } {
+function computeLayout(
+    rawNodes: GraphNode[],
+    rawLinks: GraphLink[],
+): {
+    levelXPositions: number[];
+    links: GraphLink[];
+    nodes: GraphNode[];
+} {
     const nodes: GraphNode[] = rawNodes.map((node) => ({ ...node }));
     const links: GraphLink[] = rawLinks.map((link) => ({ ...link }));
 
     if (!nodes.length) {
-        return { links, nodes };
+        return { levelXPositions: [], links, nodes };
     }
 
     const HORIZONTAL_SPACING = 480;
     const VERTICAL_SPACING = 140;
+    const BARYCENTER_PASSES = 4;
 
     // Build adjacency maps
     const nodeById = new Map<string, GraphNode>();
@@ -185,57 +395,70 @@ function computeLayout(rawNodes: GraphNode[], rawLinks: GraphLink[]): { links: G
     // Compact: remove empty levels
     const levels = allLevels.filter((group) => group.length > 0);
 
-    // Sort within each level by average neighbor position (barycenter heuristic)
-    for (let levelIdx = 0; levelIdx < levels.length; levelIdx++) {
-        const groupNodes = levels[levelIdx];
+    const assignLevelPositions = (groupNodes: GraphNode[], levelIdx: number) => {
+        const groupHeight = (groupNodes.length - 1) * VERTICAL_SPACING;
 
-        if (!groupNodes || levelIdx === 0) {
-            // First level: assign positions without sorting
-            if (groupNodes) {
-                const groupHeight = (groupNodes.length - 1) * VERTICAL_SPACING;
+        for (const [index, node] of groupNodes.entries()) {
+            node.x = levelIdx * HORIZONTAL_SPACING;
+            node.y = -groupHeight / 2 + index * VERTICAL_SPACING;
+        }
+    };
 
-                for (const [index, node] of groupNodes.entries()) {
-                    node.x = 0;
-                    node.y = -groupHeight / 2 + index * VERTICAL_SPACING;
-                }
+    const sortByBarycenter = (groupNodes: GraphNode[], excludeLevelIdx: number) => {
+        const referencePositions = new Map<string, number>();
+
+        for (let i = 0; i < levels.length; i++) {
+            if (i === excludeLevelIdx) {
+                continue;
             }
 
-            continue;
-        }
-
-        // Collect y positions of all already-positioned nodes
-        const positionedY = new Map<string, number>();
-
-        for (let prev = 0; prev < levelIdx; prev++) {
-            for (const node of levels[prev]!) {
+            for (const node of levels[i]!) {
                 if (node.y != null) {
-                    positionedY.set(node.id, node.y);
+                    referencePositions.set(node.id, node.y);
                 }
             }
         }
 
-        // Sort by average y of all connected neighbors in previous levels
         groupNodes.sort((a, b) => {
             const avgY = (nodeId: string): number => {
                 const neighbors = [...(parentIds.get(nodeId) ?? []), ...(childrenIds.get(nodeId) ?? [])].filter((id) =>
-                    positionedY.has(id),
+                    referencePositions.has(id),
                 );
 
                 if (!neighbors.length) {
                     return 0;
                 }
 
-                return neighbors.reduce((sum, id) => sum + (positionedY.get(id) ?? 0), 0) / neighbors.length;
+                return neighbors.reduce((sum, id) => sum + (referencePositions.get(id) ?? 0), 0) / neighbors.length;
             };
 
             return avgY(a.id) - avgY(b.id);
         });
+    };
 
-        const groupHeight = (groupNodes.length - 1) * VERTICAL_SPACING;
+    // Initial forward pass
+    for (let levelIdx = 0; levelIdx < levels.length; levelIdx++) {
+        const groupNodes = levels[levelIdx]!;
 
-        for (const [index, node] of groupNodes.entries()) {
-            node.x = levelIdx * HORIZONTAL_SPACING;
-            node.y = -groupHeight / 2 + index * VERTICAL_SPACING;
+        if (levelIdx > 0) {
+            sortByBarycenter(groupNodes, levelIdx);
+        }
+
+        assignLevelPositions(groupNodes, levelIdx);
+    }
+
+    // Additional forward-backward sweeps to reduce edge crossings
+    for (let pass = 0; pass < BARYCENTER_PASSES; pass++) {
+        for (let levelIdx = levels.length - 2; levelIdx >= 0; levelIdx--) {
+            const groupNodes = levels[levelIdx]!;
+            sortByBarycenter(groupNodes, levelIdx);
+            assignLevelPositions(groupNodes, levelIdx);
+        }
+
+        for (let levelIdx = 1; levelIdx < levels.length; levelIdx++) {
+            const groupNodes = levels[levelIdx]!;
+            sortByBarycenter(groupNodes, levelIdx);
+            assignLevelPositions(groupNodes, levelIdx);
         }
     }
 
@@ -247,7 +470,18 @@ function computeLayout(rawNodes: GraphNode[], rawLinks: GraphLink[]): { links: G
         link.target = nodeById.get(targetId)!;
     }
 
-    return { links, nodes };
+    // Collect unique level x-positions for edge routing
+    const levelXSet = new Set<number>();
+
+    for (const node of nodes) {
+        if (node.x != null) {
+            levelXSet.add(node.x);
+        }
+    }
+
+    const levelXPositions = Array.from(levelXSet).sort((a, b) => a - b);
+
+    return { levelXPositions, links, nodes };
 }
 
 function getEntityType(node: GraphNodeData): string {
@@ -328,6 +562,34 @@ function parseGraphEdges(data: GraphEdge[]): { links: GraphLink[]; nodes: GraphN
     return { links, nodes: Array.from(nodesMap.values()) };
 }
 
+// Convert route waypoints into a smooth SVG path with horizontal Bezier tangents
+function routeToSvgPath(points: RoutePoint[]): string {
+    if (points.length < 2) {
+        return '';
+    }
+
+    let path = `M ${points[0]!.x} ${points[0]!.y}`;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const current = points[i]!;
+        const next = points[i + 1]!;
+
+        // First and last segments are horizontal stubs — draw as straight lines
+        if (i === 0 || i === points.length - 2) {
+            path += ` L ${next.x} ${next.y}`;
+            continue;
+        }
+
+        const deltaX = next.x - current.x;
+        const offset = Math.max(Math.abs(deltaX) * 0.85, 70);
+        const sign = deltaX >= 0 ? 1 : -1;
+
+        path += ` C ${current.x + offset * sign} ${current.y}, ${next.x - offset * sign} ${next.y}, ${next.x} ${next.y}`;
+    }
+
+    return path;
+}
+
 // Truncate long names for display
 function truncateLabel(text: string, maxLength: number = 14): string {
     return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
@@ -377,7 +639,7 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
     const { links: rawLinks, nodes: rawNodes } = useMemo(() => parseGraphEdges(data.data), [data.data]);
 
     // Static layout
-    const { links, nodes } = useMemo(() => computeLayout(rawNodes, rawLinks), [rawNodes, rawLinks]);
+    const { levelXPositions, links, nodes } = useMemo(() => computeLayout(rawNodes, rawLinks), [rawNodes, rawLinks]);
 
     // Auto-fit transform computed from layout bounds and current viewport
     const autoFitTransform = useMemo(
@@ -419,6 +681,46 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
             }),
         [links, visibleTypesSet],
     );
+
+    // Pre-compute edge routes that avoid crossing visible nodes
+    const edgeRoutes = useMemo(() => {
+        const visibleNodesByLevelX = new Map<number, GraphNode[]>();
+
+        for (const node of visibleNodes) {
+            if (node.x == null) {
+                continue;
+            }
+
+            const group = visibleNodesByLevelX.get(node.x);
+
+            if (group) {
+                group.push(node);
+            } else {
+                visibleNodesByLevelX.set(node.x, [node]);
+            }
+        }
+
+        return visibleLinks.map((link) => {
+            const source = link.source as GraphNode;
+            const target = link.target as GraphNode;
+
+            if (source.x == null || source.y == null || target.x == null || target.y == null) {
+                return null;
+            }
+
+            const route = computeEdgeRoute(source, target, levelXPositions, visibleNodesByLevelX);
+            const lastPoint = route[route.length - 1]!;
+            const prevPoint = route[route.length - 2]!;
+            const arrowAngle = Math.atan2(lastPoint.y - prevPoint.y, lastPoint.x - prevPoint.x) * (180 / Math.PI);
+
+            return {
+                arrowAngle,
+                arrowTipX: lastPoint.x,
+                arrowTipY: lastPoint.y,
+                pathData: routeToSvgPath(route),
+            };
+        });
+    }, [visibleLinks, visibleNodes, levelXPositions]);
 
     // --- Pan & zoom handlers ---
 
@@ -653,35 +955,6 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
                     className="size-full"
                     viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
                 >
-                    <defs>
-                        <marker
-                            id="arrowhead"
-                            markerHeight="12"
-                            markerWidth="16"
-                            orient="auto"
-                            refX="16"
-                            refY="6"
-                        >
-                            <path
-                                className="fill-muted-foreground/40"
-                                d="M0,0 L0,12 L16,6 z"
-                            />
-                        </marker>
-                        <marker
-                            id="arrowhead-active"
-                            markerHeight="12"
-                            markerWidth="16"
-                            orient="auto"
-                            refX="16"
-                            refY="6"
-                        >
-                            <path
-                                className="fill-foreground"
-                                d="M0,0 L0,12 L16,6 z"
-                            />
-                        </marker>
-                    </defs>
-
                     {/* Transformed group: all graph content */}
                     <g transform={svgTransform}>
                         {/* Edges (bezier curves for hierarchical layout) */}
@@ -694,17 +967,15 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
                                     return null;
                                 }
 
-                                // Start/end at node edges, not centers
-                                const startX = source.x + NODE_HALF_WIDTH;
-                                const endX = target.x - NODE_HALF_WIDTH;
-                                const midX = (startX + endX) / 2;
+                                const routeData = edgeRoutes[index];
+
+                                if (!routeData) {
+                                    return null;
+                                }
+
+                                const { arrowAngle, arrowTipX, arrowTipY, pathData } = routeData;
+                                const midX = (source.x + target.x) / 2;
                                 const midY = (source.y + target.y) / 2;
-
-                                // Horizontal bezier control offset for smooth curves
-                                const edgeDeltaX = Math.abs(endX - startX);
-                                const curveOffset = Math.max(edgeDeltaX * 0.4, 30);
-
-                                const pathData = `M ${startX} ${source.y} C ${startX + curveOffset} ${source.y}, ${endX - curveOffset} ${target.y}, ${endX} ${target.y}`;
 
                                 const isHighlighted =
                                     hoveredLink === link ||
@@ -720,10 +991,19 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
                                         <path
                                             d={pathData}
                                             fill="none"
-                                            markerEnd={isHighlighted ? 'url(#arrowhead-active)' : 'url(#arrowhead)'}
                                             stroke={isHighlighted ? 'currentColor' : 'var(--color-muted-foreground)'}
                                             strokeOpacity={isHighlighted ? 0.8 : 0.25}
                                             strokeWidth={isHighlighted ? 4 : 2}
+                                        />
+                                        <polygon
+                                            fill={isHighlighted ? 'currentColor' : 'var(--color-muted-foreground)'}
+                                            fillOpacity={isHighlighted ? 0.8 : 0.4}
+                                            points={
+                                                isHighlighted
+                                                    ? `0,0 ${-ARROW_LENGTH * 1.5},${-ARROW_HALF_WIDTH * 1.5} ${-ARROW_LENGTH * 1.5},${ARROW_HALF_WIDTH * 1.5}`
+                                                    : `0,0 ${-ARROW_LENGTH},${-ARROW_HALF_WIDTH} ${-ARROW_LENGTH},${ARROW_HALF_WIDTH}`
+                                            }
+                                            transform={`translate(${arrowTipX},${arrowTipY}) rotate(${arrowAngle})`}
                                         />
                                         {/* Invisible wider path for easier hovering */}
                                         <path
@@ -909,7 +1189,7 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
                     {Math.round(transform.scale * 100)}%
                 </div>
 
-                {/* Tooltip */}
+                {/* Node tooltip */}
                 {hoveredNode && (
                     <div className="bg-popover text-popover-foreground pointer-events-none absolute bottom-3 left-3 max-w-sm rounded-md border px-3 py-2 text-xs shadow-md">
                         <div className="flex items-center gap-1.5">
@@ -931,6 +1211,44 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
                         )}
                     </div>
                 )}
+
+                {/* Link tooltip */}
+                {hoveredLink &&
+                    !hoveredNode &&
+                    (() => {
+                        const source = hoveredLink.source as GraphNode;
+                        const target = hoveredLink.target as GraphNode;
+
+                        return (
+                            <div className="bg-popover text-popover-foreground pointer-events-none absolute bottom-3 left-3 max-w-sm rounded-md border px-3 py-2 text-xs shadow-md">
+                                <div className="flex items-center gap-1.5">
+                                    <span
+                                        className="inline-block size-2 shrink-0 rounded-full"
+                                        style={{ backgroundColor: getNodeColor(source.entityType) }}
+                                    />
+                                    <span className="font-semibold">{source.entityType}</span>
+                                    <span className="text-muted-foreground">·</span>
+                                    <span className="truncate font-mono">{source.name}</span>
+                                </div>
+                                <div className="text-muted-foreground mt-0.5 mb-0.5 flex flex-col gap-0.5">
+                                    <ArrowDown className="-ml-0.5 size-3" />
+                                    <span className="font-semibold whitespace-nowrap">
+                                        {hoveredLink.relationshipType.replaceAll('_', ' ')}
+                                    </span>
+                                    <ArrowDown className="-ml-0.5 size-3" />
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <span
+                                        className="inline-block size-2 shrink-0 rounded-full"
+                                        style={{ backgroundColor: getNodeColor(target.entityType) }}
+                                    />
+                                    <span className="font-semibold">{target.entityType}</span>
+                                    <span className="text-muted-foreground">·</span>
+                                    <span className="truncate font-mono">{target.name}</span>
+                                </div>
+                            </div>
+                        );
+                    })()}
             </div>
             {/* Node detail sheet */}
             <Sheet
