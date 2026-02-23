@@ -1,6 +1,5 @@
 @import 'tailwindcss';
-
-@plugin 'tailwindcss-animate';
+@import 'tw-animate-css';
 @plugin '@tailwindcss/typography';
 
 @custom-variant dark (&:is(.dark *));
@@ -145,9 +144,6 @@
 }
 
 @theme {
-    --animate-accordion-down: accordion-down 0.2s ease-out;
-    --animate-accordion-up: accordion-up 0.2s ease-out;
-    --animate-caret-blink: caret-blink 1.25s ease-out infinite;
     --animate-logo-spin: logo-spin 10s cubic-bezier(0.5, -0.5, 0.5, 1.25) infinite;
     --animate-roll-reveal: roll-reveal 0.4s cubic-bezier(0.22, 1.28, 0.54, 0.99);
     --animate-slide-left: slide-left 0.3s ease-out;
@@ -206,33 +202,6 @@
 
     --transition-delay-10000: 10000ms;
 
-    @keyframes accordion-down {
-        from {
-            height: 0;
-        }
-        to {
-            height: var(--radix-accordion-content-height);
-        }
-    }
-    @keyframes accordion-up {
-        from {
-            height: var(--radix-accordion-content-height);
-        }
-        to {
-            height: 0;
-        }
-    }
-    @keyframes caret-blink {
-        0%,
-        70%,
-        100% {
-            opacity: 1;
-        }
-        20%,
-        50% {
-            opacity: 0;
-        }
-    }
     @keyframes logo-spin {
         0% {
             transform: rotate(0deg);
