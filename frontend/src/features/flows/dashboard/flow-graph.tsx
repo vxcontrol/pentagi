@@ -918,10 +918,13 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
     const svgTransform = `translate(${transform.x}, ${transform.y}) scale(${transform.scale})`;
 
     return (
-        <div>
+        <div
+            className={isFullscreen ? 'bg-background flex h-screen flex-col' : ''}
+            ref={containerRef}
+        >
             {/* Entity type filter toggles */}
             <ToggleGroup
-                className="mb-3 flex flex-wrap justify-start gap-1"
+                className={`flex flex-wrap justify-start gap-1 ${isFullscreen ? 'bg-background/80 p-3 pb-0 backdrop-blur-sm' : 'mb-3'}`}
                 onValueChange={setVisibleTypes}
                 type="multiple"
                 value={activeVisibleTypes}
@@ -945,11 +948,10 @@ const FlowGraph = ({ data }: FlowGraphProps) => {
 
             {/* Graph SVG */}
             <div
-                className={`bg-background relative w-full overflow-hidden rounded-lg border ${isPanning ? 'cursor-grabbing' : 'cursor-grab'} ${isFullscreen ? 'h-screen rounded-none border-none' : 'h-[500px]'}`}
+                className={`bg-background relative w-full overflow-hidden rounded-lg border ${isPanning ? 'cursor-grabbing' : 'cursor-grab'} ${isFullscreen ? 'flex-1 rounded-none border-none' : 'h-[500px]'}`}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
-                ref={containerRef}
             >
                 <svg
                     className="size-full"
