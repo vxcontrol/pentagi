@@ -1,18 +1,26 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { Camera, Search, X } from 'lucide-react';
+import { Camera, ListFilter, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { useFlow } from '@/providers/flow-provider';
 
+import FlowTasksDropdown from '../flow-tasks-dropdown';
 import FlowScreenshot from './flow-screenshot';
 
 const searchFormSchema = z.object({
+    filter: z
+        .object({
+            subtaskIds: z.array(z.string()),
+            taskIds: z.array(z.string()),
+        })
+        .optional(),
     search: z.string(),
 });
 
@@ -25,12 +33,17 @@ const FlowScreenshots = () => {
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         defaultValues: {
+            filter: {
+                subtaskIds: [],
+                taskIds: [],
+            },
             search: '',
         },
         resolver: zodResolver(searchFormSchema),
     });
 
     const searchValue = form.watch('search');
+    const filter = form.watch('filter');
 
     // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
@@ -59,38 +72,80 @@ const FlowScreenshots = () => {
 
     // Clear search when flow changes to prevent stale search state
     useEffect(() => {
-        form.reset({ search: '' });
+        form.reset({
+            filter: {
+                subtaskIds: [],
+                taskIds: [],
+            },
+            search: '',
+        });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
     }, [flowId, form, debouncedUpdateSearch]);
 
-    // Memoize filtered screenshots to avoid recomputing on every render
-    // Use debouncedSearchValue for filtering to improve performance
+    const hasActiveFilters = useMemo(() => {
+        const hasSearch = !!searchValue.trim();
+        const hasTaskFilters = !!(filter?.taskIds?.length || filter?.subtaskIds?.length);
+
+        return hasSearch || hasTaskFilters;
+    }, [searchValue, filter]);
+
     const filteredScreenshots = useMemo(() => {
         const search = debouncedSearchValue.toLowerCase().trim();
 
-        if (!search || !screenshots) {
-            return screenshots || [];
+        let filtered = screenshots || [];
+
+        if (search) {
+            filtered = filtered.filter((screenshot) => {
+                return screenshot.url.toLowerCase().includes(search);
+            });
         }
 
-        return screenshots.filter((screenshot) => {
-            return screenshot.url.toLowerCase().includes(search);
-        });
-    }, [screenshots, debouncedSearchValue]);
+        if (filter?.taskIds?.length || filter?.subtaskIds?.length) {
+            const selectedTaskIds = new Set(filter.taskIds ?? []);
+            const selectedSubtaskIds = new Set(filter.subtaskIds ?? []);
+
+            filtered = filtered.filter((screenshot) => {
+                if (screenshot.taskId && selectedTaskIds.has(screenshot.taskId)) {
+                    return true;
+                }
+
+                if (screenshot.subtaskId && selectedSubtaskIds.has(screenshot.subtaskId)) {
+                    return true;
+                }
+
+                return false;
+            });
+        }
+
+        return filtered;
+    }, [screenshots, debouncedSearchValue, filter]);
 
     const hasScreenshots = filteredScreenshots && filteredScreenshots.length > 0;
+
+    const handleResetFilters = () => {
+        form.reset({
+            filter: {
+                subtaskIds: [],
+                taskIds: [],
+            },
+            search: '',
+        });
+        setDebouncedSearchValue('');
+        debouncedUpdateSearch.cancel();
+    };
 
     return (
         <div className="flex h-full flex-col">
             <div className="bg-background sticky top-0 z-10 pb-4">
                 <Form {...form}>
-                    <div className="p-px">
+                    <div className="flex gap-2 p-px">
                         <FormField
                             control={form.control}
                             name="search"
                             render={({ field }) => (
                                 <FormControl>
-                                    <InputGroup>
+                                    <InputGroup className="flex-1">
                                         <InputGroupAddon>
                                             <Search />
                                         </InputGroupAddon>
@@ -118,6 +173,18 @@ const FlowScreenshots = () => {
                                 </FormControl>
                             )}
                         />
+                        <FormField
+                            control={form.control}
+                            name="filter"
+                            render={({ field }) => (
+                                <FormControl>
+                                    <FlowTasksDropdown
+                                        onChange={field.onChange}
+                                        value={field.value}
+                                    />
+                                </FormControl>
+                            )}
+                        />
                     </div>
                 </Form>
             </div>
@@ -131,6 +198,25 @@ const FlowScreenshots = () => {
                         />
                     ))}
                 </div>
+            ) : hasActiveFilters ? (
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                            <ListFilter />
+                        </EmptyMedia>
+                        <EmptyTitle>No screenshots found</EmptyTitle>
+                        <EmptyDescription>Try adjusting your search or filter parameters</EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                        <Button
+                            onClick={handleResetFilters}
+                            variant="outline"
+                        >
+                            <X />
+                            Reset filters
+                        </Button>
+                    </EmptyContent>
+                </Empty>
             ) : (
                 <Empty>
                     <EmptyHeader>
