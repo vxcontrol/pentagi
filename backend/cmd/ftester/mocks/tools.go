@@ -176,6 +176,79 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		resultObj = builder.String()
 
+	case tools.SploitusToolName:
+		var sploitusArgs tools.SploitusAction
+		if err := json.Unmarshal(args, &sploitusArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling sploitus arguments: %w", err)
+		}
+
+		exploitType := sploitusArgs.ExploitType
+		if exploitType == "" {
+			exploitType = "exploits"
+		}
+
+		terminal.PrintMock("Sploitus search:")
+		terminal.PrintKeyValue("Query", sploitusArgs.Query)
+		terminal.PrintKeyValue("Exploit type", exploitType)
+		terminal.PrintKeyValue("Sort", sploitusArgs.Sort)
+		terminal.PrintKeyValueFormat("Max results", "%d", sploitusArgs.MaxResults.Int())
+
+		var builder strings.Builder
+		builder.WriteString("# Sploitus Search Results\n\n")
+		builder.WriteString(fmt.Sprintf("**Query:** `%s`  \n", sploitusArgs.Query))
+		builder.WriteString(fmt.Sprintf("**Type:** %s  \n", exploitType))
+		builder.WriteString(fmt.Sprintf("**Total matches on Sploitus:** %d\n\n", 200))
+		builder.WriteString("---\n\n")
+
+		maxResults := min(sploitusArgs.MaxResults.Int(), 3)
+
+		if exploitType == "tools" {
+			builder.WriteString(fmt.Sprintf("## Security Tools (showing up to %d)\n\n", maxResults))
+			for i := 1; i <= maxResults; i++ {
+				builder.WriteString(fmt.Sprintf("### %d. SQLMap - Automated SQL Injection Tool\n\n", i))
+				builder.WriteString("**URL:** https://github.com/sqlmapproject/sqlmap  \n")
+				builder.WriteString("**Download:** https://github.com/sqlmapproject/sqlmap  \n")
+				builder.WriteString("**Source Type:** kitploit  \n")
+				builder.WriteString("**ID:** KITPLOIT:123456789  \n")
+				builder.WriteString("\n---\n\n")
+			}
+		} else {
+			builder.WriteString(fmt.Sprintf("## Exploits (showing up to %d)\n\n", maxResults))
+
+			builder.WriteString("### 1. SSTI-to-RCE-Python-Eval-Bypass\n\n")
+			builder.WriteString("**URL:** https://github.com/Rohitberiwala/SSTI-to-RCE-Python-Eval-Bypass  \n")
+			builder.WriteString("**CVSS Score:** 5.8  \n")
+			builder.WriteString("**Type:** githubexploit  \n")
+			builder.WriteString("**Published:** 2026-02-23  \n")
+			builder.WriteString("**ID:** 1A2B3C4D-5E6F-7G8H-9I0J-1K2L3M4N5O6P  \n")
+			builder.WriteString("**Language:** python  \n")
+			builder.WriteString("\n---\n\n")
+
+			if maxResults >= 2 {
+				builder.WriteString("### 2. Apache Struts CVE-2024-53677 RCE\n\n")
+				builder.WriteString("**URL:** https://github.com/example/struts-exploit  \n")
+				builder.WriteString("**CVSS Score:** 9.8  \n")
+				builder.WriteString("**Type:** packetstorm  \n")
+				builder.WriteString("**Published:** 2026-02-15  \n")
+				builder.WriteString("**ID:** PACKETSTORM:215999  \n")
+				builder.WriteString("**Language:** bash  \n")
+				builder.WriteString("\n---\n\n")
+			}
+
+			if maxResults >= 3 {
+				builder.WriteString("### 3. Linux Kernel Privilege Escalation\n\n")
+				builder.WriteString("**URL:** https://www.exploit-db.com/exploits/51234  \n")
+				builder.WriteString("**CVSS Score:** 7.8  \n")
+				builder.WriteString("**Type:** metasploit  \n")
+				builder.WriteString("**Published:** 2026-01-28  \n")
+				builder.WriteString("**ID:** MSF:EXPLOIT-LINUX-LOCAL-KERNEL-51234-  \n")
+				builder.WriteString("**Language:** RUBY  \n")
+				builder.WriteString("\n---\n\n")
+			}
+		}
+
+		resultObj = builder.String()
+
 	case tools.SearxngToolName:
 		var searchArgs tools.SearchAction
 		if err := json.Unmarshal(args, &searchArgs); err != nil {

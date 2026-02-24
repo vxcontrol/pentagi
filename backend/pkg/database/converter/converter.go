@@ -401,6 +401,28 @@ func ConvertPrompt(prompt database.Prompt) *model.UserPrompt {
 	}
 }
 
+func ConvertUserPreferences(pref database.UserPreference) *model.UserPreferences {
+	var data struct {
+		FavoriteFlows []int64 `json:"favoriteFlows"`
+	}
+	if err := json.Unmarshal(pref.Preferences, &data); err != nil {
+		return &model.UserPreferences{
+			ID:            pref.UserID,
+			FavoriteFlows: []int64{},
+		}
+	}
+
+	// requires by schema validation
+	if data.FavoriteFlows == nil {
+		data.FavoriteFlows = []int64{}
+	}
+
+	return &model.UserPreferences{
+		ID:            pref.UserID,
+		FavoriteFlows: data.FavoriteFlows,
+	}
+}
+
 func ConvertAPIToken(token database.ApiToken) *model.APIToken {
 	var name *string
 	if token.Name.Valid {

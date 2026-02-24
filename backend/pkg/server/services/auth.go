@@ -302,7 +302,7 @@ func (s *AuthService) AuthAuthorize(c *gin.Context) {
 		http.StatusTemporaryRedirect)
 }
 
-// AuthLoginGetCallback is function to catch login callback from OAuth applacation with code only
+// AuthLoginGetCallback is function to catch login callback from OAuth application with code only
 // @Summary Login user from external OAuth application
 // @Tags Public
 // @Accept json
@@ -328,7 +328,14 @@ func (s *AuthService) AuthLoginGetCallback(c *gin.Context) {
 		return
 	}
 
-	if queryState := c.Query("state"); queryState != "" && queryState != state.Value {
+	queryState := c.Query("state")
+	if queryState == "" {
+		logger.FromContext(c).Errorf("error missing state parameter in OAuth callback")
+		response.Error(c, response.ErrAuthInvalidAuthorizationState, fmt.Errorf("state parameter is required"))
+		return
+	}
+
+	if queryState != state.Value {
 		logger.FromContext(c).Errorf("error matching received state to stored one")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, nil)
 		return
@@ -342,7 +349,7 @@ func (s *AuthService) AuthLoginGetCallback(c *gin.Context) {
 	s.authLoginCallback(c, stateData, code)
 }
 
-// AuthLoginPostCallback is function to catch login callback from OAuth applacation
+// AuthLoginPostCallback is function to catch login callback from OAuth application
 // @Summary Login user from external OAuth application
 // @Tags Public
 // @Accept json
@@ -390,7 +397,7 @@ func (s *AuthService) AuthLoginPostCallback(c *gin.Context) {
 	s.authLoginCallback(c, stateData, data.Code)
 }
 
-// AuthLogoutCallback is function to catch logout callback from OAuth applacation
+// AuthLogoutCallback is function to catch logout callback from OAuth application
 // @Summary Logout current user from external OAuth application
 // @Tags Public
 // @Accept json
@@ -588,6 +595,7 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 		u, err := url.Parse(returnURI)
 		if err != nil {
 			response.Success(c, http.StatusOK, nil)
+			return
 		}
 		query := u.Query()
 		query.Add("status", "success")
@@ -633,7 +641,22 @@ func (s *AuthService) parseState(c *gin.Context, state string) (map[string]strin
 		return nil, err
 	}
 
-	exp, err := strconv.ParseInt(stateData["exp"], 10, 64)
+	expStr, ok := stateData["exp"]
+	if !ok || expStr == "" {
+		err := fmt.Errorf("missing required field: exp")
+		logger.FromContext(c).WithError(err).Errorf("error on validating state data")
+		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
+		return nil, err
+	}
+
+	if _, ok := stateData["provider"]; !ok {
+		err := fmt.Errorf("missing required field: provider")
+		logger.FromContext(c).WithError(err).Errorf("error on validating state data")
+		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
+		return nil, err
+	}
+
+	exp, err := strconv.ParseInt(expStr, 10, 64)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error on parsing expiration time")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
@@ -783,6 +806,7 @@ func (s *AuthService) Info(c *gin.Context) {
 		privs = slices.DeleteFunc(privs, func(priv string) bool {
 			return strings.HasPrefix(priv, "users.") ||
 				strings.HasPrefix(priv, "roles.") ||
+				strings.HasPrefix(priv, "settings.user.") ||
 				strings.HasPrefix(priv, "settings.tokens.")
 		})
 		resp.Privs = privs

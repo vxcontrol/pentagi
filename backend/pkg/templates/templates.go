@@ -94,6 +94,7 @@ var PromptVariables = map[PromptType][]string{
 		"FileToolName",
 		"GoogleToolName",
 		"DuckDuckGoToolName",
+		"SploitusToolName",
 		"TavilyToolName",
 		"TraversaalToolName",
 		"PerplexityToolName",

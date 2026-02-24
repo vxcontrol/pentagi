@@ -296,6 +296,7 @@ func getStructTypeForFunction(funcName string) (reflect.Type, error) {
 		tools.TraversaalToolName:        &tools.SearchAction{},
 		tools.PerplexityToolName:        &tools.SearchAction{},
 		tools.SearxngToolName:           &tools.SearchAction{},
+		tools.SploitusToolName:          &tools.SploitusAction{},
 		tools.MemoristToolName:          &tools.MemoristAction{},
 		tools.SearchInMemoryToolName:    &tools.SearchInMemoryAction{},
 		tools.SearchGuideToolName:       &tools.SearchGuideAction{},

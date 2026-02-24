@@ -1,0 +1,75 @@
+{
+    "exploits": [
+        {
+            "title": "Nmap CheatSheet",
+            "href": "http://www.kitploit.com/2013/10/nmap-cheatsheet-by-sans.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:6051495062181528604",
+            "download": "https://blogs.sans.org/pen-testing/files/2013/10/NmapCheatSheetv1.0.pdf"
+        },
+        {
+            "title": "Network Mapper: Nmap",
+            "href": "https://n0where.net/network-mapper-nmap",
+            "type": "n0where",
+            "id": "N0WHERE:8499",
+            "download": "https://github.com/nmap/nmap"
+        },
+        {
+            "title": "Nmap Bootstrap XSL - A Nmap XSL Implementation With Bootstrap",
+            "href": "http://www.kitploit.com/2018/09/nmap-bootstrap-xsl-nmap-xsl.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:7215945533026619144",
+            "download": "https://github.com/honze-net/nmap-bootstrap-xsl/"
+        },
+        {
+            "title": "[DNmap] Distributed Nmap Framwork",
+            "href": "http://www.kitploit.com/2014/03/dnmap-distributed-nmap-framwork.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:8008305432111857928",
+            "download": "http://sourceforge.net/projects/dnmap/"
+        },
+        {
+            "title": "[ScanPlanner] Scanner Nmap Online",
+            "href": "http://www.kitploit.com/2012/12/scanplanner-scanner-nmap-online.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:2951668135447282973",
+            "download": "http://www.kitploit.com/2012/12/scanplanner-scanner-nmap-online.html"
+        },
+        {
+            "title": "nMap Vulnerability Scanner: Vulscan",
+            "href": "https://n0where.net/nmap-vulnerability-scanner-vulscan",
+            "type": "n0where",
+            "id": "N0WHERE:11739",
+            "download": "http://www.computec.ch/projekte/vulscan/?s=download"
+        },
+        {
+            "title": "Distributed nmap Framework: dnmap",
+            "href": "https://n0where.net/distributed-nmap-framework-dnmap",
+            "type": "n0where",
+            "id": "N0WHERE:394",
+            "download": "http://sourceforge.net/projects/dnmap/"
+        },
+        {
+            "title": "NSEarch - Nmap Scripting Engine Search",
+            "href": "http://www.kitploit.com/2017/05/nsearch-nmap-scripting-engine-search.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:5154455548231302553",
+            "download": "https://github.com/JKO/nsearch"
+        },
+        {
+            "title": "NSEarch - Nmap Script Engine Search",
+            "href": "http://www.kitploit.com/2015/02/nsearch-nmap-script-engine-search.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:5343067594908628975",
+            "download": "https://github.com/JKO/nsearch"
+        },
+        {
+            "title": "Ruby-Nmap - A Rubyful interface to the Nmap exploration tool and security / port scanner",
+            "href": "http://www.kitploit.com/2016/03/ruby-nmap-rubyful-interface-to-nmap.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:3178978590345897812",
+            "download": "http://www.kitploit.com/2016/03/ruby-nmap-rubyful-interface-to-nmap.html"
+        }
+    ],
+    "exploits_total": 200
+}

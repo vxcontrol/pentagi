@@ -131,3 +131,7 @@ func (s *flowSubscriber) APITokenUpdated(ctx context.Context) (<-chan *model.API
 func (s *flowSubscriber) APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error) {
 	return s.ctrl.apiTokenDeleted.Subscribe(ctx, s.userID), nil
 }
+
+func (s *flowSubscriber) SettingsUserUpdated(ctx context.Context) (<-chan *model.UserPreferences, error) {
+	return s.ctrl.settingsUserUpdated.Subscribe(ctx, s.userID), nil
+}

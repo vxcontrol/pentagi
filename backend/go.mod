@@ -10,11 +10,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.31.0
 	github.com/caarlos0/env/v10 v10.0.0
 	github.com/charmbracelet/bubbles v0.21.0
-	github.com/charmbracelet/bubbletea v1.3.6
+	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/glamour v0.9.1
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/ultraviolet v0.0.0-20250725150304-368180ad03f9
-	github.com/charmbracelet/x/ansi v0.9.4-0.20250725211024-d60e1b0112b2
+	github.com/charmbracelet/x/ansi v0.10.1
 	github.com/containerd/errdefs v1.0.0
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/creack/pty v1.1.21
@@ -38,7 +38,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-runewidth v0.0.16
-	github.com/ollama/ollama v0.14.3
+	github.com/ollama/ollama v0.16.3
 	github.com/pgvector/pgvector-go v0.1.1
 	github.com/pressly/goose/v3 v3.19.2
 	github.com/rivo/uniseg v0.4.7
@@ -50,7 +50,7 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.19
 	github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1
 	github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f
-	github.com/vxcontrol/langchaingo v0.1.15-0.20260203101354-ef220222bded
+	github.com/vxcontrol/langchaingo v0.1.14-update.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.opentelemetry.io/otel v1.36.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.9.0
@@ -153,7 +153,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/compress v1.18.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect

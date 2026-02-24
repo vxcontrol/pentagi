@@ -469,6 +469,7 @@ const (
 	SearchengineTypeDuckduckgo SearchengineType = "duckduckgo"
 	SearchengineTypePerplexity SearchengineType = "perplexity"
 	SearchengineTypeSearxng    SearchengineType = "searxng"
+	SearchengineTypeSploitus   SearchengineType = "sploitus"
 )
 
 func (e *SearchengineType) Scan(src interface{}) error {
@@ -1086,6 +1087,14 @@ type User struct {
 	PasswordChangeRequired bool           `json:"password_change_required"`
 	Provider               sql.NullString `json:"provider"`
 	CreatedAt              sql.NullTime   `json:"created_at"`
+}
+
+type UserPreference struct {
+	ID          int64           `json:"id"`
+	UserID      int64           `json:"user_id"`
+	Preferences json.RawMessage `json:"preferences"`
+	CreatedAt   sql.NullTime    `json:"created_at"`
+	UpdatedAt   sql.NullTime    `json:"updated_at"`
 }
 
 type Vecstorelog struct {

@@ -42,6 +42,7 @@ type FlowWorker interface {
 	PutInput(ctx context.Context, input string) error
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
+	Rename(ctx context.Context, title string) error
 }
 
 type flowWorker struct {
@@ -218,7 +219,6 @@ func NewFlowWorker(
 		DB:         fwc.db,
 		UserID:     fwc.userID,
 		FlowID:     flow.ID,
-		FlowTitle:  flowProvider.Title(),
 		Executor:   executor,
 		Provider:   flowProvider,
 		Publisher:  pub,
@@ -368,7 +368,6 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		DB:         fwc.db,
 		UserID:     flow.UserID,
 		FlowID:     flow.ID,
-		FlowTitle:  flowProvider.Title(),
 		Executor:   executor,
 		Provider:   flowProvider,
 		Publisher:  pub,
@@ -453,7 +452,10 @@ func (fw *flowWorker) GetUserID() int64 {
 }
 
 func (fw *flowWorker) GetTitle() string {
-	return fw.flowCtx.FlowTitle
+	if fw.flowCtx.Provider != nil {
+		return fw.flowCtx.Provider.Title()
+	}
+	return ""
 }
 
 func (fw *flowWorker) GetContext() *FlowContext {
@@ -651,6 +653,27 @@ func (fw *flowWorker) Stop(ctx context.Context) error {
 	case <-done:
 		return nil
 	}
+}
+
+func (fw *flowWorker) Rename(ctx context.Context, title string) error {
+	fw.flowCtx.Provider.SetTitle(title)
+
+	flow, err := fw.flowCtx.DB.UpdateFlowTitle(ctx, database.UpdateFlowTitleParams{
+		ID:    fw.flowCtx.FlowID,
+		Title: title,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to rename flow %d: %w", fw.flowCtx.FlowID, err)
+	}
+
+	containers, err := fw.flowCtx.DB.GetFlowContainers(ctx, fw.flowCtx.FlowID)
+	if err != nil {
+		return fmt.Errorf("failed to get flow %d containers: %w", fw.flowCtx.FlowID, err)
+	}
+
+	fw.flowCtx.Publisher.FlowUpdated(ctx, flow, containers)
+
+	return nil
 }
 
 func (fw *flowWorker) finish() error {

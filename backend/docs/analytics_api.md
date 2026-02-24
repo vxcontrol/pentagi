@@ -107,7 +107,7 @@ The `isAgent` field in `FunctionToolcallsStats` categorizes tools into two types
 
 **Non-Agent Tools (`isAgent: false`):**
 - Direct tool execution (e.g., `terminal`, `browser`, `file`)
-- Search engines (e.g., `google`, `duckduckgo`, `tavily`)
+- Search engines (e.g., `google`, `duckduckgo`, `tavily`, `sploitus`, `searxng`)
 - Vector database operations (e.g., `search_in_memory`, `store_guide`)
 - Environment operations (e.g., `terminal`, `file`)
 - Execution time represents actual operation duration

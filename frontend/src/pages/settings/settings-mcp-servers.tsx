@@ -1,6 +1,19 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { AlertCircle, ArrowUpDown, Copy, Loader2, MoreHorizontal, Pencil, Plus, Server, Trash } from 'lucide-react';
+import { format, isToday } from 'date-fns';
+import { enUS } from 'date-fns/locale';
+import {
+    AlertCircle,
+    ArrowDown,
+    ArrowUp,
+    Copy,
+    Loader2,
+    MoreHorizontal,
+    Pencil,
+    Plus,
+    Server,
+    Trash,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,6 +31,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
 
 interface McpServerConfigSse {
     headers?: Record<string, string>;
@@ -72,10 +87,36 @@ const SettingsMcpServersHeader = () => {
     );
 };
 
-const formatDate = (iso: string) => new Date(iso).toLocaleDateString();
+const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+
+    if (isToday(date)) {
+        return format(date, 'HH:mm:ss', { locale: enUS });
+    }
+
+    return format(date, 'd MMM yyyy', { locale: enUS });
+};
+
+const formatFullDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+
+    return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
+};
 
 const SettingsMcpServers = () => {
     const navigate = useNavigate();
+
+    const { columnVisibility, updateColumnVisibility } = useAdaptiveColumnVisibility({
+        columns: [
+            { alwaysVisible: true, id: 'name', priority: 0 },
+            { id: 'transport', priority: 1 },
+            { id: 'tools', priority: 2 },
+            { id: 'createdAt', priority: 3 },
+            { id: 'updatedAt', priority: 4 },
+            { id: 'endpoint', priority: 5 },
+        ],
+        tableKey: 'mcp-servers',
+    });
 
     // Mocked data stored locally. This can be replaced by a real query later.
     const initialData: McpServerItem[] = useMemo(
@@ -148,6 +189,23 @@ const SettingsMcpServers = () => {
     const [isDeleteLoading, setIsDeleteLoading] = useState(false);
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
 
+    // Three-way sorting handler: null -> asc -> desc -> null
+    const handleColumnSort = (column: {
+        clearSorting: () => void;
+        getIsSorted: () => 'asc' | 'desc' | false;
+        toggleSorting: (desc?: boolean) => void;
+    }) => {
+        const sorted = column.getIsSorted();
+
+        if (sorted === 'asc') {
+            column.toggleSorting(true);
+        } else if (sorted === 'desc') {
+            column.clearSorting();
+        } else {
+            column.toggleSorting(false);
+        }
+    };
+
     const handleEdit = (serverId: number) => {
         navigate(`/settings/mcp-servers/${serverId}`);
     };
@@ -207,16 +265,25 @@ const SettingsMcpServers = () => {
             cell: ({ row }) => (
                 <div className="flex items-center gap-2 font-medium">{row.getValue('name') as string}</div>
             ),
-            header: ({ column }) => (
-                <Button
-                    className="-mx-4"
-                    onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                    variant="ghost"
-                >
-                    Name
-                    <ArrowUpDown className="ml-2 size-4" />
-                </Button>
-            ),
+            enableHiding: false,
+            header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
+                return (
+                    <Button
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                        onClick={() => handleColumnSort(column)}
+                        variant="link"
+                    >
+                        Name
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
+                    </Button>
+                );
+            },
             size: 300,
         },
         {
@@ -303,15 +370,87 @@ const SettingsMcpServers = () => {
         },
         {
             accessorKey: 'createdAt',
-            cell: ({ row }) => <div className="text-sm">{formatDate(row.getValue('createdAt'))}</div>,
-            header: 'Created',
-            size: 100,
+            cell: ({ row }) => {
+                const dateString = row.getValue('createdAt') as string;
+
+                return (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <div className="text-xs">{formatFullDateTime(dateString)}</div>
+                        </TooltipContent>
+                    </Tooltip>
+                );
+            },
+            header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
+                return (
+                    <Button
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                        onClick={() => handleColumnSort(column)}
+                        variant="link"
+                    >
+                        Created
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
+                    </Button>
+                );
+            },
+            size: 120,
+            sortingFn: (rowA, rowB) => {
+                const dateA = new Date(rowA.getValue('createdAt') as string);
+                const dateB = new Date(rowB.getValue('createdAt') as string);
+
+                return dateA.getTime() - dateB.getTime();
+            },
         },
         {
             accessorKey: 'updatedAt',
-            cell: ({ row }) => <div className="text-sm">{formatDate(row.getValue('updatedAt'))}</div>,
-            header: 'Updated',
-            size: 100,
+            cell: ({ row }) => {
+                const dateString = row.getValue('updatedAt') as string;
+
+                return (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <div className="text-xs">{formatFullDateTime(dateString)}</div>
+                        </TooltipContent>
+                    </Tooltip>
+                );
+            },
+            header: ({ column }) => {
+                const sorted = column.getIsSorted();
+
+                return (
+                    <Button
+                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                        onClick={() => handleColumnSort(column)}
+                        variant="link"
+                    >
+                        Updated
+                        {sorted === 'asc' ? (
+                            <ArrowDown className="size-4" />
+                        ) : sorted === 'desc' ? (
+                            <ArrowUp className="size-4" />
+                        ) : null}
+                    </Button>
+                );
+            },
+            size: 120,
+            sortingFn: (rowA, rowB) => {
+                const dateA = new Date(rowA.getValue('updatedAt') as string);
+                const dateB = new Date(rowB.getValue('updatedAt') as string);
+
+                return dateA.getTime() - dateB.getTime();
+            },
         },
         {
             cell: ({ row }) => {
@@ -510,10 +649,19 @@ const SettingsMcpServers = () => {
                 </Alert>
             )}
 
-            <DataTable
+            <DataTable<McpServerItem>
                 columns={columns}
+                columnVisibility={columnVisibility}
                 data={servers}
+                onColumnVisibilityChange={(visibility) => {
+                    Object.entries(visibility).forEach(([columnId, isVisible]) => {
+                        if (columnVisibility[columnId] !== isVisible) {
+                            updateColumnVisibility(columnId, isVisible);
+                        }
+                    });
+                }}
                 renderSubComponent={renderSubComponent}
+                tableKey="mcp-servers"
             />
 
             <ConfirmationDialog

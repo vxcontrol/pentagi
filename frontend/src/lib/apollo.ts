@@ -96,6 +96,7 @@ const subscriptionToCacheFieldMap: Record<string, string> = {
     providerUpdated: 'settingsProviders',
     screenshotAdded: 'screenshots',
     searchLogAdded: 'searchLogs',
+    settingsUserUpdated: 'settingsUser',
     taskCreated: 'tasks',
     taskUpdated: 'tasks',
     terminalLogAdded: 'terminalLogs',
@@ -124,6 +125,29 @@ const updateCacheForSubscription = (
     cacheField: string,
     newItem: { id: number | string },
 ): void => {
+    if (!newItem?.id) {
+        return;
+    }
+
+    if (subscriptionName === 'settingsUserUpdated') {
+        try {
+            cache.modify({
+                fields: {
+                    [cacheField]: () => newItem,
+                },
+            });
+        } catch (error) {
+            Log.error(`Error updating cache for ${subscriptionName}:`, {
+                cacheField,
+                error,
+                itemId: newItem.id,
+                subscriptionName,
+            });
+        }
+
+        return;
+    }
+
     try {
         cache.modify({
             fields: {
@@ -328,6 +352,7 @@ const createApolloClient = () => {
                     searchLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
                     settingsPrompts: { ...replaceWithIncoming },
                     settingsProviders: { ...replaceWithIncoming },
+                    settingsUser: { ...replaceWithIncoming },
                     tasks: { keyArgs: ['flowId'], ...replaceWithIncoming },
                     terminalLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
                     vectorStoreLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },

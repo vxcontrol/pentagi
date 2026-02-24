@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"pentagi/pkg/cast"
@@ -69,6 +70,8 @@ type StreamMessageChunk struct {
 type StreamMessageHandler func(ctx context.Context, chunk *StreamMessageChunk) error
 
 type FlowProvider interface {
+	ID() int64
+	DB() database.Querier
 	Type() provider.ProviderType
 	Model(opt pconfig.ProviderOptionsType) string
 	Image() string
@@ -76,7 +79,10 @@ type FlowProvider interface {
 	Language() string
 	ToolCallIDTemplate() string
 	Embedder() embeddings.Embedder
+	Executor() tools.FlowToolsExecutor
+	Prompter() templates.Prompter
 
+	SetTitle(title string)
 	SetAgentLogProvider(agentLog tools.AgentLogProvider)
 	SetMsgLogProvider(msgLog tools.MsgLogProvider)
 
@@ -118,6 +124,7 @@ type subtasksInfo struct {
 
 type flowProvider struct {
 	db database.Querier
+	mx *sync.RWMutex
 
 	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
@@ -146,31 +153,87 @@ type flowProvider struct {
 }
 
 func (fp *flowProvider) SetAgentLogProvider(agentLog tools.AgentLogProvider) {
+	fp.mx.Lock()
+	defer fp.mx.Unlock()
+
 	fp.agentLog = agentLog
 }
 
 func (fp *flowProvider) SetMsgLogProvider(msgLog tools.MsgLogProvider) {
+	fp.mx.Lock()
+	defer fp.mx.Unlock()
+
 	fp.msgLog = msgLog
 }
 
+func (fp *flowProvider) ID() int64 {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
+	return fp.flowID
+}
+
+func (fp *flowProvider) DB() database.Querier {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
+	return fp.db
+}
+
 func (fp *flowProvider) Image() string {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
 	return fp.image
 }
 
 func (fp *flowProvider) Title() string {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
 	return fp.title
 }
 
+func (fp *flowProvider) SetTitle(title string) {
+	fp.mx.Lock()
+	defer fp.mx.Unlock()
+
+	fp.title = title
+}
+
 func (fp *flowProvider) Language() string {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
 	return fp.language
 }
 
 func (fp *flowProvider) ToolCallIDTemplate() string {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
 	return fp.tcIDTemplate
 }
 
 func (fp *flowProvider) Embedder() embeddings.Embedder {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
 	return fp.embedder
+}
+
+func (fp *flowProvider) Executor() tools.FlowToolsExecutor {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
+	return fp.executor
+}
+
+func (fp *flowProvider) Prompter() templates.Prompter {
+	fp.mx.RLock()
+	defer fp.mx.RUnlock()
+
+	return fp.prompter
 }
 
 func (fp *flowProvider) GetTaskTitle(ctx context.Context, input string) (string, error) {
@@ -708,35 +771,33 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 				}
 
 				// report result to msg log as a final message for the subtask execution
-				if fp.msgLog != nil {
-					reportMsgID, err := fp.msgLog.PutMsg(
-						ctx,
-						database.MsglogTypeReport,
-						&taskID, &subtaskID, 0,
-						"", subtask.Description,
+				reportMsgID, err := fp.putMsgLog(
+					ctx,
+					database.MsglogTypeReport,
+					&taskID, &subtaskID, 0,
+					"", subtask.Description,
+				)
+				if err != nil {
+					opts = append(opts,
+						langfuse.WithAgentStatus(err.Error()),
+						langfuse.WithAgentLevel(langfuse.ObservationLevelError),
 					)
-					if err != nil {
-						opts = append(opts,
-							langfuse.WithAgentStatus(err.Error()),
-							langfuse.WithAgentLevel(langfuse.ObservationLevelError),
-						)
-						loggerFunc.WithError(err).Error("failed to put report msg")
-						return "", fmt.Errorf("failed to put report msg: %w", err)
-					}
+					loggerFunc.WithError(err).Error("failed to put report msg")
+					return "", fmt.Errorf("failed to put report msg: %w", err)
+				}
 
-					err = fp.msgLog.UpdateMsgResult(
-						ctx,
-						reportMsgID, 0,
-						done.Result, database.MsglogResultFormatMarkdown,
+				err = fp.updateMsgLogResult(
+					ctx,
+					reportMsgID, 0,
+					done.Result, database.MsglogResultFormatMarkdown,
+				)
+				if err != nil {
+					opts = append(opts,
+						langfuse.WithAgentStatus(err.Error()),
+						langfuse.WithAgentLevel(langfuse.ObservationLevelError),
 					)
-					if err != nil {
-						opts = append(opts,
-							langfuse.WithAgentStatus(err.Error()),
-							langfuse.WithAgentLevel(langfuse.ObservationLevelError),
-						)
-						loggerFunc.WithError(err).Error("failed to update report msg result")
-						return "", fmt.Errorf("failed to update report msg result: %w", err)
-					}
+					loggerFunc.WithError(err).Error("failed to update report msg result")
+					return "", fmt.Errorf("failed to update report msg result: %w", err)
 				}
 
 			case tools.AskUserToolName:
@@ -808,4 +869,56 @@ func (fp *flowProvider) EnsureChainConsistency(ctx context.Context, msgChainID i
 	return fp.processChain(ctx, msgChainID, logger, func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
 		return fp.ensureChainConsistency(chain)
 	})
+}
+
+func (fp *flowProvider) putMsgLog(
+	ctx context.Context,
+	msgType database.MsglogType,
+	taskID, subtaskID *int64,
+	streamID int64,
+	thinking, msg string,
+) (int64, error) {
+	fp.mx.RLock()
+	msgLog := fp.msgLog
+	fp.mx.RUnlock()
+
+	if msgLog == nil {
+		return 0, nil
+	}
+
+	return msgLog.PutMsg(ctx, msgType, taskID, subtaskID, streamID, thinking, msg)
+}
+
+func (fp *flowProvider) updateMsgLogResult(
+	ctx context.Context,
+	msgID, streamID int64,
+	result string,
+	resultFormat database.MsglogResultFormat,
+) error {
+	fp.mx.RLock()
+	msgLog := fp.msgLog
+	fp.mx.RUnlock()
+
+	if msgLog == nil || msgID <= 0 {
+		return nil
+	}
+
+	return msgLog.UpdateMsgResult(ctx, msgID, streamID, result, resultFormat)
+}
+
+func (fp *flowProvider) putAgentLog(
+	ctx context.Context,
+	initiator, executor database.MsgchainType,
+	task, result string,
+	taskID, subtaskID *int64,
+) (int64, error) {
+	fp.mx.RLock()
+	agentLog := fp.agentLog
+	fp.mx.RUnlock()
+
+	if agentLog == nil {
+		return 0, nil
+	}
+
+	return agentLog.PutLog(ctx, initiator, executor, task, result, taskID, subtaskID)
 }

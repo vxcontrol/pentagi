@@ -10,6 +10,8 @@
 
 [![Discord](https://img.shields.io/badge/Discord-7289DA?logo=discord&logoColor=white)](https://discord.gg/2xrMh7qX6m)⠀[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?logo=telegram&logoColor=white)](https://t.me/+Ka9i6CNwe71hMWQy)
 
+<a href="https://trendshift.io/repositories/15161" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15161" alt="vxcontrol%2Fpentagi | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 </div>
 
 ## 📖 Table of Contents
@@ -42,7 +44,7 @@ You can watch the video **PentAGI overview**:
 - 🧠 Smart Memory System. Long-term storage of research results and successful approaches for future use.
 - 📚 Knowledge Graph Integration. Graphiti-powered knowledge graph using Neo4j for semantic relationship tracking and advanced context understanding.
 - 🔍 Web Intelligence. Built-in browser via [scraper](https://hub.docker.com/r/vxcontrol/scraper) for gathering latest information from web sources.
-- 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/), and [Searxng](https://searxng.org) for comprehensive information gathering.
+- 🔎 External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/), [Sploitus Search](https://sploitus.com) and [Searxng](https://searxng.org) for comprehensive information gathering.
 - 👥 Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks.
 - 📊 Comprehensive Monitoring. Detailed logging and integration with Grafana/Prometheus for real-time system observation.
 - 📝 Detailed Reporting. Generation of thorough vulnerability reports with exploitation guides.
@@ -77,7 +79,7 @@ flowchart TB
     llm["🧠 llm-provider
     (OpenAI/Anthropic/Ollama/Bedrock/Gemini/Custom)"]
     search["🔍 search-systems
-    (Google/DuckDuckGo/Tavily/Traversaal/Perplexity/Searxng)"]
+    (Google/DuckDuckGo/Tavily/Traversaal/Perplexity/Sploitus/Searxng)"]
     langfuse["📊 langfuse-ui
     (LLM Observability Dashboard)"]
     grafana["📈 grafana
@@ -472,7 +474,7 @@ The system uses Docker containers for isolation and easy deployment, with separa
 
 ### System Requirements
 
-- Docker and Docker Compose
+- Docker and Docker Compose (or Podman - see [Podman configuration](#running-pentagi-with-podman))
 - Minimum 2 vCPU
 - Minimum 4GB RAM
 - 20GB free disk space
@@ -530,7 +532,7 @@ The installer will:
 1. **System Checks**: Verify Docker, network connectivity, and system requirements
 2. **Environment Setup**: Create and configure `.env` file with optimal defaults
 3. **Provider Configuration**: Set up LLM providers (OpenAI, Anthropic, Gemini, Bedrock, Ollama, Custom)
-4. **Search Engines**: Configure DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng
+4. **Search Engines**: Configure DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Sploitus, Searxng
 5. **Security Hardening**: Generate secure credentials and configure SSL certificates
 6. **Deployment**: Start PentAGI with docker-compose
 
@@ -586,6 +588,7 @@ OLLAMA_SERVER_MODEL=your_model_name
 
 # Optional: Additional search capabilities
 DUCKDUCKGO_ENABLED=true
+SPLOITUS_ENABLED=true
 GOOGLE_API_KEY=your_google_key
 GOOGLE_CX_KEY=your_google_cx
 TAVILY_API_KEY=your_tavily_key
@@ -662,6 +665,154 @@ Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default
 > `PROXY_URL` is a global proxy URL for all LLM providers and external search systems. You can use it for isolation from external networks.
 >
 > The `docker-compose.yml` file runs the PentAGI service as root user because it needs access to docker.sock for container management. If you're using TCP/IP network connection to Docker instead of socket file, you can remove root privileges and use the default `pentagi` user for better security.
+
+### Accessing PentAGI from External Networks
+
+By default, PentAGI binds to `127.0.0.1` (localhost only) for security. To access PentAGI from other machines on your network, you need to configure external access.
+
+#### Configuration Steps
+
+1. **Update `.env` file** with your server's IP address:
+
+```bash
+# Network binding - allow external connections
+PENTAGI_LISTEN_IP=0.0.0.0
+PENTAGI_LISTEN_PORT=8443
+
+# Public URL - use your actual server IP or hostname
+# Replace 192.168.1.100 with your server's IP address
+PUBLIC_URL=https://192.168.1.100:8443
+
+# CORS origins - list all URLs that will access PentAGI
+# Include localhost for local access AND your server IP for external access
+CORS_ORIGINS=https://localhost:8443,https://192.168.1.100:8443
+```
+
+> [!IMPORTANT]
+> - Replace `192.168.1.100` with your actual server's IP address
+> - Do NOT use `0.0.0.0` in `PUBLIC_URL` or `CORS_ORIGINS` - use the actual IP address
+> - Include both localhost and your server IP in `CORS_ORIGINS` for flexibility
+
+2. **Recreate containers** to apply the changes:
+
+```bash
+docker compose down
+docker compose up -d --force-recreate
+```
+
+3. **Verify port binding:**
+
+```bash
+docker ps | grep pentagi
+```
+
+You should see `0.0.0.0:8443->8443/tcp` or `:::8443->8443/tcp`.
+
+If you see `127.0.0.1:8443->8443/tcp`, the environment variable wasn't picked up. In this case, directly edit `docker-compose.yml` line 31:
+
+```yaml
+ports:
+  - "0.0.0.0:8443:8443"
+```
+
+Then recreate containers again.
+
+4. **Configure firewall** to allow incoming connections on port 8443:
+
+```bash
+# Ubuntu/Debian with UFW
+sudo ufw allow 8443/tcp
+sudo ufw reload
+
+# CentOS/RHEL with firewalld
+sudo firewall-cmd --permanent --add-port=8443/tcp
+sudo firewall-cmd --reload
+```
+
+5. **Access PentAGI:**
+
+- **Local access:** `https://localhost:8443`
+- **Network access:** `https://your-server-ip:8443`
+
+> [!NOTE]
+> You'll need to accept the self-signed SSL certificate warning in your browser when accessing via IP address.
+
+---
+
+### Running PentAGI with Podman
+
+PentAGI fully supports Podman as a Docker alternative. However, when using **Podman in rootless mode**, the scraper service requires special configuration because rootless containers cannot bind privileged ports (ports below 1024).
+
+#### Podman Rootless Configuration
+
+The default scraper configuration uses port 443 (HTTPS), which is a privileged port. For Podman rootless, reconfigure the scraper to use a non-privileged port:
+
+**1. Edit `docker-compose.yml`** - modify the `scraper` service (around line 199):
+
+```yaml
+scraper:
+  image: vxcontrol/scraper:latest
+  restart: unless-stopped
+  container_name: scraper
+  hostname: scraper
+  expose:
+    - 3000/tcp  # Changed from 443 to 3000
+  ports:
+    - "${SCRAPER_LISTEN_IP:-127.0.0.1}:${SCRAPER_LISTEN_PORT:-9443}:3000"  # Map to port 3000
+  environment:
+    - MAX_CONCURRENT_SESSIONS=${LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS:-10}
+    - USERNAME=${LOCAL_SCRAPER_USERNAME:-someuser}
+    - PASSWORD=${LOCAL_SCRAPER_PASSWORD:-somepass}
+  logging:
+    options:
+      max-size: 50m
+      max-file: "7"
+  volumes:
+    - scraper-ssl:/usr/src/app/ssl
+  networks:
+    - pentagi-network
+  shm_size: 2g
+```
+
+**2. Update `.env` file** - change the scraper URL to use HTTP and port 3000:
+
+```bash
+# Scraper configuration for Podman rootless
+SCRAPER_PRIVATE_URL=http://someuser:somepass@scraper:3000/
+LOCAL_SCRAPER_USERNAME=someuser
+LOCAL_SCRAPER_PASSWORD=somepass
+```
+
+> [!IMPORTANT]
+> Key changes for Podman:
+> - Use **HTTP** instead of HTTPS for `SCRAPER_PRIVATE_URL`
+> - Use port **3000** instead of 443
+> - Change internal `expose` to `3000/tcp`
+> - Update port mapping to target `3000` instead of `443`
+
+**3. Recreate containers:**
+
+```bash
+podman-compose down
+podman-compose up -d --force-recreate
+```
+
+**4. Test scraper connectivity:**
+
+```bash
+# Test from within the pentagi container
+podman exec -it pentagi wget -O- "http://someuser:somepass@scraper:3000/html?url=http://example.com"
+```
+
+If you see HTML output, the scraper is working correctly.
+
+#### Podman Rootful Mode
+
+If you're running Podman in rootful mode (with sudo), you can use the default configuration without modifications. The scraper will work on port 443 as intended.
+
+#### Docker Compatibility
+
+All Podman configurations remain fully compatible with Docker. The non-privileged port approach works identically on both container runtimes.
 
 ### Assistant Configuration
 
@@ -1442,9 +1593,9 @@ OAuth integration with GitHub and Google allows users to authenticate using thei
 - Access to user profile information from GitHub/Google accounts
 - Seamless integration with existing development workflows
 
-For using GitHub OAuth you need to create a new OAuth application in your GitHub account and set the `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in `.env` file.
+For using GitHub OAuth you need to create a new OAuth application in your GitHub account and set the `OAUTH_GITHUB_CLIENT_ID` and `OAUTH_GITHUB_CLIENT_SECRET` in `.env` file.
 
-For using Google OAuth you need to create a new OAuth application in your Google account and set the `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` file.
+For using Google OAuth you need to create a new OAuth application in your Google account and set the `OAUTH_GOOGLE_CLIENT_ID` and `OAUTH_GOOGLE_CLIENT_SECRET` in `.env` file.
 
 ### Docker Image Configuration
 
@@ -2142,6 +2293,7 @@ go run cmd/ftester/main.go browser
 - **tavily**: Search using Tavily AI search engine
 - **traversaal**: Search using Traversaal AI search engine
 - **perplexity**: Search using Perplexity AI
+- **sploitus**: Search for security exploits, vulnerabilities (CVEs), and pentesting tools
 - **searxng**: Search using Searxng meta search engine (aggregates results from multiple engines)
 
 ### Vector Database Functions

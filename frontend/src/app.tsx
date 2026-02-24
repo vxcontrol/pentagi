@@ -14,6 +14,7 @@ import client from '@/lib/apollo';
 import { FavoritesProvider } from '@/providers/favorites-provider';
 import { FlowProvider } from '@/providers/flow-provider';
 import { ProvidersProvider } from '@/providers/providers-provider';
+import { SidebarFlowsProvider } from '@/providers/sidebar-flows-provider';
 import { TemplatesProvider } from '@/providers/templates-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { UserProvider } from '@/providers/user-provider';
@@ -40,7 +41,9 @@ const App = () => {
         <ProtectedRoute>
             <SystemSettingsProvider>
                 <ProvidersProvider>
-                    <AppLayout />
+                    <SidebarFlowsProvider>
+                        <AppLayout />
+                    </SidebarFlowsProvider>
                 </ProvidersProvider>
             </SystemSettingsProvider>
         </ProtectedRoute>

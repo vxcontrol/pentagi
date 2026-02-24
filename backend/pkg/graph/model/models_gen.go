@@ -472,6 +472,11 @@ type UsageStats struct {
 	TotalUsageCostOut  float64 `json:"totalUsageCostOut"`
 }
 
+type UserPreferences struct {
+	ID            int64   `json:"id"`
+	FavoriteFlows []int64 `json:"favoriteFlows"`
+}
+
 type UserPrompt struct {
 	ID        int64      `json:"id"`
 	Type      PromptType `json:"type"`

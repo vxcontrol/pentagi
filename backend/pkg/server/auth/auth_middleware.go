@@ -107,7 +107,7 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 
 	prms, ok := prm.([]string)
 	if !ok {
-		return authResultFail, errors.New("no pemissions granted")
+		return authResultFail, errors.New("no permissions granted")
 	}
 
 	// Verify session expiration

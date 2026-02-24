@@ -155,6 +155,13 @@ type Settings {
   assistantUseAgents: Boolean!
 }
 
+# ==================== User Preferences Types ====================
+
+type UserPreferences {
+  id: ID!
+  favoriteFlows: [ID!]!
+}
+
 # ==================== Flow Management Types ====================
 
 type Terminal {
@@ -792,6 +799,7 @@ type Query {
   settings: Settings!
   settingsProviders: ProvidersConfig!
   settingsPrompts: PromptsConfig!
+  settingsUser: UserPreferences!
 
   # API Tokens management
   apiToken(tokenId: String!): APIToken
@@ -805,6 +813,7 @@ type Mutation {
   stopFlow(flowId: ID!): ResultType!
   finishFlow(flowId: ID!): ResultType!
   deleteFlow(flowId: ID!): ResultType!
+  renameFlow(flowId: ID!, title: String!): ResultType!
 
   # Assistant management
   createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!): FlowAssistant!
@@ -829,6 +838,10 @@ type Mutation {
   createAPIToken(input: CreateAPITokenInput!): APITokenWithSecret!
   updateAPIToken(tokenId: String!, input: UpdateAPITokenInput!): APIToken!
   deleteAPIToken(tokenId: String!): Boolean!
+
+  # User preferences management
+  addFavoriteFlow(flowId: ID!): ResultType!
+  deleteFavoriteFlow(flowId: ID!): ResultType!
 }
 
 type Subscription {
@@ -864,4 +877,7 @@ type Subscription {
   apiTokenCreated: APIToken!
   apiTokenUpdated: APIToken!
   apiTokenDeleted: APIToken!
+
+  # User preferences events
+  settingsUserUpdated: UserPreferences!
 }

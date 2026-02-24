@@ -121,6 +121,30 @@ type SearchResult struct {
 	Message string `json:"message" jsonschema:"required,title=Search result message" jsonschema_description:"Not so long message with the result and short answer to send to the user in user's language only"`
 }
 
+type SploitusAction struct {
+	Query       string `json:"query" jsonschema:"required" jsonschema_description:"Search query for Sploitus (e.g. 'ssh', 'apache 2.4', 'CVE-2021-44228'). Short and precise queries return the best results."`
+	ExploitType string `json:"exploit_type,omitempty" jsonschema:"enum=exploits,enum=tools" jsonschema_description:"What to search for: 'exploits' (default) for exploit code and PoCs, 'tools' for offensive security tools"`
+	Sort        string `json:"sort,omitempty" jsonschema:"enum=default,enum=date,enum=score" jsonschema_description:"Result ordering: 'default' (relevance), 'date' (newest first), 'score' (highest CVSS first)"`
+	MaxResults  Int64  `json:"max_results" jsonschema:"required,type=integer" jsonschema_description:"Maximum number of results to return (minimum 1; maximum 25; default 10)"`
+	Message     string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Not so long message with the expected result and path to reach goal to send to the user in user's language only"`
+}
+
+type GraphitiSearchAction struct {
+	SearchType     string   `json:"search_type" jsonschema:"required,enum=temporal_window,enum=entity_relationships,enum=diverse_results,enum=episode_context,enum=successful_tools,enum=recent_context,enum=entity_by_label" jsonschema_description:"Type of search to perform: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), successful_tools (proven techniques), recent_context (latest findings), entity_by_label (type-specific entity search)"`
+	Query          string   `json:"query" jsonschema:"required" jsonschema_description:"Natural language query describing what to search for in English"`
+	MaxResults     *Int64   `json:"max_results,omitempty" jsonschema:"title=Maximum Results,type=integer" jsonschema_description:"Maximum number of results to return (default varies by search type)"`
+	TimeStart      string   `json:"time_start,omitempty" jsonschema_description:"Start of time window (ISO 8601 format, required for temporal_window)"`
+	TimeEnd        string   `json:"time_end,omitempty" jsonschema_description:"End of time window (ISO 8601 format, required for temporal_window)"`
+	CenterNodeUUID string   `json:"center_node_uuid,omitempty" jsonschema_description:"UUID of entity to search from (required for entity_relationships)"`
+	MaxDepth       *Int64   `json:"max_depth,omitempty" jsonschema:"title=Maximum Depth,type=integer" jsonschema_description:"Maximum graph traversal depth (default: 2, max: 3, for entity_relationships)"`
+	NodeLabels     []string `json:"node_labels,omitempty" jsonschema_description:"Filter to specific node types (e.g., ['IP_ADDRESS', 'SERVICE', 'VULNERABILITY'])"`
+	EdgeTypes      []string `json:"edge_types,omitempty" jsonschema_description:"Filter to specific relationship types (e.g., ['HAS_PORT', 'EXPLOITS'])"`
+	DiversityLevel string   `json:"diversity_level,omitempty" jsonschema:"enum=low,enum=medium,enum=high" jsonschema_description:"How much diversity to prioritize (default: medium, for diverse_results)"`
+	MinMentions    *Int64   `json:"min_mentions,omitempty" jsonschema:"title=Minimum Mentions,type=integer" jsonschema_description:"Minimum episode mentions (default: 2, for successful_tools)"`
+	RecencyWindow  string   `json:"recency_window,omitempty" jsonschema:"enum=1h,enum=6h,enum=24h,enum=7d" jsonschema_description:"How far back to search (default: 24h, for recent_context)"`
+	Message        string   `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Not so long message with the summary of the search query and expected results to send to the user in user's language only"`
+}
+
 type EnricherResult struct {
 	Result  string `json:"result" jsonschema:"required,title=Enricher result" jsonschema_description:"Fully detailed report or error message what you can enriches of the user's question from different sources to take advice according to this data in English"`
 	Message string `json:"message" jsonschema:"required,title=Enricher result message" jsonschema_description:"Not so long message with the result and short view of the enriched data to send to the user in user's language only"`
@@ -298,20 +322,4 @@ func (i *Int64) String() string {
 		return ""
 	}
 	return strconv.FormatInt(int64(*i), 10)
-}
-
-type GraphitiSearchAction struct {
-	SearchType     string   `json:"search_type" jsonschema:"required,enum=temporal_window,enum=entity_relationships,enum=diverse_results,enum=episode_context,enum=successful_tools,enum=recent_context,enum=entity_by_label" jsonschema_description:"Type of search to perform: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), successful_tools (proven techniques), recent_context (latest findings), entity_by_label (type-specific entity search)"`
-	Query          string   `json:"query" jsonschema:"required" jsonschema_description:"Natural language query describing what to search for in English"`
-	MaxResults     *Int64   `json:"max_results,omitempty" jsonschema:"title=Maximum Results,type=integer" jsonschema_description:"Maximum number of results to return (default varies by search type)"`
-	TimeStart      string   `json:"time_start,omitempty" jsonschema_description:"Start of time window (ISO 8601 format, required for temporal_window)"`
-	TimeEnd        string   `json:"time_end,omitempty" jsonschema_description:"End of time window (ISO 8601 format, required for temporal_window)"`
-	CenterNodeUUID string   `json:"center_node_uuid,omitempty" jsonschema_description:"UUID of entity to search from (required for entity_relationships)"`
-	MaxDepth       *Int64   `json:"max_depth,omitempty" jsonschema:"title=Maximum Depth,type=integer" jsonschema_description:"Maximum graph traversal depth (default: 2, max: 3, for entity_relationships)"`
-	NodeLabels     []string `json:"node_labels,omitempty" jsonschema_description:"Filter to specific node types (e.g., ['IP_ADDRESS', 'SERVICE', 'VULNERABILITY'])"`
-	EdgeTypes      []string `json:"edge_types,omitempty" jsonschema_description:"Filter to specific relationship types (e.g., ['HAS_PORT', 'EXPLOITS'])"`
-	DiversityLevel string   `json:"diversity_level,omitempty" jsonschema:"enum=low,enum=medium,enum=high" jsonschema_description:"How much diversity to prioritize (default: medium, for diverse_results)"`
-	MinMentions    *Int64   `json:"min_mentions,omitempty" jsonschema:"title=Minimum Mentions,type=integer" jsonschema_description:"Minimum episode mentions (default: 2, for successful_tools)"`
-	RecencyWindow  string   `json:"recency_window,omitempty" jsonschema:"enum=1h,enum=6h,enum=24h,enum=7d" jsonschema_description:"How far back to search (default: 24h, for recent_context)"`
-	Message        string   `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Not so long message with the summary of the search query and expected results to send to the user in user's language only"`
 }

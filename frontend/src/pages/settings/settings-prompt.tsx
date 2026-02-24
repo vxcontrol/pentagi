@@ -265,7 +265,6 @@ const SettingsPrompt = () => {
             }
 
             setResetDialogOpen(false);
-            console.log('Prompt reset to default successfully');
         } catch (error) {
             console.error('Reset error:', error);
             setSubmitError(error instanceof Error ? error.message : 'An error occurred while resetting');
@@ -534,7 +533,6 @@ const SettingsPrompt = () => {
 
         // For creation, check if the template is identical to the default
         if (!isUpdate && formData.template === promptInfo.defaultSystemTemplate) {
-            console.log('Template is identical to default, skipping save');
 
             return;
         }
@@ -562,7 +560,6 @@ const SettingsPrompt = () => {
                         template: formData.template,
                     },
                 });
-                console.log('System prompt updated successfully');
             } else {
                 // Create new user-defined prompt
                 await createPrompt({
@@ -572,7 +569,6 @@ const SettingsPrompt = () => {
                         type: promptType,
                     },
                 });
-                console.log('System prompt created successfully');
             }
         } catch (error) {
             console.error('Submit error:', error);
@@ -589,7 +585,6 @@ const SettingsPrompt = () => {
 
         // For creation, check if the template is identical to the default
         if (!isUpdate && formData.template === promptInfo.defaultHumanTemplate) {
-            console.log('Human template is identical to default, skipping save');
 
             return;
         }
@@ -616,7 +611,6 @@ const SettingsPrompt = () => {
                         template: formData.template,
                     },
                 });
-                console.log('Human prompt updated successfully');
             } else {
                 // Create new user-defined prompt
                 await createPrompt({
@@ -626,7 +620,6 @@ const SettingsPrompt = () => {
                         type: humanPromptType,
                     },
                 });
-                console.log('Human prompt created successfully');
             }
         } catch (error) {
             console.error('Submit error:', error);

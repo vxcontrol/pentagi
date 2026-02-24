@@ -10,6 +10,7 @@ import (
 )
 
 type Querier interface {
+	AddFavoriteFlow(ctx context.Context, arg AddFavoriteFlowParams) (UserPreference, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateAgentLog(ctx context.Context, arg CreateAgentLogParams) (Agentlog, error)
 	CreateAssistant(ctx context.Context, arg CreateAssistantParams) (Assistant, error)
@@ -28,10 +29,12 @@ type Querier interface {
 	CreateTermLog(ctx context.Context, arg CreateTermLogParams) (Termlog, error)
 	CreateToolcall(ctx context.Context, arg CreateToolcallParams) (Toolcall, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateUserPreferences(ctx context.Context, arg CreateUserPreferencesParams) (UserPreference, error)
 	CreateUserPrompt(ctx context.Context, arg CreateUserPromptParams) (Prompt, error)
 	CreateVectorStoreLog(ctx context.Context, arg CreateVectorStoreLogParams) (Vecstorelog, error)
 	DeleteAPIToken(ctx context.Context, id int64) (ApiToken, error)
 	DeleteAssistant(ctx context.Context, id int64) (Assistant, error)
+	DeleteFavoriteFlow(ctx context.Context, arg DeleteFavoriteFlowParams) (UserPreference, error)
 	DeleteFlow(ctx context.Context, id int64) (Flow, error)
 	DeletePrompt(ctx context.Context, id int64) error
 	DeleteProvider(ctx context.Context, id int64) (Provider, error)
@@ -40,6 +43,7 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserAPIToken(ctx context.Context, arg DeleteUserAPITokenParams) (ApiToken, error)
 	DeleteUserAPITokenByTokenID(ctx context.Context, arg DeleteUserAPITokenByTokenIDParams) (ApiToken, error)
+	DeleteUserPreferences(ctx context.Context, userID int64) error
 	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
 	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
 	GetAPIToken(ctx context.Context, id int64) (ApiToken, error)
@@ -188,6 +192,7 @@ type Querier interface {
 	GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLogsParams) ([]Termlog, error)
 	GetUserFlowVectorStoreLogs(ctx context.Context, arg GetUserFlowVectorStoreLogsParams) ([]Vecstorelog, error)
 	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
+	GetUserPreferencesByUserID(ctx context.Context, userID int64) (UserPreference, error)
 	GetUserPrompt(ctx context.Context, arg GetUserPromptParams) (Prompt, error)
 	GetUserPromptByType(ctx context.Context, arg GetUserPromptByTypeParams) (Prompt, error)
 	GetUserPrompts(ctx context.Context, userID int64) ([]Prompt, error)
@@ -243,11 +248,13 @@ type Querier interface {
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
 	UpdateUserPasswordChangeRequired(ctx context.Context, arg UpdateUserPasswordChangeRequiredParams) (User, error)
+	UpdateUserPreferences(ctx context.Context, arg UpdateUserPreferencesParams) (UserPreference, error)
 	UpdateUserPrompt(ctx context.Context, arg UpdateUserPromptParams) (Prompt, error)
 	UpdateUserPromptByType(ctx context.Context, arg UpdateUserPromptByTypeParams) (Prompt, error)
 	UpdateUserProvider(ctx context.Context, arg UpdateUserProviderParams) (Provider, error)
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error)
+	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -293,27 +293,30 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		CallAssistant   func(childComplexity int, flowID int64, assistantID int64, input string, useAgents bool) int
-		CreateAPIToken  func(childComplexity int, input model.CreateAPITokenInput) int
-		CreateAssistant func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool) int
-		CreateFlow      func(childComplexity int, modelProvider string, input string) int
-		CreatePrompt    func(childComplexity int, typeArg model.PromptType, template string) int
-		CreateProvider  func(childComplexity int, name string, typeArg model.ProviderType, agents model.AgentsConfig) int
-		DeleteAPIToken  func(childComplexity int, tokenID string) int
-		DeleteAssistant func(childComplexity int, flowID int64, assistantID int64) int
-		DeleteFlow      func(childComplexity int, flowID int64) int
-		DeletePrompt    func(childComplexity int, promptID int64) int
-		DeleteProvider  func(childComplexity int, providerID int64) int
-		FinishFlow      func(childComplexity int, flowID int64) int
-		PutUserInput    func(childComplexity int, flowID int64, input string) int
-		StopAssistant   func(childComplexity int, flowID int64, assistantID int64) int
-		StopFlow        func(childComplexity int, flowID int64) int
-		TestAgent       func(childComplexity int, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) int
-		TestProvider    func(childComplexity int, typeArg model.ProviderType, agents model.AgentsConfig) int
-		UpdateAPIToken  func(childComplexity int, tokenID string, input model.UpdateAPITokenInput) int
-		UpdatePrompt    func(childComplexity int, promptID int64, template string) int
-		UpdateProvider  func(childComplexity int, providerID int64, name string, agents model.AgentsConfig) int
-		ValidatePrompt  func(childComplexity int, typeArg model.PromptType, template string) int
+		AddFavoriteFlow    func(childComplexity int, flowID int64) int
+		CallAssistant      func(childComplexity int, flowID int64, assistantID int64, input string, useAgents bool) int
+		CreateAPIToken     func(childComplexity int, input model.CreateAPITokenInput) int
+		CreateAssistant    func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool) int
+		CreateFlow         func(childComplexity int, modelProvider string, input string) int
+		CreatePrompt       func(childComplexity int, typeArg model.PromptType, template string) int
+		CreateProvider     func(childComplexity int, name string, typeArg model.ProviderType, agents model.AgentsConfig) int
+		DeleteAPIToken     func(childComplexity int, tokenID string) int
+		DeleteAssistant    func(childComplexity int, flowID int64, assistantID int64) int
+		DeleteFavoriteFlow func(childComplexity int, flowID int64) int
+		DeleteFlow         func(childComplexity int, flowID int64) int
+		DeletePrompt       func(childComplexity int, promptID int64) int
+		DeleteProvider     func(childComplexity int, providerID int64) int
+		FinishFlow         func(childComplexity int, flowID int64) int
+		PutUserInput       func(childComplexity int, flowID int64, input string) int
+		RenameFlow         func(childComplexity int, flowID int64, title string) int
+		StopAssistant      func(childComplexity int, flowID int64, assistantID int64) int
+		StopFlow           func(childComplexity int, flowID int64) int
+		TestAgent          func(childComplexity int, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) int
+		TestProvider       func(childComplexity int, typeArg model.ProviderType, agents model.AgentsConfig) int
+		UpdateAPIToken     func(childComplexity int, tokenID string, input model.UpdateAPITokenInput) int
+		UpdatePrompt       func(childComplexity int, promptID int64, template string) int
+		UpdateProvider     func(childComplexity int, providerID int64, name string, agents model.AgentsConfig) int
+		ValidatePrompt     func(childComplexity int, typeArg model.PromptType, template string) int
 	}
 
 	PromptValidationResult struct {
@@ -408,6 +411,7 @@ type ComplexityRoot struct {
 		Settings                        func(childComplexity int) int
 		SettingsPrompts                 func(childComplexity int) int
 		SettingsProviders               func(childComplexity int) int
+		SettingsUser                    func(childComplexity int) int
 		Tasks                           func(childComplexity int, flowID int64) int
 		TerminalLogs                    func(childComplexity int, flowID int64) int
 		ToolcallsStatsByFlow            func(childComplexity int, flowID int64) int
@@ -480,6 +484,7 @@ type ComplexityRoot struct {
 		ProviderUpdated     func(childComplexity int) int
 		ScreenshotAdded     func(childComplexity int, flowID int64) int
 		SearchLogAdded      func(childComplexity int, flowID int64) int
+		SettingsUserUpdated func(childComplexity int) int
 		TaskCreated         func(childComplexity int, flowID int64) int
 		TaskUpdated         func(childComplexity int, flowID int64) int
 		TerminalLogAdded    func(childComplexity int, flowID int64) int
@@ -580,6 +585,11 @@ type ComplexityRoot struct {
 		TotalUsageOut      func(childComplexity int) int
 	}
 
+	UserPreferences struct {
+		FavoriteFlows func(childComplexity int) int
+		ID            func(childComplexity int) int
+	}
+
 	UserPrompt struct {
 		CreatedAt func(childComplexity int) int
 		ID        func(childComplexity int) int
@@ -609,6 +619,7 @@ type MutationResolver interface {
 	StopFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	FinishFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	DeleteFlow(ctx context.Context, flowID int64) (model.ResultType, error)
+	RenameFlow(ctx context.Context, flowID int64, title string) (model.ResultType, error)
 	CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool) (*model.FlowAssistant, error)
 	CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool) (model.ResultType, error)
 	StopAssistant(ctx context.Context, flowID int64, assistantID int64) (*model.Assistant, error)
@@ -625,6 +636,8 @@ type MutationResolver interface {
 	CreateAPIToken(ctx context.Context, input model.CreateAPITokenInput) (*model.APITokenWithSecret, error)
 	UpdateAPIToken(ctx context.Context, tokenID string, input model.UpdateAPITokenInput) (*model.APIToken, error)
 	DeleteAPIToken(ctx context.Context, tokenID string) (bool, error)
+	AddFavoriteFlow(ctx context.Context, flowID int64) (model.ResultType, error)
+	DeleteFavoriteFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 }
 type QueryResolver interface {
 	Providers(ctx context.Context) ([]*model.Provider, error)
@@ -658,6 +671,7 @@ type QueryResolver interface {
 	Settings(ctx context.Context) (*model.Settings, error)
 	SettingsProviders(ctx context.Context) (*model.ProvidersConfig, error)
 	SettingsPrompts(ctx context.Context) (*model.PromptsConfig, error)
+	SettingsUser(ctx context.Context) (*model.UserPreferences, error)
 	APIToken(ctx context.Context, tokenID string) (*model.APIToken, error)
 	APITokens(ctx context.Context) ([]*model.APIToken, error)
 }
@@ -685,6 +699,7 @@ type SubscriptionResolver interface {
 	APITokenCreated(ctx context.Context) (<-chan *model.APIToken, error)
 	APITokenUpdated(ctx context.Context) (<-chan *model.APIToken, error)
 	APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error)
+	SettingsUserUpdated(ctx context.Context) (<-chan *model.UserPreferences, error)
 }
 
 type executableSchema struct {
@@ -1812,6 +1827,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ModelUsageStats.Stats(childComplexity), true
 
+	case "Mutation.addFavoriteFlow":
+		if e.complexity.Mutation.AddFavoriteFlow == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addFavoriteFlow_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AddFavoriteFlow(childComplexity, args["flowId"].(int64)), true
+
 	case "Mutation.callAssistant":
 		if e.complexity.Mutation.CallAssistant == nil {
 			break
@@ -1908,6 +1935,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.DeleteAssistant(childComplexity, args["flowId"].(int64), args["assistantId"].(int64)), true
 
+	case "Mutation.deleteFavoriteFlow":
+		if e.complexity.Mutation.DeleteFavoriteFlow == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteFavoriteFlow_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteFavoriteFlow(childComplexity, args["flowId"].(int64)), true
+
 	case "Mutation.deleteFlow":
 		if e.complexity.Mutation.DeleteFlow == nil {
 			break
@@ -1967,6 +2006,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.PutUserInput(childComplexity, args["flowId"].(int64), args["input"].(string)), true
+
+	case "Mutation.renameFlow":
+		if e.complexity.Mutation.RenameFlow == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_renameFlow_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RenameFlow(childComplexity, args["flowId"].(int64), args["title"].(string)), true
 
 	case "Mutation.stopAssistant":
 		if e.complexity.Mutation.StopAssistant == nil {
@@ -2567,6 +2618,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.SettingsProviders(childComplexity), true
 
+	case "Query.settingsUser":
+		if e.complexity.Query.SettingsUser == nil {
+			break
+		}
+
+		return e.complexity.Query.SettingsUser(childComplexity), true
+
 	case "Query.tasks":
 		if e.complexity.Query.Tasks == nil {
 			break
@@ -3060,6 +3118,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Subscription.SearchLogAdded(childComplexity, args["flowId"].(int64)), true
+
+	case "Subscription.settingsUserUpdated":
+		if e.complexity.Subscription.SettingsUserUpdated == nil {
+			break
+		}
+
+		return e.complexity.Subscription.SettingsUserUpdated(childComplexity), true
 
 	case "Subscription.taskCreated":
 		if e.complexity.Subscription.TaskCreated == nil {
@@ -3557,6 +3622,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.UsageStats.TotalUsageOut(childComplexity), true
 
+	case "UserPreferences.favoriteFlows":
+		if e.complexity.UserPreferences.FavoriteFlows == nil {
+			break
+		}
+
+		return e.complexity.UserPreferences.FavoriteFlows(childComplexity), true
+
+	case "UserPreferences.id":
+		if e.complexity.UserPreferences.ID == nil {
+			break
+		}
+
+		return e.complexity.UserPreferences.ID(childComplexity), true
+
 	case "UserPrompt.createdAt":
 		if e.complexity.UserPrompt.CreatedAt == nil {
 			break
@@ -3815,6 +3894,38 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Mutation_addFavoriteFlow_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_addFavoriteFlow_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_addFavoriteFlow_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
 
 func (ec *executionContext) field_Mutation_callAssistant_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -4369,6 +4480,38 @@ func (ec *executionContext) field_Mutation_deleteAssistant_argsAssistantID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteFavoriteFlow_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_deleteFavoriteFlow_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_deleteFavoriteFlow_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_deleteFlow_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -4549,6 +4692,65 @@ func (ec *executionContext) field_Mutation_putUserInput_argsInput(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
 	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_renameFlow_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_renameFlow_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	arg1, err := ec.field_Mutation_renameFlow_argsTitle(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["title"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_renameFlow_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_renameFlow_argsTitle(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["title"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("title"))
+	if tmp, ok := rawArgs["title"]; ok {
 		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
@@ -14187,6 +14389,61 @@ func (ec *executionContext) fieldContext_Mutation_deleteFlow(ctx context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_renameFlow(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_renameFlow(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().RenameFlow(rctx, fc.Args["flowId"].(int64), fc.Args["title"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.ResultType)
+	fc.Result = res
+	return ec.marshalNResultType2pentagiᚋpkgᚋgraphᚋmodelᚐResultType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_renameFlow(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ResultType does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_renameFlow_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createAssistant(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Mutation_createAssistant(ctx, field)
 	if err != nil {
@@ -15223,6 +15480,116 @@ func (ec *executionContext) fieldContext_Mutation_deleteAPIToken(ctx context.Con
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteAPIToken_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addFavoriteFlow(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_addFavoriteFlow(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().AddFavoriteFlow(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.ResultType)
+	fc.Result = res
+	return ec.marshalNResultType2pentagiᚋpkgᚋgraphᚋmodelᚐResultType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addFavoriteFlow(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ResultType does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addFavoriteFlow_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteFavoriteFlow(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_deleteFavoriteFlow(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().DeleteFavoriteFlow(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.ResultType)
+	fc.Result = res
+	return ec.marshalNResultType2pentagiᚋpkgᚋgraphᚋmodelᚐResultType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteFavoriteFlow(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ResultType does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteFavoriteFlow_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -19395,6 +19762,56 @@ func (ec *executionContext) fieldContext_Query_settingsPrompts(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_settingsUser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_settingsUser(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().SettingsUser(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.UserPreferences)
+	fc.Result = res
+	return ec.marshalNUserPreferences2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserPreferences(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_settingsUser(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserPreferences_id(ctx, field)
+			case "favoriteFlows":
+				return ec.fieldContext_UserPreferences_favoriteFlows(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserPreferences", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_apiToken(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_apiToken(ctx, field)
 	if err != nil {
@@ -22574,6 +22991,70 @@ func (ec *executionContext) fieldContext_Subscription_apiTokenDeleted(_ context.
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_settingsUserUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_settingsUserUpdated(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().SettingsUserUpdated(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.UserPreferences):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNUserPreferences2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserPreferences(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_settingsUserUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserPreferences_id(ctx, field)
+			case "favoriteFlows":
+				return ec.fieldContext_UserPreferences_favoriteFlows(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserPreferences", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Subtask_id(ctx context.Context, field graphql.CollectedField, obj *model.Subtask) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Subtask_id(ctx, field)
 	if err != nil {
@@ -25470,6 +25951,94 @@ func (ec *executionContext) fieldContext_UsageStats_totalUsageCostOut(_ context.
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserPreferences_id(ctx context.Context, field graphql.CollectedField, obj *model.UserPreferences) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserPreferences_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int64)
+	fc.Result = res
+	return ec.marshalNID2int64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserPreferences_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserPreferences",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserPreferences_favoriteFlows(ctx context.Context, field graphql.CollectedField, obj *model.UserPreferences) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserPreferences_favoriteFlows(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FavoriteFlows, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]int64)
+	fc.Result = res
+	return ec.marshalNID2ᚕint64ᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserPreferences_favoriteFlows(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserPreferences",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
 		},
 	}
 	return fc, nil
@@ -30031,6 +30600,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "renameFlow":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_renameFlow(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createAssistant":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createAssistant(ctx, field)
@@ -30139,6 +30715,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteAPIToken":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteAPIToken(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addFavoriteFlow":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addFavoriteFlow(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteFavoriteFlow":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteFavoriteFlow(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -31346,6 +31936,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "settingsUser":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_settingsUser(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "apiToken":
 			field := field
 
@@ -31710,6 +32322,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_apiTokenUpdated(ctx, fields[0])
 	case "apiTokenDeleted":
 		return ec._Subscription_apiTokenDeleted(ctx, fields[0])
+	case "settingsUserUpdated":
+		return ec._Subscription_settingsUserUpdated(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
@@ -32334,6 +32948,50 @@ func (ec *executionContext) _UsageStats(ctx context.Context, sel ast.SelectionSe
 			}
 		case "totalUsageCostOut":
 			out.Values[i] = ec._UsageStats_totalUsageCostOut(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var userPreferencesImplementors = []string{"UserPreferences"}
+
+func (ec *executionContext) _UserPreferences(ctx context.Context, sel ast.SelectionSet, obj *model.UserPreferences) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, userPreferencesImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UserPreferences")
+		case "id":
+			out.Values[i] = ec._UserPreferences_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "favoriteFlows":
+			out.Values[i] = ec._UserPreferences_favoriteFlows(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -33501,6 +34159,38 @@ func (ec *executionContext) marshalNID2int64(ctx context.Context, sel ast.Select
 	return res
 }
 
+func (ec *executionContext) unmarshalNID2ᚕint64ᚄ(ctx context.Context, v interface{}) ([]int64, error) {
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]int64, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2int64(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNID2ᚕint64ᚄ(ctx context.Context, sel ast.SelectionSet, v []int64) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2int64(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
 	res, err := graphql.UnmarshalInt(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -34291,6 +34981,20 @@ func (ec *executionContext) unmarshalNUsageStatsPeriod2pentagiᚋpkgᚋgraphᚋm
 
 func (ec *executionContext) marshalNUsageStatsPeriod2pentagiᚋpkgᚋgraphᚋmodelᚐUsageStatsPeriod(ctx context.Context, sel ast.SelectionSet, v model.UsageStatsPeriod) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNUserPreferences2pentagiᚋpkgᚋgraphᚋmodelᚐUserPreferences(ctx context.Context, sel ast.SelectionSet, v model.UserPreferences) graphql.Marshaler {
+	return ec._UserPreferences(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNUserPreferences2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserPreferences(ctx context.Context, sel ast.SelectionSet, v *model.UserPreferences) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UserPreferences(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNUserPrompt2pentagiᚋpkgᚋgraphᚋmodelᚐUserPrompt(ctx context.Context, sel ast.SelectionSet, v model.UserPrompt) graphql.Marshaler {

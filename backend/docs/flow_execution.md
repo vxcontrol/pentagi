@@ -48,6 +48,7 @@ This document describes the internal architecture and execution workflow of Flow
   - `tavily` - Advanced research with citations
   - `traversaal` - Structured Q&A search
   - `perplexity` - AI-powered comprehensive research
+  - `sploitus` - Search for security exploits and pentest tools
   - `searxng` - Privacy-focused meta search engine
   
 - **Vector Database Tools** - Semantic search in long-term memory
@@ -222,6 +223,9 @@ graph TD
         DeepAnalysis --> Perplexity[Perplexity Search]
         DeepAnalysis --> Traversaal[Traversaal Search]
         
+        Searcher --> SecurityTools[Security Research]
+        SecurityTools --> Sploitus[Sploitus - Exploit Database]
+        
         Searcher --> MetaSearch[Meta Search Engine]
         MetaSearch --> Searxng[Searxng - Privacy Meta Search]
     end
@@ -287,7 +291,7 @@ sequenceDiagram
     else UseAgents = false
         Note over AA,DirectTools: Direct tools only mode  
         AA->>DirectTools: terminal, file, browser
-        AA->>DirectTools: google, duckduckgo, tavily, traversaal, perplexity
+        AA->>DirectTools: google, duckduckgo, sploitus, tavily, traversaal, perplexity
         AA->>DirectTools: search_in_memory, search_guide, search_answer, search_code
         DirectTools-->>AA: Tool responses (no agent delegation)
     end
@@ -320,7 +324,7 @@ graph LR
     
     subgraph "Auto-Storage Tools (18 total)"
         EnvTools[terminal, file]
-        SearchEngines[google, duckduckgo, tavily,<br/>traversaal, perplexity, searxng]
+        SearchEngines[google, duckduckgo, tavily,<br/>traversaal, perplexity, sploitus, searxng]
         AgentTools[search, maintenance, coder,<br/>pentester, advice]
     end
     
@@ -714,7 +718,7 @@ The Searcher Agent follows a strict hierarchy for information retrieval:
    - `tavily` - Research-grade exploration of technical topics
    - `perplexity` - Comprehensive analysis with advanced reasoning
 
-**Available Search Engines**: Google, DuckDuckGo, Tavily, Traversaal, Perplexity, Searxng
+**Available Search Engines**: Google, DuckDuckGo, Tavily, Traversaal, Perplexity, Sploitus, Searxng
 
 **Search Engine Configurations**:
 - **Google** - Custom Search API with CX key and language restrictions
@@ -722,6 +726,7 @@ The Searcher Agent follows a strict hierarchy for information retrieval:
 - **Tavily** - Advanced research with raw content and citations
 - **Perplexity** - AI-powered synthesis with configurable context size
 - **Traversaal** - Structured Q&A responses with web links
+- **Sploitus** - Search for security exploits and pentest tools
 - **Searxng** - Meta search aggregating multiple engines with privacy focus
 
 **Action Economy Rules**: Maximum 3-5 search actions per query, stop immediately when sufficient information is found

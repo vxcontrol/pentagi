@@ -352,6 +352,7 @@ export type ModelUsageStats = {
 };
 
 export type Mutation = {
+    addFavoriteFlow: ResultType;
     callAssistant: ResultType;
     createAPIToken: ApiTokenWithSecret;
     createAssistant: FlowAssistant;
@@ -360,11 +361,13 @@ export type Mutation = {
     createProvider: ProviderConfig;
     deleteAPIToken: Scalars['Boolean']['output'];
     deleteAssistant: ResultType;
+    deleteFavoriteFlow: ResultType;
     deleteFlow: ResultType;
     deletePrompt: ResultType;
     deleteProvider: ResultType;
     finishFlow: ResultType;
     putUserInput: ResultType;
+    renameFlow: ResultType;
     stopAssistant: Assistant;
     stopFlow: ResultType;
     testAgent: AgentTestResult;
@@ -373,6 +376,10 @@ export type Mutation = {
     updatePrompt: UserPrompt;
     updateProvider: ProviderConfig;
     validatePrompt: PromptValidationResult;
+};
+
+export type MutationAddFavoriteFlowArgs = {
+    flowId: Scalars['ID']['input'];
 };
 
 export type MutationCallAssistantArgs = {
@@ -418,6 +425,10 @@ export type MutationDeleteAssistantArgs = {
     flowId: Scalars['ID']['input'];
 };
 
+export type MutationDeleteFavoriteFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
 export type MutationDeleteFlowArgs = {
     flowId: Scalars['ID']['input'];
 };
@@ -437,6 +448,11 @@ export type MutationFinishFlowArgs = {
 export type MutationPutUserInputArgs = {
     flowId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
+};
+
+export type MutationRenameFlowArgs = {
+    flowId: Scalars['ID']['input'];
+    title: Scalars['String']['input'];
 };
 
 export type MutationStopAssistantArgs = {
@@ -629,6 +645,7 @@ export type Query = {
     settings: Settings;
     settingsPrompts: PromptsConfig;
     settingsProviders: ProvidersConfig;
+    settingsUser: UserPreferences;
     tasks?: Maybe<Array<Task>>;
     terminalLogs?: Maybe<Array<TerminalLog>>;
     toolcallsStatsByFlow: ToolcallsStats;
@@ -812,6 +829,7 @@ export type Subscription = {
     providerUpdated: ProviderConfig;
     screenshotAdded: Screenshot;
     searchLogAdded: SearchLog;
+    settingsUserUpdated: UserPreferences;
     taskCreated: Task;
     taskUpdated: Task;
     terminalLogAdded: TerminalLog;
@@ -996,6 +1014,11 @@ export enum UsageStatsPeriod {
     Week = 'week',
 }
 
+export type UserPreferences = {
+    favoriteFlows: Array<Scalars['ID']['output']>;
+    id: Scalars['ID']['output'];
+};
+
 export type UserPrompt = {
     createdAt: Scalars['Time']['output'];
     id: Scalars['ID']['output'];
@@ -1022,8 +1045,6 @@ export type VectorStoreLog = {
     subtaskId?: Maybe<Scalars['ID']['output']>;
     taskId?: Maybe<Scalars['ID']['output']>;
 };
-
-export type FlowOverviewFragmentFragment = { id: string; title: string; status: StatusType };
 
 export type SettingsFragmentFragment = {
     debug: boolean;
@@ -1359,7 +1380,7 @@ export type FlowExecutionStatsFragmentFragment = {
 
 export type FlowsQueryVariables = Exact<{ [key: string]: never }>;
 
-export type FlowsQuery = { flows?: Array<FlowOverviewFragmentFragment> | null };
+export type FlowsQuery = { flows?: Array<FlowFragmentFragment> | null };
 
 export type ProvidersQueryVariables = Exact<{ [key: string]: never }>;
 
@@ -1577,6 +1598,24 @@ export type ApiTokenQueryVariables = Exact<{
 
 export type ApiTokenQuery = { apiToken?: ApiTokenFragmentFragment | null };
 
+export type UserPreferencesFragmentFragment = { id: string; favoriteFlows: Array<string> };
+
+export type SettingsUserQueryVariables = Exact<{ [key: string]: never }>;
+
+export type SettingsUserQuery = { settingsUser: UserPreferencesFragmentFragment };
+
+export type AddFavoriteFlowMutationVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type AddFavoriteFlowMutation = { addFavoriteFlow: ResultType };
+
+export type DeleteFavoriteFlowMutationVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type DeleteFavoriteFlowMutation = { deleteFavoriteFlow: ResultType };
+
 export type CreateFlowMutationVariables = Exact<{
     modelProvider: Scalars['String']['input'];
     input: Scalars['String']['input'];
@@ -1608,6 +1647,13 @@ export type StopFlowMutationVariables = Exact<{
 }>;
 
 export type StopFlowMutation = { stopFlow: ResultType };
+
+export type RenameFlowMutationVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+    title: Scalars['String']['input'];
+}>;
+
+export type RenameFlowMutation = { renameFlow: ResultType };
 
 export type CreateAssistantMutationVariables = Exact<{
     flowId: Scalars['ID']['input'];
@@ -1800,33 +1846,15 @@ export type AssistantLogUpdatedSubscription = { assistantLogUpdated: AssistantLo
 
 export type FlowCreatedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
-export type FlowCreatedSubscription = {
-    flowCreated: {
-        id: string;
-        title: string;
-        status: StatusType;
-        createdAt: any;
-        updatedAt: any;
-        terminals?: Array<TerminalFragmentFragment> | null;
-        provider: ProviderFragmentFragment;
-    };
-};
+export type FlowCreatedSubscription = { flowCreated: FlowFragmentFragment };
 
 export type FlowDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
-export type FlowDeletedSubscription = { flowDeleted: { id: string; status: StatusType; updatedAt: any } };
+export type FlowDeletedSubscription = { flowDeleted: FlowFragmentFragment };
 
 export type FlowUpdatedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
-export type FlowUpdatedSubscription = {
-    flowUpdated: {
-        id: string;
-        title: string;
-        status: StatusType;
-        updatedAt: any;
-        terminals?: Array<TerminalFragmentFragment> | null;
-    };
-};
+export type FlowUpdatedSubscription = { flowUpdated: FlowFragmentFragment };
 
 export type TaskCreatedSubscriptionVariables = Exact<{
     flowId: Scalars['ID']['input'];
@@ -1872,13 +1900,10 @@ export type ApiTokenDeletedSubscriptionVariables = Exact<{ [key: string]: never 
 
 export type ApiTokenDeletedSubscription = { apiTokenDeleted: ApiTokenFragmentFragment };
 
-export const FlowOverviewFragmentFragmentDoc = gql`
-    fragment flowOverviewFragment on Flow {
-        id
-        title
-        status
-    }
-`;
+export type SettingsUserUpdatedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type SettingsUserUpdatedSubscription = { settingsUserUpdated: UserPreferencesFragmentFragment };
+
 export const SettingsFragmentFragmentDoc = gql`
     fragment settingsFragment on Settings {
         debug
@@ -2375,13 +2400,21 @@ export const FlowExecutionStatsFragmentFragmentDoc = gql`
         }
     }
 `;
+export const UserPreferencesFragmentFragmentDoc = gql`
+    fragment userPreferencesFragment on UserPreferences {
+        id
+        favoriteFlows
+    }
+`;
 export const FlowsDocument = gql`
     query flows {
         flows {
-            ...flowOverviewFragment
+            ...flowFragment
         }
     }
-    ${FlowOverviewFragmentFragmentDoc}
+    ${FlowFragmentFragmentDoc}
+    ${TerminalFragmentFragmentDoc}
+    ${ProviderFragmentFragmentDoc}
 `;
 
 /**
@@ -4156,6 +4189,136 @@ export type ApiTokenQueryHookResult = ReturnType<typeof useApiTokenQuery>;
 export type ApiTokenLazyQueryHookResult = ReturnType<typeof useApiTokenLazyQuery>;
 export type ApiTokenSuspenseQueryHookResult = ReturnType<typeof useApiTokenSuspenseQuery>;
 export type ApiTokenQueryResult = Apollo.QueryResult<ApiTokenQuery, ApiTokenQueryVariables>;
+export const SettingsUserDocument = gql`
+    query settingsUser {
+        settingsUser {
+            ...userPreferencesFragment
+        }
+    }
+    ${UserPreferencesFragmentFragmentDoc}
+`;
+
+/**
+ * __useSettingsUserQuery__
+ *
+ * To run a query within a React component, call `useSettingsUserQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSettingsUserQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSettingsUserQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useSettingsUserQuery(
+    baseOptions?: Apollo.QueryHookOptions<SettingsUserQuery, SettingsUserQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<SettingsUserQuery, SettingsUserQueryVariables>(SettingsUserDocument, options);
+}
+export function useSettingsUserLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<SettingsUserQuery, SettingsUserQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<SettingsUserQuery, SettingsUserQueryVariables>(SettingsUserDocument, options);
+}
+export function useSettingsUserSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<SettingsUserQuery, SettingsUserQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<SettingsUserQuery, SettingsUserQueryVariables>(SettingsUserDocument, options);
+}
+export type SettingsUserQueryHookResult = ReturnType<typeof useSettingsUserQuery>;
+export type SettingsUserLazyQueryHookResult = ReturnType<typeof useSettingsUserLazyQuery>;
+export type SettingsUserSuspenseQueryHookResult = ReturnType<typeof useSettingsUserSuspenseQuery>;
+export type SettingsUserQueryResult = Apollo.QueryResult<SettingsUserQuery, SettingsUserQueryVariables>;
+export const AddFavoriteFlowDocument = gql`
+    mutation addFavoriteFlow($flowId: ID!) {
+        addFavoriteFlow(flowId: $flowId)
+    }
+`;
+export type AddFavoriteFlowMutationFn = Apollo.MutationFunction<
+    AddFavoriteFlowMutation,
+    AddFavoriteFlowMutationVariables
+>;
+
+/**
+ * __useAddFavoriteFlowMutation__
+ *
+ * To run a mutation, you first call `useAddFavoriteFlowMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useAddFavoriteFlowMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [addFavoriteFlowMutation, { data, loading, error }] = useAddFavoriteFlowMutation({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useAddFavoriteFlowMutation(
+    baseOptions?: Apollo.MutationHookOptions<AddFavoriteFlowMutation, AddFavoriteFlowMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<AddFavoriteFlowMutation, AddFavoriteFlowMutationVariables>(
+        AddFavoriteFlowDocument,
+        options,
+    );
+}
+export type AddFavoriteFlowMutationHookResult = ReturnType<typeof useAddFavoriteFlowMutation>;
+export type AddFavoriteFlowMutationResult = Apollo.MutationResult<AddFavoriteFlowMutation>;
+export type AddFavoriteFlowMutationOptions = Apollo.BaseMutationOptions<
+    AddFavoriteFlowMutation,
+    AddFavoriteFlowMutationVariables
+>;
+export const DeleteFavoriteFlowDocument = gql`
+    mutation deleteFavoriteFlow($flowId: ID!) {
+        deleteFavoriteFlow(flowId: $flowId)
+    }
+`;
+export type DeleteFavoriteFlowMutationFn = Apollo.MutationFunction<
+    DeleteFavoriteFlowMutation,
+    DeleteFavoriteFlowMutationVariables
+>;
+
+/**
+ * __useDeleteFavoriteFlowMutation__
+ *
+ * To run a mutation, you first call `useDeleteFavoriteFlowMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useDeleteFavoriteFlowMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [deleteFavoriteFlowMutation, { data, loading, error }] = useDeleteFavoriteFlowMutation({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useDeleteFavoriteFlowMutation(
+    baseOptions?: Apollo.MutationHookOptions<DeleteFavoriteFlowMutation, DeleteFavoriteFlowMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<DeleteFavoriteFlowMutation, DeleteFavoriteFlowMutationVariables>(
+        DeleteFavoriteFlowDocument,
+        options,
+    );
+}
+export type DeleteFavoriteFlowMutationHookResult = ReturnType<typeof useDeleteFavoriteFlowMutation>;
+export type DeleteFavoriteFlowMutationResult = Apollo.MutationResult<DeleteFavoriteFlowMutation>;
+export type DeleteFavoriteFlowMutationOptions = Apollo.BaseMutationOptions<
+    DeleteFavoriteFlowMutation,
+    DeleteFavoriteFlowMutationVariables
+>;
 export const CreateFlowDocument = gql`
     mutation createFlow($modelProvider: String!, $input: String!) {
         createFlow(modelProvider: $modelProvider, input: $input) {
@@ -4331,6 +4494,40 @@ export function useStopFlowMutation(
 export type StopFlowMutationHookResult = ReturnType<typeof useStopFlowMutation>;
 export type StopFlowMutationResult = Apollo.MutationResult<StopFlowMutation>;
 export type StopFlowMutationOptions = Apollo.BaseMutationOptions<StopFlowMutation, StopFlowMutationVariables>;
+export const RenameFlowDocument = gql`
+    mutation renameFlow($flowId: ID!, $title: String!) {
+        renameFlow(flowId: $flowId, title: $title)
+    }
+`;
+export type RenameFlowMutationFn = Apollo.MutationFunction<RenameFlowMutation, RenameFlowMutationVariables>;
+
+/**
+ * __useRenameFlowMutation__
+ *
+ * To run a mutation, you first call `useRenameFlowMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useRenameFlowMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [renameFlowMutation, { data, loading, error }] = useRenameFlowMutation({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *      title: // value for 'title'
+ *   },
+ * });
+ */
+export function useRenameFlowMutation(
+    baseOptions?: Apollo.MutationHookOptions<RenameFlowMutation, RenameFlowMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<RenameFlowMutation, RenameFlowMutationVariables>(RenameFlowDocument, options);
+}
+export type RenameFlowMutationHookResult = ReturnType<typeof useRenameFlowMutation>;
+export type RenameFlowMutationResult = Apollo.MutationResult<RenameFlowMutation>;
+export type RenameFlowMutationOptions = Apollo.BaseMutationOptions<RenameFlowMutation, RenameFlowMutationVariables>;
 export const CreateAssistantDocument = gql`
     mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!) {
         createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents) {
@@ -5440,19 +5637,10 @@ export type AssistantLogUpdatedSubscriptionResult = Apollo.SubscriptionResult<As
 export const FlowCreatedDocument = gql`
     subscription flowCreated {
         flowCreated {
-            id
-            title
-            status
-            terminals {
-                ...terminalFragment
-            }
-            provider {
-                ...providerFragment
-            }
-            createdAt
-            updatedAt
+            ...flowFragment
         }
     }
+    ${FlowFragmentFragmentDoc}
     ${TerminalFragmentFragmentDoc}
     ${ProviderFragmentFragmentDoc}
 `;
@@ -5486,11 +5674,12 @@ export type FlowCreatedSubscriptionResult = Apollo.SubscriptionResult<FlowCreate
 export const FlowDeletedDocument = gql`
     subscription flowDeleted {
         flowDeleted {
-            id
-            status
-            updatedAt
+            ...flowFragment
         }
     }
+    ${FlowFragmentFragmentDoc}
+    ${TerminalFragmentFragmentDoc}
+    ${ProviderFragmentFragmentDoc}
 `;
 
 /**
@@ -5522,16 +5711,12 @@ export type FlowDeletedSubscriptionResult = Apollo.SubscriptionResult<FlowDelete
 export const FlowUpdatedDocument = gql`
     subscription flowUpdated {
         flowUpdated {
-            id
-            title
-            status
-            terminals {
-                ...terminalFragment
-            }
-            updatedAt
+            ...flowFragment
         }
     }
+    ${FlowFragmentFragmentDoc}
     ${TerminalFragmentFragmentDoc}
+    ${ProviderFragmentFragmentDoc}
 `;
 
 /**
@@ -5857,3 +6042,41 @@ export function useApiTokenDeletedSubscription(
 }
 export type ApiTokenDeletedSubscriptionHookResult = ReturnType<typeof useApiTokenDeletedSubscription>;
 export type ApiTokenDeletedSubscriptionResult = Apollo.SubscriptionResult<ApiTokenDeletedSubscription>;
+export const SettingsUserUpdatedDocument = gql`
+    subscription settingsUserUpdated {
+        settingsUserUpdated {
+            ...userPreferencesFragment
+        }
+    }
+    ${UserPreferencesFragmentFragmentDoc}
+`;
+
+/**
+ * __useSettingsUserUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useSettingsUserUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useSettingsUserUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSettingsUserUpdatedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useSettingsUserUpdatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<
+        SettingsUserUpdatedSubscription,
+        SettingsUserUpdatedSubscriptionVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<SettingsUserUpdatedSubscription, SettingsUserUpdatedSubscriptionVariables>(
+        SettingsUserUpdatedDocument,
+        options,
+    );
+}
+export type SettingsUserUpdatedSubscriptionHookResult = ReturnType<typeof useSettingsUserUpdatedSubscription>;
+export type SettingsUserUpdatedSubscriptionResult = Apollo.SubscriptionResult<SettingsUserUpdatedSubscription>;

@@ -1,5 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
+import { format, isToday } from 'date-fns';
+import { enUS } from 'date-fns/locale';
 import {
     AlertCircle,
     ArrowDown,
@@ -17,6 +19,7 @@ import {
     X,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
@@ -39,6 +42,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusCard } from '@/components/ui/status-card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     TokenStatus as TokenStatusEnum,
     useApiTokenCreatedSubscription,
@@ -49,6 +53,7 @@ import {
     useDeleteApiTokenMutation,
     useUpdateApiTokenMutation,
 } from '@/graphql/types';
+import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
 import { cn } from '@/lib/utils';
 import { baseUrl } from '@/models/api';
 
@@ -98,6 +103,22 @@ const getStatusDisplay = (
     }
 
     return { label: token.status, variant: 'secondary' };
+};
+
+const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+
+    if (isToday(date)) {
+        return format(date, 'HH:mm:ss', { locale: enUS });
+    }
+
+    return format(date, 'd MMM yyyy', { locale: enUS });
+};
+
+const formatFullDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+
+    return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
 };
 
 const calculateTTL = (expiresAt: Date): number => {
@@ -171,6 +192,7 @@ const createNewTokenPlaceholder: APIToken = {
 };
 
 const SettingsAPITokens = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const { data, error, loading: isLoading } = useApiTokensQuery();
     const [createAPIToken, { error: createError, loading: isCreateLoading }] = useCreateApiTokenMutation();
     const [updateAPIToken, { error: updateError, loading: isUpdateLoading }] = useUpdateApiTokenMutation();
@@ -185,6 +207,60 @@ const SettingsAPITokens = () => {
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingToken, setDeletingToken] = useState<APIToken | null>(null);
+
+    const { columnVisibility, updateColumnVisibility } = useAdaptiveColumnVisibility({
+        columns: [
+            { alwaysVisible: true, id: 'name', priority: 0 },
+            { alwaysVisible: true, id: 'tokenId', priority: 0 },
+            { id: 'status', priority: 1 },
+            { id: 'createdAt', priority: 2 },
+            { id: 'expires', priority: 3 },
+        ],
+        tableKey: 'api-tokens',
+    });
+
+    // Get current page from URL
+    const currentPage = useMemo(() => {
+        const page = searchParams.get('page');
+
+        return page ? Math.max(0, Number.parseInt(page, 10) - 1) : 0;
+    }, [searchParams]);
+
+    // Handle page change
+    const handlePageChange = useCallback(
+        (pageIndex: number) => {
+            const newParams = new URLSearchParams(searchParams);
+
+            if (pageIndex === 0) {
+                newParams.delete('page');
+            } else {
+                newParams.set('page', String(pageIndex + 1));
+            }
+
+            setSearchParams(newParams);
+        },
+        [searchParams, setSearchParams],
+    );
+
+    // Three-way sorting handler: null -> asc -> desc -> null
+    const handleColumnSort = useCallback(
+        (column: {
+            clearSorting: () => void;
+            getIsSorted: () => 'asc' | 'desc' | false;
+            toggleSorting: (desc?: boolean) => void;
+        }) => {
+            const sorted = column.getIsSorted();
+
+            if (sorted === 'asc') {
+                column.toggleSorting(true);
+            } else if (sorted === 'desc') {
+                column.clearSorting();
+            } else {
+                column.toggleSorting(false);
+            }
+        },
+        [],
+    );
 
     useApiTokenCreatedSubscription({
         onData: ({ client }) => {
@@ -360,13 +436,14 @@ const SettingsAPITokens = () => {
                         </div>
                     );
                 },
+                enableHiding: false,
                 header: ({ column }) => {
                     const sorted = column.getIsSorted();
 
                     return (
                         <Button
                             className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                            onClick={() => handleColumnSort(column)}
                             variant="link"
                         >
                             Name
@@ -405,13 +482,14 @@ const SettingsAPITokens = () => {
                         </div>
                     );
                 },
+                enableHiding: false,
                 header: ({ column }) => {
                     const sorted = column.getIsSorted();
 
                     return (
                         <Button
                             className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                            onClick={() => handleColumnSort(column)}
                             variant="link"
                         >
                             Token ID
@@ -472,7 +550,7 @@ const SettingsAPITokens = () => {
                     return (
                         <Button
                             className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                            onClick={() => handleColumnSort(column)}
                             variant="link"
                         >
                             Status
@@ -534,8 +612,18 @@ const SettingsAPITokens = () => {
                     }
 
                     const expiresAt = getTokenExpirationDate(token);
+                    const expiresAtString = expiresAt.toISOString();
 
-                    return <div className="text-sm">{expiresAt.toLocaleDateString()}</div>;
+                    return (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="cursor-default text-sm">{formatDateTime(expiresAtString)}</div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <div className="text-xs">{formatFullDateTime(expiresAtString)}</div>
+                            </TooltipContent>
+                        </Tooltip>
+                    );
                 },
                 header: ({ column }) => {
                     const sorted = column.getIsSorted();
@@ -543,7 +631,7 @@ const SettingsAPITokens = () => {
                     return (
                         <Button
                             className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                            onClick={() => handleColumnSort(column)}
                             variant="link"
                         >
                             Expires
@@ -573,9 +661,18 @@ const SettingsAPITokens = () => {
                         return <div className="text-muted-foreground text-sm">N/A</div>;
                     }
 
-                    const date = new Date(row.getValue('createdAt'));
+                    const dateString = row.getValue('createdAt') as string;
 
-                    return <div className="text-sm">{date.toLocaleDateString()}</div>;
+                    return (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
+                            </TooltipContent>
+                        </Tooltip>
+                    );
                 },
                 header: ({ column }) => {
                     const sorted = column.getIsSorted();
@@ -583,7 +680,7 @@ const SettingsAPITokens = () => {
                     return (
                         <Button
                             className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                            onClick={() => handleColumnSort(column)}
                             variant="link"
                         >
                             Created
@@ -596,6 +693,12 @@ const SettingsAPITokens = () => {
                     );
                 },
                 size: 120,
+                sortingFn: (rowA, rowB) => {
+                    const dateA = new Date(rowA.getValue('createdAt') as string);
+                    const dateB = new Date(rowB.getValue('createdAt') as string);
+
+                    return dateA.getTime() - dateB.getTime();
+                },
             },
             {
                 cell: ({ row }) => {
@@ -706,11 +809,13 @@ const SettingsAPITokens = () => {
         [
             createFormData.expiresAt,
             createFormData.name,
+            deletingToken,
             editFormData.name,
             editFormData.status,
             editingTokenId,
             handleCancelCreate,
             handleCancelEdit,
+            handleColumnSort,
             handleCopyTokenId,
             handleCreate,
             handleDeleteDialogOpen,
@@ -719,7 +824,6 @@ const SettingsAPITokens = () => {
             isCreateLoading,
             isDeleteLoading,
             isUpdateLoading,
-            deletingToken,
         ],
     );
 
@@ -787,11 +891,22 @@ const SettingsAPITokens = () => {
                 </Alert>
             )}
 
-            <DataTable
+            <DataTable<APIToken>
                 columns={columns}
+                columnVisibility={columnVisibility}
                 data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
                 filterColumn="name"
                 filterPlaceholder="Filter token names..."
+                onColumnVisibilityChange={(visibility) => {
+                    Object.entries(visibility).forEach(([columnId, isVisible]) => {
+                        if (columnVisibility[columnId] !== isVisible) {
+                            updateColumnVisibility(columnId, isVisible);
+                        }
+                    });
+                }}
+                onPageChange={handlePageChange}
+                pageIndex={currentPage}
+                tableKey="api-tokens"
             />
 
             <Dialog

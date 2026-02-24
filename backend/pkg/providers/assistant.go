@@ -57,19 +57,19 @@ func (ap *assistantProvider) Model(opt pconfig.ProviderOptionsType) string {
 }
 
 func (ap *assistantProvider) Title() string {
-	return ap.fp.title
+	return ap.fp.Title()
 }
 
 func (ap *assistantProvider) Language() string {
-	return ap.fp.language
+	return ap.fp.Language()
 }
 
 func (ap *assistantProvider) ToolCallIDTemplate() string {
-	return ap.fp.tcIDTemplate
+	return ap.fp.ToolCallIDTemplate()
 }
 
 func (ap *assistantProvider) Embedder() embeddings.Embedder {
-	return ap.fp.embedder
+	return ap.fp.Embedder()
 }
 
 func (ap *assistantProvider) SetMsgChainID(msgChainID int64) {
@@ -77,11 +77,11 @@ func (ap *assistantProvider) SetMsgChainID(msgChainID int64) {
 }
 
 func (ap *assistantProvider) SetAgentLogProvider(agentLog tools.AgentLogProvider) {
-	ap.fp.agentLog = agentLog
+	ap.fp.SetAgentLogProvider(agentLog)
 }
 
 func (ap *assistantProvider) SetMsgLogProvider(msgLog tools.MsgLogProvider) {
-	ap.fp.msgLog = msgLog
+	ap.fp.SetMsgLogProvider(msgLog)
 }
 
 func (ap *assistantProvider) PrepareAgentChain(ctx context.Context) (int64, error) {
@@ -91,7 +91,7 @@ func (ap *assistantProvider) PrepareAgentChain(ctx context.Context) (int64, erro
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
-		"flow_id":      ap.fp.flowID,
+		"flow_id":      ap.fp.ID(),
 	})
 
 	systemPrompt, err := ap.getAssistantSystemPrompt(ctx)
@@ -120,7 +120,7 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
-		"flow_id":      ap.fp.flowID,
+		"flow_id":      ap.fp.ID(),
 		"msg_chain_id": ap.msgChainID,
 	})
 
@@ -130,7 +130,7 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 		return fmt.Errorf("failed to get assistant use agents: %w", err)
 	}
 
-	msgChain, err := ap.fp.db.GetMsgChain(ctx, ap.msgChainID)
+	msgChain, err := ap.fp.DB().GetMsgChain(ctx, ap.msgChainID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get primary agent msg chain")
 		return fmt.Errorf("failed to get primary agent msg chain %d: %w", ap.msgChainID, err)
@@ -180,15 +180,15 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	executorAgent := observation.Agent(
-		langfuse.WithAgentName(fmt.Sprintf("assistant %d for flow %d: %s", ap.id, ap.fp.flowID, ap.fp.title)),
+		langfuse.WithAgentName(fmt.Sprintf("assistant %d for flow %d: %s", ap.id, ap.fp.ID(), ap.fp.Title())),
 		langfuse.WithAgentInput(chain),
 		langfuse.WithAgentMetadata(langfuse.Metadata{
 			"assistant_id": ap.id,
-			"flow_id":      ap.fp.flowID,
+			"flow_id":      ap.fp.ID(),
 			"msg_chain_id": ap.msgChainID,
 			"provider":     ap.fp.Type(),
-			"image":        ap.fp.image,
-			"lang":         ap.fp.language,
+			"image":        ap.fp.Image(),
+			"lang":         ap.fp.Language(),
 		}),
 	)
 	ctx, _ = executorAgent.Observation(ctx)
@@ -204,7 +204,7 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 		Summarizer: ap.fp.GetSummarizeResultHandler(nil, nil),
 	}
 
-	executor, err := ap.fp.executor.GetAssistantExecutor(cfg)
+	executor, err := ap.fp.Executor().GetAssistantExecutor(cfg)
 	if err != nil {
 		return wrapErrorEndAgentSpan(ctx, executorAgent, "failed to get assistant executor", err)
 	}
@@ -229,7 +229,7 @@ func (ap *assistantProvider) PutInputToAgentChain(ctx context.Context, input str
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
-		"flow_id":      ap.fp.flowID,
+		"flow_id":      ap.fp.ID(),
 		"msg_chain_id": ap.msgChainID,
 		"input":        input[:min(len(input), 1000)],
 	})
@@ -275,14 +275,14 @@ func (ap *assistantProvider) updateAssistantChain(
 }
 
 func (ap *assistantProvider) getAssistantUseAgents(ctx context.Context) (bool, error) {
-	return ap.fp.db.GetAssistantUseAgents(ctx, ap.id)
+	return ap.fp.DB().GetAssistantUseAgents(ctx, ap.id)
 }
 
 func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (string, error) {
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
-		"flow_id":      ap.fp.flowID,
+		"flow_id":      ap.fp.ID(),
 	})
 
 	useAgents, err := ap.getAssistantUseAgents(ctx)
@@ -297,7 +297,7 @@ func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (stri
 		return "", fmt.Errorf("failed to get assistant execution context: %w", err)
 	}
 
-	systemAssistantTmpl, err := ap.fp.prompter.RenderTemplate(templates.PromptTypeAssistant, map[string]any{
+	systemAssistantTmpl, err := ap.fp.Prompter().RenderTemplate(templates.PromptTypeAssistant, map[string]any{
 		"SearchToolName":          tools.SearchToolName,
 		"PentesterToolName":       tools.PentesterToolName,
 		"CoderToolName":           tools.CoderToolName,
@@ -308,6 +308,7 @@ func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (stri
 		"FileToolName":            tools.FileToolName,
 		"GoogleToolName":          tools.GoogleToolName,
 		"DuckDuckGoToolName":      tools.DuckDuckGoToolName,
+		"SploitusToolName":        tools.SploitusToolName,
 		"TavilyToolName":          tools.TavilyToolName,
 		"TraversaalToolName":      tools.TraversaalToolName,
 		"PerplexityToolName":      tools.PerplexityToolName,
@@ -319,11 +320,11 @@ func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (stri
 		"SummarizationToolName":   cast.SummarizationToolName,
 		"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 		"UseAgents":               useAgents,
-		"DockerImage":             ap.fp.image,
+		"DockerImage":             ap.fp.Image(),
 		"Cwd":                     docker.WorkFolderPathInContainer,
 		"ContainerPorts":          ap.fp.getContainerPortsDescription(),
 		"ExecutionContext":        executionContext,
-		"Lang":                    ap.fp.language,
+		"Lang":                    ap.fp.Language(),
 		"CurrentTime":             getCurrentTime(),
 	})
 	if err != nil {
@@ -338,10 +339,10 @@ func (ap *assistantProvider) getAssistantExecutionContext(ctx context.Context) (
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"provider":     ap.fp.Type(),
 		"assistant_id": ap.id,
-		"flow_id":      ap.fp.flowID,
+		"flow_id":      ap.fp.ID(),
 	})
 
-	subtasks, err := ap.fp.db.GetFlowSubtasks(ctx, ap.fp.flowID)
+	subtasks, err := ap.fp.DB().GetFlowSubtasks(ctx, ap.fp.ID())
 	if err != nil {
 		logger.WithError(err).Error("failed to get flow subtasks")
 		return "", fmt.Errorf("failed to get flow subtasks: %w", err)

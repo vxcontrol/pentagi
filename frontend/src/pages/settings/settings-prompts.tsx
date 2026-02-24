@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
 import { useDeletePromptMutation, useSettingsPromptsQuery } from '@/graphql/types';
+import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
 
 // Types for table data
 type AgentPromptTableData = {
@@ -77,6 +78,42 @@ const SettingsPrompts = () => {
         promptName: string;
         type: 'all' | 'human' | 'system' | 'tool';
     }>(null);
+
+    const { columnVisibility: agentColumnVisibility, updateColumnVisibility: updateAgentColumnVisibility } =
+        useAdaptiveColumnVisibility({
+            columns: [
+                { alwaysVisible: true, id: 'displayName', priority: 0 },
+                { id: 'systemStatus', priority: 1 },
+                { id: 'humanStatus', priority: 2 },
+            ],
+            tableKey: 'prompts-agents',
+        });
+
+    const { columnVisibility: toolColumnVisibility, updateColumnVisibility: updateToolColumnVisibility } =
+        useAdaptiveColumnVisibility({
+            columns: [
+                { alwaysVisible: true, id: 'displayName', priority: 0 },
+                { id: 'status', priority: 1 },
+            ],
+            tableKey: 'prompts-tools',
+        });
+
+    // Three-way sorting handler: null -> asc -> desc -> null
+    const handleColumnSort = (column: {
+        clearSorting: () => void;
+        getIsSorted: () => 'asc' | 'desc' | false;
+        toggleSorting: (desc?: boolean) => void;
+    }) => {
+        const sorted = column.getIsSorted();
+
+        if (sorted === 'asc') {
+            column.toggleSorting(true);
+        } else if (sorted === 'desc') {
+            column.clearSorting();
+        } else {
+            column.toggleSorting(false);
+        }
+    };
 
     // Handler for editing any prompt (agent or tool)
     const handlePromptEdit = (promptName: string) => {
@@ -321,13 +358,14 @@ const SettingsPrompts = () => {
                     <span className="font-medium">{row.original.displayName}</span>
                 </div>
             ),
+            enableHiding: false,
             header: ({ column }) => {
                 const sorted = column.getIsSorted();
 
                 return (
                     <Button
                         className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        onClick={() => handleColumnSort(column)}
                         variant="link"
                     >
                         Agent Name
@@ -489,13 +527,14 @@ const SettingsPrompts = () => {
                     <span className="font-medium">{row.original.displayName}</span>
                 </div>
             ),
+            enableHiding: false,
             header: ({ column }) => {
                 const sorted = column.getIsSorted();
 
                 return (
                     <Button
                         className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        onClick={() => handleColumnSort(column)}
                         variant="link"
                     >
                         Tool Name
@@ -734,13 +773,22 @@ const SettingsPrompts = () => {
                             <Badge variant="secondary">{agentPrompts.length}</Badge>
                         </div>
                         <p className="text-muted-foreground text-sm">System and human prompts for AI agents</p>
-                        <DataTable
+                        <DataTable<AgentPromptTableData>
                             columns={agentColumns}
+                            columnVisibility={agentColumnVisibility}
                             data={agentPrompts}
                             filterColumn="displayName"
                             filterPlaceholder="Filter agent names..."
                             initialPageSize={1000}
+                            onColumnVisibilityChange={(visibility) => {
+                                Object.entries(visibility).forEach(([columnId, isVisible]) => {
+                                    if (agentColumnVisibility[columnId] !== isVisible) {
+                                        updateAgentColumnVisibility(columnId, isVisible);
+                                    }
+                                });
+                            }}
                             renderSubComponent={renderAgentSubComponent}
+                            tableKey="prompts-agents"
                         />
                     </div>
                 )}
@@ -754,13 +802,22 @@ const SettingsPrompts = () => {
                             <Badge variant="secondary">{toolPrompts.length}</Badge>
                         </div>
                         <p className="text-muted-foreground text-sm">Prompt templates for system tools and utilities</p>
-                        <DataTable
+                        <DataTable<ToolPromptTableData>
                             columns={toolColumns}
+                            columnVisibility={toolColumnVisibility}
                             data={toolPrompts}
                             filterColumn="displayName"
                             filterPlaceholder="Filter tool names..."
                             initialPageSize={1000}
+                            onColumnVisibilityChange={(visibility) => {
+                                Object.entries(visibility).forEach(([columnId, isVisible]) => {
+                                    if (toolColumnVisibility[columnId] !== isVisible) {
+                                        updateToolColumnVisibility(columnId, isVisible);
+                                    }
+                                });
+                            }}
                             renderSubComponent={renderToolSubComponent}
+                            tableKey="prompts-tools"
                         />
                     </div>
                 )}

@@ -181,6 +181,44 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 	return model.ResultTypeSuccess, nil
 }
 
+// RenameFlow is the resolver for the renameFlow field.
+func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title string) (model.ResultType, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flows.edit", flowID, r.DB)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"flow":  flowID,
+		"title": title,
+	}).Debug("rename flow")
+
+	err = r.Controller.RenameFlow(ctx, flowID, title)
+	if errors.Is(err, controller.ErrFlowNotFound) {
+		// if flow worker not found, update flow title in DB and notify about it
+		flow, err := r.DB.UpdateFlowTitle(ctx, database.UpdateFlowTitleParams{
+			ID:    flowID,
+			Title: title,
+		})
+		if err != nil {
+			return model.ResultTypeError, err
+		}
+
+		containers, err := r.DB.GetFlowContainers(ctx, flowID)
+		if err != nil {
+			return model.ResultTypeError, err
+		}
+
+		publisher := r.Subscriptions.NewFlowPublisher(flow.UserID, flow.ID)
+		publisher.FlowUpdated(ctx, flow, containers)
+	} else if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	return model.ResultTypeSuccess, nil
+}
+
 // CreateAssistant is the resolver for the createAssistant field.
 func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool) (*model.FlowAssistant, error) {
 	var (
@@ -806,6 +844,93 @@ func (r *mutationResolver) DeleteAPIToken(ctx context.Context, tokenID string) (
 	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenDeleted(ctx, token)
 
 	return true, nil
+}
+
+// AddFavoriteFlow is the resolver for the addFavoriteFlow field.
+func (r *mutationResolver) AddFavoriteFlow(ctx context.Context, flowID int64) (model.ResultType, error) {
+	_, err := validatePermissionWithFlowID(ctx, "flows.view", flowID, r.DB)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	uid, _, err := validatePermission(ctx, "settings.user.edit")
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	if !isUserSession {
+		return model.ResultTypeError, fmt.Errorf("unauthorized: non-user session is not allowed to manage favorites")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":    uid,
+		"flowID": flowID,
+	}).Debug("add favorite flow")
+
+	flow, err := r.DB.GetFlow(ctx, flowID)
+	if err != nil {
+		return model.ResultTypeError, fmt.Errorf("flow not found: %w", err)
+	}
+
+	if flow.UserID != uid {
+		return model.ResultTypeError, fmt.Errorf("unauthorized: cannot favorite other user's flow")
+	}
+
+	prefs, err := r.DB.AddFavoriteFlow(ctx, database.AddFavoriteFlowParams{
+		UserID: uid,
+		FlowID: flowID,
+	})
+	if err != nil {
+		return model.ResultTypeError, fmt.Errorf("failed to add favorite flow: %w", err)
+	}
+
+	r.Subscriptions.NewFlowPublisher(uid, 0).SettingsUserUpdated(ctx, prefs)
+
+	return model.ResultTypeSuccess, nil
+}
+
+// DeleteFavoriteFlow is the resolver for the deleteFavoriteFlow field.
+func (r *mutationResolver) DeleteFavoriteFlow(ctx context.Context, flowID int64) (model.ResultType, error) {
+	_, err := validatePermissionWithFlowID(ctx, "flows.view", flowID, r.DB)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	uid, err := validatePermissionWithFlowID(ctx, "settings.user.edit", flowID, r.DB)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	if !isUserSession {
+		return model.ResultTypeError, fmt.Errorf("unauthorized: non-user session is not allowed to manage favorites")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":    uid,
+		"flowID": flowID,
+	}).Debug("delete favorite flow")
+
+	prefs, err := r.DB.DeleteFavoriteFlow(ctx, database.DeleteFavoriteFlowParams{
+		FlowID: flowID,
+		UserID: uid,
+	})
+	if err != nil {
+		return model.ResultTypeError, fmt.Errorf("failed to delete favorite flow: %w", err)
+	}
+
+	r.Subscriptions.NewFlowPublisher(uid, 0).SettingsUserUpdated(ctx, prefs)
+
+	return model.ResultTypeSuccess, nil
 }
 
 // Providers is the resolver for the providers field.
@@ -1691,6 +1816,39 @@ func (r *queryResolver) SettingsPrompts(ctx context.Context) (*model.PromptsConf
 	return &promptsConfig, nil
 }
 
+// SettingsUser is the resolver for the settingsUser field.
+func (r *queryResolver) SettingsUser(ctx context.Context) (*model.UserPreferences, error) {
+	uid, _, err := validatePermission(ctx, "settings.user.view")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to get user preferences")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid": uid,
+	}).Debug("get user preferences")
+
+	prefs, err := r.DB.GetUserPreferencesByUserID(ctx, uid)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return &model.UserPreferences{
+				FavoriteFlows: []int64{},
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to get user preferences: %w", err)
+	}
+
+	return converter.ConvertUserPreferences(prefs), nil
+}
+
 // APIToken is the resolver for the apiToken field.
 func (r *queryResolver) APIToken(ctx context.Context, tokenID string) (*model.APIToken, error) {
 	uid, admin, err := validatePermission(ctx, "settings.tokens.view")
@@ -2033,6 +2191,25 @@ func (r *subscriptionResolver) APITokenDeleted(ctx context.Context) (<-chan *mod
 	}
 
 	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenDeleted(ctx)
+}
+
+// SettingsUserUpdated is the resolver for the settingsUserUpdated field.
+func (r *subscriptionResolver) SettingsUserUpdated(ctx context.Context) (<-chan *model.UserPreferences, error) {
+	uid, _, err := validatePermission(ctx, "settings.user.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to user preferences")
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, 0).SettingsUserUpdated(ctx)
 }
 
 // Mutation returns MutationResolver implementation.

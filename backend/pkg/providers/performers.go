@@ -74,7 +74,7 @@ func (fp *flowProvider) performTaskResultReporter(
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
@@ -155,7 +155,7 @@ func (fp *flowProvider) performSubtasksGenerator(
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
@@ -340,7 +340,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 
 	subtasks := convertSubtaskInfoPatch(result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
@@ -420,7 +420,7 @@ func (fp *flowProvider) performCoder(
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
@@ -494,7 +494,7 @@ func (fp *flowProvider) performInstaller(
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
@@ -550,7 +550,7 @@ func (fp *flowProvider) performMemorist(
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
@@ -636,7 +636,7 @@ func (fp *flowProvider) performPentester(
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
@@ -698,7 +698,7 @@ func (fp *flowProvider) performSearcher(
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
@@ -765,7 +765,7 @@ func (fp *flowProvider) performEnricher(
 	}
 
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
-		fp.agentLog.PutLog(
+		fp.putAgentLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,

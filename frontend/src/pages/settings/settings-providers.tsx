@@ -1,5 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
+import { format, isToday } from 'date-fns';
+import { enUS } from 'date-fns/locale';
 import {
     AlertCircle,
     ArrowDown,
@@ -13,8 +15,8 @@ import {
     Settings,
     Trash,
 } from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 
@@ -37,7 +39,9 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ProviderType, useDeleteProviderMutation, useSettingsProvidersQuery } from '@/graphql/types';
+import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
 
 type Provider = ProviderConfigFragmentFragment;
 
@@ -58,6 +62,22 @@ const providerTypes = [
     { label: 'Ollama', type: ProviderType.Ollama },
     { label: 'OpenAI', type: ProviderType.Openai },
 ];
+
+const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+
+    if (isToday(date)) {
+        return format(date, 'HH:mm:ss', { locale: enUS });
+    }
+
+    return format(date, 'd MMM yyyy', { locale: enUS });
+};
+
+const formatFullDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+
+    return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
+};
 
 const SettingsProvidersHeader = () => {
     const navigate = useNavigate();
@@ -103,6 +123,7 @@ const SettingsProvidersHeader = () => {
 };
 
 const SettingsProviders = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const { data, error, loading: isLoading } = useSettingsProvidersQuery();
     const [deleteProvider, { error: deleteError, loading: isDeleteLoading }] = useDeleteProviderMutation();
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
@@ -110,206 +131,309 @@ const SettingsProviders = () => {
     const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
     const navigate = useNavigate();
 
-    const handleProviderEdit = (providerId: string) => {
-        navigate(`/settings/providers/${providerId}`);
-    };
+    const { columnVisibility, updateColumnVisibility } = useAdaptiveColumnVisibility({
+        columns: [
+            { alwaysVisible: true, id: 'name', priority: 0 },
+            { id: 'type', priority: 1 },
+            { id: 'createdAt', priority: 2 },
+            { id: 'updatedAt', priority: 3 },
+        ],
+        tableKey: 'providers',
+    });
 
-    const handleProviderClone = (providerId: string) => {
-        navigate(`/settings/providers/new?id=${providerId}`);
-    };
+    // Get current page from URL
+    const currentPage = useMemo(() => {
+        const page = searchParams.get('page');
 
-    const handleProviderDeleteDialogOpen = (provider: Provider) => {
+        return page ? Math.max(0, Number.parseInt(page, 10) - 1) : 0;
+    }, [searchParams]);
+
+    // Handle page change
+    const handlePageChange = useCallback(
+        (pageIndex: number) => {
+            const newParams = new URLSearchParams(searchParams);
+
+            if (pageIndex === 0) {
+                newParams.delete('page');
+            } else {
+                newParams.set('page', String(pageIndex + 1));
+            }
+
+            setSearchParams(newParams);
+        },
+        [searchParams, setSearchParams],
+    );
+
+    // Three-way sorting handler: null -> asc -> desc -> null
+    const handleColumnSort = useCallback(
+        (column: {
+            clearSorting: () => void;
+            getIsSorted: () => 'asc' | 'desc' | false;
+            toggleSorting: (desc?: boolean) => void;
+        }) => {
+            const sorted = column.getIsSorted();
+
+            if (sorted === 'asc') {
+                column.toggleSorting(true);
+            } else if (sorted === 'desc') {
+                column.clearSorting();
+            } else {
+                column.toggleSorting(false);
+            }
+        },
+        [],
+    );
+
+    const handleProviderDelete = useCallback(
+        async (providerId: string | undefined) => {
+            if (!providerId) {
+                return;
+            }
+
+            try {
+                setDeleteErrorMessage(null);
+
+                await deleteProvider({
+                    refetchQueries: ['settingsProviders'],
+                    variables: { providerId: providerId.toString() },
+                });
+
+                setDeletingProvider(null);
+                setDeleteErrorMessage(null);
+            } catch (error) {
+                setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
+            }
+        },
+        [deleteProvider],
+    );
+
+    const handleProviderEdit = useCallback(
+        (providerId: string) => {
+            navigate(`/settings/providers/${providerId}`);
+        },
+        [navigate],
+    );
+
+    const handleProviderClone = useCallback(
+        (providerId: string) => {
+            navigate(`/settings/providers/new?id=${providerId}`);
+        },
+        [navigate],
+    );
+
+    const handleProviderDeleteDialogOpen = useCallback((provider: Provider) => {
         setDeletingProvider(provider);
         setIsDeleteDialogOpen(true);
-    };
+    }, []);
 
-    const handleProviderDelete = async (providerId: string | undefined) => {
-        if (!providerId) {
-            return;
-        }
+    const columns: ColumnDef<Provider>[] = useMemo(
+        () => [
+            {
+                accessorKey: 'name',
+                cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
+                enableHiding: false,
+                header: ({ column }) => {
+                    const sorted = column.getIsSorted();
 
-        try {
-            setDeleteErrorMessage(null);
-
-            await deleteProvider({
-                refetchQueries: ['settingsProviders'],
-                variables: { providerId: providerId.toString() },
-            });
-
-            setDeletingProvider(null);
-            setDeleteErrorMessage(null);
-        } catch (error) {
-            setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
-        }
-    };
-
-    const columns: ColumnDef<Provider>[] = [
-        {
-            accessorKey: 'name',
-            cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        variant="link"
-                    >
-                        Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
+                    return (
+                        <Button
+                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                            onClick={() => handleColumnSort(column)}
+                            variant="link"
+                        >
+                            Name
+                            {sorted === 'asc' ? (
+                                <ArrowDown className="size-4" />
+                            ) : sorted === 'desc' ? (
+                                <ArrowUp className="size-4" />
+                            ) : null}
+                        </Button>
+                    );
+                },
+                size: 400,
             },
-            size: 400,
-        },
-        {
-            accessorKey: 'type',
-            cell: ({ row }) => {
-                const providerType = row.getValue('type') as ProviderType;
-                const Icon = providerIcons[providerType];
+            {
+                accessorKey: 'type',
+                cell: ({ row }) => {
+                    const providerType = row.getValue('type') as ProviderType;
+                    const Icon = providerIcons[providerType];
 
-                return (
-                    <Badge variant="outline">
-                        {Icon && <Icon className="mr-1 size-3" />}
-                        {providerTypes.find((p) => p.type === providerType)?.label || providerType}
-                    </Badge>
-                );
+                    return (
+                        <Badge variant="outline">
+                            {Icon && <Icon className="mr-1 size-3" />}
+                            {providerTypes.find((p) => p.type === providerType)?.label || providerType}
+                        </Badge>
+                    );
+                },
+                header: ({ column }) => {
+                    const sorted = column.getIsSorted();
+
+                    return (
+                        <Button
+                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                            onClick={() => handleColumnSort(column)}
+                            variant="link"
+                        >
+                            Type
+                            {sorted === 'asc' ? (
+                                <ArrowDown className="size-4" />
+                            ) : sorted === 'desc' ? (
+                                <ArrowUp className="size-4" />
+                            ) : null}
+                        </Button>
+                    );
+                },
+                size: 160,
             },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
+            {
+                accessorKey: 'createdAt',
+                cell: ({ row }) => {
+                    const dateString = row.getValue('createdAt') as string;
 
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        variant="link"
-                    >
-                        Type
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
+                    return (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
+                            </TooltipContent>
+                        </Tooltip>
+                    );
+                },
+                header: ({ column }) => {
+                    const sorted = column.getIsSorted();
+
+                    return (
+                        <Button
+                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                            onClick={() => handleColumnSort(column)}
+                            variant="link"
+                        >
+                            Created
+                            {sorted === 'asc' ? (
+                                <ArrowDown className="size-4" />
+                            ) : sorted === 'desc' ? (
+                                <ArrowUp className="size-4" />
+                            ) : null}
+                        </Button>
+                    );
+                },
+                size: 120,
+                sortingFn: (rowA, rowB) => {
+                    const dateA = new Date(rowA.getValue('createdAt') as string);
+                    const dateB = new Date(rowB.getValue('createdAt') as string);
+
+                    return dateA.getTime() - dateB.getTime();
+                },
             },
-            size: 160,
-        },
-        {
-            accessorKey: 'createdAt',
-            cell: ({ row }) => {
-                const date = new Date(row.getValue('createdAt'));
+            {
+                accessorKey: 'updatedAt',
+                cell: ({ row }) => {
+                    const dateString = row.getValue('updatedAt') as string;
 
-                return <div className="text-sm">{date.toLocaleDateString()}</div>;
+                    return (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
+                            </TooltipContent>
+                        </Tooltip>
+                    );
+                },
+                header: ({ column }) => {
+                    const sorted = column.getIsSorted();
+
+                    return (
+                        <Button
+                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                            onClick={() => handleColumnSort(column)}
+                            variant="link"
+                        >
+                            Updated
+                            {sorted === 'asc' ? (
+                                <ArrowDown className="size-4" />
+                            ) : sorted === 'desc' ? (
+                                <ArrowUp className="size-4" />
+                            ) : null}
+                        </Button>
+                    );
+                },
+                size: 120,
+                sortingFn: (rowA, rowB) => {
+                    const dateA = new Date(rowA.getValue('updatedAt') as string);
+                    const dateB = new Date(rowB.getValue('updatedAt') as string);
+
+                    return dateA.getTime() - dateB.getTime();
+                },
             },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
+            {
+                cell: ({ row }) => {
+                    const provider = row.original;
 
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        variant="link"
-                    >
-                        Created
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
-            },
-            size: 120,
-        },
-        {
-            accessorKey: 'updatedAt',
-            cell: ({ row }) => {
-                const date = new Date(row.getValue('updatedAt'));
-
-                return <div className="text-sm">{date.toLocaleDateString()}</div>;
-            },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                        variant="link"
-                    >
-                        Updated
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
-            },
-            size: 120,
-        },
-        {
-            cell: ({ row }) => {
-                const provider = row.original;
-
-                return (
-                    <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    className="size-8 p-0"
-                                    variant="ghost"
+                    return (
+                        <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        className="size-8 p-0"
+                                        variant="ghost"
+                                    >
+                                        <span className="sr-only">Open menu</span>
+                                        <MoreHorizontal className="size-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    align="end"
+                                    className="min-w-24"
                                 >
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="size-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align="end"
-                                className="min-w-24"
-                            >
-                                <DropdownMenuItem onClick={() => handleProviderEdit(provider.id)}>
-                                    <Pencil className="size-3" />
-                                    Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleProviderClone(provider.id)}>
-                                    <Copy className="size-4" />
-                                    Clone
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    disabled={isDeleteLoading && deletingProvider?.id === provider.id}
-                                    onClick={() => handleProviderDeleteDialogOpen(provider)}
-                                >
-                                    {isDeleteLoading && deletingProvider?.id === provider.id ? (
-                                        <>
-                                            <Loader2 className="size-4 animate-spin" />
-                                            Deleting...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Trash className="size-4" />
-                                            Delete
-                                        </>
-                                    )}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                );
+                                    <DropdownMenuItem onClick={() => handleProviderEdit(provider.id)}>
+                                        <Pencil className="size-3" />
+                                        Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleProviderClone(provider.id)}>
+                                        <Copy className="size-4" />
+                                        Clone
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        disabled={isDeleteLoading && deletingProvider?.id === provider.id}
+                                        onClick={() => handleProviderDeleteDialogOpen(provider)}
+                                    >
+                                        {isDeleteLoading && deletingProvider?.id === provider.id ? (
+                                            <>
+                                                <Loader2 className="size-4 animate-spin" />
+                                                Deleting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Trash className="size-4" />
+                                                Delete
+                                            </>
+                                        )}
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    );
+                },
+                enableHiding: false,
+                header: () => null,
+                id: 'actions',
+                size: 48,
             },
-            enableHiding: false,
-            header: () => null,
-            id: 'actions',
-            size: 48,
-        },
-    ];
+        ],
+        [
+            handleColumnSort,
+            handleProviderClone,
+            handleProviderDeleteDialogOpen,
+            handleProviderEdit,
+            isDeleteLoading,
+            deletingProvider,
+        ],
+    );
 
     const renderSubComponent = ({ row }: { row: any }) => {
         const provider = row.original as Provider;
@@ -448,12 +572,23 @@ const SettingsProviders = () => {
                 </Alert>
             )}
 
-            <DataTable
+            <DataTable<Provider>
                 columns={columns}
+                columnVisibility={columnVisibility}
                 data={providers}
                 filterColumn="name"
                 filterPlaceholder="Filter provider names..."
+                onColumnVisibilityChange={(visibility) => {
+                    Object.entries(visibility).forEach(([columnId, isVisible]) => {
+                        if (columnVisibility[columnId] !== isVisible) {
+                            updateColumnVisibility(columnId, isVisible);
+                        }
+                    });
+                }}
+                onPageChange={handlePageChange}
+                pageIndex={currentPage}
                 renderSubComponent={renderSubComponent}
+                tableKey="providers"
             />
 
             <ConfirmationDialog

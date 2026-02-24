@@ -34,7 +34,7 @@ const (
 	defaultImage                = "debian:latest"
 	defaultDockerSocketPath     = "/var/run/docker.sock"
 	containerPrimaryTypePattern = "-terminal-"
-	containeLocalCwdTemplate    = "flow-%d"
+	containerLocalCwdTemplate   = "flow-%d"
 	containerPortsNumber        = 2
 	limitContainerPortsNumber   = 2000
 )
@@ -163,14 +163,14 @@ func (dc *dockerClient) SpawnContainer(
 		return database.Container{}, fmt.Errorf("no config found for container %s", containerName)
 	}
 
-	workDir := filepath.Join(dc.dataDir, fmt.Sprintf(containeLocalCwdTemplate, flowID))
+	workDir := filepath.Join(dc.dataDir, fmt.Sprintf(containerLocalCwdTemplate, flowID))
 	if err := os.MkdirAll(workDir, 0755); err != nil {
 		return database.Container{}, fmt.Errorf("failed to create tmp directory: %w", err)
 	}
 
 	hostDir := dc.hostDir
 	if hostDir != "" {
-		hostDir = filepath.Join(hostDir, fmt.Sprintf(containeLocalCwdTemplate, flowID))
+		hostDir = filepath.Join(hostDir, fmt.Sprintf(containerLocalCwdTemplate, flowID))
 	}
 
 	logger := dc.logger.WithContext(ctx).WithFields(logrus.Fields{

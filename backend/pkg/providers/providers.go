@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -371,6 +372,7 @@ func (pc *providerController) NewFlowProvider(
 
 	fp := &flowProvider{
 		db:             pc.db,
+		mx:             &sync.RWMutex{},
 		embedder:       pc.embedder,
 		graphitiClient: pc.graphitiClient,
 		flowID:         flowID,
@@ -409,6 +411,7 @@ func (pc *providerController) LoadFlowProvider(
 
 	fp := &flowProvider{
 		db:             pc.db,
+		mx:             &sync.RWMutex{},
 		embedder:       pc.embedder,
 		graphitiClient: pc.graphitiClient,
 		flowID:         flowID,
@@ -492,6 +495,7 @@ func (pc *providerController) NewAssistantProvider(
 		summarizer: pc.summarizerAssistant,
 		fp: flowProvider{
 			db:             pc.db,
+			mx:             &sync.RWMutex{},
 			embedder:       pc.embedder,
 			graphitiClient: pc.graphitiClient,
 			flowID:         flowID,
@@ -534,6 +538,7 @@ func (pc *providerController) LoadAssistantProvider(
 		summarizer: pc.summarizerAssistant,
 		fp: flowProvider{
 			db:             pc.db,
+			mx:             &sync.RWMutex{},
 			embedder:       pc.embedder,
 			graphitiClient: pc.graphitiClient,
 			flowID:         flowID,

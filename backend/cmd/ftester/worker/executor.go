@@ -216,6 +216,16 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.GetSummarizer(),
 		), nil
 
+	case tools.SploitusToolName:
+		return tools.NewSploitusTool(
+			te.flowID,
+			te.taskID,
+			te.subtaskID,
+			te.cfg.SploitusEnabled,
+			te.cfg.ProxyURL,
+			te.proxies.GetSearchLogProvider(),
+		), nil
+
 	case tools.SearchInMemoryToolName:
 		return tools.NewMemoryTool(
 			te.flowID,

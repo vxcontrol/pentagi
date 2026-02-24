@@ -19,9 +19,8 @@ var ErrNothingToLoad = errors.New("nothing to load")
 type FlowContext struct {
 	DB database.Querier
 
-	UserID    int64
-	FlowID    int64
-	FlowTitle string
+	UserID int64
+	FlowID int64
 
 	Executor  tools.FlowToolsExecutor
 	Provider  providers.FlowProvider

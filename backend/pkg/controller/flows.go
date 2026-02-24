@@ -47,6 +47,7 @@ type FlowController interface {
 	GetFlow(ctx context.Context, flowID int64) (FlowWorker, error)
 	StopFlow(ctx context.Context, flowID int64) error
 	FinishFlow(ctx context.Context, flowID int64) error
+	RenameFlow(ctx context.Context, flowID int64, title string) error
 }
 
 type flowController struct {
@@ -363,4 +364,16 @@ func (fc *flowController) FinishFlow(ctx context.Context, flowID int64) error {
 	delete(fc.flows, flowID)
 
 	return nil
+}
+
+func (fc *flowController) RenameFlow(ctx context.Context, flowID int64, title string) error {
+	fc.mx.Lock()
+	defer fc.mx.Unlock()
+
+	flow, ok := fc.flows[flowID]
+	if !ok {
+		return ErrFlowNotFound
+	}
+
+	return flow.Rename(ctx, title)
 }

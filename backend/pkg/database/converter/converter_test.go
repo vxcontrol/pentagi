@@ -36,6 +36,8 @@ func TestIsAgentTool(t *testing.T) {
 		{"google is not agent", "google", false},
 		{"duckduckgo is not agent", "duckduckgo", false},
 		{"tavily is not agent", "tavily", false},
+		{"sploitus is not agent", "sploitus", false},
+		{"searxng is not agent", "searxng", false},
 		{"search_in_memory is not agent", "search_in_memory", false},
 		{"store_guide is not agent", "store_guide", false},
 		{"done is not agent", "done", false},

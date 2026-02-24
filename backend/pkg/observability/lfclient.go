@@ -9,6 +9,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/system"
 	"pentagi/pkg/version"
 )
 
@@ -63,13 +64,21 @@ func NewLangfuseClient(ctx context.Context, cfg *config.Config) (LangfuseClient,
 		return nil, fmt.Errorf("langfuse base url is not set: %w", ErrNotConfigured)
 	}
 
+	caPool, err := system.GetSystemCertPool(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	httpClient := &http.Client{
 		Timeout: DefaultObservationTimeout,
 		Transport: &http.Transport{
 			MaxIdleConns:        10,
 			IdleConnTimeout:     30 * time.Second,
 			TLSHandshakeTimeout: 10 * time.Second,
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: cfg.ExternalSSLInsecure,
+				RootCAs:            caPool,
+			},
 		},
 	}
 

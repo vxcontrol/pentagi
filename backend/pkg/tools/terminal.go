@@ -211,20 +211,27 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 	defer resp.Close()
 
 	dst := bytes.Buffer{}
-	done := make(chan struct{})
+	errChan := make(chan error, 1)
+
 	go func() {
-		_, err = io.Copy(&dst, resp.Reader)
-		close(done)
+		_, copyErr := io.Copy(&dst, resp.Reader)
+		errChan <- copyErr
 	}()
 
 	select {
-	case <-done:
+	case err := <-errChan:
+		if err != nil && err != io.EOF {
+			return "", fmt.Errorf("failed to copy output: %w", err)
+		}
 	case <-ctx.Done():
+		// Close the response to unblock io.Copy
+		resp.Close()
+
+		// Wait for the copy goroutine to finish
+		<-errChan
+
 		result := fmt.Sprintf("temporary output: %s", dst.String())
-		err = fmt.Errorf("timeout value is too low, use greater value if you need so: %w: %s", ctx.Err(), result)
-	}
-	if err != nil && err != io.EOF {
-		return "", fmt.Errorf("failed to copy output: %w", err)
+		return "", fmt.Errorf("timeout value is too low, use greater value if you need so: %w: %s", ctx.Err(), result)
 	}
 
 	// wait for the exec process to finish
@@ -259,7 +266,8 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 	}
 
 	cwd := docker.WorkFolderPathInContainer
-	formattedCommand := FormatTerminalInput(cwd, fmt.Sprintf("cat %s", path))
+	escapedPath := strings.ReplaceAll(path, "'", "'\"'\"'")
+	formattedCommand := FormatTerminalInput(cwd, fmt.Sprintf("cat '%s'", escapedPath))
 	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, formattedCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (read file cmd): %w", err)
@@ -293,6 +301,14 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 					tarHeader.Name, tarHeader.Size,
 				),
 			)
+		}
+
+		const maxReadFileSize int64 = 100 * 1024 * 1024 // 100 MB limit
+		if tarHeader.Size > maxReadFileSize {
+			return "", fmt.Errorf("file '%s' size %d exceeds maximum allowed size %d", tarHeader.Name, tarHeader.Size, maxReadFileSize)
+		}
+		if tarHeader.Size < 0 {
+			return "", fmt.Errorf("file '%s' has invalid size %d", tarHeader.Name, tarHeader.Size)
 		}
 
 		var fileContent = make([]byte, tarHeader.Size)
@@ -331,6 +347,8 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	// put content into a tar archive
 	archive := &bytes.Buffer{}
 	tarWriter := tar.NewWriter(archive)
+	defer tarWriter.Close()
+
 	filename := filepath.Base(path)
 	tarHeader := &tar.Header{
 		Name: filename,
@@ -345,6 +363,11 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	_, err = tarWriter.Write([]byte(content))
 	if err != nil {
 		return "", fmt.Errorf("failed to write tar content: %w", err)
+	}
+
+	err = tarWriter.Close()
+	if err != nil {
+		return "", fmt.Errorf("failed to close tar writer: %w", err)
 	}
 
 	dir := filepath.Dir(path)

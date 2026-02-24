@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo } from 'reac
 import { toast } from 'sonner';
 
 import type { FlowFormValues } from '@/features/flows/flow-form';
-import type { FlowOverviewFragmentFragment, FlowsQuery } from '@/graphql/types';
+import type { FlowFragmentFragment, FlowsQuery } from '@/graphql/types';
 
 import {
     useCreateAssistantMutation,
@@ -17,7 +17,7 @@ import {
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 
-export type Flow = FlowOverviewFragmentFragment;
+export type Flow = FlowFragmentFragment;
 
 interface FlowsContextValue {
     createFlow: (values: FlowFormValues) => Promise<null | string>;

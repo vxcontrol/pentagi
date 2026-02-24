@@ -1177,6 +1177,7 @@ const (
 	ToolsSearchEnginesFormName        = "Search Engines"
 	ToolsSearchEnginesFormOverview    = `Available search engines:
 • DuckDuckGo - Free search engine (no API key required)
+• Sploitus - Security exploits and vulnerabilities database (no API key required)
 • Perplexity - AI-powered search with reasoning
 • Tavily - Search API for AI applications
 • Traversaal - Web scraping and search
@@ -1191,6 +1192,8 @@ Get API keys from:
 
 	ToolsSearchEnginesDuckDuckGo            = "DuckDuckGo Search"
 	ToolsSearchEnginesDuckDuckGoDesc        = "Enable DuckDuckGo search (no API key required)"
+	ToolsSearchEnginesSploitus              = "Sploitus Search"
+	ToolsSearchEnginesSploitusDesc          = "Enable Sploitus search for exploits and vulnerabilities (no API key required)"
 	ToolsSearchEnginesPerplexityKey         = "Perplexity API Key"
 	ToolsSearchEnginesPerplexityKeyDesc     = "API key for Perplexity AI search"
 	ToolsSearchEnginesTavilyKey             = "Tavily API Key"
@@ -2003,6 +2006,7 @@ const (
 	EnvDesc_LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS = "Scraper Max Concurrent Sessions"
 
 	EnvDesc_DUCKDUCKGO_ENABLED = "DuckDuckGo Search"
+	EnvDesc_SPLOITUS_ENABLED   = "Sploitus Search"
 	EnvDesc_PERPLEXITY_API_KEY = "Perplexity API Key"
 	EnvDesc_TAVILY_API_KEY     = "Tavily API Key"
 	EnvDesc_TRAVERSAAL_API_KEY = "Traversaal API Key"

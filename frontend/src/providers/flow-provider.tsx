@@ -72,7 +72,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         loading: isLoading,
     } = useFlowQuery({
         errorPolicy: 'all',
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
         notifyOnNetworkStatusChange: true,
         skip: !flowId,
@@ -80,7 +80,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     });
 
     const { data: assistantsData, loading: isAssistantsLoading } = useAssistantsQuery({
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
         skip: !flowId,
         variables: { flowId: flowId ?? '' },
@@ -113,7 +113,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     }, [flowId, selectedAssistantIds, assistants]);
 
     const { data: assistantLogsData } = useAssistantLogsQuery({
-        fetchPolicy: 'cache-and-network',
+        fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
         skip: !flowId || !selectedAssistantId || selectedAssistantId === '',
         variables: { assistantId: selectedAssistantId ?? '', flowId: flowId ?? '' },

@@ -3,6 +3,7 @@ package providers
 import (
 	"encoding/json"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -196,6 +197,7 @@ func cloneChain(chain []llms.MessageContent) []llms.MessageContent {
 
 func newFlowProvider() *flowProvider {
 	return &flowProvider{
+		mx:          &sync.RWMutex{},
 		callCounter: &atomic.Int64{},
 	}
 }

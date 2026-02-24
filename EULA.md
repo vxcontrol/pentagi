@@ -40,7 +40,7 @@ When using PentAGI's integration capabilities with external services, you must e
 
 ## Third-Party Services
 
-PentAGI integrates with external third-party services, including but not limited to Large Language Model (LLM) providers such as OpenAI, Anthropic, Depp Infra, OpenRouter, and search engines such as Tavily, Traversal, Perplexity, DuckDuckGo, Google and Searxng. You acknowledge and agree that your use of these third-party services is at your sole discretion and responsibility.
+PentAGI integrates with external third-party services, including but not limited to Large Language Model (LLM) providers such as OpenAI, Anthropic, Deep Infra, OpenRouter, and search engines such as Tavily, Traversaal, Perplexity, DuckDuckGo, Google, Sploitus and Searxng. You acknowledge and agree that your use of these third-party services is at your sole discretion and responsibility.
 
 When using self-hosted or local LLM servers compatible with OpenAI API, you are solely responsible for ensuring the security and compliance of these deployments. The PentAGI Development Team bears no responsibility for any data leaks or security issues arising from the use of such local deployments.
 

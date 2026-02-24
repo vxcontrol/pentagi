@@ -42,6 +42,13 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		config.DuckDuckGoEnabled,
 	))
 
+	// Sploitus (boolean)
+	fields = append(fields, m.createBooleanField("sploitus_enabled",
+		locale.ToolsSearchEnginesSploitus,
+		locale.ToolsSearchEnginesSploitusDesc,
+		config.SploitusEnabled,
+	))
+
 	// Perplexity API Key
 	fields = append(fields, m.createAPIKeyField("perplexity_api_key",
 		locale.ToolsSearchEnginesPerplexityKey,
@@ -249,6 +256,19 @@ func (m *SearchEnginesFormModel) GetCurrentConfiguration() string {
 			m.GetStyles().Warning.Render(locale.StatusDisabled)))
 	}
 
+	// Sploitus
+	sploitusEnabled := config.SploitusEnabled.Value
+	if sploitusEnabled == "" {
+		sploitusEnabled = config.SploitusEnabled.Default
+	}
+	if sploitusEnabled == "true" {
+		sections = append(sections, fmt.Sprintf("• Sploitus: %s",
+			m.GetStyles().Success.Render(locale.StatusEnabled)))
+	} else {
+		sections = append(sections, fmt.Sprintf("• Sploitus: %s",
+			m.GetStyles().Warning.Render(locale.StatusDisabled)))
+	}
+
 	// Perplexity
 	if config.PerplexityAPIKey.Value != "" {
 		sections = append(sections, fmt.Sprintf("• Perplexity: %s",
@@ -327,6 +347,7 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 	newConfig := &controller.SearchEnginesConfig{
 		// copy current EnvVar fields - they preserve metadata like Line, IsPresent, etc.
 		DuckDuckGoEnabled:     config.DuckDuckGoEnabled,
+		SploitusEnabled:       config.SploitusEnabled,
 		PerplexityAPIKey:      config.PerplexityAPIKey,
 		PerplexityModel:       config.PerplexityModel,
 		PerplexityContextSize: config.PerplexityContextSize,
@@ -353,6 +374,12 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 				return fmt.Errorf("invalid boolean value for DuckDuckGo: %s (must be 'true' or 'false')", value)
 			}
 			newConfig.DuckDuckGoEnabled.Value = value
+		case "sploitus_enabled":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for Sploitus: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.SploitusEnabled.Value = value
 		case "perplexity_api_key":
 			newConfig.PerplexityAPIKey.Value = value
 		case "perplexity_model":

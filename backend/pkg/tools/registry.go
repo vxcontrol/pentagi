@@ -27,6 +27,7 @@ const (
 	TraversaalToolName        = "traversaal"
 	PerplexityToolName        = "perplexity"
 	SearxngToolName           = "searxng"
+	SploitusToolName          = "sploitus"
 	SearchToolName            = "search"
 	SearchResultToolName      = "search_result"
 	EnricherResultToolName    = "enricher_result"
@@ -106,6 +107,7 @@ var toolsTypeMapping = map[string]ToolType{
 	TraversaalToolName:        SearchNetworkToolType,
 	PerplexityToolName:        SearchNetworkToolType,
 	SearxngToolName:           SearchNetworkToolType,
+	SploitusToolName:          SearchNetworkToolType,
 	SearchToolName:            AgentToolType,
 	SearchResultToolName:      StoreAgentResultToolType,
 	EnricherResultToolName:    StoreAgentResultToolType,
@@ -144,6 +146,7 @@ var allowedStoringInMemoryTools = []string{
 	TraversaalToolName,
 	PerplexityToolName,
 	SearxngToolName,
+	SploitusToolName,
 	MaintenanceToolName,
 	CoderToolName,
 	PentesterToolName,
@@ -233,6 +236,15 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"that aggregates results from multiple search engines with customizable categories, " +
 			"language settings, and safety filters",
 		Parameters: reflector.Reflect(&SearchAction{}),
+	},
+	SploitusToolName: {
+		Name: SploitusToolName,
+		Description: "Search the Sploitus exploit aggregator (https://sploitus.com) for public exploits, " +
+			"proof-of-concept code, and offensive security tools. Sploitus indexes ExploitDB, Packet Storm, " +
+			"GitHub Security Advisories, and many other sources. Use this tool to find exploit code and PoCs " +
+			"for specific software, services, CVEs, or vulnerability classes (e.g. 'ssh', 'apache log4j', " +
+			"'CVE-2021-44228'). Returns exploit URLs, CVSS scores, CVE references, and publication dates.",
+		Parameters: reflector.Reflect(&SploitusAction{}),
 	},
 	EnricherResultToolName: {
 		Name:        EnricherResultToolName,
@@ -364,8 +376,8 @@ func getMessageType(name string) database.MsglogType {
 	case BrowserToolName:
 		return database.MsglogTypeBrowser
 	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, TraversaalToolName,
-		PerplexityToolName, SearxngToolName, SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName,
-		GraphitiSearchToolName:
+		PerplexityToolName, SearxngToolName, SploitusToolName,
+		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:
 		return database.MsglogTypeAdvice

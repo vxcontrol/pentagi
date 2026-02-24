@@ -458,7 +458,7 @@ The package provides comprehensive logging for all system operations:
 - **AgentLog**: Inter-agent communication and delegation
 - **AssistantLog**: Human-assistant interactions
 - **MsgLog**: General message logging (thoughts/browser/terminal/file/search/advice/ask/input/done)
-- **SearchLog**: External search operations (google/tavily/traversaal/browser/duckduckgo/perplexity/searxng)
+- **SearchLog**: External search operations (google/tavily/traversaal/browser/duckduckgo/perplexity/sploitus/searxng)
 - **TermLog**: Terminal command execution (stdin/stdout/stderr)
 - **ToolCall**: AI function calling with duration tracking
   - `duration_seconds` - pre-calculated execution duration (DOUBLE PRECISION, NOT NULL, DEFAULT 0.0)

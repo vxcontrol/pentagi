@@ -1433,6 +1433,7 @@ type SearchEnginesConfig struct {
 	// direct form field mappings using loader.EnvVar
 	// these fields directly correspond to environment variables and form inputs (not computed)
 	DuckDuckGoEnabled loader.EnvVar // DUCKDUCKGO_ENABLED
+	SploitusEnabled   loader.EnvVar // SPLOITUS_ENABLED
 	PerplexityAPIKey  loader.EnvVar // PERPLEXITY_API_KEY
 	TavilyAPIKey      loader.EnvVar // TAVILY_API_KEY
 	TraversaalAPIKey  loader.EnvVar // TRAVERSAAL_API_KEY
@@ -1459,6 +1460,7 @@ type SearchEnginesConfig struct {
 func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	// get all environment variables using the state controller
 	duckduckgoEnabled, _ := c.GetVar("DUCKDUCKGO_ENABLED")
+	sploitusEnabled, _ := c.GetVar("SPLOITUS_ENABLED")
 	perplexityAPIKey, _ := c.GetVar("PERPLEXITY_API_KEY")
 	tavilyAPIKey, _ := c.GetVar("TAVILY_API_KEY")
 	traversaalAPIKey, _ := c.GetVar("TRAVERSAAL_API_KEY")
@@ -1475,6 +1477,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 
 	config := &SearchEnginesConfig{
 		DuckDuckGoEnabled:     duckduckgoEnabled,
+		SploitusEnabled:       sploitusEnabled,
 		PerplexityAPIKey:      perplexityAPIKey,
 		PerplexityModel:       perplexityModel,
 		PerplexityContextSize: perplexityContextSize,
@@ -1495,6 +1498,11 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	if duckduckgoEnabled.Value == "true" {
 		configuredCount++
 	} else if duckduckgoEnabled.Value == "" && duckduckgoEnabled.Default == "true" {
+		configuredCount++
+	}
+	if sploitusEnabled.Value == "true" {
+		configuredCount++
+	} else if sploitusEnabled.Value == "" && sploitusEnabled.Default == "true" {
 		configuredCount++
 	}
 	if perplexityAPIKey.Value != "" {
@@ -1526,6 +1534,9 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	// update environment variables
 	if err := c.SetVar("DUCKDUCKGO_ENABLED", config.DuckDuckGoEnabled.Value); err != nil {
 		return fmt.Errorf("failed to set DUCKDUCKGO_ENABLED: %w", err)
+	}
+	if err := c.SetVar("SPLOITUS_ENABLED", config.SploitusEnabled.Value); err != nil {
+		return fmt.Errorf("failed to set SPLOITUS_ENABLED: %w", err)
 	}
 	if err := c.SetVar("PERPLEXITY_API_KEY", config.PerplexityAPIKey.Value); err != nil {
 		return fmt.Errorf("failed to set PERPLEXITY_API_KEY: %w", err)
@@ -1575,6 +1586,7 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 	// reset all search engines-related environment variables to their defaults
 	vars := []string{
 		"DUCKDUCKGO_ENABLED",
+		"SPLOITUS_ENABLED",
 		"PERPLEXITY_API_KEY",
 		"PERPLEXITY_MODEL",
 		"PERPLEXITY_CONTEXT_SIZE",
@@ -2025,6 +2037,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS": locale.EnvDesc_LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS,
 
 		"DUCKDUCKGO_ENABLED": locale.EnvDesc_DUCKDUCKGO_ENABLED,
+		"SPLOITUS_ENABLED":   locale.EnvDesc_SPLOITUS_ENABLED,
 		"PERPLEXITY_API_KEY": locale.EnvDesc_PERPLEXITY_API_KEY,
 		"TAVILY_API_KEY":     locale.EnvDesc_TAVILY_API_KEY,
 		"TRAVERSAAL_API_KEY": locale.EnvDesc_TRAVERSAAL_API_KEY,
@@ -2190,6 +2203,7 @@ var criticalVariables = map[string]bool{
 
 	// tools changes
 	"DUCKDUCKGO_ENABLED":      true,
+	"SPLOITUS_ENABLED":        true,
 	"PERPLEXITY_API_KEY":      true,
 	"PERPLEXITY_MODEL":        true,
 	"PERPLEXITY_CONTEXT_SIZE": true,

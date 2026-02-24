@@ -1,11 +1,5 @@
 # ==================== Fragments ====================
 
-fragment flowOverviewFragment on Flow {
-    id
-    title
-    status
-}
-
 fragment settingsFragment on Settings {
     debug
     askUser
@@ -466,7 +460,7 @@ fragment flowExecutionStatsFragment on FlowExecutionStats {
 
 query flows {
     flows {
-        ...flowOverviewFragment
+        ...flowFragment
     }
 }
 
@@ -852,7 +846,28 @@ query apiToken($tokenId: String!) {
     }
 }
 
+fragment userPreferencesFragment on UserPreferences {
+    id
+    favoriteFlows
+}
+
+# ==================== Queries ====================
+
+query settingsUser {
+    settingsUser {
+        ...userPreferencesFragment
+    }
+}
+
 # ==================== Mutations ====================
+
+mutation addFavoriteFlow($flowId: ID!) {
+    addFavoriteFlow(flowId: $flowId)
+}
+
+mutation deleteFavoriteFlow($flowId: ID!) {
+    deleteFavoriteFlow(flowId: $flowId)
+}
 
 mutation createFlow($modelProvider: String!, $input: String!) {
     createFlow(modelProvider: $modelProvider, input: $input) {
@@ -874,6 +889,10 @@ mutation finishFlow($flowId: ID!) {
 
 mutation stopFlow($flowId: ID!) {
     stopFlow(flowId: $flowId)
+}
+
+mutation renameFlow($flowId: ID!, $title: String!) {
+    renameFlow(flowId: $flowId, title: $title)
 }
 
 mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!) {
@@ -1043,37 +1062,19 @@ subscription assistantLogUpdated($flowId: ID!) {
 
 subscription flowCreated {
     flowCreated {
-        id
-        title
-        status
-        terminals {
-            ...terminalFragment
-        }
-        provider {
-            ...providerFragment
-        }
-        createdAt
-        updatedAt
+        ...flowFragment
     }
 }
 
 subscription flowDeleted {
     flowDeleted {
-        id
-        status
-        updatedAt
+        ...flowFragment
     }
 }
 
 subscription flowUpdated {
     flowUpdated {
-        id
-        title
-        status
-        terminals {
-            ...terminalFragment
-        }
-        updatedAt
+        ...flowFragment
     }
 }
 
@@ -1128,5 +1129,11 @@ subscription apiTokenUpdated {
 subscription apiTokenDeleted {
     apiTokenDeleted {
         ...apiTokenFragment
+    }
+}
+
+subscription settingsUserUpdated {
+    settingsUserUpdated {
+        ...userPreferencesFragment
     }
 }

@@ -1,0 +1,75 @@
+{
+    "exploits": [
+        {
+            "title": "Metasploit Cheat Sheet",
+            "href": "http://www.kitploit.com/2019/02/metasploit-cheat-sheet.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:7055349016929732627",
+            "download": "http://www.kitploit.com/2019/02/metasploit-cheat-sheet.html"
+        },
+        {
+            "title": "Mad-Metasploit - Metasploit Custom Modules, Plugins & Resource Scripts",
+            "href": "http://www.kitploit.com/2019/03/mad-metasploit-metasploit-custom.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:6452101544934521121",
+            "download": "https://github.com/hahwul/mad-metasploit"
+        },
+        {
+            "title": "RapidPayload - Metasploit Payload Generator",
+            "href": "http://www.kitploit.com/2020/03/rapidpayload-metasploit-payload.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:3265043889693258675",
+            "download": "https://github.com/AngelSecurityTeam/RapidPayload"
+        },
+        {
+            "title": "Terminator - Metasploit Payload Generator",
+            "href": "http://www.kitploit.com/2018/05/terminator-metasploit-payload-generator.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:7681050677118719644",
+            "download": "https://github.com/MohamedNourTN/Terminator"
+        },
+        {
+            "title": "Meterpreter Session Proxy: Metasploit Aggregator",
+            "href": "https://n0where.net/meterpreter-session-proxy-metasploit-aggregator",
+            "type": "n0where",
+            "id": "N0WHERE:171624",
+            "download": "https://github.com/rapid7/metasploit-aggregator"
+        },
+        {
+            "title": "Maligno v2.0 - Metasploit Payload Server",
+            "href": "http://www.kitploit.com/2015/03/maligno-v20-metasploit-payload-server.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:4970264585535727524",
+            "download": "http://www.encripto.no/tools/"
+        },
+        {
+            "title": "Metasploit AV Evasion - Metasploit payload generator that avoids most Anti-Virus products",
+            "href": "http://www.kitploit.com/2015/08/metasploit-av-evasion-metasploit.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:772044478861977703",
+            "download": "https://github.com/nccgroup/metasploitavevasion"
+        },
+        {
+            "title": "Exploitivator - Automate Metasploit Scanning And Exploitation",
+            "href": "http://www.kitploit.com/2019/12/exploitivator-automate-metasploit.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:4145068200266092374",
+            "download": "https://github.com/N1ckDunn/Exploitivator"
+        },
+        {
+            "title": "deep-pwning - Metasploit for Machine Learning",
+            "href": "http://www.kitploit.com/2016/11/deep-pwning-metasploit-for-machine.html",
+            "type": "kitploit",
+            "id": "KITPLOIT:5761162152532930994",
+            "download": "http://www.kitploit.com/2016/11/deep-pwning-metasploit-for-machine.html"
+        },
+        {
+            "title": "Metasploit for Machine Learning: Deep-Pwning",
+            "href": "https://n0where.net/metasploit-for-machine-learning-deep-pwning",
+            "type": "n0where",
+            "id": "N0WHERE:104900",
+            "download": "https://github.com/cchio/deep-pwning"
+        }
+    ],
+    "exploits_total": 200
+}

@@ -127,3 +127,7 @@ func (p *flowPublisher) APITokenUpdated(ctx context.Context, apiToken database.A
 func (p *flowPublisher) APITokenDeleted(ctx context.Context, apiToken database.ApiToken) {
 	p.ctrl.apiTokenDeleted.Publish(ctx, p.userID, converter.ConvertAPIToken(apiToken))
 }
+
+func (p *flowPublisher) SettingsUserUpdated(ctx context.Context, userPreferences database.UserPreference) {
+	p.ctrl.settingsUserUpdated.Publish(ctx, p.userID, converter.ConvertUserPreferences(userPreferences))
+}

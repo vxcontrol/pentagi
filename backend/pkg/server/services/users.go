@@ -278,7 +278,7 @@ func (s *UserService) GetUsers(c *gin.Context) {
 // @Produce json
 // @Param hash path string true "hash in hex format (md5)" minlength(32) maxlength(32)
 // @Success 200 {object} response.successResp{data=models.UserRolePrivileges} "user received successful"
-// @Failure 403 {object} response.errorResp "getting user not permitted
+// @Failure 403 {object} response.errorResp "getting user not permitted"
 // @Failure 404 {object} response.errorResp "user not found"
 // @Failure 500 {object} response.errorResp "internal error on getting user"
 // @Router /users/{hash} [get]

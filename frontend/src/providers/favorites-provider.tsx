@@ -1,154 +1,199 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 
+import {
+    useAddFavoriteFlowMutation,
+    useDeleteFavoriteFlowMutation,
+    useSettingsUserQuery,
+    useSettingsUserUpdatedSubscription,
+} from '@/graphql/types';
 import { Log } from '@/lib/log';
-import { useUser } from '@/providers/user-provider';
-
-interface FavoriteFlow {
-    id: string;
-    name: string;
-}
 
 interface FavoritesContextValue {
-    addFavoriteFlow: (flowId: string, flowName: string) => void;
-    favoriteFlows: FavoriteFlow[];
-    isFavoriteFlow: (flowId: string) => boolean;
-    removeFavoriteFlow: (flowId: string) => void;
-    toggleFavoriteFlow: (flowId: string, flowName: string) => void;
+    addFavoriteFlow: (flowId: number | string) => Promise<void>;
+    favoriteFlowIds: number[];
+    isFavoriteFlow: (flowId: number | string) => boolean;
+    isLoading: boolean;
+    removeFavoriteFlow: (flowId: number | string) => Promise<void>;
+    toggleFavoriteFlow: (flowId: number | string) => Promise<void>;
 }
 
 interface FavoritesProviderProps {
     children: ReactNode;
 }
 
-interface FavoritesStorage {
-    [userId: string]: UserFavorites;
-}
-
-interface UserFavorites {
-    flows?: FavoriteFlow[];
-}
-
 const FavoritesContext = createContext<FavoritesContextValue | undefined>(undefined);
 
 const FAVORITES_STORAGE_KEY = 'favorites';
 
-const loadFavorites = (): FavoritesStorage => {
-    try {
-        const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
-
-        if (stored) {
-            const parsed = JSON.parse(stored);
-
-            return typeof parsed === 'object' && parsed !== null ? parsed : {};
-        }
-    } catch (error) {
-        Log.error('Error loading favorites from storage:', error);
-    }
-
-    return {};
-};
-
-const saveFavorites = (favorites: FavoritesStorage): void => {
-    try {
-        localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
-    } catch (error) {
-        Log.error('Error saving favorites to storage:', error);
-    }
-};
-
 export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
-    const { authInfo } = useUser();
-    const userId = authInfo?.user?.id?.toString() ?? 'guest';
+    // GraphQL query for user preferences
+    const { data: userPreferencesData, loading: isLoadingPreferences } = useSettingsUserQuery({
+        fetchPolicy: 'cache-and-network',
+    });
 
-    const [favoritesStorage, setFavoritesStorage] = useState<FavoritesStorage>(() => loadFavorites());
+    // GraphQL mutations
+    const [addFavoriteFlowMutation] = useAddFavoriteFlowMutation();
+    const [deleteFavoriteFlowMutation] = useDeleteFavoriteFlowMutation();
 
-    // Get current user's favorite flows sorted by id (descending)
-    const favoriteFlows = useMemo(() => {
-        const flows = favoritesStorage[userId]?.flows ?? [];
+    // GraphQL subscription
+    useSettingsUserUpdatedSubscription();
 
-        return [...flows].sort((a, b) => +b.id - +a.id);
-    }, [favoritesStorage, userId]);
+    // Get favorite flow IDs from GraphQL as numbers
+    const favoriteFlowIds = useMemo(() => {
+        const ids = userPreferencesData?.settingsUser?.favoriteFlows ?? [];
 
-    // Save to localStorage whenever favorites change
+        return ids.map((id) => +id);
+    }, [userPreferencesData?.settingsUser?.favoriteFlows]);
+
+    // Migration: sync localStorage favorites to backend on first load
     useEffect(() => {
-        saveFavorites(favoritesStorage);
-    }, [favoritesStorage]);
+        const migrateLocalStorageFavorites = async () => {
+            try {
+                const stored = localStorage.getItem(FAVORITES_STORAGE_KEY);
 
-    const addFavoriteFlow = useCallback(
-        (flowId: string, flowName: string) => {
-            setFavoritesStorage((previousStorage) => {
-                const userFavorites = previousStorage[userId] ?? {};
-                const currentFlows = userFavorites.flows ?? [];
-
-                // Check if already exists
-                if (currentFlows.some((flow) => flow.id === flowId)) {
-                    return previousStorage;
+                if (!stored) {
+                    return;
                 }
 
-                return {
-                    ...previousStorage,
-                    [userId]: {
-                        ...userFavorites,
-                        flows: [...currentFlows, { id: flowId, name: flowName }],
-                    },
-                };
-            });
+                const parsed = JSON.parse(stored);
+
+                if (typeof parsed !== 'object' || !parsed) {
+                    return;
+                }
+
+                // Get current user's favorites from localStorage
+                const userIds = Object.keys(parsed);
+
+                if (userIds.length === 0) {
+                    localStorage.removeItem(FAVORITES_STORAGE_KEY);
+
+                    return;
+                }
+
+                const userId = userIds[0];
+
+                if (!userId) {
+                    localStorage.removeItem(FAVORITES_STORAGE_KEY);
+
+                    return;
+                }
+
+                const localFavorites = parsed[userId]?.flows ?? [];
+
+                if (localFavorites.length === 0) {
+                    // No local favorites to migrate
+                    localStorage.removeItem(FAVORITES_STORAGE_KEY);
+
+                    return;
+                }
+
+                // Migrate each favorite to backend
+                for (const flow of localFavorites) {
+                    // Check if already in backend
+                    if (!favoriteFlowIds.includes(flow.id)) {
+                        try {
+                            await addFavoriteFlowMutation({
+                                variables: { flowId: flow.id },
+                            });
+                        } catch (error) {
+                            Log.error('Error migrating favorite flow:', error);
+                        }
+                    }
+                }
+
+                // Clear localStorage after successful migration
+                localStorage.removeItem(FAVORITES_STORAGE_KEY);
+                Log.info('Successfully migrated favorites from localStorage to backend');
+            } catch (error) {
+                Log.error('Error during favorites migration:', error);
+            }
+        };
+
+        // Only run migration if we have loaded preferences and localStorage data exists
+        if (!isLoadingPreferences && userPreferencesData) {
+            migrateLocalStorageFavorites();
+        }
+    }, [isLoadingPreferences, userPreferencesData, favoriteFlowIds, addFavoriteFlowMutation]);
+
+    const addFavoriteFlow = useCallback(
+        async (flowId: number | string) => {
+            const id = typeof flowId === 'string' ? flowId : flowId.toString();
+
+            try {
+                await addFavoriteFlowMutation({
+                    variables: { flowId: id },
+                });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to add favorite';
+                toast.error('Failed to add to favorites', {
+                    description: errorMessage,
+                });
+                Log.error('Error adding favorite flow:', error);
+            }
         },
-        [userId],
+        [addFavoriteFlowMutation],
     );
 
     const removeFavoriteFlow = useCallback(
-        (flowId: string) => {
-            setFavoritesStorage((previousStorage) => {
-                const userFavorites = previousStorage[userId];
+        async (flowId: number | string) => {
+            const id = typeof flowId === 'string' ? flowId : flowId.toString();
 
-                if (!userFavorites?.flows) {
-                    return previousStorage;
-                }
-
-                const updatedFlows = userFavorites.flows.filter((flow) => flow.id !== flowId);
-
-                return {
-                    ...previousStorage,
-                    [userId]: {
-                        ...userFavorites,
-                        flows: updatedFlows,
-                    },
-                };
-            });
+            try {
+                await deleteFavoriteFlowMutation({
+                    variables: { flowId: id },
+                });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to remove favorite';
+                toast.error('Failed to remove from favorites', {
+                    description: errorMessage,
+                });
+                Log.error('Error removing favorite flow:', error);
+            }
         },
-        [userId],
+        [deleteFavoriteFlowMutation],
     );
 
     const toggleFavoriteFlow = useCallback(
-        (flowId: string, flowName: string) => {
-            const isFavorite = favoriteFlows.some((flow) => flow.id === flowId);
+        async (flowId: number | string) => {
+            const numId = typeof flowId === 'string' ? +flowId : flowId;
+            const isFavorite = favoriteFlowIds.includes(numId);
 
             if (isFavorite) {
-                removeFavoriteFlow(flowId);
+                await removeFavoriteFlow(flowId);
             } else {
-                addFavoriteFlow(flowId, flowName);
+                await addFavoriteFlow(flowId);
             }
         },
-        [favoriteFlows, addFavoriteFlow, removeFavoriteFlow],
+        [favoriteFlowIds, addFavoriteFlow, removeFavoriteFlow],
     );
 
     const isFavoriteFlow = useCallback(
-        (flowId: string) => {
-            return favoriteFlows.some((flow) => flow.id === flowId);
+        (flowId: number | string) => {
+            const numId = typeof flowId === 'string' ? +flowId : flowId;
+
+            return favoriteFlowIds.includes(numId);
         },
-        [favoriteFlows],
+        [favoriteFlowIds],
     );
 
     const value = useMemo(
         () => ({
             addFavoriteFlow,
-            favoriteFlows,
+            favoriteFlowIds,
             isFavoriteFlow,
+            isLoading: isLoadingPreferences,
             removeFavoriteFlow,
             toggleFavoriteFlow,
         }),
-        [addFavoriteFlow, favoriteFlows, isFavoriteFlow, removeFavoriteFlow, toggleFavoriteFlow],
+        [
+            addFavoriteFlow,
+            favoriteFlowIds,
+            isFavoriteFlow,
+            isLoadingPreferences,
+            removeFavoriteFlow,
+            toggleFavoriteFlow,
+        ],
     );
 
     return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>;
