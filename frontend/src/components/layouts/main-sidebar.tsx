@@ -122,6 +122,15 @@ const MainSidebar = () => {
                                         Templates
                                     </Link>
                                 </SidebarMenuButton>
+                                <SidebarMenuAction
+                                    asChild
+                                    className="data-[state=open]:bg-accent rounded-sm"
+                                    showOnHover
+                                >
+                                    <Link to="/templates/new">
+                                        <Plus />
+                                    </Link>
+                                </SidebarMenuAction>
                             </SidebarMenuItem>
                         </SidebarMenu>
                     </SidebarGroupContent>

@@ -252,7 +252,16 @@ const Template = () => {
                                 <h1 className="text-2xl font-semibold">
                                     {isNew ? 'Create a new template' : 'Edit template'}
                                 </h1>
-                                <p className="text-muted-foreground mt-2">Title and content for your template</p>
+                                <p className="text-muted-foreground mt-2">
+                                    Add title and content for your template or use a
+                                    <Button
+                                        className="h-auto px-1.5 py-0 text-base"
+                                        onClick={() => setIsAsideOpen((open) => !open)}
+                                        variant="link"
+                                    >
+                                        Preset template
+                                    </Button>
+                                </p>
                             </div>
                             <Form {...form}>
                                 <form
