@@ -285,10 +285,10 @@
         --input: oklch(0.91 0.01 240);
         --ring: oklch(0.25 0.14 245);
         --chart-1: oklch(0.25 0.14 245);
-        --chart-2: oklch(0.54 0.22 240);
-        --chart-3: oklch(0.49 0.22 242);
-        --chart-4: oklch(0.42 0.18 244);
-        --chart-5: oklch(0.38 0.14 246);
+        --chart-2: oklch(0.38 0.18 245);
+        --chart-3: oklch(0.50 0.22 245);
+        --chart-4: oklch(0.42 0.10 245);
+        --chart-5: oklch(0.55 0.14 245);
         --sidebar: oklch(0.98 0 240);
         --sidebar-foreground: oklch(0.32 0 0);
         --sidebar-primary: oklch(0.25 0.14 245);
@@ -339,11 +339,11 @@
         --border: oklch(0.3 0.04 245);
         --input: oklch(0.3 0.04 245);
         --ring: oklch(0.5 0.16 245);
-        --chart-1: oklch(0.55 0.14 245);
-        --chart-2: oklch(0.58 0.16 240);
-        --chart-3: oklch(0.55 0.22 242);
-        --chart-4: oklch(0.57 0.22 244);
-        --chart-5: oklch(0.55 0.18 246);
+        --chart-1: oklch(0.50 0.16 245);
+        --chart-2: oklch(0.60 0.20 245);
+        --chart-3: oklch(0.70 0.22 245);
+        --chart-4: oklch(0.58 0.10 245);
+        --chart-5: oklch(0.74 0.14 245);
         --sidebar: oklch(0.15 0.02 245);
         --sidebar-foreground: oklch(0.92 0 0);
         --sidebar-primary: oklch(0.5 0.16 245);
@@ -551,4 +551,9 @@
     font-weight: 400 !important;
     line-height: 16px !important;
     color: var(--muted-foreground) !important;
+}
+
+.recharts-wrapper,
+.recharts-wrapper * {
+    outline: none !important;
 }

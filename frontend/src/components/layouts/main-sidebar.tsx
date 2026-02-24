@@ -3,6 +3,7 @@ import {
     ChevronsUpDown,
     GitFork,
     KeyRound,
+    LayoutDashboard,
     LogOut,
     Monitor,
     Moon,
@@ -53,6 +54,7 @@ import { useUser } from '@/providers/user-provider';
 const MainSidebar = () => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
+    const isDashboardActive = useMatch('/dashboard');
     const isFlowsActive = useMatch('/flows/*');
     const isTemplatesActive = useMatch('/templates/*');
     const isSettingsActive = useMatch('/settings/*');
@@ -89,6 +91,17 @@ const MainSidebar = () => {
                                     <Link to="/flows/new">
                                         <Plus />
                                         New Flow
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={!!isDashboardActive}
+                                >
+                                    <Link to="/dashboard">
+                                        <LayoutDashboard />
+                                        Dashboard
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
