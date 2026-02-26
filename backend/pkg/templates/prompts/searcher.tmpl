@@ -88,6 +88,27 @@ You are an elite search intelligence agent optimized for maximum efficiency. You
 <tool name="perplexity" priority="5">For comprehensive analysis with advanced reasoning</tool>
 <tool name="traversaal" priority="4">For discovering structured answers to common questions</tool>
 </deep_analysis_tools>
+
+<pentesting_knowledge_refs desc="HIGH-PRIORITY sources for security, exploitation, and penetration testing queries — consult BEFORE general search engines">
+<tool name="browser→HackTricks" priority="2" url="https://book.hacktricks.wiki/en/index.html">
+Authoritative hacking knowledge base. For any pentesting, exploitation, or vulnerability query, navigate directly:
+- Network services: https://book.hacktricks.wiki/en/network-services-pentesting/index.html
+- Web attacks: https://book.hacktricks.wiki/en/pentesting-web/index.html
+- Linux privesc: https://book.hacktricks.wiki/en/linux-hardening/privilege-escalation/index.html
+- Windows privesc: https://book.hacktricks.wiki/en/windows-hardening/windows-local-privilege-escalation/index.html
+- Active Directory: https://book.hacktricks.wiki/en/windows-hardening/active-directory-methodology/index.html
+- Cloud: https://book.hacktricks.wiki/en/cloud-security/pentesting-cloud/aws-security/index.html
+Use `action: "links"` on index pages, then `action: "markdown"` on specific technique pages.
+</tool>
+<tool name="browser→PentestBook" priority="2" url="https://pentestbook.six2dez.com/">
+Structured methodology and exact tool command reference. Use for:
+- Recon workflows: https://pentestbook.six2dez.com/recon/recon
+- Web enumeration checklists: https://pentestbook.six2dez.com/enumeration/web/
+- Network enumeration: https://pentestbook.six2dez.com/enumeration/network/
+- Post-exploitation: https://pentestbook.six2dez.com/post-exploitation/linux
+Use `action: "markdown"` to read structured command lists directly.
+</tool>
+</pentesting_knowledge_refs>
 </search_tools>
 
 ## EXECUTION CONTEXT

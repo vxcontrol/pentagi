@@ -96,7 +96,14 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 	// Get primary container for terminal/file operations
 	var containerID int64
 	var containerLID string
-	if cnt, err := te.db.GetFlowPrimaryContainer(ctx, te.flowID); err == nil {
+
+	// Only fetch and validate the primary container for tools that require it
+	requiresContainer := funcName == tools.TerminalToolName || funcName == tools.FileToolName
+	if requiresContainer {
+		cnt, err := te.db.GetFlowPrimaryContainer(ctx, te.flowID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get primary container for flow %d: %w", te.flowID, err)
+		}
 		containerID = cnt.ID
 		containerLID = cnt.LocalID.String
 	}
