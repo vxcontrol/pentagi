@@ -1,0 +1,41 @@
+- name: qwen-turbo
+  description: 通义千问 Turbo，速度最快的轻量模型，适合高频简单任务和实时响应场景。
+  thinking: false
+  price:
+    input: 0.11
+    output: 0.28
+
+- name: qwen-plus
+  description: 通义千问 Plus，均衡性能模型，适合通用对话、代码生成和工具调用，性价比高。
+  thinking: false
+  price:
+    input: 0.56
+    output: 1.67
+
+- name: qwen-max
+  description: 通义千问 Max，旗舰推理模型，具备强大的指令遵循和复杂任务处理能力，适合高难度安全分析。
+  thinking: false
+  price:
+    input: 5.56
+    output: 16.67
+
+- name: qwen-max-longcontext
+  description: 通义千问 Max 长上下文版本，支持超长文档分析，适合大型代码库扫描和完整报告生成。
+  thinking: false
+  price:
+    input: 5.56
+    output: 16.67
+
+- name: qwq-plus
+  description: 通义千问 QwQ-Plus，深度推理模型，具备扩展思维链能力，适合复杂逻辑推理和安全漏洞分析。
+  thinking: true
+  price:
+    input: 0.56
+    output: 1.67
+
+- name: qwq-32b
+  description: 通义千问 QwQ-32B，开源推理模型，强大的逻辑推理和数学能力，适合深度安全研究。
+  thinking: true
+  price:
+    input: 0.56
+    output: 1.67

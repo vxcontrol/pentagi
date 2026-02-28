@@ -246,9 +246,13 @@ export type DefaultProvidersConfig = {
     anthropic: ProviderConfig;
     bedrock?: Maybe<ProviderConfig>;
     custom?: Maybe<ProviderConfig>;
+    deepseek?: Maybe<ProviderConfig>;
     gemini?: Maybe<ProviderConfig>;
+    glm?: Maybe<ProviderConfig>;
+    kimi?: Maybe<ProviderConfig>;
     ollama?: Maybe<ProviderConfig>;
     openai: ProviderConfig;
+    qwen?: Maybe<ProviderConfig>;
 };
 
 export type Flow = {
@@ -575,9 +579,13 @@ export enum ProviderType {
     Anthropic = 'anthropic',
     Bedrock = 'bedrock',
     Custom = 'custom',
+    Deepseek = 'deepseek',
     Gemini = 'gemini',
+    Glm = 'glm',
+    Kimi = 'kimi',
     Ollama = 'ollama',
     Openai = 'openai',
+    Qwen = 'qwen',
 }
 
 export type ProviderUsageStats = {
@@ -596,18 +604,26 @@ export type ProvidersModelsList = {
     anthropic: Array<ModelConfig>;
     bedrock?: Maybe<Array<ModelConfig>>;
     custom?: Maybe<Array<ModelConfig>>;
+    deepseek?: Maybe<Array<ModelConfig>>;
     gemini: Array<ModelConfig>;
+    glm?: Maybe<Array<ModelConfig>>;
+    kimi?: Maybe<Array<ModelConfig>>;
     ollama?: Maybe<Array<ModelConfig>>;
     openai: Array<ModelConfig>;
+    qwen?: Maybe<Array<ModelConfig>>;
 };
 
 export type ProvidersReadinessStatus = {
     anthropic: Scalars['Boolean']['output'];
     bedrock: Scalars['Boolean']['output'];
     custom: Scalars['Boolean']['output'];
+    deepseek: Scalars['Boolean']['output'];
     gemini: Scalars['Boolean']['output'];
+    glm: Scalars['Boolean']['output'];
+    kimi: Scalars['Boolean']['output'];
     ollama: Scalars['Boolean']['output'];
     openai: Scalars['Boolean']['output'];
+    qwen: Scalars['Boolean']['output'];
 };
 
 export type Query = {
@@ -1380,6 +1396,10 @@ export type SettingsProvidersQuery = {
             bedrock: boolean;
             ollama: boolean;
             custom: boolean;
+            deepseek: boolean;
+            glm: boolean;
+            kimi: boolean;
+            qwen: boolean;
         };
         default: {
             openai: ProviderConfigFragmentFragment;
@@ -1388,6 +1408,10 @@ export type SettingsProvidersQuery = {
             bedrock?: ProviderConfigFragmentFragment | null;
             ollama?: ProviderConfigFragmentFragment | null;
             custom?: ProviderConfigFragmentFragment | null;
+            deepseek?: ProviderConfigFragmentFragment | null;
+            glm?: ProviderConfigFragmentFragment | null;
+            kimi?: ProviderConfigFragmentFragment | null;
+            qwen?: ProviderConfigFragmentFragment | null;
         };
         userDefined?: Array<ProviderConfigFragmentFragment> | null;
         models: {
@@ -1397,6 +1421,10 @@ export type SettingsProvidersQuery = {
             bedrock?: Array<ModelConfigFragmentFragment> | null;
             ollama?: Array<ModelConfigFragmentFragment> | null;
             custom?: Array<ModelConfigFragmentFragment> | null;
+            deepseek?: Array<ModelConfigFragmentFragment> | null;
+            glm?: Array<ModelConfigFragmentFragment> | null;
+            kimi?: Array<ModelConfigFragmentFragment> | null;
+            qwen?: Array<ModelConfigFragmentFragment> | null;
         };
     };
 };
@@ -2513,6 +2541,10 @@ export const SettingsProvidersDocument = gql`
                 bedrock
                 ollama
                 custom
+                deepseek
+                glm
+                kimi
+                qwen
             }
             default {
                 openai {
@@ -2531,6 +2563,18 @@ export const SettingsProvidersDocument = gql`
                     ...providerConfigFragment
                 }
                 custom {
+                    ...providerConfigFragment
+                }
+                deepseek {
+                    ...providerConfigFragment
+                }
+                glm {
+                    ...providerConfigFragment
+                }
+                kimi {
+                    ...providerConfigFragment
+                }
+                qwen {
                     ...providerConfigFragment
                 }
             }
@@ -2554,6 +2598,18 @@ export const SettingsProvidersDocument = gql`
                     ...modelConfigFragment
                 }
                 custom {
+                    ...modelConfigFragment
+                }
+                deepseek {
+                    ...modelConfigFragment
+                }
+                glm {
+                    ...modelConfigFragment
+                }
+                kimi {
+                    ...modelConfigFragment
+                }
+                qwen {
                     ...modelConfigFragment
                 }
             }

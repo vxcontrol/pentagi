@@ -1,0 +1,114 @@
+simple:
+  model: qwen-plus
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.56
+    output: 1.67
+
+simple_json:
+  model: qwen-plus
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.56
+    output: 1.67
+
+primary_agent:
+  model: qwen-max
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 5.56
+    output: 16.67
+
+assistant:
+  model: qwen-max
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 5.56
+    output: 16.67
+
+generator:
+  model: qwen-max
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 5.56
+    output: 16.67
+
+refiner:
+  model: qwen-max
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 5.56
+    output: 16.67
+
+adviser:
+  model: qwen-plus
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.56
+    output: 1.67
+
+reflector:
+  model: qwen-max
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 5.56
+    output: 16.67
+
+searcher:
+  model: qwen-plus
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.56
+    output: 1.67
+
+enricher:
+  model: qwen-plus
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.56
+    output: 1.67
+
+coder:
+  model: qwen-max
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 5.56
+    output: 16.67
+
+installer:
+  model: qwen-max
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 5.56
+    output: 16.67
+
+pentester:
+  model: qwen-max
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 5.56
+    output: 16.67

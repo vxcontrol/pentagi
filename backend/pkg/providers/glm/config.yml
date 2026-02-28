@@ -1,0 +1,114 @@
+simple:
+  model: glm-4-air
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.14
+    output: 0.14
+
+simple_json:
+  model: glm-4-air
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.14
+    output: 0.14
+
+primary_agent:
+  model: glm-z1-air
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.28
+    output: 0.28
+
+assistant:
+  model: glm-z1-air
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.28
+    output: 0.28
+
+generator:
+  model: glm-z1-air
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.28
+    output: 0.28
+
+refiner:
+  model: glm-z1-air
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.28
+    output: 0.28
+
+adviser:
+  model: glm-4-air
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.14
+    output: 0.14
+
+reflector:
+  model: glm-z1-air
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.28
+    output: 0.28
+
+searcher:
+  model: glm-4-air
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.14
+    output: 0.14
+
+enricher:
+  model: glm-4-air
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.14
+    output: 0.14
+
+coder:
+  model: glm-z1-air
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.28
+    output: 0.28
+
+installer:
+  model: glm-z1-air
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.28
+    output: 0.28
+
+pentester:
+  model: glm-z1-air
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.28
+    output: 0.28

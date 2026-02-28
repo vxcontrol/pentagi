@@ -1,0 +1,34 @@
+- name: moonshot-v1-8k
+  description: Kimi moonshot-v1-8k，月之暗面通用对话模型（8K 上下文），适合常规问答、工具调用和代码生成。
+  thinking: false
+  price:
+    input: 1.67
+    output: 1.67
+
+- name: moonshot-v1-32k
+  description: Kimi moonshot-v1-32k，32K 长上下文模型，适合长文档分析和多轮对话场景。
+  thinking: false
+  price:
+    input: 3.33
+    output: 3.33
+
+- name: moonshot-v1-128k
+  description: Kimi moonshot-v1-128k，超长上下文模型（128K），适合大型代码库分析和完整文档处理。
+  thinking: false
+  price:
+    input: 8.33
+    output: 8.33
+
+- name: kimi-thinking-preview
+  description: Kimi 深度思考模型，具备扩展链式推理能力，适合复杂逻辑分析、数学证明和安全漏洞深度分析。
+  thinking: true
+  price:
+    input: 2.08
+    output: 2.08
+
+- name: kimi-latest
+  description: Kimi 最新版通用模型，综合能力强，适合多样化任务场景。
+  thinking: false
+  price:
+    input: 1.67
+    output: 1.67

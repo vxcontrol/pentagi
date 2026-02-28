@@ -1,0 +1,41 @@
+- name: glm-4-air
+  description: 智谱 GLM-4-Air，高性价比通用对话模型，适合常规任务、工具调用和信息提取。
+  thinking: false
+  price:
+    input: 0.14
+    output: 0.14
+
+- name: glm-4-airx
+  description: 智谱 GLM-4-AirX，GLM-4-Air 的加速版本，延迟更低，适合实时交互场景。
+  thinking: false
+  price:
+    input: 0.14
+    output: 0.14
+
+- name: glm-4-plus
+  description: 智谱 GLM-4-Plus，旗舰级通用模型，具备强大的推理和代码生成能力，适合复杂任务。
+  thinking: false
+  price:
+    input: 6.94
+    output: 6.94
+
+- name: glm-z1-air
+  description: 智谱 GLM-Z1-Air，具备链式推理能力的轻量推理模型，适合逻辑分析和安全评估。
+  thinking: true
+  price:
+    input: 0.28
+    output: 0.28
+
+- name: glm-z1-airx
+  description: 智谱 GLM-Z1-AirX，GLM-Z1-Air 的加速版，推理能力强且响应更快。
+  thinking: true
+  price:
+    input: 0.28
+    output: 0.28
+
+- name: glm-z1-plus
+  description: 智谱 GLM-Z1-Plus，旗舰级推理模型，深度推理能力强，适合高复杂度安全研究和渗透测试规划。
+  thinking: true
+  price:
+    input: 6.94
+    output: 6.94

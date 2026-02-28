@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# # syntax=docker/dockerfile:1.4
 
 # STEP 1: Build the frontend
 FROM node:23-slim as fe-build
@@ -84,7 +84,8 @@ RUN apk --no-cache add ca-certificates openssl shadow
 
 ADD entrypoint.sh /opt/pentagi/bin/
 
-RUN chmod +x /opt/pentagi/bin/entrypoint.sh
+RUN sed -i 's/\r//' /opt/pentagi/bin/entrypoint.sh && \
+    chmod +x /opt/pentagi/bin/entrypoint.sh
 
 RUN mkdir -p \
     /opt/pentagi/bin \

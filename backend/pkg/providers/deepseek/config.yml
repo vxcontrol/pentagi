@@ -1,0 +1,127 @@
+simple:
+  model: deepseek-chat
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.10
+    cache_read: 0.07
+
+simple_json:
+  model: deepseek-chat
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.27
+    output: 1.10
+    cache_read: 0.07
+
+primary_agent:
+  model: deepseek-reasoner
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.55
+    output: 2.19
+    cache_read: 0.14
+
+assistant:
+  model: deepseek-reasoner
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.55
+    output: 2.19
+    cache_read: 0.14
+
+generator:
+  model: deepseek-reasoner
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.55
+    output: 2.19
+    cache_read: 0.14
+
+refiner:
+  model: deepseek-reasoner
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.55
+    output: 2.19
+    cache_read: 0.14
+
+adviser:
+  model: deepseek-chat
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.27
+    output: 1.10
+    cache_read: 0.07
+
+reflector:
+  model: deepseek-reasoner
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.55
+    output: 2.19
+    cache_read: 0.14
+
+searcher:
+  model: deepseek-chat
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.10
+    cache_read: 0.07
+
+enricher:
+  model: deepseek-chat
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.10
+    cache_read: 0.07
+
+coder:
+  model: deepseek-reasoner
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.55
+    output: 2.19
+    cache_read: 0.14
+
+installer:
+  model: deepseek-reasoner
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.55
+    output: 2.19
+    cache_read: 0.14
+
+pentester:
+  model: deepseek-reasoner
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.55
+    output: 2.19
+    cache_read: 0.14

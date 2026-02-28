@@ -9,9 +9,13 @@ import { cn } from '@/lib/utils';
 import Anthropic from './anthropic';
 import Bedrock from './bedrock';
 import Custom from './custom';
+import DeepSeek from './deepseek';
 import Gemini from './gemini';
+import GLM from './glm';
+import Kimi from './kimi';
 import Ollama from './ollama';
 import OpenAi from './open-ai';
+import Qwen from './qwen';
 
 interface ProviderIconConfig {
     className: string;
@@ -28,9 +32,13 @@ const providerIcons: Record<ProviderType, ProviderIconConfig> = {
     [ProviderType.Anthropic]: { className: 'text-purple-500', icon: Anthropic },
     [ProviderType.Bedrock]: { className: 'text-blue-500', icon: Bedrock },
     [ProviderType.Custom]: { className: 'text-blue-500', icon: Custom },
+    [ProviderType.Deepseek]: { className: 'text-blue-600', icon: DeepSeek },
     [ProviderType.Gemini]: { className: 'text-blue-500', icon: Gemini },
+    [ProviderType.Glm]: { className: 'text-violet-500', icon: GLM },
+    [ProviderType.Kimi]: { className: 'text-sky-500', icon: Kimi },
     [ProviderType.Ollama]: { className: 'text-blue-500', icon: Ollama },
     [ProviderType.Openai]: { className: 'text-blue-500', icon: OpenAi },
+    [ProviderType.Qwen]: { className: 'text-orange-500', icon: Qwen },
 };
 const defaultProviderIcon: ProviderIconConfig = { className: 'text-blue-500', icon: Custom };
 

@@ -106,6 +106,22 @@ type Config struct {
 	BedrockSessionToken string `env:"BEDROCK_SESSION_TOKEN"`
 	BedrockServerURL    string `env:"BEDROCK_SERVER_URL"`
 
+	// DeepSeek
+	DeepSeekAPIKey    string `env:"DEEPSEEK_API_KEY"`
+	DeepSeekServerURL string `env:"DEEPSEEK_SERVER_URL" envDefault:"https://api.deepseek.com/v1"`
+
+	// 智谱 GLM
+	GLMAPIKey    string `env:"GLM_API_KEY"`
+	GLMServerURL string `env:"GLM_SERVER_URL" envDefault:"https://open.bigmodel.cn/api/paas/v4"`
+
+	// Kimi（月之暗面）
+	KimiAPIKey    string `env:"KIMI_API_KEY"`
+	KimiServerURL string `env:"KIMI_SERVER_URL" envDefault:"https://api.moonshot.cn/v1"`
+
+	// 通义千问
+	QwenAPIKey    string `env:"QWEN_API_KEY"`
+	QwenServerURL string `env:"QWEN_SERVER_URL" envDefault:"https://dashscope.aliyuncs.com/compatible-mode/v1"`
+
 	// DuckDuckGo search engine
 	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
 
