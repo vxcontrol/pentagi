@@ -158,8 +158,11 @@ func (b *browser) ContentMD(url string) (string, string, error) {
 	if errContent != nil {
 		return "", "", errContent
 	}
+
+	// Screenshot is non-critical: log the failure but return valid content
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		logrus.WithError(errScreenshot).Warnf("failed to capture screenshot for %s, continuing without it", url)
+		screenshotName = ""
 	}
 
 	return content, screenshotName, nil
@@ -190,8 +193,11 @@ func (b *browser) ContentHTML(url string) (string, string, error) {
 	if errContent != nil {
 		return "", "", errContent
 	}
+
+	// Screenshot is non-critical: log the failure but return valid content
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		logrus.WithError(errScreenshot).Warnf("failed to capture screenshot for %s, continuing without it", url)
+		screenshotName = ""
 	}
 
 	return content, screenshotName, nil
@@ -222,8 +228,11 @@ func (b *browser) Links(url string) (string, string, error) {
 	if errLinks != nil {
 		return "", "", errLinks
 	}
+
+	// Screenshot is non-critical: log the failure but return valid content
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		logrus.WithError(errScreenshot).Warnf("failed to capture screenshot for %s, continuing without it", url)
+		screenshotName = ""
 	}
 
 	return links, screenshotName, nil
