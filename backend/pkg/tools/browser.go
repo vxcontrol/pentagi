@@ -159,7 +159,8 @@ func (b *browser) ContentMD(url string) (string, string, error) {
 		return "", "", errContent
 	}
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		log.Printf("Warning: screenshot failed for %s (content still available): %v", url, errScreenshot)
+		screenshotName = ""
 	}
 
 	return content, screenshotName, nil
@@ -191,7 +192,8 @@ func (b *browser) ContentHTML(url string) (string, string, error) {
 		return "", "", errContent
 	}
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		log.Printf("Warning: screenshot failed for %s (content still available): %v", url, errScreenshot)
+		screenshotName = ""
 	}
 
 	return content, screenshotName, nil
@@ -223,7 +225,8 @@ func (b *browser) Links(url string) (string, string, error) {
 		return "", "", errLinks
 	}
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		log.Printf("Warning: screenshot failed for %s (links still available): %v", url, errScreenshot)
+		screenshotName = ""
 	}
 
 	return links, screenshotName, nil
