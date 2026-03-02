@@ -130,9 +130,11 @@ func (t *tavily) Handle(ctx context.Context, name string, args json.RawMessage) 
 func (t *tavily) search(ctx context.Context, query string, maxResults int) (string, error) {
 	client := http.DefaultClient
 	if t.proxyURL != "" {
-		client.Transport = &http.Transport{
-			Proxy: func(req *http.Request) (*url.URL, error) {
-				return url.Parse(t.proxyURL)
+		client = &http.Client{
+			Transport: &http.Transport{
+				Proxy: func(req *http.Request) (*url.URL, error) {
+					return url.Parse(t.proxyURL)
+				},
 			},
 		}
 	}

@@ -100,9 +100,11 @@ func (t *traversaal) Handle(ctx context.Context, name string, args json.RawMessa
 func (t *traversaal) search(ctx context.Context, query string) (string, error) {
 	client := http.DefaultClient
 	if t.proxyURL != "" {
-		client.Transport = &http.Transport{
-			Proxy: func(req *http.Request) (*url.URL, error) {
-				return url.Parse(t.proxyURL)
+		client = &http.Client{
+			Transport: &http.Transport{
+				Proxy: func(req *http.Request) (*url.URL, error) {
+					return url.Parse(t.proxyURL)
+				},
 			},
 		}
 	}
