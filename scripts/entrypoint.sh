@@ -39,7 +39,11 @@ elif [ "$SERVER_USE_SSL" = "true" ]; then
     cat ${SERVER_SSL_CA_CRT} >> ${SERVER_SSL_CRT}
 
     chmod g+r ${SERVER_SSL_KEY}
-    chmod g+r ${SERVER_SSL_CA_KEY}
+
+    # Remove CA private key and CSR after signing -- they are no longer
+    # needed at runtime and leaving them on disk increases the attack
+    # surface if the container filesystem is compromised.
+    rm -f ${SERVER_SSL_CA_KEY} ${SERVER_SSL_CSR} ssl/service_ca.srl
 fi
 
 exec "$@"
