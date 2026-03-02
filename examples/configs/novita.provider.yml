@@ -1,5 +1,5 @@
 simple:
-  model: "deepseek/deepseek-v3-0324"
+  model: "deepseek/deepseek-v3.2"
   temperature: 0.7
   top_p: 0.95
   n: 1
@@ -9,7 +9,7 @@ simple:
     output: 1.1
 
 simple_json:
-  model: "deepseek/deepseek-v3-0324"
+  model: "deepseek/deepseek-v3.2"
   temperature: 0.7
   top_p: 1.0
   n: 1
@@ -20,7 +20,7 @@ simple_json:
     output: 1.1
 
 primary_agent:
-  model: "deepseek/deepseek-r1"
+  model: "deepseek/deepseek-v3.2"
   temperature: 1.0
   n: 1
   max_tokens: 10000
@@ -31,7 +31,7 @@ primary_agent:
     output: 2.2
 
 assistant:
-  model: "deepseek/deepseek-r1"
+  model: "deepseek/deepseek-v3.2"
   temperature: 1.0
   n: 1
   max_tokens: 10000
@@ -42,7 +42,7 @@ assistant:
     output: 2.2
 
 generator:
-  model: "deepseek/deepseek-r1"
+  model: "deepseek/deepseek-v3.2"
   temperature: 1.0
   n: 1
   max_tokens: 12000
@@ -53,7 +53,7 @@ generator:
     output: 2.2
 
 refiner:
-  model: "deepseek/deepseek-r1"
+  model: "deepseek/deepseek-v3.2"
   temperature: 1.0
   n: 1
   max_tokens: 10000
@@ -64,7 +64,7 @@ refiner:
     output: 2.2
 
 adviser:
-  model: "deepseek/deepseek-r1"
+  model: "deepseek/deepseek-v3.2"
   temperature: 1.0
   n: 1
   max_tokens: 8000
@@ -103,7 +103,7 @@ enricher:
     output: 0.8
 
 coder:
-  model: "deepseek/deepseek-r1"
+  model: "deepseek/deepseek-v3.2"
   temperature: 1.0
   n: 1
   max_tokens: 10000
@@ -123,7 +123,7 @@ installer:
     output: 1.0
 
 pentester:
-  model: "deepseek/deepseek-r1"
+  model: "deepseek/deepseek-v3.2"
   temperature: 1.0
   n: 1
   max_tokens: 10000
