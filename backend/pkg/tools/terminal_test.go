@@ -47,8 +47,11 @@ func TestFormatTerminalInput(t *testing.T) {
 			t.Parallel()
 
 			result := FormatTerminalInput(tt.cwd, tt.text)
-			if !strings.Contains(result, tt.cwd) {
+			if tt.cwd != "" && !strings.Contains(result, tt.cwd) {
 				t.Errorf("result should contain cwd %q", tt.cwd)
+			}
+			if tt.cwd == "" && !strings.HasPrefix(result, " $ ") {
+				t.Errorf("empty cwd should produce prompt prefix ' $ ', got %q", result)
 			}
 			if !strings.Contains(result, tt.text) {
 				t.Errorf("result should contain text %q", tt.text)
@@ -84,7 +87,7 @@ func TestFormatTerminalSystemOutput(t *testing.T) {
 			t.Parallel()
 
 			result := FormatTerminalSystemOutput(tt.text)
-			if !strings.Contains(result, tt.text) {
+			if tt.text != "" && !strings.Contains(result, tt.text) {
 				t.Errorf("result should contain text %q", tt.text)
 			}
 			if !strings.HasSuffix(result, "\r\n") {
@@ -96,6 +99,12 @@ func TestFormatTerminalSystemOutput(t *testing.T) {
 			}
 			if !strings.Contains(result, "\033[0m") {
 				t.Error("result should contain reset ANSI code")
+			}
+			if tt.text == "" {
+				expected := "\033[34m\033[0m\r\n"
+				if result != expected {
+					t.Errorf("empty output formatting mismatch: got %q, want %q", result, expected)
+				}
 			}
 		})
 	}

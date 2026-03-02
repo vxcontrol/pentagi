@@ -1,9 +1,12 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/vxcontrol/langchaingo/llms"
 )
 
 func TestGetMessage(t *testing.T) {
@@ -189,5 +192,155 @@ func TestGetBarrierToolNames(t *testing.T) {
 	}
 	if !nameSet[AskUserToolName] {
 		t.Errorf("GetBarrierToolNames() missing %q", AskUserToolName)
+	}
+}
+
+func TestToolsReturnsDefinitions(t *testing.T) {
+	t.Parallel()
+
+	ce := &customExecutor{
+		definitions: []llms.FunctionDefinition{
+			{Name: TerminalToolName, Description: "terminal"},
+			{Name: FileToolName, Description: "file"},
+		},
+	}
+
+	tools := ce.Tools()
+	if len(tools) != 2 {
+		t.Fatalf("Tools() returned %d tools, want 2", len(tools))
+	}
+	if tools[0].Function == nil || tools[0].Function.Name != TerminalToolName {
+		t.Fatalf("Tools()[0] mismatch: %+v", tools[0].Function)
+	}
+	if tools[1].Function == nil || tools[1].Function.Name != FileToolName {
+		t.Fatalf("Tools()[1] mismatch: %+v", tools[1].Function)
+	}
+}
+
+func TestExecuteEarlyReturns(t *testing.T) {
+	t.Parallel()
+
+	ce := &customExecutor{
+		handlers: map[string]ExecutorHandler{},
+	}
+
+	t.Run("unknown tool returns helper message", func(t *testing.T) {
+		t.Parallel()
+		result, err := ce.Execute(t.Context(), 1, "id", "unknown_tool", "", json.RawMessage(`{}`))
+		if err != nil {
+			t.Fatalf("Execute() unexpected error: %v", err)
+		}
+		if !strings.Contains(result, "function 'unknown_tool' not found") {
+			t.Fatalf("Execute() result = %q, expected not found message", result)
+		}
+	})
+
+	t.Run("invalid args json returns fix message", func(t *testing.T) {
+		t.Parallel()
+		ce.handlers[TerminalToolName] = func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+			return "ok", nil
+		}
+		result, err := ce.Execute(t.Context(), 1, "id", TerminalToolName, "", json.RawMessage(`{invalid`))
+		if err != nil {
+			t.Fatalf("Execute() unexpected error: %v", err)
+		}
+		if !strings.Contains(result, "failed to unmarshal") || !strings.Contains(result, "fix it") {
+			t.Fatalf("Execute() result = %q, expected argument-fix message", result)
+		}
+	})
+}
+
+func TestGetToolSchemaFallbackAndUnknown(t *testing.T) {
+	t.Parallel()
+
+	ce := &customExecutor{
+		definitions: []llms.FunctionDefinition{
+			registryDefinitions[TerminalToolName],
+		},
+	}
+
+	schemaObj, err := ce.GetToolSchema(TerminalToolName)
+	if err != nil {
+		t.Fatalf("GetToolSchema(%q) unexpected error: %v", TerminalToolName, err)
+	}
+	if schemaObj == nil {
+		t.Fatalf("GetToolSchema(%q) returned nil schema", TerminalToolName)
+	}
+
+	// Should fallback to global registry definitions when not in ce.definitions
+	schemaObj, err = ce.GetToolSchema(BrowserToolName)
+	if err != nil {
+		t.Fatalf("GetToolSchema(%q) fallback unexpected error: %v", BrowserToolName, err)
+	}
+	if schemaObj == nil {
+		t.Fatalf("GetToolSchema(%q) fallback returned nil schema", BrowserToolName)
+	}
+
+	_, err = ce.GetToolSchema("unknown_tool")
+	if err == nil {
+		t.Fatal("GetToolSchema(unknown_tool) should return error")
+	}
+}
+
+func TestGetBarrierToolsSkipsUnknownBarriers(t *testing.T) {
+	t.Parallel()
+
+	ce := &customExecutor{
+		barriers: map[string]struct{}{
+			FinalyToolName: {},
+			"unknown_tool": {},
+		},
+	}
+
+	tools := ce.GetBarrierTools()
+	if len(tools) != 1 {
+		t.Fatalf("GetBarrierTools() returned %d tools, want 1", len(tools))
+	}
+	if tools[0].Name != FinalyToolName {
+		t.Fatalf("GetBarrierTools()[0].Name = %q, want %q", tools[0].Name, FinalyToolName)
+	}
+	if tools[0].Schema == "" {
+		t.Fatal("GetBarrierTools()[0].Schema should not be empty")
+	}
+}
+
+func TestGetSummarizePromptTruncatesLongArgValues(t *testing.T) {
+	t.Parallel()
+
+	ce := &customExecutor{
+		definitions: []llms.FunctionDefinition{
+			registryDefinitions[TerminalToolName],
+		},
+	}
+
+	longValue := strings.Repeat("x", maxArgValueLength+50)
+	args := map[string]any{
+		"message": "hello",
+		"query":   longValue,
+	}
+	argsBytes, err := json.Marshal(args)
+	if err != nil {
+		t.Fatalf("failed to marshal args: %v", err)
+	}
+
+	prompt, err := ce.getSummarizePrompt(TerminalToolName, string(argsBytes), "result")
+	if err != nil {
+		t.Fatalf("getSummarizePrompt() unexpected error: %v", err)
+	}
+	if !strings.Contains(prompt, "... [truncated]") {
+		t.Fatalf("prompt should contain truncated marker, got: %q", prompt)
+	}
+}
+
+func TestConverToJSONSchemaErrorPath(t *testing.T) {
+	t.Parallel()
+
+	ce := &customExecutor{}
+	_, err := ce.converToJSONSchema(make(chan int))
+	if err == nil {
+		t.Fatal("converToJSONSchema() should fail on non-marshalable type")
+	}
+	if !strings.Contains(err.Error(), "failed to marshal parameters") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
