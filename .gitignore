@@ -24,3 +24,14 @@ data/*
 !.gitkeep
 .claude/
 
+# IDE
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+
