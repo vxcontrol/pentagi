@@ -37,6 +37,8 @@ func TestBoolUnmarshalJSON(t *testing.T) {
 		{name: "whitespace padded true", input: `" true "`, want: true},
 		{name: "whitespace padded false", input: `" false "`, want: false},
 		{name: "tab and newline around true", input: "\"\ttrue\n\"", want: true},
+		{name: "carriage return around true", input: "\"\rtrue\r\"", want: true},
+		{name: "null literal", input: `null`, wantErr: true},
 		{name: "invalid yes", input: `"yes"`, wantErr: true},
 		{name: "invalid 1", input: `"1"`, wantErr: true},
 		{name: "invalid 0", input: `"0"`, wantErr: true},
@@ -153,10 +155,15 @@ func TestInt64UnmarshalJSON(t *testing.T) {
 		{name: "quoted negative", input: `"-456"`, want: -456},
 		{name: "quoted zero", input: `"0"`, want: 0},
 		{name: "single-quoted positive", input: `"'789'"`, want: 789},
+		{name: "single-quoted negative", input: `"'-5'"`, want: -5},
 		{name: "whitespace padded", input: `" 100 "`, want: 100},
+		{name: "tab around value", input: "\"\t99\t\"", want: 99},
 		{name: "newline around value", input: "\"\n50\n\"", want: 50},
 		{name: "max int64", input: `"9223372036854775807"`, want: Int64(9223372036854775807)},
 		{name: "min int64", input: `"-9223372036854775808"`, want: Int64(-9223372036854775808)},
+		{name: "null literal", input: `null`, wantErr: true},
+		{name: "overflow int64", input: `"9223372036854775808"`, wantErr: true},
+		{name: "underflow int64", input: `"-9223372036854775809"`, wantErr: true},
 		{name: "invalid string", input: `"abc"`, wantErr: true},
 		{name: "invalid float", input: `"1.5"`, wantErr: true},
 		{name: "empty string", input: `""`, wantErr: true},
@@ -244,6 +251,7 @@ func TestInt64Int64Method(t *testing.T) {
 	}{
 		{name: "positive value", i: int64Ptr(42), want: 42},
 		{name: "negative value", i: int64Ptr(-7), want: -7},
+		{name: "zero value", i: int64Ptr(0), want: 0},
 		{name: "nil pointer", i: nil, want: 0},
 	}
 
@@ -268,6 +276,7 @@ func TestInt64PtrInt64(t *testing.T) {
 		want    int64
 	}{
 		{name: "positive value", i: int64Ptr(42), wantNil: false, want: 42},
+		{name: "negative value", i: int64Ptr(-7), wantNil: false, want: -7},
 		{name: "zero value", i: int64Ptr(0), wantNil: false, want: 0},
 		{name: "nil pointer", i: nil, wantNil: true},
 	}
