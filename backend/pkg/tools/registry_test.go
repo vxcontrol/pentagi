@@ -86,11 +86,20 @@ func TestRegistryDefinitionsCompleteness(t *testing.T) {
 			t.Errorf("tool %q is in toolsTypeMapping but missing from registryDefinitions", name)
 		}
 	}
+
+	// Reverse direction: every tool in registryDefinitions should be in toolsTypeMapping
+	for name := range defs {
+		if _, ok := mapping[name]; !ok {
+			t.Errorf("tool %q is in registryDefinitions but missing from toolsTypeMapping", name)
+		}
+	}
 }
 
 // TestRegistryDefinitionsReturnsCopy verifies that GetRegistryDefinitions returns
 // a copy that can be mutated without affecting the original registry.
 func TestRegistryDefinitionsReturnsCopy(t *testing.T) {
+	t.Parallel()
+
 	defs1 := GetRegistryDefinitions()
 	originalLen := len(defs1)
 
@@ -107,6 +116,8 @@ func TestRegistryDefinitionsReturnsCopy(t *testing.T) {
 
 // TestToolTypeMappingReturnsCopy verifies that GetToolTypeMapping returns a copy.
 func TestToolTypeMappingReturnsCopy(t *testing.T) {
+	t.Parallel()
+
 	m1 := GetToolTypeMapping()
 	originalLen := len(m1)
 
