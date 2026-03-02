@@ -297,7 +297,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 		if stats.Mode.IsDir() {
 			buffer.WriteString("--------------------------------------------------\n")
 			buffer.WriteString(
-				fmt.Sprintf("'%s' file content (with size %d bytes) keeps bellow:\n",
+				fmt.Sprintf("'%s' file content (with size %d bytes) shown below:\n",
 					tarHeader.Name, tarHeader.Size,
 				),
 			)
