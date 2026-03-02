@@ -1802,7 +1802,7 @@ docker run --rm \
 
 #### Using Pre-configured Providers
 
-The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, DeepInfra, DeepSeek, Moonshot):
+The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, DeepInfra, DeepSeek, Moonshot, Novita):
 
 ```bash
 # Test with OpenRouter configuration
@@ -1824,6 +1824,11 @@ docker run --rm \
 docker run --rm \
   -v $(pwd)/.env:/opt/pentagi/.env \
   vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/moonshot.provider.yml
+
+# Test with Novita configuration
+docker run --rm \
+  -v $(pwd)/.env:/opt/pentagi/.env \
+  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/novita.provider.yml
 
 # Test with OpenAI configuration
 docker run --rm \
@@ -1869,11 +1874,11 @@ docker run --rm \
 To use these configurations, your `.env` file only needs to contain:
 
 ```
-LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.deepseek.com or https://api.openai.com/v1 or https://api.moonshot.ai/v1
+LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.deepseek.com or https://api.openai.com/v1 or https://api.moonshot.ai/v1 or https://api.novita.ai/openai
 LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
-LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml or moonshot.provider.yml
-LLM_SERVER_PROVIDER=                             # Provider name for LiteLLM proxy (e.g., openrouter, deepseek, moonshot)
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.yml or deepseek.provider.yml or custom-openai.provider.yml or moonshot.provider.yml or novita.provider.yml
+LLM_SERVER_PROVIDER=                             # Provider name for LiteLLM proxy (e.g., openrouter, deepseek, moonshot, novita)
 LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
 LLM_SERVER_PRESERVE_REASONING=false              # Preserve reasoning content in multi-turn conversations (required by Moonshot, default: false)
 
@@ -1902,6 +1907,19 @@ OLLAMA_SERVER_MODEL=llama3.1:8b-instruct-q8_0
 OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-llama318b.provider.yml
 OLLAMA_SERVER_PULL_MODELS_ENABLED=false
 OLLAMA_SERVER_LOAD_MODELS_ENABLED=false
+```
+
+#### Using Novita AI (OpenAI-compatible)
+
+```bash
+NOVITA_API_KEY=your_novita_api_key
+LLM_SERVER_URL=https://api.novita.ai/openai
+LLM_SERVER_KEY=${NOVITA_API_KEY}
+LLM_SERVER_MODEL=                                # Leave empty, models are specified in config
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/novita.provider.yml
+LLM_SERVER_PROVIDER=novita                       # Optional, useful when routing through LiteLLM
+LLM_SERVER_LEGACY_REASONING=false
+LLM_SERVER_PRESERVE_REASONING=false
 ```
 
 #### Using OpenAI with Unverified Organizations
@@ -1960,6 +1978,7 @@ With `LLM_SERVER_PROVIDER=moonshot`, the system automatically prefixes all model
 - `deepseek` - for DeepSeek models
 - `deepinfra` - for DeepInfra hosting
 - `moonshot` - for Moonshot AI (Kimi)
+- `novita` - for Novita AI
 - Any other provider name configured in your LiteLLM instance
 
 This approach allows you to:

@@ -1,0 +1,134 @@
+simple:
+  model: "deepseek/deepseek-v3-0324"
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.27
+    output: 1.1
+
+simple_json:
+  model: "deepseek/deepseek-v3-0324"
+  temperature: 0.7
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.27
+    output: 1.1
+
+primary_agent:
+  model: "deepseek/deepseek-r1"
+  temperature: 1.0
+  n: 1
+  max_tokens: 10000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.6
+    output: 2.2
+
+assistant:
+  model: "deepseek/deepseek-r1"
+  temperature: 1.0
+  n: 1
+  max_tokens: 10000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.6
+    output: 2.2
+
+generator:
+  model: "deepseek/deepseek-r1"
+  temperature: 1.0
+  n: 1
+  max_tokens: 12000
+  reasoning:
+    effort: high
+  price:
+    input: 0.6
+    output: 2.2
+
+refiner:
+  model: "deepseek/deepseek-r1"
+  temperature: 1.0
+  n: 1
+  max_tokens: 10000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.6
+    output: 2.2
+
+adviser:
+  model: "deepseek/deepseek-r1"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.6
+    output: 2.2
+
+reflector:
+  model: "qwen/qwen2.5-72b-instruct"
+  temperature: 0.9
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.4
+    output: 1.2
+
+searcher:
+  model: "qwen/qwen2.5-32b-instruct"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.2
+    output: 0.8
+
+enricher:
+  model: "qwen/qwen2.5-32b-instruct"
+  temperature: 1.0
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.2
+    output: 0.8
+
+coder:
+  model: "deepseek/deepseek-r1"
+  temperature: 1.0
+  n: 1
+  max_tokens: 10000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.6
+    output: 2.2
+
+installer:
+  model: "qwen/qwen2.5-coder-32b-instruct"
+  temperature: 0.9
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.25
+    output: 1.0
+
+pentester:
+  model: "deepseek/deepseek-r1"
+  temperature: 1.0
+  n: 1
+  max_tokens: 10000
+  reasoning:
+    effort: medium
+  price:
+    input: 0.6
+    output: 2.2
