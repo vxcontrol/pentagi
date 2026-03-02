@@ -103,7 +103,7 @@ func (u User) Validate(db *gorm.DB) {
 
 // UserPassword is model to contain user information
 type UserPassword struct {
-	Password string `form:"password" json:"password" validate:"max=100,required" gorm:"column:password;type:TEXT"`
+	Password string `form:"password" json:"password" validate:"stpass,max=100,required" gorm:"column:password;type:TEXT"`
 	User     `form:"" json:""`
 }
 
