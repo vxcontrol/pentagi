@@ -18,7 +18,7 @@ func TestDuckDuckGoBasicSearch(t *testing.T) {
 		t.Skip("skipping integration test in short mode - use unit tests instead")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	flowID := int64(1)
@@ -99,7 +99,7 @@ func TestDuckDuckGoDisabled(t *testing.T) {
 
 // TestDuckDuckGoInvalidJSON tests handling of invalid JSON input
 func TestDuckDuckGoInvalidJSON(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	flowID := int64(5)
 	taskID := int64(5)

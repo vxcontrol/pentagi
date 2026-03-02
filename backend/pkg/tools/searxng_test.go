@@ -150,7 +150,7 @@ func TestSearxngToolHandleWithInvalidArgs(t *testing.T) {
 	}
 
 	// Test with invalid JSON args
-	_, err := tool.Handle(context.Background(), SearxngToolName, []byte("invalid json"))
+	_, err := tool.Handle(t.Context(), SearxngToolName, []byte("invalid json"))
 	if err == nil {
 		t.Error("Expected error for invalid JSON args")
 	}
@@ -160,7 +160,7 @@ func TestSearxngToolHandleWithInvalidArgs(t *testing.T) {
 		Query: "",
 	}
 	argsJSON, _ := json.Marshal(args)
-	_, err = tool.Handle(context.Background(), SearxngToolName, argsJSON)
+	_, err = tool.Handle(t.Context(), SearxngToolName, argsJSON)
 	if err == nil {
 		t.Error("Expected error for empty query")
 	}
@@ -197,7 +197,7 @@ func TestSearxngToolHandleWithValidArgs(t *testing.T) {
 	}
 	argsJSON, _ := json.Marshal(args)
 
-	result, err := tool.Handle(context.Background(), SearxngToolName, argsJSON)
+	result, err := tool.Handle(t.Context(), SearxngToolName, argsJSON)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -239,7 +239,7 @@ func TestSearxngToolHandleWithServerError(t *testing.T) {
 	}
 	argsJSON, _ := json.Marshal(args)
 
-	_, err := tool.Handle(context.Background(), SearxngToolName, argsJSON)
+	_, err := tool.Handle(t.Context(), SearxngToolName, argsJSON)
 	if err == nil {
 		t.Error("Expected error for server error response")
 	}
@@ -260,7 +260,7 @@ func TestSearxngToolHandleWithInvalidURL(t *testing.T) {
 	}
 	argsJSON, _ := json.Marshal(args)
 
-	_, err := tool.Handle(context.Background(), SearxngToolName, argsJSON)
+	_, err := tool.Handle(t.Context(), SearxngToolName, argsJSON)
 	if err == nil {
 		t.Error("Expected error for invalid URL")
 	}
@@ -291,7 +291,7 @@ func TestSearxngToolHandleWithNoResults(t *testing.T) {
 	}
 	argsJSON, _ := json.Marshal(args)
 
-	result, err := tool.Handle(context.Background(), SearxngToolName, argsJSON)
+	result, err := tool.Handle(t.Context(), SearxngToolName, argsJSON)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}

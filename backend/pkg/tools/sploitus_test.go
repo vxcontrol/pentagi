@@ -18,7 +18,7 @@ func TestSploitusExploitsSearch(t *testing.T) {
 		t.Skip("skipping integration test in short mode - use unit tests instead")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	flowID := int64(1)
@@ -81,7 +81,7 @@ func TestSploitusToolsSearch(t *testing.T) {
 		t.Skip("skipping integration test in short mode - use unit tests instead")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	flowID := int64(2)
@@ -163,7 +163,7 @@ func TestSploitusDisabled(t *testing.T) {
 
 // TestSploitusInvalidJSON tests handling of invalid JSON input
 func TestSploitusInvalidJSON(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	flowID := int64(4)
 	taskID := int64(4)
@@ -417,7 +417,7 @@ func TestSploitusFormatResults(t *testing.T) {
 
 // TestSploitusDefaultValues tests default values for optional parameters
 func TestSploitusDefaultValues(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	flowID := int64(5)
 	taskID := int64(5)
@@ -454,7 +454,7 @@ func TestSploitusSizeLimits(t *testing.T) {
 	t.Run("source truncation at 50KB", func(t *testing.T) {
 		// Create a large source (60 KB)
 		largeSource := strings.Repeat("A", 60*1024)
-		
+
 		resp := sploitusResponse{
 			Exploits: []sploitusExploit{
 				{
@@ -466,22 +466,22 @@ func TestSploitusSizeLimits(t *testing.T) {
 			},
 			ExploitsTotal: 1,
 		}
-		
+
 		result := formatSploitusResults("test", "exploits", 10, resp)
-		
+
 		// Check that source was truncated
 		if strings.Contains(result, "source truncated, exceeded 50 KB limit") {
 			// Good, truncation message is present
 		} else {
 			t.Error("expected source truncation message for 60 KB source")
 		}
-		
+
 		// Verify result doesn't contain the full 60 KB
 		if len(result) > 80*1024 {
 			t.Errorf("result size %d exceeds 80 KB limit", len(result))
 		}
 	})
-	
+
 	t.Run("total size limit at 80KB", func(t *testing.T) {
 		// Create many results to exceed 80 KB total
 		results := make([]sploitusExploit, 100)
@@ -493,24 +493,24 @@ func TestSploitusSizeLimits(t *testing.T) {
 				Source: strings.Repeat("X", 5000), // 5 KB each
 			}
 		}
-		
+
 		resp := sploitusResponse{
 			Exploits:      results,
 			ExploitsTotal: 100,
 		}
-		
+
 		result := formatSploitusResults("test", "exploits", 100, resp)
-		
+
 		// Result should be under 80 KB
 		if len(result) > 80*1024 {
 			t.Errorf("result size %d exceeds 80 KB hard limit", len(result))
 		}
-		
+
 		// Should have truncation warning
 		if !strings.Contains(result, "Results truncated") {
 			t.Error("expected truncation warning when hitting 80 KB limit")
 		}
-		
+
 		// Should not show all 100 results
 		count := strings.Count(result, "### ")
 		if count >= 100 {
