@@ -138,7 +138,7 @@ func (g *google) newSearchService(ctx context.Context) (*customsearch.Service, e
 		}))
 	}
 
-	svc, err := customsearch.NewService(ctx, option.WithAPIKey(g.apiKey))
+	svc, err := customsearch.NewService(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create google search service: %v", err)
 	}
