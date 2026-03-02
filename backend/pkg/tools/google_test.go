@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -139,7 +140,7 @@ func TestGoogleNewSearchServiceWithoutProxy(t *testing.T) {
 	// newSearchService should succeed with valid API key (even if fake).
 	// The Google API client library accepts any string as the API key at
 	// construction time; validation happens on actual API calls.
-	svc, err := g.newSearchService(t.Context())
+	svc, err := g.newSearchService(context.Background())
 	if err != nil {
 		t.Fatalf("newSearchService() unexpected error: %v", err)
 	}
@@ -161,7 +162,7 @@ func TestGoogleNewSearchServiceWithProxy(t *testing.T) {
 	// This test verifies the service is created without error; it does NOT
 	// verify that the proxy is actually applied to the underlying HTTP client,
 	// because that requires an integration test with real network traffic.
-	svc, err := g.newSearchService(t.Context())
+	svc, err := g.newSearchService(context.Background())
 	if err != nil {
 		t.Fatalf("newSearchService() unexpected error: %v", err)
 	}
