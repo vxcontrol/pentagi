@@ -1,14 +1,40 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
+
+type screenshotProviderMock struct {
+	mu        sync.Mutex
+	calls     int
+	lastName  string
+	lastURL   string
+	lastTask  *int64
+	lastSub   *int64
+	returnErr error
+}
+
+func (m *screenshotProviderMock) PutScreenshot(_ context.Context, name, url string, taskID, subtaskID *int64) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.calls++
+	m.lastName = name
+	m.lastURL = url
+	m.lastTask = taskID
+	m.lastSub = subtaskID
+	return 1, m.returnErr
+}
 
 func TestBrowserResolveUrl(t *testing.T) {
 	tests := []struct {
@@ -230,7 +256,7 @@ func TestContentMD_ScreenshotFailure_ReturnsContent(t *testing.T) {
 		scPubURL: ts.URL,
 	}
 
-	content, screenshot, err := b.ContentMD("https://example.com/page")
+	content, screenshot, err := b.ContentMD(t.Context(), "https://example.com/page")
 	if err != nil {
 		t.Fatalf("ContentMD() returned unexpected error: %v", err)
 	}
@@ -253,7 +279,7 @@ func TestContentHTML_ScreenshotFailure_ReturnsContent(t *testing.T) {
 		scPubURL: ts.URL,
 	}
 
-	content, screenshot, err := b.ContentHTML("https://example.com/page")
+	content, screenshot, err := b.ContentHTML(t.Context(), "https://example.com/page")
 	if err != nil {
 		t.Fatalf("ContentHTML() returned unexpected error: %v", err)
 	}
@@ -276,7 +302,7 @@ func TestLinks_ScreenshotFailure_ReturnsContent(t *testing.T) {
 		scPubURL: ts.URL,
 	}
 
-	links, screenshot, err := b.Links("https://example.com/page")
+	links, screenshot, err := b.Links(t.Context(), "https://example.com/page")
 	if err != nil {
 		t.Fatalf("Links() returned unexpected error: %v", err)
 	}
@@ -299,7 +325,7 @@ func TestContentMD_ScreenshotSmall_ReturnsContent(t *testing.T) {
 		scPubURL: ts.URL,
 	}
 
-	content, screenshot, err := b.ContentMD("https://example.com/page")
+	content, screenshot, err := b.ContentMD(t.Context(), "https://example.com/page")
 	if err != nil {
 		t.Fatalf("ContentMD() returned unexpected error: %v", err)
 	}
@@ -322,7 +348,7 @@ func TestContentMD_BothSucceed_ReturnsContentAndScreenshot(t *testing.T) {
 		scPubURL: ts.URL,
 	}
 
-	content, screenshot, err := b.ContentMD("https://example.com/page")
+	content, screenshot, err := b.ContentMD(t.Context(), "https://example.com/page")
 	if err != nil {
 		t.Fatalf("ContentMD() returned unexpected error: %v", err)
 	}
@@ -362,5 +388,91 @@ func TestGetHTML_UsesCorrectMinContentSize(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), fmt.Sprintf("%d bytes", minHtmlContentSize)) {
 		t.Errorf("getHTML() error should reference minHtmlContentSize (%d), got: %v", minHtmlContentSize, err)
+	}
+}
+
+func TestBrowserHandle_ValidationErrors(t *testing.T) {
+	b := &browser{}
+
+	t.Run("unknown tool", func(t *testing.T) {
+		_, err := b.Handle(t.Context(), "not-browser", json.RawMessage(`{}`))
+		if err == nil || !strings.Contains(err.Error(), "unknown tool") {
+			t.Fatalf("expected unknown tool error, got: %v", err)
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		_, err := b.Handle(t.Context(), "browser", json.RawMessage(`{`))
+		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal browser action") {
+			t.Fatalf("expected unmarshal error, got: %v", err)
+		}
+	})
+
+	t.Run("unknown action", func(t *testing.T) {
+		_, err := b.Handle(t.Context(), "browser", json.RawMessage(`{"url":"https://example.com","action":"unknown","message":"m"}`))
+		if err == nil || !strings.Contains(err.Error(), "unknown file action") {
+			t.Fatalf("expected unknown action error, got: %v", err)
+		}
+	})
+}
+
+func TestBrowserHandle_MarkdownSuccess_StoresScreenshot(t *testing.T) {
+	ts := newTestScraper(t, "ok")
+	defer ts.Close()
+
+	scp := &screenshotProviderMock{}
+	dataDir := t.TempDir()
+	b := &browser{
+		flowID:   1,
+		dataDir:  dataDir,
+		scPubURL: ts.URL,
+		scp:      scp,
+	}
+
+	result, err := b.Handle(t.Context(), "browser", json.RawMessage(`{"url":"https://example.com/page","action":"markdown","message":"m"}`))
+	if err != nil {
+		t.Fatalf("Handle() returned unexpected error: %v", err)
+	}
+	if result == "" {
+		t.Fatal("Handle() returned empty markdown result")
+	}
+
+	scp.mu.Lock()
+	defer scp.mu.Unlock()
+
+	if scp.calls != 1 {
+		t.Fatalf("PutScreenshot() calls = %d, want 1", scp.calls)
+	}
+	if scp.lastURL != "https://example.com/page" {
+		t.Fatalf("PutScreenshot() url = %q, want %q", scp.lastURL, "https://example.com/page")
+	}
+	if scp.lastName == "" {
+		t.Fatal("PutScreenshot() screenshot name should not be empty")
+	}
+}
+
+func TestWrapCommandResult_ErrorIsSwallowed(t *testing.T) {
+	scp := &screenshotProviderMock{}
+	b := &browser{scp: scp}
+
+	result, err := b.wrapCommandResult(
+		t.Context(),
+		"browser",
+		"payload",
+		"https://example.com",
+		"screen.png",
+		errors.New("boom"),
+	)
+	if err != nil {
+		t.Fatalf("wrapCommandResult() returned unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "handled with error") {
+		t.Fatalf("wrapCommandResult() = %q, want handled with error message", result)
+	}
+
+	scp.mu.Lock()
+	defer scp.mu.Unlock()
+	if scp.calls != 0 {
+		t.Fatalf("PutScreenshot() should not be called on error branch, got %d calls", scp.calls)
 	}
 }

@@ -140,7 +140,7 @@ func TestGoogleNewSearchServiceWithoutProxy(t *testing.T) {
 	// newSearchService should succeed with valid API key (even if fake).
 	// The Google API client library accepts any string as the API key at
 	// construction time; validation happens on actual API calls.
-	svc, err := g.newSearchService(context.Background())
+	svc, err := g.newSearchService(t.Context())
 	if err != nil {
 		t.Fatalf("newSearchService() unexpected error: %v", err)
 	}
@@ -162,11 +162,45 @@ func TestGoogleNewSearchServiceWithProxy(t *testing.T) {
 	// This test verifies the service is created without error; it does NOT
 	// verify that the proxy is actually applied to the underlying HTTP client,
 	// because that requires an integration test with real network traffic.
-	svc, err := g.newSearchService(context.Background())
+	svc, err := g.newSearchService(t.Context())
 	if err != nil {
 		t.Fatalf("newSearchService() unexpected error: %v", err)
 	}
 	if svc == nil {
 		t.Fatal("newSearchService() returned nil service")
 	}
+}
+
+func TestGoogleHandle_ValidationAndBehavior(t *testing.T) {
+	g := &google{
+		flowID: 1,
+		apiKey: "test-api-key",
+		cxKey:  "test-cx-key",
+	}
+
+	t.Run("invalid json", func(t *testing.T) {
+		_, err := g.Handle(t.Context(), GoogleToolName, []byte("{"))
+		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
+			t.Fatalf("expected unmarshal error, got: %v", err)
+		}
+	})
+
+	t.Run("search error swallowed", func(t *testing.T) {
+		// Use canceled context to make Do() fail immediately and avoid depending
+		// on real network/API state in this unit test.
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		got, err := g.Handle(
+			ctx,
+			GoogleToolName,
+			[]byte(`{"query":"q","max_results":5,"message":"m"}`),
+		)
+		if err != nil {
+			t.Fatalf("Handle() unexpected error: %v", err)
+		}
+		if !strings.Contains(got, "failed to call tool google to search in google results") {
+			t.Fatalf("Handle() = %q, expected swallowed error", got)
+		}
+	})
 }
