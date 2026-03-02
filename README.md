@@ -1909,19 +1909,6 @@ OLLAMA_SERVER_PULL_MODELS_ENABLED=false
 OLLAMA_SERVER_LOAD_MODELS_ENABLED=false
 ```
 
-#### Using Novita AI (OpenAI-compatible)
-
-```bash
-NOVITA_API_KEY=your_novita_api_key
-LLM_SERVER_URL=https://api.novita.ai/openai
-LLM_SERVER_KEY=${NOVITA_API_KEY}
-LLM_SERVER_MODEL=                                # Leave empty, models are specified in config
-LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/novita.provider.yml
-LLM_SERVER_PROVIDER=novita                       # Optional, useful when routing through LiteLLM
-LLM_SERVER_LEGACY_REASONING=false
-LLM_SERVER_PRESERVE_REASONING=false
-```
-
 #### Using OpenAI with Unverified Organizations
 
 For OpenAI accounts with unverified organizations that don't have access to the latest reasoning models (o1, o3, o4-mini), you need to use a custom configuration.

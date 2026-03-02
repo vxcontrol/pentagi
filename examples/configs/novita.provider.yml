@@ -20,115 +20,127 @@ simple_json:
     output: 1.1
 
 primary_agent:
-  model: "deepseek/deepseek-v3.2"
+  model: "moonshotai/kimi-k2.5"
   temperature: 1.0
   n: 1
-  max_tokens: 10000
-  reasoning:
-    effort: medium
-  price:
-    input: 0.6
-    output: 2.2
-
-assistant:
-  model: "deepseek/deepseek-v3.2"
-  temperature: 1.0
-  n: 1
-  max_tokens: 10000
-  reasoning:
-    effort: medium
-  price:
-    input: 0.6
-    output: 2.2
-
-generator:
-  model: "deepseek/deepseek-v3.2"
-  temperature: 1.0
-  n: 1
-  max_tokens: 12000
+  max_tokens: 16384
   reasoning:
     effort: high
   price:
     input: 0.6
-    output: 2.2
+    output: 3.0
+    cache_read: 0.1
+
+assistant:
+  model: "moonshotai/kimi-k2.5"
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.6
+    output: 3.0
+    cache_read: 0.1
+
+generator:
+  model: "moonshotai/kimi-k2.5"
+  temperature: 1.0
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 0.6
+    output: 3.0
+    cache_read: 0.1
 
 refiner:
-  model: "deepseek/deepseek-v3.2"
+  model: "moonshotai/kimi-k2.5"
   temperature: 1.0
   n: 1
-  max_tokens: 10000
+  max_tokens: 20480
   reasoning:
     effort: medium
   price:
     input: 0.6
-    output: 2.2
+    output: 3.0
+    cache_read: 0.1
 
 adviser:
-  model: "deepseek/deepseek-v3.2"
+  model: "zai-org/glm-5"
   temperature: 1.0
   n: 1
-  max_tokens: 8000
+  max_tokens: 8192
   reasoning:
-    effort: medium
+    effort: high
   price:
-    input: 0.6
-    output: 2.2
+    input: 1.0
+    output: 3.2
+    cache_read: 0.2
 
 reflector:
-  model: "qwen/qwen2.5-72b-instruct"
-  temperature: 0.9
-  top_p: 1.0
-  n: 1
-  max_tokens: 4000
-  price:
-    input: 0.4
-    output: 1.2
-
-searcher:
-  model: "qwen/qwen2.5-32b-instruct"
+  model: "qwen/qwen3.5-35b-a3b"
   temperature: 1.0
   n: 1
-  max_tokens: 4000
-  price:
-    input: 0.2
-    output: 0.8
-
-enricher:
-  model: "qwen/qwen2.5-32b-instruct"
-  temperature: 1.0
-  n: 1
-  max_tokens: 6000
-  price:
-    input: 0.2
-    output: 0.8
-
-coder:
-  model: "deepseek/deepseek-v3.2"
-  temperature: 1.0
-  n: 1
-  max_tokens: 10000
+  max_tokens: 8192
   reasoning:
     effort: medium
-  price:
-    input: 0.6
-    output: 2.2
-
-installer:
-  model: "qwen/qwen2.5-coder-32b-instruct"
-  temperature: 0.9
-  n: 1
-  max_tokens: 6000
   price:
     input: 0.25
-    output: 1.0
+    output: 2.0
 
-pentester:
-  model: "deepseek/deepseek-v3.2"
+searcher:
+  model: "qwen/qwen3.5-35b-a3b"
   temperature: 1.0
   n: 1
-  max_tokens: 10000
+  max_tokens: 8192
+  reasoning:
+    effort: low
+  price:
+    input: 0.25
+    output: 2.0
+
+enricher:
+  model: "qwen/qwen3.5-35b-a3b"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: low
+  price:
+    input: 0.25
+    output: 2.0
+
+coder:
+  model: "moonshotai/kimi-k2.5"
+  temperature: 1.0
+  n: 1
+  max_tokens: 32768
   reasoning:
     effort: medium
   price:
     input: 0.6
-    output: 2.2
+    output: 3.0
+    cache_read: 0.1
+
+installer:
+  model: "moonshotai/kimi-k2-instruct"
+  temperature: 0.7
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.57
+    output: 2.3
+
+pentester:
+  model: "moonshotai/kimi-k2.5"
+  temperature: 1.0
+  n: 1
+  max_tokens: 20480
+  reasoning:
+    effort: low
+  price:
+    input: 0.6
+    output: 3.0
+    cache_read: 0.1
