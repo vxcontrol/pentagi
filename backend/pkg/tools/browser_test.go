@@ -1,6 +1,12 @@
 package tools
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -171,5 +177,190 @@ func TestBrowserIsAvailable(t *testing.T) {
 				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// newTestScraper creates an httptest server that simulates the scraper service.
+// screenshotBehavior controls the /screenshot endpoint: "ok", "fail", or "small".
+func newTestScraper(t *testing.T, screenshotBehavior string) *httptest.Server {
+	t.Helper()
+	validMD := strings.Repeat("A", minMdContentSize+1)
+	validHTML := strings.Repeat("<p>x</p>", minHtmlContentSize/8+1)
+	validLinks := `[{"Title":"Example","Link":"https://example.com"}]`
+	validScreenshot := strings.Repeat("\x89PNG", minImgContentSize/4+1) // exceeds minImgContentSize
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/markdown":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, validMD)
+		case "/html":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, validHTML)
+		case "/links":
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, validLinks)
+		case "/screenshot":
+			switch screenshotBehavior {
+			case "ok":
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, validScreenshot)
+			case "fail":
+				w.WriteHeader(http.StatusInternalServerError)
+			case "small":
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "tiny") // below minImgContentSize
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+func TestContentMD_ScreenshotFailure_ReturnsContent(t *testing.T) {
+	ts := newTestScraper(t, "fail")
+	defer ts.Close()
+
+	dataDir := t.TempDir()
+	b := &browser{
+		flowID:   1,
+		dataDir:  dataDir,
+		scPubURL: ts.URL,
+	}
+
+	content, screenshot, err := b.ContentMD("https://example.com/page")
+	if err != nil {
+		t.Fatalf("ContentMD() returned unexpected error: %v", err)
+	}
+	if content == "" {
+		t.Error("ContentMD() returned empty content despite successful fetch")
+	}
+	if screenshot != "" {
+		t.Errorf("ContentMD() screenshot = %q, want empty string on failure", screenshot)
+	}
+}
+
+func TestContentHTML_ScreenshotFailure_ReturnsContent(t *testing.T) {
+	ts := newTestScraper(t, "fail")
+	defer ts.Close()
+
+	dataDir := t.TempDir()
+	b := &browser{
+		flowID:   1,
+		dataDir:  dataDir,
+		scPubURL: ts.URL,
+	}
+
+	content, screenshot, err := b.ContentHTML("https://example.com/page")
+	if err != nil {
+		t.Fatalf("ContentHTML() returned unexpected error: %v", err)
+	}
+	if content == "" {
+		t.Error("ContentHTML() returned empty content despite successful fetch")
+	}
+	if screenshot != "" {
+		t.Errorf("ContentHTML() screenshot = %q, want empty string on failure", screenshot)
+	}
+}
+
+func TestLinks_ScreenshotFailure_ReturnsContent(t *testing.T) {
+	ts := newTestScraper(t, "fail")
+	defer ts.Close()
+
+	dataDir := t.TempDir()
+	b := &browser{
+		flowID:   1,
+		dataDir:  dataDir,
+		scPubURL: ts.URL,
+	}
+
+	links, screenshot, err := b.Links("https://example.com/page")
+	if err != nil {
+		t.Fatalf("Links() returned unexpected error: %v", err)
+	}
+	if links == "" {
+		t.Error("Links() returned empty content despite successful fetch")
+	}
+	if screenshot != "" {
+		t.Errorf("Links() screenshot = %q, want empty string on failure", screenshot)
+	}
+}
+
+func TestContentMD_ScreenshotSmall_ReturnsContent(t *testing.T) {
+	ts := newTestScraper(t, "small")
+	defer ts.Close()
+
+	dataDir := t.TempDir()
+	b := &browser{
+		flowID:   1,
+		dataDir:  dataDir,
+		scPubURL: ts.URL,
+	}
+
+	content, screenshot, err := b.ContentMD("https://example.com/page")
+	if err != nil {
+		t.Fatalf("ContentMD() returned unexpected error: %v", err)
+	}
+	if content == "" {
+		t.Error("ContentMD() returned empty content when screenshot was too small")
+	}
+	if screenshot != "" {
+		t.Errorf("ContentMD() screenshot = %q, want empty string for undersized image", screenshot)
+	}
+}
+
+func TestContentMD_BothSucceed_ReturnsContentAndScreenshot(t *testing.T) {
+	ts := newTestScraper(t, "ok")
+	defer ts.Close()
+
+	dataDir := t.TempDir()
+	b := &browser{
+		flowID:   1,
+		dataDir:  dataDir,
+		scPubURL: ts.URL,
+	}
+
+	content, screenshot, err := b.ContentMD("https://example.com/page")
+	if err != nil {
+		t.Fatalf("ContentMD() returned unexpected error: %v", err)
+	}
+	if content == "" {
+		t.Error("ContentMD() returned empty content")
+	}
+	if screenshot == "" {
+		t.Error("ContentMD() returned empty screenshot when both should succeed")
+	}
+	// Verify screenshot file was written
+	screenshotPath := filepath.Join(dataDir, "screenshots", "flow-1", screenshot)
+	if _, err := os.Stat(screenshotPath); os.IsNotExist(err) {
+		t.Errorf("screenshot file not written: %s", screenshotPath)
+	}
+}
+
+func TestGetHTML_UsesCorrectMinContentSize(t *testing.T) {
+	// Serve HTML content that is larger than minMdContentSize (50)
+	// but smaller than minHtmlContentSize (300).
+	// With the fix, getHTML should reject this; before the fix it would accept it.
+	smallHTML := strings.Repeat("x", minMdContentSize+10) // 60 bytes: > 50, < 300
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, smallHTML)
+	}))
+	defer ts.Close()
+
+	b := &browser{
+		flowID:   1,
+		scPubURL: ts.URL,
+	}
+
+	_, err := b.getHTML("https://example.com/page")
+	if err == nil {
+		t.Fatal("getHTML() should reject content smaller than minHtmlContentSize")
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("%d bytes", minHtmlContentSize)) {
+		t.Errorf("getHTML() error should reference minHtmlContentSize (%d), got: %v", minHtmlContentSize, err)
 	}
 }
