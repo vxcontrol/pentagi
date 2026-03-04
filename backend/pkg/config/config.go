@@ -101,6 +101,8 @@ type Config struct {
 
 	// Bedrock
 	BedrockRegion       string `env:"BEDROCK_REGION" envDefault:"us-east-1"`
+	BedrockDefaultAuth  bool   `env:"BEDROCK_DEFAULT_AUTH" envDefault:"false"`
+	BedrockBearerToken  string `env:"BEDROCK_BEARER_TOKEN"`
 	BedrockAccessKey    string `env:"BEDROCK_ACCESS_KEY_ID"`
 	BedrockSecretKey    string `env:"BEDROCK_SECRET_ACCESS_KEY"`
 	BedrockSessionToken string `env:"BEDROCK_SESSION_TOKEN"`

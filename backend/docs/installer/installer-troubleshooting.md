@@ -120,7 +120,10 @@ func (m *FormModel) ensureFocusVisible() {
 
 **Provider Field Mapping**:
 - **OpenAI/Anthropic/Gemini**: Base URL + API Key
-- **AWS Bedrock**: Region + Access Key + Secret Key + Base URL (optional)
+- **AWS Bedrock**: Region + Authentication (Default Auth OR Bearer Token OR Access Key + Secret Key) + Session Token (optional) + Base URL (optional)
+  - **Default Auth**: AWS SDK credential chain - highest priority
+  - **Bearer Token**: Token-based auth - priority over static credentials  
+  - **Static Credentials**: Access Key + Secret Key - traditional authentication
 - **Ollama**: Base URL + Config Path
 - **Custom**: Base URL + API Key + Model + Config Path + Legacy Reasoning (boolean)
 

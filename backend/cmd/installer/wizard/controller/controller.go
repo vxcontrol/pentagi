@@ -152,6 +152,8 @@ type LLMProviderConfig struct {
 	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | BEDROCK_ACCESS_KEY_ID | OLLAMA_SERVER_CONFIG_PATH | LLM_SERVER_KEY
 	Model   loader.EnvVar // LLM_SERVER_MODEL
 	// AWS Bedrock specific fields
+	DefaultAuth  loader.EnvVar // BEDROCK_DEFAULT_AUTH
+	BearerToken  loader.EnvVar // BEDROCK_BEARER_TOKEN
 	AccessKey    loader.EnvVar // BEDROCK_ACCESS_KEY_ID
 	SecretKey    loader.EnvVar // BEDROCK_SECRET_ACCESS_KEY
 	SessionToken loader.EnvVar // BEDROCK_SESSION_TOKEN
@@ -230,11 +232,16 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 	case "bedrock":
 		providerConfig.Name = "AWS Bedrock"
 		providerConfig.Region, _ = c.GetVar("BEDROCK_REGION")
+		providerConfig.DefaultAuth, _ = c.GetVar("BEDROCK_DEFAULT_AUTH")
+		providerConfig.BearerToken, _ = c.GetVar("BEDROCK_BEARER_TOKEN")
 		providerConfig.AccessKey, _ = c.GetVar("BEDROCK_ACCESS_KEY_ID")
 		providerConfig.SecretKey, _ = c.GetVar("BEDROCK_SECRET_ACCESS_KEY")
 		providerConfig.SessionToken, _ = c.GetVar("BEDROCK_SESSION_TOKEN")
 		providerConfig.BaseURL, _ = c.GetVar("BEDROCK_SERVER_URL")
-		providerConfig.Configured = (providerConfig.AccessKey.Value != "" && providerConfig.SecretKey.Value != "") || providerConfig.SessionToken.Value != ""
+		// Configured if any of three auth methods is set: DefaultAuth, BearerToken, or AccessKey+SecretKey
+		providerConfig.Configured = providerConfig.DefaultAuth.Value == "true" ||
+			providerConfig.BearerToken.Value != "" ||
+			(providerConfig.AccessKey.Value != "" && providerConfig.SecretKey.Value != "")
 
 	case "ollama":
 		providerConfig.Name = "Ollama"
@@ -300,6 +307,12 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 	case "bedrock":
 		if err := c.SetVar(config.Region.Name, config.Region.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.Region.Name, err)
+		}
+		if err := c.SetVar(config.DefaultAuth.Name, config.DefaultAuth.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.DefaultAuth.Name, err)
+		}
+		if err := c.SetVar(config.BearerToken.Name, config.BearerToken.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.BearerToken.Name, err)
 		}
 		if err := c.SetVar(config.AccessKey.Name, config.AccessKey.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.AccessKey.Name, err)
@@ -403,6 +416,7 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 		vars = []string{"GEMINI_API_KEY", "GEMINI_SERVER_URL"}
 	case "bedrock":
 		vars = []string{
+			"BEDROCK_DEFAULT_AUTH", "BEDROCK_BEARER_TOKEN",
 			"BEDROCK_ACCESS_KEY_ID", "BEDROCK_SECRET_ACCESS_KEY", "BEDROCK_SESSION_TOKEN",
 			"BEDROCK_REGION", "BEDROCK_SERVER_URL",
 		}
@@ -1959,6 +1973,8 @@ func (c *controller) getVariableDescription(varName string) string {
 		"ANTHROPIC_SERVER_URL":              locale.EnvDesc_ANTHROPIC_SERVER_URL,
 		"GEMINI_API_KEY":                    locale.EnvDesc_GEMINI_API_KEY,
 		"GEMINI_SERVER_URL":                 locale.EnvDesc_GEMINI_SERVER_URL,
+		"BEDROCK_DEFAULT_AUTH":              locale.EnvDesc_BEDROCK_DEFAULT_AUTH,
+		"BEDROCK_BEARER_TOKEN":              locale.EnvDesc_BEDROCK_BEARER_TOKEN,
 		"BEDROCK_ACCESS_KEY_ID":             locale.EnvDesc_BEDROCK_ACCESS_KEY_ID,
 		"BEDROCK_SECRET_ACCESS_KEY":         locale.EnvDesc_BEDROCK_SECRET_ACCESS_KEY,
 		"BEDROCK_SESSION_TOKEN":             locale.EnvDesc_BEDROCK_SESSION_TOKEN,
@@ -2118,6 +2134,7 @@ var maskedVariables = map[string]bool{
 	"OPEN_AI_KEY":               true,
 	"ANTHROPIC_API_KEY":         true,
 	"GEMINI_API_KEY":            true,
+	"BEDROCK_BEARER_TOKEN":      true,
 	"BEDROCK_ACCESS_KEY_ID":     true,
 	"BEDROCK_SECRET_ACCESS_KEY": true,
 	"BEDROCK_SESSION_TOKEN":     true,
@@ -2183,6 +2200,8 @@ var criticalVariables = map[string]bool{
 	"ANTHROPIC_SERVER_URL":              true,
 	"GEMINI_API_KEY":                    true,
 	"GEMINI_SERVER_URL":                 true,
+	"BEDROCK_DEFAULT_AUTH":              true,
+	"BEDROCK_BEARER_TOKEN":              true,
 	"BEDROCK_ACCESS_KEY_ID":             true,
 	"BEDROCK_SECRET_ACCESS_KEY":         true,
 	"BEDROCK_SESSION_TOKEN":             true,

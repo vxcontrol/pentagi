@@ -479,13 +479,17 @@ These settings control the integration with various Large Language Model (LLM) p
 
 ### AWS Bedrock LLM Provider
 
-| Option              | Environment Variable        | Default Value | Description                                                                            |
-| ------------------- | --------------------------- | ------------- | -------------------------------------------------------------------------------------- |
-| BedrockRegion       | `BEDROCK_REGION`            | `us-east-1`   | AWS region for Bedrock service                                                         |
-| BedrockAccessKey    | `BEDROCK_ACCESS_KEY_ID`     | *(none)*      | AWS access key ID for Bedrock authentication                                           |
-| BedrockSecretKey    | `BEDROCK_SECRET_ACCESS_KEY` | *(none)*      | AWS secret access key for Bedrock authentication                                       |
-| BedrockSessionToken | `BEDROCK_SESSION_TOKEN`     | *(none)*      | AWS session token for temporary credentials (optional, required for STS/assumed roles) |
-| BedrockServerURL    | `BEDROCK_SERVER_URL`        | *(none)*      | Optional custom endpoint URL for Bedrock service                                       |
+| Option              | Environment Variable        | Default Value | Description                                                                                                              |
+| ------------------- | --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| BedrockRegion       | `BEDROCK_REGION`            | `us-east-1`   | AWS region for Bedrock service                                                                                           |
+| BedrockDefaultAuth  | `BEDROCK_DEFAULT_AUTH`      | `false`       | Use default AWS SDK credential chain (environment variables, EC2 role, ~/.aws/credentials) - highest priority            |
+| BedrockBearerToken  | `BEDROCK_BEARER_TOKEN`      | *(none)*      | Bearer token for authentication - takes priority over static credentials                                                 |
+| BedrockAccessKey    | `BEDROCK_ACCESS_KEY_ID`     | *(none)*      | AWS access key ID for static credentials authentication                                                                  |
+| BedrockSecretKey    | `BEDROCK_SECRET_ACCESS_KEY` | *(none)*      | AWS secret access key for static credentials authentication                                                              |
+| BedrockSessionToken | `BEDROCK_SESSION_TOKEN`     | *(none)*      | AWS session token for temporary credentials (optional, used with static credentials for STS/assumed roles)               |
+| BedrockServerURL    | `BEDROCK_SERVER_URL`        | *(none)*      | Optional custom endpoint URL for Bedrock service (VPC endpoints, local testing)                                          |
+
+**Authentication Priority**: `BedrockDefaultAuth` (highest) → `BedrockBearerToken` → `BedrockAccessKey`+`BedrockSecretKey` (lowest)
 
 ### Custom LLM Provider
 

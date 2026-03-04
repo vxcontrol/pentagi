@@ -579,8 +579,11 @@ GEMINI_API_KEY=your_gemini_key
 
 # Optional: AWS Bedrock provider (enterprise-grade models)
 BEDROCK_REGION=us-east-1
-BEDROCK_ACCESS_KEY_ID=your_aws_access_key
-BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+# Choose one authentication method:
+BEDROCK_DEFAULT_AUTH=true                        # Option 1: Use AWS SDK default credential chain (recommended for EC2/ECS)
+# BEDROCK_BEARER_TOKEN=your_bearer_token         # Option 2: Bearer token authentication
+# BEDROCK_ACCESS_KEY_ID=your_aws_access_key      # Option 3: Static credentials
+# BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
 
 # Optional: Local LLM provider (zero-cost inference)
 OLLAMA_SERVER_URL=http://localhost:11434
@@ -1342,81 +1345,118 @@ The system automatically selects appropriate Gemini models based on agent requir
 
 ### AWS Bedrock Provider Configuration
 
-PentAGI integrates with Amazon Bedrock, offering access to a wide range of foundation models from leading AI companies including Anthropic, AI21, Cohere, Meta, and Amazon's own models:
+PentAGI integrates with Amazon Bedrock, offering access to 20+ foundation models from leading AI companies including Anthropic, Amazon, Cohere, DeepSeek, OpenAI, Qwen, Mistral, and Moonshot.
 
-| Variable                    | Default     | Description                                             |
-| --------------------------- | ----------- | ------------------------------------------------------- |
-| `BEDROCK_REGION`            | `us-east-1` | AWS region for Bedrock service                          |
-| `BEDROCK_ACCESS_KEY_ID`     |             | AWS access key ID for authentication                    |
-| `BEDROCK_SECRET_ACCESS_KEY` |             | AWS secret access key for authentication                |
-| `BEDROCK_SESSION_TOKEN`     |             | AWS session token as alternative way for authentication |
-| `BEDROCK_SERVER_URL`        |             | Optional custom Bedrock endpoint URL                    |
+#### Configuration Variables
 
-Configuration examples:
+| Variable                    | Default     | Description                                                                                         |
+| --------------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
+| `BEDROCK_REGION`            | `us-east-1` | AWS region for Bedrock service                                                                      |
+| `BEDROCK_DEFAULT_AUTH`      | `false`     | Use AWS SDK default credential chain (environment, EC2 role, ~/.aws/credentials) - highest priority |
+| `BEDROCK_BEARER_TOKEN`      |             | Bearer token authentication - priority over static credentials                                      |
+| `BEDROCK_ACCESS_KEY_ID`     |             | AWS access key ID for static credentials                                                            |
+| `BEDROCK_SECRET_ACCESS_KEY` |             | AWS secret access key for static credentials                                                        |
+| `BEDROCK_SESSION_TOKEN`     |             | AWS session token for temporary credentials (optional, used with static credentials)                |
+| `BEDROCK_SERVER_URL`        |             | Custom Bedrock endpoint (VPC endpoints, local testing)                                              |
+
+**Authentication Priority**: `BEDROCK_DEFAULT_AUTH` → `BEDROCK_BEARER_TOKEN` → `BEDROCK_ACCESS_KEY_ID`+`BEDROCK_SECRET_ACCESS_KEY`
+
+#### Configuration Examples
 
 ```bash
-# Basic AWS Bedrock setup with credentials
+# Recommended: Default AWS SDK authentication (EC2/ECS/Lambda roles)
+BEDROCK_REGION=us-east-1
+BEDROCK_DEFAULT_AUTH=true
+
+# Bearer token authentication (AWS STS, custom auth)
+BEDROCK_REGION=us-east-1
+BEDROCK_BEARER_TOKEN=your_bearer_token
+
+# Static credentials (development, testing)
 BEDROCK_REGION=us-east-1
 BEDROCK_ACCESS_KEY_ID=your_aws_access_key
 BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
 
-# Using with proxy for enhanced security
+# With proxy and custom endpoint
 BEDROCK_REGION=us-east-1
-BEDROCK_ACCESS_KEY_ID=your_aws_access_key
-BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
+BEDROCK_DEFAULT_AUTH=true
+BEDROCK_SERVER_URL=https://bedrock-runtime.us-east-1.vpce-xxx.amazonaws.com
 PROXY_URL=http://your-proxy:8080
-
-# Using custom endpoint (for VPC endpoints or testing)
-BEDROCK_REGION=us-east-1
-BEDROCK_ACCESS_KEY_ID=your_aws_access_key
-BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key
-BEDROCK_SERVER_URL=https://bedrock-runtime.us-east-1.amazonaws.com
 ```
 
+#### Supported Models
+
+PentAGI supports 21 AWS Bedrock models with tool calling, streaming, and multimodal capabilities. Models marked with `*` are used in default configuration.
+
+| Model ID                                         | Provider        | Thinking | Multimodal | Price (Input/Output) | Use Case                                |
+| ------------------------------------------------ | --------------- | -------- | ---------- | -------------------- | --------------------------------------- |
+| `us.amazon.nova-2-lite-v1:0`                     | Amazon Nova     | ❌        | ✅          | $0.33/$2.75          | Adaptive reasoning, efficient thinking  |
+| `us.amazon.nova-premier-v1:0`                    | Amazon Nova     | ❌        | ✅          | $2.50/$12.50         | Complex reasoning, advanced analysis    |
+| `us.amazon.nova-pro-v1:0`                        | Amazon Nova     | ❌        | ✅          | $0.80/$3.20          | Balanced accuracy, speed, cost          |
+| `us.amazon.nova-lite-v1:0`                       | Amazon Nova     | ❌        | ✅          | $0.06/$0.24          | Fast processing, high-volume operations |
+| `us.amazon.nova-micro-v1:0`                      | Amazon Nova     | ❌        | ❌          | $0.035/$0.14         | Ultra-low latency, real-time monitoring |
+| `us.anthropic.claude-opus-4-6-v1`*               | Anthropic       | ✅        | ✅          | $5.00/$25.00         | World-class coding, enterprise agents   |
+| `us.anthropic.claude-sonnet-4-6`                 | Anthropic       | ✅        | ✅          | $3.00/$15.00         | Frontier intelligence, enterprise scale |
+| `us.anthropic.claude-opus-4-5-20251101-v1:0`     | Anthropic       | ✅        | ✅          | $5.00/$25.00         | Multi-day software development          |
+| `us.anthropic.claude-haiku-4-5-20251001-v1:0`*   | Anthropic       | ✅        | ✅          | $1.00/$5.00          | Near-frontier performance, high speed   |
+| `us.anthropic.claude-sonnet-4-5-20250929-v1:0`*  | Anthropic       | ✅        | ✅          | $3.00/$15.00         | Real-world agents, coding excellence    |
+| `us.anthropic.claude-sonnet-4-20250514-v1:0`     | Anthropic       | ✅        | ✅          | $3.00/$15.00         | Balanced performance, production-ready  |
+| `us.anthropic.claude-3-5-haiku-20241022-v1:0`    | Anthropic       | ❌        | ❌          | $0.80/$4.00          | Fastest model, cost-effective scanning  |
+| `cohere.command-r-plus-v1:0`                     | Cohere          | ❌        | ❌          | $3.00/$15.00         | Large-scale operations, superior RAG    |
+| `deepseek.v3.2`                                  | DeepSeek        | ❌        | ❌          | $0.58/$1.68          | Long-context reasoning, efficiency      |
+| `openai.gpt-oss-120b-1:0`*                       | OpenAI (OSS)    | ✅        | ❌          | $0.15/$0.60          | Strong reasoning, scientific analysis   |
+| `openai.gpt-oss-20b-1:0`                         | OpenAI (OSS)    | ✅        | ❌          | $0.07/$0.30          | Efficient coding, software development  |
+| `qwen.qwen3-next-80b-a3b`                        | Qwen            | ❌        | ❌          | $0.15/$1.20          | Ultra-long context, flagship reasoning  |
+| `qwen.qwen3-32b-v1:0`                            | Qwen            | ❌        | ❌          | $0.15/$0.60          | Balanced reasoning, research use cases  |
+| `qwen.qwen3-coder-30b-a3b-v1:0`                  | Qwen            | ❌        | ❌          | $0.15/$0.60          | Vibe coding, natural-language first     |
+| `qwen.qwen3-coder-next`                          | Qwen            | ❌        | ❌          | $0.45/$1.80          | Tool use, function calling optimized    |
+| `mistral.mistral-large-3-675b-instruct`          | Mistral         | ❌        | ✅          | $4.00/$12.00         | Advanced multimodal, long-context       |
+| `moonshotai.kimi-k2.5`                           | Moonshot        | ❌        | ✅          | $0.60/$3.00          | Vision, language, code in one model     |
+
+**Prices**: Per 1M tokens. Models with thinking/reasoning support additional compute costs during reasoning phase.
+
+#### Tested but Incompatible Models
+
+Some AWS Bedrock models were tested but are **not supported** due to technical limitations:
+
+| Model Family              | Reason for Incompatibility                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| **GLM (Z.AI)**            | Tool calling format incompatible with Converse API (expects string instead of JSON)       |
+| **AI21 Jamba**            | Severe rate limits (1-2 req/min) prevent reliable testing and production use              |
+| **Meta Llama 3.3/3.1**    | Unstable tool call result processing, causes unexpected failures in multi-turn workflows  |
+| **Mistral Magistral**     | Tool calling not supported by the model                                                   |
+| **Moonshot K2-Thinking**  | Unstable streaming behavior with tool calls, unreliable in production                     |
+| **Qwen3-VL**              | Unstable streaming with tool calling, multimodal + tools combination fails intermittently |
+
 > [!IMPORTANT]
-> **AWS Bedrock Rate Limits Warning**
+> **Rate Limits & Quota Management**
 >
-> The default PentAGI configuration for AWS Bedrock uses two primary models:
-> - `us.anthropic.claude-sonnet-4-20250514-v1:0` (for most agents) - **2 requests per minute** for new AWS accounts
-> - `us.anthropic.claude-3-5-haiku-20241022-v1:0` (for simple tasks) - **20 requests per minute** for new AWS accounts
+> Default AWS Bedrock quotas for Claude models are **extremely restrictive** (2-20 requests/minute for new accounts). For production penetration testing:
 >
-> These default rate limits are **extremely restrictive** for comfortable penetration testing scenarios and will significantly impact your workflow. We **strongly recommend**:
+> 1. **Request quota increases** through AWS Service Quotas console for models you plan to use
+> 2. **Use Amazon Nova models** - higher default quotas and excellent performance
+> 3. **Enable provisioned throughput** for consistent high-volume testing
+> 4. **Monitor usage** - AWS throttles aggressively at quota limits
 >
-> 1. **Request quota increases** for your AWS Bedrock models through the AWS Service Quotas console
-> 2. **Use provisioned throughput models** with hourly billing for higher throughput requirements
-> 3. **Switch to alternative models** with higher default quotas (e.g., Amazon Nova series, Meta Llama models)
-> 4. **Consider using a different LLM provider** (OpenAI, Anthropic, Gemini) if you need immediate high-throughput access
->
-> Without adequate rate limits, you may experience frequent delays, timeouts, and degraded testing performance.
-
-The AWS Bedrock provider delivers comprehensive capabilities including:
-
-- **Multi-Provider Access**: Access to models from Anthropic (Claude), AI21 (Jamba), Cohere (Command), Meta (Llama), Amazon (Nova, Titan), and DeepSeek (R1) through a single interface
-- **Advanced Reasoning**: Support for Claude 4 and other reasoning-capable models with step-by-step thinking
-- **Multimodal Models**: Amazon Nova series supporting text, image, and video processing for comprehensive security analysis
-- **Enterprise Security**: AWS-native security controls, VPC integration, and compliance certifications
-- **Cost Optimization**: Wide range of model sizes and capabilities for cost-effective penetration testing
-- **Regional Availability**: Deploy models in your preferred AWS region for data residency and performance
-- **High Performance**: Low-latency inference through AWS's global infrastructure
-
-The system automatically selects appropriate Bedrock models based on task complexity and requirements, leveraging the full spectrum of available foundation models for optimal security testing results.
+> Without quota increases, expect frequent delays and workflow interruptions.
 
 > [!WARNING]
 > **Converse API Requirements**
 >
-> PentAGI uses the **Amazon Bedrock Converse API** for model interactions, which requires models to support the following features:
-> - ✅ **Converse** - Basic conversation API support
-> - ✅ **ConverseStream** - Streaming response support
-> - ✅ **Tool use** - Function calling capabilities for penetration testing tools
-> - ✅ **Streaming tool use** - Real-time tool execution feedback
+> PentAGI uses Amazon Bedrock **Converse API** for unified model access. All supported models require:
 >
-> **Before selecting models**, verify their feature support at: [Supported models and model features](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
+> - ✅ Converse/ConverseStream API support
+> - ✅ Tool use (function calling) for penetration testing workflows
+> - ✅ Streaming tool use for real-time feedback
 >
-> ⚠️ **Important**: Some models like AI21 Jurassic-2 and Cohere Command (Text) have **limited chat support** and may not work properly with PentAGI's multi-turn conversation workflows.
+> Verify model capabilities at: [AWS Bedrock Model Features](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference-supported-models-features.html)
 
-> **Note**: AWS credentials can also be provided through IAM roles, environment variables, or AWS credential files following standard AWS SDK authentication patterns. Ensure your AWS account has appropriate permissions for Amazon Bedrock service access.
-
-For advanced configuration options and detailed setup instructions, please visit our [documentation](https://docs.pentagi.com).
+**Key Features**:
+- **Automatic Prompt Caching**: 40-70% cost reduction on repeated context (Claude 4.x models)
+- **Extended Thinking**: Step-by-step reasoning for complex security analysis (Claude, DeepSeek R1, OpenAI GPT)
+- **Multimodal Analysis**: Process screenshots, diagrams, video for comprehensive testing (Nova, Claude, Mistral, Kimi)
+- **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
+- **Streaming**: Real-time response streaming for interactive security assessment workflows
 
 ## 🔧 Advanced Setup
 
@@ -1896,10 +1936,13 @@ GEMINI_SERVER_URL=https://generativelanguage.googleapis.com  # Google AI API end
 
 # For AWS Bedrock (enterprise foundation models)
 BEDROCK_REGION=us-east-1                         # AWS region for Bedrock service
-BEDROCK_ACCESS_KEY_ID=your_aws_access_key        # AWS access key ID
-BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key    # AWS secret access key
-BEDROCK_SESSION_TOKEN=your_aws_session_token     # AWS session token (alternative auth method)
-BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint
+# Authentication (choose one method, priority: DefaultAuth > BearerToken > AccessKey):
+BEDROCK_DEFAULT_AUTH=false                       # Use AWS SDK credential chain (env vars, EC2 role, ~/.aws/credentials)
+BEDROCK_BEARER_TOKEN=                            # Bearer token authentication (takes priority over static credentials)
+BEDROCK_ACCESS_KEY_ID=your_aws_access_key        # AWS access key ID (static credentials)
+BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key    # AWS secret access key (static credentials)
+BEDROCK_SESSION_TOKEN=                           # AWS session token (optional, for temporary credentials with static auth)
+BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint (VPC endpoints, local testing)
 
 # For Ollama (local inference)
 OLLAMA_SERVER_URL=http://localhost:11434

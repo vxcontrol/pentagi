@@ -158,8 +158,11 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		return gemini.New(cfg, providerConfig)
 
 	case "bedrock":
-		if cfg.BedrockAccessKey == "" {
-			return nil, fmt.Errorf("Bedrock access key is not set")
+		if !cfg.BedrockDefaultAuth && cfg.BedrockBearerToken == "" &&
+			(cfg.BedrockAccessKey == "" || cfg.BedrockSecretKey == "") {
+			return nil, fmt.Errorf("Bedrock requires authentication: set " +
+				"BEDROCK_DEFAULT_AUTH=true, BEDROCK_BEARER_TOKEN, or " +
+				"BEDROCK_ACCESS_KEY_ID+BEDROCK_SECRET_ACCESS_KEY")
 		}
 		providerConfig, err := bedrock.DefaultProviderConfig()
 		if err != nil {

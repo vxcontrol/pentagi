@@ -3,9 +3,11 @@ package bedrock
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
 	"sync"
 
 	"pentagi/pkg/config"
@@ -16,6 +18,7 @@ import (
 	bconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
+	smithybearer "github.com/aws/smithy-go/auth/bearer"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/bedrock"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
@@ -73,11 +76,28 @@ type bedrockProvider struct {
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
 	opts := []func(*bconfig.LoadOptions) error{
 		bconfig.WithRegion(cfg.BedrockRegion),
-		bconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+	}
+
+	// Choose authentication strategy based on configuration
+	if cfg.BedrockDefaultAuth {
+		// Use default AWS SDK credential chain (environment, EC2 role, etc.)
+		// Don't add any explicit credentials provider
+	} else if cfg.BedrockBearerToken != "" {
+		// Use bearer token authentication
+		opts = append(opts, bconfig.WithBearerAuthTokenProvider(smithybearer.StaticTokenProvider{
+			Token: smithybearer.Token{
+				Value: cfg.BedrockBearerToken,
+			},
+		}))
+	} else if cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "" {
+		// Use static credentials (traditional approach)
+		opts = append(opts, bconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			cfg.BedrockAccessKey,
 			cfg.BedrockSecretKey,
 			cfg.BedrockSessionToken,
-		)),
+		)))
+	} else {
+		return nil, fmt.Errorf("no valid authentication method configured for Bedrock")
 	}
 
 	if cfg.BedrockServerURL != "" {
@@ -179,14 +199,12 @@ func (p *bedrockProvider) CallEx(
 	//   toolUse and toolResult content blocks.
 	// We reconstruct minimal tool definitions from the tool-call names already
 	// present in the chain so that the library sets toolConfig automatically.
-	if minimalTools := buildMinimalToolsFromChain(chain); len(minimalTools) > 0 {
-		options = append(options, llms.WithTools(minimalTools))
-	}
+	options = append(options, p.providerConfig.GetOptionsForType(opt)...)
+	tools := extractToolsFromOptions(options)
+	tools = restoreMissedToolsFromChain(chain, tools)
+	options = append(options, llms.WithTools(tools))
 
-	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append(options, p.providerConfig.GetOptionsForType(opt)...)...,
-	)
+	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }
 
 func (p *bedrockProvider) CallWithTools(
@@ -200,9 +218,7 @@ func (p *bedrockProvider) CallWithTools(
 	// explicitly provided for this turn but the chain already carries toolUse /
 	// toolResult blocks, reconstruct minimal definitions so that the library
 	// includes toolConfig in the request.
-	if len(tools) == 0 {
-		tools = buildMinimalToolsFromChain(chain)
-	}
+	tools = restoreMissedToolsFromChain(chain, tools)
 
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
@@ -221,52 +237,147 @@ func (p *bedrockProvider) GetToolCallIDTemplate(ctx context.Context, prompter te
 	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
 }
 
-// buildMinimalToolsFromChain inspects a conversation chain for ToolCall and
-// ToolCallResponse parts and returns minimal llms.Tool definitions for every
-// unique tool name found.  This is required by the AWS Bedrock Converse API:
-// whenever the request messages contain toolUse or toolResult content blocks,
-// the request MUST also include a valid toolConfig — otherwise the API returns
-//
-//	ValidationException: The toolConfig field must be defined when using
-//	toolUse and toolResult content blocks.
-//
-// We intentionally build placeholder definitions (no real parameter schema)
-// because Bedrock only validates that the config is present, not that the
-// schemas match historical usage.
-func buildMinimalToolsFromChain(chain []llms.MessageContent) []llms.Tool {
-	seen := make(map[string]struct{})
+func extractToolsFromOptions(options []llms.CallOption) []llms.Tool {
+	var opts llms.CallOptions
+
+	for _, option := range options {
+		option(&opts)
+	}
+
+	return opts.Tools
+}
+
+func restoreMissedToolsFromChain(chain []llms.MessageContent, tools []llms.Tool) []llms.Tool {
+	// Build index of already declared tools to avoid overwriting them
+	declaredTools := make(map[string]llms.Tool)
+	for _, tool := range tools {
+		if tool.Function != nil && tool.Function.Name != "" {
+			declaredTools[tool.Function.Name] = tool
+		}
+	}
+
+	// Collect tool usage from chain with their arguments for schema inference
+	toolUsage := collectToolUsageFromChain(chain)
+	if len(toolUsage) == 0 {
+		return tools
+	}
+
+	// Build enhanced tool definitions only for tools not already declared
+	result := make([]llms.Tool, len(tools))
+	copy(result, tools)
+
+	for name, args := range toolUsage {
+		if _, exists := declaredTools[name]; exists {
+			// Trust the existing declaration - don't update it
+			continue
+		}
+
+		// Infer schema from arguments found in the chain
+		schema := inferSchemaFromArguments(args)
+		result = append(result, llms.Tool{
+			Type: "function",
+			Function: &llms.FunctionDefinition{
+				Name:        name,
+				Description: fmt.Sprintf("Tool: %s", name),
+				Parameters:  schema,
+			},
+		})
+	}
+
+	return result
+}
+
+// collectToolUsageFromChain scans the message chain and collects all unique
+// tool names along with sample arguments from their invocations. This allows
+// us to infer parameter schemas using reflection on actual usage.
+func collectToolUsageFromChain(chain []llms.MessageContent) map[string][]string {
+	usage := make(map[string][]string)
+
 	for _, msg := range chain {
 		for _, part := range msg.Parts {
 			switch p := part.(type) {
 			case llms.ToolCall:
 				if p.FunctionCall != nil && p.FunctionCall.Name != "" {
-					seen[p.FunctionCall.Name] = struct{}{}
+					usage[p.FunctionCall.Name] = append(usage[p.FunctionCall.Name], p.FunctionCall.Arguments)
 				}
 			case llms.ToolCallResponse:
 				if p.Name != "" {
-					seen[p.Name] = struct{}{}
+					// ToolCallResponse doesn't have arguments, but we record the tool name
+					if _, exists := usage[p.Name]; !exists {
+						usage[p.Name] = []string{}
+					}
 				}
 			}
 		}
 	}
 
-	if len(seen) == 0 {
-		return nil
+	return usage
+}
+
+// inferSchemaFromArguments attempts to infer a JSON schema for a tool's parameters
+// by analyzing actual argument samples from the chain. It uses reflection to determine
+// top-level property types (simple types, arrays, or objects) without descending deeper.
+func inferSchemaFromArguments(argumentSamples []string) map[string]any {
+	schema := map[string]any{
+		"type":       "object",
+		"properties": map[string]any{},
 	}
 
-	tools := make([]llms.Tool, 0, len(seen))
-	for name := range seen {
-		tools = append(tools, llms.Tool{
-			Type: "function",
-			Function: &llms.FunctionDefinition{
-				Name:        name,
-				Description: fmt.Sprintf("Tool: %s", name),
-				Parameters: map[string]any{
-					"type":       "object",
-					"properties": map[string]any{},
-				},
-			},
-		})
+	if len(argumentSamples) == 0 {
+		return schema
 	}
-	return tools
+
+	// Aggregate properties from all samples to build a complete schema
+	properties := make(map[string]any)
+
+	for _, argJSON := range argumentSamples {
+		if argJSON == "" {
+			continue
+		}
+
+		var args map[string]any
+		if err := json.Unmarshal([]byte(argJSON), &args); err != nil {
+			// Invalid JSON - skip this sample
+			continue
+		}
+
+		for key, value := range args {
+			if _, exists := properties[key]; exists {
+				// Already inferred from a previous sample - trust first occurrence
+				continue
+			}
+
+			propType := inferPropertyType(value)
+			properties[key] = map[string]any{"type": propType}
+		}
+	}
+
+	schema["properties"] = properties
+	return schema
+}
+
+// inferPropertyType determines the JSON schema type for a property value.
+// It only classifies top-level types: string, number, boolean, array, object, or null.
+func inferPropertyType(value any) string {
+	if value == nil {
+		return "null"
+	}
+
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.String:
+		return "string"
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.Slice, reflect.Array:
+		return "array"
+	case reflect.Map, reflect.Struct:
+		return "object"
+	default:
+		return "object"
+	}
 }

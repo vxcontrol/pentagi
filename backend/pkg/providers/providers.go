@@ -226,7 +226,12 @@ func NewProviderController(
 		providers[provider.DefaultProviderNameGemini] = p
 	}
 
-	if cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "" {
+	// Bedrock supports three authentication strategies:
+	// 1. Default AWS SDK auth (BedrockDefaultAuth=true)
+	// 2. Bearer token (BedrockBearerToken set)
+	// 3. Static credentials (BedrockAccessKey + BedrockSecretKey)
+	if cfg.BedrockDefaultAuth || cfg.BedrockBearerToken != "" ||
+		(cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "") {
 		p, err := bedrock.New(cfg, defaultConfigs[provider.ProviderBedrock])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bedrock provider: %w", err)
