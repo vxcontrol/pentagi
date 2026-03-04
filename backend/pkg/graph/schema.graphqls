@@ -17,6 +17,10 @@ enum ProviderType {
   bedrock
   ollama
   custom
+  deepseek
+  glm
+  kimi
+  qwen
 }
 
 # Reasoning effort levels for advanced AI models (OpenAI format)
@@ -614,6 +618,10 @@ type ProvidersModelsList {
   bedrock: [ModelConfig!]
   ollama: [ModelConfig!]
   custom: [ModelConfig!]
+  deepseek: [ModelConfig!]
+  glm: [ModelConfig!]
+  kimi: [ModelConfig!]
+  qwen: [ModelConfig!]
 }
 
 # Provider availability status
@@ -624,6 +632,10 @@ type ProvidersReadinessStatus {
   bedrock: Boolean!
   ollama: Boolean!
   custom: Boolean!
+  deepseek: Boolean!
+  glm: Boolean!
+  kimi: Boolean!
+  qwen: Boolean!
 }
 
 # Default provider configurations
@@ -634,6 +646,10 @@ type DefaultProvidersConfig {
   bedrock: ProviderConfig
   ollama: ProviderConfig
   custom: ProviderConfig
+  deepseek: ProviderConfig
+  glm: ProviderConfig
+  kimi: ProviderConfig
+  qwen: ProviderConfig
 }
 
 # Complete providers configuration

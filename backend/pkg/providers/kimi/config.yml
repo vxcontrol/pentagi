@@ -1,0 +1,114 @@
+simple:
+  model: moonshot-v1-8k
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 1.67
+    output: 1.67
+
+simple_json:
+  model: moonshot-v1-8k
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 1.67
+    output: 1.67
+
+primary_agent:
+  model: kimi-thinking-preview
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 2.08
+    output: 2.08
+
+assistant:
+  model: kimi-thinking-preview
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 2.08
+    output: 2.08
+
+generator:
+  model: kimi-thinking-preview
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 2.08
+    output: 2.08
+
+refiner:
+  model: kimi-thinking-preview
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 2.08
+    output: 2.08
+
+adviser:
+  model: moonshot-v1-8k
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 1.67
+    output: 1.67
+
+reflector:
+  model: kimi-thinking-preview
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 2.08
+    output: 2.08
+
+searcher:
+  model: moonshot-v1-8k
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 1.67
+    output: 1.67
+
+enricher:
+  model: moonshot-v1-8k
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 1.67
+    output: 1.67
+
+coder:
+  model: kimi-thinking-preview
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 2.08
+    output: 2.08
+
+installer:
+  model: kimi-thinking-preview
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 2.08
+    output: 2.08
+
+pentester:
+  model: kimi-thinking-preview
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 2.08
+    output: 2.08
