@@ -168,11 +168,24 @@ func (p *bedrockProvider) CallEx(
 	chain []llms.MessageContent,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
+	options := []llms.CallOption{
+		llms.WithStreamingFunc(streamCb),
+	}
+
+	// The AWS Bedrock Converse API requires toolConfig to be defined whenever the
+	// conversation history contains toolUse or toolResult content blocks — even when
+	// no new tools are being offered in the current turn.  Without it the API returns:
+	//   ValidationException: The toolConfig field must be defined when using
+	//   toolUse and toolResult content blocks.
+	// We reconstruct minimal tool definitions from the tool-call names already
+	// present in the chain so that the library sets toolConfig automatically.
+	if minimalTools := buildMinimalToolsFromChain(chain); len(minimalTools) > 0 {
+		options = append(options, llms.WithTools(minimalTools))
+	}
+
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
+		append(options, p.providerConfig.GetOptionsForType(opt)...)...,
 	)
 }
 
@@ -183,6 +196,14 @@ func (p *bedrockProvider) CallWithTools(
 	tools []llms.Tool,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
+	// Same Bedrock Converse API requirement as in CallEx: if no tools were
+	// explicitly provided for this turn but the chain already carries toolUse /
+	// toolResult blocks, reconstruct minimal definitions so that the library
+	// includes toolConfig in the request.
+	if len(tools) == 0 {
+		tools = buildMinimalToolsFromChain(chain)
+	}
+
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
 		append([]llms.CallOption{
@@ -198,4 +219,54 @@ func (p *bedrockProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 
 func (p *bedrockProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
 	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+}
+
+// buildMinimalToolsFromChain inspects a conversation chain for ToolCall and
+// ToolCallResponse parts and returns minimal llms.Tool definitions for every
+// unique tool name found.  This is required by the AWS Bedrock Converse API:
+// whenever the request messages contain toolUse or toolResult content blocks,
+// the request MUST also include a valid toolConfig — otherwise the API returns
+//
+//	ValidationException: The toolConfig field must be defined when using
+//	toolUse and toolResult content blocks.
+//
+// We intentionally build placeholder definitions (no real parameter schema)
+// because Bedrock only validates that the config is present, not that the
+// schemas match historical usage.
+func buildMinimalToolsFromChain(chain []llms.MessageContent) []llms.Tool {
+	seen := make(map[string]struct{})
+	for _, msg := range chain {
+		for _, part := range msg.Parts {
+			switch p := part.(type) {
+			case llms.ToolCall:
+				if p.FunctionCall != nil && p.FunctionCall.Name != "" {
+					seen[p.FunctionCall.Name] = struct{}{}
+				}
+			case llms.ToolCallResponse:
+				if p.Name != "" {
+					seen[p.Name] = struct{}{}
+				}
+			}
+		}
+	}
+
+	if len(seen) == 0 {
+		return nil
+	}
+
+	tools := make([]llms.Tool, 0, len(seen))
+	for name := range seen {
+		tools = append(tools, llms.Tool{
+			Type: "function",
+			Function: &llms.FunctionDefinition{
+				Name:        name,
+				Description: fmt.Sprintf("Tool: %s", name),
+				Parameters: map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
+		})
+	}
+	return tools
 }
