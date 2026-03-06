@@ -815,3 +815,199 @@ func TestEnsureChainConsistency(t *testing.T) {
 		})
 	}
 }
+
+// makeToolCall is a helper to create a ToolCall with the given function name and arguments.
+func makeToolCall(name, args string) llms.ToolCall {
+	return llms.ToolCall{
+		ID:   "test-id",
+		Type: "function",
+		FunctionCall: &llms.FunctionCall{
+			Name:      name,
+			Arguments: args,
+		},
+	}
+}
+
+func TestRepeatingDetector(t *testing.T) {
+	tests := []struct {
+		name             string
+		calls            []llms.ToolCall
+		expectedDetected []bool // expected detect() return for each call
+		expectedLen      int    // expected len(funcCalls) after all calls
+	}{
+		{
+			name: "nil function call returns false",
+			calls: []llms.ToolCall{
+				{ID: "test", Type: "function", FunctionCall: nil},
+			},
+			expectedDetected: []bool{false},
+			expectedLen:      0,
+		},
+		{
+			name: "first call returns false",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test"}`),
+			},
+			expectedDetected: []bool{false},
+			expectedLen:      1,
+		},
+		{
+			name: "two identical calls below threshold",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("search", `{"query":"test"}`),
+			},
+			expectedDetected: []bool{false, false},
+			expectedLen:      2,
+		},
+		{
+			name: "three identical calls triggers detection",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("search", `{"query":"test"}`),
+			},
+			expectedDetected: []bool{false, false, true},
+			expectedLen:      3,
+		},
+		{
+			name: "different call resets funcCalls",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("browse", `{"url":"http://example.com"}`),
+			},
+			expectedDetected: []bool{false, false, false},
+			expectedLen:      1,
+		},
+		{
+			name: "six identical calls still below escalation threshold",
+			calls: func() []llms.ToolCall {
+				tc := makeToolCall("search", `{"query":"test"}`)
+				return []llms.ToolCall{tc, tc, tc, tc, tc, tc}
+			}(),
+			expectedDetected: []bool{false, false, true, true, true, true},
+			expectedLen:      6,
+		},
+		{
+			name: "seven identical calls reaches escalation threshold",
+			calls: func() []llms.ToolCall {
+				tc := makeToolCall("search", `{"query":"test"}`)
+				return []llms.ToolCall{tc, tc, tc, tc, tc, tc, tc}
+			}(),
+			expectedDetected: []bool{false, false, true, true, true, true, true},
+			expectedLen:      7,
+		},
+		{
+			name: "message field stripped treats calls as identical",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test","message":"first attempt"}`),
+				makeToolCall("search", `{"query":"test","message":"second attempt"}`),
+				makeToolCall("search", `{"query":"test","message":"third attempt"}`),
+			},
+			expectedDetected: []bool{false, false, true},
+			expectedLen:      3,
+		},
+		{
+			name: "different JSON key order treated as identical",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test","limit":"10"}`),
+				makeToolCall("search", `{"limit":"10","query":"test"}`),
+				makeToolCall("search", `{"query":"test","limit":"10"}`),
+			},
+			expectedDetected: []bool{false, false, true},
+			expectedLen:      3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			detector := &repeatingDetector{}
+
+			for i, call := range tt.calls {
+				detected := detector.detect(call)
+				assert.Equal(t, tt.expectedDetected[i], detected,
+					"call %d: expected detect=%v, got %v", i, tt.expectedDetected[i], detected)
+			}
+
+			assert.Equal(t, tt.expectedLen, len(detector.funcCalls),
+				"expected funcCalls length %d, got %d", tt.expectedLen, len(detector.funcCalls))
+		})
+	}
+}
+
+func TestRepeatingDetectorEscalationThreshold(t *testing.T) {
+	// This test validates the escalation math used in performer.go:
+	// len(detector.funcCalls) >= RepeatingToolCallThreshold + maxSoftDetectionsBeforeAbort
+	// With threshold=3 and maxSoftDetections=4, abort triggers at len >= 7
+
+	detector := &repeatingDetector{}
+	tc := makeToolCall("search", `{"query":"test"}`)
+
+	for i := 0; i < 7; i++ {
+		detector.detect(tc)
+	}
+
+	assert.Equal(t, 7, len(detector.funcCalls))
+	assert.True(t, len(detector.funcCalls) >= RepeatingToolCallThreshold+4,
+		"7 calls should reach escalation threshold: %d >= %d+%d",
+		len(detector.funcCalls), RepeatingToolCallThreshold, 4)
+
+	// Verify 6 calls is below threshold
+	detector2 := &repeatingDetector{}
+	for i := 0; i < 6; i++ {
+		detector2.detect(tc)
+	}
+
+	assert.Equal(t, 6, len(detector2.funcCalls))
+	assert.False(t, len(detector2.funcCalls) >= RepeatingToolCallThreshold+4,
+		"6 calls should NOT reach escalation threshold: %d < %d+%d",
+		len(detector2.funcCalls), RepeatingToolCallThreshold, 4)
+}
+
+func TestClearCallArguments(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        llms.FunctionCall
+		expectedName string
+		expectedArgs string
+	}{
+		{
+			name: "strips message field",
+			input: llms.FunctionCall{
+				Name:      "search",
+				Arguments: `{"cmd":"ls","message":"please run this"}`,
+			},
+			expectedName: "search",
+			expectedArgs: "cmd: ls\n",
+		},
+		{
+			name: "sorts keys alphabetically",
+			input: llms.FunctionCall{
+				Name:      "execute",
+				Arguments: `{"z_param":"1","a_param":"2","m_param":"3"}`,
+			},
+			expectedName: "execute",
+			expectedArgs: "a_param: 2\nm_param: 3\nz_param: 1\n",
+		},
+		{
+			name: "invalid JSON returns original",
+			input: llms.FunctionCall{
+				Name:      "search",
+				Arguments: "not valid json",
+			},
+			expectedName: "search",
+			expectedArgs: "not valid json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			detector := &repeatingDetector{}
+			result := detector.clearCallArguments(&tt.input)
+
+			assert.Equal(t, tt.expectedName, result.Name)
+			assert.Equal(t, tt.expectedArgs, result.Arguments)
+		})
+	}
+}
