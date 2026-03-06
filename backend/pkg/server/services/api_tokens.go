@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"pentagi/pkg/database"
+	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/logger"
 	"pentagi/pkg/server/models"
@@ -24,14 +26,21 @@ type TokenService struct {
 	db         *gorm.DB
 	globalSalt string
 	tokenCache *auth.TokenCache
+	ss         subscriptions.SubscriptionsController
 }
 
 // NewTokenService creates a new TokenService instance
-func NewTokenService(db *gorm.DB, globalSalt string, tokenCache *auth.TokenCache) *TokenService {
+func NewTokenService(
+	db *gorm.DB,
+	globalSalt string,
+	tokenCache *auth.TokenCache,
+	ss subscriptions.SubscriptionsController,
+) *TokenService {
 	return &TokenService{
 		db:         db,
 		globalSalt: globalSalt,
 		tokenCache: tokenCache,
+		ss:         ss,
 	}
 }
 
@@ -127,6 +136,14 @@ func (s *TokenService) CreateToken(c *gin.Context) {
 	// invalidate cache for negative caching results
 	s.tokenCache.Invalidate(apiToken.TokenID)
 	s.tokenCache.InvalidateUser(apiToken.UserID)
+
+	if s.ss != nil {
+		publisher := s.ss.NewFlowPublisher(int64(apiToken.UserID), 0)
+		publisher.APITokenCreated(c, database.APITokenWithSecret{
+			ApiToken: convertAPITokenToDatabase(apiToken),
+			Token:    token,
+		})
+	}
 
 	response.Success(c, http.StatusCreated, result)
 }
@@ -330,6 +347,11 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 		token.Status = models.TokenStatusExpired
 	}
 
+	if s.ss != nil {
+		publisher := s.ss.NewFlowPublisher(int64(token.UserID), 0)
+		publisher.APITokenUpdated(c, convertAPITokenToDatabase(token))
+	}
+
 	response.Success(c, http.StatusOK, token)
 }
 
@@ -378,5 +400,25 @@ func (s *TokenService) DeleteToken(c *gin.Context) {
 	s.tokenCache.Invalidate(tokenID)
 	s.tokenCache.InvalidateUser(token.UserID)
 
+	if s.ss != nil {
+		publisher := s.ss.NewFlowPublisher(int64(token.UserID), 0)
+		publisher.APITokenDeleted(c, convertAPITokenToDatabase(token))
+	}
+
 	response.Success(c, http.StatusOK, gin.H{"message": "token deleted successfully"})
+}
+
+func convertAPITokenToDatabase(apiToken models.APIToken) database.ApiToken {
+	return database.ApiToken{
+		ID:        int64(apiToken.ID),
+		TokenID:   apiToken.TokenID,
+		UserID:    int64(apiToken.UserID),
+		RoleID:    int64(apiToken.RoleID),
+		Name:      database.StringToNullString(*apiToken.Name),
+		Ttl:       int64(apiToken.TTL),
+		Status:    database.TokenStatus(apiToken.Status),
+		CreatedAt: database.TimeToNullTime(apiToken.CreatedAt),
+		UpdatedAt: database.TimeToNullTime(apiToken.UpdatedAt),
+		DeletedAt: database.PtrTimeToNullTime(apiToken.DeletedAt),
+	}
 }

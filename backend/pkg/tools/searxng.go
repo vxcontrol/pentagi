@@ -78,13 +78,20 @@ func (s *SearxngTool) Handle(ctx context.Context, name string, args json.RawMess
 		return "", fmt.Errorf("searxng tool is not available: missing base URL or search log provider")
 	}
 
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(s.flowID, s.taskID, s.subtaskID, logrus.Fields{
+		"tool": name,
+		"args": string(args),
+	}))
+
 	var searchArgs SearchAction
 	if err := json.Unmarshal(args, &searchArgs); err != nil {
+		logger.WithError(err).Error("failed to unmarshal searxng search action")
 		return "", fmt.Errorf("error unmarshaling search arguments: %w", err)
 	}
 
 	// Validate required parameters
 	if searchArgs.Query == "" {
+		logger.Error("query parameter is required")
 		return "", fmt.Errorf("query parameter is required")
 	}
 
@@ -103,7 +110,7 @@ func (s *SearxngTool) Handle(ctx context.Context, name string, args json.RawMess
 			s.subtaskID,
 		)
 		if err != nil {
-			logrus.WithError(err).Error("failed to create search log")
+			logger.WithError(err).Error("failed to create search log")
 		}
 	}
 
@@ -124,10 +131,11 @@ func (s *SearxngTool) Handle(ctx context.Context, name string, args json.RawMess
 					s.subtaskID,
 				)
 				if updateErr != nil {
-					logrus.WithError(updateErr).Error("failed to update search log with error")
+					logger.WithError(updateErr).Error("failed to update search log with error")
 				}
 			}
 		}
+		logger.WithError(err).Error("failed to perform searxng search")
 		return "", fmt.Errorf("searxng search failed: %w", err)
 	}
 
@@ -146,7 +154,7 @@ func (s *SearxngTool) Handle(ctx context.Context, name string, args json.RawMess
 				s.subtaskID,
 			)
 			if updateErr != nil {
-				logrus.WithError(updateErr).Error("failed to update search log with results")
+				logger.WithError(updateErr).Error("failed to update search log with results")
 			}
 		}
 	}
@@ -213,12 +221,12 @@ func (s *SearxngTool) performSearxngSearch(ctx context.Context, query string, ma
 	// Set user agent
 	req.Header.Set("User-Agent", "PentAGI/1.0")
 
-	logrus.WithFields(logrus.Fields{
+	logrus.WithFields(enrichLogrusFields(s.flowID, s.taskID, s.subtaskID, logrus.Fields{
 		"url":    apiURL.String(),
 		"query":  query,
 		"limit":  params.Get("limit"),
 		"engine": "searxng",
-	}).Debug("Performing Searxng search")
+	})).Debug("Performing Searxng search")
 
 	resp, err := client.Do(req)
 	if err != nil {

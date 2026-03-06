@@ -46,10 +46,10 @@ func NewTraversaalTool(flowID int64, taskID, subtaskID *int64, apiKey, proxyURL 
 func (t *traversaal) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
-	})
+	}))
 
 	if err := json.Unmarshal(args, &action); err != nil {
 		logger.WithError(err).Error("failed to unmarshal traversaal search action")
@@ -108,9 +108,9 @@ func (t *traversaal) search(ctx context.Context, query string) (string, error) {
 	}
 
 	reqBody, err := json.Marshal(struct {
-		Query []string `json:"query"`
+		Query string `json:"query"`
 	}{
-		Query: []string{query},
+		Query: query,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal request body: %v", err)

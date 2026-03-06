@@ -12,9 +12,11 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/terminal"
+	"pentagi/pkg/version"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -28,6 +30,8 @@ func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
 	help := flag.Bool("help", false, "Show help information")
 	flag.Parse()
+
+	logrus.Infof("Starting PentAGI Embedding Tester %s", version.GetBinaryVersion())
 
 	// Extract command from first non-flag argument
 	args := flag.Args()

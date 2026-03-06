@@ -15,10 +15,7 @@ import (
 	"pentagi/cmd/installer/hardening"
 	"pentagi/cmd/installer/state"
 	"pentagi/cmd/installer/wizard"
-)
-
-const (
-	version = "1.0.0"
+	"pentagi/pkg/version"
 )
 
 type Config struct {
@@ -30,7 +27,7 @@ func main() {
 	config := parseFlags(os.Args)
 
 	if config.showVersion {
-		fmt.Println(version)
+		fmt.Println(version.GetBinaryVersion())
 		os.Exit(0)
 	}
 
@@ -87,7 +84,7 @@ func parseFlags(args []string) Config {
 	flagSet.BoolVar(&config.showVersion, "v", false, "Show version information")
 	flagSet.StringVar(&config.envPath, "e", ".env", "Path to environment file")
 	flagSet.Usage = func() {
-		fmt.Fprintf(os.Stderr, "PentAGI Installer v%s\n\n", version)
+		fmt.Fprintf(os.Stderr, "PentAGI Installer v%s\n\n", version.GetBinaryVersion())
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", name)
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flagSet.PrintDefaults()
@@ -158,7 +155,7 @@ func createInitialEnvFile(path string) error {
 # This file contains environment variables for PentAGI configuration.
 # You can modify these values through the installer interface.
 #
-%s`, version, string(content))
+%s`, version.GetBinaryVersion(), string(content))
 
 	if err := os.WriteFile(path, content, 0600); err != nil {
 		return fmt.Errorf("cannot write .env file: %w", err)
@@ -186,7 +183,7 @@ func gatherSystemFacts(ctx context.Context, appState state.State) (checker.Check
 }
 
 func printStartupInfo(envPath string, checkResult checker.CheckResult) {
-	fmt.Printf("PentAGI Installer v%s\n", version)
+	fmt.Printf("PentAGI Installer v%s\n", version.GetBinaryVersion())
 	fmt.Printf("Environment file: %s\n", envPath)
 
 	if !checkResult.IsReadyToContinue() {

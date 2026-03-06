@@ -43,10 +43,10 @@ func NewGuideTool(flowID int64, taskID, subtaskID *int64, store *pgvector.Store,
 
 func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(g.flowID, g.taskID, g.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
-	})
+	}))
 
 	if g.store == nil {
 		logger.Error("pgvector store is not initialized")

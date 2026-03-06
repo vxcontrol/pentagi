@@ -170,7 +170,7 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		return model.ResultTypeError, err
 	}
 
-	if _, err := r.DB.DeleteFlow(ctx, flowID); err != nil {
+	if _, err := r.DB.DeleteFlow(ctx, flow.ID); err != nil {
 		return model.ResultTypeError, err
 	}
 
@@ -205,7 +205,7 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 			return model.ResultTypeError, err
 		}
 
-		containers, err := r.DB.GetFlowContainers(ctx, flowID)
+		containers, err := r.DB.GetFlowContainers(ctx, flow.ID)
 		if err != nil {
 			return model.ResultTypeError, err
 		}

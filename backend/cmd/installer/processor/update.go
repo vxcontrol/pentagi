@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"pentagi/cmd/installer/checker"
+	"pentagi/pkg/version"
 )
 
 const updateServerURL = "https://update.pentagi.com"
@@ -102,7 +103,7 @@ func (u *updateOperationsImpl) removeInstaller(ctx context.Context, state *opera
 }
 
 func (u *updateOperationsImpl) buildUpdateCheckRequest() checker.CheckUpdatesRequest {
-	currentVersion := "1.0.0"
+	currentVersion := version.GetBinaryVersion()
 	if versionVar, exists := u.processor.state.GetVar("PENTAGI_VERSION"); exists {
 		currentVersion = versionVar.Value
 	}

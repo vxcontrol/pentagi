@@ -225,12 +225,23 @@ definitions:
         type: string
       model_provider_type:
         type: string
+      msgchain_id:
+        minimum: 0
+        type: integer
       status:
         type: string
       title:
         type: string
+      tool_call_id_template:
+        maxLength: 70
+        type: string
+      trace_id:
+        maxLength: 70
+        type: string
       updated_at:
         type: string
+      use_agents:
+        type: boolean
     required:
     - flow_id
     - language
@@ -239,6 +250,8 @@ definitions:
     - model_provider_type
     - status
     - title
+    - tool_call_id_template
+    - trace_id
     type: object
   models.AssistantFlow:
     properties:
@@ -267,12 +280,23 @@ definitions:
         type: string
       model_provider_type:
         type: string
+      msgchain_id:
+        minimum: 0
+        type: integer
       status:
         type: string
       title:
         type: string
+      tool_call_id_template:
+        maxLength: 70
+        type: string
+      trace_id:
+        maxLength: 70
+        type: string
       updated_at:
         type: string
+      use_agents:
+        type: boolean
     required:
     - flow_id
     - language
@@ -281,6 +305,8 @@ definitions:
     - model_provider_type
     - status
     - title
+    - tool_call_id_template
+    - trace_id
     type: object
   models.Assistantlog:
     properties:
@@ -460,6 +486,12 @@ definitions:
         type: string
       title:
         type: string
+      tool_call_id_template:
+        maxLength: 70
+        type: string
+      trace_id:
+        maxLength: 70
+        type: string
       updated_at:
         type: string
       user_id:
@@ -472,6 +504,8 @@ definitions:
     - model_provider_type
     - status
     - title
+    - tool_call_id_template
+    - trace_id
     - user_id
     type: object
   models.FlowExecutionStats:
@@ -539,6 +573,12 @@ definitions:
         type: array
       title:
         type: string
+      tool_call_id_template:
+        maxLength: 70
+        type: string
+      trace_id:
+        maxLength: 70
+        type: string
       updated_at:
         type: string
       user_id:
@@ -552,6 +592,8 @@ definitions:
     - status
     - tasks
     - title
+    - tool_call_id_template
+    - trace_id
     - user_id
     type: object
   models.FlowUsageResponse:
@@ -709,9 +751,13 @@ definitions:
         - stop
         - finish
         - input
+        - rename
         type: string
       input:
         example: user input for waiting flow
+        type: string
+      name:
+        example: new flow name
         type: string
     required:
     - action

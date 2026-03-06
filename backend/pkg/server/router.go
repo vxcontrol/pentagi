@@ -38,6 +38,8 @@ import (
 
 const baseURL = "/api/v1"
 
+const corsAllowGoogleOAuth = "https://accounts.google.com"
+
 // frontendRoutes defines the list of URI prefixes that should be handled by the frontend SPA.
 // Add new frontend base routes here if they are added in the frontend router (e.g., in App.tsx).
 var frontendRoutes = []string{
@@ -125,11 +127,11 @@ func NewRouter(
 	userService := services.NewUserService(orm, userCache)
 	roleService := services.NewRoleService(orm)
 	providerService := services.NewProviderService(providers)
-	flowService := services.NewFlowService(orm, providers, controller)
+	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
-	assistantService := services.NewAssistantService(orm, providers, controller)
+	assistantService := services.NewAssistantService(orm, providers, controller, subscriptions)
 	agentlogService := services.NewAgentlogService(orm)
 	assistantlogService := services.NewAssistantlogService(orm)
 	msglogService := services.NewMsglogService(orm)
@@ -139,7 +141,7 @@ func NewRouter(
 	screenshotService := services.NewScreenshotService(orm, cfg.DataDir)
 	promptService := services.NewPromptService(orm)
 	analyticsService := services.NewAnalyticsService(orm)
-	tokenService := services.NewTokenService(orm, cfg.CookieSigningSalt, tokenCache)
+	tokenService := services.NewTokenService(orm, cfg.CookieSigningSalt, tokenCache, subscriptions)
 	graphqlService := services.NewGraphqlService(
 		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions,
 	)
@@ -154,7 +156,20 @@ func NewRouter(
 	config.AllowWildcard = true
 	config.AllowWebSockets = true
 	config.AllowPrivateNetwork = true
-	config.AllowOrigins = cfg.CorsOrigins
+
+	// Add OAuth provider origins to CORS allowed origins
+	allowedOrigins := make([]string, len(cfg.CorsOrigins))
+	copy(allowedOrigins, cfg.CorsOrigins)
+
+	// Google OAuth uses POST callback from accounts.google.com
+	if cfg.OAuthGoogleClientID != "" && cfg.OAuthGoogleClientSecret != "" {
+		if !slices.Contains(allowedOrigins, corsAllowGoogleOAuth) && !slices.Contains(cfg.CorsOrigins, "*") {
+			allowedOrigins = append(allowedOrigins, corsAllowGoogleOAuth)
+			logrus.Infof("Added %s to CORS allowed origins for Google OAuth", corsAllowGoogleOAuth)
+		}
+	}
+
+	config.AllowOrigins = allowedOrigins
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	if err := config.Validate(); err != nil {
 		logrus.WithError(err).Error("failed to validate cors config")

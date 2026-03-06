@@ -98,10 +98,10 @@ func NewDuckDuckGoTool(flowID int64, taskID, subtaskID *int64, enabled bool,
 func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(d.flowID, d.taskID, d.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
-	})
+	}))
 
 	if err := json.Unmarshal(args, &action); err != nil {
 		logger.WithError(err).Error("failed to unmarshal duckduckgo search action")

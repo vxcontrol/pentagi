@@ -59,10 +59,10 @@ func (g *google) parseGoogleSearchResult(res *customsearch.Search) string {
 func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(g.flowID, g.taskID, g.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
-	})
+	}))
 
 	if err := json.Unmarshal(args, &action); err != nil {
 		logger.WithError(err).Error("failed to unmarshal google search action")

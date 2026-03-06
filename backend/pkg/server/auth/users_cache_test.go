@@ -38,6 +38,18 @@ func setupUserTestDB(t *testing.T) *gorm.DB {
 		)
 	`)
 
+	// Create user_preferences table
+	db.Exec(`
+		CREATE TABLE user_preferences (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL UNIQUE,
+			preferences TEXT NOT NULL DEFAULT '{"favoriteFlows": []}',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)
+	`)
+
 	time.Sleep(200 * time.Millisecond) // wait for database to be ready
 
 	return db

@@ -20,8 +20,10 @@ import (
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/providers/tester"
 	"pentagi/pkg/providers/tester/testdata"
+	"pentagi/pkg/version"
 
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -36,6 +38,8 @@ func main() {
 	workers := flag.Int("workers", 4, "Number of workers to use")
 	verbose := flag.Bool("verbose", false, "Enable verbose output")
 	flag.Parse()
+
+	logrus.Infof("Starting PentAGI Provider Configuration Tester %s", version.GetBinaryVersion())
 
 	if err := godotenv.Load(*envFile); err != nil {
 		log.Println("Warning: Error loading .env file:", err)

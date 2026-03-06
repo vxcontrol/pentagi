@@ -288,9 +288,16 @@ func (s *AuthService) AuthAuthorize(c *gin.Context) {
 	signedStateJSON := append(signature, stateJSON...)
 	state := base64.RawURLEncoding.EncodeToString(signedStateJSON)
 
+	// Google OAuth uses POST callback which requires SameSite=None for cross-site requests
+	// GitHub and other providers use GET callback which works with SameSite=Lax
+	sameSiteMode := http.SameSiteLaxMode
+	if provider == "google" {
+		sameSiteMode = http.SameSiteNoneMode
+	}
+
 	maxAge := int(authStateRequestTTL / time.Second)
-	s.setCallbackCookie(c.Writer, c.Request, authStateCookieName, state, maxAge)
-	s.setCallbackCookie(c.Writer, c.Request, authNonceCookieName, nonce, maxAge)
+	s.setCallbackCookie(c.Writer, c.Request, authStateCookieName, state, maxAge, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, authNonceCookieName, nonce, maxAge, sameSiteMode)
 
 	authOpts := []oauth2.AuthCodeOption{
 		oauth2.SetAuthURLParam("nonce", nonce),
@@ -524,8 +531,31 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 				Status: "active",
 				Type:   models.UserTypeOAuth,
 			}
-			if err = s.db.Create(&user).Error; err != nil {
+
+			tx := s.db.Begin()
+			if tx.Error != nil {
+				logger.FromContext(c).WithError(tx.Error).Errorf("error starting transaction")
+				response.Error(c, response.ErrInternal, tx.Error)
+				return
+			}
+
+			if err = tx.Create(&user).Error; err != nil {
+				tx.Rollback()
 				logger.FromContext(c).WithError(err).Errorf("error creating user")
+				response.Error(c, response.ErrInternal, err)
+				return
+			}
+
+			preferences := models.NewUserPreferences(user.ID)
+			if err = tx.Create(preferences).Error; err != nil {
+				tx.Rollback()
+				logger.FromContext(c).WithError(err).Errorf("error creating user preferences")
+				response.Error(c, response.ErrInternal, err)
+				return
+			}
+
+			if err = tx.Commit().Error; err != nil {
+				logger.FromContext(c).WithError(err).Errorf("error committing transaction")
 				response.Error(c, response.ErrInternal, err)
 				return
 			}
@@ -573,8 +603,14 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 	}
 
 	// delete temporary cookies
-	s.setCallbackCookie(c.Writer, c.Request, authStateCookieName, "", 0)
-	s.setCallbackCookie(c.Writer, c.Request, authNonceCookieName, "", 0)
+	// Google OAuth uses POST callback which requires SameSite=None for cross-site requests
+	// GitHub and other providers use GET callback which works with SameSite=Lax
+	sameSiteMode := http.SameSiteLaxMode
+	if stateData["provider"] == "google" {
+		sameSiteMode = http.SameSiteNoneMode
+	}
+	s.setCallbackCookie(c.Writer, c.Request, authStateCookieName, "", 0, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, authNonceCookieName, "", 0, sameSiteMode)
 
 	logger.FromContext(c).
 		WithFields(logrus.Fields{
@@ -673,13 +709,20 @@ func (s *AuthService) parseState(c *gin.Context, state string) (map[string]strin
 	return stateData, nil
 }
 
-func (s *AuthService) setCallbackCookie(w http.ResponseWriter, r *http.Request, name, value string, maxAge int) {
+func (s *AuthService) setCallbackCookie(
+	w http.ResponseWriter, r *http.Request,
+	name, value string, maxAge int,
+	sameSite http.SameSite,
+) {
+	// Check both direct TLS and X-Forwarded-Proto header (for reverse proxy setups)
+	useTLS := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+
 	c := &http.Cookie{
 		Name:     name,
 		Value:    value,
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   useTLS,
+		SameSite: sameSite,
 		Path:     path.Join(s.cfg.BaseURL, s.cfg.LoginCallbackURL),
 		MaxAge:   maxAge,
 	}

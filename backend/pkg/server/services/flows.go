@@ -1,12 +1,15 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
 	"strconv"
 
 	"pentagi/pkg/controller"
+	"pentagi/pkg/database"
+	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/server/logger"
@@ -45,13 +48,20 @@ type FlowService struct {
 	db *gorm.DB
 	pc providers.ProviderController
 	fc controller.FlowController
+	ss subscriptions.SubscriptionsController
 }
 
-func NewFlowService(db *gorm.DB, pc providers.ProviderController, fc controller.FlowController) *FlowService {
+func NewFlowService(
+	db *gorm.DB,
+	pc providers.ProviderController,
+	fc controller.FlowController,
+	ss subscriptions.SubscriptionsController,
+) *FlowService {
 	return &FlowService{
 		db: db,
 		pc: pc,
 		fc: fc,
+		ss: ss,
 	}
 }
 
@@ -463,6 +473,17 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
+	case "rename":
+		if patchFlow.Name == nil || *patchFlow.Name == "" {
+			logger.FromContext(c).Errorf("error renaming flow: name is empty")
+			response.Error(c, response.ErrFlowsInvalidRequest, nil)
+			return
+		}
+		if err := fw.Rename(c, *patchFlow.Name); err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error renaming flow")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
 	default:
 		logger.FromContext(c).Errorf("error filtering flow action")
 		response.Error(c, response.ErrFlowsInvalidRequest, nil)
@@ -539,6 +560,14 @@ func (s *FlowService) DeleteFlow(c *gin.Context) {
 		return
 	}
 
+	var containers []models.Container
+	err = s.db.Model(&containers).Where("flow_id = ?", flow.ID).Find(&containers).Error
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error getting flow containers")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
 	if err = s.db.Scopes(scope).Delete(&flow).Error; err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error deleting flow by id")
 		if gorm.IsRecordNotFoundError(err) {
@@ -549,5 +578,62 @@ func (s *FlowService) DeleteFlow(c *gin.Context) {
 		return
 	}
 
+	flowDB, err := convertFlowToDatabase(flow)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error converting flow to database")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	containersDB := make([]database.Container, 0, len(containers))
+	for _, container := range containers {
+		containersDB = append(containersDB, convertContainerToDatabase(container))
+	}
+
+	if s.ss != nil {
+		publisher := s.ss.NewFlowPublisher(int64(flow.UserID), int64(flow.ID))
+		publisher.FlowUpdated(c, flowDB, containersDB)
+		publisher.FlowDeleted(c, flowDB, containersDB)
+	}
+
 	response.Success(c, http.StatusOK, flow)
+}
+
+func convertFlowToDatabase(flow models.Flow) (database.Flow, error) {
+	functions, err := json.Marshal(flow.Functions)
+	if err != nil {
+		return database.Flow{}, err
+	}
+
+	return database.Flow{
+		ID:                 int64(flow.ID),
+		Status:             database.FlowStatus(flow.Status),
+		Title:              flow.Title,
+		Model:              flow.Model,
+		ModelProviderName:  flow.ModelProviderName,
+		Language:           flow.Language,
+		Functions:          functions,
+		UserID:             int64(flow.UserID),
+		CreatedAt:          database.TimeToNullTime(flow.CreatedAt),
+		UpdatedAt:          database.TimeToNullTime(flow.UpdatedAt),
+		DeletedAt:          database.PtrTimeToNullTime(flow.DeletedAt),
+		TraceID:            database.PtrStringToNullString(flow.TraceID),
+		ModelProviderType:  database.ProviderType(flow.ModelProviderType),
+		ToolCallIDTemplate: flow.ToolCallIDTemplate,
+	}, nil
+}
+
+func convertContainerToDatabase(container models.Container) database.Container {
+	return database.Container{
+		ID:        int64(container.ID),
+		Type:      database.ContainerType(container.Type),
+		Name:      container.Name,
+		Image:     container.Image,
+		Status:    database.ContainerStatus(container.Status),
+		LocalID:   database.StringToNullString(container.LocalID),
+		LocalDir:  database.StringToNullString(container.LocalDir),
+		FlowID:    int64(container.FlowID),
+		CreatedAt: database.TimeToNullTime(container.CreatedAt),
+		UpdatedAt: database.TimeToNullTime(container.UpdatedAt),
+	}
 }

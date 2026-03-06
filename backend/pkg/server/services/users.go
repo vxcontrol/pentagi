@@ -404,8 +404,30 @@ func (s *UserService) CreateUser(c *gin.Context) {
 		user.Password = string(encPassword)
 	}
 
-	if err = s.db.Create(&user).Error; err != nil {
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		logger.FromContext(c).WithError(tx.Error).Errorf("error starting transaction")
+		response.Error(c, response.ErrInternal, tx.Error)
+		return
+	}
+
+	if err = tx.Create(&user).Error; err != nil {
+		tx.Rollback()
 		logger.FromContext(c).WithError(err).Errorf("error creating user")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	preferences := models.NewUserPreferences(user.ID)
+	if err = tx.Create(preferences).Error; err != nil {
+		tx.Rollback()
+		logger.FromContext(c).WithError(err).Errorf("error creating user preferences")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	if err = tx.Commit().Error; err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error committing transaction")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}

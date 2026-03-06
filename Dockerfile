@@ -37,6 +37,10 @@ RUN npm run build -- \
 # STEP 2: Build the backend
 FROM golang:1.24-bookworm as be-build
 
+# Build arguments for version information
+ARG PACKAGE_VER=develop
+ARG PACKAGE_REV=
+
 ENV CGO_ENABLED=0
 ENV GO111MODULE=on
 
@@ -58,17 +62,37 @@ COPY backend/ .
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-# Build backend
-RUN go build -trimpath -o /pentagi ./cmd/pentagi
+# Build backend with version information
+RUN go build -trimpath \
+    -ldflags "\
+        -X pentagi/pkg/version.PackageName=pentagi \
+        -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} \
+        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}" \
+    -o /pentagi ./cmd/pentagi
 
 # Build ctester utility
-RUN go build -trimpath -o /ctester ./cmd/ctester
+RUN go build -trimpath \
+    -ldflags "\
+        -X pentagi/pkg/version.PackageName=ctester \
+        -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} \
+        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}" \
+    -o /ctester ./cmd/ctester
 
 # Build ftester utility
-RUN go build -trimpath -o /ftester ./cmd/ftester
+RUN go build -trimpath \
+    -ldflags "\
+        -X pentagi/pkg/version.PackageName=ftester \
+        -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} \
+        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}" \
+    -o /ftester ./cmd/ftester
 
 # Build etester utility
-RUN go build -trimpath -o /etester ./cmd/etester
+RUN go build -trimpath \
+    -ldflags "\
+        -X pentagi/pkg/version.PackageName=etester \
+        -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} \
+        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}" \
+    -o /etester ./cmd/etester
 
 # STEP 3: Build the final image
 FROM alpine:3.23.3
@@ -82,7 +106,7 @@ RUN addgroup -g 998 docker && \
 # Install required packages
 RUN apk --no-cache add ca-certificates openssl shadow
 
-ADD entrypoint.sh /opt/pentagi/bin/
+ADD scripts/entrypoint.sh /opt/pentagi/bin/
 
 RUN chmod +x /opt/pentagi/bin/entrypoint.sh
 

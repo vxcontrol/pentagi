@@ -13,6 +13,7 @@ import (
 	"pentagi/pkg/schema"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
@@ -1500,4 +1501,20 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 		handlers:    map[string]ExecutorHandler{ReportResultToolName: cfg.ReportResult},
 		barriers:    map[string]struct{}{ReportResultToolName: {}},
 	}, nil
+}
+
+func enrichLogrusFields(flowID int64, taskID, subtaskID *int64, fields logrus.Fields) logrus.Fields {
+	if fields == nil {
+		fields = make(logrus.Fields)
+	}
+
+	fields["flow_id"] = flowID
+	if taskID != nil {
+		fields["task_id"] = *taskID
+	}
+	if subtaskID != nil {
+		fields["subtask_id"] = *subtaskID
+	}
+
+	return fields
 }

@@ -18,6 +18,13 @@ func StringToNullString(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: s != ""}
 }
 
+func PtrStringToNullString(s *string) sql.NullString {
+	if s == nil {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: *s, Valid: true}
+}
+
 func NullStringToPtrString(s sql.NullString) *string {
 	if s.Valid {
 		return &s.String
@@ -32,6 +39,13 @@ func Int64ToNullInt64(i *int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: *i, Valid: true}
 }
 
+func Uint64ToNullInt64(i *uint64) sql.NullInt64 {
+	if i == nil {
+		return sql.NullInt64{Int64: 0, Valid: false}
+	}
+	return sql.NullInt64{Int64: int64(*i), Valid: true}
+}
+
 func NullInt64ToInt64(i sql.NullInt64) *int64 {
 	if i.Valid {
 		return &i.Int64
@@ -41,6 +55,13 @@ func NullInt64ToInt64(i sql.NullInt64) *int64 {
 
 func TimeToNullTime(t time.Time) sql.NullTime {
 	return sql.NullTime{Time: t, Valid: !t.IsZero()}
+}
+
+func PtrTimeToNullTime(t *time.Time) sql.NullTime {
+	if t == nil {
+		return sql.NullTime{Valid: false}
+	}
+	return sql.NullTime{Time: *t, Valid: true}
 }
 
 func SanitizeUTF8(msg string) string {

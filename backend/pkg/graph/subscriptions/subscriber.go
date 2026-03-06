@@ -49,7 +49,7 @@ func (s *flowSubscriber) FlowUpdatedAdmin(ctx context.Context) (<-chan *model.Fl
 }
 
 func (s *flowSubscriber) FlowUpdated(ctx context.Context) (<-chan *model.Flow, error) {
-	return s.ctrl.flowUpdated.Subscribe(ctx, s.flowID), nil
+	return s.ctrl.flowUpdated.Subscribe(ctx, s.userID), nil
 }
 
 func (s *flowSubscriber) TaskCreated(ctx context.Context) (<-chan *model.Task, error) {

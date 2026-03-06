@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"pentagi/pkg/version"
 )
 
 func TestParseFlags(t *testing.T) {
@@ -145,7 +147,7 @@ func TestCreateEmptyEnvFile(t *testing.T) {
 	if !containsString(contentStr, "PentAGI Environment Configuration") {
 		t.Error("Expected file to contain header comment")
 	}
-	if !containsString(contentStr, version) {
+	if !containsString(contentStr, version.GetBinaryVersion()) {
 		t.Error("Expected file to contain version")
 	}
 }

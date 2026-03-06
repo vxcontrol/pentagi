@@ -9,11 +9,15 @@ import (
 	"sync"
 
 	"pentagi/cmd/installer/state"
+	"pentagi/pkg/version"
 
 	"github.com/docker/docker/client"
 )
 
-const InstallerVersion = "1.0.0"
+var (
+	InstallerVersion = version.GetBinaryVersion()
+	UserAgent        = "PentAGI-Installer/" + InstallerVersion
+)
 
 const (
 	DockerComposeFile            = "docker-compose.yml"
@@ -38,7 +42,6 @@ const (
 	DefaultLangfuseOtelEndpoint  = "http://otelcol:4318"
 	DefaultUpdateServerEndpoint  = "https://update.pentagi.com"
 	UpdatesCheckEndpoint         = "/api/v1/updates/check"
-	UserAgent                    = "PentAGI-Installer/" + InstallerVersion
 	MinFreeMemGB                 = 0.5
 	MinFreeMemGBForPentagi       = 0.5
 	MinFreeMemGBForGraphiti      = 2.0

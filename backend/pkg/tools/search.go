@@ -43,10 +43,10 @@ func NewSearchTool(flowID int64, taskID, subtaskID *int64, store *pgvector.Store
 
 func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(s.flowID, s.taskID, s.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
-	})
+	}))
 
 	if s.store == nil {
 		logger.Error("pgvector store is not initialized")

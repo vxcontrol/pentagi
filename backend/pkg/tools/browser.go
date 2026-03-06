@@ -97,10 +97,10 @@ func (b *browser) wrapCommandResult(ctx context.Context, name, result, url, scre
 
 func (b *browser) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action Browser
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(b.flowID, b.taskID, b.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
-	})
+	}))
 
 	if name != "browser" {
 		logger.Error("unknown tool")

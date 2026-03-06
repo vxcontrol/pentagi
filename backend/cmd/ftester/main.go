@@ -20,6 +20,7 @@ import (
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/terminal"
+	"pentagi/pkg/version"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -41,6 +42,8 @@ func main() {
 	if *subtaskID == 0 {
 		subtaskID = nil
 	}
+
+	logrus.Infof("Starting PentAGI Function Tester %s", version.GetBinaryVersion())
 
 	err := godotenv.Load(*envFile)
 	if err != nil {
@@ -70,7 +73,11 @@ func main() {
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
 		log.Fatalf("Unable to create telemetry client: %v\n", err)
 	}
-	defer otelclient.ForceFlush(context.Background())
+	defer func() {
+		if otelclient != nil {
+			otelclient.ForceFlush(context.Background())
+		}
+	}()
 
 	obs.InitObserver(ctx, lfclient, otelclient, []logrus.Level{
 		logrus.DebugLevel,

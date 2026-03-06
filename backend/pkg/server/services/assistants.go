@@ -1,12 +1,15 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
 	"strconv"
 
 	"pentagi/pkg/controller"
+	"pentagi/pkg/database"
+	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/server/logger"
@@ -47,13 +50,20 @@ type AssistantService struct {
 	db *gorm.DB
 	pc providers.ProviderController
 	fc controller.FlowController
+	ss subscriptions.SubscriptionsController
 }
 
-func NewAssistantService(db *gorm.DB, pc providers.ProviderController, fc controller.FlowController) *AssistantService {
+func NewAssistantService(
+	db *gorm.DB,
+	pc providers.ProviderController,
+	fc controller.FlowController,
+	ss subscriptions.SubscriptionsController,
+) *AssistantService {
 	return &AssistantService{
 		db: db,
 		pc: pc,
 		fc: fc,
+		ss: ss,
 	}
 }
 
@@ -427,6 +437,18 @@ func (s *AssistantService) PatchAssistant(c *gin.Context) {
 		return
 	}
 
+	assistantDB, err := convertAssistantToDatabase(assistant.Assistant)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error converting assistant to database")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	if s.ss != nil {
+		publisher := s.ss.NewFlowPublisher(int64(assistant.Flow.UserID), int64(assistant.FlowID))
+		publisher.AssistantUpdated(c, assistantDB)
+	}
+
 	response.Success(c, http.StatusOK, assistant)
 }
 
@@ -522,5 +544,43 @@ func (s *AssistantService) DeleteAssistant(c *gin.Context) {
 		return
 	}
 
+	assistantDB, err := convertAssistantToDatabase(assistant.Assistant)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error converting assistant to database")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	if s.ss != nil {
+		publisher := s.ss.NewFlowPublisher(int64(assistant.Flow.UserID), int64(assistant.FlowID))
+		publisher.AssistantDeleted(c, assistantDB)
+	}
+
 	response.Success(c, http.StatusOK, assistant)
+}
+
+func convertAssistantToDatabase(assistant models.Assistant) (database.Assistant, error) {
+	functions, err := json.Marshal(assistant.Functions)
+	if err != nil {
+		return database.Assistant{}, err
+	}
+
+	return database.Assistant{
+		ID:                 int64(assistant.ID),
+		Status:             database.AssistantStatus(assistant.Status),
+		Title:              assistant.Title,
+		Model:              assistant.Model,
+		ModelProviderName:  assistant.ModelProviderName,
+		Language:           assistant.Language,
+		Functions:          functions,
+		TraceID:            database.PtrStringToNullString(assistant.TraceID),
+		FlowID:             int64(assistant.FlowID),
+		UseAgents:          assistant.UseAgents,
+		MsgchainID:         database.Uint64ToNullInt64(assistant.MsgchainID),
+		CreatedAt:          database.TimeToNullTime(assistant.CreatedAt),
+		UpdatedAt:          database.TimeToNullTime(assistant.UpdatedAt),
+		DeletedAt:          database.PtrTimeToNullTime(assistant.DeletedAt),
+		ModelProviderType:  database.ProviderType(assistant.ModelProviderType),
+		ToolCallIDTemplate: assistant.ToolCallIDTemplate,
+	}, nil
 }

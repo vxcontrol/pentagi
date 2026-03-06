@@ -5822,7 +5822,9 @@ const docTemplate = `{
                 "model_provider_name",
                 "model_provider_type",
                 "status",
-                "title"
+                "title",
+                "tool_call_id_template",
+                "trace_id"
             ],
             "properties": {
                 "created_at": {
@@ -5857,14 +5859,29 @@ const docTemplate = `{
                 "model_provider_type": {
                     "type": "string"
                 },
+                "msgchain_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
                 "status": {
                     "type": "string"
                 },
                 "title": {
                     "type": "string"
                 },
+                "tool_call_id_template": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "trace_id": {
+                    "type": "string",
+                    "maxLength": 70
+                },
                 "updated_at": {
                     "type": "string"
+                },
+                "use_agents": {
+                    "type": "boolean"
                 }
             }
         },
@@ -5877,7 +5894,9 @@ const docTemplate = `{
                 "model_provider_name",
                 "model_provider_type",
                 "status",
-                "title"
+                "title",
+                "tool_call_id_template",
+                "trace_id"
             ],
             "properties": {
                 "created_at": {
@@ -5915,14 +5934,29 @@ const docTemplate = `{
                 "model_provider_type": {
                     "type": "string"
                 },
+                "msgchain_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
                 "status": {
                     "type": "string"
                 },
                 "title": {
                     "type": "string"
                 },
+                "tool_call_id_template": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "trace_id": {
+                    "type": "string",
+                    "maxLength": 70
+                },
                 "updated_at": {
                     "type": "string"
+                },
+                "use_agents": {
+                    "type": "boolean"
                 }
             }
         },
@@ -6152,6 +6186,8 @@ const docTemplate = `{
                 "model_provider_type",
                 "status",
                 "title",
+                "tool_call_id_template",
+                "trace_id",
                 "user_id"
             ],
             "properties": {
@@ -6188,6 +6224,14 @@ const docTemplate = `{
                 },
                 "title": {
                     "type": "string"
+                },
+                "tool_call_id_template": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "trace_id": {
+                    "type": "string",
+                    "maxLength": 70
                 },
                 "updated_at": {
                     "type": "string"
@@ -6258,6 +6302,8 @@ const docTemplate = `{
                 "status",
                 "tasks",
                 "title",
+                "tool_call_id_template",
+                "trace_id",
                 "user_id"
             ],
             "properties": {
@@ -6300,6 +6346,14 @@ const docTemplate = `{
                 },
                 "title": {
                     "type": "string"
+                },
+                "tool_call_id_template": {
+                    "type": "string",
+                    "maxLength": 70
+                },
+                "trace_id": {
+                    "type": "string",
+                    "maxLength": 70
                 },
                 "updated_at": {
                     "type": "string"
@@ -6531,12 +6585,17 @@ const docTemplate = `{
                     "enum": [
                         "stop",
                         "finish",
-                        "input"
+                        "input",
+                        "rename"
                     ]
                 },
                 "input": {
                     "type": "string",
                     "example": "user input for waiting flow"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "new flow name"
                 }
             }
         },

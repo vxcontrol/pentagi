@@ -80,10 +80,10 @@ func (t *terminal) wrapCommandResult(ctx context.Context, args json.RawMessage, 
 }
 
 func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
-	})
+	}))
 
 	switch name {
 	case TerminalToolName:

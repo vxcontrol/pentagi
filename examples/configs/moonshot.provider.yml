@@ -20,7 +20,7 @@ primary_agent:
   model: "kimi-k2.5"
   temperature: 1.0
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   reasoning:
     effort: high
   price:
@@ -31,7 +31,7 @@ assistant:
   model: "kimi-k2.5"
   temperature: 1.0
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   reasoning:
     effort: high
   price:
@@ -42,7 +42,7 @@ generator:
   model: "kimi-k2.5"
   temperature: 1.0
   n: 1
-  max_tokens: 16384
+  max_tokens: 32768
   reasoning:
     effort: high
   price:
@@ -53,7 +53,7 @@ refiner:
   model: "kimi-k2.5"
   temperature: 1.0
   n: 1
-  max_tokens: 8192
+  max_tokens: 20480
   reasoning:
     effort: medium
   price:
@@ -102,7 +102,7 @@ coder:
   model: "kimi-k2.5"
   temperature: 1.0
   n: 1
-  max_tokens: 16384
+  max_tokens: 20480
   reasoning:
     effort: high
   price:
@@ -113,7 +113,7 @@ installer:
   model: "kimi-k2-turbo-preview"
   temperature: 0.5
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   price:
     input: 1.15
     output: 8.0
@@ -122,7 +122,7 @@ pentester:
   model: "kimi-k2-turbo-preview"
   temperature: 0.7
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   price:
     input: 1.15
     output: 8.0

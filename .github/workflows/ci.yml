@@ -84,7 +84,6 @@ jobs:
 
       # Backend lint and test
       - name: Backend - Download dependencies
-        if: steps.go-cache.outputs.cache-hit != 'true'
         working-directory: backend
         run: go mod download
         continue-on-error: true
@@ -95,9 +94,6 @@ jobs:
           version: latest
           working-directory: backend
           args: --timeout=5m --issues-exit-code=0
-          skip-cache: false
-          skip-pkg-cache: false
-          skip-build-cache: false
         continue-on-error: true
 
       - name: Backend - Test
@@ -111,12 +107,28 @@ jobs:
           CGO_ENABLED: 0
           GO111MODULE: on
         run: |
+          # Get version information
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          PACKAGE_VER=${LATEST_TAG#v}
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG" 2>/dev/null || echo "")
+          
+          if [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
+            PACKAGE_REV=$(git rev-parse --short HEAD)
+          else
+            PACKAGE_REV=""
+          fi
+          
+          LDFLAGS="-X pentagi/pkg/version.PackageName=pentagi -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}"
+          
+          echo "Building with version: ${PACKAGE_VER}${PACKAGE_REV:+-$PACKAGE_REV}"
+          
           # Build for AMD64
-          GOOS=linux GOARCH=amd64 go build -trimpath -o /tmp/pentagi-amd64 ./cmd/pentagi
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o /tmp/pentagi-amd64 ./cmd/pentagi
           echo "✓ Successfully built for linux/amd64"
 
           # Build for ARM64
-          GOOS=linux GOARCH=arm64 go build -trimpath -o /tmp/pentagi-arm64 ./cmd/pentagi
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o /tmp/pentagi-arm64 ./cmd/pentagi
           echo "✓ Successfully built for linux/arm64"
         continue-on-error: true
 
@@ -140,18 +152,40 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Extract version from tag (without 'v' prefix) and split into parts
-      - name: Extract version
+      - name: Extract version and revision
         id: version
         run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-            # Split version into major.minor.patch
+          # Get latest tag version (without 'v' prefix)
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          VERSION=${LATEST_TAG#v}
+          
+          # Get current commit hash
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          
+          # Get commit hash of the latest tag
+          TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG" 2>/dev/null || echo "")
+          
+          # Set revision only if current commit differs from tag commit
+          if [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
+            PACKAGE_REV=$(git rev-parse --short HEAD)
+            echo "revision=${PACKAGE_REV}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "Building development version: ${VERSION}-${PACKAGE_REV}"
+            echo " Docker tags: latest only"
+          else
+            echo "revision=" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "Building release version: ${VERSION}"
+            
+            # Split version into major.minor.patch for Docker tags (only for releases)
             IFS='.' read -r major minor patch <<< "$VERSION"
             echo "major=${major}" >> $GITHUB_OUTPUT
             echo "minor=${major}.${minor}" >> $GITHUB_OUTPUT
-            echo "patch=${major}.${minor}.${patch}" >> $GITHUB_OUTPUT
+            echo "patch=${VERSION}" >> $GITHUB_OUTPUT
+            echo "  Docker tags: latest, ${major}, ${major}.${minor}, ${VERSION}"
           fi
+          
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Generate Docker metadata
         id: meta
@@ -161,10 +195,10 @@ jobs:
           tags: |
             # For master branch - latest tag
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
-            # For version tags - major, minor and patch versions
-            type=raw,value=${{ steps.version.outputs.major }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=${{ steps.version.outputs.minor }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=${{ steps.version.outputs.patch }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # For release builds only - tag with major, minor and patch versions
+            type=raw,value=${{ steps.version.outputs.major }},enable=${{ steps.version.outputs.is_release == 'true' }}
+            type=raw,value=${{ steps.version.outputs.minor }},enable=${{ steps.version.outputs.is_release == 'true' }}
+            type=raw,value=${{ steps.version.outputs.patch }},enable=${{ steps.version.outputs.is_release == 'true' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -178,3 +212,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            PACKAGE_VER=${{ steps.version.outputs.version }}
+            PACKAGE_REV=${{ steps.version.outputs.revision }}

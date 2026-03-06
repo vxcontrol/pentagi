@@ -114,6 +114,22 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	db.Exec("INSERT INTO users (id, hash, mail, name, status, role_id) VALUES (1, 'testhash1', 'user1@test.com', 'User 1', 'active', 2)")
 	db.Exec("INSERT INTO users (id, hash, mail, name, status, role_id) VALUES (2, 'testhash2', 'user2@test.com', 'User 2', 'active', 2)")
 
+	// Create user_preferences table
+	db.Exec(`
+		CREATE TABLE user_preferences (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL UNIQUE,
+			preferences TEXT NOT NULL DEFAULT '{"favoriteFlows": []}',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)
+	`)
+
+	// Insert preferences for test users
+	db.Exec("INSERT INTO user_preferences (user_id, preferences) VALUES (1, '{\"favoriteFlows\": []}')")
+	db.Exec("INSERT INTO user_preferences (user_id, preferences) VALUES (2, '{\"favoriteFlows\": []}')")
+
 	return db
 }
 
@@ -214,7 +230,7 @@ func TestTokenService_CreateToken(t *testing.T) {
 			defer db.Close()
 
 			tokenCache := auth.NewTokenCache(db)
-			service := NewTokenService(db, tc.globalSalt, tokenCache)
+			service := NewTokenService(db, tc.globalSalt, tokenCache, nil)
 			c, w := setupTestContext(tc.uid, tc.rid, tc.uhash, []string{"settings.tokens.create"})
 
 			c.Request = httptest.NewRequest(http.MethodPost, "/tokens", bytes.NewBufferString(tc.requestBody))
@@ -252,7 +268,7 @@ func TestTokenService_CreateToken_NameUniqueness(t *testing.T) {
 	defer db.Close()
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	// Create first token
 	c1, w1 := setupTestContext(1, 2, "hash1", []string{"settings.tokens.create"})
@@ -301,7 +317,7 @@ func TestTokenService_ListTokens(t *testing.T) {
 	}
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	testCases := []struct {
 		name          string
@@ -366,7 +382,7 @@ func TestTokenService_GetToken(t *testing.T) {
 	db.Create(&token2)
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	testCases := []struct {
 		name         string
@@ -434,7 +450,7 @@ func TestTokenService_UpdateToken(t *testing.T) {
 	defer db.Close()
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	// Create initial token
 	initialToken := models.APIToken{
@@ -532,7 +548,7 @@ func TestTokenService_UpdateToken_NameUniqueness(t *testing.T) {
 	defer db.Close()
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	// Create two tokens
 	token1 := models.APIToken{TokenID: "token1", UserID: 1, RoleID: 2, TTL: 3600, Status: models.TokenStatusActive}
@@ -562,7 +578,7 @@ func TestTokenService_DeleteToken(t *testing.T) {
 	defer db.Close()
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	testCases := []struct {
 		name         string
@@ -644,7 +660,7 @@ func TestTokenService_DeleteToken_InvalidatesCache(t *testing.T) {
 	defer db.Close()
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	// Create token
 	tokenID := "cachetest1"
@@ -674,7 +690,7 @@ func TestTokenService_UpdateToken_InvalidatesCache(t *testing.T) {
 	defer db.Close()
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	// Create token
 	tokenID := "cachetest2"
@@ -711,7 +727,7 @@ func TestTokenService_FullLifecycle(t *testing.T) {
 	defer db.Close()
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	// Step 1: Create token
 	c1, w1 := setupTestContext(1, 2, "hash1", []string{"settings.tokens.create"})
@@ -802,7 +818,7 @@ func TestTokenService_AdminPermissions(t *testing.T) {
 	defer db.Close()
 
 	tokenCache := auth.NewTokenCache(db)
-	service := NewTokenService(db, "custom_salt", tokenCache)
+	service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 	// Create tokens for different users
 	token1 := models.APIToken{TokenID: "admintest1", UserID: 1, RoleID: 2, TTL: 3600, Status: models.TokenStatusActive}
@@ -986,7 +1002,7 @@ func TestTokenService_SecurityChecks(t *testing.T) {
 		defer db.Close()
 
 		tokenCache := auth.NewTokenCache(db)
-		service := NewTokenService(db, "custom_salt", tokenCache)
+		service := NewTokenService(db, "custom_salt", tokenCache, nil)
 
 		c, w := setupTestContext(1, 2, "hash1", []string{"settings.tokens.create"})
 		c.Request = httptest.NewRequest(http.MethodPost, "/tokens",

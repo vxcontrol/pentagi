@@ -1,6 +1,8 @@
 package models
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -229,4 +231,74 @@ func (urp UserRolePrivileges) Validate(db *gorm.DB) {
 	if err := urp.Valid(); err != nil {
 		db.AddError(err)
 	}
+}
+
+// UserPreferencesOptions is model to contain user preferences as JSON
+type UserPreferencesOptions struct {
+	FavoriteFlows []int64 `json:"favoriteFlows"`
+}
+
+// Value implements driver.Valuer interface for database write
+func (upo UserPreferencesOptions) Value() (driver.Value, error) {
+	return json.Marshal(upo)
+}
+
+// Scan implements sql.Scanner interface for database read
+func (upo *UserPreferencesOptions) Scan(value any) error {
+	if value == nil {
+		*upo = UserPreferencesOptions{FavoriteFlows: []int64{}}
+		return nil
+	}
+
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("failed to scan UserPreferencesOptions: expected []byte, got %T", value)
+	}
+
+	return json.Unmarshal(bytes, upo)
+}
+
+// UserPreferences is model to contain user preferences information
+type UserPreferences struct {
+	ID          uint64                 `json:"id" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
+	UserID      uint64                 `json:"user_id" gorm:"type:BIGINT;NOT NULL;UNIQUE_INDEX"`
+	Preferences UserPreferencesOptions `json:"preferences" gorm:"type:JSONB;NOT NULL"`
+	CreatedAt   time.Time              `json:"created_at" gorm:"type:TIMESTAMPTZ;NOT NULL;default:CURRENT_TIMESTAMP"`
+	UpdatedAt   time.Time              `json:"updated_at" gorm:"type:TIMESTAMPTZ;NOT NULL;default:CURRENT_TIMESTAMP"`
+}
+
+// TableName returns the table name string to guaranty use correct table
+func (up *UserPreferences) TableName() string {
+	return "user_preferences"
+}
+
+// Valid is function to control input/output data
+func (up UserPreferences) Valid() error {
+	if up.UserID == 0 {
+		return fmt.Errorf("user_id is required")
+	}
+	return nil
+}
+
+// Validate is function to use callback to control input/output data
+func (up UserPreferences) Validate(db *gorm.DB) {
+	if err := up.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
+// NewUserPreferences creates a new UserPreferences with default values
+func NewUserPreferences(userID uint64) *UserPreferences {
+	return &UserPreferences{
+		UserID: userID,
+		Preferences: UserPreferencesOptions{
+			FavoriteFlows: []int64{},
+		},
+	}
+}
+
+// UserWithPreferences is model to combine User and UserPreferences for transactional creation
+type UserWithPreferences struct {
+	User        User
+	Preferences UserPreferences
 }

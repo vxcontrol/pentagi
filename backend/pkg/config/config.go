@@ -110,7 +110,8 @@ type Config struct {
 	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
 
 	// Sploitus exploit aggregator (https://sploitus.com)
-	SploitusEnabled bool `env:"SPLOITUS_ENABLED" envDefault:"true"`
+	// service under cloudflare protection, IP should have good reputation to avoid being blocked
+	SploitusEnabled bool `env:"SPLOITUS_ENABLED" envDefault:"false"`
 
 	// Google search engine
 	GoogleAPIKey string `env:"GOOGLE_API_KEY"`

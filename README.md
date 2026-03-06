@@ -2476,14 +2476,69 @@ Function-specific arguments are passed after the function name using `-name valu
 
 ### Building Docker Image
 
+The Docker build process automatically embeds version information from git tags. To properly version your build, use the provided scripts:
+
+#### Linux/macOS
+
 ```bash
-docker build -t local/pentagi:latest .
+# Load version variables
+source ./scripts/version.sh
+
+# Standard build
+docker build \
+  --build-arg PACKAGE_VER=$PACKAGE_VER \
+  --build-arg PACKAGE_REV=$PACKAGE_REV \
+  -t pentagi:$PACKAGE_VER .
+
+# Multi-platform build
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --build-arg PACKAGE_VER=$PACKAGE_VER \
+  --build-arg PACKAGE_REV=$PACKAGE_REV \
+  -t pentagi:$PACKAGE_VER .
+
+# Build and push
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --build-arg PACKAGE_VER=$PACKAGE_VER \
+  --build-arg PACKAGE_REV=$PACKAGE_REV \
+  -t myregistry/pentagi:$PACKAGE_VER \
+  --push .
+```
+
+#### Windows (PowerShell)
+
+```powershell
+# Load version variables
+. .\scripts\version.ps1
+
+# Standard build
+docker build `
+  --build-arg PACKAGE_VER=$env:PACKAGE_VER `
+  --build-arg PACKAGE_REV=$env:PACKAGE_REV `
+  -t pentagi:$env:PACKAGE_VER .
+
+# Multi-platform build
+docker buildx build `
+  --platform linux/amd64,linux/arm64 `
+  --build-arg PACKAGE_VER=$env:PACKAGE_VER `
+  --build-arg PACKAGE_REV=$env:PACKAGE_REV `
+  -t pentagi:$env:PACKAGE_VER .
+```
+
+#### Quick build without version
+
+For development builds without version tracking:
+
+```bash
+docker build -t pentagi:dev .
 ```
 
 > [!NOTE]
-> You can use `docker buildx` to build the image for different platforms like a `docker buildx build --platform linux/amd64 -t local/pentagi:latest .`
->
-> You need to change image name in docker-compose.yml file to `local/pentagi:latest` and run `docker compose up -d` to start the server or use `build` key option in [docker-compose.yml](docker-compose.yml) file.
+> - The build scripts automatically determine version from git tags
+> - Release builds (on tag commit) have no revision suffix
+> - Development builds (after tag) include commit hash as revision (e.g., `1.1.0-bc6e800`)
+> - To use the built image locally, update the image name in `docker-compose.yml` or use the `build` option
 
 ## 👏 Credits
 

@@ -195,11 +195,56 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             }
 
             return new Promise<LoginResult>((resolve) => {
+                const popupCheckInterval = 500;
+                const popupTimeout = 300000;
+                let isResolved = false;
+
+                const popupCheck = setInterval(() => {
+                    if (popup?.closed && !isResolved) {
+                        isResolved = true;
+                        clearInterval(popupCheck);
+                        clearTimeout(timeoutId);
+                        window.removeEventListener('message', messageHandler);
+                        const errorMessage = 'Authentication cancelled';
+                        toast.info(errorMessage);
+                        resolve({
+                            error: errorMessage,
+                            success: false,
+                        });
+                    }
+                }, popupCheckInterval);
+
+                const timeoutId = setTimeout(() => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        clearInterval(popupCheck);
+                        window.removeEventListener('message', messageHandler);
+
+                        if (popup && !popup.closed) {
+                            popup.close();
+                        }
+
+                        const errorMessage = 'Authentication timeout';
+                        toast.error(errorMessage);
+                        resolve({
+                            error: errorMessage,
+                            success: false,
+                        });
+                    }
+                }, popupTimeout);
+
                 const messageHandler = async (event: MessageEvent) => {
                     if (event.origin !== window.location.origin || event.data?.type !== 'oauth-result') {
                         return;
                     }
 
+                    if (isResolved) {
+                        return;
+                    }
+
+                    isResolved = true;
+                    clearInterval(popupCheck);
+                    clearTimeout(timeoutId);
                     window.removeEventListener('message', messageHandler);
 
                     const cleanup = () => {
@@ -236,38 +281,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 };
 
                 window.addEventListener('message', messageHandler);
-
-                const popupCheckInterval = 500;
-                const popupTimeout = 300000;
-
-                const popupCheck = setInterval(() => {
-                    if (popup?.closed) {
-                        clearInterval(popupCheck);
-                        window.removeEventListener('message', messageHandler);
-                        const errorMessage = 'Authentication cancelled';
-                        toast.info(errorMessage);
-                        resolve({
-                            error: errorMessage,
-                            success: false,
-                        });
-                    }
-                }, popupCheckInterval);
-
-                setTimeout(() => {
-                    clearInterval(popupCheck);
-                    window.removeEventListener('message', messageHandler);
-
-                    if (popup && !popup.closed) {
-                        popup.close();
-                    }
-
-                    const errorMessage = 'Authentication timeout';
-                    toast.error(errorMessage);
-                    resolve({
-                        error: errorMessage,
-                        success: false,
-                    });
-                }, popupTimeout);
             });
         },
         [setAuth],

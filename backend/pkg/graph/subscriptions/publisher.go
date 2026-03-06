@@ -44,7 +44,7 @@ func (p *flowPublisher) FlowDeleted(ctx context.Context, flow database.Flow, ter
 
 func (p *flowPublisher) FlowUpdated(ctx context.Context, flow database.Flow, terms []database.Container) {
 	flowModel := converter.ConvertFlow(flow, terms)
-	p.ctrl.flowUpdated.Publish(ctx, p.flowID, flowModel)
+	p.ctrl.flowUpdated.Publish(ctx, p.userID, flowModel)
 	p.ctrl.flowUpdatedAdmin.Broadcast(ctx, flowModel)
 }
 

@@ -8,6 +8,7 @@ import {
     useSettingsUserUpdatedSubscription,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
+import { useUser } from '@/providers/user-provider';
 
 interface FavoritesContextValue {
     addFavoriteFlow: (flowId: number | string) => Promise<void>;
@@ -27,17 +28,26 @@ const FavoritesContext = createContext<FavoritesContextValue | undefined>(undefi
 const FAVORITES_STORAGE_KEY = 'favorites';
 
 export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
+    const { authInfo } = useUser();
+
+    // Only fetch user preferences if user is authenticated and not a guest
+    // authInfo must exist and type must be 'user' or 'api' (not 'guest' and not null/undefined)
+    const shouldFetchPreferences = Boolean(authInfo && authInfo.type !== 'guest');
+
     // GraphQL query for user preferences
     const { data: userPreferencesData, loading: isLoadingPreferences } = useSettingsUserQuery({
         fetchPolicy: 'cache-and-network',
+        skip: !shouldFetchPreferences,
     });
 
     // GraphQL mutations
     const [addFavoriteFlowMutation] = useAddFavoriteFlowMutation();
     const [deleteFavoriteFlowMutation] = useDeleteFavoriteFlowMutation();
 
-    // GraphQL subscription
-    useSettingsUserUpdatedSubscription();
+    // GraphQL subscription (only for authenticated users)
+    useSettingsUserUpdatedSubscription({
+        skip: !shouldFetchPreferences,
+    });
 
     // Get favorite flow IDs from GraphQL as numbers
     const favoriteFlowIds = useMemo(() => {
@@ -111,10 +121,11 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
         };
 
         // Only run migration if we have loaded preferences and localStorage data exists
-        if (!isLoadingPreferences && userPreferencesData) {
+        // and user is authenticated (not a guest)
+        if (!isLoadingPreferences && userPreferencesData && shouldFetchPreferences) {
             migrateLocalStorageFavorites();
         }
-    }, [isLoadingPreferences, userPreferencesData, favoriteFlowIds, addFavoriteFlowMutation]);
+    }, [isLoadingPreferences, userPreferencesData, favoriteFlowIds, addFavoriteFlowMutation, shouldFetchPreferences]);
 
     const addFavoriteFlow = useCallback(
         async (flowId: number | string) => {

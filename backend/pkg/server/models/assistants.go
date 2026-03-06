@@ -46,18 +46,22 @@ func (s AssistantStatus) Validate(db *gorm.DB) {
 // Assistant is model to contain assistant information
 // nolint:lll
 type Assistant struct {
-	ID                uint64           `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
-	Status            AssistantStatus  `form:"status" json:"status" validate:"valid,required" gorm:"type:ASSISTANT_STATUS;NOT NULL;default:'created'"`
-	Title             string           `form:"title" json:"title" validate:"required" gorm:"type:TEXT;NOT NULL;default:'untitled'"`
-	Model             string           `form:"model" json:"model" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
-	ModelProviderName string           `form:"model_provider_name" json:"model_provider_name" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
-	ModelProviderType ProviderType     `form:"model_provider_type" json:"model_provider_type" validate:"valid,required" gorm:"type:PROVIDER_TYPE;NOT NULL"`
-	Language          string           `form:"language" json:"language" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
-	Functions         *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid" gorm:"type:JSON;NOT NULL;default:'{}'"`
-	FlowID            uint64           `form:"flow_id" json:"flow_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
-	CreatedAt         time.Time        `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
-	UpdatedAt         time.Time        `form:"updated_at,omitempty" json:"updated_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
-	DeletedAt         *time.Time       `form:"deleted_at,omitempty" json:"deleted_at,omitempty" validate:"omitempty" sql:"index" gorm:"type:TIMESTAMPTZ"`
+	ID                 uint64           `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
+	Status             AssistantStatus  `form:"status" json:"status" validate:"valid,required" gorm:"type:ASSISTANT_STATUS;NOT NULL;default:'created'"`
+	Title              string           `form:"title" json:"title" validate:"required" gorm:"type:TEXT;NOT NULL;default:'untitled'"`
+	Model              string           `form:"model" json:"model" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
+	ModelProviderName  string           `form:"model_provider_name" json:"model_provider_name" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
+	ModelProviderType  ProviderType     `form:"model_provider_type" json:"model_provider_type" validate:"valid,required" gorm:"type:PROVIDER_TYPE;NOT NULL"`
+	Language           string           `form:"language" json:"language" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
+	Functions          *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid" gorm:"type:JSON;NOT NULL;default:'{}'"`
+	FlowID             uint64           `form:"flow_id" json:"flow_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
+	MsgchainID         *uint64          `form:"msgchain_id" json:"msgchain_id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL"`
+	TraceID            *string          `form:"trace_id" json:"trace_id" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
+	ToolCallIDTemplate string           `form:"tool_call_id_template" json:"tool_call_id_template" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
+	UseAgents          bool             `form:"use_agents" json:"use_agents" validate:"omitempty" gorm:"type:BOOLEAN;NOT NULL;default:false"`
+	CreatedAt          time.Time        `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
+	UpdatedAt          time.Time        `form:"updated_at,omitempty" json:"updated_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
+	DeletedAt          *time.Time       `form:"deleted_at,omitempty" json:"deleted_at,omitempty" validate:"omitempty" sql:"index" gorm:"type:TIMESTAMPTZ"`
 }
 
 // TableName returns the table name string to guaranty use correct table
