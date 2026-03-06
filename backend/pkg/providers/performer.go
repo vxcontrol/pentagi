@@ -26,11 +26,13 @@ import (
 )
 
 const (
-	maxRetriesToCallSimpleChain = 3
-	maxRetriesToCallAgentChain  = 3
-	maxRetriesToCallFunction    = 3
-	maxReflectorCallsPerChain   = 3
-	delayBetweenRetries         = 5 * time.Second
+	maxRetriesToCallSimpleChain     = 3
+	maxRetriesToCallAgentChain      = 3
+	maxRetriesToCallFunction        = 3
+	maxReflectorCallsPerChain       = 3
+	maxAgentChainIterations         = 100
+	maxRepeatingDetectionsBeforeErr = 5
+	delayBetweenRetries             = 5 * time.Second
 )
 
 type callResult struct {
@@ -91,7 +93,13 @@ func (fp *flowProvider) performAgentChain(
 	groupID := fmt.Sprintf("flow-%d", fp.flowID)
 	toolTypeMapping := tools.GetToolTypeMapping()
 
-	for {
+	for iteration := 0; ; iteration++ {
+		if iteration >= maxAgentChainIterations {
+			msg := fmt.Sprintf("agent chain exceeded maximum iterations (%d)", maxAgentChainIterations)
+			logger.WithField("iteration", iteration).Error(msg)
+			return fmt.Errorf("%s", msg)
+		}
+
 		result, err := fp.callWithRetries(ctx, chain, optAgentType, executor)
 		if err != nil {
 			logger.WithError(err).Error("failed to call agent chain")
@@ -256,6 +264,12 @@ func (fp *flowProvider) execToolCall(
 	})
 
 	if detector.detect(toolCall) {
+		if len(detector.funcCalls) >= RepeatingToolCallThreshold+maxRepeatingDetectionsBeforeErr-1 {
+			errMsg := fmt.Sprintf("tool '%s' repeated %d times consecutively, aborting chain", funcName, len(detector.funcCalls))
+			logger.WithField("repeat_count", len(detector.funcCalls)).Error(errMsg)
+			return "", fmt.Errorf("%s", errMsg)
+		}
+
 		response := fmt.Sprintf("tool call '%s' is repeating, please try another tool", funcName)
 
 		_, observation := obs.Observer.NewObservation(ctx)
