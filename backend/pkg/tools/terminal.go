@@ -181,9 +181,10 @@ func (t *terminal) ExecCommand(
 
 	if detach {
 		resultChan := make(chan execResult, 1)
+		detachedCtx := context.WithoutCancel(ctx)
 
 		go func() {
-			output, err := t.getExecResult(ctx, createResp.ID, timeout)
+			output, err := t.getExecResult(detachedCtx, createResp.ID, timeout)
 			resultChan <- execResult{output: output, err: err}
 		}()
 
