@@ -828,6 +828,10 @@ func makeToolCall(name, args string) llms.ToolCall {
 	}
 }
 
+// maxSoftDetectionsBeforeAbort mirrors the constant in performer.go.
+// Keep in sync with performer.go:maxSoftDetectionsBeforeAbort.
+const testMaxSoftDetectionsBeforeAbort = 4
+
 func TestRepeatingDetector(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -876,6 +880,16 @@ func TestRepeatingDetector(t *testing.T) {
 				makeToolCall("search", `{"query":"test"}`),
 				makeToolCall("search", `{"query":"test"}`),
 				makeToolCall("browse", `{"url":"http://example.com"}`),
+			},
+			expectedDetected: []bool{false, false, false},
+			expectedLen:      1,
+		},
+		{
+			name: "same name different args resets funcCalls",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test","limit":"10"}`),
+				makeToolCall("search", `{"query":"test","limit":"10"}`),
+				makeToolCall("search", `{"query":"different","limit":"20"}`),
 			},
 			expectedDetected: []bool{false, false, false},
 			expectedLen:      1,
@@ -949,9 +963,9 @@ func TestRepeatingDetectorEscalationThreshold(t *testing.T) {
 	}
 
 	assert.Equal(t, 7, len(detector.funcCalls))
-	assert.True(t, len(detector.funcCalls) >= RepeatingToolCallThreshold+4,
+	assert.True(t, len(detector.funcCalls) >= RepeatingToolCallThreshold+testMaxSoftDetectionsBeforeAbort,
 		"7 calls should reach escalation threshold: %d >= %d+%d",
-		len(detector.funcCalls), RepeatingToolCallThreshold, 4)
+		len(detector.funcCalls), RepeatingToolCallThreshold, testMaxSoftDetectionsBeforeAbort)
 
 	// Verify 6 calls is below threshold
 	detector2 := &repeatingDetector{}
@@ -960,7 +974,7 @@ func TestRepeatingDetectorEscalationThreshold(t *testing.T) {
 	}
 
 	assert.Equal(t, 6, len(detector2.funcCalls))
-	assert.False(t, len(detector2.funcCalls) >= RepeatingToolCallThreshold+4,
+	assert.False(t, len(detector2.funcCalls) >= RepeatingToolCallThreshold+testMaxSoftDetectionsBeforeAbort,
 		"6 calls should NOT reach escalation threshold: %d < %d+%d",
 		len(detector2.funcCalls), RepeatingToolCallThreshold, 4)
 }
