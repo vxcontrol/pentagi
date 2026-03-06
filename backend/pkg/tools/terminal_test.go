@@ -123,7 +123,7 @@ func TestExecCommandDetachReturnsQuickly(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Contains(t, output, "Command started in background")
-	assert.Less(t, elapsed, 2*time.Second, "detach should return within ~500ms, not wait for command")
+	assert.Less(t, elapsed, 1*time.Second, "detach should return within ~500ms quick check timeout")
 }
 
 func TestExecCommandDetachQuickCompletion(t *testing.T) {
