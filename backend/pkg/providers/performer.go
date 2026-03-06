@@ -31,7 +31,7 @@ const (
 	maxRetriesToCallFunction        = 3
 	maxReflectorCallsPerChain       = 3
 	maxAgentChainIterations         = 100
-	maxRepeatingDetectionsBeforeErr = 5
+	maxSoftDetectionsBeforeAbort    = 4
 	delayBetweenRetries             = 5 * time.Second
 )
 
@@ -97,7 +97,7 @@ func (fp *flowProvider) performAgentChain(
 		if iteration >= maxAgentChainIterations {
 			msg := fmt.Sprintf("agent chain exceeded maximum iterations (%d)", maxAgentChainIterations)
 			logger.WithField("iteration", iteration).Error(msg)
-			return fmt.Errorf("%s", msg)
+			return errors.New(msg)
 		}
 
 		result, err := fp.callWithRetries(ctx, chain, optAgentType, executor)
@@ -264,10 +264,10 @@ func (fp *flowProvider) execToolCall(
 	})
 
 	if detector.detect(toolCall) {
-		if len(detector.funcCalls) >= RepeatingToolCallThreshold+maxRepeatingDetectionsBeforeErr-1 {
+		if len(detector.funcCalls) >= RepeatingToolCallThreshold+maxSoftDetectionsBeforeAbort {
 			errMsg := fmt.Sprintf("tool '%s' repeated %d times consecutively, aborting chain", funcName, len(detector.funcCalls))
 			logger.WithField("repeat_count", len(detector.funcCalls)).Error(errMsg)
-			return "", fmt.Errorf("%s", errMsg)
+			return "", errors.New(errMsg)
 		}
 
 		response := fmt.Sprintf("tool call '%s' is repeating, please try another tool", funcName)
