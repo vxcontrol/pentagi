@@ -16,15 +16,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// mockTermLogProvider implements TermLogProvider for testing.
-type mockTermLogProvider struct{}
+// contextTestTermLogProvider implements TermLogProvider for context tests.
+type contextTestTermLogProvider struct{}
 
-func (m *mockTermLogProvider) PutMsg(_ context.Context, _ database.TermlogType, _ string,
+func (m *contextTestTermLogProvider) PutMsg(_ context.Context, _ database.TermlogType, _ string,
 	_ int64, _, _ *int64) (int64, error) {
 	return 1, nil
 }
 
-var _ TermLogProvider = (*mockTermLogProvider)(nil)
+var _ TermLogProvider = (*contextTestTermLogProvider)(nil)
 
 // contextAwareMockDockerClient tracks whether the context was canceled
 // when getExecResult runs, proving context.WithoutCancel works.
@@ -125,7 +125,7 @@ func TestExecCommandDetachSurvivesParentCancel(t *testing.T) {
 		containerID:  1,
 		containerLID: "test-container",
 		dockerClient: mock,
-		tlp:          &mockTermLogProvider{},
+		tlp:          &contextTestTermLogProvider{},
 	}
 
 	// Create a cancellable parent context
@@ -166,7 +166,7 @@ func TestExecCommandNonDetachRespectsParentCancel(t *testing.T) {
 		containerID:  1,
 		containerLID: "test-container",
 		dockerClient: mock,
-		tlp:          &mockTermLogProvider{},
+		tlp:          &contextTestTermLogProvider{},
 	}
 
 	parentCtx, cancel := context.WithCancel(context.Background())
