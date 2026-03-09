@@ -432,7 +432,7 @@ func (c *StateController) GetLLMProviders() map[string]ProviderConfig {
     // Aggregate multiple environment variables into structured config
     providers := make(map[string]ProviderConfig)
 
-    for _, providerID := range []string{"openai", "anthropic", "gemini", "bedrock", "ollama", "custom"} {
+    for _, providerID := range []string{"openai", "anthropic", "gemini", "bedrock", "deepseek", "glm", "kimi", "qwen", "ollama", "custom"} {
         config := c.loadProviderConfig(providerID)
         providers[providerID] = config
     }

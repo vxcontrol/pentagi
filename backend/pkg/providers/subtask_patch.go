@@ -24,6 +24,9 @@ func applySubtaskOperations(
 		"message":          patch.Message,
 	}).Debug("applying subtask operations")
 
+	// Fix the patch to ensure it is valid
+	patch = fixSubtaskPatch(planned, patch)
+
 	// Convert database.Subtask to tools.SubtaskInfo with IDs
 	result := make([]tools.SubtaskInfoPatch, 0, len(planned))
 	for _, st := range planned {
@@ -206,7 +209,9 @@ func convertSubtaskInfoPatch(subtasks []tools.SubtaskInfoPatch) []tools.SubtaskI
 	return result
 }
 
-// buildIndexMap creates a map from subtask ID to its index in the slice
+// buildIndexMap creates a map from subtask ID to its index in the slice.
+// Note: Subtasks with ID=0 (newly added) are excluded from the map
+// to avoid collisions, as they don't have database IDs yet.
 func buildIndexMap(subtasks []tools.SubtaskInfoPatch) map[int64]int {
 	idToIdx := make(map[int64]int, len(subtasks))
 	for i, st := range subtasks {
@@ -229,6 +234,106 @@ func calculateInsertIndex(afterID *int64, idToIdx map[int64]int, length int) int
 
 	// AfterID not found, append to end
 	return length
+}
+
+func fixSubtaskPatch(planned []database.Subtask, patch tools.SubtaskPatch) tools.SubtaskPatch {
+	newPatch := tools.SubtaskPatch{
+		Operations: make([]tools.SubtaskOperation, 0, len(patch.Operations)),
+		Message:    patch.Message,
+	}
+
+	plannedMap := make(map[int64]tools.SubtaskInfoPatch)
+	for _, st := range planned {
+		plannedMap[st.ID] = tools.SubtaskInfoPatch{
+			ID: st.ID,
+			SubtaskInfo: tools.SubtaskInfo{
+				Title:       st.Title,
+				Description: st.Description,
+			},
+		}
+	}
+	isEmptyID := func(id *int64) bool {
+		return id == nil || *id == 0
+	}
+	isPlannedID := func(id *int64) bool {
+		if isEmptyID(id) {
+			return false
+		}
+		if _, ok := plannedMap[*id]; !ok {
+			return false
+		}
+		return true
+	}
+	cleanID := func(id *int64) *int64 {
+		if isEmptyID(id) || !isPlannedID(id) {
+			return nil
+		}
+		return id
+	}
+
+	for _, op := range patch.Operations {
+		switch op.Op {
+		case tools.SubtaskOpAdd:
+			if op.Title == "" || op.Description == "" {
+				continue
+			}
+			newPatch.Operations = append(newPatch.Operations, tools.SubtaskOperation{
+				Op:          op.Op,
+				ID:          nil, // Generate new ID
+				AfterID:     cleanID(op.AfterID),
+				Title:       op.Title,
+				Description: op.Description,
+			})
+		case tools.SubtaskOpRemove:
+			if isEmptyID(op.ID) || !isPlannedID(op.ID) {
+				continue
+			}
+			newPatch.Operations = append(newPatch.Operations, tools.SubtaskOperation{
+				Op:          op.Op,
+				ID:          op.ID,
+				AfterID:     nil,
+				Title:       op.Title,
+				Description: op.Description,
+			})
+		case tools.SubtaskOpModify:
+			if isEmptyID(op.ID) || !isPlannedID(op.ID) {
+				// Convert to ADD operation if ID doesn't exist
+				if op.Title == "" || op.Description == "" {
+					continue // Skip if missing required fields for ADD
+				}
+				newPatch.Operations = append(newPatch.Operations, tools.SubtaskOperation{
+					Op:          tools.SubtaskOpAdd,
+					ID:          nil,
+					AfterID:     cleanID(op.AfterID),
+					Title:       op.Title,
+					Description: op.Description,
+				})
+			} else {
+				// Keep as MODIFY for existing IDs
+				// Note: AfterID is not used for modify operations (modify doesn't change position)
+				newPatch.Operations = append(newPatch.Operations, tools.SubtaskOperation{
+					Op:          tools.SubtaskOpModify,
+					ID:          op.ID,
+					AfterID:     nil, // Modify doesn't change position
+					Title:       op.Title,
+					Description: op.Description,
+				})
+			}
+		case tools.SubtaskOpReorder:
+			if isEmptyID(op.ID) || !isPlannedID(op.ID) {
+				continue
+			}
+			newPatch.Operations = append(newPatch.Operations, tools.SubtaskOperation{
+				Op:          op.Op,
+				ID:          cleanID(op.ID),
+				AfterID:     cleanID(op.AfterID),
+				Title:       op.Title,
+				Description: op.Description,
+			})
+		}
+	}
+
+	return newPatch
 }
 
 // ValidateSubtaskPatch validates the operations in a SubtaskPatch

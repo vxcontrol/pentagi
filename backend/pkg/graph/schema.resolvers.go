@@ -16,10 +16,14 @@ import (
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
+	"pentagi/pkg/providers/deepseek"
 	"pentagi/pkg/providers/gemini"
+	"pentagi/pkg/providers/glm"
+	"pentagi/pkg/providers/kimi"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/qwen"
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/templates/validator"
@@ -1734,6 +1738,26 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Default.Ollama = mpcfg
 		case provider.ProviderCustom:
 			config.Default.Custom = mpcfg
+		case provider.ProviderDeepSeek:
+			config.Default.Deepseek = mpcfg
+			if models, err := deepseek.DefaultModels(); err == nil {
+				config.Models.Deepseek = converter.ConvertModels(models)
+			}
+		case provider.ProviderGLM:
+			config.Default.Glm = mpcfg
+			if models, err := glm.DefaultModels(); err == nil {
+				config.Models.Glm = converter.ConvertModels(models)
+			}
+		case provider.ProviderKimi:
+			config.Default.Kimi = mpcfg
+			if models, err := kimi.DefaultModels(); err == nil {
+				config.Models.Kimi = converter.ConvertModels(models)
+			}
+		case provider.ProviderQwen:
+			config.Default.Qwen = mpcfg
+			if models, err := qwen.DefaultModels(); err == nil {
+				config.Models.Qwen = converter.ConvertModels(models)
+			}
 		}
 	}
 
@@ -1758,6 +1782,14 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			if p, ok := defaultProviders[provider.DefaultProviderNameCustom]; ok {
 				config.Models.Custom = converter.ConvertModels(p.GetModels())
 			}
+		case provider.ProviderDeepSeek:
+			config.Enabled.Deepseek = true
+		case provider.ProviderGLM:
+			config.Enabled.Glm = true
+		case provider.ProviderKimi:
+			config.Enabled.Kimi = true
+		case provider.ProviderQwen:
+			config.Enabled.Qwen = true
 		}
 	}
 

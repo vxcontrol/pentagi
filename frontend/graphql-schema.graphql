@@ -485,6 +485,10 @@ query settingsProviders {
             bedrock
             ollama
             custom
+            deepseek
+            glm
+            kimi
+            qwen
         }
         default {
             openai {
@@ -503,6 +507,18 @@ query settingsProviders {
                 ...providerConfigFragment
             }
             custom {
+                ...providerConfigFragment
+            }
+            deepseek {
+                ...providerConfigFragment
+            }
+            glm {
+                ...providerConfigFragment
+            }
+            kimi {
+                ...providerConfigFragment
+            }
+            qwen {
                 ...providerConfigFragment
             }
         }
@@ -526,6 +542,18 @@ query settingsProviders {
                 ...modelConfigFragment
             }
             custom {
+                ...modelConfigFragment
+            }
+            deepseek {
+                ...modelConfigFragment
+            }
+            glm {
+                ...modelConfigFragment
+            }
+            kimi {
+                ...modelConfigFragment
+            }
+            qwen {
                 ...modelConfigFragment
             }
         }

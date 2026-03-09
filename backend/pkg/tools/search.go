@@ -31,7 +31,12 @@ type search struct {
 	vslp      VectorStoreLogProvider
 }
 
-func NewSearchTool(flowID int64, taskID, subtaskID *int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+func NewSearchTool(
+	flowID int64,
+	taskID, subtaskID *int64,
+	store *pgvector.Store,
+	vslp VectorStoreLogProvider,
+) Tool {
 	return &search{
 		flowID:    flowID,
 		taskID:    taskID,

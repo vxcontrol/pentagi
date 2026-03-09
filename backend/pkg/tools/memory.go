@@ -39,6 +39,10 @@ func NewMemoryTool(flowID int64, store *pgvector.Store, vslp VectorStoreLogProvi
 }
 
 func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !m.IsAvailable() {
+		return "", fmt.Errorf("memory is not available")
+	}
+
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(m.flowID, nil, nil, logrus.Fields{
 		"tool": name,

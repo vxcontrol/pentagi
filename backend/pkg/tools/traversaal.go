@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/system"
 
 	"github.com/sirupsen/logrus"
 )
@@ -24,26 +25,33 @@ type traversaalSearchResult struct {
 }
 
 type traversaal struct {
+	cfg       *config.Config
 	flowID    int64
 	taskID    *int64
 	subtaskID *int64
-	apiKey    string
-	proxyURL  string
 	slp       SearchLogProvider
 }
 
-func NewTraversaalTool(flowID int64, taskID, subtaskID *int64, apiKey, proxyURL string, slp SearchLogProvider) Tool {
+func NewTraversaalTool(
+	cfg *config.Config,
+	flowID int64,
+	taskID, subtaskID *int64,
+	slp SearchLogProvider,
+) Tool {
 	return &traversaal{
+		cfg:       cfg,
 		flowID:    flowID,
 		taskID:    taskID,
 		subtaskID: subtaskID,
-		apiKey:    apiKey,
-		proxyURL:  proxyURL,
 		slp:       slp,
 	}
 }
 
 func (t *traversaal) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !t.IsAvailable() {
+		return "", fmt.Errorf("traversaal is not available")
+	}
+
 	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, logrus.Fields{
@@ -98,13 +106,9 @@ func (t *traversaal) Handle(ctx context.Context, name string, args json.RawMessa
 }
 
 func (t *traversaal) search(ctx context.Context, query string) (string, error) {
-	client := http.DefaultClient
-	if t.proxyURL != "" {
-		client.Transport = &http.Transport{
-			Proxy: func(req *http.Request) (*url.URL, error) {
-				return url.Parse(t.proxyURL)
-			},
-		}
+	client, err := system.GetHTTPClient(t.cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to create http client: %w", err)
 	}
 
 	reqBody, err := json.Marshal(struct {
@@ -123,7 +127,7 @@ func (t *traversaal) search(ctx context.Context, query string) (string, error) {
 
 	req = req.WithContext(ctx)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", t.apiKey)
+	req.Header.Set("x-api-key", t.apiKey())
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -158,5 +162,13 @@ func (t *traversaal) parseHTTPResponse(resp *http.Response) (string, error) {
 }
 
 func (t *traversaal) IsAvailable() bool {
-	return t.apiKey != ""
+	return t.apiKey() != ""
+}
+
+func (t *traversaal) apiKey() string {
+	if t.cfg == nil {
+		return ""
+	}
+
+	return t.cfg.TraversaalAPIKey
 }

@@ -118,11 +118,18 @@ func (m *FormModel) ensureFocusVisible() {
 **Problem**: Missing configuration fields for several LLM providers
 **Solution**: Added complete field sets for all supported providers
 
-**Provider Field Mapping**:
+**Provider-Specific Field Sets:**
+
 - **OpenAI/Anthropic/Gemini**: Base URL + API Key
-- **AWS Bedrock**: Region + Access Key + Secret Key + Base URL (optional)
-- **Ollama**: Base URL + Config Path
-- **Custom**: Base URL + API Key + Model + Config Path + Legacy Reasoning (boolean)
+- **AWS Bedrock**: Region + Default Auth OR Bearer Token OR (Access Key + Secret Key + Session Token) + Base URL
+- **DeepSeek**: Base URL + API Key + Provider Name (for LiteLLM prefix, e.g., 'deepseek')
+- **GLM**: Base URL + API Key + Provider Name (for LiteLLM prefix, e.g., 'zai')
+- **Kimi**: Base URL + API Key + Provider Name (for LiteLLM prefix, e.g., 'moonshot')
+- **Qwen**: Base URL + API Key + Provider Name (for LiteLLM prefix, e.g., 'dashscope')
+- **Ollama**: Base URL + API Key (cloud only) + Model + Config Path + Pull/Load settings
+  - Local scenario: No API key needed
+  - Cloud scenario: API key required from https://ollama.com/settings/keys
+- **Custom**: Base URL + API Key + Model + Config Path + Provider Name + Reasoning options
 
 **Dynamic Form Generation**: Forms adapt based on provider type with appropriate validation and help text.
 

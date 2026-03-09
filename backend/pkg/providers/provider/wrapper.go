@@ -125,7 +125,7 @@ func WrapGenerateFromSinglePrompt(
 	options ...llms.CallOption,
 ) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	model := provider.Model(opt)
+	modelWithPrefix := provider.ModelWithPrefix(opt)
 	messages := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeHuman, prompt),
 	}
@@ -135,7 +135,7 @@ func WrapGenerateFromSinglePrompt(
 		langfuse.WithGenerationMetadata(metadata),
 		langfuse.WithGenerationInput(messages),
 		langfuse.WithGenerationTools(extractToolsFromOptions(options...)),
-		langfuse.WithGenerationModel(model),
+		langfuse.WithGenerationModel(modelWithPrefix),
 		langfuse.WithGenerationModelParameters(langfuse.GetLangchainModelParameters(options)),
 	)
 
@@ -149,8 +149,11 @@ func WrapGenerateFromSinglePrompt(
 		resp *llms.ContentResponse
 	)
 
+	// Inject prefixed model name into call options
+	callOptions := append(options, llms.WithModel(modelWithPrefix))
+
 	for idx := range MaxTooManyRequestsRetries {
-		resp, err = llm.GenerateContent(ctx, []llms.MessageContent{msg}, options...)
+		resp, err = llm.GenerateContent(ctx, []llms.MessageContent{msg}, callOptions...)
 		if err != nil {
 			if isTooManyRequestsError(err) {
 				_, observation = generation.Observation(ctx)
@@ -250,13 +253,14 @@ func WrapGenerateContent(
 	options ...llms.CallOption,
 ) (*llms.ContentResponse, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
+	modelWithPrefix := provider.ModelWithPrefix(opt)
 	metadata := buildMetadata(provider, opt, messages, options...)
 	generation := observation.Generation(
 		langfuse.WithGenerationName(fmt.Sprintf("%s-generation-ex", provider.Type().String())),
 		langfuse.WithGenerationMetadata(metadata),
 		langfuse.WithGenerationInput(messages),
 		langfuse.WithGenerationTools(extractToolsFromOptions(options...)),
-		langfuse.WithGenerationModel(provider.Model(opt)),
+		langfuse.WithGenerationModel(modelWithPrefix),
 		langfuse.WithGenerationModelParameters(langfuse.GetLangchainModelParameters(options)),
 	)
 
@@ -265,8 +269,11 @@ func WrapGenerateContent(
 		resp *llms.ContentResponse
 	)
 
+	// Inject prefixed model name into call options
+	callOptions := append(options, llms.WithModel(modelWithPrefix))
+
 	for idx := range MaxTooManyRequestsRetries {
-		resp, err = fn(ctx, messages, options...)
+		resp, err = fn(ctx, messages, callOptions...)
 		if err != nil {
 			if isTooManyRequestsError(err) {
 				_, observation = generation.Observation(ctx)

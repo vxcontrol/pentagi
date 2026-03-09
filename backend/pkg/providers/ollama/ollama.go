@@ -33,7 +33,7 @@ const (
 func BuildProviderConfig(cfg *config.Config, configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithN(1),
-		llms.WithMaxTokens(8192),
+		llms.WithMaxTokens(32768),
 		llms.WithModel(cfg.OllamaServerModel),
 	}
 
@@ -178,11 +178,18 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		}
 	}
 
-	client, err := ollama.New(
+	options := []ollama.Option{
 		ollama.WithServerURL(serverURL),
 		ollama.WithHTTPClient(httpClient),
 		ollama.WithModel(baseModel),
-	)
+	}
+
+	// Add API key for Ollama Cloud support
+	if cfg.OllamaServerAPIKey != "" {
+		options = append(options, ollama.WithAPIKey(cfg.OllamaServerAPIKey))
+	}
+
+	client, err := ollama.New(options...)
 	if err != nil {
 		return nil, err
 	}
@@ -234,6 +241,11 @@ func (p *ollamaProvider) Model(opt pconfig.ProviderOptionsType) string {
 	}
 
 	return opts.Model
+}
+
+func (p *ollamaProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	// Ollama provider doesn't need prefix support (passthrough mode in LiteLLM)
+	return p.Model(opt)
 }
 
 func (p *ollamaProvider) Call(

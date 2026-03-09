@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"strings"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/system"
 
 	"github.com/sirupsen/logrus"
 	customsearch "google.golang.org/api/customsearch/v1"
@@ -20,43 +20,33 @@ import (
 const googleMaxResults = 10
 
 type google struct {
+	cfg       *config.Config
 	flowID    int64
 	taskID    *int64
 	subtaskID *int64
-	apiKey    string
-	cxKey     string
-	lrKey     string
-	proxyURL  string
 	slp       SearchLogProvider
 }
 
-func NewGoogleTool(flowID int64, taskID, subtaskID *int64,
-	apiKey, cxKey, lrKey, proxyURL string, slp SearchLogProvider,
+func NewGoogleTool(
+	cfg *config.Config,
+	flowID int64,
+	taskID, subtaskID *int64,
+	slp SearchLogProvider,
 ) Tool {
 	return &google{
+		cfg:       cfg,
 		flowID:    flowID,
 		taskID:    taskID,
 		subtaskID: subtaskID,
-		apiKey:    apiKey,
-		cxKey:     cxKey,
-		lrKey:     lrKey,
-		proxyURL:  proxyURL,
 		slp:       slp,
 	}
 }
 
-func (g *google) parseGoogleSearchResult(res *customsearch.Search) string {
-	var writer strings.Builder
-	for i, item := range res.Items {
-		writer.WriteString(fmt.Sprintf("# %d. %s\n\n", i+1, item.Title))
-		writer.WriteString(fmt.Sprintf("## URL\n%s\n\n", item.Link))
-		writer.WriteString(fmt.Sprintf("## Snippet\n\n%s\n\n", item.Snippet))
+func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !g.IsAvailable() {
+		return "", fmt.Errorf("google is not available")
 	}
 
-	return writer.String()
-}
-
-func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(g.flowID, g.taskID, g.subtaskID, logrus.Fields{
@@ -85,7 +75,7 @@ func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) 
 		return "", err
 	}
 
-	resp, err := svc.Cse.List().Context(ctx).Cx(g.cxKey).Q(action.Query).Lr(g.lrKey).Num(numResults).Do()
+	result, err := g.search(ctx, svc, action.Query, numResults)
 	if err != nil {
 		observation.Event(
 			langfuse.WithEventName("search engine error swallowed"),
@@ -101,11 +91,9 @@ func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) 
 			}),
 		)
 
-		logger.WithError(err).Error("failed to call tool to search in google results")
-		return fmt.Sprintf("failed to call tool %s to search in google results: %v", name, err), nil
+		logger.WithError(err).Error("failed to search in google")
+		result = fmt.Sprintf("failed to search in google: %v", err)
 	}
-
-	result := g.parseGoogleSearchResult(resp)
 
 	if agentCtx, ok := GetAgentContext(ctx); ok {
 		_, _ = g.slp.PutLog(
@@ -123,22 +111,38 @@ func (g *google) Handle(ctx context.Context, name string, args json.RawMessage) 
 	return result, nil
 }
 
+func (g *google) search(ctx context.Context, svc *customsearch.Service, query string, numResults int64) (string, error) {
+	resp, err := svc.Cse.List().Context(ctx).Cx(g.cxKey()).Q(query).Lr(g.lrKey()).Num(numResults).Do()
+	if err != nil {
+		return "", fmt.Errorf("failed to do request: %w", err)
+	}
+
+	return g.formatResults(resp), nil
+}
+
+func (g *google) formatResults(res *customsearch.Search) string {
+	var writer strings.Builder
+	for i, item := range res.Items {
+		writer.WriteString(fmt.Sprintf("# %d. %s\n\n", i+1, item.Title))
+		writer.WriteString(fmt.Sprintf("## URL\n%s\n\n", item.Link))
+		writer.WriteString(fmt.Sprintf("## Snippet\n\n%s\n\n", item.Snippet))
+	}
+
+	return writer.String()
+}
+
 func (g *google) newSearchService(ctx context.Context) (*customsearch.Service, error) {
+	client, err := system.GetHTTPClient(g.cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create http client: %w", err)
+	}
+
 	opts := []option.ClientOption{
-		option.WithAPIKey(g.apiKey),
+		option.WithAPIKey(g.apiKey()),
+		option.WithHTTPClient(client),
 	}
 
-	if g.proxyURL != "" {
-		opts = append(opts, option.WithHTTPClient(&http.Client{
-			Transport: &http.Transport{
-				Proxy: func(req *http.Request) (*url.URL, error) {
-					return url.Parse(g.proxyURL)
-				},
-			},
-		}))
-	}
-
-	svc, err := customsearch.NewService(ctx, option.WithAPIKey(g.apiKey))
+	svc, err := customsearch.NewService(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create google search service: %v", err)
 	}
@@ -147,5 +151,29 @@ func (g *google) newSearchService(ctx context.Context) (*customsearch.Service, e
 }
 
 func (g *google) IsAvailable() bool {
-	return g.apiKey != "" && g.cxKey != ""
+	return g.apiKey() != "" && g.cxKey() != ""
+}
+
+func (g *google) apiKey() string {
+	if g.cfg == nil {
+		return ""
+	}
+
+	return g.cfg.GoogleAPIKey
+}
+
+func (g *google) cxKey() string {
+	if g.cfg == nil {
+		return ""
+	}
+
+	return g.cfg.GoogleCXKey
+}
+
+func (g *google) lrKey() string {
+	if g.cfg == nil {
+		return ""
+	}
+
+	return g.cfg.GoogleLRKey
 }

@@ -42,6 +42,10 @@ func NewGuideTool(flowID int64, taskID, subtaskID *int64, store *pgvector.Store,
 }
 
 func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !g.IsAvailable() {
+		return "", fmt.Errorf("guide is not available")
+	}
+
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(g.flowID, g.taskID, g.subtaskID, logrus.Fields{
 		"tool": name,

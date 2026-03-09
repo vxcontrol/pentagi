@@ -1,15 +1,45 @@
-# Gemini 3.0 Series (Latest Flagship)
-- name: gemini-3-pro-preview
-  description: Google's most capable multimodal model designed for complex agentic workflows, advanced coding, and comprehensive problem solving. Features near-zero latency thinking capabilities.
+# Gemini 3.1 Series - Latest Flagship (February 2026)
+- name: gemini-3.1-pro-preview
+  description: Gemini 3.1 Pro - Latest flagship with refined performance, improved thinking, better token efficiency, and grounded factual consistency. Optimized for software engineering and agentic workflows with precise tool usage
   thinking: true
-  release_date: 2025-11-18
+  release_date: 2026-02-19
+  price:
+    input: 2.0
+    output: 12.0
+    cache_read: 0.2
+
+- name: gemini-3.1-pro-preview-customtools
+  description: Gemini 3.1 Pro Custom Tools - Specialized endpoint optimized for agentic workflows using custom tools and bash, better at prioritizing custom tools (view_file, search_code) over standard tools
+  thinking: true
+  release_date: 2026-02-19
+  price:
+    input: 2.0
+    output: 12.0
+    cache_read: 0.2
+
+- name: gemini-3.1-flash-lite-preview
+  description: Gemini 3.1 Flash-Lite - Most cost-efficient multimodal model with fastest performance for high-frequency lightweight tasks, high-volume agentic tasks, simple data extraction, and extremely low-latency applications
+  thinking: true
+  release_date: 2026-03-03
+  price:
+    input: 0.25
+    output: 1.5
+    cache_read: 0.025
+
+# Gemini 3 Series (DEPRECATED - Shutdown March 9, 2026)
+- name: gemini-3-pro-preview
+  description: "[DEPRECATED] Gemini 3 Pro - Shutdown March 9, 2026. Migrate to Gemini 3.1 Pro Preview to avoid service disruption"
+  thinking: true
+  deprecated: true
+  shutdown_date: 2026-03-09
+  release_date: 2025-11-20
   price:
     input: 2.0
     output: 12.0
     cache_read: 0.2
 
 - name: gemini-3-flash-preview
-  description: Latest and fastest and cost-effective thinking preview model designed for high-throughput security scanning and rapid vulnerability classification
+  description: Gemini 3 Flash - Frontier intelligence with superior search and grounding, designed for speed and high-throughput security scanning
   thinking: true
   release_date: 2025-11-20
   price:
@@ -19,7 +49,7 @@
 
 # Gemini 2.5 Series - Advanced thinking models with enhanced reasoning capabilities
 - name: gemini-2.5-pro
-  description: Most advanced reasoning model capable of complex multi-step security analysis, sophisticated threat modeling, and comprehensive penetration testing methodologies
+  description: Gemini 2.5 Pro - State-of-the-art multipurpose model excelling at coding and complex reasoning tasks, sophisticated threat modeling, and comprehensive penetration testing methodologies
   thinking: true
   release_date: 2025-06-17
   price:
@@ -28,7 +58,7 @@
     cache_read: 0.125
 
 - name: gemini-2.5-flash
-  description: Best price-performance thinking model ideal for large-scale security assessments, automated vulnerability analysis, and high-volume penetration testing workflows
+  description: Gemini 2.5 Flash - First hybrid reasoning model with 1M token context window and thinking budgets, best price-performance for large-scale security assessments and automated vulnerability analysis
   thinking: true
   release_date: 2025-06-17
   price:
@@ -37,7 +67,7 @@
     cache_read: 0.03
 
 - name: gemini-2.5-flash-lite
-  description: Fastest and most cost-effective thinking model designed for high-throughput security scanning and rapid vulnerability classification
+  description: Gemini 2.5 Flash-Lite - Smallest and most cost-effective model built for at-scale usage, high-throughput security scanning and rapid vulnerability classification
   thinking: true
   release_date: 2025-07-22
   price:
@@ -45,9 +75,18 @@
     output: 0.4
     cache_read: 0.01
 
+- name: gemini-2.5-flash-lite-preview-09-2025
+  description: Gemini 2.5 Flash-Lite Preview - Latest preview optimized for cost-efficiency, high throughput, and high quality for continuous security monitoring
+  thinking: true
+  release_date: 2025-09-01
+  price:
+    input: 0.1
+    output: 0.4
+    cache_read: 0.01
+
 # Gemini 2.0 Series - Balanced multimodal models for agent-based security operations
 - name: gemini-2.0-flash
-  description: Well-balanced multimodal model optimized for diverse security tasks, real-time threat monitoring, and interactive penetration testing scenarios
+  description: Gemini 2.0 Flash - Most balanced multimodal model with 1M token context window, built for the era of Agents, optimized for diverse security tasks and real-time threat monitoring
   thinking: false
   release_date: 2025-01-30
   price:
@@ -56,16 +95,16 @@
     cache_read: 0.025
 
 - name: gemini-2.0-flash-lite
-  description: Lightweight model perfect for continuous security monitoring, basic vulnerability scanning, and automated security alert processing
+  description: Gemini 2.0 Flash-Lite - Lightweight model perfect for continuous security monitoring, basic vulnerability scanning, and automated security alert processing
   thinking: false
   release_date: 2025-02-05
   price:
     input: 0.075
     output: 0.3
 
-# Specialized Models
+# Specialized Open-Source Models
 - name: gemma-3-27b-it
-  description: Open-source model ideal for on-premises security operations, privacy-sensitive penetration testing, and customizable security analysis workflows
+  description: Gemma 3 - Open-source lightweight model built from Gemini technology, ideal for on-premises security operations, privacy-sensitive penetration testing, and customizable security analysis workflows
   thinking: false
   release_date: 2024-02-21
   price:

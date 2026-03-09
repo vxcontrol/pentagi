@@ -26,6 +26,10 @@ const (
 	ProviderBedrock   ProviderType = "bedrock"
 	ProviderOllama    ProviderType = "ollama"
 	ProviderCustom    ProviderType = "custom"
+	ProviderDeepSeek  ProviderType = "deepseek"
+	ProviderGLM       ProviderType = "glm"
+	ProviderKimi      ProviderType = "kimi"
+	ProviderQwen      ProviderType = "qwen"
 )
 
 type ProviderName string
@@ -41,11 +45,17 @@ const (
 	DefaultProviderNameBedrock   ProviderName = ProviderName(ProviderBedrock)
 	DefaultProviderNameOllama    ProviderName = ProviderName(ProviderOllama)
 	DefaultProviderNameCustom    ProviderName = ProviderName(ProviderCustom)
+	DefaultProviderNameDeepSeek  ProviderName = ProviderName(ProviderDeepSeek)
+	DefaultProviderNameGLM       ProviderName = ProviderName(ProviderGLM)
+	DefaultProviderNameKimi      ProviderName = ProviderName(ProviderKimi)
+	DefaultProviderNameQwen      ProviderName = ProviderName(ProviderQwen)
 )
 
 type Provider interface {
 	Type() ProviderType
 	Model(opt pconfig.ProviderOptionsType) string
+	// ModelWithPrefix returns model name WITH provider prefix for LLM API calls and Langfuse logging
+	ModelWithPrefix(opt pconfig.ProviderOptionsType) string
 	GetUsage(info map[string]any) pconfig.CallUsage
 
 	Call(ctx context.Context, opt pconfig.ProviderOptionsType, prompt string) (string, error)

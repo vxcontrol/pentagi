@@ -1,300 +1,305 @@
 package tools
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
-	"time"
+
+	"pentagi/pkg/config"
+	"pentagi/pkg/database"
 )
 
-// TestSploitusExploitsSearch tests exploit search functionality with a CVE query
-// This is an integration test that makes real HTTP requests to Sploitus
-func TestSploitusExploitsSearch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode - use unit tests instead")
-	}
+func testSploitusConfig() *config.Config {
+	return &config.Config{SploitusEnabled: true}
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+func TestSploitusHandle(t *testing.T) {
+	var seenRequest bool
+	var receivedMethod string
+	var receivedContentType string
+	var receivedAccept string
+	var receivedOrigin string
+	var receivedReferer string
+	var receivedUserAgent string
+	var receivedBody []byte
+
+	mockMux := http.NewServeMux()
+	mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		seenRequest = true
+		receivedMethod = r.Method
+		receivedContentType = r.Header.Get("Content-Type")
+		receivedAccept = r.Header.Get("Accept")
+		receivedOrigin = r.Header.Get("Origin")
+		receivedReferer = r.Header.Get("Referer")
+		receivedUserAgent = r.Header.Get("User-Agent")
+
+		var err error
+		receivedBody, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("failed to read request body: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"exploits":[
+				{
+					"id":"CVE-2024-1234",
+					"title":"Test Exploit for nginx",
+					"type":"githubexploit",
+					"href":"https://github.com/test/exploit",
+					"score":9.8,
+					"published":"2024-01-15",
+					"language":"python",
+					"source":"exploit code here"
+				}
+			],
+			"exploits_total":42
+		}`))
+	})
+
+	proxy, err := newTestProxy("sploitus.com", mockMux)
+	if err != nil {
+		t.Fatalf("failed to create proxy: %v", err)
+	}
+	defer proxy.Close()
 
 	flowID := int64(1)
-	taskID := int64(1)
-	subtaskID := int64(1)
+	taskID := int64(10)
+	subtaskID := int64(20)
+	slp := &searchLogProviderMock{}
 
-	sploitus := NewSploitusTool(
-		flowID,
-		&taskID,
-		&subtaskID,
-		true,
-		"", // no proxy
-		&MockSearchLogProvider{},
+	cfg := &config.Config{
+		SploitusEnabled:   true,
+		ProxyURL:          proxy.URL(),
+		ExternalSSLCAPath: proxy.CACertPath(),
+	}
+
+	sp := NewSploitusTool(cfg, flowID, &taskID, &subtaskID, slp)
+
+	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
+	got, err := sp.Handle(
+		ctx,
+		SploitusToolName,
+		[]byte(`{"query":"nginx","exploit_type":"exploits","sort":"date","max_results":5}`),
 	)
-
-	maxResults := 5
-	searchAction := SploitusAction{
-		Query:       "nginx",
-		ExploitType: "exploits",
-		Sort:        "date",
-		MaxResults:  Int64(maxResults),
-	}
-
-	args, err := json.Marshal(searchAction)
 	if err != nil {
-		t.Fatalf("failed to marshal search action: %v", err)
+		t.Fatalf("Handle() unexpected error: %v", err)
 	}
 
-	result, err := sploitus.Handle(ctx, "sploitus_search", args)
-	if err != nil {
-		t.Fatalf("search failed: %v", err)
+	// Verify mock handler was called
+	if !seenRequest {
+		t.Fatal("request was not intercepted by proxy - mock handler was not called")
 	}
 
-	if result == "" {
-		t.Fatal("expected non-empty result")
+	// Verify request was built correctly
+	if receivedMethod != http.MethodPost {
+		t.Errorf("request method = %q, want POST", receivedMethod)
+	}
+	if receivedContentType != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", receivedContentType)
+	}
+	if receivedAccept != "application/json" {
+		t.Errorf("Accept = %q, want application/json", receivedAccept)
+	}
+	if receivedOrigin != "https://sploitus.com" {
+		t.Errorf("Origin = %q, want https://sploitus.com", receivedOrigin)
+	}
+	if !strings.Contains(receivedReferer, "sploitus.com") {
+		t.Errorf("Referer = %q, want to contain sploitus.com", receivedReferer)
+	}
+	if !strings.Contains(receivedUserAgent, "Mozilla") {
+		t.Errorf("User-Agent = %q, want to contain Mozilla", receivedUserAgent)
+	}
+	if !strings.Contains(string(receivedBody), `"query":"nginx"`) {
+		t.Errorf("request body = %q, expected to contain query", string(receivedBody))
+	}
+	if !strings.Contains(string(receivedBody), `"type":"exploits"`) {
+		t.Errorf("request body = %q, expected to contain type", string(receivedBody))
+	}
+	if !strings.Contains(string(receivedBody), `"sort":"date"`) {
+		t.Errorf("request body = %q, expected to contain sort", string(receivedBody))
 	}
 
-	if strings.Contains(result, "No exploits were found") {
-		t.Fatal("expected to find exploits for nginx query")
+	// Verify response was parsed correctly
+	if !strings.Contains(got, "# Sploitus Search Results") {
+		t.Errorf("result missing '# Sploitus Search Results' section: %q", got)
+	}
+	if !strings.Contains(got, "**Query:** `nginx`") {
+		t.Errorf("result missing expected query: %q", got)
+	}
+	if !strings.Contains(got, "**Total matches on Sploitus:** 42") {
+		t.Errorf("result missing expected total: %q", got)
+	}
+	if !strings.Contains(got, "Test Exploit for nginx") {
+		t.Errorf("result missing expected title: %q", got)
 	}
 
-	// Check for expected structure
-	if !strings.Contains(result, "# Sploitus Search Results") {
-		t.Error("expected results header")
+	// Verify search log was written with agent context
+	if slp.calls != 1 {
+		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
 	}
-
-	if !strings.Contains(result, "**Query:** `nginx`") {
-		t.Error("expected query in results")
+	if slp.engine != database.SearchengineTypeSploitus {
+		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypeSploitus)
 	}
-
-	if !strings.Contains(result, "**Type:** exploits") {
-		t.Error("expected type in results")
+	if slp.query != "nginx" {
+		t.Errorf("logged query = %q, want %q", slp.query, "nginx")
+	}
+	if slp.parentType != database.MsgchainTypeSearcher {
+		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
+	}
+	if slp.currType != database.MsgchainTypeSearcher {
+		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
+	}
+	if slp.taskID == nil || *slp.taskID != taskID {
+		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
+	}
+	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
+		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
 	}
 }
 
-// TestSploitusToolsSearch tests tools search functionality
-// This is an integration test that makes real HTTP requests to Sploitus
-func TestSploitusToolsSearch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode - use unit tests instead")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	flowID := int64(2)
-	taskID := int64(2)
-	subtaskID := int64(2)
-
-	sploitus := NewSploitusTool(
-		flowID,
-		&taskID,
-		&subtaskID,
-		true,
-		"", // no proxy
-		&MockSearchLogProvider{},
-	)
-
-	maxResults := 5
-	searchAction := SploitusAction{
-		Query:       "metasploit",
-		ExploitType: "tools",
-		Sort:        "default",
-		MaxResults:  Int64(maxResults),
-	}
-
-	args, err := json.Marshal(searchAction)
-	if err != nil {
-		t.Fatalf("failed to marshal search action: %v", err)
-	}
-
-	result, err := sploitus.Handle(ctx, "sploitus_search", args)
-	if err != nil {
-		t.Fatalf("search failed: %v", err)
-	}
-
-	if result == "" {
-		t.Fatal("expected non-empty result")
-	}
-
-	if strings.Contains(result, "No security tools were found") {
-		t.Fatal("expected to find tools for metasploit query")
-	}
-
-	// Check for expected structure
-	if !strings.Contains(result, "# Sploitus Search Results") {
-		t.Error("expected results header")
-	}
-
-	if !strings.Contains(result, "**Query:** `metasploit`") {
-		t.Error("expected query in results")
-	}
-
-	if !strings.Contains(result, "**Type:** tools") {
-		t.Error("expected type in results")
-	}
-
-	if !strings.Contains(result, "## Security Tools") {
-		t.Error("expected security tools section")
-	}
-}
-
-// TestSploitusDisabled tests that disabled tool returns appropriate status
-func TestSploitusDisabled(t *testing.T) {
-	flowID := int64(3)
-	taskID := int64(3)
-	subtaskID := int64(3)
-
-	sploitus := NewSploitusTool(
-		flowID,
-		&taskID,
-		&subtaskID,
-		false, // disabled
-		"",
-		&MockSearchLogProvider{},
-	)
-
-	if sploitus.IsAvailable() {
-		t.Error("expected tool to be unavailable when disabled")
-	}
-}
-
-// TestSploitusInvalidJSON tests handling of invalid JSON input
-func TestSploitusInvalidJSON(t *testing.T) {
-	ctx := context.Background()
-
-	flowID := int64(4)
-	taskID := int64(4)
-	subtaskID := int64(4)
-
-	sploitus := NewSploitusTool(
-		flowID,
-		&taskID,
-		&subtaskID,
-		true,
-		"",
-		&MockSearchLogProvider{},
-	)
-
-	invalidJSON := json.RawMessage(`{invalid json}`)
-
-	_, err := sploitus.Handle(ctx, "sploitus_search", invalidJSON)
-	if err == nil {
-		t.Error("expected error when handling invalid JSON")
-	}
-}
-
-// TestSploitusParseExploitsResponse tests parsing of exploits response from test data
-func TestSploitusParseExploitsResponse(t *testing.T) {
-	testdata := []struct {
-		filename    string
-		expectedMin int
-		exploitType string
+func TestSploitusIsAvailable(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *config.Config
+		want bool
 	}{
-		{filename: "sploitus_result_cve_2026.json", expectedMin: 5, exploitType: "exploits"},
-		{filename: "sploitus_result_nginx.json", expectedMin: 5, exploitType: "exploits"},
+		{
+			name: "available when enabled",
+			cfg:  testSploitusConfig(),
+			want: true,
+		},
+		{
+			name: "unavailable when disabled",
+			cfg:  &config.Config{SploitusEnabled: false},
+			want: false,
+		},
+		{
+			name: "unavailable when nil config",
+			cfg:  nil,
+			want: false,
+		},
 	}
 
-	for _, tt := range testdata {
-		t.Run(tt.filename, func(t *testing.T) {
-			t.Parallel()
-
-			body, err := os.ReadFile(filepath.Join("testdata", tt.filename))
-			if err != nil {
-				t.Fatalf("failed to read test data: %v", err)
-			}
-
-			var resp sploitusResponse
-			if err := json.Unmarshal(body, &resp); err != nil {
-				t.Fatalf("failed to unmarshal response: %v", err)
-			}
-
-			if len(resp.Exploits) < tt.expectedMin {
-				t.Fatalf("expected at least %d results, got %d", tt.expectedMin, len(resp.Exploits))
-			}
-
-			if resp.ExploitsTotal == 0 {
-				t.Error("expected non-zero total count")
-			}
-
-			// Verify result structure
-			for i, item := range resp.Exploits {
-				if item.Title == "" {
-					t.Errorf("result %d should have title", i)
-				}
-				if item.Href == "" {
-					t.Errorf("result %d should have href", i)
-				}
-				if item.ID == "" {
-					t.Errorf("result %d should have id", i)
-				}
-				if item.Type == "" {
-					t.Errorf("result %d should have type", i)
-				}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &sploitus{cfg: tt.cfg}
+			if got := sp.IsAvailable(); got != tt.want {
+				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestSploitusParseToolsResponse tests parsing of tools response from test data
-func TestSploitusParseToolsResponse(t *testing.T) {
-	testdata := []struct {
-		filename    string
-		expectedMin int
-		exploitType string
+func TestSploitusHandle_ValidationAndSwallowedError(t *testing.T) {
+	t.Run("invalid json", func(t *testing.T) {
+		sp := &sploitus{cfg: testSploitusConfig()}
+		_, err := sp.Handle(t.Context(), SploitusToolName, []byte("{"))
+		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
+			t.Fatalf("expected unmarshal error, got: %v", err)
+		}
+	})
+
+	t.Run("search error swallowed", func(t *testing.T) {
+		var seenRequest bool
+		mockMux := http.NewServeMux()
+		mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+			seenRequest = true
+			w.WriteHeader(http.StatusBadGateway)
+		})
+
+		proxy, err := newTestProxy("sploitus.com", mockMux)
+		if err != nil {
+			t.Fatalf("failed to create proxy: %v", err)
+		}
+		defer proxy.Close()
+
+		sp := &sploitus{
+			flowID: 1,
+			cfg: &config.Config{
+				SploitusEnabled:   true,
+				ProxyURL:          proxy.URL(),
+				ExternalSSLCAPath: proxy.CACertPath(),
+			},
+		}
+
+		result, err := sp.Handle(
+			t.Context(),
+			SploitusToolName,
+			[]byte(`{"query":"test","exploit_type":"exploits"}`),
+		)
+		if err != nil {
+			t.Fatalf("Handle() unexpected error: %v", err)
+		}
+
+		// Verify mock handler was called (request was intercepted)
+		if !seenRequest {
+			t.Error("request was not intercepted by proxy - mock handler was not called")
+		}
+
+		// Verify error was swallowed and returned as string
+		if !strings.Contains(result, "failed to search in Sploitus") {
+			t.Errorf("Handle() = %q, expected swallowed error message", result)
+		}
+	})
+}
+
+func TestSploitusHandle_StatusCodeErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		errContain string
 	}{
-		{filename: "sploitus_result_metasploit.json", expectedMin: 5, exploitType: "tools"},
-		{filename: "sploitus_result_nmap.json", expectedMin: 5, exploitType: "tools"},
+		{"rate limit 499", 499, "rate limit exceeded"},
+		{"rate limit 422", 422, "rate limit exceeded"},
+		{"server error", http.StatusInternalServerError, "HTTP 500"},
 	}
 
-	for _, tt := range testdata {
-		t.Run(tt.filename, func(t *testing.T) {
-			t.Parallel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockMux := http.NewServeMux()
+			mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.statusCode)
+			})
 
-			body, err := os.ReadFile(filepath.Join("testdata", tt.filename))
+			proxy, err := newTestProxy("sploitus.com", mockMux)
 			if err != nil {
-				t.Fatalf("failed to read test data: %v", err)
+				t.Fatalf("failed to create proxy: %v", err)
+			}
+			defer proxy.Close()
+
+			sp := &sploitus{
+				flowID: 1,
+				cfg: &config.Config{
+					SploitusEnabled:   true,
+					ProxyURL:          proxy.URL(),
+					ExternalSSLCAPath: proxy.CACertPath(),
+				},
 			}
 
-			var resp sploitusResponse
-			if err := json.Unmarshal(body, &resp); err != nil {
-				t.Fatalf("failed to unmarshal response: %v", err)
+			result, err := sp.Handle(
+				t.Context(),
+				SploitusToolName,
+				[]byte(`{"query":"test","exploit_type":"exploits"}`),
+			)
+			if err != nil {
+				t.Fatalf("Handle() unexpected error: %v", err)
 			}
 
-			if len(resp.Exploits) < tt.expectedMin {
-				t.Fatalf("expected at least %d results, got %d", tt.expectedMin, len(resp.Exploits))
+			// Error should be swallowed and returned as string
+			if !strings.Contains(result, "failed to search in Sploitus") {
+				t.Errorf("Handle() = %q, expected swallowed error", result)
 			}
-
-			if resp.ExploitsTotal == 0 {
-				t.Error("expected non-zero total count")
-			}
-
-			// Verify result structure for tools
-			for i, item := range resp.Exploits {
-				if item.Title == "" {
-					t.Errorf("result %d should have title", i)
-				}
-				if item.Href == "" {
-					t.Errorf("result %d should have href", i)
-				}
-				if item.ID == "" {
-					t.Errorf("result %d should have id", i)
-				}
-				if item.Type == "" {
-					t.Errorf("result %d should have type", i)
-				}
-				// Tools should have download field
-				if item.Download == "" {
-					t.Logf("warning: result %d missing download field", i)
-				}
+			if !strings.Contains(result, tt.errContain) {
+				t.Errorf("Handle() = %q, expected to contain %q", result, tt.errContain)
 			}
 		})
 	}
 }
 
-// TestSploitusFormatResults tests the formatting of results
 func TestSploitusFormatResults(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -415,46 +420,56 @@ func TestSploitusFormatResults(t *testing.T) {
 	}
 }
 
-// TestSploitusDefaultValues tests default values for optional parameters
 func TestSploitusDefaultValues(t *testing.T) {
-	ctx := context.Background()
+	mockMux := http.NewServeMux()
+	var receivedBody []byte
+	mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		receivedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"exploits":[],"exploits_total":0}`))
+	})
 
-	flowID := int64(5)
-	taskID := int64(5)
-	subtaskID := int64(5)
-
-	sploitus := NewSploitusTool(
-		flowID,
-		&taskID,
-		&subtaskID,
-		true,
-		"",
-		&MockSearchLogProvider{},
-	)
-
-	// Test with minimal action (only query)
-	searchAction := SploitusAction{
-		Query: "test",
-	}
-
-	args, err := json.Marshal(searchAction)
+	proxy, err := newTestProxy("sploitus.com", mockMux)
 	if err != nil {
-		t.Fatalf("failed to marshal search action: %v", err)
+		t.Fatalf("failed to create proxy: %v", err)
+	}
+	defer proxy.Close()
+
+	sp := &sploitus{
+		flowID: 1,
+		cfg: &config.Config{
+			SploitusEnabled:   true,
+			ProxyURL:          proxy.URL(),
+			ExternalSSLCAPath: proxy.CACertPath(),
+		},
 	}
 
-	// This will fail in actual API call, but we're testing parameter handling
-	// The Handle method should set defaults: exploitType="exploits", sort="default", maxResults=10
-	_, _ = sploitus.Handle(ctx, "sploitus_search", args)
+	// Test with minimal action (only query, no type/sort/maxResults)
+	_, err = sp.Handle(
+		t.Context(),
+		SploitusToolName,
+		[]byte(`{"query":"test"}`),
+	)
+	if err != nil {
+		t.Fatalf("Handle() unexpected error: %v", err)
+	}
 
-	// The test passes if no panic occurs during parameter processing
+	// Verify defaults were applied
+	bodyStr := string(receivedBody)
+	if !strings.Contains(bodyStr, `"type":"exploits"`) {
+		t.Errorf("expected default type 'exploits', got: %s", bodyStr)
+	}
+	if !strings.Contains(bodyStr, `"sort":"default"`) {
+		t.Errorf("expected default sort 'default', got: %s", bodyStr)
+	}
 }
 
-// TestSploitusSizeLimits tests hard size limits (50 KB source, 80 KB total)
 func TestSploitusSizeLimits(t *testing.T) {
 	t.Run("source truncation at 50KB", func(t *testing.T) {
 		// Create a large source (60 KB)
 		largeSource := strings.Repeat("A", 60*1024)
-		
+
 		resp := sploitusResponse{
 			Exploits: []sploitusExploit{
 				{
@@ -466,22 +481,20 @@ func TestSploitusSizeLimits(t *testing.T) {
 			},
 			ExploitsTotal: 1,
 		}
-		
+
 		result := formatSploitusResults("test", "exploits", 10, resp)
-		
+
 		// Check that source was truncated
-		if strings.Contains(result, "source truncated, exceeded 50 KB limit") {
-			// Good, truncation message is present
-		} else {
+		if !strings.Contains(result, "source truncated, exceeded 50 KB limit") {
 			t.Error("expected source truncation message for 60 KB source")
 		}
-		
+
 		// Verify result doesn't contain the full 60 KB
 		if len(result) > 80*1024 {
 			t.Errorf("result size %d exceeds 80 KB limit", len(result))
 		}
 	})
-	
+
 	t.Run("total size limit at 80KB", func(t *testing.T) {
 		// Create many results to exceed 80 KB total
 		results := make([]sploitusExploit, 100)
@@ -493,24 +506,24 @@ func TestSploitusSizeLimits(t *testing.T) {
 				Source: strings.Repeat("X", 5000), // 5 KB each
 			}
 		}
-		
+
 		resp := sploitusResponse{
 			Exploits:      results,
 			ExploitsTotal: 100,
 		}
-		
+
 		result := formatSploitusResults("test", "exploits", 100, resp)
-		
+
 		// Result should be under 80 KB
 		if len(result) > 80*1024 {
 			t.Errorf("result size %d exceeds 80 KB hard limit", len(result))
 		}
-		
+
 		// Should have truncation warning
 		if !strings.Contains(result, "Results truncated") {
 			t.Error("expected truncation warning when hitting 80 KB limit")
 		}
-		
+
 		// Should not show all 100 results
 		count := strings.Count(result, "### ")
 		if count >= 100 {
@@ -519,7 +532,6 @@ func TestSploitusSizeLimits(t *testing.T) {
 	})
 }
 
-// TestSploitusMaxResultsClamp tests that max results are clamped to valid range
 func TestSploitusMaxResultsClamp(t *testing.T) {
 	tests := []struct {
 		name          string

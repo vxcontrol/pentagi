@@ -108,7 +108,8 @@ RUN apk --no-cache add ca-certificates openssl shadow
 
 ADD scripts/entrypoint.sh /opt/pentagi/bin/
 
-RUN chmod +x /opt/pentagi/bin/entrypoint.sh
+RUN sed -i 's/\r//' /opt/pentagi/bin/entrypoint.sh && \
+    chmod +x /opt/pentagi/bin/entrypoint.sh
 
 RUN mkdir -p \
     /opt/pentagi/bin \
@@ -134,6 +135,8 @@ COPY examples/configs/ollama-llama318b.provider.yml /opt/pentagi/conf/
 COPY examples/configs/ollama-qwen332b-fp16-tc.provider.yml /opt/pentagi/conf/
 COPY examples/configs/ollama-qwq32b-fp16-tc.provider.yml /opt/pentagi/conf/
 COPY examples/configs/openrouter.provider.yml /opt/pentagi/conf/
+COPY examples/configs/novita.provider.yml /opt/pentagi/conf/
+COPY examples/configs/vllm-qwen3.5-27b-fp8.provider.yml /opt/pentagi/conf/
 COPY examples/configs/vllm-qwen332b-fp16.provider.yml /opt/pentagi/conf/
 
 COPY LICENSE /opt/pentagi/LICENSE

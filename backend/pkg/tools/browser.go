@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -83,19 +82,25 @@ func (b *browser) wrapCommandResult(ctx context.Context, name, result, url, scre
 			}),
 		)
 
-		logrus.WithContext(ctx).WithError(err).WithFields(logrus.Fields{
+		logrus.WithContext(ctx).WithError(err).WithFields(enrichLogrusFields(b.flowID, b.taskID, b.subtaskID, logrus.Fields{
 			"tool":   name,
 			"url":    url,
 			"screen": screen,
 			"result": result[:min(len(result), 1000)],
-		}).Error("browser tool failed")
+		})).Error("browser tool failed")
 		return fmt.Sprintf("browser tool '%s' handled with error: %v", name, err), nil
 	}
-	_, _ = b.scp.PutScreenshot(ctx, screen, url, b.taskID, b.subtaskID)
+	if screen != "" {
+		_, _ = b.scp.PutScreenshot(ctx, screen, url, b.taskID, b.subtaskID)
+	}
 	return result, nil
 }
 
 func (b *browser) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !b.IsAvailable() {
+		return "", fmt.Errorf("browser is not available")
+	}
+
 	var action Browser
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(b.flowID, b.taskID, b.subtaskID, logrus.Fields{
 		"tool": name,
@@ -119,13 +124,13 @@ func (b *browser) Handle(ctx context.Context, name string, args json.RawMessage)
 
 	switch action.Action {
 	case Markdown:
-		result, screen, err := b.ContentMD(action.Url)
+		result, screen, err := b.ContentMD(ctx, action.Url)
 		return b.wrapCommandResult(ctx, name, result, action.Url, screen, err)
 	case HTML:
-		result, screen, err := b.ContentHTML(action.Url)
+		result, screen, err := b.ContentHTML(ctx, action.Url)
 		return b.wrapCommandResult(ctx, name, result, action.Url, screen, err)
 	case Links:
-		result, screen, err := b.Links(action.Url)
+		result, screen, err := b.Links(ctx, action.Url)
 		return b.wrapCommandResult(ctx, name, result, action.Url, screen, err)
 	default:
 		logger.Error("unknown file action")
@@ -133,8 +138,13 @@ func (b *browser) Handle(ctx context.Context, name string, args json.RawMessage)
 	}
 }
 
-func (b *browser) ContentMD(url string) (string, string, error) {
-	log.Println("Trying to get content from", url)
+func (b *browser) ContentMD(ctx context.Context, url string) (string, string, error) {
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(b.flowID, b.taskID, b.subtaskID, logrus.Fields{
+		"tool":   "browser",
+		"action": "markdown",
+		"url":    url,
+	}))
+	logger.Debug("trying to get markdown content")
 
 	var (
 		wg                        sync.WaitGroup
@@ -159,14 +169,20 @@ func (b *browser) ContentMD(url string) (string, string, error) {
 		return "", "", errContent
 	}
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		logger.WithError(errScreenshot).Warn("failed to capture screenshot, continuing without it")
+		screenshotName = ""
 	}
 
 	return content, screenshotName, nil
 }
 
-func (b *browser) ContentHTML(url string) (string, string, error) {
-	log.Println("Trying to get content from", url)
+func (b *browser) ContentHTML(ctx context.Context, url string) (string, string, error) {
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(b.flowID, b.taskID, b.subtaskID, logrus.Fields{
+		"tool":   "browser",
+		"action": "html",
+		"url":    url,
+	}))
+	logger.Debug("trying to get HTML content")
 
 	var (
 		wg                        sync.WaitGroup
@@ -191,14 +207,20 @@ func (b *browser) ContentHTML(url string) (string, string, error) {
 		return "", "", errContent
 	}
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		logger.WithError(errScreenshot).Warn("failed to capture screenshot, continuing without it")
+		screenshotName = ""
 	}
 
 	return content, screenshotName, nil
 }
 
-func (b *browser) Links(url string) (string, string, error) {
-	log.Println("Trying to get urls from", url)
+func (b *browser) Links(ctx context.Context, url string) (string, string, error) {
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(b.flowID, b.taskID, b.subtaskID, logrus.Fields{
+		"tool":   "browser",
+		"action": "links",
+		"url":    url,
+	}))
+	logger.Debug("trying to get links")
 
 	var (
 		wg                      sync.WaitGroup
@@ -223,7 +245,8 @@ func (b *browser) Links(url string) (string, string, error) {
 		return "", "", errLinks
 	}
 	if errScreenshot != nil {
-		return "", "", errScreenshot
+		logger.WithError(errScreenshot).Warn("failed to capture screenshot, continuing without it")
+		screenshotName = ""
 	}
 
 	return links, screenshotName, nil
@@ -349,8 +372,8 @@ func (b *browser) getHTML(targetURL string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch content by url '%s': %w", targetURL, err)
 	}
-	if len(content) < minMdContentSize {
-		return "", fmt.Errorf("content size is less than minimum: %d bytes", minMdContentSize)
+	if len(content) < minHtmlContentSize {
+		return "", fmt.Errorf("content size is less than minimum: %d bytes", minHtmlContentSize)
 	}
 
 	return string(content), nil

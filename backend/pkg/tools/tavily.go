@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"text/template"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/system"
 
 	"github.com/sirupsen/logrus"
 )
@@ -50,30 +51,36 @@ type tavilyResult struct {
 }
 
 type tavily struct {
+	cfg        *config.Config
 	flowID     int64
 	taskID     *int64
 	subtaskID  *int64
-	apiKey     string
-	proxyURL   string
 	slp        SearchLogProvider
 	summarizer SummarizeHandler
 }
 
-func NewTavilyTool(flowID int64, taskID, subtaskID *int64, apiKey, proxyURL string,
-	slp SearchLogProvider, summarizer SummarizeHandler,
+func NewTavilyTool(
+	cfg *config.Config,
+	flowID int64,
+	taskID, subtaskID *int64,
+	slp SearchLogProvider,
+	summarizer SummarizeHandler,
 ) Tool {
 	return &tavily{
+		cfg:        cfg,
 		flowID:     flowID,
 		taskID:     taskID,
 		subtaskID:  subtaskID,
-		apiKey:     apiKey,
-		proxyURL:   proxyURL,
 		slp:        slp,
 		summarizer: summarizer,
 	}
 }
 
 func (t *tavily) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !t.IsAvailable() {
+		return "", fmt.Errorf("tavily is not available")
+	}
+
 	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, logrus.Fields{
@@ -128,18 +135,14 @@ func (t *tavily) Handle(ctx context.Context, name string, args json.RawMessage) 
 }
 
 func (t *tavily) search(ctx context.Context, query string, maxResults int) (string, error) {
-	client := http.DefaultClient
-	if t.proxyURL != "" {
-		client.Transport = &http.Transport{
-			Proxy: func(req *http.Request) (*url.URL, error) {
-				return url.Parse(t.proxyURL)
-			},
-		}
+	client, err := system.GetHTTPClient(t.cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to create http client: %w", err)
 	}
 
 	reqPayload := tavilyRequest{
 		Query:             query,
-		ApiKey:            t.apiKey,
+		ApiKey:            t.apiKey(),
 		Topic:             "general",
 		SearchDepth:       "advanced",
 		IncludeImages:     false,
@@ -307,5 +310,13 @@ The summary MUST provide complete answers to the user's query, preserving all re
 }
 
 func (t *tavily) IsAvailable() bool {
-	return t.apiKey != ""
+	return t.apiKey() != ""
+}
+
+func (t *tavily) apiKey() string {
+	if t.cfg == nil {
+		return ""
+	}
+
+	return t.cfg.TavilyAPIKey
 }

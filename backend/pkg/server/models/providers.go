@@ -25,7 +25,11 @@ func (s ProviderType) Valid() error {
 		provider.ProviderGemini,
 		provider.ProviderBedrock,
 		provider.ProviderOllama,
-		provider.ProviderCustom:
+		provider.ProviderCustom,
+		provider.ProviderDeepSeek,
+		provider.ProviderGLM,
+		provider.ProviderKimi,
+		provider.ProviderQwen:
 		return nil
 	default:
 		return fmt.Errorf("invalid ProviderType: %s", s)

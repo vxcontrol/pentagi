@@ -8,14 +8,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 	"text/template"
 	"time"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/system"
 
 	"github.com/sirupsen/logrus"
 )
@@ -81,67 +82,40 @@ type Usage struct {
 
 // perplexity - structure for working with Perplexity API
 type perplexity struct {
-	flowID      int64
-	taskID      *int64
-	subtaskID   *int64
-	apiKey      string
-	proxyURL    string
-	model       string
-	contextSize string
-	temperature float64
-	topP        float64
-	maxTokens   int
-	timeout     time.Duration
-	slp         SearchLogProvider
-	summarizer  SummarizeHandler
+	cfg        *config.Config
+	flowID     int64
+	taskID     *int64
+	subtaskID  *int64
+	slp        SearchLogProvider
+	summarizer SummarizeHandler
 }
 
-func NewPerplexityTool(flowID int64, taskID, subtaskID *int64,
-	apiKey, proxyURL, model, contextSize string, temperature, topP float64,
-	maxTokens int, timeout time.Duration, slp SearchLogProvider, summarizer SummarizeHandler,
+func NewPerplexityTool(
+	cfg *config.Config,
+	flowID int64,
+	taskID, subtaskID *int64,
+	slp SearchLogProvider,
+	summarizer SummarizeHandler,
 ) Tool {
-	if model == "" {
-		model = perplexityModel
-	}
-
-	if temperature == 0 {
-		temperature = perplexityTemperature
-	}
-
-	if topP == 0 {
-		topP = perplexityTopP
-	}
-
-	if maxTokens == 0 {
-		maxTokens = perplexityMaxTokens
-	}
-
-	if timeout == 0 {
-		timeout = perplexityTimeout
-	}
-
 	return &perplexity{
-		flowID:      flowID,
-		taskID:      taskID,
-		subtaskID:   subtaskID,
-		apiKey:      apiKey,
-		proxyURL:    proxyURL,
-		model:       model,
-		contextSize: contextSize,
-		temperature: temperature,
-		topP:        topP,
-		maxTokens:   maxTokens,
-		timeout:     timeout,
-		slp:         slp,
-		summarizer:  summarizer,
+		cfg:        cfg,
+		flowID:     flowID,
+		taskID:     taskID,
+		subtaskID:  subtaskID,
+		slp:        slp,
+		summarizer: summarizer,
 	}
 }
 
 // Handle processes a search request through Perplexity API
-func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (p *perplexity) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !p.IsAvailable() {
+		return "", fmt.Errorf("perplexity is not available")
+	}
+
 	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(p.flowID, p.taskID, p.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
 	}))
@@ -156,7 +130,7 @@ func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessa
 		"max_results": action.MaxResults,
 	})
 
-	result, err := t.search(ctx, action.Query)
+	result, err := p.search(ctx, action.Query)
 	if err != nil {
 		observation.Event(
 			langfuse.WithEventName("search engine error swallowed"),
@@ -167,7 +141,7 @@ func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessa
 				"tool_name":   PerplexityToolName,
 				"engine":      "perplexity",
 				"query":       action.Query,
-				"model":       t.model,
+				"model":       p.model(),
 				"max_results": action.MaxResults.Int(),
 				"error":       err.Error(),
 			}),
@@ -178,15 +152,15 @@ func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessa
 	}
 
 	if agentCtx, ok := GetAgentContext(ctx); ok {
-		_, _ = t.slp.PutLog(
+		_, _ = p.slp.PutLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
 			database.SearchengineTypePerplexity,
 			action.Query,
 			result,
-			t.taskID,
-			t.subtaskID,
+			p.taskID,
+			p.subtaskID,
 		)
 	}
 
@@ -194,20 +168,13 @@ func (t *perplexity) Handle(ctx context.Context, name string, args json.RawMessa
 }
 
 // search performs a request to Perplexity API
-func (t *perplexity) search(ctx context.Context, query string) (string, error) {
-	// Setting up HTTP client with timeout
-	httpClient := &http.Client{
-		Timeout: t.timeout,
+func (p *perplexity) search(ctx context.Context, query string) (string, error) {
+	client, err := system.GetHTTPClient(p.cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to create http client: %w", err)
 	}
 
-	// Setting up proxy if specified
-	if t.proxyURL != "" {
-		httpClient.Transport = &http.Transport{
-			Proxy: func(req *http.Request) (*url.URL, error) {
-				return url.Parse(t.proxyURL)
-			},
-		}
-	}
+	client.Timeout = p.timeout()
 
 	// Creating message for the request
 	messages := []Message{
@@ -220,11 +187,11 @@ func (t *perplexity) search(ctx context.Context, query string) (string, error) {
 	// Forming the request
 	reqPayload := CompletionRequest{
 		Messages:               messages,
-		Model:                  t.model,
-		SearchContextSize:      t.contextSize,
-		MaxTokens:              t.maxTokens,
-		Temperature:            t.temperature,
-		TopP:                   t.topP,
+		Model:                  p.model(),
+		SearchContextSize:      p.contextSize(),
+		MaxTokens:              p.maxTokens(),
+		Temperature:            p.temperature(),
+		TopP:                   p.topP(),
 		ReturnImages:           false,
 		ReturnRelatedQuestions: false,
 		Stream:                 false,
@@ -243,11 +210,11 @@ func (t *perplexity) search(ctx context.Context, query string) (string, error) {
 	}
 
 	// Setting request headers
-	req.Header.Set("Authorization", "Bearer "+t.apiKey)
+	req.Header.Set("Authorization", "Bearer "+p.apiKey())
 	req.Header.Set("Content-Type", "application/json")
 
 	// Sending the request
-	resp, err := httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
@@ -255,7 +222,7 @@ func (t *perplexity) search(ctx context.Context, query string) (string, error) {
 
 	// Handling the response
 	if resp.StatusCode != http.StatusOK {
-		return "", t.handleErrorResponse(resp.StatusCode)
+		return "", p.handleErrorResponse(resp.StatusCode)
 	}
 
 	// Reading the response body
@@ -271,12 +238,12 @@ func (t *perplexity) search(ctx context.Context, query string) (string, error) {
 	}
 
 	// Forming the result
-	result := t.formatResponse(ctx, &response, query)
+	result := p.formatResponse(ctx, &response, query)
 	return result, nil
 }
 
 // handleErrorResponse handles erroneous HTTP statuses
-func (t *perplexity) handleErrorResponse(statusCode int) error {
+func (p *perplexity) handleErrorResponse(statusCode int) error {
 	switch statusCode {
 	case http.StatusBadRequest:
 		return errors.New("request is invalid")
@@ -304,7 +271,7 @@ func (t *perplexity) handleErrorResponse(statusCode int) error {
 }
 
 // formatResponse formats the API response into readable text
-func (t *perplexity) formatResponse(ctx context.Context, response *CompletionResponse, query string) string {
+func (p *perplexity) formatResponse(ctx context.Context, response *CompletionResponse, query string) string {
 	var builder strings.Builder
 
 	// Checking for response choices
@@ -328,10 +295,10 @@ func (t *perplexity) formatResponse(ctx context.Context, response *CompletionRes
 	rawContent := builder.String()
 	if len(rawContent) > maxRawContentLength {
 		// Check if summarizer is available
-		if t.summarizer != nil {
-			summarizePrompt, err := t.getSummarizePrompt(query, rawContent, response.Citations)
+		if p.summarizer != nil {
+			summarizePrompt, err := p.getSummarizePrompt(query, rawContent, response.Citations)
 			if err == nil {
-				if summarizedContent, err := t.summarizer(ctx, summarizePrompt); err == nil {
+				if summarizedContent, err := p.summarizer(ctx, summarizePrompt); err == nil {
 					return summarizedContent
 				}
 			}
@@ -344,7 +311,7 @@ func (t *perplexity) formatResponse(ctx context.Context, response *CompletionRes
 }
 
 // getSummarizePrompt creates a prompt for summarizing Perplexity search results
-func (t *perplexity) getSummarizePrompt(query string, content string, citations *[]string) (string, error) {
+func (p *perplexity) getSummarizePrompt(query string, content string, citations *[]string) (string, error) {
 	templateText := `<instructions>
 TASK: Summarize Perplexity search results for the following user query:
 
@@ -414,6 +381,46 @@ The summary MUST provide complete answers to the user's query, preserving all re
 }
 
 // isAvailable checks the availability of the API
-func (t *perplexity) IsAvailable() bool {
-	return t.apiKey != ""
+func (p *perplexity) IsAvailable() bool {
+	return p.apiKey() != ""
+}
+
+func (p *perplexity) apiKey() string {
+	if p.cfg == nil {
+		return ""
+	}
+
+	return p.cfg.PerplexityAPIKey
+}
+
+func (p *perplexity) model() string {
+	if p.cfg == nil || p.cfg.PerplexityModel == "" {
+		return perplexityModel
+	}
+
+	return p.cfg.PerplexityModel
+}
+
+func (p *perplexity) contextSize() string {
+	if p.cfg == nil {
+		return ""
+	}
+
+	return p.cfg.PerplexityContextSize
+}
+
+func (p *perplexity) temperature() float64 {
+	return perplexityTemperature
+}
+
+func (p *perplexity) topP() float64 {
+	return perplexityTopP
+}
+
+func (p *perplexity) maxTokens() int {
+	return perplexityMaxTokens
+}
+
+func (p *perplexity) timeout() time.Duration {
+	return perplexityTimeout
 }

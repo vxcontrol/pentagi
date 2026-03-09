@@ -1,0 +1,136 @@
+# Qwen3.5-27B FP8 Provider Configuration
+# Based on official Qwen recommendations for vLLM inference
+# Architecture: Hybrid 75% DeltaNet + 25% Full Attention (48+16 layers)
+# Context: 262K native, expandable to 1M with YaRN
+# Vision: VLM with Vision Encoder (uses VRAM even for text-only tasks)
+
+simple:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 0.7
+  top_k: 20
+  top_p: 0.8
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+simple_json:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 0.7
+  top_k: 20
+  top_p: 0.8
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+  json: true
+
+primary_agent:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+assistant:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+generator:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+refiner:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+adviser:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+reflector:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+searcher:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 0.7
+  top_k: 20
+  top_p: 0.8
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+enricher:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 0.7
+  top_k: 20
+  top_p: 0.8
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+coder:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 0.0
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+installer:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 0.6
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 0.0
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768
+
+pentester:
+  model: "Qwen/Qwen3.5-27B-FP8"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 32768

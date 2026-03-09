@@ -29,7 +29,7 @@ import (
 
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
-	providerName := flag.String("provider", "custom", "Provider name (openai, anthropic, gemini, bedrock, ollama, custom)")
+	providerName := flag.String("provider", "custom", "Provider name (openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, custom)")
 	flowID := flag.Int64("flow", 0, "Flow ID for testing functions that require it (0 means using mocks)")
 	userID := flag.Int64("user", 0, "User ID for testing functions that require it (1 is default admin user)")
 	taskID := flag.Int64("task", 0, "Task ID for testing functions with default unset")

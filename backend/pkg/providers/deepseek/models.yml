@@ -1,0 +1,15 @@
+- name: deepseek-chat
+  description: DeepSeek-V3.2 (Non-thinking Mode) - Suitable for general dialogue, code generation, and tool calling tasks. Supports JSON Output, Tool Calls, Chat Prefix Completion, and FIM Completion. 128K context, max output 8K
+  thinking: false
+  price:
+    input: 0.28
+    output: 0.42
+    cache_read: 0.028
+
+- name: deepseek-reasoner
+  description: DeepSeek-V3.2 (Thinking Mode) - Advanced reasoning model with reinforcement learning chain-of-thought capabilities, suitable for complex logic, mathematical reasoning, and security analysis tasks. 128K context, max output 64K
+  thinking: true
+  price:
+    input: 0.28
+    output: 0.42
+    cache_read: 0.028

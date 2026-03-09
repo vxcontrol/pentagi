@@ -24,3 +24,12 @@ data/*
 !.gitkeep
 .claude/
 
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+

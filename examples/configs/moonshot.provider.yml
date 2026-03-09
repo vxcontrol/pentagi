@@ -1,17 +1,18 @@
 simple:
   model: "kimi-k2-turbo-preview"
-  temperature: 0.5
+  temperature: 0.6
   n: 1
-  max_tokens: 4096
+  max_tokens: 8192
   price:
     input: 1.15
     output: 8.0
 
 simple_json:
   model: "kimi-k2-turbo-preview"
-  temperature: 0.4
+  temperature: 0.6
   n: 1
   max_tokens: 4096
+  json: true
   price:
     input: 1.15
     output: 8.0
@@ -73,7 +74,7 @@ adviser:
 
 reflector:
   model: "kimi-k2-0905-preview"
-  temperature: 0.5
+  temperature: 0.7
   n: 1
   max_tokens: 4096
   price:
@@ -111,7 +112,7 @@ coder:
 
 installer:
   model: "kimi-k2-turbo-preview"
-  temperature: 0.5
+  temperature: 0.7
   n: 1
   max_tokens: 16384
   price:
@@ -120,7 +121,7 @@ installer:
 
 pentester:
   model: "kimi-k2-turbo-preview"
-  temperature: 0.7
+  temperature: 0.8
   n: 1
   max_tokens: 16384
   price:

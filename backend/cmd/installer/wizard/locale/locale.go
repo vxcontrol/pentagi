@@ -359,12 +359,20 @@ const (
 	LLMProviderGemini        = "Google Gemini"
 	LLMProviderBedrock       = "AWS Bedrock"
 	LLMProviderOllama        = "Ollama"
+	LLMProviderDeepSeek      = "DeepSeek"
+	LLMProviderGLM           = "GLM Zhipu AI"
+	LLMProviderKimi          = "Kimi Moonshot AI"
+	LLMProviderQwen          = "Qwen Alibaba Cloud"
 	LLMProviderCustom        = "Custom"
 	LLMProviderOpenAIDesc    = "Industry-leading GPT models with excellent general performance"
 	LLMProviderAnthropicDesc = "Claude models with superior reasoning and safety features"
 	LLMProviderGeminiDesc    = "Google's advanced multimodal models with broad knowledge"
 	LLMProviderBedrockDesc   = "Enterprise AWS access to multiple foundation model providers"
-	LLMProviderOllamaDesc    = "Local open-source models for privacy and cost control"
+	LLMProviderOllamaDesc    = "Local and cloud open-source models for privacy and flexibility"
+	LLMProviderDeepSeekDesc  = "Advanced Chinese AI models with strong reasoning and multilingual capabilities"
+	LLMProviderGLMDesc       = "Zhipu AI's GLM models for Chinese and English tasks"
+	LLMProviderKimiDesc      = "Moonshot AI's long-context models for document analysis"
+	LLMProviderQwenDesc      = "Alibaba Cloud's Qwen models for multilingual tasks"
 	LLMProviderCustomDesc    = "Custom OpenAI-compatible endpoint for maximum flexibility"
 )
 
@@ -425,44 +433,169 @@ Cost: Most cost-effective option among major cloud providers with excellent perf
 
 Setup: Get your API key from https://aistudio.google.com/app/apikey`
 
-	LLMFormBedrockHelp = `AWS Bedrock provides enterprise-grade access to multiple foundation model families with enhanced security and compliance.
+	LLMFormBedrockHelp = `AWS Bedrock provides enterprise-grade access to 20+ foundation models with multiple authentication methods and enhanced security.
 
 Default PentAGI Models:
-• Claude Sonnet-4 (via Bedrock): Premium reasoning model with AWS enterprise security controls
-• Claude 3.5 Haiku (via Bedrock): High-speed model for rapid security analysis with SOC2/HIPAA compliance
-• Access to additional models: Amazon Nova series, Meta Llama, Cohere Command, and more through single interface
+• Claude Sonnet-4.5 (via Bedrock): Premium reasoning model with AWS enterprise security and extended thinking capabilities
+• OpenAI GPT OSS 120B: Strong reasoning model for scientific analysis and complex security tasks
+• Claude Haiku-4.5, DeepSeek V3.2, Qwen3-32B: Efficient models for specific agent roles and cost optimization
+• Access to Amazon Nova (multimodal), Mistral, Moonshot, and more through single unified interface
+
+Authentication Methods (priority order):
+1. Default AWS Auth (BEDROCK_DEFAULT_AUTH=true): Use AWS SDK credential chain - recommended for EC2/ECS/Lambda
+2. Bearer Token (BEDROCK_BEARER_TOKEN): Token-based authentication for custom auth scenarios
+3. Static Credentials (ACCESS_KEY + SECRET_KEY): Traditional IAM credentials for development and testing
 
 Key Advantages:
-• Enterprise compliance: SOC2, HIPAA, FedRAMP certifications with data residency controls
-• Multi-provider access: Single interface to models from Anthropic, Amazon, Meta, AI21, Cohere, and DeepSeek
-• Enhanced security: VPC integration, CloudTrail logging, IAM controls for enterprise governance
-• Regional deployment: Choose AWS regions for latency optimization and data sovereignty requirements
+• Enterprise compliance: SOC2, HIPAA, FedRAMP certifications with data residency and governance controls
+• Multi-provider access: 20+ models from Anthropic, Amazon, OpenAI, Qwen, DeepSeek, Cohere, Mistral, Moonshot
+• Flexible authentication: Three methods to suit different deployment scenarios and security requirements
+• Enhanced security: VPC integration, CloudTrail logging, IAM controls, private endpoints for complete isolation
+• Regional deployment: Deploy in preferred AWS regions for latency optimization and data sovereignty
 
-Best for: Enterprise environments, regulated industries, teams requiring compliance and governance controls
-Cost: Competitive pricing with reserved capacity options, but may have restrictive default rate limits
-Warning: New AWS accounts have very low rate limits (2 requests/minute) - request quota increases for production use
+Best for: Enterprise environments, regulated industries, teams requiring compliance controls and flexible authentication
+Cost: Competitive pricing with provisioned throughput options, but new accounts have restrictive rate limits (2-20 req/min)
+Important: Request quota increases through AWS Service Quotas console for production penetration testing workflows
 
-Setup: Configure AWS credentials and region. Check rate limits at https://docs.aws.amazon.com/bedrock/`
+Setup: Choose authentication method and configure credentials. Verify rate limits at https://docs.aws.amazon.com/bedrock/`
 
-	LLMFormOllamaHelp = `Ollama enables completely private, on-premises LLM deployment with zero ongoing costs and full data control.
+	LLMFormOllamaHelp = `Ollama supports two deployment scenarios for complete flexibility.
+
+Scenario 1: Local Ollama Server (Self-Hosted)
+• Run Ollama on your own hardware (8GB+ RAM recommended, GPU optional but beneficial)
+• Complete data privacy - all processing happens locally
+• Zero ongoing costs - only infrastructure
+• No API key needed - authentication handled by network access
+• Setup: Install from https://ollama.ai/ and configure OLLAMA_SERVER_URL=http://ollama-server:11434
+
+Scenario 2: Ollama Cloud (Managed Service)
+• Cloud-hosted models without local infrastructure requirements
+• No hardware needed - models run on Ollama's infrastructure
+• Pay-per-use pricing with free tier available
+• API key required - generate at https://ollama.com/settings/keys
+• Setup: Register at https://ollama.com, configure OLLAMA_SERVER_URL=https://ollama.com + OLLAMA_SERVER_API_KEY=your_key
 
 Default PentAGI Models:
-• Llama 3.1:8b: Primary model for all agent types providing balanced performance and resource efficiency
-• Customizable: Easy model switching between Qwen, Mistral, CodeLlama, Gemma, and 100+ other open models
-• Local inference: No internet dependency once models are downloaded
+• Llama 3.1:8b, Qwen3:32b, and other open models
+• Customizable - switch between 100+ available models
+• Model auto-download and loading options for convenience
 
 Key Advantages:
-• Complete data privacy: All processing happens locally, no data sent to external services
-• Zero ongoing costs: Only infrastructure costs, no per-token or per-request charges
-• Customizable: Load any compatible model, fine-tune for specific security testing scenarios
-• Air-gapped deployment: Perfect for isolated networks and highly secure environments
-• Resource efficient: Optimized for local GPUs with quantized models for smaller hardware
+• Dual deployment options: Choose between privacy (local) and convenience (cloud)
+• Cost flexibility: Zero ongoing costs for local, pay-per-use for cloud
+• Extensive model library: Access to latest open-source models (Llama, Qwen, Mistral, Gemma, and more)
+• Air-gapped support: Local deployment works in isolated networks
 
-Best for: Privacy-focused teams, air-gapped networks, cost-sensitive deployments, organizations with data sovereignty requirements
-Cost: Only infrastructure costs - powerful for teams with dedicated hardware
-Requirement: Local compute resources (8GB+ RAM recommended, GPU optional but beneficial)
+Best for: Privacy-focused teams (local), budget-conscious deployments (cloud), organizations with data sovereignty requirements
+Setup options: Local installation from https://10.10.10.10:11434 or cloud registration at https://ollama.com`
 
-Setup: Install Ollama from https://ollama.ai/ or use container deployments. See examples/configs for optimized configurations`
+	LLMFormDeepSeekHelp = `DeepSeek provides advanced AI models with strong reasoning capabilities and multilingual support.
+
+Default PentAGI Models:
+• DeepSeek-Chat: Flagship model for general-purpose tasks with strong coding and reasoning capabilities
+• DeepSeek-Reasoner: Advanced reasoning model for complex security analysis
+• Cost-effective pricing with competitive performance compared to leading models
+
+Key Advantages:
+• Strong coding and reasoning capabilities for security analysis and exploit development
+• Multilingual support (Chinese and English) for international penetration testing scenarios
+• Competitive pricing with excellent performance-to-cost ratio
+• OpenAI-compatible API for seamless integration
+
+LiteLLM Integration:
+• Set Provider Name to 'deepseek' when using LiteLLM proxy
+• Enables model prefix (e.g., deepseek/deepseek-chat) without modifying config.yml
+• Optional for direct DeepSeek API usage
+
+Best for: Teams requiring multilingual support, cost-conscious deployments, Chinese language security testing
+Cost: Highly competitive pricing with strong performance characteristics
+
+Setup: Get your API key from https://platform.deepseek.com/`
+
+	LLMFormGLMHelp = `GLM from Zhipu AI provides advanced language models with strong NLP and reasoning capabilities developed by Tsinghua University.
+
+Default PentAGI Models:
+• GLM-4-Air: High performance general dialogue model optimized for regular tasks and tool calling
+• GLM-4-Plus: Flagship model with strong reasoning and code generation capabilities
+• GLM-Z1-Plus: Advanced reasoning model with deep analysis capabilities for security research
+
+Key Advantages:
+• Exceptional Chinese and English NLP capabilities
+• Strong performance in multilingual security testing and analysis scenarios
+• GLM-4 and GLM-Z1 model families with enhanced reasoning and coding
+• OpenAI-compatible API for easy integration
+
+Alternative API Endpoints:
+• International: https://api.z.ai/api/paas/v4 (default)
+• China: https://open.bigmodel.cn/api/paas/v4
+• Coding-specific: https://api.z.ai/api/coding/paas/v4
+
+LiteLLM Integration:
+• Set Provider Name to 'zai' when using LiteLLM proxy
+• Enables model prefix (e.g., zai/glm-4) without modifying config.yml
+• Optional for direct GLM API usage
+
+Best for: Chinese and English multilingual penetration testing, teams operating in Asian markets
+Cost: Competitive pricing with good performance for multilingual tasks
+
+Setup: Get your API key from https://open.bigmodel.cn/`
+
+	LLMFormKimiHelp = `Kimi from Moonshot AI provides ultra-long context models perfect for analyzing extensive codebases and documentation.
+
+Default PentAGI Models:
+• Moonshot-v1-8k: Long-context model supporting up to 8K tokens for general dialogue
+• Kimi-k2.5: Advanced model with strong reasoning and document understanding
+• Optimized for processing large volumes of text and code
+
+Key Advantages:
+• Ultra-long context windows (up to 1M tokens) for comprehensive codebase analysis
+• Strong Chinese and English language support for multilingual penetration testing
+• Cost-effective for document-heavy security assessments and threat intelligence analysis
+• Excellent at understanding complex system architectures and long-form technical documentation
+
+Alternative API Endpoints:
+• International: https://api.moonshot.ai/v1 (default)
+• China: https://api.moonshot.cn/v1
+
+LiteLLM Integration:
+• Set Provider Name to 'moonshot' when using LiteLLM proxy
+• Enables model prefix (e.g., moonshot/kimi-k2.5) without modifying config.yml
+• Optional for direct Kimi API usage
+
+Best for: Large codebase analysis, document-heavy assessments, teams needing extended context for security research
+Cost: Competitive pricing with excellent value for long-context use cases
+
+Setup: Get your API key from https://platform.moonshot.ai/`
+
+	LLMFormQwenHelp = `Qwen from Alibaba Cloud Model Studio (DashScope) provides powerful multilingual models with multimodal capabilities.
+
+Default PentAGI Models:
+• Qwen-Turbo: Fastest lightweight model for high-frequency tasks and real-time response scenarios
+• Qwen-Plus: Balanced performance model for general dialogue, code generation, and tool calling
+• Qwen-Max: Flagship reasoning model with strong instruction following and complex task handling
+• QwQ-Plus: Deep reasoning model with extended chain-of-thought for complex logic analysis
+
+Key Advantages:
+• Strong multilingual support (Chinese, English, and multiple other languages)
+• Multimodal capabilities with Qwen-VL for visual security analysis
+• Alibaba Cloud integration for enterprise deployments
+• DashScope ecosystem with additional AI services and tools
+• Qwen2.5, Qwen3, and QwQ model families with various sizes and specializations
+
+Alternative API Endpoints:
+• US: https://dashscope-us.aliyuncs.com/compatible-mode/v1 (default)
+• Singapore: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+• China: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+LiteLLM Integration:
+• Set Provider Name to 'dashscope' when using LiteLLM proxy
+• Enables model prefix (e.g., dashscope/qwen-plus) without modifying config.yml
+• Optional for direct Qwen API usage
+
+Best for: Teams operating in Asian markets, multilingual security testing, visual analysis with Qwen-VL, Alibaba Cloud ecosystem integration
+Cost: Competitive pricing with flexible tiers for different use cases
+
+Setup: Get your API key from https://dashscope.console.aliyun.com/`
 
 	LLMFormCustomHelp = `Configure any OpenAI-compatible API endpoint for maximum flexibility and integration with existing infrastructure.
 
@@ -495,6 +628,8 @@ Examples available: Pre-configured setups for major providers in /opt/pentagi/co
 const (
 	LLMFormFieldBaseURL           = "Base URL"
 	LLMFormFieldAPIKey            = "API Key"
+	LLMFormFieldDefaultAuth       = "Use Default AWS Auth"
+	LLMFormFieldBearerToken       = "Bearer Token"
 	LLMFormFieldAccessKey         = "Access Key ID"
 	LLMFormFieldSecretKey         = "Secret Access Key"
 	LLMFormFieldSessionToken      = "Session Token"
@@ -509,9 +644,11 @@ const (
 	LLMFormFieldLoadModelsEnabled = "Load Models from Server"
 	LLMFormBaseURLDesc            = "API endpoint URL for the provider"
 	LLMFormAPIKeyDesc             = "Your API key for authentication"
-	LLMFormAccessKeyDesc          = "AWS Access Key ID for Bedrock access"
-	LLMFormSecretKeyDesc          = "AWS Secret Access Key for Bedrock access"
-	LLMFormSessionTokenDesc       = "AWS Session Token for Bedrock access"
+	LLMFormDefaultAuthDesc        = "Use AWS SDK default credential chain (environment, EC2 role, ~/.aws/credentials) - highest priority"
+	LLMFormBearerTokenDesc        = "Bearer token for authentication - takes priority over static credentials"
+	LLMFormAccessKeyDesc          = "AWS Access Key ID for static credentials authentication"
+	LLMFormSecretKeyDesc          = "AWS Secret Access Key for static credentials authentication"
+	LLMFormSessionTokenDesc       = "AWS Session Token for temporary credentials (optional, used with static credentials)"
 	LLMFormRegionDesc             = "AWS region for Bedrock service"
 	LLMFormModelDesc              = "Default model to use for this provider"
 	LLMFormConfigPathDesc         = "Path to configuration file (optional)"
@@ -521,6 +658,7 @@ const (
 	LLMFormPullTimeoutDesc        = "Timeout in seconds for downloading models (default: 600)"
 	LLMFormPullEnabledDesc        = "Automatically download required models on startup"
 	LLMFormLoadModelsEnabledDesc  = "Load available models list from Ollama server"
+	LLMFormOllamaAPIKeyDesc       = "Ollama Cloud API key (optional, leave empty for local Ollama server)"
 )
 
 // LLM Provider Form status messages
@@ -1190,32 +1328,40 @@ Get API keys from:
 • Traversaal: https://traversaal.ai/
 • Google: https://developers.google.com/custom-search/v1/introduction`
 
-	ToolsSearchEnginesDuckDuckGo            = "DuckDuckGo Search"
-	ToolsSearchEnginesDuckDuckGoDesc        = "Enable DuckDuckGo search (no API key required)"
-	ToolsSearchEnginesSploitus              = "Sploitus Search"
-	ToolsSearchEnginesSploitusDesc          = "Enable Sploitus search for exploits and vulnerabilities (no API key required)"
-	ToolsSearchEnginesPerplexityKey         = "Perplexity API Key"
-	ToolsSearchEnginesPerplexityKeyDesc     = "API key for Perplexity AI search"
-	ToolsSearchEnginesTavilyKey             = "Tavily API Key"
-	ToolsSearchEnginesTavilyKeyDesc         = "API key for Tavily search service"
-	ToolsSearchEnginesTraversaalKey         = "Traversaal API Key"
-	ToolsSearchEnginesTraversaalKeyDesc     = "API key for Traversaal web scraping"
-	ToolsSearchEnginesGoogleKey             = "Google Search API Key"
-	ToolsSearchEnginesGoogleKeyDesc         = "Google Custom Search API key"
-	ToolsSearchEnginesGoogleCX              = "Google Search Engine ID"
-	ToolsSearchEnginesGoogleCXDesc          = "Google Custom Search Engine ID"
-	ToolsSearchEnginesGoogleLR              = "Google Language Restriction"
-	ToolsSearchEnginesGoogleLRDesc          = "Google Search Engine	language restriction (e.g., lang_en, lang_cn, etc.)"
-	ToolsSearchEnginesSearxngURL            = "Searxng Search URL"
-	ToolsSearchEnginesSearxngURLDesc        = "Searxng search engine URL"
-	ToolsSearchEnginesSearxngCategories     = "Searxng Search Categories"
-	ToolsSearchEnginesSearxngCategoriesDesc = "Searxng search engine categories (e.g., general, it, web, news, technology, science, health, other)"
-	ToolsSearchEnginesSearxngLanguage       = "Searxng Search Language"
-	ToolsSearchEnginesSearxngLanguageDesc   = "Searxng search engine language (en, ch, fr, de, it, es, pt, ru, zh, empty for all languages)"
-	ToolsSearchEnginesSearxngSafeSearch     = "Searxng Safe Search"
-	ToolsSearchEnginesSearxngSafeSearchDesc = "Searxng search engine safe search (0: off, 1: moderate, 2: strict)"
-	ToolsSearchEnginesSearxngTimeRange      = "Searxng Time Range"
-	ToolsSearchEnginesSearxngTimeRangeDesc  = "Searxng search engine time range (day, month, year)"
+	ToolsSearchEnginesDuckDuckGo               = "DuckDuckGo Search"
+	ToolsSearchEnginesDuckDuckGoDesc           = "Enable DuckDuckGo search (no API key required)"
+	ToolsSearchEnginesDuckDuckGoRegion         = "DuckDuckGo Region"
+	ToolsSearchEnginesDuckDuckGoRegionDesc     = "DuckDuckGo region code (e.g., us-en, uk-en, cn-zh)"
+	ToolsSearchEnginesDuckDuckGoSafeSearch     = "DuckDuckGo Safe Search"
+	ToolsSearchEnginesDuckDuckGoSafeSearchDesc = "DuckDuckGo safe search (strict, moderate, off)"
+	ToolsSearchEnginesDuckDuckGoTimeRange      = "DuckDuckGo Time Range"
+	ToolsSearchEnginesDuckDuckGoTimeRangeDesc  = "DuckDuckGo time range (d: day, w: week, m: month, y: year)"
+	ToolsSearchEnginesSploitus                 = "Sploitus Search"
+	ToolsSearchEnginesSploitusDesc             = "Enable Sploitus search for exploits and vulnerabilities (no API key required)"
+	ToolsSearchEnginesPerplexityKey            = "Perplexity API Key"
+	ToolsSearchEnginesPerplexityKeyDesc        = "API key for Perplexity AI search"
+	ToolsSearchEnginesTavilyKey                = "Tavily API Key"
+	ToolsSearchEnginesTavilyKeyDesc            = "API key for Tavily search service"
+	ToolsSearchEnginesTraversaalKey            = "Traversaal API Key"
+	ToolsSearchEnginesTraversaalKeyDesc        = "API key for Traversaal web scraping"
+	ToolsSearchEnginesGoogleKey                = "Google Search API Key"
+	ToolsSearchEnginesGoogleKeyDesc            = "Google Custom Search API key"
+	ToolsSearchEnginesGoogleCX                 = "Google Search Engine ID"
+	ToolsSearchEnginesGoogleCXDesc             = "Google Custom Search Engine ID"
+	ToolsSearchEnginesGoogleLR                 = "Google Language Restriction"
+	ToolsSearchEnginesGoogleLRDesc             = "Google Search Engine language restriction (e.g., lang_en, lang_cn, etc.)"
+	ToolsSearchEnginesSearxngURL               = "Searxng Search URL"
+	ToolsSearchEnginesSearxngURLDesc           = "Searxng search engine URL"
+	ToolsSearchEnginesSearxngCategories        = "Searxng Search Categories"
+	ToolsSearchEnginesSearxngCategoriesDesc    = "Searxng search engine categories (e.g., general, it, web, news, technology, science, health, other)"
+	ToolsSearchEnginesSearxngLanguage          = "Searxng Search Language"
+	ToolsSearchEnginesSearxngLanguageDesc      = "Searxng search engine language (en, ch, fr, de, it, es, pt, ru, zh, empty for all languages)"
+	ToolsSearchEnginesSearxngSafeSearch        = "Searxng Safe Search"
+	ToolsSearchEnginesSearxngSafeSearchDesc    = "Searxng search engine safe search (0: off, 1: moderate, 2: strict)"
+	ToolsSearchEnginesSearxngTimeRange         = "Searxng Time Range"
+	ToolsSearchEnginesSearxngTimeRangeDesc     = "Searxng search engine time range (day, month, year)"
+	ToolsSearchEnginesSearxngTimeout           = "Searxng Timeout"
+	ToolsSearchEnginesSearxngTimeoutDesc       = "Searxng request timeout in seconds"
 )
 
 // Scraper screen strings
@@ -1928,17 +2074,32 @@ const (
 	EnvDesc_ANTHROPIC_SERVER_URL              = "Anthropic Server URL"
 	EnvDesc_GEMINI_API_KEY                    = "Google Gemini API Key"
 	EnvDesc_GEMINI_SERVER_URL                 = "Gemini Server URL"
-	EnvDesc_BEDROCK_ACCESS_KEY_ID             = "AWS Bedrock Access Key"
-	EnvDesc_BEDROCK_SECRET_ACCESS_KEY         = "AWS Bedrock Secret Key"
+	EnvDesc_BEDROCK_DEFAULT_AUTH              = "AWS Bedrock Use Default Credential Chain"
+	EnvDesc_BEDROCK_BEARER_TOKEN              = "AWS Bedrock Bearer Token"
+	EnvDesc_BEDROCK_ACCESS_KEY_ID             = "AWS Bedrock Access Key ID"
+	EnvDesc_BEDROCK_SECRET_ACCESS_KEY         = "AWS Bedrock Secret Access Key"
 	EnvDesc_BEDROCK_SESSION_TOKEN             = "AWS Bedrock Session Token"
 	EnvDesc_BEDROCK_REGION                    = "AWS Bedrock Region"
-	EnvDesc_BEDROCK_SERVER_URL                = "AWS Bedrock Server URL"
+	EnvDesc_BEDROCK_SERVER_URL                = "AWS Bedrock Custom Endpoint URL"
 	EnvDesc_OLLAMA_SERVER_URL                 = "Ollama Server URL"
+	EnvDesc_OLLAMA_SERVER_API_KEY             = "Ollama Server API Key (Cloud)"
 	EnvDesc_OLLAMA_SERVER_MODEL               = "Ollama Default Model"
 	EnvDesc_OLLAMA_SERVER_CONFIG_PATH         = "Ollama Container Config Path"
 	EnvDesc_OLLAMA_SERVER_PULL_MODELS_TIMEOUT = "Ollama Model Pull Timeout"
 	EnvDesc_OLLAMA_SERVER_PULL_MODELS_ENABLED = "Ollama Auto-pull Models"
 	EnvDesc_OLLAMA_SERVER_LOAD_MODELS_ENABLED = "Ollama Load Models List"
+	EnvDesc_DEEPSEEK_API_KEY                  = "DeepSeek API Key"
+	EnvDesc_DEEPSEEK_SERVER_URL               = "DeepSeek Server URL"
+	EnvDesc_DEEPSEEK_PROVIDER                 = "DeepSeek Provider Name Prefix (for LiteLLM, e.g., 'deepseek')"
+	EnvDesc_GLM_API_KEY                       = "GLM API Key"
+	EnvDesc_GLM_SERVER_URL                    = "GLM Server URL"
+	EnvDesc_GLM_PROVIDER                      = "GLM Provider Name Prefix (for LiteLLM, e.g., 'zai')"
+	EnvDesc_KIMI_API_KEY                      = "Kimi API Key"
+	EnvDesc_KIMI_SERVER_URL                   = "Kimi Server URL"
+	EnvDesc_KIMI_PROVIDER                     = "Kimi Provider Name Prefix (for LiteLLM, e.g., 'moonshot')"
+	EnvDesc_QWEN_API_KEY                      = "Qwen API Key"
+	EnvDesc_QWEN_SERVER_URL                   = "Qwen Server URL"
+	EnvDesc_QWEN_PROVIDER                     = "Qwen Provider Name Prefix (for LiteLLM, e.g., 'dashscope')"
 	EnvDesc_LLM_SERVER_URL                    = "Custom LLM Server URL"
 	EnvDesc_LLM_SERVER_KEY                    = "Custom LLM API Key"
 	EnvDesc_LLM_SERVER_MODEL                  = "Custom LLM Model"
@@ -2005,14 +2166,17 @@ const (
 	EnvDesc_LOCAL_SCRAPER_PASSWORD                = "Local Scraper Password"
 	EnvDesc_LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS = "Scraper Max Concurrent Sessions"
 
-	EnvDesc_DUCKDUCKGO_ENABLED = "DuckDuckGo Search"
-	EnvDesc_SPLOITUS_ENABLED   = "Sploitus Search"
-	EnvDesc_PERPLEXITY_API_KEY = "Perplexity API Key"
-	EnvDesc_TAVILY_API_KEY     = "Tavily API Key"
-	EnvDesc_TRAVERSAAL_API_KEY = "Traversaal API Key"
-	EnvDesc_GOOGLE_API_KEY     = "Google Search API Key"
-	EnvDesc_GOOGLE_CX_KEY      = "Google Search CX Key"
-	EnvDesc_GOOGLE_LR_KEY      = "Google Search LR Key"
+	EnvDesc_DUCKDUCKGO_ENABLED    = "DuckDuckGo Search"
+	EnvDesc_DUCKDUCKGO_REGION     = "DuckDuckGo Region"
+	EnvDesc_DUCKDUCKGO_SAFESEARCH = "DuckDuckGo Safe Search"
+	EnvDesc_DUCKDUCKGO_TIME_RANGE = "DuckDuckGo Time Range"
+	EnvDesc_SPLOITUS_ENABLED      = "Sploitus Search"
+	EnvDesc_PERPLEXITY_API_KEY    = "Perplexity API Key"
+	EnvDesc_TAVILY_API_KEY        = "Tavily API Key"
+	EnvDesc_TRAVERSAAL_API_KEY    = "Traversaal API Key"
+	EnvDesc_GOOGLE_API_KEY        = "Google Search API Key"
+	EnvDesc_GOOGLE_CX_KEY         = "Google Search CX Key"
+	EnvDesc_GOOGLE_LR_KEY         = "Google Search LR Key"
 
 	EnvDesc_DOCKER_INSIDE                    = "Docker Inside Container"
 	EnvDesc_DOCKER_NET_ADMIN                 = "Docker Network Admin"
@@ -2058,6 +2222,7 @@ const (
 	EnvDesc_SEARXNG_LANGUAGE   = "Searxng Search Language"
 	EnvDesc_SEARXNG_SAFESEARCH = "Searxng Safe Search"
 	EnvDesc_SEARXNG_TIME_RANGE = "Searxng Time Range"
+	EnvDesc_SEARXNG_TIMEOUT    = "Searxng Timeout"
 
 	EnvDesc_OAUTH_GOOGLE_CLIENT_ID     = "OAuth Google Client ID"
 	EnvDesc_OAUTH_GOOGLE_CLIENT_SECRET = "OAuth Google Client Secret"

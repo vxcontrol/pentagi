@@ -1,32 +1,32 @@
 simple:
-  model: gemini-2.5-flash-lite
+  model: gemini-3.1-flash-lite-preview
   temperature: 0.7
   top_p: 0.95
   n: 1
-  max_tokens: 4000
+  max_tokens: 8192
   price:
-    input: 0.1
-    output: 0.4
-    cache_read: 0.01
+    input: 0.25
+    output: 1.5
+    cache_read: 0.025
 
 simple_json:
-  model: gemini-2.5-flash-lite
+  model: gemini-3.1-flash-lite-preview
   temperature: 0.7
   top_p: 0.95
   n: 1
-  max_tokens: 3000
+  max_tokens: 4096
   json: true
   price:
-    input: 0.1
-    output: 0.4
-    cache_read: 0.01
+    input: 0.25
+    output: 1.5
+    cache_read: 0.025
 
 primary_agent:
-  model: gemini-3-pro-preview
+  model: gemini-3.1-pro-preview
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   reasoning:
     effort: medium
   price:
@@ -35,11 +35,11 @@ primary_agent:
     cache_read: 0.2
 
 assistant:
-  model: gemini-3-pro-preview
+  model: gemini-3.1-pro-preview
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   reasoning:
     effort: medium
   price:
@@ -48,11 +48,11 @@ assistant:
     cache_read: 0.2
 
 generator:
-  model: gemini-3-pro-preview
+  model: gemini-3.1-pro-preview
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 12000
+  max_tokens: 32768
   reasoning:
     effort: high
   price:
@@ -61,11 +61,11 @@ generator:
     cache_read: 0.2
 
 refiner:
-  model: gemini-3-pro-preview
+  model: gemini-3.1-pro-preview
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 8000
+  max_tokens: 20480
   reasoning:
     effort: medium
   price:
@@ -74,11 +74,11 @@ refiner:
     cache_read: 0.2
 
 adviser:
-  model: gemini-3-pro-preview
+  model: gemini-3.1-pro-preview
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 8192
   reasoning:
     effort: medium
   price:
@@ -91,7 +91,7 @@ reflector:
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
     input: 0.5
     output: 3.0
@@ -102,7 +102,7 @@ searcher:
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 5000
+  max_tokens: 8192
   price:
     input: 0.5
     output: 3.0
@@ -113,18 +113,18 @@ enricher:
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 5000
+  max_tokens: 4096
   price:
     input: 0.5
     output: 3.0
     cache_read: 0.05
 
 coder:
-  model: gemini-3-pro-preview
+  model: gemini-3.1-pro-preview
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 8000
+  max_tokens: 20480
   reasoning:
     effort: low
   price:
@@ -137,7 +137,7 @@ installer:
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   reasoning:
     effort: low
   price:
@@ -146,11 +146,11 @@ installer:
     cache_read: 0.05
 
 pentester:
-  model: gemini-3-pro-preview
+  model: gemini-3.1-pro-preview
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 8192
   reasoning:
     effort: low
   price:

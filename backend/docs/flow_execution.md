@@ -359,6 +359,10 @@ graph TD
     PC --> Anthropic[Anthropic Provider]
     PC --> Gemini[Gemini Provider]
     PC --> Bedrock[AWS Bedrock Provider]
+    PC --> DeepSeek[DeepSeek Provider]
+    PC --> GLM[Zhipu AI Provider]
+    PC --> Kimi[Moonshot AI Provider]
+    PC --> Qwen[Alibaba Cloud DashScope Provider]
     PC --> Ollama[Ollama Provider]
     PC --> Custom[Custom Provider]
     

@@ -117,6 +117,11 @@ func (p *openaiProvider) Model(opt pconfig.ProviderOptionsType) string {
 	return opts.Model
 }
 
+func (p *openaiProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	// OpenAI provider doesn't need prefix support (passthrough mode in LiteLLM)
+	return p.Model(opt)
+}
+
 func (p *openaiProvider) Call(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,

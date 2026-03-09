@@ -25,6 +25,10 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Ollama LLM Provider](#ollama-llm-provider)
     - [Google AI (Gemini) LLM Provider](#google-ai-gemini-llm-provider)
     - [AWS Bedrock LLM Provider](#aws-bedrock-llm-provider)
+    - [DeepSeek LLM Provider](#deepseek-llm-provider)
+    - [GLM LLM Provider](#glm-llm-provider)
+    - [Kimi LLM Provider](#kimi-llm-provider)
+    - [Qwen LLM Provider](#qwen-llm-provider)
     - [Custom LLM Provider](#custom-llm-provider)
     - [Usage Details](#usage-details-6)
   - [Embedding Settings](#embedding-settings)
@@ -39,6 +43,13 @@ This document serves as a comprehensive guide to the configuration system in Pen
   - [Assistant Settings](#assistant-settings)
     - [Usage Details](#usage-details-8)
     - [Recommended Assistant Settings for Different Use Cases](#recommended-assistant-settings-for-different-use-cases)
+  - [Functions Configuration](#functions-configuration)
+    - [DisableFunction Structure](#disablefunction-structure)
+    - [ExternalFunction Structure](#externalfunction-structure)
+    - [Usage Details](#usage-details-9)
+    - [Example Configuration](#example-configuration)
+    - [Security Considerations](#security-considerations)
+    - [Built-in Functions Reference](#built-in-functions-reference)
   - [Search Engine Settings](#search-engine-settings)
     - [DuckDuckGo Search](#duckduckgo-search)
     - [Sploitus Search](#sploitus-search)
@@ -47,15 +58,15 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Tavily Search](#tavily-search)
     - [Perplexity Search](#perplexity-search)
     - [Searxng Search](#searxng-search)
-    - [Usage Details](#usage-details-9)
-  - [Proxy Settings](#proxy-settings)
     - [Usage Details](#usage-details-10)
-  - [Graphiti Knowledge Graph Settings](#graphiti-knowledge-graph-settings)
+  - [Proxy Settings](#proxy-settings)
     - [Usage Details](#usage-details-11)
+  - [Graphiti Knowledge Graph Settings](#graphiti-knowledge-graph-settings)
+    - [Usage Details](#usage-details-12)
   - [Observability Settings](#observability-settings)
     - [Telemetry](#telemetry)
     - [Langfuse](#langfuse)
-    - [Usage Details](#usage-details-12)
+    - [Usage Details](#usage-details-13)
 
 ## Configuration Basics
 
@@ -459,14 +470,19 @@ These settings control the integration with various Large Language Model (LLM) p
 
 ### Ollama LLM Provider
 
-| Option                        | Environment Variable                | Default Value               | Description                                       |
-| ----------------------------- | ----------------------------------- | --------------------------- | ------------------------------------------------- |
-| OllamaServerURL               | `OLLAMA_SERVER_URL`                 | *(none)*                    | Server URL for Ollama API requests                |
-| OllamaServerModel             | `OLLAMA_SERVER_MODEL`               | `llama3.1:8b-instruct-q8_0` | Default model to use for inference                |
-| OllamaServerConfig            | `OLLAMA_SERVER_CONFIG_PATH`         | *(none)*                    | Path to config file for Ollama provider options   |
-| OllamaServerPullModelsTimeout | `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600`                       | Timeout in seconds for model downloads            |
-| OllamaServerPullModelsEnabled | `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false`                     | Automatically download required models on startup |
-| OllamaServerLoadModelsEnabled | `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false`                     | Load available models list from server API        |
+| Option                        | Environment Variable                | Default Value        | Description                                                       |
+| ----------------------------- | ----------------------------------- | -------------------- | ----------------------------------------------------------------- |
+| OllamaServerURL               | `OLLAMA_SERVER_URL`                 | *(none)*             | Ollama server URL (local or cloud https://ollama.com)             |
+| OllamaServerAPIKey            | `OLLAMA_SERVER_API_KEY`             | *(none)*             | Ollama Cloud API key (optional, required for https://ollama.com)  |
+| OllamaServerModel             | `OLLAMA_SERVER_MODEL`               | *(none)*             | Default model to use for inference                                |
+| OllamaServerConfig            | `OLLAMA_SERVER_CONFIG_PATH`         | *(none)*             | Path to config file for Ollama provider options                   |
+| OllamaServerPullModelsTimeout | `OLLAMA_SERVER_PULL_MODELS_TIMEOUT` | `600`                | Timeout in seconds for model downloads                            |
+| OllamaServerPullModelsEnabled | `OLLAMA_SERVER_PULL_MODELS_ENABLED` | `false`              | Automatically download required models on startup                 |
+| OllamaServerLoadModelsEnabled | `OLLAMA_SERVER_LOAD_MODELS_ENABLED` | `false`              | Load available models list from server API                        |
+
+**Deployment Scenarios**: 
+- **Local Server**: Set `OLLAMA_SERVER_URL` to local endpoint (e.g., `http://ollama-server:11434`), leave `OLLAMA_SERVER_API_KEY` empty
+- **Ollama Cloud**: Set `OLLAMA_SERVER_URL=https://ollama.com` and provide `OLLAMA_SERVER_API_KEY` from https://ollama.com/settings/keys
 
 **Note:** When `OllamaServerLoadModelsEnabled=false`, only the default model is available. Enable this to see all installed models in the UI.
 
@@ -479,13 +495,71 @@ These settings control the integration with various Large Language Model (LLM) p
 
 ### AWS Bedrock LLM Provider
 
-| Option              | Environment Variable        | Default Value | Description                                                                            |
-| ------------------- | --------------------------- | ------------- | -------------------------------------------------------------------------------------- |
-| BedrockRegion       | `BEDROCK_REGION`            | `us-east-1`   | AWS region for Bedrock service                                                         |
-| BedrockAccessKey    | `BEDROCK_ACCESS_KEY_ID`     | *(none)*      | AWS access key ID for Bedrock authentication                                           |
-| BedrockSecretKey    | `BEDROCK_SECRET_ACCESS_KEY` | *(none)*      | AWS secret access key for Bedrock authentication                                       |
-| BedrockSessionToken | `BEDROCK_SESSION_TOKEN`     | *(none)*      | AWS session token for temporary credentials (optional, required for STS/assumed roles) |
-| BedrockServerURL    | `BEDROCK_SERVER_URL`        | *(none)*      | Optional custom endpoint URL for Bedrock service                                       |
+| Option              | Environment Variable        | Default Value | Description                                                                                                              |
+| ------------------- | --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| BedrockRegion       | `BEDROCK_REGION`            | `us-east-1`   | AWS region for Bedrock service                                                                                           |
+| BedrockDefaultAuth  | `BEDROCK_DEFAULT_AUTH`      | `false`       | Use default AWS SDK credential chain (environment variables, EC2 role, ~/.aws/credentials) - highest priority            |
+| BedrockBearerToken  | `BEDROCK_BEARER_TOKEN`      | *(none)*      | Bearer token for authentication - takes priority over static credentials                                                 |
+| BedrockAccessKey    | `BEDROCK_ACCESS_KEY_ID`     | *(none)*      | AWS access key ID for static credentials authentication                                                                  |
+| BedrockSecretKey    | `BEDROCK_SECRET_ACCESS_KEY` | *(none)*      | AWS secret access key for static credentials authentication                                                              |
+| BedrockSessionToken | `BEDROCK_SESSION_TOKEN`     | *(none)*      | AWS session token for temporary credentials (optional, used with static credentials for STS/assumed roles)               |
+| BedrockServerURL    | `BEDROCK_SERVER_URL`        | *(none)*      | Optional custom endpoint URL for Bedrock service (VPC endpoints, local testing)                                          |
+
+**Authentication Priority**: `BedrockDefaultAuth` (highest) → `BedrockBearerToken` → `BedrockAccessKey`+`BedrockSecretKey` (lowest)
+
+### DeepSeek LLM Provider
+
+| Option            | Environment Variable  | Default Value              | Description                                              |
+| ----------------- | --------------------- | -------------------------- | -------------------------------------------------------- |
+| DeepSeekAPIKey    | `DEEPSEEK_API_KEY`    | *(none)*                   | DeepSeek API key for authentication                      |
+| DeepSeekServerURL | `DEEPSEEK_SERVER_URL` | `https://api.deepseek.com` | DeepSeek API endpoint URL                                |
+| DeepSeekProvider  | `DEEPSEEK_PROVIDER`   | *(none)*                   | Provider name prefix for LiteLLM integration (optional)  |
+
+**LiteLLM Integration**: Set `DEEPSEEK_PROVIDER=deepseek` to enable model prefixing (e.g., `deepseek/deepseek-chat`) when using LiteLLM proxy with default PentAGI configs.
+
+### GLM LLM Provider
+
+| Option         | Environment Variable | Default Value                  | Description                                              |
+| -------------- | -------------------- | ------------------------------ | -------------------------------------------------------- |
+| GLMAPIKey      | `GLM_API_KEY`        | *(none)*                       | GLM API key for authentication                           |
+| GLMServerURL   | `GLM_SERVER_URL`     | `https://api.z.ai/api/paas/v4` | GLM API endpoint URL (international)                     |
+| GLMProvider    | `GLM_PROVIDER`       | *(none)*                       | Provider name prefix for LiteLLM integration (optional)  |
+
+**Alternative Endpoints**:
+- International: `https://api.z.ai/api/paas/v4` (default)
+- China: `https://open.bigmodel.cn/api/paas/v4`
+- Coding-specific: `https://api.z.ai/api/coding/paas/v4`
+
+**LiteLLM Integration**: Set `GLM_PROVIDER=zai` to enable model prefixing (e.g., `zai/glm-4`) when using LiteLLM proxy with default PentAGI configs.
+
+### Kimi LLM Provider
+
+| Option          | Environment Variable | Default Value                 | Description                                              |
+| --------------- | -------------------- | ----------------------------- | -------------------------------------------------------- |
+| KimiAPIKey      | `KIMI_API_KEY`       | *(none)*                      | Kimi API key for authentication                          |
+| KimiServerURL   | `KIMI_SERVER_URL`    | `https://api.moonshot.ai/v1`  | Kimi API endpoint URL (international)                    |
+| KimiProvider    | `KIMI_PROVIDER`      | *(none)*                      | Provider name prefix for LiteLLM integration (optional)  |
+
+**Alternative Endpoints**:
+- International: `https://api.moonshot.ai/v1` (default)
+- China: `https://api.moonshot.cn/v1`
+
+**LiteLLM Integration**: Set `KIMI_PROVIDER=moonshot` to enable model prefixing (e.g., `moonshot/kimi-k2.5`) when using LiteLLM proxy with default PentAGI configs.
+
+### Qwen LLM Provider
+
+| Option          | Environment Variable | Default Value                                          | Description                                              |
+| --------------- | -------------------- | ------------------------------------------------------ | -------------------------------------------------------- |
+| QwenAPIKey      | `QWEN_API_KEY`       | *(none)*                                               | Qwen API key for authentication                          |
+| QwenServerURL   | `QWEN_SERVER_URL`    | `https://dashscope-us.aliyuncs.com/compatible-mode/v1` | Qwen API endpoint URL (international)                    |
+| QwenProvider    | `QWEN_PROVIDER`      | *(none)*                                               | Provider name prefix for LiteLLM integration (optional)  |
+
+**Alternative Endpoints**:
+- US: `https://dashscope-us.aliyuncs.com/compatible-mode/v1` (default)
+- Singapore: `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+- China: `https://dashscope.aliyuncs.com/compatible-mode/v1`
+
+**LiteLLM Integration**: Set `QWEN_PROVIDER=dashscope` to enable model prefixing (e.g., `dashscope/qwen-plus`) when using LiteLLM proxy with default PentAGI configs.
 
 ### Custom LLM Provider
 
@@ -1035,15 +1109,212 @@ The assistant summarizer configuration is designed to provide more memory for co
    ```
    More conservative settings for environments with limited resources or smaller context models.
 
+## Functions Configuration
+
+These settings control which tools are available to AI agents and allow adding custom external functions. The Functions API enables fine-grained control over agent capabilities by selectively disabling built-in tools or extending functionality with custom integrations.
+
+| Field     | Type                 | Description                                                     |
+| --------- | -------------------- | --------------------------------------------------------------- |
+| token     | string (optional)    | API token for authenticating external function calls            |
+| disabled  | DisableFunction[]    | List of built-in functions to disable for specific agent types  |
+| functions | ExternalFunction[]   | List of custom external functions to add to agent capabilities  |
+
+### DisableFunction Structure
+
+Allows disabling specific built-in functions for certain agent contexts, providing security and control over agent capabilities.
+
+| Field   | Type     | Description                                                                    |
+| ------- | -------- | ------------------------------------------------------------------------------ |
+| name    | string   | Name of the built-in function to disable (e.g., `terminal`, `browser`, `file`) |
+| context | string[] | Agent contexts where the function should be disabled (optional)                |
+
+**Available Agent Contexts**: `agent`, `adviser`, `coder`, `searcher`, `generator`, `memorist`, `enricher`, `reporter`, `assistant`
+
+When `context` is empty or omitted, the function is disabled for all agents.
+
+### ExternalFunction Structure
+
+Allows adding custom external functions that agents can call via HTTP endpoints, enabling integration with external tools and services.
+
+| Field   | Type          | Description                                                        |
+| ------- | ------------- | ------------------------------------------------------------------ |
+| name    | string        | Name of the custom function (must be unique)                       |
+| url     | string        | HTTP(S) URL endpoint for the function                              |
+| timeout | int64         | Timeout in seconds for function execution (default: 60)            |
+| context | string[]      | Agent contexts where the function is available (optional)          |
+| schema  | Schema object | JSON schema defining function parameters and description (OpenAI format) |
+
+**Available Agent Contexts**: Same as DisableFunction (`agent`, `adviser`, `coder`, `searcher`, `generator`, `memorist`, `enricher`, `reporter`, `assistant`)
+
+When `context` is empty or omitted, the function is available to all agents.
+
+### Usage Details
+
+The Functions configuration is typically provided when creating a flow through the API:
+
+```go
+// Example from pkg/tools/tools.go
+type Functions struct {
+    Token    *string            `json:"token,omitempty"`
+    Disabled []DisableFunction  `json:"disabled,omitempty"`
+    Function []ExternalFunction `json:"functions,omitempty"`
+}
+```
+
+These settings are used in `pkg/tools/tools.go` to configure available tools for each agent type:
+
+- **Token**: Used for authenticating requests to external function endpoints:
+  ```go
+  // The token is passed in the Authorization header when calling external functions
+  req.Header.Set("Authorization", "Bearer " + *functions.Token)
+  ```
+
+- **Disabled**: Filters out built-in functions for specific agent contexts:
+  ```go
+  // Check if function is disabled for current agent context
+  for _, disabled := range functions.Disabled {
+      if disabled.Name == functionName && 
+         (len(disabled.Context) == 0 || contains(disabled.Context, agentType)) {
+          // Skip this function
+      }
+  }
+  ```
+
+- **Functions**: Adds custom external functions to agent capabilities:
+  ```go
+  // Register external functions as available tools
+  for _, externalFunc := range functions.Function {
+      if len(externalFunc.Context) == 0 || contains(externalFunc.Context, agentType) {
+          definitions = append(definitions, externalFunc.Schema)
+          handlers[externalFunc.Name] = createExternalHandler(externalFunc)
+      }
+  }
+  ```
+
+### Example Configuration
+
+```json
+{
+  "token": "secret-api-token-for-external-functions",
+  "disabled": [
+    {
+      "name": "terminal",
+      "context": ["searcher", "enricher"]
+    },
+    {
+      "name": "browser",
+      "context": ["memorist"]
+    },
+    {
+      "name": "file"
+    }
+  ],
+  "functions": [
+    {
+      "name": "custom_vulnerability_scan",
+      "url": "https://scanner.example.com/api/v1/scan",
+      "timeout": 120,
+      "context": ["pentester", "coder"],
+      "schema": {
+        "type": "function",
+        "function": {
+          "name": "custom_vulnerability_scan",
+          "description": "Perform a custom vulnerability scan on the target",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "target": {
+                "type": "string",
+                "description": "Target IP address or domain to scan"
+              },
+              "scan_type": {
+                "type": "string",
+                "enum": ["quick", "full", "stealth"],
+                "description": "Type of scan to perform"
+              }
+            },
+            "required": ["target"]
+          }
+        }
+      }
+    },
+    {
+      "name": "query_threat_intelligence",
+      "url": "https://threatintel.example.com/api/query",
+      "timeout": 30,
+      "context": ["searcher", "adviser"],
+      "schema": {
+        "type": "function",
+        "function": {
+          "name": "query_threat_intelligence",
+          "description": "Query threat intelligence database for IoCs and TTPs",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "indicator": {
+                "type": "string",
+                "description": "IP, domain, hash, or other indicator to search"
+              },
+              "indicator_type": {
+                "type": "string",
+                "enum": ["ip", "domain", "hash", "url"],
+                "description": "Type of indicator"
+              }
+            },
+            "required": ["indicator", "indicator_type"]
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+### Security Considerations
+
+- **Token Security**: Store the `token` value securely and use HTTPS endpoints for external functions
+- **Function Validation**: External functions should validate all inputs and return structured error messages
+- **Timeout Configuration**: Set appropriate timeouts to prevent long-running operations from blocking agents
+- **Context Restriction**: Use the `context` field to limit which agents can access sensitive functions
+- **URL Validation**: Ensure external function URLs are trusted and properly secured
+
+### Built-in Functions Reference
+
+Common built-in functions that can be disabled:
+
+- `terminal` - Execute shell commands in containers
+- `file` - Read and write files in containers
+- `browser` - Browse websites and take screenshots
+- `search_in_memory` - Search vector memory store
+- `search_guide` - Search knowledge guides
+- `search_answer` - Search for answers
+- `search_code` - Search code repositories
+- `store_guide` - Store knowledge guides
+- `store_answer` - Store answers
+- `store_code` - Store code snippets
+- `google` - Google Search
+- `duckduckgo` - DuckDuckGo Search
+- `tavily` - Tavily Search
+- `traversaal` - Traversaal Search
+- `perplexity` - Perplexity Search
+- `searxng` - SearXNG Search
+- `sploitus` - Sploitus Exploit Search
+- `graphiti_search` - Graphiti Knowledge Graph Search
+
+The specific functions available depend on the agent type and system configuration.
+
 ## Search Engine Settings
 
 These settings control the integration with various search engines used for web search capabilities, providing AI agents with up-to-date information from the internet.
 
 ### DuckDuckGo Search
 
-| Option            | Environment Variable | Default Value | Description                                |
-| ----------------- | -------------------- | ------------- | ------------------------------------------ |
-| DuckDuckGoEnabled | `DUCKDUCKGO_ENABLED` | `true`        | Enable or disable DuckDuckGo Search engine |
+| Option               | Environment Variable    | Default Value | Description                                                                |
+| -------------------- | ----------------------- | ------------- | -------------------------------------------------------------------------- |
+| DuckDuckGoEnabled    | `DUCKDUCKGO_ENABLED`    | `true`        | Enable or disable DuckDuckGo Search engine                                 |
+| DuckDuckGoRegion     | `DUCKDUCKGO_REGION`     | *(none)*      | Region code for search results (e.g., `us-en`, `uk-en`, `cn-zh`)           |
+| DuckDuckGoSafeSearch | `DUCKDUCKGO_SAFESEARCH` | *(none)*      | Safe search filter (`off`, `moderate`, `strict`)                           |
+| DuckDuckGoTimeRange  | `DUCKDUCKGO_TIME_RANGE` | *(none)*      | Time range for search results (`d`: day, `w`: week, `m`: month, `y`: year) |
 
 ### Sploitus Search
 
@@ -1088,6 +1359,7 @@ These settings control the integration with various search engines used for web 
 | SearxngLanguage   | `SEARXNG_LANGUAGE`   | *(none)*      | Language filter for search results (e.g., `en`, `ch`)               |
 | SearxngSafeSearch | `SEARXNG_SAFESEARCH` | `0`           | Safe search filter level (`0` = none, `1` = moderate, `2` = strict) |
 | SearxngTimeRange  | `SEARXNG_TIME_RANGE` | *(none)*      | Time range filter (e.g., `day`, `month`, `year`)                    |
+| SearxngTimeout    | `SEARXNG_TIMEOUT`    | *(none)*      | Request timeout in seconds for Searxng API calls                    |
 
 ### Usage Details
 
@@ -1145,7 +1417,7 @@ searxng := NewSearxngTool(
     fte.cfg.SearxngSafeSearch,
     fte.cfg.SearxngTimeRange,
     fte.cfg.ProxyURL,
-    0, // timeout (will use default 30 seconds)
+    fte.cfg.SearxngTimeout,
     fte.slp,
     cfg.Summarizer,
 )

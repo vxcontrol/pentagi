@@ -422,6 +422,10 @@ const (
 	ProviderTypeBedrock   ProviderType = "bedrock"
 	ProviderTypeOllama    ProviderType = "ollama"
 	ProviderTypeCustom    ProviderType = "custom"
+	ProviderTypeDeepseek  ProviderType = "deepseek"
+	ProviderTypeGlm       ProviderType = "glm"
+	ProviderTypeKimi      ProviderType = "kimi"
+	ProviderTypeQwen      ProviderType = "qwen"
 )
 
 func (e *ProviderType) Scan(src interface{}) error {

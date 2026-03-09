@@ -89,7 +89,8 @@ type Config struct {
 
 	// Ollama LLM provider
 	OllamaServerURL               string `env:"OLLAMA_SERVER_URL"`
-	OllamaServerModel             string `env:"OLLAMA_SERVER_MODEL" envDefault:"llama3.1:8b-instruct-q8_0"`
+	OllamaServerAPIKey            string `env:"OLLAMA_SERVER_API_KEY"`
+	OllamaServerModel             string `env:"OLLAMA_SERVER_MODEL"`
 	OllamaServerConfig            string `env:"OLLAMA_SERVER_CONFIG_PATH"`
 	OllamaServerPullModelsTimeout int    `env:"OLLAMA_SERVER_PULL_MODELS_TIMEOUT" envDefault:"600"`
 	OllamaServerPullModelsEnabled bool   `env:"OLLAMA_SERVER_PULL_MODELS_ENABLED" envDefault:"false"`
@@ -99,15 +100,40 @@ type Config struct {
 	GeminiAPIKey    string `env:"GEMINI_API_KEY"`
 	GeminiServerURL string `env:"GEMINI_SERVER_URL" envDefault:"https://generativelanguage.googleapis.com"`
 
-	// Bedrock
+	// AWS Bedrock LLM provider
 	BedrockRegion       string `env:"BEDROCK_REGION" envDefault:"us-east-1"`
+	BedrockDefaultAuth  bool   `env:"BEDROCK_DEFAULT_AUTH" envDefault:"false"`
+	BedrockBearerToken  string `env:"BEDROCK_BEARER_TOKEN"`
 	BedrockAccessKey    string `env:"BEDROCK_ACCESS_KEY_ID"`
 	BedrockSecretKey    string `env:"BEDROCK_SECRET_ACCESS_KEY"`
 	BedrockSessionToken string `env:"BEDROCK_SESSION_TOKEN"`
 	BedrockServerURL    string `env:"BEDROCK_SERVER_URL"`
 
+	// DeepSeek LLM provider
+	DeepSeekAPIKey    string `env:"DEEPSEEK_API_KEY"`
+	DeepSeekServerURL string `env:"DEEPSEEK_SERVER_URL" envDefault:"https://api.deepseek.com"`
+	DeepSeekProvider  string `env:"DEEPSEEK_PROVIDER"`
+
+	// GLM (Zhipu AI) provider
+	GLMAPIKey    string `env:"GLM_API_KEY"`
+	GLMServerURL string `env:"GLM_SERVER_URL" envDefault:"https://api.z.ai/api/paas/v4"`
+	GLMProvider  string `env:"GLM_PROVIDER"`
+
+	// Kimi (Moonshot AI) provider
+	KimiAPIKey    string `env:"KIMI_API_KEY"`
+	KimiServerURL string `env:"KIMI_SERVER_URL" envDefault:"https://api.moonshot.ai/v1"`
+	KimiProvider  string `env:"KIMI_PROVIDER"`
+
+	// Qwen (Tongyi Qianwen) provider
+	QwenAPIKey    string `env:"QWEN_API_KEY"`
+	QwenServerURL string `env:"QWEN_SERVER_URL" envDefault:"https://dashscope-us.aliyuncs.com/compatible-mode/v1"`
+	QwenProvider  string `env:"QWEN_PROVIDER"`
+
 	// DuckDuckGo search engine
-	DuckDuckGoEnabled bool `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
+	DuckDuckGoEnabled    bool   `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
+	DuckDuckGoRegion     string `env:"DUCKDUCKGO_REGION"`
+	DuckDuckGoSafeSearch string `env:"DUCKDUCKGO_SAFESEARCH"`
+	DuckDuckGoTimeRange  string `env:"DUCKDUCKGO_TIME_RANGE"`
 
 	// Sploitus exploit aggregator (https://sploitus.com)
 	// service under cloudflare protection, IP should have good reputation to avoid being blocked
@@ -146,6 +172,7 @@ type Config struct {
 	SearxngLanguage   string `env:"SEARXNG_LANGUAGE"`
 	SearxngSafeSearch string `env:"SEARXNG_SAFESEARCH" envDefault:"0"`
 	SearxngTimeRange  string `env:"SEARXNG_TIME_RANGE"`
+	SearxngTimeout    int    `env:"SEARXNG_TIMEOUT"`
 
 	// Assistant
 	AssistantUseAgents                bool `env:"ASSISTANT_USE_AGENTS" envDefault:"false"`

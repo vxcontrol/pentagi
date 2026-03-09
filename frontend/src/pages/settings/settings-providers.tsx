@@ -23,9 +23,13 @@ import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 import Anthropic from '@/components/icons/anthropic';
 import Bedrock from '@/components/icons/bedrock';
 import Custom from '@/components/icons/custom';
+import DeepSeek from '@/components/icons/deepseek';
 import Gemini from '@/components/icons/gemini';
+import GLM from '@/components/icons/glm';
+import Kimi from '@/components/icons/kimi';
 import Ollama from '@/components/icons/ollama';
 import OpenAi from '@/components/icons/open-ai';
+import Qwen from '@/components/icons/qwen';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -49,18 +53,26 @@ const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
     [ProviderType.Anthropic]: Anthropic,
     [ProviderType.Bedrock]: Bedrock,
     [ProviderType.Custom]: Custom,
+    [ProviderType.Deepseek]: DeepSeek,
     [ProviderType.Gemini]: Gemini,
+    [ProviderType.Glm]: GLM,
+    [ProviderType.Kimi]: Kimi,
     [ProviderType.Ollama]: Ollama,
     [ProviderType.Openai]: OpenAi,
+    [ProviderType.Qwen]: Qwen,
 };
 
 const providerTypes = [
     { label: 'Anthropic', type: ProviderType.Anthropic },
     { label: 'Bedrock', type: ProviderType.Bedrock },
     { label: 'Custom', type: ProviderType.Custom },
+    { label: 'DeepSeek', type: ProviderType.Deepseek },
     { label: 'Gemini', type: ProviderType.Gemini },
+    { label: 'GLM', type: ProviderType.Glm },
+    { label: 'Kimi', type: ProviderType.Kimi },
     { label: 'Ollama', type: ProviderType.Ollama },
     { label: 'OpenAI', type: ProviderType.Openai },
+    { label: 'Qwen', type: ProviderType.Qwen },
 ];
 
 const formatDateTime = (dateString: string) => {

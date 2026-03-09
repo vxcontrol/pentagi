@@ -21,12 +21,16 @@ import (
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/custom"
+	"pentagi/pkg/providers/deepseek"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/gemini"
+	"pentagi/pkg/providers/glm"
+	"pentagi/pkg/providers/kimi"
 	"pentagi/pkg/providers/ollama"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/qwen"
 	"pentagi/pkg/providers/tester"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -199,6 +203,30 @@ func NewProviderController(
 		defaultConfigs[provider.ProviderCustom] = config
 	}
 
+	if config, err := deepseek.DefaultProviderConfig(); err != nil {
+		return nil, fmt.Errorf("failed to create deepseek provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderDeepSeek] = config
+	}
+
+	if config, err := glm.DefaultProviderConfig(); err != nil {
+		return nil, fmt.Errorf("failed to create glm provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderGLM] = config
+	}
+
+	if config, err := kimi.DefaultProviderConfig(); err != nil {
+		return nil, fmt.Errorf("failed to create kimi provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderKimi] = config
+	}
+
+	if config, err := qwen.DefaultProviderConfig(); err != nil {
+		return nil, fmt.Errorf("failed to create qwen provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderQwen] = config
+	}
+
 	if cfg.OpenAIKey != "" {
 		p, err := openai.New(cfg, defaultConfigs[provider.ProviderOpenAI])
 		if err != nil {
@@ -226,7 +254,12 @@ func NewProviderController(
 		providers[provider.DefaultProviderNameGemini] = p
 	}
 
-	if cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "" {
+	// Bedrock supports three authentication strategies:
+	// 1. Default AWS SDK auth (BedrockDefaultAuth=true)
+	// 2. Bearer token (BedrockBearerToken set)
+	// 3. Static credentials (BedrockAccessKey + BedrockSecretKey)
+	if cfg.BedrockDefaultAuth || cfg.BedrockBearerToken != "" ||
+		(cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "") {
 		p, err := bedrock.New(cfg, defaultConfigs[provider.ProviderBedrock])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bedrock provider: %w", err)
@@ -249,6 +282,42 @@ func NewProviderController(
 		}
 
 		providers[provider.DefaultProviderNameCustom] = p
+	}
+
+	if cfg.DeepSeekAPIKey != "" {
+		p, err := deepseek.New(cfg, defaultConfigs[provider.ProviderDeepSeek])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create deepseek provider: %w", err)
+		}
+
+		providers[provider.DefaultProviderNameDeepSeek] = p
+	}
+
+	if cfg.GLMAPIKey != "" {
+		p, err := glm.New(cfg, defaultConfigs[provider.ProviderGLM])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create glm provider: %w", err)
+		}
+
+		providers[provider.DefaultProviderNameGLM] = p
+	}
+
+	if cfg.KimiAPIKey != "" {
+		p, err := kimi.New(cfg, defaultConfigs[provider.ProviderKimi])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create kimi provider: %w", err)
+		}
+
+		providers[provider.DefaultProviderNameKimi] = p
+	}
+
+	if cfg.QwenAPIKey != "" {
+		p, err := qwen.New(cfg, defaultConfigs[provider.ProviderQwen])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create qwen provider: %w", err)
+		}
+
+		providers[provider.DefaultProviderNameQwen] = p
 	}
 
 	summarizerAgent := csum.NewSummarizer(csum.SummarizerConfig{
@@ -586,6 +655,14 @@ func (pc *providerController) GetProvider(
 		return pc.Providers.Get(provider.DefaultProviderNameOllama)
 	case provider.DefaultProviderNameCustom:
 		return pc.Providers.Get(provider.DefaultProviderNameCustom)
+	case provider.DefaultProviderNameDeepSeek:
+		return pc.Providers.Get(provider.DefaultProviderNameDeepSeek)
+	case provider.DefaultProviderNameGLM:
+		return pc.Providers.Get(provider.DefaultProviderNameGLM)
+	case provider.DefaultProviderNameKimi:
+		return pc.Providers.Get(provider.DefaultProviderNameKimi)
+	case provider.DefaultProviderNameQwen:
+		return pc.Providers.Get(provider.DefaultProviderNameQwen)
 	}
 
 	// Lookup user defined providers by name and build it
@@ -676,6 +753,30 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 			return nil, fmt.Errorf("failed to build custom provider config: %w", err)
 		}
 		return custom.New(pc.cfg, customConfig)
+	case provider.ProviderDeepSeek:
+		deepseekConfig, err := deepseek.BuildProviderConfig(prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build deepseek provider config: %w", err)
+		}
+		return deepseek.New(pc.cfg, deepseekConfig)
+	case provider.ProviderGLM:
+		glmConfig, err := glm.BuildProviderConfig(prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build glm provider config: %w", err)
+		}
+		return glm.New(pc.cfg, glmConfig)
+	case provider.ProviderKimi:
+		kimiConfig, err := kimi.BuildProviderConfig(prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build kimi provider config: %w", err)
+		}
+		return kimi.New(pc.cfg, kimiConfig)
+	case provider.ProviderQwen:
+		qwenConfig, err := qwen.BuildProviderConfig(prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build qwen provider config: %w", err)
+		}
+		return qwen.New(pc.cfg, qwenConfig)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", prv.Type)
 	}
@@ -1003,6 +1104,14 @@ func (pc *providerController) buildProviderFromConfig(
 		return bedrock.New(pc.cfg, config)
 	case provider.ProviderOllama:
 		return ollama.New(pc.cfg, config)
+	case provider.ProviderDeepSeek:
+		return deepseek.New(pc.cfg, config)
+	case provider.ProviderGLM:
+		return glm.New(pc.cfg, config)
+	case provider.ProviderKimi:
+		return kimi.New(pc.cfg, config)
+	case provider.ProviderQwen:
+		return qwen.New(pc.cfg, config)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", prvtype)
 	}
