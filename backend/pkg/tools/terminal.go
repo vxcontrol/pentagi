@@ -41,9 +41,12 @@ type terminal struct {
 	tlp          TermLogProvider
 }
 
-func NewTerminalTool(flowID int64, taskID, subtaskID *int64,
+func NewTerminalTool(
+	flowID int64,
+	taskID, subtaskID *int64,
 	containerID int64, containerLID string,
-	dockerClient docker.DockerClient, tlp TermLogProvider,
+	dockerClient docker.DockerClient,
+	tlp TermLogProvider,
 ) Tool {
 	return &terminal{
 		flowID:       flowID,
@@ -80,6 +83,10 @@ func (t *terminal) wrapCommandResult(ctx context.Context, args json.RawMessage, 
 }
 
 func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !t.IsAvailable() {
+		return "", fmt.Errorf("terminal is not available")
+	}
+
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),

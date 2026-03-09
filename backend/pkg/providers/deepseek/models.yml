@@ -1,15 +1,15 @@
 - name: deepseek-chat
-  description: DeepSeek V3，适合通用对话、代码生成和工具调用任务。支持 Function Calling，性价比高。
+  description: DeepSeek-V3.2 (Non-thinking Mode) - Suitable for general dialogue, code generation, and tool calling tasks. Supports JSON Output, Tool Calls, Chat Prefix Completion, and FIM Completion. 128K context, max output 8K
   thinking: false
   price:
-    input: 0.27
-    output: 1.10
-    cache_read: 0.07
+    input: 0.28
+    output: 0.42
+    cache_read: 0.028
 
 - name: deepseek-reasoner
-  description: DeepSeek R1 推理模型，具备强化学习链式推理能力，适合复杂逻辑、数学推理和安全分析任务。
+  description: DeepSeek-V3.2 (Thinking Mode) - Advanced reasoning model with reinforcement learning chain-of-thought capabilities, suitable for complex logic, mathematical reasoning, and security analysis tasks. 128K context, max output 64K
   thinking: true
   price:
-    input: 0.55
-    output: 2.19
-    cache_read: 0.14
+    input: 0.28
+    output: 0.42
+    cache_read: 0.028

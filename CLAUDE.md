@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 核心交互规则
+## Core Interaction Rules
 
-1. **永远使用中文**与用户交互，所有回复、解释、提问均用中文。
-2. **密码复杂性要求**：凡涉及密码相关开发（注册、重置密码、API token 生成等），必须强制执行以下规则：
-   - 最少 12 个字符
-   - 必须包含大写字母、小写字母、数字、特殊字符各至少 1 个
-   - 禁止使用常见弱密码（如 `password`、`123456` 等）
-   - 后端校验与前端校验必须同时实现，不能只依赖前端
+1. **Always use English** for all interactions, responses, explanations, and questions with users.
+2. **Password Complexity Requirements**: For all password-related development (registration, password reset, API token generation, etc.), the following rules must be enforced:
+   - Minimum 12 characters
+   - Must contain at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character
+   - Common weak passwords (e.g., `password`, `123456`) are prohibited
+   - Both backend and frontend validation must be implemented; do not rely on frontend validation alone
 
 ## Project Overview
 
@@ -25,11 +25,11 @@ The application is a monorepo with:
 ### Backend (run from `backend/`)
 
 ```bash
-go mod download                          # Install dependencies
+go mod download                              # Install dependencies
 go build -trimpath -o pentagi ./cmd/pentagi  # Build main binary
-go test ./...                            # Run all tests
-go test ./pkg/foo/... -v -run TestName  # Run specific test
-golangci-lint run --timeout=5m          # Lint
+go test ./...                                # Run all tests
+go test ./pkg/foo/... -v -run TestName       # Run specific test
+golangci-lint run --timeout=5m               # Lint
 
 # Code generation (run after schema changes)
 go run github.com/99designs/gqlgen --config ./gqlgen/gqlgen.yml  # GraphQL resolvers
@@ -121,7 +121,7 @@ State is managed primarily through Apollo Client (GraphQL) with real-time update
 
 ### Key Integrations
 
-- **LLM Providers**: OpenAI, Anthropic, Gemini, AWS Bedrock, Ollama, DeepSeek, GLM (智谱), Kimi (月之暗面), Qwen (通义千问), and custom HTTP endpoints — configured via environment variables or the Settings UI
+- **LLM Providers**: OpenAI, Anthropic, Gemini, AWS Bedrock, Ollama, DeepSeek, GLM, Kimi, Qwen, and custom HTTP endpoints — configured via environment variables or the Settings UI
 - **Search**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng
 - **Databases**: PostgreSQL + pgvector (required), Neo4j (optional, for knowledge graph)
 - **Observability**: OpenTelemetry → VictoriaMetrics + Loki + Jaeger → Grafana; Langfuse for LLM analytics

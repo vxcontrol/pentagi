@@ -10,7 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/system"
 
 	"github.com/sirupsen/logrus"
 )
@@ -19,242 +23,165 @@ const (
 	defaultSearxngTimeout = 30 * time.Second
 )
 
-// SearxngTool represents the Searxng search tool
-type SearxngTool struct {
+type searxng struct {
+	cfg        *config.Config
 	flowID     int64
 	taskID     *int64
 	subtaskID  *int64
-	baseURL    string
-	categories string
-	language   string
-	safeSearch string
-	timeRange  string
-	proxyURL   string
-	timeout    time.Duration
 	slp        SearchLogProvider
 	summarizer SummarizeHandler
 }
 
-// NewSearxngTool creates a new Searxng tool instance
 func NewSearxngTool(
+	cfg *config.Config,
 	flowID int64,
 	taskID, subtaskID *int64,
-	baseURL, categories, language, safeSearch, timeRange, proxyURL string,
-	timeout int,
 	slp SearchLogProvider,
 	summarizer SummarizeHandler,
-) *SearxngTool {
-	tool := &SearxngTool{
+) Tool {
+	return &searxng{
+		cfg:        cfg,
 		flowID:     flowID,
 		taskID:     taskID,
 		subtaskID:  subtaskID,
-		baseURL:    baseURL,
-		categories: categories,
-		language:   language,
-		safeSearch: safeSearch,
-		timeRange:  timeRange,
-		proxyURL:   proxyURL,
 		slp:        slp,
 		summarizer: summarizer,
 	}
-
-	if timeout > 0 {
-		tool.timeout = time.Duration(timeout) * time.Second
-	} else {
-		tool.timeout = defaultSearxngTimeout
-	}
-
-	return tool
 }
 
-// IsAvailable checks if the Searxng tool is available
-func (s *SearxngTool) IsAvailable() bool {
-	return s.baseURL != "" && s.slp != nil
+func (s *searxng) IsAvailable() bool {
+	return s.baseURL() != ""
 }
 
-// Handle handles the Searxng search tool execution
-func (s *SearxngTool) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (s *searxng) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	if !s.IsAvailable() {
-		return "", fmt.Errorf("searxng tool is not available: missing base URL or search log provider")
+		return "", fmt.Errorf("searxng is not available")
 	}
 
+	var action SearchAction
+	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(s.flowID, s.taskID, s.subtaskID, logrus.Fields{
 		"tool": name,
 		"args": string(args),
 	}))
 
-	var searchArgs SearchAction
-	if err := json.Unmarshal(args, &searchArgs); err != nil {
+	if err := json.Unmarshal(args, &action); err != nil {
 		logger.WithError(err).Error("failed to unmarshal searxng search action")
-		return "", fmt.Errorf("error unmarshaling search arguments: %w", err)
+		return "", fmt.Errorf("failed to unmarshal %s search action arguments: %w", name, err)
 	}
 
-	// Validate required parameters
-	if searchArgs.Query == "" {
-		logger.Error("query parameter is required")
-		return "", fmt.Errorf("query parameter is required")
+	logger = logger.WithFields(logrus.Fields{
+		"query":       action.Query[:min(len(action.Query), 1000)],
+		"max_results": action.MaxResults,
+	})
+
+	result, err := s.search(ctx, action.Query, action.MaxResults.Int())
+	if err != nil {
+		observation.Event(
+			langfuse.WithEventName("search engine error swallowed"),
+			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventStatus(err.Error()),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"tool_name":   SearxngToolName,
+				"engine":      "searxng",
+				"query":       action.Query,
+				"max_results": action.MaxResults.Int(),
+				"error":       err.Error(),
+			}),
+		)
+
+		logger.WithError(err).Error("failed to search in searxng")
+		return fmt.Sprintf("failed to search in searxng: %v", err), nil
 	}
 
-	// Log the search
-	var searchLogID int64
-	var err error
 	if agentCtx, ok := GetAgentContext(ctx); ok {
-		searchLogID, err = s.slp.PutLog(
+		_, _ = s.slp.PutLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
 			database.SearchengineTypeSearxng,
-			searchArgs.Query,
-			"",
+			action.Query,
+			result,
 			s.taskID,
 			s.subtaskID,
 		)
-		if err != nil {
-			logger.WithError(err).Error("failed to create search log")
-		}
 	}
 
-	// Perform the search
-	results, err := s.performSearxngSearch(ctx, searchArgs.Query, searchArgs.MaxResults.Int())
-	if err != nil {
-		// Update search log with error
-		if searchLogID > 0 {
-			if agentCtx, ok := GetAgentContext(ctx); ok {
-				_, updateErr := s.slp.PutLog(
-					ctx,
-					agentCtx.ParentAgentType,
-					agentCtx.CurrentAgentType,
-					database.SearchengineTypeSearxng,
-					searchArgs.Query,
-					err.Error(),
-					s.taskID,
-					s.subtaskID,
-				)
-				if updateErr != nil {
-					logger.WithError(updateErr).Error("failed to update search log with error")
-				}
-			}
-		}
-		logger.WithError(err).Error("failed to perform searxng search")
-		return "", fmt.Errorf("searxng search failed: %w", err)
-	}
-
-	// Update search log with results
-	if searchLogID > 0 {
-		resultJSON, _ := json.Marshal(results)
-		if agentCtx, ok := GetAgentContext(ctx); ok {
-			_, updateErr := s.slp.PutLog(
-				ctx,
-				agentCtx.ParentAgentType,
-				agentCtx.CurrentAgentType,
-				database.SearchengineTypeSearxng,
-				searchArgs.Query,
-				string(resultJSON),
-				s.taskID,
-				s.subtaskID,
-			)
-			if updateErr != nil {
-				logger.WithError(updateErr).Error("failed to update search log with results")
-			}
-		}
-	}
-
-	// Format the results
-	return s.formatSearchResults(results, searchArgs.Query), nil
+	return result, nil
 }
 
-// performSearxngSearch performs the actual search against the Searxng API
-func (s *SearxngTool) performSearxngSearch(ctx context.Context, query string, maxResults int) ([]SearxngResult, error) {
-	// Build the Searxng API URL
-	apiURL, err := url.Parse(s.baseURL)
+func (s *searxng) search(ctx context.Context, query string, maxResults int) (string, error) {
+	apiURL, err := url.Parse(s.baseURL())
 	if err != nil {
-		return nil, fmt.Errorf("invalid Searxng base URL: %w", err)
+		return "", fmt.Errorf("invalid searxng base URL: %w", err)
 	}
 
-	// Add /search path if not present
 	if !strings.HasSuffix(apiURL.Path, "/search") {
 		apiURL.Path = strings.TrimSuffix(apiURL.Path, "/") + "/search"
 	}
 
-	// Prepare query parameters
 	params := url.Values{}
 	params.Add("q", query)
 	params.Add("format", "json")
-	params.Add("language", s.language)
-	params.Add("categories", s.categories)
-	params.Add("safesearch", s.safeSearch)
+	params.Add("language", s.language())
+	params.Add("categories", s.categories())
+	params.Add("safesearch", s.safeSearch())
 
-	if s.timeRange != "" {
-		params.Add("time_range", s.timeRange)
+	if timeRange := s.timeRange(); timeRange != "" {
+		params.Add("time_range", timeRange)
 	}
 
 	if maxResults > 0 {
 		params.Add("limit", strconv.Itoa(maxResults))
 	} else {
-		params.Add("limit", "10") // Default limit
+		params.Add("limit", "10")
 	}
 
 	apiURL.RawQuery = params.Encode()
 
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: s.timeout,
-	}
-
-	// If proxy URL is provided, configure proxy
-	if s.proxyURL != "" {
-		proxyURL, err := url.Parse(s.proxyURL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid proxy URL: %w", err)
-		}
-		client.Transport = &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
-		}
-	}
-
-	// Make the request
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL.String(), nil)
+	client, err := system.GetHTTPClient(s.cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return "", fmt.Errorf("failed to create http client: %w", err)
 	}
 
-	// Set user agent
-	req.Header.Set("User-Agent", "PentAGI/1.0")
+	client.Timeout = s.timeout()
 
-	logrus.WithFields(enrichLogrusFields(s.flowID, s.taskID, s.subtaskID, logrus.Fields{
-		"url":    apiURL.String(),
-		"query":  query,
-		"limit":  params.Get("limit"),
-		"engine": "searxng",
-	})).Debug("Performing Searxng search")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("User-Agent", "PentAGI/1.0")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return "", fmt.Errorf("failed to do request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("searxng API returned status code: %d", resp.StatusCode)
-	}
-
-	// Parse the response
-	var searxngResponse SearxngResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searxngResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return searxngResponse.Results, nil
+	return s.parseHTTPResponse(resp, query)
 }
 
-// formatSearchResults formats the Searxng results for display
-func (s *SearxngTool) formatSearchResults(results []SearxngResult, query string) string {
+func (s *searxng) parseHTTPResponse(resp *http.Response, query string) (string, error) {
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	var searxngResponse SearxngResponse
+	if err := json.NewDecoder(resp.Body).Decode(&searxngResponse); err != nil {
+		return "", fmt.Errorf("failed to decode response body: %w", err)
+	}
+
+	return s.formatResults(searxngResponse.Results, query), nil
+}
+
+func (s *searxng) formatResults(results []SearxngResult, query string) string {
 	if len(results) == 0 {
 		return fmt.Sprintf("# No Results Found\n\nNo results were found for query: %s", query)
 	}
 
 	var builder strings.Builder
-
 	builder.WriteString(fmt.Sprintf("# Searxng Search Results\n\n## Query: %s\n\n", query))
 	builder.WriteString("Results from Searxng meta search engine (aggregated from multiple search engines):\n\n")
 
@@ -285,6 +212,54 @@ func (s *SearxngTool) formatSearchResults(results []SearxngResult, query string)
 	}
 
 	return builder.String()
+}
+
+func (s *searxng) baseURL() string {
+	if s.cfg == nil {
+		return ""
+	}
+
+	return s.cfg.SearxngURL
+}
+
+func (s *searxng) categories() string {
+	if s.cfg == nil {
+		return ""
+	}
+
+	return s.cfg.SearxngCategories
+}
+
+func (s *searxng) language() string {
+	if s.cfg == nil {
+		return ""
+	}
+
+	return s.cfg.SearxngLanguage
+}
+
+func (s *searxng) safeSearch() string {
+	if s.cfg == nil {
+		return ""
+	}
+
+	return s.cfg.SearxngSafeSearch
+}
+
+func (s *searxng) timeRange() string {
+	if s.cfg == nil {
+		return ""
+	}
+
+	return s.cfg.SearxngTimeRange
+}
+
+func (s *searxng) timeout() time.Duration {
+	if s.cfg == nil || s.cfg.SearxngTimeout <= 0 {
+		return defaultSearxngTimeout
+	}
+
+	return time.Duration(s.cfg.SearxngTimeout) * time.Second
 }
 
 // SearxngResult represents a single result from Searxng

@@ -19,13 +19,12 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const GLMAgentModel = "glm-4-air"
+const GLMAgentModel = "glm-4.7-flashx"
 
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(GLMAgentModel),
 		llms.WithN(1),
-		llms.WithMaxTokens(4000),
 	}
 
 	providerConfig, err := pconfig.LoadConfigData(configData, defaultOptions)
@@ -58,6 +57,7 @@ type glmProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
 	providerConfig *pconfig.ProviderConfig
+	providerPrefix string
 }
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
@@ -89,6 +89,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		llm:            client,
 		models:         models,
 		providerConfig: providerConfig,
+		providerPrefix: cfg.GLMProvider,
 	}, nil
 }
 
@@ -119,6 +120,10 @@ func (p *glmProvider) Model(opt pconfig.ProviderOptionsType) string {
 	}
 
 	return opts.Model
+}
+
+func (p *glmProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	return provider.ApplyModelPrefix(p.Model(opt), p.providerPrefix)
 }
 
 func (p *glmProvider) Call(

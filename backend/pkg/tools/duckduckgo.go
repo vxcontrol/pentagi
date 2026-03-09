@@ -11,9 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/system"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/html"
@@ -67,35 +69,34 @@ type searchResponse struct {
 }
 
 type duckduckgo struct {
-	flowID     int64
-	taskID     *int64
-	subtaskID  *int64
-	enabled    bool
-	proxyURL   string
-	region     string
-	safeSearch string
-	timeRange  string
-	slp        SearchLogProvider
+	cfg       *config.Config
+	flowID    int64
+	taskID    *int64
+	subtaskID *int64
+	slp       SearchLogProvider
 }
 
-func NewDuckDuckGoTool(flowID int64, taskID, subtaskID *int64, enabled bool,
-	proxyURL, region, safeSearch, timeRange string, slp SearchLogProvider,
+func NewDuckDuckGoTool(
+	cfg *config.Config,
+	flowID int64,
+	taskID, subtaskID *int64,
+	slp SearchLogProvider,
 ) Tool {
 	return &duckduckgo{
-		flowID:     flowID,
-		taskID:     taskID,
-		subtaskID:  subtaskID,
-		enabled:    enabled,
-		proxyURL:   proxyURL,
-		region:     region,
-		safeSearch: safeSearch,
-		timeRange:  timeRange,
-		slp:        slp,
+		cfg:       cfg,
+		flowID:    flowID,
+		taskID:    taskID,
+		subtaskID: subtaskID,
+		slp:       slp,
 	}
 }
 
 // Handle processes the search request from an AI agent
 func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !d.IsAvailable() {
+		return "", fmt.Errorf("duckduckgo is not available")
+	}
+
 	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(d.flowID, d.taskID, d.subtaskID, logrus.Fields{
@@ -117,7 +118,9 @@ func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessa
 	logger = logger.WithFields(logrus.Fields{
 		"query":       action.Query[:min(len(action.Query), 1000)],
 		"num_results": numResults,
-		"region":      d.region,
+		"region":      d.region(),
+		"safe_search": d.safeSearch(),
+		"time_range":  d.timeRange(),
 	})
 
 	// Perform search
@@ -133,7 +136,7 @@ func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessa
 				"engine":      "duckduckgo",
 				"query":       action.Query,
 				"max_results": numResults,
-				"region":      d.region,
+				"region":      d.region(),
 				"error":       err.Error(),
 			}),
 		)
@@ -165,7 +168,12 @@ func (d *duckduckgo) search(ctx context.Context, query string, maxResults int) (
 	formData := d.buildFormData(query)
 
 	// Create HTTP client with proper configuration
-	client := d.createHTTPClient()
+	client, err := system.GetHTTPClient(d.cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to create http client: %w", err)
+	}
+
+	client.Timeout = duckduckgoTimeout
 
 	// Execute request with retry logic
 	var response *searchResponse
@@ -241,25 +249,16 @@ func (d *duckduckgo) buildFormData(query string) string {
 	params.Set("b", "")
 	params.Set("df", "")
 
-	if d.region != "" {
-		params.Set("kl", d.region)
-	} else {
-		params.Set("kl", RegionUS)
+	if region := d.region(); region != "" {
+		params.Set("kl", region)
 	}
 
-	if d.safeSearch != "" {
-		switch d.safeSearch {
-		case DuckDuckGoSafeSearchStrict:
-			params.Set("kp", "1")
-		case DuckDuckGoSafeSearchModerate:
-			params.Set("kp", "0")
-		case DuckDuckGoSafeSearchOff:
-			params.Set("kp", "-1")
-		}
+	if safeSearch := d.safeSearch(); safeSearch != "" {
+		params.Set("kp", safeSearch)
 	}
 
-	if d.timeRange != "" {
-		params.Set("df", d.timeRange)
+	if timeRange := d.timeRange(); timeRange != "" {
+		params.Set("df", timeRange)
 	}
 
 	return params.Encode()
@@ -524,28 +523,42 @@ func (d *duckduckgo) formatSearchResults(results []searchResult) string {
 	return builder.String()
 }
 
-// createHTTPClient creates an HTTP client with configured proxy and timeout
-func (d *duckduckgo) createHTTPClient() *http.Client {
-	client := &http.Client{
-		Timeout: duckduckgoTimeout,
-	}
-
-	// Configure proxy if specified
-	if d.proxyURL != "" {
-		proxyURL, err := url.Parse(d.proxyURL)
-		if err == nil {
-			client.Transport = &http.Transport{
-				Proxy: http.ProxyURL(proxyURL),
-			}
-		}
-	}
-
-	return client
-}
-
 // isAvailable checks if the DuckDuckGo search client is properly configured
 func (d *duckduckgo) IsAvailable() bool {
 	// DuckDuckGo is a free search engine that doesn't require API keys or additional configuration.
 	// We only need to check if it's enabled in the settings according to the user config.
-	return d.enabled
+	return d.enabled()
+}
+
+func (d *duckduckgo) enabled() bool {
+	return d.cfg != nil && d.cfg.DuckDuckGoEnabled
+}
+
+func (d *duckduckgo) region() string {
+	if d.cfg == nil || d.cfg.DuckDuckGoRegion == "" {
+		return RegionUS
+	}
+
+	return d.cfg.DuckDuckGoRegion
+}
+
+func (d *duckduckgo) safeSearch() string {
+	switch d.cfg.DuckDuckGoSafeSearch {
+	case DuckDuckGoSafeSearchStrict:
+		return "1"
+	case DuckDuckGoSafeSearchModerate:
+		return "0"
+	case DuckDuckGoSafeSearchOff:
+		return "-1"
+	default:
+		return ""
+	}
+}
+
+func (d *duckduckgo) timeRange() string {
+	if d.cfg == nil || d.cfg.DuckDuckGoTimeRange == "" {
+		return ""
+	}
+
+	return d.cfg.DuckDuckGoTimeRange
 }

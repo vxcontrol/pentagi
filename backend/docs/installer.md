@@ -942,8 +942,9 @@ func (m *Model) ensureFocusVisible() {
 **Provider Field Mapping**:
 - **OpenAI/Anthropic/Gemini**: Base URL + API Key
 - **AWS Bedrock**: Region + Authentication (Default Auth OR Bearer Token OR Access Key + Secret Key) + Session Token (optional) + Base URL (optional)
-- **Ollama**: Base URL + Config Path
-- **Custom**: Base URL + API Key + Model + Config Path + Legacy Reasoning (boolean)
+- **DeepSeek/GLM/Kimi/Qwen**: Base URL + API Key + Provider Name (optional, for LiteLLM)
+- **Ollama**: Base URL + API Key (optional, for cloud) + Model + Config Path + Pull/Load options
+- **Custom**: Base URL + API Key + Model + Config Path + Provider Name + Legacy Reasoning (boolean)
 
 **Dynamic Form Generation**: Forms adapt based on provider type with appropriate validation and help text.
 
@@ -1282,8 +1283,9 @@ provider := ProviderInfo{
   - **Default Auth**: Use AWS SDK credential chain (environment, EC2 role, ~/.aws/credentials) - highest priority
   - **Bearer Token**: Token-based authentication - priority over static credentials
   - **Static Credentials**: Access Key + Secret Key + Session Token (optional) - traditional IAM authentication
-- **Ollama**: Base URL + Config Path
-- **Custom**: Base URL + API Key + Model + Config Path + Legacy Reasoning (boolean with suggestions)
+- **DeepSeek/GLM/Kimi/Qwen**: Base URL + API Key + Provider Name (optional, for LiteLLM)
+- **Ollama**: Base URL + API Key (optional, for cloud) + Model + Config Path + Pull/Load options
+- **Custom**: Base URL + API Key + Model + Config Path + Provider Name + Legacy/Preserve Reasoning (boolean with suggestions)
 
 ### **Screen Architecture (App.go Integration)**
 

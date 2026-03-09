@@ -171,6 +171,11 @@ func (p *bedrockProvider) Model(opt pconfig.ProviderOptionsType) string {
 	return opts.Model
 }
 
+func (p *bedrockProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	// Bedrock provider doesn't need prefix support (passthrough mode in LiteLLM)
+	return p.Model(opt)
+}
+
 func (p *bedrockProvider) Call(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,

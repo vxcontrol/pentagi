@@ -145,90 +145,67 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 
 	case tools.GoogleToolName:
 		return tools.NewGoogleTool(
+			te.cfg,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
-			te.cfg.GoogleAPIKey,
-			te.cfg.GoogleCXKey,
-			te.cfg.GoogleLRKey,
-			te.cfg.ProxyURL,
 			te.proxies.GetSearchLogProvider(),
 		), nil
 
 	case tools.DuckDuckGoToolName:
 		return tools.NewDuckDuckGoTool(
+			te.cfg,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
-			te.cfg.DuckDuckGoEnabled,
-			te.cfg.ProxyURL,
-			"", // region (default)
-			"", // safeSearch (default)
-			"", // timeRange (default)
 			te.proxies.GetSearchLogProvider(),
 		), nil
 
 	case tools.TavilyToolName:
 		return tools.NewTavilyTool(
+			te.cfg,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
-			te.cfg.TavilyAPIKey,
-			te.cfg.ProxyURL,
 			te.proxies.GetSearchLogProvider(),
 			te.GetSummarizer(),
 		), nil
 
 	case tools.TraversaalToolName:
 		return tools.NewTraversaalTool(
+			te.cfg,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
-			te.cfg.TraversaalAPIKey,
-			te.cfg.ProxyURL,
 			te.proxies.GetSearchLogProvider(),
 		), nil
 
 	case tools.PerplexityToolName:
 		return tools.NewPerplexityTool(
+			te.cfg,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
-			te.cfg.PerplexityAPIKey,
-			te.cfg.ProxyURL,
-			te.cfg.PerplexityModel,
-			te.cfg.PerplexityContextSize,
-			0, // default temperature
-			0, // default topP
-			0, // default maxTokens
-			0, // default timeout
 			te.proxies.GetSearchLogProvider(),
 			te.GetSummarizer(),
 		), nil
 
 	case tools.SearxngToolName:
 		return tools.NewSearxngTool(
+			te.cfg,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
-			te.cfg.SearxngURL,
-			te.cfg.SearxngCategories,
-			te.cfg.SearxngLanguage,
-			te.cfg.SearxngSafeSearch,
-			te.cfg.SearxngTimeRange,
-			te.cfg.ProxyURL,
-			0, // timeout (will use default)
 			te.proxies.GetSearchLogProvider(),
 			te.GetSummarizer(),
 		), nil
 
 	case tools.SploitusToolName:
 		return tools.NewSploitusTool(
+			te.cfg,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
-			te.cfg.SploitusEnabled,
-			te.cfg.ProxyURL,
 			te.proxies.GetSearchLogProvider(),
 		), nil
 

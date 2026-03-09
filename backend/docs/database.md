@@ -266,7 +266,7 @@ Code generation is performed using Docker to ensure consistency:
 ```bash
 docker run --rm -v "$(pwd):/src" --network pentagi-network \
   -e DATABASE_URL='postgres://postgres:postgres@pgvector:5432/pentagidb?sslmode=disable' \
-  -w /src sqlc/sqlc generate -f sqlc/sqlc.yml
+  -w /src sqlc/sqlc:1.27.0 generate -f sqlc/sqlc.yml
 ```
 
 This command:
@@ -437,7 +437,7 @@ LLM conversation management and usage tracking:
 
 #### Provider
 LLM provider configurations for multi-provider support:
-- `type` - PROVIDER_TYPE enum (openai/anthropic/gemini/bedrock/ollama/custom)
+- `type` - PROVIDER_TYPE enum (openai/anthropic/gemini/bedrock/deepseek/glm/kimi/qwen/ollama/custom)
 - `name` - user-defined provider name
 - `config` - JSON configuration for API keys and settings
 - `user_id` - user ownership

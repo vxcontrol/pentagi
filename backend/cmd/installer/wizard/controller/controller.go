@@ -148,8 +148,8 @@ type LLMProviderConfig struct {
 
 	// direct form field mappings using loader.EnvVar
 	// these fields directly correspond to environment variables and form inputs (not computed)
-	BaseURL loader.EnvVar // OPEN_AI_SERVER_URL | ANTHROPIC_SERVER_URL | GEMINI_SERVER_URL | BEDROCK_SERVER_URL | OLLAMA_SERVER_URL | LLM_SERVER_URL
-	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | BEDROCK_ACCESS_KEY_ID | OLLAMA_SERVER_CONFIG_PATH | LLM_SERVER_KEY
+	BaseURL loader.EnvVar // OPEN_AI_SERVER_URL | ANTHROPIC_SERVER_URL | GEMINI_SERVER_URL | BEDROCK_SERVER_URL | OLLAMA_SERVER_URL | DEEPSEEK_SERVER_URL | GLM_SERVER_URL | KIMI_SERVER_URL | QWEN_SERVER_URL | LLM_SERVER_URL
+	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | LLM_SERVER_KEY | DEEPSEEK_API_KEY | GLM_API_KEY | KIMI_API_KEY | QWEN_API_KEY | OLLAMA_SERVER_API_KEY
 	Model   loader.EnvVar // LLM_SERVER_MODEL
 	// AWS Bedrock specific fields
 	DefaultAuth  loader.EnvVar // BEDROCK_DEFAULT_AUTH
@@ -164,7 +164,7 @@ type LLMProviderConfig struct {
 	LegacyReasoning   loader.EnvVar // LLM_SERVER_LEGACY_REASONING
 	PreserveReasoning loader.EnvVar // LLM_SERVER_PRESERVE_REASONING
 	// Custom specific fields
-	ProviderName loader.EnvVar // LLM_SERVER_PROVIDER
+	ProviderName loader.EnvVar // LLM_SERVER_PROVIDER | DEEPSEEK_PROVIDER | GLM_PROVIDER | KIMI_PROVIDER | QWEN_PROVIDER
 	// Ollama specific fields
 	PullTimeout       loader.EnvVar // OLLAMA_SERVER_PULL_MODELS_TIMEOUT
 	PullEnabled       loader.EnvVar // OLLAMA_SERVER_PULL_MODELS_ENABLED
@@ -198,6 +198,10 @@ func (c *controller) GetLLMProviders() map[string]*LLMProviderConfig {
 		"gemini":    c.GetLLMProviderConfig("gemini"),
 		"bedrock":   c.GetLLMProviderConfig("bedrock"),
 		"ollama":    c.GetLLMProviderConfig("ollama"),
+		"deepseek":  c.GetLLMProviderConfig("deepseek"),
+		"glm":       c.GetLLMProviderConfig("glm"),
+		"kimi":      c.GetLLMProviderConfig("kimi"),
+		"qwen":      c.GetLLMProviderConfig("qwen"),
 		"custom":    c.GetLLMProviderConfig("custom"),
 	}
 }
@@ -246,6 +250,7 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 	case "ollama":
 		providerConfig.Name = "Ollama"
 		providerConfig.BaseURL, _ = c.GetVar("OLLAMA_SERVER_URL")
+		providerConfig.APIKey, _ = c.GetVar("OLLAMA_SERVER_API_KEY")
 		providerConfig.ConfigPath, _ = c.GetVar("OLLAMA_SERVER_CONFIG_PATH")
 		providerConfig.HostConfigPath, _ = c.GetVar("PENTAGI_OLLAMA_SERVER_CONFIG_PATH")
 		if slices.Contains(providersConfigsPath, providerConfig.ConfigPath.Value) {
@@ -256,6 +261,34 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.PullEnabled, _ = c.GetVar("OLLAMA_SERVER_PULL_MODELS_ENABLED")
 		providerConfig.LoadModelsEnabled, _ = c.GetVar("OLLAMA_SERVER_LOAD_MODELS_ENABLED")
 		providerConfig.Configured = providerConfig.BaseURL.Value != ""
+
+	case "deepseek":
+		providerConfig.Name = "DeepSeek"
+		providerConfig.APIKey, _ = c.GetVar("DEEPSEEK_API_KEY")
+		providerConfig.BaseURL, _ = c.GetVar("DEEPSEEK_SERVER_URL")
+		providerConfig.ProviderName, _ = c.GetVar("DEEPSEEK_PROVIDER")
+		providerConfig.Configured = providerConfig.APIKey.Value != ""
+
+	case "glm":
+		providerConfig.Name = "GLM"
+		providerConfig.APIKey, _ = c.GetVar("GLM_API_KEY")
+		providerConfig.BaseURL, _ = c.GetVar("GLM_SERVER_URL")
+		providerConfig.ProviderName, _ = c.GetVar("GLM_PROVIDER")
+		providerConfig.Configured = providerConfig.APIKey.Value != ""
+
+	case "kimi":
+		providerConfig.Name = "Kimi"
+		providerConfig.APIKey, _ = c.GetVar("KIMI_API_KEY")
+		providerConfig.BaseURL, _ = c.GetVar("KIMI_SERVER_URL")
+		providerConfig.ProviderName, _ = c.GetVar("KIMI_PROVIDER")
+		providerConfig.Configured = providerConfig.APIKey.Value != ""
+
+	case "qwen":
+		providerConfig.Name = "Qwen"
+		providerConfig.APIKey, _ = c.GetVar("QWEN_API_KEY")
+		providerConfig.BaseURL, _ = c.GetVar("QWEN_SERVER_URL")
+		providerConfig.ProviderName, _ = c.GetVar("QWEN_PROVIDER")
+		providerConfig.Configured = providerConfig.APIKey.Value != ""
 
 	case "custom":
 		providerConfig.Name = "Custom"
@@ -331,6 +364,9 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
 		}
+		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
+		}
 		if err := c.SetVar(config.Model.Name, config.Model.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.Model.Name, err)
 		}
@@ -360,6 +396,50 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 		}
 		if err := c.SetVar(config.HostConfigPath.Name, hostPath); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.HostConfigPath.Name, err)
+		}
+
+	case "deepseek":
+		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
+		}
+		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
+		}
+		if err := c.SetVar(config.ProviderName.Name, config.ProviderName.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
+		}
+
+	case "glm":
+		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
+		}
+		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
+		}
+		if err := c.SetVar(config.ProviderName.Name, config.ProviderName.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
+		}
+
+	case "kimi":
+		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
+		}
+		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
+		}
+		if err := c.SetVar(config.ProviderName.Name, config.ProviderName.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
+		}
+
+	case "qwen":
+		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
+		}
+		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
+		}
+		if err := c.SetVar(config.ProviderName.Name, config.ProviderName.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
 		}
 
 	case "custom":
@@ -423,6 +503,7 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 	case "ollama":
 		vars = []string{
 			"OLLAMA_SERVER_URL",
+			"OLLAMA_SERVER_API_KEY",
 			"OLLAMA_SERVER_MODEL",
 			"OLLAMA_SERVER_CONFIG_PATH",
 			"OLLAMA_SERVER_PULL_MODELS_TIMEOUT",
@@ -430,6 +511,14 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 			"OLLAMA_SERVER_LOAD_MODELS_ENABLED",
 			"PENTAGI_OLLAMA_SERVER_CONFIG_PATH",
 		}
+	case "deepseek":
+		vars = []string{"DEEPSEEK_API_KEY", "DEEPSEEK_SERVER_URL", "DEEPSEEK_PROVIDER"}
+	case "glm":
+		vars = []string{"GLM_API_KEY", "GLM_SERVER_URL", "GLM_PROVIDER"}
+	case "kimi":
+		vars = []string{"KIMI_API_KEY", "KIMI_SERVER_URL", "KIMI_PROVIDER"}
+	case "qwen":
+		vars = []string{"QWEN_API_KEY", "QWEN_SERVER_URL", "QWEN_PROVIDER"}
 	case "custom":
 		vars = []string{
 			"LLM_SERVER_URL", "LLM_SERVER_KEY", "LLM_SERVER_MODEL",
@@ -1455,6 +1544,11 @@ type SearchEnginesConfig struct {
 	GoogleCXKey       loader.EnvVar // GOOGLE_CX_KEY
 	GoogleLRKey       loader.EnvVar // GOOGLE_LR_KEY
 
+	// duckduckgo extra settings
+	DuckDuckGoRegion     loader.EnvVar // DUCKDUCKGO_REGION
+	DuckDuckGoSafeSearch loader.EnvVar // DUCKDUCKGO_SAFESEARCH
+	DuckDuckGoTimeRange  loader.EnvVar // DUCKDUCKGO_TIME_RANGE
+
 	// perplexity extra settings
 	PerplexityModel       loader.EnvVar // PERPLEXITY_MODEL
 	PerplexityContextSize loader.EnvVar // PERPLEXITY_CONTEXT_SIZE
@@ -1465,6 +1559,7 @@ type SearchEnginesConfig struct {
 	SearxngLanguage   loader.EnvVar // SEARXNG_LANGUAGE
 	SearxngSafeSearch loader.EnvVar // SEARXNG_SAFESEARCH
 	SearxngTimeRange  loader.EnvVar // SEARXNG_TIME_RANGE
+	SearxngTimeout    loader.EnvVar // SEARXNG_TIMEOUT
 
 	// computed fields (not directly mapped to env vars)
 	ConfiguredCount int // number of configured engines
@@ -1474,6 +1569,9 @@ type SearchEnginesConfig struct {
 func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	// get all environment variables using the state controller
 	duckduckgoEnabled, _ := c.GetVar("DUCKDUCKGO_ENABLED")
+	duckduckgoRegion, _ := c.GetVar("DUCKDUCKGO_REGION")
+	duckduckgoSafeSearch, _ := c.GetVar("DUCKDUCKGO_SAFESEARCH")
+	duckduckgoTimeRange, _ := c.GetVar("DUCKDUCKGO_TIME_RANGE")
 	sploitusEnabled, _ := c.GetVar("SPLOITUS_ENABLED")
 	perplexityAPIKey, _ := c.GetVar("PERPLEXITY_API_KEY")
 	tavilyAPIKey, _ := c.GetVar("TAVILY_API_KEY")
@@ -1488,9 +1586,13 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	searxngLanguage, _ := c.GetVar("SEARXNG_LANGUAGE")
 	searxngSafeSearch, _ := c.GetVar("SEARXNG_SAFESEARCH")
 	searxngTimeRange, _ := c.GetVar("SEARXNG_TIME_RANGE")
+	searxngTimeout, _ := c.GetVar("SEARXNG_TIMEOUT")
 
 	config := &SearchEnginesConfig{
 		DuckDuckGoEnabled:     duckduckgoEnabled,
+		DuckDuckGoRegion:      duckduckgoRegion,
+		DuckDuckGoSafeSearch:  duckduckgoSafeSearch,
+		DuckDuckGoTimeRange:   duckduckgoTimeRange,
 		SploitusEnabled:       sploitusEnabled,
 		PerplexityAPIKey:      perplexityAPIKey,
 		PerplexityModel:       perplexityModel,
@@ -1505,6 +1607,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		SearxngLanguage:       searxngLanguage,
 		SearxngSafeSearch:     searxngSafeSearch,
 		SearxngTimeRange:      searxngTimeRange,
+		SearxngTimeout:        searxngTimeout,
 	}
 
 	// compute configured count
@@ -1549,6 +1652,15 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	if err := c.SetVar("DUCKDUCKGO_ENABLED", config.DuckDuckGoEnabled.Value); err != nil {
 		return fmt.Errorf("failed to set DUCKDUCKGO_ENABLED: %w", err)
 	}
+	if err := c.SetVar("DUCKDUCKGO_REGION", config.DuckDuckGoRegion.Value); err != nil {
+		return fmt.Errorf("failed to set DUCKDUCKGO_REGION: %w", err)
+	}
+	if err := c.SetVar("DUCKDUCKGO_SAFESEARCH", config.DuckDuckGoSafeSearch.Value); err != nil {
+		return fmt.Errorf("failed to set DUCKDUCKGO_SAFESEARCH: %w", err)
+	}
+	if err := c.SetVar("DUCKDUCKGO_TIME_RANGE", config.DuckDuckGoTimeRange.Value); err != nil {
+		return fmt.Errorf("failed to set DUCKDUCKGO_TIME_RANGE: %w", err)
+	}
 	if err := c.SetVar("SPLOITUS_ENABLED", config.SploitusEnabled.Value); err != nil {
 		return fmt.Errorf("failed to set SPLOITUS_ENABLED: %w", err)
 	}
@@ -1591,6 +1703,9 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	if err := c.SetVar("SEARXNG_TIME_RANGE", config.SearxngTimeRange.Value); err != nil {
 		return fmt.Errorf("failed to set SEARXNG_TIME_RANGE: %w", err)
 	}
+	if err := c.SetVar("SEARXNG_TIMEOUT", config.SearxngTimeout.Value); err != nil {
+		return fmt.Errorf("failed to set SEARXNG_TIMEOUT: %w", err)
+	}
 
 	return nil
 }
@@ -1600,6 +1715,9 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 	// reset all search engines-related environment variables to their defaults
 	vars := []string{
 		"DUCKDUCKGO_ENABLED",
+		"DUCKDUCKGO_REGION",
+		"DUCKDUCKGO_SAFESEARCH",
+		"DUCKDUCKGO_TIME_RANGE",
 		"SPLOITUS_ENABLED",
 		"PERPLEXITY_API_KEY",
 		"PERPLEXITY_MODEL",
@@ -1614,6 +1732,7 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 		"SEARXNG_LANGUAGE",
 		"SEARXNG_SAFESEARCH",
 		"SEARXNG_TIME_RANGE",
+		"SEARXNG_TIMEOUT",
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -1981,11 +2100,24 @@ func (c *controller) getVariableDescription(varName string) string {
 		"BEDROCK_REGION":                    locale.EnvDesc_BEDROCK_REGION,
 		"BEDROCK_SERVER_URL":                locale.EnvDesc_BEDROCK_SERVER_URL,
 		"OLLAMA_SERVER_URL":                 locale.EnvDesc_OLLAMA_SERVER_URL,
+		"OLLAMA_SERVER_API_KEY":             locale.EnvDesc_OLLAMA_SERVER_API_KEY,
 		"OLLAMA_SERVER_MODEL":               locale.EnvDesc_OLLAMA_SERVER_MODEL,
 		"OLLAMA_SERVER_CONFIG_PATH":         locale.EnvDesc_OLLAMA_SERVER_CONFIG_PATH,
 		"OLLAMA_SERVER_PULL_MODELS_TIMEOUT": locale.EnvDesc_OLLAMA_SERVER_PULL_MODELS_TIMEOUT,
 		"OLLAMA_SERVER_PULL_MODELS_ENABLED": locale.EnvDesc_OLLAMA_SERVER_PULL_MODELS_ENABLED,
 		"OLLAMA_SERVER_LOAD_MODELS_ENABLED": locale.EnvDesc_OLLAMA_SERVER_LOAD_MODELS_ENABLED,
+		"DEEPSEEK_API_KEY":                  locale.EnvDesc_DEEPSEEK_API_KEY,
+		"DEEPSEEK_SERVER_URL":               locale.EnvDesc_DEEPSEEK_SERVER_URL,
+		"DEEPSEEK_PROVIDER":                 locale.EnvDesc_DEEPSEEK_PROVIDER,
+		"GLM_API_KEY":                       locale.EnvDesc_GLM_API_KEY,
+		"GLM_SERVER_URL":                    locale.EnvDesc_GLM_SERVER_URL,
+		"GLM_PROVIDER":                      locale.EnvDesc_GLM_PROVIDER,
+		"KIMI_API_KEY":                      locale.EnvDesc_KIMI_API_KEY,
+		"KIMI_SERVER_URL":                   locale.EnvDesc_KIMI_SERVER_URL,
+		"KIMI_PROVIDER":                     locale.EnvDesc_KIMI_PROVIDER,
+		"QWEN_API_KEY":                      locale.EnvDesc_QWEN_API_KEY,
+		"QWEN_SERVER_URL":                   locale.EnvDesc_QWEN_SERVER_URL,
+		"QWEN_PROVIDER":                     locale.EnvDesc_QWEN_PROVIDER,
 		"LLM_SERVER_URL":                    locale.EnvDesc_LLM_SERVER_URL,
 		"LLM_SERVER_KEY":                    locale.EnvDesc_LLM_SERVER_KEY,
 		"LLM_SERVER_MODEL":                  locale.EnvDesc_LLM_SERVER_MODEL,
@@ -2052,14 +2184,17 @@ func (c *controller) getVariableDescription(varName string) string {
 		"LOCAL_SCRAPER_PASSWORD":                locale.EnvDesc_LOCAL_SCRAPER_PASSWORD,
 		"LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS": locale.EnvDesc_LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS,
 
-		"DUCKDUCKGO_ENABLED": locale.EnvDesc_DUCKDUCKGO_ENABLED,
-		"SPLOITUS_ENABLED":   locale.EnvDesc_SPLOITUS_ENABLED,
-		"PERPLEXITY_API_KEY": locale.EnvDesc_PERPLEXITY_API_KEY,
-		"TAVILY_API_KEY":     locale.EnvDesc_TAVILY_API_KEY,
-		"TRAVERSAAL_API_KEY": locale.EnvDesc_TRAVERSAAL_API_KEY,
-		"GOOGLE_API_KEY":     locale.EnvDesc_GOOGLE_API_KEY,
-		"GOOGLE_CX_KEY":      locale.EnvDesc_GOOGLE_CX_KEY,
-		"GOOGLE_LR_KEY":      locale.EnvDesc_GOOGLE_LR_KEY,
+		"DUCKDUCKGO_ENABLED":    locale.EnvDesc_DUCKDUCKGO_ENABLED,
+		"DUCKDUCKGO_REGION":     locale.EnvDesc_DUCKDUCKGO_REGION,
+		"DUCKDUCKGO_SAFESEARCH": locale.EnvDesc_DUCKDUCKGO_SAFESEARCH,
+		"DUCKDUCKGO_TIME_RANGE": locale.EnvDesc_DUCKDUCKGO_TIME_RANGE,
+		"SPLOITUS_ENABLED":      locale.EnvDesc_SPLOITUS_ENABLED,
+		"PERPLEXITY_API_KEY":    locale.EnvDesc_PERPLEXITY_API_KEY,
+		"TAVILY_API_KEY":        locale.EnvDesc_TAVILY_API_KEY,
+		"TRAVERSAAL_API_KEY":    locale.EnvDesc_TRAVERSAAL_API_KEY,
+		"GOOGLE_API_KEY":        locale.EnvDesc_GOOGLE_API_KEY,
+		"GOOGLE_CX_KEY":         locale.EnvDesc_GOOGLE_CX_KEY,
+		"GOOGLE_LR_KEY":         locale.EnvDesc_GOOGLE_LR_KEY,
 
 		"PERPLEXITY_MODEL":        locale.EnvDesc_PERPLEXITY_MODEL,
 		"PERPLEXITY_CONTEXT_SIZE": locale.EnvDesc_PERPLEXITY_CONTEXT_SIZE,
@@ -2069,6 +2204,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"SEARXNG_LANGUAGE":   locale.EnvDesc_SEARXNG_LANGUAGE,
 		"SEARXNG_SAFESEARCH": locale.EnvDesc_SEARXNG_SAFESEARCH,
 		"SEARXNG_TIME_RANGE": locale.EnvDesc_SEARXNG_TIME_RANGE,
+		"SEARXNG_TIMEOUT":    locale.EnvDesc_SEARXNG_TIMEOUT,
 
 		"DOCKER_INSIDE":                    locale.EnvDesc_DOCKER_INSIDE,
 		"DOCKER_NET_ADMIN":                 locale.EnvDesc_DOCKER_NET_ADMIN,
@@ -2138,6 +2274,11 @@ var maskedVariables = map[string]bool{
 	"BEDROCK_ACCESS_KEY_ID":     true,
 	"BEDROCK_SECRET_ACCESS_KEY": true,
 	"BEDROCK_SESSION_TOKEN":     true,
+	"OLLAMA_SERVER_API_KEY":     true,
+	"DEEPSEEK_API_KEY":          true,
+	"GLM_API_KEY":               true,
+	"KIMI_API_KEY":              true,
+	"QWEN_API_KEY":              true,
 	"LLM_SERVER_KEY":            true,
 	"LANGFUSE_PUBLIC_KEY":       true,
 	"LANGFUSE_SECRET_KEY":       true,
@@ -2207,11 +2348,24 @@ var criticalVariables = map[string]bool{
 	"BEDROCK_SESSION_TOKEN":             true,
 	"BEDROCK_REGION":                    true,
 	"OLLAMA_SERVER_URL":                 true,
+	"OLLAMA_SERVER_API_KEY":             true,
 	"OLLAMA_SERVER_MODEL":               true,
 	"OLLAMA_SERVER_CONFIG_PATH":         true,
 	"OLLAMA_SERVER_PULL_MODELS_TIMEOUT": true,
 	"OLLAMA_SERVER_PULL_MODELS_ENABLED": true,
 	"OLLAMA_SERVER_LOAD_MODELS_ENABLED": true,
+	"DEEPSEEK_API_KEY":                  true,
+	"DEEPSEEK_SERVER_URL":               true,
+	"DEEPSEEK_PROVIDER":                 true,
+	"GLM_API_KEY":                       true,
+	"GLM_SERVER_URL":                    true,
+	"GLM_PROVIDER":                      true,
+	"KIMI_API_KEY":                      true,
+	"KIMI_SERVER_URL":                   true,
+	"KIMI_PROVIDER":                     true,
+	"QWEN_API_KEY":                      true,
+	"QWEN_SERVER_URL":                   true,
+	"QWEN_PROVIDER":                     true,
 	"LLM_SERVER_URL":                    true,
 	"LLM_SERVER_KEY":                    true,
 	"LLM_SERVER_MODEL":                  true,
@@ -2222,6 +2376,9 @@ var criticalVariables = map[string]bool{
 
 	// tools changes
 	"DUCKDUCKGO_ENABLED":      true,
+	"DUCKDUCKGO_REGION":       true,
+	"DUCKDUCKGO_SAFESEARCH":   true,
+	"DUCKDUCKGO_TIME_RANGE":   true,
 	"SPLOITUS_ENABLED":        true,
 	"PERPLEXITY_API_KEY":      true,
 	"PERPLEXITY_MODEL":        true,
@@ -2236,6 +2393,7 @@ var criticalVariables = map[string]bool{
 	"SEARXNG_LANGUAGE":        true,
 	"SEARXNG_SAFESEARCH":      true,
 	"SEARXNG_TIME_RANGE":      true,
+	"SEARXNG_TIMEOUT":         true,
 
 	// mounting custom LLM server config into pentagi container changes volume mapping
 	"PENTAGI_LLM_SERVER_CONFIG_PATH":    true,

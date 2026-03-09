@@ -220,12 +220,11 @@ func TestToolsReturnsDefinitions(t *testing.T) {
 func TestExecuteEarlyReturns(t *testing.T) {
 	t.Parallel()
 
-	ce := &customExecutor{
-		handlers: map[string]ExecutorHandler{},
-	}
-
 	t.Run("unknown tool returns helper message", func(t *testing.T) {
 		t.Parallel()
+		ce := &customExecutor{
+			handlers: map[string]ExecutorHandler{},
+		}
 		result, err := ce.Execute(t.Context(), 1, "id", "unknown_tool", "", json.RawMessage(`{}`))
 		if err != nil {
 			t.Fatalf("Execute() unexpected error: %v", err)
@@ -237,8 +236,12 @@ func TestExecuteEarlyReturns(t *testing.T) {
 
 	t.Run("invalid args json returns fix message", func(t *testing.T) {
 		t.Parallel()
-		ce.handlers[TerminalToolName] = func(ctx context.Context, name string, args json.RawMessage) (string, error) {
-			return "ok", nil
+		ce := &customExecutor{
+			handlers: map[string]ExecutorHandler{
+				TerminalToolName: func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+					return "ok", nil
+				},
+			},
 		}
 		result, err := ce.Execute(t.Context(), 1, "id", TerminalToolName, "", json.RawMessage(`{invalid`))
 		if err != nil {

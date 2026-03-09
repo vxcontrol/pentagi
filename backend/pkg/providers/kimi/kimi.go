@@ -19,7 +19,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const KimiAgentModel = "moonshot-v1-8k"
+const KimiAgentModel = "kimi-k2-turbo-preview"
 
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
@@ -58,6 +58,7 @@ type kimiProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
 	providerConfig *pconfig.ProviderConfig
+	providerPrefix string
 }
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
@@ -80,6 +81,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		openai.WithModel(KimiAgentModel),
 		openai.WithBaseURL(cfg.KimiServerURL),
 		openai.WithHTTPClient(httpClient),
+		openai.WithPreserveReasoningContent(),
 	)
 	if err != nil {
 		return nil, err
@@ -89,6 +91,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		llm:            client,
 		models:         models,
 		providerConfig: providerConfig,
+		providerPrefix: cfg.KimiProvider,
 	}, nil
 }
 
@@ -119,6 +122,10 @@ func (p *kimiProvider) Model(opt pconfig.ProviderOptionsType) string {
 	}
 
 	return opts.Model
+}
+
+func (p *kimiProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	return provider.ApplyModelPrefix(p.Model(opt), p.providerPrefix)
 }
 
 func (p *kimiProvider) Call(

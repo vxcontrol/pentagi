@@ -62,11 +62,17 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 
 	case LLMProviderOllama:
 		fields = append(fields, m.createBaseURLField(config))
+		fields = append(fields, m.createOllamaAPIKeyField(config))
 		fields = append(fields, m.createModelField(config))
 		fields = append(fields, m.createConfigPathField(config))
 		fields = append(fields, m.createPullTimeoutField(config))
 		fields = append(fields, m.createPullEnabledField(config))
 		fields = append(fields, m.createLoadModelsEnabledField(config))
+
+	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen:
+		fields = append(fields, m.createBaseURLField(config))
+		fields = append(fields, m.createAPIKeyField(config))
+		fields = append(fields, m.createProviderNameField(config))
 
 	case LLMProviderCustom:
 		fields = append(fields, m.createBaseURLField(config))
@@ -321,6 +327,20 @@ func (m *LLMProviderFormModel) createLoadModelsEnabledField(config *controller.L
 	}
 }
 
+func (m *LLMProviderFormModel) createOllamaAPIKeyField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.APIKey)
+
+	return FormField{
+		Key:         "ollama_api_key",
+		Title:       locale.LLMFormFieldAPIKey,
+		Description: locale.LLMFormOllamaAPIKeyDesc,
+		Required:    false,
+		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
 func (m *LLMProviderFormModel) GetFormTitle() string {
 	return fmt.Sprintf(locale.LLMProviderFormTitle, m.providerName)
 }
@@ -337,6 +357,14 @@ func (m *LLMProviderFormModel) GetFormDescription() string {
 		return locale.LLMProviderBedrockDesc
 	case LLMProviderOllama:
 		return locale.LLMProviderOllamaDesc
+	case LLMProviderDeepSeek:
+		return locale.LLMProviderDeepSeekDesc
+	case LLMProviderGLM:
+		return locale.LLMProviderGLMDesc
+	case LLMProviderKimi:
+		return locale.LLMProviderKimiDesc
+	case LLMProviderQwen:
+		return locale.LLMProviderQwenDesc
 	case LLMProviderCustom:
 		return locale.LLMProviderCustomDesc
 	default:
@@ -356,6 +384,14 @@ func (m *LLMProviderFormModel) GetFormName() string {
 		return locale.LLMProviderBedrock
 	case LLMProviderOllama:
 		return locale.LLMProviderOllama
+	case LLMProviderDeepSeek:
+		return locale.LLMProviderDeepSeek
+	case LLMProviderGLM:
+		return locale.LLMProviderGLM
+	case LLMProviderKimi:
+		return locale.LLMProviderKimi
+	case LLMProviderQwen:
+		return locale.LLMProviderQwen
 	case LLMProviderCustom:
 		return locale.LLMProviderCustom
 	default:
@@ -449,6 +485,10 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(config.BaseURL.Value)))
 		}
+		if config.APIKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldAPIKey, m.GetStyles().Muted.Render(getMaskedValue(config.APIKey.Value))))
+		}
 		if config.Model.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldModel, m.GetStyles().Info.Render(config.Model.Value)))
@@ -468,6 +508,20 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 		if config.LoadModelsEnabled.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldLoadModelsEnabled, m.GetStyles().Info.Render(config.LoadModelsEnabled.Value)))
+		}
+
+	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen:
+		if config.BaseURL.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
+		}
+		if config.APIKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldAPIKey, m.GetStyles().Muted.Render(getMaskedValue(config.APIKey.Value))))
+		}
+		if config.ProviderName.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldProviderName, m.GetStyles().Info.Render(config.ProviderName.Value)))
 		}
 
 	case LLMProviderCustom:
@@ -525,6 +579,14 @@ func (m *LLMProviderFormModel) GetHelpContent() string {
 		sections = append(sections, locale.LLMFormBedrockHelp)
 	case LLMProviderOllama:
 		sections = append(sections, locale.LLMFormOllamaHelp)
+	case LLMProviderDeepSeek:
+		sections = append(sections, locale.LLMFormDeepSeekHelp)
+	case LLMProviderGLM:
+		sections = append(sections, locale.LLMFormGLMHelp)
+	case LLMProviderKimi:
+		sections = append(sections, locale.LLMFormKimiHelp)
+	case LLMProviderQwen:
+		sections = append(sections, locale.LLMFormQwenHelp)
 	case LLMProviderCustom:
 		sections = append(sections, locale.LLMFormCustomHelp)
 	}
@@ -587,6 +649,8 @@ func (m *LLMProviderFormModel) HandleSave() error {
 			newConfig.SessionToken.Value = value
 		case "region":
 			newConfig.Region.Value = value
+		case "ollama_api_key":
+			newConfig.APIKey.Value = value
 		case "config_path":
 			// User edits HostConfigPath, ConfigPath is auto-generated on save
 			// validate config path if provided (skip validation for embedded configs)
@@ -712,6 +776,14 @@ func (m *LLMProviderFormModel) getDefaultBaseURL() string {
 		return "" // Bedrock uses regional endpoints
 	case LLMProviderOllama:
 		return "http://ollama-server:11434"
+	case LLMProviderDeepSeek:
+		return "https://api.deepseek.com"
+	case LLMProviderGLM:
+		return "https://api.z.ai/api/paas/v4"
+	case LLMProviderKimi:
+		return "https://api.moonshot.ai/v1"
+	case LLMProviderQwen:
+		return "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
 	case LLMProviderCustom:
 		return "http://llm-server:8000"
 	default:

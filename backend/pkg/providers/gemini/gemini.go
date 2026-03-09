@@ -134,6 +134,11 @@ func (p *geminiProvider) Model(opt pconfig.ProviderOptionsType) string {
 	return opts.Model
 }
 
+func (p *geminiProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	// Gemini provider doesn't need prefix support (passthrough mode in LiteLLM)
+	return p.Model(opt)
+}
+
 func (p *geminiProvider) Call(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,

@@ -42,6 +42,36 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		config.DuckDuckGoEnabled,
 	))
 
+	// DuckDuckGo Region
+	fields = append(fields, m.createSelectTextField(
+		"duckduckgo_region",
+		locale.ToolsSearchEnginesDuckDuckGoRegion,
+		locale.ToolsSearchEnginesDuckDuckGoRegionDesc,
+		config.DuckDuckGoRegion,
+		[]string{"us-en", "uk-en", "cn-zh", "ru-ru", "de-de", "fr-fr", "es-es", "it-it"},
+		false,
+	))
+
+	// DuckDuckGo Safe Search
+	fields = append(fields, m.createSelectTextField(
+		"duckduckgo_safesearch",
+		locale.ToolsSearchEnginesDuckDuckGoSafeSearch,
+		locale.ToolsSearchEnginesDuckDuckGoSafeSearchDesc,
+		config.DuckDuckGoSafeSearch,
+		[]string{"strict", "moderate", "off"},
+		false,
+	))
+
+	// DuckDuckGo Time Range
+	fields = append(fields, m.createSelectTextField(
+		"duckduckgo_time_range",
+		locale.ToolsSearchEnginesDuckDuckGoTimeRange,
+		locale.ToolsSearchEnginesDuckDuckGoTimeRangeDesc,
+		config.DuckDuckGoTimeRange,
+		[]string{"d", "w", "m", "y"},
+		false,
+	))
+
 	// Sploitus (boolean)
 	fields = append(fields, m.createBooleanField("sploitus_enabled",
 		locale.ToolsSearchEnginesSploitus,
@@ -151,6 +181,14 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		locale.ToolsSearchEnginesSearxngTimeRangeDesc,
 		config.SearxngTimeRange,
 		[]string{"day", "month", "year"},
+		false,
+	))
+
+	// Searxng Timeout
+	fields = append(fields, m.createTextField("searxng_timeout",
+		locale.ToolsSearchEnginesSearxngTimeout,
+		locale.ToolsSearchEnginesSearxngTimeoutDesc,
+		config.SearxngTimeout,
 		false,
 	))
 
@@ -347,6 +385,9 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 	newConfig := &controller.SearchEnginesConfig{
 		// copy current EnvVar fields - they preserve metadata like Line, IsPresent, etc.
 		DuckDuckGoEnabled:     config.DuckDuckGoEnabled,
+		DuckDuckGoRegion:      config.DuckDuckGoRegion,
+		DuckDuckGoSafeSearch:  config.DuckDuckGoSafeSearch,
+		DuckDuckGoTimeRange:   config.DuckDuckGoTimeRange,
 		SploitusEnabled:       config.SploitusEnabled,
 		PerplexityAPIKey:      config.PerplexityAPIKey,
 		PerplexityModel:       config.PerplexityModel,
@@ -361,6 +402,7 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 		SearxngLanguage:       config.SearxngLanguage,
 		SearxngSafeSearch:     config.SearxngSafeSearch,
 		SearxngTimeRange:      config.SearxngTimeRange,
+		SearxngTimeout:        config.SearxngTimeout,
 	}
 
 	// update field values based on form input
@@ -374,6 +416,12 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 				return fmt.Errorf("invalid boolean value for DuckDuckGo: %s (must be 'true' or 'false')", value)
 			}
 			newConfig.DuckDuckGoEnabled.Value = value
+		case "duckduckgo_region":
+			newConfig.DuckDuckGoRegion.Value = value
+		case "duckduckgo_safesearch":
+			newConfig.DuckDuckGoSafeSearch.Value = value
+		case "duckduckgo_time_range":
+			newConfig.DuckDuckGoTimeRange.Value = value
 		case "sploitus_enabled":
 			// validate boolean input
 			if value != "" && value != "true" && value != "false" {
@@ -406,6 +454,8 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 			newConfig.SearxngSafeSearch.Value = value
 		case "searxng_time_range":
 			newConfig.SearxngTimeRange.Value = value
+		case "searxng_timeout":
+			newConfig.SearxngTimeout.Value = value
 		}
 	}
 

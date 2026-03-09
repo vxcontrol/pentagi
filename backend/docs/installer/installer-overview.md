@@ -46,7 +46,7 @@ tail -f log.json | jq '.'
 - **Dynamic Sizing**: Form fields and panels resize automatically
 
 ### **Interactive Configuration**
-- **LLM Providers**: Support for OpenAI, Anthropic, Gemini, Bedrock, Ollama, Custom endpoints
+- **LLM Providers**: Support for OpenAI, Anthropic, Gemini, Bedrock, DeepSeek, GLM, Kimi, Qwen, Ollama, Custom endpoints
 - **Monitoring Setup**: Langfuse integration for LLM observability
 - **Observability**: Complete monitoring stack with Grafana, VictoriaMetrics, Jaeger
 - **Summarization**: Advanced context management for LLM interactions
@@ -189,6 +189,7 @@ Forms automatically scroll to keep focused fields visible:
 - **Anthropic**: Claude-3, Claude-2 with API key configuration
 - **Google Gemini**: Gemini Pro, Ultra with API key configuration
 - **AWS Bedrock**: Multi-model support with AWS credentials
+- **DeepSeek/GLM/Kimi/Qwen**: Base URL + API Key + Provider Name (optional, for LiteLLM)
 - **Ollama**: Local model server integration
 - **Custom**: OpenAI-compatible endpoint configuration
 

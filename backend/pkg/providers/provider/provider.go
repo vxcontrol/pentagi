@@ -54,6 +54,8 @@ const (
 type Provider interface {
 	Type() ProviderType
 	Model(opt pconfig.ProviderOptionsType) string
+	// ModelWithPrefix returns model name WITH provider prefix for LLM API calls and Langfuse logging
+	ModelWithPrefix(opt pconfig.ProviderOptionsType) string
 	GetUsage(info map[string]any) pconfig.CallUsage
 
 	Call(ctx context.Context, opt pconfig.ProviderOptionsType, prompt string) (string, error)

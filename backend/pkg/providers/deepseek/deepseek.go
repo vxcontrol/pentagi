@@ -58,6 +58,7 @@ type deepseekProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
 	providerConfig *pconfig.ProviderConfig
+	providerPrefix string
 }
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
@@ -80,6 +81,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		openai.WithModel(DeepSeekAgentModel),
 		openai.WithBaseURL(cfg.DeepSeekServerURL),
 		openai.WithHTTPClient(httpClient),
+		openai.WithPreserveReasoningContent(),
 	)
 	if err != nil {
 		return nil, err
@@ -89,6 +91,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		llm:            client,
 		models:         models,
 		providerConfig: providerConfig,
+		providerPrefix: cfg.DeepSeekProvider,
 	}, nil
 }
 
@@ -119,6 +122,10 @@ func (p *deepseekProvider) Model(opt pconfig.ProviderOptionsType) string {
 	}
 
 	return opts.Model
+}
+
+func (p *deepseekProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	return provider.ApplyModelPrefix(p.Model(opt), p.providerPrefix)
 }
 
 func (p *deepseekProvider) Call(

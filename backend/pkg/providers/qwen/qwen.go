@@ -58,6 +58,7 @@ type qwenProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
 	providerConfig *pconfig.ProviderConfig
+	providerPrefix string
 }
 
 func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
@@ -89,6 +90,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		llm:            client,
 		models:         models,
 		providerConfig: providerConfig,
+		providerPrefix: cfg.QwenProvider,
 	}, nil
 }
 
@@ -119,6 +121,10 @@ func (p *qwenProvider) Model(opt pconfig.ProviderOptionsType) string {
 	}
 
 	return opts.Model
+}
+
+func (p *qwenProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	return provider.ApplyModelPrefix(p.Model(opt), p.providerPrefix)
 }
 
 func (p *qwenProvider) Call(

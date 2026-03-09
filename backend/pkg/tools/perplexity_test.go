@@ -1,104 +1,192 @@
 package tools
 
 import (
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 )
 
+const testPerplexityAPIKey = "test-key"
+
+func testPerplexityConfig() *config.Config {
+	return &config.Config{
+		PerplexityAPIKey:      testPerplexityAPIKey,
+		PerplexityModel:       "sonar",
+		PerplexityContextSize: "high",
+	}
+}
+
+func TestPerplexityHandle(t *testing.T) {
+	var seenRequest bool
+	var receivedMethod string
+	var receivedAuth string
+	var receivedContentType string
+	var receivedBody []byte
+
+	mockMux := http.NewServeMux()
+	mockMux.HandleFunc("/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		seenRequest = true
+		receivedMethod = r.Method
+		receivedAuth = r.Header.Get("Authorization")
+		receivedContentType = r.Header.Get("Content-Type")
+
+		var err error
+		receivedBody, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("failed to read request body: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"id":"test-id",
+			"model":"sonar",
+			"created":1234567890,
+			"object":"chat.completion",
+			"choices":[{
+				"index":0,
+				"finish_reason":"stop",
+				"message":{"role":"assistant","content":"This is a test answer."}
+			}],
+			"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30},
+			"citations":["https://example.com","https://test.com"]
+		}`))
+	})
+
+	proxy, err := newTestProxy("api.perplexity.ai", mockMux)
+	if err != nil {
+		t.Fatalf("failed to create proxy: %v", err)
+	}
+	defer proxy.Close()
+
+	flowID := int64(1)
+	taskID := int64(10)
+	subtaskID := int64(20)
+	slp := &searchLogProviderMock{}
+
+	cfg := &config.Config{
+		PerplexityAPIKey:      testPerplexityAPIKey,
+		PerplexityModel:       "sonar",
+		PerplexityContextSize: "high",
+		ProxyURL:              proxy.URL(),
+		ExternalSSLCAPath:     proxy.CACertPath(),
+	}
+
+	px := NewPerplexityTool(cfg, flowID, &taskID, &subtaskID, slp, nil)
+
+	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
+	got, err := px.Handle(
+		ctx,
+		PerplexityToolName,
+		[]byte(`{"query":"test query","max_results":5,"message":"m"}`),
+	)
+	if err != nil {
+		t.Fatalf("Handle() unexpected error: %v", err)
+	}
+
+	// Verify mock handler was called
+	if !seenRequest {
+		t.Fatal("request was not intercepted by proxy - mock handler was not called")
+	}
+
+	// Verify request was built correctly
+	if receivedMethod != http.MethodPost {
+		t.Errorf("request method = %q, want POST", receivedMethod)
+	}
+	if receivedAuth != "Bearer "+testPerplexityAPIKey {
+		t.Errorf("Authorization = %q, want Bearer %s", receivedAuth, testPerplexityAPIKey)
+	}
+	if receivedContentType != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", receivedContentType)
+	}
+	if !strings.Contains(string(receivedBody), `"model":"sonar"`) {
+		t.Errorf("request body = %q, expected to contain model", string(receivedBody))
+	}
+	if !strings.Contains(string(receivedBody), `"content":"test query"`) {
+		t.Errorf("request body = %q, expected to contain query", string(receivedBody))
+	}
+	if !strings.Contains(string(receivedBody), `"search_context_size":"high"`) {
+		t.Errorf("request body = %q, expected to contain context size", string(receivedBody))
+	}
+
+	// Verify response was parsed correctly
+	if !strings.Contains(got, "# Answer") {
+		t.Errorf("result missing '# Answer' section: %q", got)
+	}
+	if !strings.Contains(got, "This is a test answer.") {
+		t.Errorf("result missing expected text 'This is a test answer.': %q", got)
+	}
+	if !strings.Contains(got, "# Citations") {
+		t.Errorf("result missing '# Citations' section: %q", got)
+	}
+	if !strings.Contains(got, "https://example.com") {
+		t.Errorf("result missing expected citation 'https://example.com': %q", got)
+	}
+
+	// Verify search log was written with agent context
+	if slp.calls != 1 {
+		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
+	}
+	if slp.engine != database.SearchengineTypePerplexity {
+		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypePerplexity)
+	}
+	if slp.query != "test query" {
+		t.Errorf("logged query = %q, want %q", slp.query, "test query")
+	}
+	if slp.parentType != database.MsgchainTypeSearcher {
+		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
+	}
+	if slp.currType != database.MsgchainTypeSearcher {
+		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
+	}
+	if slp.taskID == nil || *slp.taskID != taskID {
+		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
+	}
+	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
+		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
+	}
+}
+
 func TestPerplexityIsAvailable(t *testing.T) {
 	tests := []struct {
-		name   string
-		apiKey string
-		want   bool
+		name string
+		cfg  *config.Config
+		want bool
 	}{
 		{
-			name:   "available when API key is set",
-			apiKey: "test-key",
-			want:   true,
+			name: "available when API key is set",
+			cfg:  testPerplexityConfig(),
+			want: true,
 		},
 		{
-			name:   "unavailable when API key is empty",
-			apiKey: "",
-			want:   false,
+			name: "unavailable when API key is empty",
+			cfg:  &config.Config{},
+			want: false,
+		},
+		{
+			name: "unavailable when nil config",
+			cfg:  nil,
+			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &perplexity{apiKey: tt.apiKey}
-			if got := p.IsAvailable(); got != tt.want {
+			px := &perplexity{cfg: tt.cfg}
+			if got := px.IsAvailable(); got != tt.want {
 				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestPerplexityNewDefaults(t *testing.T) {
-	tool := NewPerplexityTool(1, nil, nil, "key", "", "", "", 0, 0, 0, 0, nil, nil)
-	p, ok := tool.(*perplexity)
-	if !ok {
-		t.Fatal("NewPerplexityTool did not return *perplexity")
-	}
-
-	if p.model != perplexityModel {
-		t.Errorf("default model = %q, want %q", p.model, perplexityModel)
-	}
-	if p.temperature != perplexityTemperature {
-		t.Errorf("default temperature = %v, want %v", p.temperature, perplexityTemperature)
-	}
-	if p.topP != perplexityTopP {
-		t.Errorf("default topP = %v, want %v", p.topP, perplexityTopP)
-	}
-	if p.maxTokens != perplexityMaxTokens {
-		t.Errorf("default maxTokens = %d, want %d", p.maxTokens, perplexityMaxTokens)
-	}
-	if p.timeout != perplexityTimeout {
-		t.Errorf("default timeout = %v, want %v", p.timeout, perplexityTimeout)
-	}
-}
-
-func TestPerplexityNewCustomValues(t *testing.T) {
-	tool := NewPerplexityTool(
-		1, nil, nil,
-		"key", "http://proxy:8080",
-		"sonar-pro", "high",
-		0.7, 0.8,
-		8000, 30*time.Second,
-		nil, nil,
-	)
-	p, ok := tool.(*perplexity)
-	if !ok {
-		t.Fatal("NewPerplexityTool did not return *perplexity")
-	}
-
-	if p.model != "sonar-pro" {
-		t.Errorf("model = %q, want %q", p.model, "sonar-pro")
-	}
-	if p.temperature != 0.7 {
-		t.Errorf("temperature = %v, want 0.7", p.temperature)
-	}
-	if p.topP != 0.8 {
-		t.Errorf("topP = %v, want 0.8", p.topP)
-	}
-	if p.maxTokens != 8000 {
-		t.Errorf("maxTokens = %d, want 8000", p.maxTokens)
-	}
-	if p.timeout != 30*time.Second {
-		t.Errorf("timeout = %v, want 30s", p.timeout)
-	}
-	if p.proxyURL != "http://proxy:8080" {
-		t.Errorf("proxyURL = %q, want %q", p.proxyURL, "http://proxy:8080")
-	}
-}
-
 func TestPerplexityHandleErrorResponse(t *testing.T) {
+	px := &perplexity{flowID: 1}
+
 	tests := []struct {
 		name       string
 		statusCode int
@@ -157,14 +245,13 @@ func TestPerplexityHandleErrorResponse(t *testing.T) {
 		{
 			name:       "unknown status code",
 			statusCode: 418,
-			errContain: fmt.Sprintf("%d", 418),
+			errContain: "unexpected status code",
 		},
 	}
 
-	p := &perplexity{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := p.handleErrorResponse(tt.statusCode)
+			err := px.handleErrorResponse(tt.statusCode)
 			if err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -176,11 +263,11 @@ func TestPerplexityHandleErrorResponse(t *testing.T) {
 }
 
 func TestPerplexityFormatResponse(t *testing.T) {
-	p := &perplexity{flowID: 1}
+	px := &perplexity{flowID: 1}
 
 	t.Run("empty choices returns fallback message", func(t *testing.T) {
 		resp := &CompletionResponse{Choices: []Choice{}}
-		result := p.formatResponse(t.Context(), resp, "test query")
+		result := px.formatResponse(t.Context(), resp, "test query")
 		if result != "No response received from Perplexity API" {
 			t.Errorf("unexpected result for empty choices: %q", result)
 		}
@@ -192,7 +279,7 @@ func TestPerplexityFormatResponse(t *testing.T) {
 				{Index: 0, Message: Message{Role: "assistant", Content: "Go is a compiled language."}},
 			},
 		}
-		result := p.formatResponse(t.Context(), resp, "what is Go")
+		result := px.formatResponse(t.Context(), resp, "what is Go")
 		if !strings.Contains(result, "# Answer") {
 			t.Error("result should contain '# Answer' heading")
 		}
@@ -212,7 +299,7 @@ func TestPerplexityFormatResponse(t *testing.T) {
 			},
 			Citations: &citations,
 		}
-		result := p.formatResponse(t.Context(), resp, "test")
+		result := px.formatResponse(t.Context(), resp, "test")
 		if !strings.Contains(result, "# Citations") {
 			t.Error("result should contain '# Citations' heading")
 		}
@@ -231,7 +318,7 @@ func TestPerplexityFormatResponse(t *testing.T) {
 			},
 			Citations: nil,
 		}
-		result := p.formatResponse(t.Context(), resp, "query")
+		result := px.formatResponse(t.Context(), resp, "query")
 		if strings.Contains(result, "# Citations") {
 			t.Error("result should NOT contain citations when pointer is nil")
 		}
@@ -245,7 +332,7 @@ func TestPerplexityFormatResponse(t *testing.T) {
 			},
 			Citations: &emptyCitations,
 		}
-		result := p.formatResponse(t.Context(), resp, "query")
+		result := px.formatResponse(t.Context(), resp, "query")
 		if strings.Contains(result, "# Citations") {
 			t.Error("result should NOT contain citations when slice is empty")
 		}
@@ -253,10 +340,10 @@ func TestPerplexityFormatResponse(t *testing.T) {
 }
 
 func TestPerplexityGetSummarizePrompt(t *testing.T) {
-	p := &perplexity{}
+	px := &perplexity{}
 
 	t.Run("prompt without citations", func(t *testing.T) {
-		prompt, err := p.getSummarizePrompt("test query", "some content", nil)
+		prompt, err := px.getSummarizePrompt("test query", "some content", nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -266,8 +353,6 @@ func TestPerplexityGetSummarizePrompt(t *testing.T) {
 		if !strings.Contains(prompt, "some content") {
 			t.Error("prompt should contain the content")
 		}
-		// The template instructions always mention <citations> as a description,
-		// but the actual citations data block (</citations>) should be absent.
 		if strings.Contains(prompt, "</citations>") {
 			t.Error("prompt should NOT contain closing </citations> tag when nil")
 		}
@@ -275,7 +360,7 @@ func TestPerplexityGetSummarizePrompt(t *testing.T) {
 
 	t.Run("prompt with citations", func(t *testing.T) {
 		citations := []string{"https://a.com", "https://b.com"}
-		prompt, err := p.getSummarizePrompt("query", "content", &citations)
+		prompt, err := px.getSummarizePrompt("query", "content", &citations)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -288,124 +373,39 @@ func TestPerplexityGetSummarizePrompt(t *testing.T) {
 	})
 }
 
-func readRequestBody(t *testing.T, req *http.Request) string {
-	t.Helper()
-	b, err := io.ReadAll(req.Body)
-	if err != nil {
-		t.Fatalf("failed to read request body: %v", err)
-	}
-	return string(b)
-}
-
-func newHTTPJSONResponse(status int, body string) *http.Response {
-	return &http.Response{
-		StatusCode: status,
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Header:     make(http.Header),
-	}
-}
-
-func TestPerplexitySearch_RequestBuildAndParse(t *testing.T) {
-	originalTransport := http.DefaultTransport
-	defer func() { http.DefaultTransport = originalTransport }()
-	var seenRequest bool
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		seenRequest = true
-		if req.Method != http.MethodPost {
-			t.Fatalf("request method = %s, want POST", req.Method)
-		}
-		if req.URL.String() != perplexityURL {
-			t.Fatalf("request url = %s, want %s", req.URL.String(), perplexityURL)
-		}
-		if got := req.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q, want %q", got, "Bearer test-key")
-		}
-		if got := req.Header.Get("Content-Type"); got != "application/json" {
-			t.Fatalf("Content-Type = %q, want application/json", got)
-		}
-		body := readRequestBody(t, req)
-		if !strings.Contains(body, `"model":"sonar"`) {
-			t.Fatalf("request body = %q, expected model", body)
-		}
-		if !strings.Contains(body, `"search_context_size":"high"`) {
-			t.Fatalf("request body = %q, expected context size", body)
-		}
-		if !strings.Contains(body, `"content":"test query"`) {
-			t.Fatalf("request body = %q, expected query content", body)
-		}
-
-		return newHTTPJSONResponse(http.StatusOK, `{
-		  "id":"id",
-		  "model":"sonar",
-		  "created":1,
-		  "object":"chat.completion",
-		  "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"answer"}}],
-		  "usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2},
-		  "citations":["https://a.com"]
-		}`), nil
-	})
-
-	p := &perplexity{
-		flowID:      1,
-		apiKey:      "test-key",
-		model:       "sonar",
-		contextSize: "high",
-		timeout:     5 * time.Second,
-	}
-
-	got, err := p.search(t.Context(), "test query")
-	if err != nil {
-		t.Fatalf("search() unexpected error: %v", err)
-	}
-	if !seenRequest {
-		t.Fatal("custom default transport was not used")
-	}
-	if !strings.Contains(got, "# Answer") || !strings.Contains(got, "https://a.com") {
-		t.Fatalf("search() unexpected response format: %q", got)
-	}
-}
-
-func TestPerplexitySearch_TransportError(t *testing.T) {
-	originalTransport := http.DefaultTransport
-	defer func() { http.DefaultTransport = originalTransport }()
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		return nil, errors.New("network down")
-	})
-
-	p := &perplexity{
-		flowID:  1,
-		apiKey:  "test-key",
-		model:   "sonar",
-		timeout: 2 * time.Second,
-	}
-
-	_, err := p.search(t.Context(), "test query")
-	if err == nil {
-		t.Fatal("search() should return error on transport failure")
-	}
-	if !strings.Contains(err.Error(), "failed to send request") {
-		t.Errorf("error = %q, want to contain 'failed to send request'", err.Error())
-	}
-}
-
-func TestPerplexityHandle_ValidationAndBehavior(t *testing.T) {
-	p := &perplexity{apiKey: "test-key", model: "sonar", timeout: 2 * time.Second}
-
+func TestPerplexityHandle_ValidationAndSwallowedError(t *testing.T) {
 	t.Run("invalid json", func(t *testing.T) {
-		_, err := p.Handle(t.Context(), PerplexityToolName, []byte("{"))
+		px := &perplexity{cfg: testPerplexityConfig()}
+		_, err := px.Handle(t.Context(), PerplexityToolName, []byte("{"))
 		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
 			t.Fatalf("expected unmarshal error, got: %v", err)
 		}
 	})
 
 	t.Run("search error swallowed", func(t *testing.T) {
-		originalTransport := http.DefaultTransport
-		defer func() { http.DefaultTransport = originalTransport }()
-		http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			return nil, errors.New("boom")
+		var seenRequest bool
+		mockMux := http.NewServeMux()
+		mockMux.HandleFunc("/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+			seenRequest = true
+			w.WriteHeader(http.StatusBadGateway)
 		})
 
-		got, err := p.Handle(
+		proxy, err := newTestProxy("api.perplexity.ai", mockMux)
+		if err != nil {
+			t.Fatalf("failed to create proxy: %v", err)
+		}
+		defer proxy.Close()
+
+		px := &perplexity{
+			flowID: 1,
+			cfg: &config.Config{
+				PerplexityAPIKey:  testPerplexityAPIKey,
+				ProxyURL:          proxy.URL(),
+				ExternalSSLCAPath: proxy.CACertPath(),
+			},
+		}
+
+		result, err := px.Handle(
 			t.Context(),
 			PerplexityToolName,
 			[]byte(`{"query":"q","max_results":5,"message":"m"}`),
@@ -413,55 +413,95 @@ func TestPerplexityHandle_ValidationAndBehavior(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Handle() unexpected error: %v", err)
 		}
-		if !strings.Contains(got, "failed to search in perplexity") {
-			t.Fatalf("Handle() = %q, expected swallowed error message", got)
+
+		// Verify mock handler was called (request was intercepted)
+		if !seenRequest {
+			t.Error("request was not intercepted by proxy - mock handler was not called")
+		}
+
+		// Verify error was swallowed and returned as string
+		if !strings.Contains(result, "failed to search in perplexity") {
+			t.Errorf("Handle() = %q, expected swallowed error message", result)
 		}
 	})
 }
 
-func TestPerplexityHandle_Success_WritesSearchLogWithAgentContext(t *testing.T) {
-	originalTransport := http.DefaultTransport
-	defer func() { http.DefaultTransport = originalTransport }()
-	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		return newHTTPJSONResponse(http.StatusOK, `{
-		  "id":"id",
-		  "model":"sonar",
-		  "created":1,
-		  "object":"chat.completion",
-		  "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"ok"}}],
-		  "usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
-		}`), nil
-	})
-
-	taskID := int64(101)
-	subtaskID := int64(202)
-	slp := &searchLogProviderMock{}
-	p := &perplexity{
-		flowID:    1,
-		taskID:    &taskID,
-		subtaskID: &subtaskID,
-		apiKey:    "test-key",
-		model:     "sonar",
-		timeout:   2 * time.Second,
-		slp:       slp,
+func TestPerplexityHandle_StatusCodeErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		errContain string
+	}{
+		{"unauthorized", http.StatusUnauthorized, "API key"},
+		{"server error", http.StatusInternalServerError, "server"},
 	}
 
-	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
-	got, err := p.Handle(
-		ctx,
-		PerplexityToolName,
-		[]byte(`{"query":"q","max_results":5,"message":"m"}`),
-	)
-	if err != nil {
-		t.Fatalf("Handle() unexpected error: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockMux := http.NewServeMux()
+			mockMux.HandleFunc("/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.statusCode)
+			})
+
+			proxy, err := newTestProxy("api.perplexity.ai", mockMux)
+			if err != nil {
+				t.Fatalf("failed to create proxy: %v", err)
+			}
+			defer proxy.Close()
+
+			px := &perplexity{
+				flowID: 1,
+				cfg: &config.Config{
+					PerplexityAPIKey:  testPerplexityAPIKey,
+					ProxyURL:          proxy.URL(),
+					ExternalSSLCAPath: proxy.CACertPath(),
+				},
+			}
+
+			result, err := px.Handle(
+				t.Context(),
+				PerplexityToolName,
+				[]byte(`{"query":"test","max_results":5,"message":"m"}`),
+			)
+			if err != nil {
+				t.Fatalf("Handle() unexpected error: %v", err)
+			}
+
+			// Error should be swallowed and returned as string
+			if !strings.Contains(result, "failed to search in perplexity") {
+				t.Errorf("Handle() = %q, expected swallowed error", result)
+			}
+			if !strings.Contains(result, tt.errContain) {
+				t.Errorf("Handle() = %q, expected to contain %q", result, tt.errContain)
+			}
+		})
 	}
-	if !strings.Contains(got, "ok") {
-		t.Fatalf("Handle() result = %q, expected answer", got)
+}
+
+func TestPerplexityDefaultValues(t *testing.T) {
+	px := &perplexity{cfg: &config.Config{}}
+
+	if px.model() != perplexityModel {
+		t.Errorf("default model = %q, want %q", px.model(), perplexityModel)
 	}
-	if slp.calls != 1 {
-		t.Fatalf("PutLog() calls = %d, want 1", slp.calls)
+	if px.temperature() != perplexityTemperature {
+		t.Errorf("default temperature = %v, want %v", px.temperature(), perplexityTemperature)
 	}
-	if slp.engine != database.SearchengineTypePerplexity {
-		t.Fatalf("engine = %q, want %q", slp.engine, database.SearchengineTypePerplexity)
+	if px.topP() != perplexityTopP {
+		t.Errorf("default topP = %v, want %v", px.topP(), perplexityTopP)
+	}
+	if px.maxTokens() != perplexityMaxTokens {
+		t.Errorf("default maxTokens = %d, want %d", px.maxTokens(), perplexityMaxTokens)
+	}
+	if px.timeout() != perplexityTimeout {
+		t.Errorf("default timeout = %v, want %v", px.timeout(), perplexityTimeout)
+	}
+}
+
+func TestPerplexityCustomModel(t *testing.T) {
+	px := &perplexity{cfg: &config.Config{PerplexityModel: "sonar-pro"}}
+
+	if px.model() != "sonar-pro" {
+		t.Errorf("model = %q, want sonar-pro", px.model())
 	}
 }

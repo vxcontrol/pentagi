@@ -64,6 +64,10 @@ func GetSystemCertPool(cfg *config.Config) (*x509.CertPool, error) {
 func GetHTTPClient(cfg *config.Config) (*http.Client, error) {
 	var httpClient *http.Client
 
+	if cfg == nil {
+		return http.DefaultClient, nil
+	}
+
 	rootCAPool, err := GetSystemCertPool(cfg)
 	if err != nil {
 		return nil, err

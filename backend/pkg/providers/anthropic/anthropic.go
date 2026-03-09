@@ -125,6 +125,11 @@ func (p *anthropicProvider) Model(opt pconfig.ProviderOptionsType) string {
 	return opts.Model
 }
 
+func (p *anthropicProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
+	// Anthropic provider doesn't need prefix support (passthrough mode in LiteLLM)
+	return p.Model(opt)
+}
+
 func (p *anthropicProvider) Call(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,

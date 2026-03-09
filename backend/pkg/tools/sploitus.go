@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/system"
 
 	"github.com/sirupsen/logrus"
 )
@@ -33,39 +35,35 @@ const (
 
 // sploitus represents the Sploitus exploit search tool
 type sploitus struct {
+	cfg       *config.Config
 	flowID    int64
 	taskID    *int64
 	subtaskID *int64
-	enabled   bool
-	proxyURL  string
 	slp       SearchLogProvider
 }
 
 // NewSploitusTool creates a new Sploitus search tool instance
 func NewSploitusTool(
+	cfg *config.Config,
 	flowID int64,
 	taskID, subtaskID *int64,
-	enabled bool,
-	proxyURL string,
 	slp SearchLogProvider,
 ) Tool {
 	return &sploitus{
+		cfg:       cfg,
 		flowID:    flowID,
 		taskID:    taskID,
 		subtaskID: subtaskID,
-		enabled:   enabled,
-		proxyURL:  proxyURL,
 		slp:       slp,
 	}
 }
 
-// IsAvailable returns true if the Sploitus tool is enabled and configured
-func (s *sploitus) IsAvailable() bool {
-	return s.enabled && s.slp != nil
-}
-
 // Handle processes a Sploitus exploit search request from an AI agent
 func (s *sploitus) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if !s.IsAvailable() {
+		return "", fmt.Errorf("sploitus is not available")
+	}
+
 	var action SploitusAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(s.flowID, s.taskID, s.subtaskID, logrus.Fields{
@@ -141,6 +139,83 @@ func (s *sploitus) Handle(ctx context.Context, name string, args json.RawMessage
 	return result, nil
 }
 
+// search calls the Sploitus API and returns a formatted markdown result string
+func (s *sploitus) search(ctx context.Context, query, exploitType, sort string, limit int) (string, error) {
+	reqBody := sploitusRequest{
+		Query:  query,
+		Type:   exploitType,
+		Sort:   sort,
+		Title:  false, // search only for titles
+		Offset: 0,
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	client, err := system.GetHTTPClient(s.cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to create http client: %w", err)
+	}
+
+	client.Timeout = sploitusRequestTimeout
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sploitusAPIURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Build referer with query to mimic browser behavior
+	referer := fmt.Sprintf("https://sploitus.com/?query=%s", url.QueryEscape(query))
+
+	// Mimic Chrome browser headers to bypass Cloudflare protection
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://sploitus.com")
+	req.Header.Set("Referer", referer)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+	req.Header.Set("sec-ch-ua", `"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"`)
+	req.Header.Set("sec-ch-ua-mobile", "?0")
+	req.Header.Set("sec-ch-ua-platform", `"macOS"`)
+	req.Header.Set("sec-fetch-dest", "empty")
+	req.Header.Set("sec-fetch-mode", "cors")
+	req.Header.Set("sec-fetch-site", "same-origin")
+	req.Header.Set("DNT", "1")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request to Sploitus failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Sploitus API returns 499 when rate limit is temporarily exceeded
+	if resp.StatusCode == 499 || resp.StatusCode == 422 {
+		return "", fmt.Errorf("Sploitus API rate limit exceeded (HTTP %d), please try again later", resp.StatusCode)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Sploitus API returned HTTP %d", resp.StatusCode)
+	}
+
+	var apiResp sploitusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return "", fmt.Errorf("failed to decode Sploitus response: %w", err)
+	}
+
+	return formatSploitusResults(query, exploitType, limit, apiResp), nil
+}
+
+// IsAvailable returns true if the Sploitus tool is enabled and configured
+func (s *sploitus) IsAvailable() bool {
+	return s.enabled()
+}
+
+func (s *sploitus) enabled() bool {
+	return s.cfg != nil && s.cfg.SploitusEnabled
+}
+
 // sploitusRequest is the JSON body sent to the Sploitus search API
 type sploitusRequest struct {
 	Query  string `json:"query"`
@@ -168,77 +243,6 @@ type sploitusExploit struct {
 type sploitusResponse struct {
 	Exploits      []sploitusExploit `json:"exploits"`
 	ExploitsTotal int               `json:"exploits_total"`
-}
-
-// search calls the Sploitus API and returns a formatted markdown result string
-func (s *sploitus) search(ctx context.Context, query, exploitType, sort string, limit int) (string, error) {
-	reqBody := sploitusRequest{
-		Query:  query,
-		Type:   exploitType,
-		Sort:   sort,
-		Title:  false, // search only for titles
-		Offset: 0,
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	// Build HTTP client, optionally routed through a proxy
-	httpClient := &http.Client{Timeout: sploitusRequestTimeout}
-	if s.proxyURL != "" {
-		proxyParsed, parseErr := url.Parse(s.proxyURL)
-		if parseErr != nil {
-			return "", fmt.Errorf("invalid proxy URL: %w", parseErr)
-		}
-		httpClient.Transport = &http.Transport{Proxy: http.ProxyURL(proxyParsed)}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sploitusAPIURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Build referer with query to mimic browser behavior
-	referer := fmt.Sprintf("https://sploitus.com/?query=%s", url.QueryEscape(query))
-
-	// Mimic Chrome browser headers to bypass Cloudflare protection
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://sploitus.com")
-	req.Header.Set("Referer", referer)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
-	req.Header.Set("sec-ch-ua", `"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"`)
-	req.Header.Set("sec-ch-ua-mobile", "?0")
-	req.Header.Set("sec-ch-ua-platform", `"macOS"`)
-	req.Header.Set("sec-fetch-dest", "empty")
-	req.Header.Set("sec-fetch-mode", "cors")
-	req.Header.Set("sec-fetch-site", "same-origin")
-	req.Header.Set("DNT", "1")
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("request to Sploitus failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Sploitus API returns 499 when rate limit is temporarily exceeded
-	if resp.StatusCode == 499 || resp.StatusCode == 422 {
-		return "", fmt.Errorf("Sploitus API rate limit exceeded (HTTP %d), please try again later", resp.StatusCode)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Sploitus API returned HTTP %d", resp.StatusCode)
-	}
-
-	var apiResp sploitusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return "", fmt.Errorf("failed to decode Sploitus response: %w", err)
-	}
-
-	return formatSploitusResults(query, exploitType, limit, apiResp), nil
 }
 
 // formatSploitusResults converts a sploitusResponse into a human-readable markdown string

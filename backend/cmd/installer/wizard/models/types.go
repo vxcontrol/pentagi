@@ -88,6 +88,10 @@ const (
 	LLMProviderBedrockScreen   ScreenID = "llm_provider_form§bedrock"
 	LLMProviderOllamaScreen    ScreenID = "llm_provider_form§ollama"
 	LLMProviderCustomScreen    ScreenID = "llm_provider_form§custom"
+	LLMProviderDeepSeekScreen  ScreenID = "llm_provider_form§deepseek"
+	LLMProviderGLMScreen       ScreenID = "llm_provider_form§glm"
+	LLMProviderKimiScreen      ScreenID = "llm_provider_form§kimi"
+	LLMProviderQwenScreen      ScreenID = "llm_provider_form§qwen"
 
 	// Summarizer screens
 	SummarizerScreen          ScreenID = "summarizer"
@@ -135,6 +139,10 @@ const (
 	LLMProviderBedrock   LLMProviderID = "bedrock"
 	LLMProviderOllama    LLMProviderID = "ollama"
 	LLMProviderCustom    LLMProviderID = "custom"
+	LLMProviderDeepSeek  LLMProviderID = "deepseek"
+	LLMProviderGLM       LLMProviderID = "glm"
+	LLMProviderKimi      LLMProviderID = "kimi"
+	LLMProviderQwen      LLMProviderID = "qwen"
 )
 
 // NavigationMsg represents screen navigation requests

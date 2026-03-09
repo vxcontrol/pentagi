@@ -392,7 +392,9 @@ func TestGetHTML_UsesCorrectMinContentSize(t *testing.T) {
 }
 
 func TestBrowserHandle_ValidationErrors(t *testing.T) {
-	b := &browser{}
+	b := &browser{
+		scPrvURL: "http://127.0.0.1:8080",
+	}
 
 	t.Run("unknown tool", func(t *testing.T) {
 		_, err := b.Handle(t.Context(), "not-browser", json.RawMessage(`{}`))

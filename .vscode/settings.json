@@ -2,6 +2,7 @@
     "go.lintFlags": [
         "-checks=\"all,-ST1005\""
     ],
+    "go.testTimeout": "300s",
     "go.testEnvVars": {
       "INSTALLER_LOG_FILE": "${workspaceFolder}/build/log.json"
     },
