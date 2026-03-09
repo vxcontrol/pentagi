@@ -60,6 +60,10 @@ type Config struct {
 	AnthropicAPIKey    string `env:"ANTHROPIC_API_KEY"`
 	AnthropicServerURL string `env:"ANTHROPIC_SERVER_URL" envDefault:"https://api.anthropic.com/v1"`
 
+	// MiniMax
+	MiniMaxAPIKey    string `env:"MINIMAX_API_KEY"`
+	MiniMaxServerURL string `env:"MINIMAX_SERVER_URL" envDefault:"https://api.minimax.io/v1"`
+
 	// Embedding provider
 	EmbeddingURL           string `env:"EMBEDDING_URL"`
 	EmbeddingKey           string `env:"EMBEDDING_KEY"`

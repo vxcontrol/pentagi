@@ -360,12 +360,14 @@ const (
 	LLMProviderBedrock       = "AWS Bedrock"
 	LLMProviderOllama        = "Ollama"
 	LLMProviderCustom        = "Custom"
+	LLMProviderMiniMax       = "MiniMax"
 	LLMProviderOpenAIDesc    = "Industry-leading GPT models with excellent general performance"
 	LLMProviderAnthropicDesc = "Claude models with superior reasoning and safety features"
 	LLMProviderGeminiDesc    = "Google's advanced multimodal models with broad knowledge"
 	LLMProviderBedrockDesc   = "Enterprise AWS access to multiple foundation model providers"
 	LLMProviderOllamaDesc    = "Local open-source models for privacy and cost control"
 	LLMProviderCustomDesc    = "Custom OpenAI-compatible endpoint for maximum flexibility"
+	LLMProviderMiniMaxDesc   = "MiniMax M2.5 models with peak performance and ultimate value"
 )
 
 // Provider-specific help text
@@ -489,6 +491,25 @@ Key Advantages:
 Best for: Teams with specific model requirements, cost optimization needs, or existing LLM infrastructure
 LiteLLM Integration: Set LLM_SERVER_PROVIDER to match your provider name (e.g., "openrouter", "moonshot") to use the same config files with both direct API access and LiteLLM proxy
 Examples available: Pre-configured setups for major providers in /opt/pentagi/conf/ directory inside the container`
+
+	LLMFormMiniMaxHelp = `MiniMax provides high-performance AI models with OpenAI-compatible API, offering peak performance at ultimate value.
+
+Default PentAGI Models:
+• MiniMax-M2.5: Flagship model for complex reasoning, code generation, and multi-tool orchestration
+• MiniMax-M2.5-highspeed: Same performance, faster and more agile for high-throughput tasks
+• Both models support 204,800 token context window for analyzing extensive codebases
+
+Key Advantages:
+• Peak performance with excellent reasoning capabilities for security analysis
+• OpenAI-compatible API for seamless integration
+• Large context window (204,800 tokens) for comprehensive codebase analysis
+• Cost-effective pricing with competitive rates
+• High-speed variant available for latency-sensitive operations
+
+Best for: Teams seeking high-performance AI capabilities with cost efficiency
+Cost: Competitive pricing with excellent value for enterprise workloads
+
+Setup: Get your API key from https://platform.minimax.io/`
 )
 
 // LLM Provider Form field labels and descriptions

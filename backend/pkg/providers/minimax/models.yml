@@ -1,0 +1,16 @@
+# MiniMax M2.5 series - Peak Performance, Ultimate Value
+- name: MiniMax-M2.5
+  description: Peak Performance. Ultimate Value. Master the Complex. MiniMax flagship model with 204,800 token context window, excelling at complex reasoning, code generation, and multi-tool orchestration for autonomous security research and penetration testing workflows.
+  thinking: false
+  release_date: 2025-05-01
+  price:
+    input: 1.0
+    output: 4.0
+
+- name: MiniMax-M2.5-highspeed
+  description: Same performance, faster and more agile. High-speed variant of MiniMax-M2.5 with 204,800 token context window, optimized for low-latency responses while maintaining strong reasoning capabilities. Ideal for high-throughput security scanning and rapid vulnerability analysis.
+  thinking: false
+  release_date: 2025-05-01
+  price:
+    input: 1.0
+    output: 4.0

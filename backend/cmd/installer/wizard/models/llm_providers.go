@@ -37,6 +37,7 @@ func (h *LLMProvidersHandler) LoadItems() []ListItem {
 		{ID: LLMProviderBedrockScreen},
 		{ID: LLMProviderOllamaScreen},
 		{ID: LLMProviderCustomScreen},
+		{ID: LLMProviderMiniMaxScreen},
 	}
 
 	return items

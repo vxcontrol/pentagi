@@ -422,6 +422,7 @@ const (
 	ProviderTypeBedrock   ProviderType = "bedrock"
 	ProviderTypeOllama    ProviderType = "ollama"
 	ProviderTypeCustom    ProviderType = "custom"
+	ProviderTypeMinimax   ProviderType = "minimax"
 )
 
 func (e *ProviderType) Scan(src interface{}) error {

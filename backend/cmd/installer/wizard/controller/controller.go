@@ -197,6 +197,7 @@ func (c *controller) GetLLMProviders() map[string]*LLMProviderConfig {
 		"bedrock":   c.GetLLMProviderConfig("bedrock"),
 		"ollama":    c.GetLLMProviderConfig("ollama"),
 		"custom":    c.GetLLMProviderConfig("custom"),
+		"minimax":   c.GetLLMProviderConfig("minimax"),
 	}
 }
 
@@ -265,6 +266,12 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.ProviderName, _ = c.GetVar("LLM_SERVER_PROVIDER")
 		providerConfig.Configured = providerConfig.BaseURL.Value != "" && providerConfig.APIKey.Value != "" &&
 			(providerConfig.Model.Value != "" || providerConfig.ConfigPath.Value != "")
+
+	case "minimax":
+		providerConfig.Name = "MiniMax"
+		providerConfig.APIKey, _ = c.GetVar("MINIMAX_API_KEY")
+		providerConfig.BaseURL, _ = c.GetVar("MINIMAX_SERVER_URL")
+		providerConfig.Configured = providerConfig.APIKey.Value != ""
 	}
 
 	return providerConfig
@@ -386,6 +393,14 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 		if err := c.SetVar(config.HostConfigPath.Name, hostPath); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.HostConfigPath.Name, err)
 		}
+
+	case "minimax":
+		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
+		}
+		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
+		}
 	}
 
 	return nil
@@ -423,6 +438,8 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 			"LLM_SERVER_PRESERVE_REASONING", "LLM_SERVER_PROVIDER",
 			"PENTAGI_LLM_SERVER_CONFIG_PATH", // local path to the LLM config file
 		}
+	case "minimax":
+		vars = []string{"MINIMAX_API_KEY", "MINIMAX_SERVER_URL"}
 	}
 
 	if len(vars) != 0 {

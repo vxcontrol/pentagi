@@ -26,6 +26,7 @@ const (
 	ProviderBedrock   ProviderType = "bedrock"
 	ProviderOllama    ProviderType = "ollama"
 	ProviderCustom    ProviderType = "custom"
+	ProviderMiniMax   ProviderType = "minimax"
 )
 
 type ProviderName string
@@ -41,6 +42,7 @@ const (
 	DefaultProviderNameBedrock   ProviderName = ProviderName(ProviderBedrock)
 	DefaultProviderNameOllama    ProviderName = ProviderName(ProviderOllama)
 	DefaultProviderNameCustom    ProviderName = ProviderName(ProviderCustom)
+	DefaultProviderNameMiniMax   ProviderName = ProviderName(ProviderMiniMax)
 )
 
 type Provider interface {

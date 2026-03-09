@@ -17,6 +17,7 @@ enum ProviderType {
   bedrock
   ollama
   custom
+  minimax
 }
 
 # Reasoning effort levels for advanced AI models (OpenAI format)
@@ -614,6 +615,7 @@ type ProvidersModelsList {
   bedrock: [ModelConfig!]
   ollama: [ModelConfig!]
   custom: [ModelConfig!]
+  minimax: [ModelConfig!]
 }
 
 # Provider availability status
@@ -624,6 +626,7 @@ type ProvidersReadinessStatus {
   bedrock: Boolean!
   ollama: Boolean!
   custom: Boolean!
+  minimax: Boolean!
 }
 
 # Default provider configurations
@@ -634,6 +637,7 @@ type DefaultProvidersConfig {
   bedrock: ProviderConfig
   ollama: ProviderConfig
   custom: ProviderConfig
+  minimax: ProviderConfig
 }
 
 # Complete providers configuration

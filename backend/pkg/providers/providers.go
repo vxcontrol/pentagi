@@ -23,6 +23,7 @@ import (
 	"pentagi/pkg/providers/custom"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/gemini"
+	"pentagi/pkg/providers/minimax"
 	"pentagi/pkg/providers/ollama"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
@@ -199,6 +200,12 @@ func NewProviderController(
 		defaultConfigs[provider.ProviderCustom] = config
 	}
 
+	if config, err := minimax.DefaultProviderConfig(); err != nil {
+		return nil, fmt.Errorf("failed to create minimax provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderMiniMax] = config
+	}
+
 	if cfg.OpenAIKey != "" {
 		p, err := openai.New(cfg, defaultConfigs[provider.ProviderOpenAI])
 		if err != nil {
@@ -240,6 +247,15 @@ func NewProviderController(
 			return nil, fmt.Errorf("failed to create ollama provider: %w", err)
 		}
 		providers[provider.DefaultProviderNameOllama] = p
+	}
+
+	if cfg.MiniMaxAPIKey != "" {
+		p, err := minimax.New(cfg, defaultConfigs[provider.ProviderMiniMax])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create minimax provider: %w", err)
+		}
+
+		providers[provider.DefaultProviderNameMiniMax] = p
 	}
 
 	if cfg.LLMServerURL != "" && (cfg.LLMServerModel != "" || cfg.LLMServerConfig != "") {
@@ -586,6 +602,8 @@ func (pc *providerController) GetProvider(
 		return pc.Providers.Get(provider.DefaultProviderNameOllama)
 	case provider.DefaultProviderNameCustom:
 		return pc.Providers.Get(provider.DefaultProviderNameCustom)
+	case provider.DefaultProviderNameMiniMax:
+		return pc.Providers.Get(provider.DefaultProviderNameMiniMax)
 	}
 
 	// Lookup user defined providers by name and build it
@@ -676,6 +694,12 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 			return nil, fmt.Errorf("failed to build custom provider config: %w", err)
 		}
 		return custom.New(pc.cfg, customConfig)
+	case provider.ProviderMiniMax:
+		minimaxConfig, err := minimax.BuildProviderConfig(prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build minimax provider config: %w", err)
+		}
+		return minimax.New(pc.cfg, minimaxConfig)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", prv.Type)
 	}
@@ -1003,6 +1027,8 @@ func (pc *providerController) buildProviderFromConfig(
 		return bedrock.New(pc.cfg, config)
 	case provider.ProviderOllama:
 		return ollama.New(pc.cfg, config)
+	case provider.ProviderMiniMax:
+		return minimax.New(pc.cfg, config)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", prvtype)
 	}

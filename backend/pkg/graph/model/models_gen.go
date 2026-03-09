@@ -175,6 +175,7 @@ type DefaultProvidersConfig struct {
 	Bedrock   *ProviderConfig `json:"bedrock,omitempty"`
 	Ollama    *ProviderConfig `json:"ollama,omitempty"`
 	Custom    *ProviderConfig `json:"custom,omitempty"`
+	Minimax   *ProviderConfig `json:"minimax,omitempty"`
 }
 
 type Flow struct {
@@ -321,6 +322,7 @@ type ProvidersModelsList struct {
 	Bedrock   []*ModelConfig `json:"bedrock,omitempty"`
 	Ollama    []*ModelConfig `json:"ollama,omitempty"`
 	Custom    []*ModelConfig `json:"custom,omitempty"`
+	Minimax   []*ModelConfig `json:"minimax,omitempty"`
 }
 
 type ProvidersReadinessStatus struct {
@@ -330,6 +332,7 @@ type ProvidersReadinessStatus struct {
 	Bedrock   bool `json:"bedrock"`
 	Ollama    bool `json:"ollama"`
 	Custom    bool `json:"custom"`
+	Minimax   bool `json:"minimax"`
 }
 
 type Query struct {
@@ -855,6 +858,7 @@ const (
 	ProviderTypeBedrock   ProviderType = "bedrock"
 	ProviderTypeOllama    ProviderType = "ollama"
 	ProviderTypeCustom    ProviderType = "custom"
+	ProviderTypeMinimax   ProviderType = "minimax"
 )
 
 var AllProviderType = []ProviderType{
@@ -864,11 +868,12 @@ var AllProviderType = []ProviderType{
 	ProviderTypeBedrock,
 	ProviderTypeOllama,
 	ProviderTypeCustom,
+	ProviderTypeMinimax,
 }
 
 func (e ProviderType) IsValid() bool {
 	switch e {
-	case ProviderTypeOpenai, ProviderTypeAnthropic, ProviderTypeGemini, ProviderTypeBedrock, ProviderTypeOllama, ProviderTypeCustom:
+	case ProviderTypeOpenai, ProviderTypeAnthropic, ProviderTypeGemini, ProviderTypeBedrock, ProviderTypeOllama, ProviderTypeCustom, ProviderTypeMinimax:
 		return true
 	}
 	return false

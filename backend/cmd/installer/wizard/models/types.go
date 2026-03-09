@@ -88,6 +88,7 @@ const (
 	LLMProviderBedrockScreen   ScreenID = "llm_provider_form§bedrock"
 	LLMProviderOllamaScreen    ScreenID = "llm_provider_form§ollama"
 	LLMProviderCustomScreen    ScreenID = "llm_provider_form§custom"
+	LLMProviderMiniMaxScreen   ScreenID = "llm_provider_form§minimax"
 
 	// Summarizer screens
 	SummarizerScreen          ScreenID = "summarizer"
@@ -135,6 +136,7 @@ const (
 	LLMProviderBedrock   LLMProviderID = "bedrock"
 	LLMProviderOllama    LLMProviderID = "ollama"
 	LLMProviderCustom    LLMProviderID = "custom"
+	LLMProviderMiniMax   LLMProviderID = "minimax"
 )
 
 // NavigationMsg represents screen navigation requests

@@ -57,6 +57,7 @@ func (r *registry) initScreens() {
 	r.screens[models.LLMProviderBedrockScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderBedrock)
 	r.screens[models.LLMProviderOllamaScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderOllama)
 	r.screens[models.LLMProviderCustomScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderCustom)
+	r.screens[models.LLMProviderMiniMaxScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderMiniMax)
 
 	// Summarizer Forms
 	r.screens[models.SummarizerScreen] = models.NewSummarizerModel(r.controller, r.styles, r.window, r)

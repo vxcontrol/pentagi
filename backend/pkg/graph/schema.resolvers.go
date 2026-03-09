@@ -17,6 +17,7 @@ import (
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/gemini"
+	"pentagi/pkg/providers/minimax"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
@@ -1734,6 +1735,11 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Default.Ollama = mpcfg
 		case provider.ProviderCustom:
 			config.Default.Custom = mpcfg
+		case provider.ProviderMiniMax:
+			config.Default.Minimax = mpcfg
+			if models, err := minimax.DefaultModels(); err == nil {
+				config.Models.Minimax = converter.ConvertModels(models)
+			}
 		}
 	}
 
@@ -1758,6 +1764,8 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			if p, ok := defaultProviders[provider.DefaultProviderNameCustom]; ok {
 				config.Models.Custom = converter.ConvertModels(p.GetModels())
 			}
+		case provider.ProviderMiniMax:
+			config.Enabled.Minimax = true
 		}
 	}
 

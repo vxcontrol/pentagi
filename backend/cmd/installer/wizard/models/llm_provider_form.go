@@ -47,7 +47,7 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 
 	// Add fields based on provider type
 	switch m.providerID {
-	case LLMProviderOpenAI, LLMProviderAnthropic, LLMProviderGemini:
+	case LLMProviderOpenAI, LLMProviderAnthropic, LLMProviderGemini, LLMProviderMiniMax:
 		fields = append(fields, m.createBaseURLField(config))
 		fields = append(fields, m.createAPIKeyField(config))
 
@@ -308,6 +308,8 @@ func (m *LLMProviderFormModel) GetFormDescription() string {
 		return locale.LLMProviderOllamaDesc
 	case LLMProviderCustom:
 		return locale.LLMProviderCustomDesc
+	case LLMProviderMiniMax:
+		return locale.LLMProviderMiniMaxDesc
 	default:
 		return locale.LLMProviderFormDescription
 	}
@@ -327,6 +329,8 @@ func (m *LLMProviderFormModel) GetFormName() string {
 		return locale.LLMProviderOllama
 	case LLMProviderCustom:
 		return locale.LLMProviderCustom
+	case LLMProviderMiniMax:
+		return locale.LLMProviderMiniMax
 	default:
 		return fmt.Sprintf(locale.LLMProviderFormName, m.providerName)
 	}
@@ -373,7 +377,7 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 
 	// Show configured fields (without values for security)
 	switch m.providerID {
-	case LLMProviderOpenAI, LLMProviderAnthropic, LLMProviderGemini:
+	case LLMProviderOpenAI, LLMProviderAnthropic, LLMProviderGemini, LLMProviderMiniMax:
 		if config.BaseURL.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
@@ -488,6 +492,8 @@ func (m *LLMProviderFormModel) GetHelpContent() string {
 		sections = append(sections, locale.LLMFormOllamaHelp)
 	case LLMProviderCustom:
 		sections = append(sections, locale.LLMFormCustomHelp)
+	case LLMProviderMiniMax:
+		sections = append(sections, locale.LLMFormMiniMaxHelp)
 	}
 
 	return strings.Join(sections, "\n")
@@ -662,6 +668,8 @@ func (m *LLMProviderFormModel) getDefaultBaseURL() string {
 		return "http://ollama-server:11434"
 	case LLMProviderCustom:
 		return "http://llm-server:8000"
+	case LLMProviderMiniMax:
+		return "https://api.minimax.io/v1"
 	default:
 		return ""
 	}
