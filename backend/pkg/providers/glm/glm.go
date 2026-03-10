@@ -80,6 +80,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		openai.WithModel(GLMAgentModel),
 		openai.WithBaseURL(cfg.GLMServerURL),
 		openai.WithHTTPClient(httpClient),
+		openai.WithPreserveReasoningContent(),
 	)
 	if err != nil {
 		return nil, err

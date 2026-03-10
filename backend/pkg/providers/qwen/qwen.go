@@ -81,6 +81,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		openai.WithModel(QwenAgentModel),
 		openai.WithBaseURL(cfg.QwenServerURL),
 		openai.WithHTTPClient(httpClient),
+		openai.WithPreserveReasoningContent(),
 	)
 	if err != nil {
 		return nil, err
