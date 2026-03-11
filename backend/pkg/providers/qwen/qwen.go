@@ -115,12 +115,13 @@ func (p *qwenProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *qwenProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: QwenAgentModel}
+	model := QwenAgentModel
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *qwenProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {

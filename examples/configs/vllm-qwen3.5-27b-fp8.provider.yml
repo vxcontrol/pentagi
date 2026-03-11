@@ -9,6 +9,7 @@ simple:
   temperature: 0.7
   top_k: 20
   top_p: 0.8
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -19,6 +20,7 @@ simple_json:
   temperature: 0.7
   top_k: 20
   top_p: 0.8
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -30,6 +32,7 @@ primary_agent:
   temperature: 1.0
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -40,6 +43,7 @@ assistant:
   temperature: 1.0
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -50,6 +54,7 @@ generator:
   temperature: 1.0
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -60,6 +65,7 @@ refiner:
   temperature: 1.0
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -70,6 +76,7 @@ adviser:
   temperature: 1.0
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -80,6 +87,7 @@ reflector:
   temperature: 1.0
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -90,6 +98,7 @@ searcher:
   temperature: 0.7
   top_k: 20
   top_p: 0.8
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -100,6 +109,7 @@ enricher:
   temperature: 0.7
   top_k: 20
   top_p: 0.8
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
@@ -110,6 +120,7 @@ coder:
   temperature: 0.6
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 0.0
   repetition_penalty: 1.0
   n: 1
@@ -120,6 +131,7 @@ installer:
   temperature: 0.6
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 0.0
   repetition_penalty: 1.0
   n: 1
@@ -130,6 +142,7 @@ pentester:
   temperature: 1.0
   top_k: 20
   top_p: 0.95
+  min_p: 0.0
   presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1

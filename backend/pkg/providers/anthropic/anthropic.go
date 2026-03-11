@@ -117,12 +117,13 @@ func (p *anthropicProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *anthropicProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: AnthropicAgentModel}
+	model := AnthropicAgentModel
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *anthropicProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {

@@ -116,12 +116,13 @@ func (p *deepseekProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *deepseekProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: DeepSeekAgentModel}
+	model := DeepSeekAgentModel
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *deepseekProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {

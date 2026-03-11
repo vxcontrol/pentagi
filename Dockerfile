@@ -104,7 +104,7 @@ RUN addgroup -g 998 docker && \
     addgroup pentagi docker
 
 # Install required packages
-RUN apk --no-cache add ca-certificates openssl shadow
+RUN apk --no-cache add ca-certificates openssl openssh-keygen shadow
 
 ADD scripts/entrypoint.sh /opt/pentagi/bin/
 
@@ -112,12 +112,14 @@ RUN sed -i 's/\r//' /opt/pentagi/bin/entrypoint.sh && \
     chmod +x /opt/pentagi/bin/entrypoint.sh
 
 RUN mkdir -p \
+    /root/.ollama \
     /opt/pentagi/bin \
     /opt/pentagi/ssl \
     /opt/pentagi/fe \
     /opt/pentagi/logs \
     /opt/pentagi/data \
-    /opt/pentagi/conf
+    /opt/pentagi/conf && \
+    chmod 777 /root/.ollama
 
 COPY --from=be-build /pentagi /opt/pentagi/bin/pentagi
 COPY --from=be-build /ctester /opt/pentagi/bin/ctester

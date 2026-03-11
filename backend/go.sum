@@ -613,8 +613,8 @@ github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1 h1:qx2SF3lrUBFSMyl
 github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1/go.mod h1:AeiQFqiMgJJAXy6FYXtDS2a3P/PMB56iiBNY2vGrZhQ=
 github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f h1:5RzZ9isUxs51yYrcwop1MeDJMTX3aLAKqYi6taOVpZc=
 github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f/go.mod h1:6UHL5uqAKp4KAdziva4qgcAxFtBzU05Hm/BAo4NkAuo=
-github.com/vxcontrol/langchaingo v0.1.14-update.2 h1:RZUwS12vAxNnVFH1glvrIvN8xOIkPoZ3yrsmS5+znZ4=
-github.com/vxcontrol/langchaingo v0.1.14-update.2/go.mod h1:ojKN1Rl7fAOUxXghuz4K3dCUbMFU4XeUXrzxViAdupo=
+github.com/vxcontrol/langchaingo v0.1.14-update.3 h1:2DAwAkrLPibU06meKsivaXUB/PDb9xSVK2zpqP9FBWQ=
+github.com/vxcontrol/langchaingo v0.1.14-update.3/go.mod h1:ojKN1Rl7fAOUxXghuz4K3dCUbMFU4XeUXrzxViAdupo=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
 github.com/wk8/go-ordered-map/v2 v2.1.8/go.mod h1:5nJHM5DyteebpVlHnWMV0rPz6Zp7+xBAnxjb1X5vnTw=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=

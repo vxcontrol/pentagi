@@ -124,12 +124,13 @@ func (p *customProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *customProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: p.model}
+	model := p.model
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *customProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {

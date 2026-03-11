@@ -196,6 +196,7 @@ type AgentConfig struct {
 	Temperature       float64         `json:"temperature,omitempty" yaml:"temperature,omitempty"`
 	TopK              int             `json:"top_k,omitempty" yaml:"top_k,omitempty"`
 	TopP              float64         `json:"top_p,omitempty" yaml:"top_p,omitempty"`
+	MinP              float64         `json:"min_p,omitempty" yaml:"min_p,omitempty"`
 	N                 int             `json:"n,omitempty" yaml:"n,omitempty"`
 	MinLength         int             `json:"min_length,omitempty" yaml:"min_length,omitempty"`
 	MaxLength         int             `json:"max_length,omitempty" yaml:"max_length,omitempty"`
@@ -542,6 +543,9 @@ func (ac *AgentConfig) BuildOptions() []llms.CallOption {
 	if _, ok := ac.raw["top_p"]; ok {
 		options = append(options, llms.WithTopP(ac.TopP))
 	}
+	if _, ok := ac.raw["min_p"]; ok {
+		options = append(options, llms.WithMinP(ac.MinP))
+	}
 	if _, ok := ac.raw["n"]; ok {
 		options = append(options, llms.WithN(ac.N))
 	}
@@ -606,6 +610,9 @@ func (ac *AgentConfig) marshalMap() map[string]any {
 	}
 	if ac.TopP != 0 {
 		output["top_p"] = ac.TopP
+	}
+	if ac.MinP != 0 {
+		output["min_p"] = ac.MinP
 	}
 	if ac.N != 0 {
 		output["n"] = ac.N
@@ -699,8 +706,8 @@ func (pc *ProviderConfig) GetModelsMap() map[ProviderOptionsType]string {
 		for _, option := range options {
 			option(&callOptions)
 		}
-		if callOptions.Model != "" {
-			models[optType] = callOptions.Model
+		if callOptions.Model != nil {
+			models[optType] = callOptions.GetModel()
 		}
 	}
 

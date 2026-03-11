@@ -235,12 +235,13 @@ func (p *ollamaProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *ollamaProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: p.model}
+	model := p.model
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *ollamaProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {

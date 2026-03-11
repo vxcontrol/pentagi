@@ -308,9 +308,8 @@ func (p *Provider) handleStreamingResponse(
 		// Add reasoning content to first chunk
 		if i == 0 && !thinking.IsEmpty() {
 			chunk.Reasoning = &reasoning.ContentReasoning{
-				Content:         thinking.Content,
-				Signature:       thinking.Signature,
-				RedactedContent: thinking.RedactedContent,
+				Content:   thinking.Content,
+				Signature: thinking.Signature,
 			}
 		}
 

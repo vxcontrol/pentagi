@@ -163,12 +163,13 @@ func (p *bedrockProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *bedrockProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: BedrockAgentModel}
+	model := BedrockAgentModel
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *bedrockProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {

@@ -116,12 +116,13 @@ func (p *kimiProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *kimiProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: KimiAgentModel}
+	model := KimiAgentModel
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *kimiProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {

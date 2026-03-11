@@ -160,31 +160,33 @@ func (u *GenerationUsage) ToLangfuse() *api.IngestionUsage {
 
 type ModelParameters struct {
 	// CandidateCount is the number of response candidates to generate.
-	CandidateCount int `json:"candidate_count"`
+	CandidateCount *int `json:"candidate_count,omitempty"`
 	// MaxTokens is the maximum number of tokens to generate.
-	MaxTokens int `json:"max_tokens"`
+	MaxTokens *int `json:"max_tokens,omitempty"`
 	// Temperature is the temperature for sampling, between 0 and 1.
-	Temperature float64 `json:"temperature"`
+	Temperature *float64 `json:"temperature,omitempty"`
 	// StopWords is a list of words to stop on.
 	StopWords []string `json:"stop_words"`
 	// TopK is the number of tokens to consider for top-k sampling.
-	TopK int `json:"top_k"`
+	TopK *int `json:"top_k,omitempty"`
 	// TopP is the cumulative probability for top-p sampling.
-	TopP float64 `json:"top_p"`
+	TopP *float64 `json:"top_p,omitempty"`
+	// MinP is the minimum probability for top-p sampling.
+	MinP *float64 `json:"min_p,omitempty"`
 	// Seed is a seed for deterministic sampling.
-	Seed int `json:"seed"`
+	Seed *int `json:"seed,omitempty"`
 	// MinLength is the minimum length of the generated text.
-	MinLength int `json:"min_length"`
+	MinLength *int `json:"min_length,omitempty"`
 	// MaxLength is the maximum length of the generated text.
-	MaxLength int `json:"max_length"`
+	MaxLength *int `json:"max_length,omitempty"`
 	// N is how many chat completion choices to generate for each input message.
-	N int `json:"n"`
+	N *int `json:"n,omitempty"`
 	// RepetitionPenalty is the repetition penalty for sampling.
-	RepetitionPenalty float64 `json:"repetition_penalty"`
+	RepetitionPenalty *float64 `json:"repetition_penalty,omitempty"`
 	// FrequencyPenalty is the frequency penalty for sampling.
-	FrequencyPenalty float64 `json:"frequency_penalty"`
+	FrequencyPenalty *float64 `json:"frequency_penalty,omitempty"`
 	// PresencePenalty is the presence penalty for sampling.
-	PresencePenalty float64 `json:"presence_penalty"`
+	PresencePenalty *float64 `json:"presence_penalty,omitempty"`
 
 	// JSONMode is a flag to enable JSON mode.
 	JSONMode bool `json:"json"`
@@ -196,42 +198,49 @@ func (m *ModelParameters) ToLangfuse() map[string]*api.MapValue {
 	}
 
 	parametersMap := make(map[string]any)
-	parametersMap["temperature"] = fmt.Sprintf("%0.1f", m.Temperature)
-	parametersMap["top_p"] = fmt.Sprintf("%0.1f", m.TopP)
-	if m.CandidateCount != 0 {
-		parametersMap["candidate_count"] = m.CandidateCount
+	if m.Temperature != nil {
+		parametersMap["temperature"] = fmt.Sprintf("%0.1f", *m.Temperature)
 	}
-	if m.MaxTokens != 0 {
-		parametersMap["max_tokens"] = m.MaxTokens
+	if m.TopP != nil {
+		parametersMap["top_p"] = fmt.Sprintf("%0.1f", *m.TopP)
+	}
+	if m.MinP != nil {
+		parametersMap["min_p"] = fmt.Sprintf("%0.1f", *m.MinP)
+	}
+	if m.CandidateCount != nil {
+		parametersMap["candidate_count"] = *m.CandidateCount
+	}
+	if m.MaxTokens != nil {
+		parametersMap["max_tokens"] = *m.MaxTokens
 	} else {
 		parametersMap["max_tokens"] = "inf"
 	}
 	if len(m.StopWords) > 0 {
 		parametersMap["stop_words"] = m.StopWords
 	}
-	if m.TopK != 0 {
-		parametersMap["top_k"] = m.TopK
+	if m.TopK != nil {
+		parametersMap["top_k"] = *m.TopK
 	}
-	if m.Seed != 0 {
-		parametersMap["seed"] = m.Seed
+	if m.Seed != nil {
+		parametersMap["seed"] = *m.Seed
 	}
-	if m.MinLength != 0 {
-		parametersMap["min_length"] = m.MinLength
+	if m.MinLength != nil {
+		parametersMap["min_length"] = *m.MinLength
 	}
-	if m.MaxLength != 0 {
-		parametersMap["max_length"] = m.MaxLength
+	if m.MaxLength != nil {
+		parametersMap["max_length"] = *m.MaxLength
 	}
-	if m.N != 0 {
-		parametersMap["n"] = m.N
+	if m.N != nil {
+		parametersMap["n"] = *m.N
 	}
-	if m.RepetitionPenalty != 0 {
-		parametersMap["repetition_penalty"] = fmt.Sprintf("%0.1f", m.RepetitionPenalty)
+	if m.RepetitionPenalty != nil {
+		parametersMap["repetition_penalty"] = fmt.Sprintf("%0.1f", *m.RepetitionPenalty)
 	}
-	if m.FrequencyPenalty != 0 {
-		parametersMap["frequency_penalty"] = fmt.Sprintf("%0.1f", m.FrequencyPenalty)
+	if m.FrequencyPenalty != nil {
+		parametersMap["frequency_penalty"] = fmt.Sprintf("%0.1f", *m.FrequencyPenalty)
 	}
-	if m.PresencePenalty != 0 {
-		parametersMap["presence_penalty"] = fmt.Sprintf("%0.1f", m.PresencePenalty)
+	if m.PresencePenalty != nil {
+		parametersMap["presence_penalty"] = fmt.Sprintf("%0.1f", *m.PresencePenalty)
 	}
 	if m.JSONMode {
 		parametersMap["json"] = m.JSONMode

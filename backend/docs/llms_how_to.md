@@ -89,7 +89,6 @@ normalizedChain := ast.Messages()
 **Why**: Reasoning content contains provider-specific data that causes API errors with different providers:
 - **Cryptographic signatures**: Anthropic's extended thinking uses signatures that other providers reject
 - **Reasoning metadata**: Provider-specific formatting and validation
-- **Redacted content**: Encrypted reasoning blocks
 
 **Problem**: When restoring a chain created with Anthropic (with reasoning signatures) and sending to Gemini, the API will reject the request.
 
@@ -163,7 +162,6 @@ messages = append(messages, llms.MessageContent{
 **Components in `choice.Reasoning`**:
 - `Content`: Human-readable thinking text
 - `Signature`: Binary cryptographic signature (REQUIRED for roundtrip)
-- `RedactedContent`: Encrypted reasoning (if present, MUST be preserved)
 
 #### 1.2 Temperature Requirement
 

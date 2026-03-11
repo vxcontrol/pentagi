@@ -2718,9 +2718,8 @@ func TestNormalizeToolCallIDs_IntegrationScenario(t *testing.T) {
 func TestClearReasoning(t *testing.T) {
 	// Import reasoning package types for testing
 	reasoningContent := &reasoning.ContentReasoning{
-		Content:         "This is thinking content",
-		Signature:       []byte("crypto_signature_data"),
-		RedactedContent: []byte("encrypted_reasoning"),
+		Content:   "This is thinking content",
+		Signature: []byte("crypto_signature_data"),
 	}
 
 	tests := []struct {

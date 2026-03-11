@@ -114,12 +114,13 @@ func (p *glmProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *glmProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: GLMAgentModel}
+	model := GLMAgentModel
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *glmProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {

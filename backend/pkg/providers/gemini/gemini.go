@@ -126,12 +126,13 @@ func (p *geminiProvider) GetModels() pconfig.ModelsConfig {
 }
 
 func (p *geminiProvider) Model(opt pconfig.ProviderOptionsType) string {
-	opts := llms.CallOptions{Model: GeminiAgentModel}
+	model := GeminiAgentModel
+	opts := llms.CallOptions{Model: &model}
 	for _, option := range p.providerConfig.GetOptionsForType(opt) {
 		option(&opts)
 	}
 
-	return opts.Model
+	return opts.GetModel()
 }
 
 func (p *geminiProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
