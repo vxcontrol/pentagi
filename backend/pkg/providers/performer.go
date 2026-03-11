@@ -30,6 +30,7 @@ const (
 	maxRetriesToCallAgentChain  = 3
 	maxRetriesToCallFunction    = 3
 	maxReflectorCallsPerChain   = 3
+	maxAgentChainIterations     = 100
 	delayBetweenRetries         = 5 * time.Second
 )
 
@@ -91,7 +92,7 @@ func (fp *flowProvider) performAgentChain(
 	groupID := fmt.Sprintf("flow-%d", fp.flowID)
 	toolTypeMapping := tools.GetToolTypeMapping()
 
-	for {
+	for iteration := 0; iteration < maxAgentChainIterations; iteration++ {
 		result, err := fp.callWithRetries(ctx, chain, optAgentType, executor)
 		if err != nil {
 			logger.WithError(err).Error("failed to call agent chain")
@@ -219,6 +220,9 @@ func (fp *flowProvider) performAgentChain(
 			}
 		}
 	}
+
+	logger.Error("agent chain exceeded maximum iterations")
+	return fmt.Errorf("agent chain exceeded maximum iterations (%d)", maxAgentChainIterations)
 }
 
 func (fp *flowProvider) execToolCall(
@@ -271,6 +275,12 @@ func (fp *flowProvider) execToolCall(
 			langfuse.WithEventLevel(langfuse.ObservationLevelError),
 			langfuse.WithEventOutput(response),
 		)
+
+		if detector.shouldError() {
+			logger.Error("tool call repeated too many times, aborting agent chain")
+			return "", fmt.Errorf("tool call '%s' repeated %d consecutive times, aborting", funcName, detector.consecutiveDetections)
+		}
+
 		logger.Warn("failed to exec function: tool call is repeating")
 
 		return response, nil
