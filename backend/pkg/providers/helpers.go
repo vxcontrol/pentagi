@@ -25,8 +25,9 @@ import (
 )
 
 const (
-	RepeatingToolCallThreshold   = 3
-	maxQASectionsAfterRestore    = 3
+	RepeatingToolCallThreshold          = 3
+	MaxConsecutiveRepeatingDetections   = 5
+	maxQASectionsAfterRestore           = 3
 	keepQASectionsAfterRestore   = 1
 	lastSecBytesAfterRestore     = 16 * 1024 // 16 KB
 	maxBPBytesAfterRestore       = 8 * 1024  // 8 KB
@@ -36,7 +37,8 @@ const (
 )
 
 type repeatingDetector struct {
-	funcCalls []llms.FunctionCall
+	funcCalls            []llms.FunctionCall
+	consecutiveDetections int
 }
 
 func (rd *repeatingDetector) detect(toolCall llms.ToolCall) bool {
@@ -59,7 +61,16 @@ func (rd *repeatingDetector) detect(toolCall llms.ToolCall) bool {
 
 	rd.funcCalls = append(rd.funcCalls, funcCall)
 
-	return len(rd.funcCalls) >= RepeatingToolCallThreshold
+	if len(rd.funcCalls) >= RepeatingToolCallThreshold {
+		rd.consecutiveDetections++
+		return true
+	}
+
+	return false
+}
+
+func (rd *repeatingDetector) shouldError() bool {
+	return rd.consecutiveDetections >= MaxConsecutiveRepeatingDetections
 }
 
 func (rd *repeatingDetector) clearCallArguments(toolCall *llms.FunctionCall) llms.FunctionCall {
