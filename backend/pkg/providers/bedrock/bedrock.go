@@ -226,12 +226,16 @@ func (p *bedrockProvider) CallWithTools(
 	// includes toolConfig in the request.
 	tools = restoreMissedToolsFromChain(chain, tools)
 
+	// Build options with provider config first, then append WithTools last
+	// so that tool definitions are never accidentally overwritten.
+	options := []llms.CallOption{
+		llms.WithStreamingFunc(streamCb),
+	}
+	options = append(options, p.providerConfig.GetOptionsForType(opt)...)
+	options = append(options, llms.WithTools(tools))
+
 	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithTools(tools),
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
+		ctx, p, opt, p.llm.GenerateContent, chain, options...,
 	)
 }
 
