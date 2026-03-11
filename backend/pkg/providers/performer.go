@@ -26,11 +26,12 @@ import (
 )
 
 const (
-	maxRetriesToCallSimpleChain = 3
-	maxRetriesToCallAgentChain  = 3
-	maxRetriesToCallFunction    = 3
-	maxReflectorCallsPerChain   = 3
-	delayBetweenRetries         = 5 * time.Second
+	maxRetriesToCallSimpleChain  = 3
+	maxRetriesToCallAgentChain   = 3
+	maxRetriesToCallFunction     = 3
+	maxReflectorCallsPerChain    = 3
+	delayBetweenRetries          = 5 * time.Second
+	defaultAgentExecutionTimeout = 10 * time.Minute
 )
 
 type callResult struct {
@@ -52,6 +53,9 @@ func (fp *flowProvider) performAgentChain(
 ) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.performAgentChain")
 	defer span.End()
+
+	ctx, cancelTimeout := context.WithTimeout(ctx, defaultAgentExecutionTimeout)
+	defer cancelTimeout()
 
 	var (
 		wantToStop        bool
