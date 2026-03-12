@@ -29,6 +29,7 @@ const (
 	ProviderDeepSeek  ProviderType = "deepseek"
 	ProviderGLM       ProviderType = "glm"
 	ProviderKimi      ProviderType = "kimi"
+	ProviderMiniMax   ProviderType = "minimax"
 	ProviderQwen      ProviderType = "qwen"
 )
 
@@ -48,6 +49,7 @@ const (
 	DefaultProviderNameDeepSeek  ProviderName = ProviderName(ProviderDeepSeek)
 	DefaultProviderNameGLM       ProviderName = ProviderName(ProviderGLM)
 	DefaultProviderNameKimi      ProviderName = ProviderName(ProviderKimi)
+	DefaultProviderNameMiniMax   ProviderName = ProviderName(ProviderMiniMax)
 	DefaultProviderNameQwen      ProviderName = ProviderName(ProviderQwen)
 )
 

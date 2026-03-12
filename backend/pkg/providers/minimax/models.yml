@@ -1,0 +1,13 @@
+- name: MiniMax-M2.5
+  description: MiniMax-M2.5 - High-performance large language model with 204K context window. Supports tool calling, JSON output, and streaming. Suitable for general dialogue, code generation, and complex reasoning tasks.
+  thinking: false
+  price:
+    input: 0.40
+    output: 1.10
+
+- name: MiniMax-M2.5-highspeed
+  description: MiniMax-M2.5-highspeed - Optimized version of MiniMax-M2.5 for faster inference with 204K context window. Same capabilities as M2.5 with improved response latency.
+  thinking: false
+  price:
+    input: 0.40
+    output: 1.10

@@ -124,6 +124,11 @@ type Config struct {
 	KimiServerURL string `env:"KIMI_SERVER_URL" envDefault:"https://api.moonshot.ai/v1"`
 	KimiProvider  string `env:"KIMI_PROVIDER"`
 
+	// MiniMax LLM provider
+	MiniMaxAPIKey    string `env:"MINIMAX_API_KEY"`
+	MiniMaxServerURL string `env:"MINIMAX_SERVER_URL" envDefault:"https://api.minimax.io/v1"`
+	MiniMaxProvider  string `env:"MINIMAX_PROVIDER"`
+
 	// Qwen (Tongyi Qianwen) provider
 	QwenAPIKey    string `env:"QWEN_API_KEY"`
 	QwenServerURL string `env:"QWEN_SERVER_URL" envDefault:"https://dashscope-us.aliyuncs.com/compatible-mode/v1"`
