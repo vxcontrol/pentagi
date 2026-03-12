@@ -26,6 +26,7 @@ import (
 	"pentagi/pkg/providers/gemini"
 	"pentagi/pkg/providers/glm"
 	"pentagi/pkg/providers/kimi"
+	"pentagi/pkg/providers/minimax"
 	"pentagi/pkg/providers/ollama"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
@@ -221,6 +222,12 @@ func NewProviderController(
 		defaultConfigs[provider.ProviderKimi] = config
 	}
 
+	if config, err := minimax.DefaultProviderConfig(); err != nil {
+		return nil, fmt.Errorf("failed to create minimax provider config: %w", err)
+	} else {
+		defaultConfigs[provider.ProviderMiniMax] = config
+	}
+
 	if config, err := qwen.DefaultProviderConfig(); err != nil {
 		return nil, fmt.Errorf("failed to create qwen provider config: %w", err)
 	} else {
@@ -309,6 +316,15 @@ func NewProviderController(
 		}
 
 		providers[provider.DefaultProviderNameKimi] = p
+	}
+
+	if cfg.MiniMaxAPIKey != "" {
+		p, err := minimax.New(cfg, defaultConfigs[provider.ProviderMiniMax])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create minimax provider: %w", err)
+		}
+
+		providers[provider.DefaultProviderNameMiniMax] = p
 	}
 
 	if cfg.QwenAPIKey != "" {
@@ -771,6 +787,12 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 			return nil, fmt.Errorf("failed to build kimi provider config: %w", err)
 		}
 		return kimi.New(pc.cfg, kimiConfig)
+	case provider.ProviderMiniMax:
+		minimaxConfig, err := minimax.BuildProviderConfig(prv.Config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build minimax provider config: %w", err)
+		}
+		return minimax.New(pc.cfg, minimaxConfig)
 	case provider.ProviderQwen:
 		qwenConfig, err := qwen.BuildProviderConfig(prv.Config)
 		if err != nil {

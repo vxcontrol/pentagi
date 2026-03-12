@@ -1,0 +1,130 @@
+simple:
+  model: MiniMax-M2.5
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.40
+    output: 1.10
+
+simple_json:
+  model: MiniMax-M2.5
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4096
+  json: true
+  price:
+    input: 0.40
+    output: 1.10
+
+primary_agent:
+  model: MiniMax-M2.5
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.40
+    output: 1.10
+
+assistant:
+  model: MiniMax-M2.5
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.40
+    output: 1.10
+
+generator:
+  model: MiniMax-M2.5
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 32768
+  price:
+    input: 0.40
+    output: 1.10
+
+refiner:
+  model: MiniMax-M2.5
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 20480
+  price:
+    input: 0.40
+    output: 1.10
+
+adviser:
+  model: MiniMax-M2.5
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.40
+    output: 1.10
+
+reflector:
+  model: MiniMax-M2.5
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.40
+    output: 1.10
+
+searcher:
+  model: MiniMax-M2.5
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.40
+    output: 1.10
+
+enricher:
+  model: MiniMax-M2.5
+  temperature: 0.7
+  top_p: 0.8
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.40
+    output: 1.10
+
+coder:
+  model: MiniMax-M2.5
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 20480
+  price:
+    input: 0.40
+    output: 1.10
+
+installer:
+  model: MiniMax-M2.5
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.40
+    output: 1.10
+
+pentester:
+  model: MiniMax-M2.5
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.40
+    output: 1.10
