@@ -263,10 +263,62 @@ func TestGetSecretPatterns_AllFields(t *testing.T) {
 	t.Logf("successfully compiled %d total regexes", len(regexes))
 }
 
+// clearConfigEnv clears all environment variables referenced by Config struct tags
+// so that tests are hermetic and not affected by ambient environment.
+func clearConfigEnv(t *testing.T) {
+	t.Helper()
+
+	envVars := []string{
+		"DATABASE_URL", "DEBUG", "DATA_DIR", "ASK_USER", "INSTALLATION_ID", "LICENSE_KEY",
+		"DOCKER_INSIDE", "DOCKER_NET_ADMIN", "DOCKER_SOCKET", "DOCKER_NETWORK",
+		"DOCKER_PUBLIC_IP", "DOCKER_WORK_DIR", "DOCKER_DEFAULT_IMAGE", "DOCKER_DEFAULT_IMAGE_FOR_PENTEST",
+		"SERVER_PORT", "SERVER_HOST", "SERVER_USE_SSL", "SERVER_SSL_KEY", "SERVER_SSL_CRT",
+		"STATIC_URL", "STATIC_DIR", "CORS_ORIGINS", "COOKIE_SIGNING_SALT",
+		"SCRAPER_PUBLIC_URL", "SCRAPER_PRIVATE_URL",
+		"OPEN_AI_KEY", "OPEN_AI_SERVER_URL",
+		"ANTHROPIC_API_KEY", "ANTHROPIC_SERVER_URL",
+		"EMBEDDING_URL", "EMBEDDING_KEY", "EMBEDDING_MODEL",
+		"EMBEDDING_STRIP_NEW_LINES", "EMBEDDING_BATCH_SIZE", "EMBEDDING_PROVIDER",
+		"SUMMARIZER_PRESERVE_LAST", "SUMMARIZER_USE_QA", "SUMMARIZER_SUM_MSG_HUMAN_IN_QA",
+		"SUMMARIZER_LAST_SEC_BYTES", "SUMMARIZER_MAX_BP_BYTES",
+		"SUMMARIZER_MAX_QA_SECTIONS", "SUMMARIZER_MAX_QA_BYTES", "SUMMARIZER_KEEP_QA_SECTIONS",
+		"LLM_SERVER_URL", "LLM_SERVER_KEY", "LLM_SERVER_MODEL", "LLM_SERVER_PROVIDER",
+		"LLM_SERVER_CONFIG_PATH", "LLM_SERVER_LEGACY_REASONING", "LLM_SERVER_PRESERVE_REASONING",
+		"OLLAMA_SERVER_URL", "OLLAMA_SERVER_API_KEY", "OLLAMA_SERVER_MODEL",
+		"OLLAMA_SERVER_CONFIG_PATH", "OLLAMA_SERVER_PULL_MODELS_TIMEOUT",
+		"OLLAMA_SERVER_PULL_MODELS_ENABLED", "OLLAMA_SERVER_LOAD_MODELS_ENABLED",
+		"GEMINI_API_KEY", "GEMINI_SERVER_URL",
+		"BEDROCK_REGION", "BEDROCK_DEFAULT_AUTH", "BEDROCK_BEARER_TOKEN",
+		"BEDROCK_ACCESS_KEY_ID", "BEDROCK_SECRET_ACCESS_KEY", "BEDROCK_SESSION_TOKEN", "BEDROCK_SERVER_URL",
+		"DEEPSEEK_API_KEY", "DEEPSEEK_SERVER_URL", "DEEPSEEK_PROVIDER",
+		"GLM_API_KEY", "GLM_SERVER_URL", "GLM_PROVIDER",
+		"KIMI_API_KEY", "KIMI_SERVER_URL", "KIMI_PROVIDER",
+		"QWEN_API_KEY", "QWEN_SERVER_URL", "QWEN_PROVIDER",
+		"DUCKDUCKGO_ENABLED", "DUCKDUCKGO_REGION", "DUCKDUCKGO_SAFESEARCH", "DUCKDUCKGO_TIME_RANGE",
+		"SPLOITUS_ENABLED",
+		"GOOGLE_API_KEY", "GOOGLE_CX_KEY", "GOOGLE_LR_KEY",
+		"OAUTH_GOOGLE_CLIENT_ID", "OAUTH_GOOGLE_CLIENT_SECRET",
+		"OAUTH_GITHUB_CLIENT_ID", "OAUTH_GITHUB_CLIENT_SECRET",
+		"PUBLIC_URL", "TRAVERSAAL_API_KEY", "TAVILY_API_KEY",
+		"PERPLEXITY_API_KEY", "PERPLEXITY_MODEL", "PERPLEXITY_CONTEXT_SIZE",
+		"SEARXNG_URL", "SEARXNG_CATEGORIES", "SEARXNG_LANGUAGE",
+		"SEARXNG_SAFESEARCH", "SEARXNG_TIME_RANGE", "SEARXNG_TIMEOUT",
+		"ASSISTANT_USE_AGENTS", "ASSISTANT_SUMMARIZER_PRESERVE_LAST",
+		"ASSISTANT_SUMMARIZER_LAST_SEC_BYTES", "ASSISTANT_SUMMARIZER_MAX_BP_BYTES",
+		"ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS", "ASSISTANT_SUMMARIZER_MAX_QA_BYTES",
+		"ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS",
+		"PROXY_URL", "EXTERNAL_SSL_CA_PATH", "EXTERNAL_SSL_INSECURE",
+		"OTEL_HOST", "LANGFUSE_BASE_URL", "LANGFUSE_PROJECT_ID", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY",
+		"GRAPHITI_ENABLED", "GRAPHITI_TIMEOUT", "GRAPHITI_URL",
+	}
+	for _, v := range envVars {
+		t.Setenv(v, "")
+	}
+}
+
 func TestNewConfig_Defaults(t *testing.T) {
-	// Unset env vars that would override defaults
-	t.Setenv("DATABASE_URL", "")
-	t.Setenv("LICENSE_KEY", "")
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -286,10 +338,12 @@ func TestNewConfig_Defaults(t *testing.T) {
 }
 
 func TestNewConfig_EnvOverride(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
 	t.Setenv("SERVER_PORT", "9090")
 	t.Setenv("SERVER_HOST", "127.0.0.1")
 	t.Setenv("DEBUG", "true")
-	t.Setenv("LICENSE_KEY", "")
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -301,7 +355,8 @@ func TestNewConfig_EnvOverride(t *testing.T) {
 }
 
 func TestNewConfig_ProviderDefaults(t *testing.T) {
-	t.Setenv("LICENSE_KEY", "")
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -317,8 +372,10 @@ func TestNewConfig_ProviderDefaults(t *testing.T) {
 }
 
 func TestNewConfig_StaticURL(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
 	t.Setenv("STATIC_URL", "https://example.com/static")
-	t.Setenv("LICENSE_KEY", "")
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -330,8 +387,8 @@ func TestNewConfig_StaticURL(t *testing.T) {
 }
 
 func TestNewConfig_StaticURL_Empty(t *testing.T) {
-	t.Setenv("STATIC_URL", "")
-	t.Setenv("LICENSE_KEY", "")
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -339,7 +396,8 @@ func TestNewConfig_StaticURL_Empty(t *testing.T) {
 }
 
 func TestNewConfig_SummarizerDefaults(t *testing.T) {
-	t.Setenv("LICENSE_KEY", "")
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -355,7 +413,8 @@ func TestNewConfig_SummarizerDefaults(t *testing.T) {
 }
 
 func TestNewConfig_SearchEngineDefaults(t *testing.T) {
-	t.Setenv("LICENSE_KEY", "")
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -440,7 +499,8 @@ func TestEnsureInstallationID_ReplacesInvalidFileContent(t *testing.T) {
 }
 
 func TestNewConfig_CorsOrigins(t *testing.T) {
-	t.Setenv("LICENSE_KEY", "")
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -449,7 +509,8 @@ func TestNewConfig_CorsOrigins(t *testing.T) {
 }
 
 func TestNewConfig_OllamaDefaults(t *testing.T) {
-	t.Setenv("LICENSE_KEY", "")
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
 
 	config, err := NewConfig()
 	require.NoError(t, err)
