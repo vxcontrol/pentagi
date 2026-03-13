@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 
@@ -69,13 +70,14 @@ func TestInteractivePromptContext_TrimsWhitespace(t *testing.T) {
 }
 
 func TestInteractivePromptContext_CancelledContext(t *testing.T) {
-	// Use a reader that blocks (empty)
-	reader := strings.NewReader("")
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
+	pr, pw := io.Pipe()
+	defer pw.Close()
 
-	_, err := InteractivePromptContext(ctx, "Enter", reader)
-	assert.Error(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := InteractivePromptContext(ctx, "Enter", pr)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestGetYesNoInputContext_Yes(t *testing.T) {
@@ -121,12 +123,14 @@ func TestGetYesNoInputContext_No(t *testing.T) {
 }
 
 func TestGetYesNoInputContext_CancelledContext(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	reader := strings.NewReader("")
-	_, err := GetYesNoInputContext(ctx, "Confirm?", reader)
-	assert.Error(t, err)
+	_, err := GetYesNoInputContext(ctx, "Confirm?", pr)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestPrintJSON_ValidData(t *testing.T) {
