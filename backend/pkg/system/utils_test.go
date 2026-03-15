@@ -211,6 +211,7 @@ func createTestConfig(caPath string, insecure bool, proxyURL string) *config.Con
 		ExternalSSLCAPath:   caPath,
 		ExternalSSLInsecure: insecure,
 		ProxyURL:            proxyURL,
+		HTTPClientTimeout:   600, // default 10 minutes
 	}
 }
 
@@ -632,6 +633,83 @@ func TestHTTPClient_RealConnection_MultipleRootCAs(t *testing.T) {
 
 	if resp2.StatusCode != http.StatusOK {
 		t.Errorf("expected status 200 from second server, got %d", resp2.StatusCode)
+	}
+}
+
+func TestGetHTTPClient_NilConfig(t *testing.T) {
+	client, err := GetHTTPClient(nil)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if client == nil {
+		t.Fatal("expected non-nil HTTP client")
+	}
+
+	if client.Timeout != defaultHTTPClientTimeout {
+		t.Errorf("expected default timeout %v, got %v", defaultHTTPClientTimeout, client.Timeout)
+	}
+}
+
+func TestGetHTTPClient_DefaultTimeout(t *testing.T) {
+	cfg := createTestConfig("", false, "")
+
+	client, err := GetHTTPClient(cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	expected := 600 * time.Second
+	if client.Timeout != expected {
+		t.Errorf("expected timeout %v, got %v", expected, client.Timeout)
+	}
+}
+
+func TestGetHTTPClient_CustomTimeout(t *testing.T) {
+	cfg := &config.Config{
+		HTTPClientTimeout: 120,
+	}
+
+	client, err := GetHTTPClient(cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	expected := 120 * time.Second
+	if client.Timeout != expected {
+		t.Errorf("expected timeout %v, got %v", expected, client.Timeout)
+	}
+}
+
+func TestGetHTTPClient_ZeroTimeoutUsesDefault(t *testing.T) {
+	cfg := &config.Config{
+		HTTPClientTimeout: 0,
+	}
+
+	client, err := GetHTTPClient(cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if client.Timeout != defaultHTTPClientTimeout {
+		t.Errorf("expected default timeout %v for zero config, got %v", defaultHTTPClientTimeout, client.Timeout)
+	}
+}
+
+func TestGetHTTPClient_TimeoutWithProxy(t *testing.T) {
+	cfg := &config.Config{
+		HTTPClientTimeout: 300,
+		ProxyURL:          "http://proxy.example.com:8080",
+	}
+
+	client, err := GetHTTPClient(cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	expected := 300 * time.Second
+	if client.Timeout != expected {
+		t.Errorf("expected timeout %v with proxy, got %v", expected, client.Timeout)
 	}
 }
 
