@@ -39,7 +39,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-runewidth v0.0.16
-	github.com/ollama/ollama v0.17.5
+	github.com/ollama/ollama v0.18.0
 	github.com/pgvector/pgvector-go v0.1.1
 	github.com/pressly/goose/v3 v3.19.2
 	github.com/rivo/uniseg v0.4.7
@@ -51,7 +51,8 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.19
 	github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1
 	github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f
-	github.com/vxcontrol/langchaingo v0.1.14-update.3
+	github.com/vxcontrol/langchaingo v0.1.14-update.5
+	github.com/wasilibs/go-re2 v1.10.0
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.9.0
@@ -190,11 +191,13 @@ require (
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/sosodev/duration v1.3.1 // indirect
 	github.com/tealeg/xlsx v1.0.5 // indirect
+	github.com/tetratelabs/wazero v1.9.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/urfave/cli/v2 v2.27.5 // indirect
+	github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect

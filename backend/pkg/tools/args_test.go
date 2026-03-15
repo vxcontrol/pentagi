@@ -420,3 +420,175 @@ func TestInt64JSONRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchInMemoryAction_QuestionsUnmarshal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		json    string
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "single question",
+			json:    `{"questions": ["test query"], "message": "test"}`,
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name:    "multiple questions",
+			json:    `{"questions": ["query1", "query2", "query3"], "message": "test"}`,
+			wantLen: 3,
+			wantErr: false,
+		},
+		{
+			name:    "five questions max",
+			json:    `{"questions": ["q1", "q2", "q3", "q4", "q5"], "message": "test"}`,
+			wantLen: 5,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var action SearchInMemoryAction
+			err := json.Unmarshal([]byte(tt.json), &action)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && len(action.Questions) != tt.wantLen {
+				t.Errorf("Questions length = %d, want %d", len(action.Questions), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestSearchGuideAction_QuestionsUnmarshal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		json    string
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "single question",
+			json:    `{"questions": ["how to install tool"], "type": "install", "message": "test"}`,
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name:    "multiple questions",
+			json:    `{"questions": ["q1", "q2", "q3"], "type": "pentest", "message": "test"}`,
+			wantLen: 3,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var action SearchGuideAction
+			err := json.Unmarshal([]byte(tt.json), &action)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && len(action.Questions) != tt.wantLen {
+				t.Errorf("Questions length = %d, want %d", len(action.Questions), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestSearchAnswerAction_QuestionsUnmarshal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		json    string
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "single question",
+			json:    `{"questions": ["what is exploit"], "type": "vulnerability", "message": "test"}`,
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name:    "multiple questions",
+			json:    `{"questions": ["q1", "q2"], "type": "tool", "message": "test"}`,
+			wantLen: 2,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var action SearchAnswerAction
+			err := json.Unmarshal([]byte(tt.json), &action)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && len(action.Questions) != tt.wantLen {
+				t.Errorf("Questions length = %d, want %d", len(action.Questions), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestSearchCodeAction_QuestionsUnmarshal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		json    string
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "single question",
+			json:    `{"questions": ["python script for parsing"], "lang": "python", "message": "test"}`,
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name:    "multiple questions",
+			json:    `{"questions": ["bash script", "shell automation", "file processing"], "lang": "bash", "message": "test"}`,
+			wantLen: 3,
+			wantErr: false,
+		},
+		{
+			name:    "five questions",
+			json:    `{"questions": ["q1", "q2", "q3", "q4", "q5"], "lang": "golang", "message": "test"}`,
+			wantLen: 5,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var action SearchCodeAction
+			err := json.Unmarshal([]byte(tt.json), &action)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && len(action.Questions) != tt.wantLen {
+				t.Errorf("Questions length = %d, want %d", len(action.Questions), tt.wantLen)
+			}
+		})
+	}
+}

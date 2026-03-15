@@ -519,11 +519,13 @@ export enum PromptType {
     QuestionAdviser = 'question_adviser',
     QuestionCoder = 'question_coder',
     QuestionEnricher = 'question_enricher',
+    QuestionExecutionMonitor = 'question_execution_monitor',
     QuestionInstaller = 'question_installer',
     QuestionMemorist = 'question_memorist',
     QuestionPentester = 'question_pentester',
     QuestionReflector = 'question_reflector',
     QuestionSearcher = 'question_searcher',
+    QuestionTaskPlanner = 'question_task_planner',
     Refiner = 'refiner',
     Reflector = 'reflector',
     Reporter = 'reporter',
@@ -532,6 +534,7 @@ export enum PromptType {
     SubtasksGenerator = 'subtasks_generator',
     SubtasksRefiner = 'subtasks_refiner',
     Summarizer = 'summarizer',
+    TaskAssignmentWrapper = 'task_assignment_wrapper',
     TaskDescriptor = 'task_descriptor',
     TaskReporter = 'task_reporter',
     ToolCallIdCollector = 'tool_call_id_collector',
@@ -1001,13 +1004,16 @@ export type ToolcallsStats = {
 export type ToolsPrompts = {
     chooseDockerImage: DefaultPrompt;
     chooseUserLanguage: DefaultPrompt;
-    collectToolCallID: DefaultPrompt;
-    detectToolCallIDPattern: DefaultPrompt;
+    collectToolCallId: DefaultPrompt;
+    detectToolCallIdPattern: DefaultPrompt;
     getExecutionLogs: DefaultPrompt;
     getFlowDescription: DefaultPrompt;
     getFullExecutionContext: DefaultPrompt;
     getShortExecutionContext: DefaultPrompt;
     getTaskDescription: DefaultPrompt;
+    monitorAgentExecution: DefaultPrompt;
+    planAgentTask: DefaultPrompt;
+    wrapAgentTask: DefaultPrompt;
 };
 
 export type UpdateApiTokenInput = {
@@ -1480,8 +1486,11 @@ export type SettingsPromptsQuery = {
                 getShortExecutionContext: DefaultPromptFragmentFragment;
                 chooseDockerImage: DefaultPromptFragmentFragment;
                 chooseUserLanguage: DefaultPromptFragmentFragment;
-                collectToolCallID: DefaultPromptFragmentFragment;
-                detectToolCallIDPattern: DefaultPromptFragmentFragment;
+                collectToolCallId: DefaultPromptFragmentFragment;
+                detectToolCallIdPattern: DefaultPromptFragmentFragment;
+                monitorAgentExecution: DefaultPromptFragmentFragment;
+                planAgentTask: DefaultPromptFragmentFragment;
+                wrapAgentTask: DefaultPromptFragmentFragment;
             };
         };
         userDefined?: Array<UserPromptFragmentFragment> | null;
@@ -2838,10 +2847,19 @@ export const SettingsPromptsDocument = gql`
                     chooseUserLanguage {
                         ...defaultPromptFragment
                     }
-                    collectToolCallID {
+                    collectToolCallId {
                         ...defaultPromptFragment
                     }
-                    detectToolCallIDPattern {
+                    detectToolCallIdPattern {
+                        ...defaultPromptFragment
+                    }
+                    monitorAgentExecution {
+                        ...defaultPromptFragment
+                    }
+                    planAgentTask {
+                        ...defaultPromptFragment
+                    }
+                    wrapAgentTask {
                         ...defaultPromptFragment
                     }
                 }

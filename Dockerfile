@@ -139,6 +139,7 @@ COPY examples/configs/ollama-qwq32b-fp16-tc.provider.yml /opt/pentagi/conf/
 COPY examples/configs/openrouter.provider.yml /opt/pentagi/conf/
 COPY examples/configs/novita.provider.yml /opt/pentagi/conf/
 COPY examples/configs/vllm-qwen3.5-27b-fp8.provider.yml /opt/pentagi/conf/
+COPY examples/configs/vllm-qwen3.5-27b-fp8-no-think.provider.yml /opt/pentagi/conf/
 COPY examples/configs/vllm-qwen332b-fp16.provider.yml /opt/pentagi/conf/
 
 COPY LICENSE /opt/pentagi/LICENSE

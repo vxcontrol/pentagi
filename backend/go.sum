@@ -472,8 +472,8 @@ github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdh
 github.com/ncruces/go-strftime v0.1.9/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/nikolalohinski/gonja v1.5.3 h1:GsA+EEaZDZPGJ8JtpeGN78jidhOlxeJROpqMT9fTj9c=
 github.com/nikolalohinski/gonja v1.5.3/go.mod h1:RmjwxNiXAEqcq1HeK5SSMmqFJvKOfTfXhkJv6YBtPa4=
-github.com/ollama/ollama v0.17.5 h1:jXNeWtRABs6pDtJ9wcOSlf9p3LjZlzRwOuA0fd/Q7YY=
-github.com/ollama/ollama v0.17.5/go.mod h1:tCX4IMV8DHjl3zY0THxuEkpWDZSOchJpzTuLACpMwFw=
+github.com/ollama/ollama v0.18.0 h1:loPvswLB07Cn3SnRy5E9tZziGS4nqfnoVllSKO68vX8=
+github.com/ollama/ollama v0.18.0/go.mod h1:tCX4IMV8DHjl3zY0THxuEkpWDZSOchJpzTuLACpMwFw=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
@@ -570,6 +570,8 @@ github.com/testcontainers/testcontainers-go v0.38.0 h1:d7uEapLcv2P8AvH8ahLqDMMxd
 github.com/testcontainers/testcontainers-go v0.38.0/go.mod h1:C52c9MoHpWO+C4aqmgSU+hxlR5jlEayWtgYrb8Pzz1w=
 github.com/testcontainers/testcontainers-go/modules/postgres v0.37.0 h1:hsVwFkS6s+79MbKEO+W7A1wNIw1fmkMtF4fg83m6kbc=
 github.com/testcontainers/testcontainers-go/modules/postgres v0.37.0/go.mod h1:Qj/eGbRbO/rEYdcRLmN+bEojzatP/+NS1y8ojl2PQsc=
+github.com/tetratelabs/wazero v1.9.0 h1:IcZ56OuxrtaEz8UYNRHBrUa9bYeX9oVY93KspZZBf/I=
+github.com/tetratelabs/wazero v1.9.0/go.mod h1:TSbcXCfFP0L2FGkRPxHphadXPjo1T6W+CseNNY7EkjM=
 github.com/tklauser/go-sysconf v0.3.15 h1:VE89k0criAymJ/Os65CSn1IXaol+1wrsFHEB8Ol49K4=
 github.com/tklauser/go-sysconf v0.3.15/go.mod h1:Dmjwr6tYFIseJw7a3dRLJfsHAMXZ3nEnL/aZY+0IuI4=
 github.com/tklauser/numcpus v0.10.0 h1:18njr6LDBk1zuna922MgdjQuJFjrdppsZG60sHGfjso=
@@ -613,8 +615,12 @@ github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1 h1:qx2SF3lrUBFSMyl
 github.com/vxcontrol/cloud v0.0.0-20250927184507-e8b7ea3f9ba1/go.mod h1:AeiQFqiMgJJAXy6FYXtDS2a3P/PMB56iiBNY2vGrZhQ=
 github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f h1:5RzZ9isUxs51yYrcwop1MeDJMTX3aLAKqYi6taOVpZc=
 github.com/vxcontrol/graphiti-go-client v0.0.0-20260203202314-a1540b4a652f/go.mod h1:6UHL5uqAKp4KAdziva4qgcAxFtBzU05Hm/BAo4NkAuo=
-github.com/vxcontrol/langchaingo v0.1.14-update.3 h1:2DAwAkrLPibU06meKsivaXUB/PDb9xSVK2zpqP9FBWQ=
-github.com/vxcontrol/langchaingo v0.1.14-update.3/go.mod h1:ojKN1Rl7fAOUxXghuz4K3dCUbMFU4XeUXrzxViAdupo=
+github.com/vxcontrol/langchaingo v0.1.14-update.5 h1:QIib3znyGg/YnRSRB3ZMxwwfRE2vy+xZ2gDH6zwj9fk=
+github.com/vxcontrol/langchaingo v0.1.14-update.5/go.mod h1:fJal4XqJsYXRFTbAPJpwcJdztea9+1174fSDYacgctU=
+github.com/wasilibs/go-re2 v1.10.0 h1:vQZEBYZOCA9jdBMmrO4+CvqyCj0x4OomXTJ4a5/urQ0=
+github.com/wasilibs/go-re2 v1.10.0/go.mod h1:k+5XqO2bCJS+QpGOnqugyfwC04nw0jaglmjrrkG8U6o=
+github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52 h1:OvLBa8SqJnZ6P+mjlzc2K7PM22rRUPE1x32G9DTPrC4=
+github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52/go.mod h1:jMeV4Vpbi8osrE/pKUxRZkVaA0EX7NZN0A9/oRzgpgY=
 github.com/wk8/go-ordered-map/v2 v2.1.8 h1:5h/BUHu93oj4gIdvHHHGsScSTMijfx5PeYkE/fJgbpc=
 github.com/wk8/go-ordered-map/v2 v2.1.8/go.mod h1:5nJHM5DyteebpVlHnWMV0rPz6Zp7+xBAnxjb1X5vnTw=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=

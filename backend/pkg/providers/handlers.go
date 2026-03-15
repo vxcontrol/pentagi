@@ -95,6 +95,12 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 				"Lang":                    fp.language,
 				"CurrentTime":             getCurrentTime(),
 				"ToolPlaceholder":         ToolPlaceholder,
+				"SearchInMemoryToolName":  tools.SearchInMemoryToolName,
+				"GraphitiEnabled":         fp.graphitiClient != nil && fp.graphitiClient.IsEnabled(),
+				"GraphitiSearchToolName":  tools.GraphitiSearchToolName,
+				"FileToolName":            tools.FileToolName,
+				"TerminalToolName":        tools.TerminalToolName,
+				"BrowserToolName":         tools.BrowserToolName,
 			},
 		}
 
@@ -139,16 +145,36 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 	}
 
 	adviserHandler := func(ctx context.Context, ask tools.AskAdvice, enriches string) (string, error) {
+		initiatorAgent := "unknown"
+		if agentCtx, ok := tools.GetAgentContext(ctx); ok {
+			initiatorAgent = string(agentCtx.CurrentAgentType)
+		}
+
 		adviserContext := map[string]map[string]any{
 			"user": {
-				"Question": ask.Question,
-				"Code":     ask.Code,
-				"Output":   ask.Output,
-				"Enriches": enriches,
+				"InitiatorAgent": initiatorAgent,
+				"Question":       ask.Question,
+				"Code":           ask.Code,
+				"Output":         ask.Output,
+				"Enriches":       enriches,
 			},
 			"system": {
-				"ExecutionContext": executionContext,
-				"CurrentTime":      getCurrentTime(),
+				"ExecutionContext":          executionContext,
+				"CurrentTime":               getCurrentTime(),
+				"FinalyToolName":            tools.FinalyToolName,
+				"PentesterToolName":         tools.PentesterToolName,
+				"HackResultToolName":        tools.HackResultToolName,
+				"CoderToolName":             tools.CoderToolName,
+				"CodeResultToolName":        tools.CodeResultToolName,
+				"MaintenanceToolName":       tools.MaintenanceToolName,
+				"MaintenanceResultToolName": tools.MaintenanceResultToolName,
+				"SearchToolName":            tools.SearchToolName,
+				"SearchResultToolName":      tools.SearchResultToolName,
+				"MemoristToolName":          tools.MemoristToolName,
+				"AdviceToolName":            tools.AdviceToolName,
+				"DockerImage":               fp.image,
+				"Cwd":                       docker.WorkFolderPathInContainer,
+				"ContainerPorts":            fp.getContainerPortsDescription(),
 			},
 		}
 

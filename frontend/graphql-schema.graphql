@@ -698,10 +698,19 @@ query settingsPrompts {
                 chooseUserLanguage {
                     ...defaultPromptFragment
                 }
-                collectToolCallID {
+                collectToolCallId {
                     ...defaultPromptFragment
                 }
-                detectToolCallIDPattern {
+                detectToolCallIdPattern {
+                    ...defaultPromptFragment
+                }
+                monitorAgentExecution {
+                    ...defaultPromptFragment
+                }
+                planAgentTask {
+                    ...defaultPromptFragment
+                }
+                wrapAgentTask {
                     ...defaultPromptFragment
                 }
             }

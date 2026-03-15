@@ -1284,8 +1284,14 @@ func (c *controller) ResetEmbedderConfig() *EmbedderConfig {
 type AIAgentsConfig struct {
 	// direct form field mappings using loader.EnvVar
 	// these fields directly correspond to environment variables and form inputs (not computed)
-	HumanInTheLoop     loader.EnvVar // ASK_USER
-	AssistantUseAgents loader.EnvVar // ASSISTANT_USE_AGENTS
+	HumanInTheLoop                 loader.EnvVar // ASK_USER
+	AssistantUseAgents             loader.EnvVar // ASSISTANT_USE_AGENTS
+	ExecutionMonitorEnabled        loader.EnvVar // EXECUTION_MONITOR_ENABLED
+	ExecutionMonitorSameToolLimit  loader.EnvVar // EXECUTION_MONITOR_SAME_TOOL_LIMIT
+	ExecutionMonitorTotalToolLimit loader.EnvVar // EXECUTION_MONITOR_TOTAL_TOOL_LIMIT
+	MaxGeneralAgentToolCalls       loader.EnvVar // MAX_GENERAL_AGENT_TOOL_CALLS
+	MaxLimitedAgentToolCalls       loader.EnvVar // MAX_LIMITED_AGENT_TOOL_CALLS
+	AgentPlanningStepEnabled       loader.EnvVar // AGENT_PLANNING_STEP_ENABLED
 }
 
 func (c *controller) GetAIAgentsConfig() *AIAgentsConfig {
@@ -1293,6 +1299,12 @@ func (c *controller) GetAIAgentsConfig() *AIAgentsConfig {
 
 	config.HumanInTheLoop, _ = c.GetVar("ASK_USER")
 	config.AssistantUseAgents, _ = c.GetVar("ASSISTANT_USE_AGENTS")
+	config.ExecutionMonitorEnabled, _ = c.GetVar("EXECUTION_MONITOR_ENABLED")
+	config.ExecutionMonitorSameToolLimit, _ = c.GetVar("EXECUTION_MONITOR_SAME_TOOL_LIMIT")
+	config.ExecutionMonitorTotalToolLimit, _ = c.GetVar("EXECUTION_MONITOR_TOTAL_TOOL_LIMIT")
+	config.MaxGeneralAgentToolCalls, _ = c.GetVar("MAX_GENERAL_AGENT_TOOL_CALLS")
+	config.MaxLimitedAgentToolCalls, _ = c.GetVar("MAX_LIMITED_AGENT_TOOL_CALLS")
+	config.AgentPlanningStepEnabled, _ = c.GetVar("AGENT_PLANNING_STEP_ENABLED")
 
 	return config
 }
@@ -1307,6 +1319,24 @@ func (c *controller) UpdateAIAgentsConfig(config *AIAgentsConfig) error {
 	}
 	if err := c.SetVar("ASSISTANT_USE_AGENTS", config.AssistantUseAgents.Value); err != nil {
 		return fmt.Errorf("failed to set ASSISTANT_USE_AGENTS: %w", err)
+	}
+	if err := c.SetVar("EXECUTION_MONITOR_ENABLED", config.ExecutionMonitorEnabled.Value); err != nil {
+		return fmt.Errorf("failed to set EXECUTION_MONITOR_ENABLED: %w", err)
+	}
+	if err := c.SetVar("EXECUTION_MONITOR_SAME_TOOL_LIMIT", config.ExecutionMonitorSameToolLimit.Value); err != nil {
+		return fmt.Errorf("failed to set EXECUTION_MONITOR_SAME_TOOL_LIMIT: %w", err)
+	}
+	if err := c.SetVar("EXECUTION_MONITOR_TOTAL_TOOL_LIMIT", config.ExecutionMonitorTotalToolLimit.Value); err != nil {
+		return fmt.Errorf("failed to set EXECUTION_MONITOR_TOTAL_TOOL_LIMIT: %w", err)
+	}
+	if err := c.SetVar("MAX_GENERAL_AGENT_TOOL_CALLS", config.MaxGeneralAgentToolCalls.Value); err != nil {
+		return fmt.Errorf("failed to set MAX_GENERAL_AGENT_TOOL_CALLS: %w", err)
+	}
+	if err := c.SetVar("MAX_LIMITED_AGENT_TOOL_CALLS", config.MaxLimitedAgentToolCalls.Value); err != nil {
+		return fmt.Errorf("failed to set MAX_LIMITED_AGENT_TOOL_CALLS: %w", err)
+	}
+	if err := c.SetVar("AGENT_PLANNING_STEP_ENABLED", config.AgentPlanningStepEnabled.Value); err != nil {
+		return fmt.Errorf("failed to set AGENT_PLANNING_STEP_ENABLED: %w", err)
 	}
 
 	return nil
@@ -2178,6 +2208,13 @@ func (c *controller) getVariableDescription(varName string) string {
 
 		"ASSISTANT_USE_AGENTS": locale.EnvDesc_ASSISTANT_USE_AGENTS,
 
+		"EXECUTION_MONITOR_ENABLED":          locale.EnvDesc_EXECUTION_MONITOR_ENABLED,
+		"EXECUTION_MONITOR_SAME_TOOL_LIMIT":  locale.EnvDesc_EXECUTION_MONITOR_SAME_TOOL_LIMIT,
+		"EXECUTION_MONITOR_TOTAL_TOOL_LIMIT": locale.EnvDesc_EXECUTION_MONITOR_TOTAL_TOOL_LIMIT,
+		"MAX_GENERAL_AGENT_TOOL_CALLS":       locale.EnvDesc_MAX_GENERAL_AGENT_TOOL_CALLS,
+		"MAX_LIMITED_AGENT_TOOL_CALLS":       locale.EnvDesc_MAX_LIMITED_AGENT_TOOL_CALLS,
+		"AGENT_PLANNING_STEP_ENABLED":        locale.EnvDesc_AGENT_PLANNING_STEP_ENABLED,
+
 		"SCRAPER_PUBLIC_URL":                    locale.EnvDesc_SCRAPER_PUBLIC_URL,
 		"SCRAPER_PRIVATE_URL":                   locale.EnvDesc_SCRAPER_PRIVATE_URL,
 		"LOCAL_SCRAPER_USERNAME":                locale.EnvDesc_LOCAL_SCRAPER_USERNAME,
@@ -2429,7 +2466,14 @@ var criticalVariables = map[string]bool{
 	"GRAPHITI_MODEL_NAME": true,
 
 	// server settings changes
-	"ASK_USER":              true,
+	"ASK_USER":                           true,
+	"EXECUTION_MONITOR_ENABLED":          true,
+	"EXECUTION_MONITOR_SAME_TOOL_LIMIT":  true,
+	"EXECUTION_MONITOR_TOTAL_TOOL_LIMIT": true,
+	"MAX_GENERAL_AGENT_TOOL_CALLS":       true,
+	"MAX_LIMITED_AGENT_TOOL_CALLS":       true,
+	"AGENT_PLANNING_STEP_ENABLED":        true,
+
 	"LICENSE_KEY":           true,
 	"PENTAGI_LISTEN_IP":     true,
 	"PENTAGI_LISTEN_PORT":   true,

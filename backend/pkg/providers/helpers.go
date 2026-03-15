@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,7 +34,14 @@ const (
 	maxQABytesAfterRestore       = 20 * 1024 // 20 KB
 	msgLogResultSummarySizeLimit = 70 * 1024 // 70 KB
 	msgLogResultEntrySizeLimit   = 1024      // 1 KB
+	extractLastMessagesCount     = 30
+	extractToolCallsCount        = 10
+	toolCallsHistorySeparator    = "---------------TOOL_CALLS_HISTORY---------------"
 )
+
+type dummyMessage struct {
+	Message string `json:"message"`
+}
 
 type repeatingDetector struct {
 	funcCalls []llms.FunctionCall
@@ -84,6 +92,43 @@ func (rd *repeatingDetector) clearCallArguments(toolCall *llms.FunctionCall) llm
 		Name:      toolCall.Name,
 		Arguments: buffer.String(),
 	}
+}
+
+type executionMonitorBuilder func() *executionMonitor
+
+// executionMonitor detects when to invoke mentor (adviser agent) for execution monitoring
+type executionMonitor struct {
+	sameToolCount  int
+	totalCallCount int
+	lastToolName   string
+	sameThreshold  int
+	totalThreshold int
+	enabled        bool
+}
+
+// shouldInvokeMentor checks if mentor (adviser agent) should be invoked based on tool call patterns
+func (emd *executionMonitor) shouldInvokeMentor(toolCall llms.ToolCall) bool {
+	if !emd.enabled || toolCall.FunctionCall == nil {
+		return false
+	}
+
+	emd.totalCallCount++
+
+	if toolCall.FunctionCall.Name == emd.lastToolName {
+		emd.sameToolCount++
+	} else {
+		emd.sameToolCount = 1
+		emd.lastToolName = toolCall.FunctionCall.Name
+	}
+
+	return emd.sameToolCount >= emd.sameThreshold || emd.totalCallCount >= emd.totalThreshold
+}
+
+// reset resets the execution monitor state after mentor (adviser agent) invocation
+func (emd *executionMonitor) reset() {
+	emd.sameToolCount = 0
+	emd.totalCallCount = 0
+	emd.lastToolName = ""
 }
 
 func (fp *flowProvider) getTasksInfo(ctx context.Context, taskID int64) (*tasksInfo, error) {
@@ -724,15 +769,28 @@ func (fp *flowProvider) subtasksToMarkdown(subtasks []tools.SubtaskInfo) string 
 func (fp *flowProvider) getContainerPortsDescription() string {
 	ports := docker.GetPrimaryContainerPorts(fp.flowID)
 	var buffer strings.Builder
-	buffer.WriteString("This container has the following ports which bind to the host:\n")
+	
+	buffer.WriteString("**OOB Attack Infrastructure:**\n\n")
+	buffer.WriteString("This container has TCP ports bound for receiving out-of-band (OOB) callbacks:\n\n")
+	
 	for _, port := range ports {
-		buffer.WriteString(fmt.Sprintf("* %s:%d -> %d/tcp (in container)\n", fp.publicIP, port, port))
+		buffer.WriteString(fmt.Sprintf("- Port %d/tcp (container) → %s:%d (external)\n", port, fp.publicIP, port))
 	}
+	
+	buffer.WriteString("\n**Usage for OOB Attacks:**\n")
+	
 	if fp.publicIP == "0.0.0.0" {
-		buffer.WriteString("you need to discover the public IP yourself via the following command:\n")
-		buffer.WriteString("`curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip` or `curl -s ifconfig.me`\n")
+		buffer.WriteString("The bind IP is 0.0.0.0 (all interfaces). To receive external callbacks:\n")
+		buffer.WriteString("1. Discover your public IP: `curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip`\n")
+		buffer.WriteString("2. Use discovered IP in exploit payloads for callbacks\n")
+		buffer.WriteString("3. Listen on container ports (shown above) to receive connections\n\n")
+		buffer.WriteString("**Important:** Check Task.Input - user may have specified the public IP to use.\n")
+	} else {
+		buffer.WriteString(fmt.Sprintf("Your external IP is: %s\n", fp.publicIP))
+		buffer.WriteString("Use this IP in exploit payloads requiring callbacks (DNS exfiltration, reverse shells, XXE OOB, SSRF verification, etc.)\n")
+		buffer.WriteString("Listen on the container ports above to receive incoming connections.\n")
 	}
-	buffer.WriteString("you can listen these ports the container inside and receive connections from the internet.")
+	
 	return buffer.String()
 }
 
@@ -748,4 +806,231 @@ func isEmptyChain(msgChain json.RawMessage) bool {
 	}
 
 	return len(msgList) == 0
+}
+
+func getToolCallMessage(toolCall *llms.FunctionCall) map[string]string {
+	var msg dummyMessage
+
+	if toolCall == nil {
+		return nil
+	}
+
+	if err := json.Unmarshal(json.RawMessage(toolCall.Arguments), &msg); err != nil {
+		return nil
+	}
+
+	return map[string]string{
+		"name": toolCall.Name,
+		"msg":  msg.Message,
+	}
+}
+
+// getRecentMessages returns the last section messages from the chain
+func getRecentMessages(chain []llms.MessageContent) []map[string]string {
+	var messages []map[string]string
+
+	ast, err := cast.NewChainAST(chain, true)
+	if err != nil {
+		return messages
+	}
+
+	lastSection := ast.Sections[len(ast.Sections)-1]
+	if len(lastSection.Body) == 0 {
+		return messages
+	}
+
+	for idx := len(lastSection.Body) - 1; idx >= 0 && len(messages) < extractLastMessagesCount; idx-- {
+		pair := lastSection.Body[idx]
+		if pair.Type != cast.RequestResponse {
+			continue
+		}
+
+		for _, tc := range pair.GetToolCallsInfo().CompletedToolCalls {
+			message := getToolCallMessage(tc.ToolCall.FunctionCall)
+			if message != nil {
+				messages = append(messages, message)
+			}
+		}
+	}
+
+	slices.Reverse(messages)
+
+	return messages
+}
+
+func cutString(s string, maxLength int) string {
+	if len(s) <= maxLength {
+		return s
+	}
+
+	return s[:maxLength] + "...[truncated full size is " + strconv.Itoa(len(s)) + " bytes]"
+}
+
+func formatToolCallArguments(args string) string {
+	var v map[string]any
+	if err := json.Unmarshal(json.RawMessage(args), &v); err != nil {
+		return ""
+	}
+
+	delete(v, "message")
+	var keys []string
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buffer strings.Builder
+	for _, k := range keys {
+		value, err := json.Marshal(v[k])
+		if err != nil {
+			continue
+		}
+		buffer.WriteString(fmt.Sprintf("<field name=\"%s\">%s</field>\n", k, cutString(string(value), 256)))
+	}
+
+	return buffer.String()
+}
+
+func getToolCallInfo(toolCall *cast.ToolCallPair) map[string]string {
+	if toolCall == nil {
+		return nil
+	}
+
+	if toolCall.ToolCall.FunctionCall == nil {
+		return nil
+	}
+
+	return map[string]string{
+		"name":   toolCall.ToolCall.FunctionCall.Name,
+		"args":   formatToolCallArguments(toolCall.ToolCall.FunctionCall.Arguments),
+		"result": cutString(toolCall.Response.Content, 1024),
+	}
+}
+
+// extractToolCallsFromChain extracts all tool calls from the message chain
+func extractToolCallsFromChain(chain []llms.MessageContent) []map[string]string {
+	var toolCalls []map[string]string
+
+	ast, err := cast.NewChainAST(chain, true)
+	if err != nil {
+		return toolCalls
+	}
+
+	lastSection := ast.Sections[len(ast.Sections)-1]
+	if len(lastSection.Body) == 0 {
+		return toolCalls
+	}
+
+	for idx := len(lastSection.Body) - 1; idx >= 0 && len(toolCalls) < extractToolCallsCount; idx-- {
+		pair := lastSection.Body[idx]
+		if pair.Type != cast.RequestResponse {
+			continue
+		}
+
+		toolCallsInfo := pair.GetToolCallsInfo()
+		for _, tc := range toolCallsInfo.CompletedToolCalls {
+			info := getToolCallInfo(tc)
+			if info != nil {
+				toolCalls = append(toolCalls, info)
+			}
+		}
+	}
+
+	slices.Reverse(toolCalls)
+
+	return toolCalls
+}
+
+// extractAgentPromptFromChain extracts the agent prompt from the message chain
+func extractAgentPromptFromChain(chain []llms.MessageContent) string {
+	ast, err := cast.NewChainAST(chain, true)
+	if err != nil {
+		return ""
+	}
+
+	lastSection := ast.Sections[len(ast.Sections)-1]
+	if len(lastSection.Body) == 0 {
+		return ""
+	}
+
+	if lastSection.Header == nil {
+		return ""
+	}
+
+	humanMessage := lastSection.Header.HumanMessage
+	if humanMessage == nil {
+		return ""
+	}
+
+	var parts []string
+	for _, part := range humanMessage.Parts {
+		if text, ok := part.(llms.TextContent); ok && text.Text != "" {
+			parts = append(parts, text.Text)
+		}
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// formatEnhancedToolResponse formats tool response with optional mentor analysis
+func formatEnhancedToolResponse(originalResult, mentorAnalysis string) string {
+	if mentorAnalysis == "" {
+		return originalResult
+	}
+
+	return fmt.Sprintf(`<enhanced_response>
+<original_result>
+%s
+</original_result>
+
+<mentor_analysis>
+%s
+</mentor_analysis>
+</enhanced_response>`, originalResult, mentorAnalysis)
+}
+
+func extractHistoryFromHumanMessage(msg *llms.MessageContent) string {
+	if msg == nil {
+		return ""
+	}
+
+	if msg.Role != llms.ChatMessageTypeHuman {
+		return ""
+	}
+
+	var parts []string
+	for _, part := range msg.Parts {
+		if text, ok := part.(llms.TextContent); ok && text.Text != "" {
+			parts = append(parts, text.Text)
+		}
+	}
+
+	msgText := strings.Join(parts, "\n")
+	msgParts := strings.Split(msgText, toolCallsHistorySeparator)
+	if len(msgParts) < 2 {
+		return ""
+	}
+
+	return strings.Trim(msgParts[len(msgParts)-1], "\n\t\r ")
+}
+
+func appendNewToolCallsToHistory(history string, toolCalls []map[string]string) string {
+	var buffer strings.Builder
+
+	buffer.WriteString(history)
+	if history != "" {
+		buffer.WriteString("\n")
+	}
+
+	for _, toolCall := range toolCalls {
+		buffer.WriteString(fmt.Sprintf(
+			"<tool_call>\n<name>%s</name>\n<arguments>\n%s\n</arguments>\n<result>%s</result>\n</tool_call>\n",
+			toolCall["name"], toolCall["args"], toolCall["result"]))
+	}
+
+	return buffer.String()
+}
+
+func combineHistoryToolCallsToHumanMessage(history, msg string) string {
+	return fmt.Sprintf("%s\n\n%s\n\n%s", msg, toolCallsHistorySeparator, history)
 }

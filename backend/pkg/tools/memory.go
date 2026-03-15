@@ -13,6 +13,7 @@ import (
 	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
+	"github.com/vxcontrol/langchaingo/schema"
 	"github.com/vxcontrol/langchaingo/vectorstores"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
@@ -83,12 +84,13 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			"task_id":          action.TaskID,
 			"subtask_id":       action.SubtaskID,
 			"specific_filters": isSpecificFilters,
+			"queries_count":    len(action.Questions),
 		}
 
 		retriever := observation.Retriever(
 			langfuse.WithRetrieverName("retrieve memory facts from vector store"),
 			langfuse.WithRetrieverInput(map[string]any{
-				"query":       action.Question,
+				"queries":     action.Questions,
 				"threshold":   memoryVectorStoreThreshold,
 				"max_results": memoryVectorStoreResultLimit,
 				"filters":     filters,
@@ -98,7 +100,7 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 		ctx, observation = retriever.Observation(ctx)
 
 		fields := logrus.Fields{
-			"query": action.Question[:min(len(action.Question), 1000)],
+			"queries_count": len(action.Questions),
 		}
 		if action.TaskID != nil {
 			fields["task_id"] = action.TaskID.Int64()
@@ -109,52 +111,69 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 
 		logger = logger.WithFields(fields)
 
-		docs, err := m.store.SimilaritySearch(
-			ctx,
-			action.Question,
-			memoryVectorStoreResultLimit,
-			vectorstores.WithScoreThreshold(memoryVectorStoreThreshold),
-			vectorstores.WithFilters(filters),
-		)
-		if err != nil {
-			retriever.End(
-				langfuse.WithRetrieverStatus(err.Error()),
-				langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
-			)
-			logger.WithError(err).Error("failed to search for similar documents")
-			return "", fmt.Errorf("failed to search for similar documents: %w", err)
-		}
+		// Execute multiple queries and collect all documents
+		var allDocs []schema.Document
+		for i, query := range action.Questions {
+			queryLogger := logger.WithFields(logrus.Fields{
+				"query_index": i + 1,
+				"query":       query[:min(len(query), 1000)],
+			})
 
-		// fallback to search in the flow only if task or subtask id is provided
-		if isSpecificFilters && len(docs) == 0 {
-			docs, err = m.store.SimilaritySearch(
+			docs, err := m.store.SimilaritySearch(
 				ctx,
-				action.Question,
+				query,
 				memoryVectorStoreResultLimit,
 				vectorstores.WithScoreThreshold(memoryVectorStoreThreshold),
-				vectorstores.WithFilters(globalFilters),
-			)
-			observation.Event(
-				langfuse.WithEventName("memory search fallback to global filters"),
-				langfuse.WithEventInput(map[string]any{
-					"query":       action.Question,
-					"threshold":   memoryVectorStoreThreshold,
-					"max_results": memoryVectorStoreResultLimit,
-					"filters":     globalFilters,
-				}),
-				langfuse.WithEventOutput(docs),
-				langfuse.WithEventStatus("no memory facts found"),
-				langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+				vectorstores.WithFilters(filters),
 			)
 			if err != nil {
-				retriever.End(
-					langfuse.WithRetrieverStatus(err.Error()),
-					langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
-				)
-				logger.WithError(err).Error("failed to search for similar documents by global filters")
-				return "", fmt.Errorf("failed to search for similar documents by global filters: %w", err)
+				queryLogger.WithError(err).Error("failed to search for similar documents")
+				continue // Continue with other queries even if one fails
 			}
+
+			// Fallback to global filters if specific filters yielded no results
+			if isSpecificFilters && len(docs) == 0 {
+				docs, err = m.store.SimilaritySearch(
+					ctx,
+					query,
+					memoryVectorStoreResultLimit,
+					vectorstores.WithScoreThreshold(memoryVectorStoreThreshold),
+					vectorstores.WithFilters(globalFilters),
+				)
+				if err != nil {
+					queryLogger.WithError(err).Error("failed to search with global filters")
+					continue
+				}
+				if len(docs) > 0 {
+					observation.Event(
+						langfuse.WithEventName("memory search fallback to global filters"),
+						langfuse.WithEventInput(map[string]any{
+							"query":       query,
+							"query_index": i + 1,
+							"threshold":   memoryVectorStoreThreshold,
+							"max_results": memoryVectorStoreResultLimit,
+							"filters":     globalFilters,
+						}),
+						langfuse.WithEventOutput(docs),
+						langfuse.WithEventLevel(langfuse.ObservationLevelDebug),
+					)
+				}
+			}
+
+			queryLogger.WithField("docs_found", len(docs)).Debug("query executed")
+			allDocs = append(allDocs, docs...)
 		}
+
+		logger.WithFields(logrus.Fields{
+			"total_docs_before_dedup": len(allDocs),
+		}).Debug("all queries completed")
+
+		// Merge, deduplicate, sort by score, and limit results
+		docs := MergeAndDeduplicateDocs(allDocs, memoryVectorStoreResultLimit)
+
+		logger.WithFields(logrus.Fields{
+			"docs_after_dedup": len(docs),
+		}).Debug("documents deduplicated and sorted")
 
 		if len(docs) == 0 {
 			retriever.End(
@@ -169,9 +188,6 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			)
 			return memoryNotFoundMessage, nil
 		}
-
-		// TODO: here need to rerank and filter the docs based on the question
-		// use evaluator observation type to process each document and to get a score
 
 		retriever.End(
 			langfuse.WithRetrieverStatus("success"),
@@ -208,12 +224,14 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
 			}
+			// Join all queries for logging
+			queriesText := strings.Join(action.Questions, "\n--------------------------------\n")
 			_, _ = m.vslp.PutLog(
 				ctx,
 				agentCtx.ParentAgentType,
 				agentCtx.CurrentAgentType,
 				filtersData,
-				action.Question,
+				queriesText,
 				database.VecstoreActionTypeRetrieve,
 				buffer.String(),
 				action.TaskID.PtrInt64(),

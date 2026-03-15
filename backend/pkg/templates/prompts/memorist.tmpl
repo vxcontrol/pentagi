@@ -113,7 +113,9 @@ Vector database provides the "library" of reusable solutions.
 
 <container_constraints>
 <runtime>Docker {{.DockerImage}} with working directory {{.Cwd}}</runtime>
-<ports>{{.ContainerPorts}}</ports>
+<ports>
+{{.ContainerPorts}}
+</ports>
 <timeout>Default: 120 seconds (Hard limit: 20 minutes)</timeout>
 <restrictions>
 - No GUI applications

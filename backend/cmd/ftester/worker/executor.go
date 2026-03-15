@@ -16,6 +16,8 @@ import (
 	"pentagi/pkg/tools"
 
 	"github.com/sirupsen/logrus"
+	"github.com/vxcontrol/cloud/anonymizer"
+	"github.com/vxcontrol/cloud/anonymizer/patterns"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
@@ -37,6 +39,7 @@ func (at *agentTool) IsAvailable() bool {
 // toolExecutor holds the necessary data for creating and managing tools
 type toolExecutor struct {
 	flowExecutor   tools.FlowToolsExecutor
+	replacer       anonymizer.Replacer
 	cfg            *config.Config
 	db             database.Querier
 	dockerClient   docker.DockerClient
@@ -61,7 +64,7 @@ func newToolExecutor(
 	taskID, subtaskID *int64,
 	embedder embeddings.Embedder,
 	graphitiClient *graphiti.Client,
-) *toolExecutor {
+) (*toolExecutor, error) {
 	var store *pgvector.Store
 	if embedder.IsAvailable() {
 		s, err := pgvector.New(
@@ -76,8 +79,22 @@ func newToolExecutor(
 		}
 	}
 
+	allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load all patterns: %v", err)
+	}
+
+	// combine with config secret patterns
+	allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
+
+	replacer, err := anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create replacer: %v", err)
+	}
+
 	return &toolExecutor{
 		flowExecutor:   flowExecutor,
+		replacer:       replacer,
 		cfg:            cfg,
 		db:             db,
 		dockerClient:   dockerClient,
@@ -88,7 +105,7 @@ func newToolExecutor(
 		flowID:         flowID,
 		taskID:         taskID,
 		subtaskID:      subtaskID,
-	}
+	}, nil
 }
 
 // GetTool returns the appropriate tool for a given function name
@@ -221,6 +238,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
+			te.replacer,
 			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
@@ -230,6 +248,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
+			te.replacer,
 			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil
@@ -239,6 +258,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
+			te.replacer,
 			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil

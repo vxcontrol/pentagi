@@ -440,22 +440,32 @@ func (pc *providerController) NewFlowProvider(
 	}
 
 	fp := &flowProvider{
-		db:             pc.db,
-		mx:             &sync.RWMutex{},
-		embedder:       pc.embedder,
-		graphitiClient: pc.graphitiClient,
-		flowID:         flowID,
-		publicIP:       pc.publicIP,
-		callCounter:    newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
-		image:          image,
-		title:          title,
-		language:       language,
-		askUser:        askUser,
-		tcIDTemplate:   tcIDTemplate,
-		prompter:       prompter,
-		executor:       executor,
-		summarizer:     pc.summarizerAgent,
-		Provider:       prv,
+		db:              pc.db,
+		mx:              &sync.RWMutex{},
+		embedder:        pc.embedder,
+		graphitiClient:  pc.graphitiClient,
+		flowID:          flowID,
+		publicIP:        pc.publicIP,
+		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+		image:           image,
+		title:           title,
+		language:        language,
+		askUser:         askUser,
+		planning:        pc.cfg.AgentPlanningStepEnabled,
+		tcIDTemplate:    tcIDTemplate,
+		prompter:        prompter,
+		executor:        executor,
+		summarizer:      pc.summarizerAgent,
+		Provider:        prv,
+		maxGACallsLimit: pc.cfg.MaxGeneralAgentToolCalls,
+		maxLACallsLimit: pc.cfg.MaxLimitedAgentToolCalls,
+		buildMonitor: func() *executionMonitor {
+			return &executionMonitor{
+				enabled:        pc.cfg.ExecutionMonitorEnabled,
+				sameThreshold:  pc.cfg.ExecutionMonitorSameToolLimit,
+				totalThreshold: pc.cfg.ExecutionMonitorTotalToolLimit,
+			}
+		},
 	}
 
 	return fp, nil
@@ -479,22 +489,32 @@ func (pc *providerController) LoadFlowProvider(
 	}
 
 	fp := &flowProvider{
-		db:             pc.db,
-		mx:             &sync.RWMutex{},
-		embedder:       pc.embedder,
-		graphitiClient: pc.graphitiClient,
-		flowID:         flowID,
-		publicIP:       pc.publicIP,
-		callCounter:    newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
-		image:          image,
-		title:          title,
-		language:       language,
-		askUser:        askUser,
-		tcIDTemplate:   tcIDTemplate,
-		prompter:       prompter,
-		executor:       executor,
-		summarizer:     pc.summarizerAgent,
-		Provider:       prv,
+		db:              pc.db,
+		mx:              &sync.RWMutex{},
+		embedder:        pc.embedder,
+		graphitiClient:  pc.graphitiClient,
+		flowID:          flowID,
+		publicIP:        pc.publicIP,
+		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
+		image:           image,
+		title:           title,
+		language:        language,
+		askUser:         askUser,
+		planning:        pc.cfg.AgentPlanningStepEnabled,
+		tcIDTemplate:    tcIDTemplate,
+		prompter:        prompter,
+		executor:        executor,
+		summarizer:      pc.summarizerAgent,
+		Provider:        prv,
+		maxGACallsLimit: pc.cfg.MaxGeneralAgentToolCalls,
+		maxLACallsLimit: pc.cfg.MaxLimitedAgentToolCalls,
+		buildMonitor: func() *executionMonitor {
+			return &executionMonitor{
+				enabled:        pc.cfg.ExecutionMonitorEnabled,
+				sameThreshold:  pc.cfg.ExecutionMonitorSameToolLimit,
+				totalThreshold: pc.cfg.ExecutionMonitorTotalToolLimit,
+			}
+		},
 	}
 
 	return fp, nil

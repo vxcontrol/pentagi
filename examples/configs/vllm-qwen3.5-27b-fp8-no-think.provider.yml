@@ -1,13 +1,8 @@
-# Qwen3.5-27B FP8 Provider Configuration - THINKING MODE (default)
+# Qwen3.5-27B FP8 Provider Configuration - NON-THINKING MODE
 # Based on official Qwen recommendations for vLLM inference
 # Architecture: Hybrid 75% DeltaNet + 25% Full Attention (48+16 layers)
 # Context: 262K native, expandable to 1M with YaRN
 # Vision: VLM with Vision Encoder (uses VRAM even for text-only tasks)
-#
-# Thinking mode is enabled by default (no extra_body needed)
-# Recommended sampling parameters:
-# - General tasks: temp=1.0, top_p=0.95, top_k=20, min_p=0.0, pp=1.5, rp=1.0
-# - Precise coding: temp=0.6, top_p=0.95, top_k=20, min_p=0.0, pp=0.0, rp=1.0
 #
 # Non-thinking mode is disabled via extra_body parameter
 # Recommended sampling parameters:
@@ -53,6 +48,9 @@ primary_agent:
   repetition_penalty: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
 
 assistant:
   model: "Qwen/Qwen3.5-27B-FP8"
@@ -64,6 +62,9 @@ assistant:
   repetition_penalty: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
 
 generator:
   model: "Qwen/Qwen3.5-27B-FP8"
@@ -75,6 +76,9 @@ generator:
   repetition_penalty: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
 
 refiner:
   model: "Qwen/Qwen3.5-27B-FP8"
@@ -86,6 +90,9 @@ refiner:
   repetition_penalty: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
 
 adviser:
   model: "Qwen/Qwen3.5-27B-FP8"
@@ -97,6 +104,9 @@ adviser:
   repetition_penalty: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
 
 reflector:
   model: "Qwen/Qwen3.5-27B-FP8"
@@ -142,33 +152,42 @@ enricher:
 
 coder:
   model: "Qwen/Qwen3.5-27B-FP8"
-  temperature: 0.6
+  temperature: 1.0
   top_k: 20
   top_p: 0.95
   min_p: 0.0
-  presence_penalty: 0.0
+  presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
 
 installer:
   model: "Qwen/Qwen3.5-27B-FP8"
-  temperature: 0.6
+  temperature: 1.0
   top_k: 20
   top_p: 0.95
   min_p: 0.0
-  presence_penalty: 0.0
+  presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
 
 pentester:
   model: "Qwen/Qwen3.5-27B-FP8"
-  temperature: 0.6
+  temperature: 1.0
   top_k: 20
   top_p: 0.95
   min_p: 0.0
-  presence_penalty: 0.0
+  presence_penalty: 1.5
   repetition_penalty: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false

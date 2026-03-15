@@ -51,7 +51,11 @@ type browser struct {
 	scp       ScreenshotProvider
 }
 
-func NewBrowserTool(flowID int64, taskID, subtaskID *int64, dataDir, scPrvURL, scPubURL string, scp ScreenshotProvider) Tool {
+func NewBrowserTool(
+	flowID int64, taskID, subtaskID *int64,
+	dataDir, scPrvURL, scPubURL string,
+	scp ScreenshotProvider,
+) Tool {
 	return &browser{
 		flowID:    flowID,
 		taskID:    taskID,

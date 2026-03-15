@@ -138,6 +138,7 @@ type flowProvider struct {
 	title    string
 	language string
 	askUser  bool
+	planning bool
 
 	tcIDTemplate string
 
@@ -148,6 +149,10 @@ type flowProvider struct {
 	streamCb StreamMessageHandler
 
 	summarizer csum.Summarizer
+
+	maxGACallsLimit int
+	maxLACallsLimit int
+	buildMonitor    executionMonitorBuilder
 
 	provider.Provider
 }

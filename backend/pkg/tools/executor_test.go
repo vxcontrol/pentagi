@@ -225,7 +225,7 @@ func TestExecuteEarlyReturns(t *testing.T) {
 		ce := &customExecutor{
 			handlers: map[string]ExecutorHandler{},
 		}
-		result, err := ce.Execute(t.Context(), 1, "id", "unknown_tool", "", json.RawMessage(`{}`))
+		result, err := ce.Execute(t.Context(), 1, "id", "unknown_tool", "", "", json.RawMessage(`{}`))
 		if err != nil {
 			t.Fatalf("Execute() unexpected error: %v", err)
 		}
@@ -243,7 +243,7 @@ func TestExecuteEarlyReturns(t *testing.T) {
 				},
 			},
 		}
-		result, err := ce.Execute(t.Context(), 1, "id", TerminalToolName, "", json.RawMessage(`{invalid`))
+		result, err := ce.Execute(t.Context(), 1, "id", TerminalToolName, "", "", json.RawMessage(`{invalid`))
 		if err != nil {
 			t.Fatalf("Execute() unexpected error: %v", err)
 		}

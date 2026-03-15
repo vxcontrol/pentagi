@@ -1287,25 +1287,69 @@ const (
 	ToolsAIAgentsSettingsFormName        = "AI Agents Settings"
 	ToolsAIAgentsSettingsFormOverview    = `This section configures global behavior of AI agents across PentAGI.
 
-Current options:
-• Enable User Interaction (Human-in-the-loop): allow agents to request user input when needed
-• Use Multi-Agent Mode: enable assistant to orchestrate multiple specialized agents when appropriate
+Basic Settings:
+• Enable User Interaction: allow agents to request user input when needed
+• Use Multi-Agent Mode: enable assistant to orchestrate multiple specialized agents
 
-These settings affect how AI agents operate system-wide.`
+Execution Monitoring (⚠️  BETA):
+• Enable Execution Monitoring: automatic mentor supervision for pattern analysis
+• Same Tool Call Threshold: consecutive identical tool calls before mentor review
+• Total Tool Call Threshold: total tool calls before mentor review
+
+Tool Call Limits:
+• Max Tool Calls (General Agents): prevent runaway executions for Assistant, Primary Agent, Pentester, Coder, Installer
+• Max Tool Calls (Limited Agents): prevent runaway executions for Searcher, Enricher, Memorist, etc.
+
+Task Planning (⚠️  BETA):
+• Enable Task Planning: generate structured execution plans for specialist agents
+
+⚠️  BETA features are under active development. Enable for testing only.`
 
 	// field labels and descriptions
-	ToolsAIAgentsSettingHumanInTheLoop     = "Enable User Interaction"
-	ToolsAIAgentsSettingHumanInTheLoopDesc = "Allow agents to ask for user input when needed"
-	ToolsAIAgentsSettingUseAgents          = "Use Multi-Agent Mode"
-	ToolsAIAgentsSettingUseAgentsDesc      = "Enable assistant to orchestrate multiple specialized agents"
+	ToolsAIAgentsSettingHumanInTheLoop          = "Enable User Interaction"
+	ToolsAIAgentsSettingHumanInTheLoopDesc      = "Allow agents to ask for user input when needed"
+	ToolsAIAgentsSettingUseAgents               = "Use Multi-Agent Mode"
+	ToolsAIAgentsSettingUseAgentsDesc           = "Enable assistant to orchestrate multiple specialized agents"
+	ToolsAIAgentsSettingExecutionMonitor        = "Enable Execution Monitoring (beta)"
+	ToolsAIAgentsSettingExecutionMonitorDesc    = "Automatically invoke mentor for execution pattern analysis"
+	ToolsAIAgentsSettingSameToolLimit           = "Same Tool Call Threshold"
+	ToolsAIAgentsSettingSameToolLimitDesc       = "Consecutive identical tool calls before mentor review"
+	ToolsAIAgentsSettingTotalToolLimit          = "Total Tool Call Threshold"
+	ToolsAIAgentsSettingTotalToolLimitDesc      = "Total tool calls before mentor review"
+	ToolsAIAgentsSettingMaxGeneralToolCalls     = "Max Tool Calls (General Agents)"
+	ToolsAIAgentsSettingMaxGeneralToolCallsDesc = "Maximum tool calls for Assistant, Primary Agent, Pentester, Coder, Installer"
+	ToolsAIAgentsSettingMaxLimitedToolCalls     = "Max Tool Calls (Limited Agents)"
+	ToolsAIAgentsSettingMaxLimitedToolCallsDesc = "Maximum tool calls for Searcher, Enricher, Memorist, etc."
+	ToolsAIAgentsSettingTaskPlanning            = "Enable Task Planning (beta)"
+	ToolsAIAgentsSettingTaskPlanningDesc        = "Generate structured execution plans for specialist agents"
 
 	// help content
-	ToolsAIAgentsSettingsHelp = `AI Agents Settings define how agents collaborate and interact with users.
+	ToolsAIAgentsSettingsHelp = `AI Agents Settings define how agents collaborate, interact with users, and handle execution control.
 
-• Enable User Interaction to allow safe prompts for approval and clarifications.
-• Use Multi-Agent Mode to let the assistant spawn domain-specific agents (researcher, coder, pentester) for better results on complex tasks.
+Basic Settings:
+• Enable User Interaction: allow agents to ask for user input when needed
+• Use Multi-Agent Mode: enable assistant to orchestrate specialized agents for complex tasks
 
-Note: These are global settings for control AI agents behavior.`
+Execution Monitoring (⚠️  BETA):
+Automatically invokes adviser (mentor) to analyze execution patterns, detect loops, suggest alternative strategies, and prevent agents from fixating on single approach. Thresholds: consecutive identical calls (default: 5) and total calls (default: 10).
+
+Task Planning (⚠️  BETA):
+Generates 3-7 step execution plans before specialist agents begin work. Prevents scope creep and improves success rates. Works best when adviser uses enhanced configuration (stronger model or maximum reasoning mode).
+
+Tool Call Limits (always active):
+Hard limits prevent infinite loops: General agents default 100, Limited agents default 20. Works independently from beta features.
+
+OPEN SOURCE MODELS < 32B (Qwen3.5-27B, DeepSeek-V3, Llama-3.1-70B):
+✓ ENABLE both beta features - ESSENTIAL for quality results
+✓ Testing shows 2x improvement in result quality vs. baseline
+✓ Configure adviser with enhanced settings for best performance
+✓ Ideal for air-gapped deployments with local LLM inference
+
+Performance: 2-3x increase in tokens/time, 2x improvement in quality for models < 32B.
+
+⚠️  BETA WARNING: Features under active development. Recommended for open source models < 32B despite beta status. For cloud APIs with larger models, keep disabled.
+
+Note: Changes require service restart.`
 )
 
 // Search Engines screen strings
@@ -2159,6 +2203,13 @@ const (
 	EnvDesc_ASK_USER = "Human-in-the-loop"
 
 	EnvDesc_ASSISTANT_USE_AGENTS = "Enable multi-agent mode for assistant"
+
+	EnvDesc_EXECUTION_MONITOR_ENABLED          = "Enable Execution Monitoring (beta)"
+	EnvDesc_EXECUTION_MONITOR_SAME_TOOL_LIMIT  = "Same Tool Call Threshold"
+	EnvDesc_EXECUTION_MONITOR_TOTAL_TOOL_LIMIT = "Total Tool Call Threshold"
+	EnvDesc_MAX_GENERAL_AGENT_TOOL_CALLS       = "Max Tool Calls for General Agents"
+	EnvDesc_MAX_LIMITED_AGENT_TOOL_CALLS       = "Max Tool Calls for Limited Agents"
+	EnvDesc_AGENT_PLANNING_STEP_ENABLED        = "Enable Task Planning (beta)"
 
 	EnvDesc_SCRAPER_PUBLIC_URL                    = "Scraper Public URL"
 	EnvDesc_SCRAPER_PRIVATE_URL                   = "Scraper Private URL"

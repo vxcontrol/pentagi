@@ -11,7 +11,9 @@ import (
 	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
+	"github.com/vxcontrol/cloud/anonymizer"
 	"github.com/vxcontrol/langchaingo/documentloaders"
+	"github.com/vxcontrol/langchaingo/schema"
 	"github.com/vxcontrol/langchaingo/vectorstores"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
@@ -27,15 +29,23 @@ type code struct {
 	flowID    int64
 	taskID    *int64
 	subtaskID *int64
+	replacer  anonymizer.Replacer
 	store     *pgvector.Store
 	vslp      VectorStoreLogProvider
 }
 
-func NewCodeTool(flowID int64, taskID, subtaskID *int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+func NewCodeTool(
+	flowID int64,
+	taskID, subtaskID *int64,
+	replacer anonymizer.Replacer,
+	store *pgvector.Store,
+	vslp VectorStoreLogProvider,
+) Tool {
 	return &code{
 		flowID:    flowID,
 		taskID:    taskID,
 		subtaskID: subtaskID,
+		replacer:  replacer,
 		store:     store,
 		vslp:      vslp,
 	}
@@ -71,18 +81,19 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 		}
 
 		metadata := langfuse.Metadata{
-			"tool_name": name,
-			"code_lang": action.Lang,
-			"message":   action.Message,
-			"limit":     codeVectorStoreResultLimit,
-			"threshold": codeVectorStoreThreshold,
-			"doc_type":  codeVectorStoreDefaultType,
+			"tool_name":     name,
+			"code_lang":     action.Lang,
+			"message":       action.Message,
+			"limit":         codeVectorStoreResultLimit,
+			"threshold":     codeVectorStoreThreshold,
+			"doc_type":      codeVectorStoreDefaultType,
+			"queries_count": len(action.Questions),
 		}
 
 		retriever := observation.Retriever(
 			langfuse.WithRetrieverName("retrieve code samples from vector store"),
 			langfuse.WithRetrieverInput(map[string]any{
-				"query":       action.Question,
+				"queries":     action.Questions,
 				"threshold":   codeVectorStoreThreshold,
 				"max_results": codeVectorStoreResultLimit,
 				"filters":     filters,
@@ -92,26 +103,45 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 		ctx, observation = retriever.Observation(ctx)
 
 		logger = logger.WithFields(logrus.Fields{
-			"query":   action.Question[:min(len(action.Question), 1000)],
-			"lang":    action.Lang,
-			"filters": filters,
+			"queries_count": len(action.Questions),
+			"lang":          action.Lang,
+			"filters":       filters,
 		})
 
-		docs, err := c.store.SimilaritySearch(
-			ctx,
-			action.Question,
-			codeVectorStoreResultLimit,
-			vectorstores.WithScoreThreshold(codeVectorStoreThreshold),
-			vectorstores.WithFilters(filters),
-		)
-		if err != nil {
-			retriever.End(
-				langfuse.WithRetrieverStatus(err.Error()),
-				langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
+		// Execute multiple queries and collect all documents
+		var allDocs []schema.Document
+		for i, query := range action.Questions {
+			queryLogger := logger.WithFields(logrus.Fields{
+				"query_index": i + 1,
+				"query":       query[:min(len(query), 1000)],
+			})
+
+			docs, err := c.store.SimilaritySearch(
+				ctx,
+				query,
+				codeVectorStoreResultLimit,
+				vectorstores.WithScoreThreshold(codeVectorStoreThreshold),
+				vectorstores.WithFilters(filters),
 			)
-			logger.WithError(err).Error("failed to search code samples for question")
-			return "", fmt.Errorf("failed to search code samples for question: %w", err)
+			if err != nil {
+				queryLogger.WithError(err).Error("failed to search code samples for query")
+				continue // Continue with other queries even if one fails
+			}
+
+			queryLogger.WithField("docs_found", len(docs)).Debug("query executed")
+			allDocs = append(allDocs, docs...)
 		}
+
+		logger.WithFields(logrus.Fields{
+			"total_docs_before_dedup": len(allDocs),
+		}).Debug("all queries completed")
+
+		// Merge, deduplicate, sort by score, and limit results
+		docs := MergeAndDeduplicateDocs(allDocs, codeVectorStoreResultLimit)
+
+		logger.WithFields(logrus.Fields{
+			"docs_after_dedup": len(docs),
+		}).Debug("documents deduplicated and sorted")
 
 		if len(docs) == 0 {
 			retriever.End(
@@ -132,9 +162,6 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			langfuse.WithRetrieverLevel(langfuse.ObservationLevelDebug),
 			langfuse.WithRetrieverOutput(docs),
 		)
-
-		// TODO: here need to rerank and filter the docs based on the question
-		// use evaluator observation type to process each document and to get a score
 
 		buffer := strings.Builder{}
 		for i, doc := range docs {
@@ -157,12 +184,14 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
 			}
+			// Join all queries for logging
+			queriesText := strings.Join(action.Questions, "\n--------------------------------\n")
 			_, _ = c.vslp.PutLog(
 				ctx,
 				agentCtx.ParentAgentType,
 				agentCtx.CurrentAgentType,
 				filtersData,
-				action.Question,
+				queriesText,
 				database.VecstoreActionTypeRetrieve,
 				buffer.String(),
 				c.taskID,
@@ -203,7 +232,12 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			"code":  action.Code[:min(len(action.Code), 1000)],
 		})
 
-		docs, err := documentloaders.NewText(strings.NewReader(buffer.String())).Load(ctx)
+		var (
+			anonymizedCode     = c.replacer.ReplaceString(buffer.String())
+			anonymizedQuestion = c.replacer.ReplaceString(action.Question)
+		)
+
+		docs, err := documentloaders.NewText(strings.NewReader(anonymizedCode)).Load(ctx)
 		if err != nil {
 			observation.Event(append(opts,
 				langfuse.WithEventStatus(err.Error()),
@@ -226,10 +260,10 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			}
 			doc.Metadata["doc_type"] = codeVectorStoreDefaultType
 			doc.Metadata["code_lang"] = action.Lang
-			doc.Metadata["question"] = action.Question
+			doc.Metadata["question"] = anonymizedQuestion
 			doc.Metadata["description"] = action.Description
 			doc.Metadata["part_size"] = len(doc.PageContent)
-			doc.Metadata["total_size"] = len(action.Code)
+			doc.Metadata["total_size"] = len(anonymizedCode)
 		}
 
 		if _, err := c.store.AddDocuments(ctx, docs); err != nil {

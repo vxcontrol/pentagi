@@ -241,7 +241,7 @@ func (ce *customExecutor) createSpanObservation(ctx context.Context, name string
 func (ce *customExecutor) Execute(
 	ctx context.Context,
 	streamID int64,
-	id, name, thinking string,
+	id, name, obsName, thinking string,
 	args json.RawMessage,
 ) (string, error) {
 	startTime := time.Now()
@@ -262,11 +262,11 @@ func (ce *customExecutor) Execute(
 
 	switch toolType {
 	case EnvironmentToolType, SearchNetworkToolType, StoreAgentResultToolType, StoreVectorDbToolType:
-		obsWrapper = ce.createToolObservation(ctx, name, args)
+		obsWrapper = ce.createToolObservation(ctx, obsName, args)
 	case AgentToolType:
-		obsWrapper = ce.createAgentObservation(ctx, name, args)
+		obsWrapper = ce.createAgentObservation(ctx, obsName, args)
 	case BarrierToolType:
-		obsWrapper = ce.createSpanObservation(ctx, name, args)
+		obsWrapper = ce.createSpanObservation(ctx, obsName, args)
 	case SearchVectorDbToolType:
 		// Skip - handlers create RETRIEVER internally
 		obsWrapper = &noopObservationWrapper{context: ctx}
@@ -365,9 +365,11 @@ func (ce *customExecutor) Execute(
 		return "", fmt.Errorf("failed to store tool result in long-term memory: %w", err)
 	}
 
-	if err := ce.mlp.UpdateMsgResult(ctx, msgID, streamID, result, resultFormat); err != nil {
-		obsWrapper.end(result, err, time.Since(startTime).Seconds())
-		return "", err
+	if msgID != 0 {
+		if err := ce.mlp.UpdateMsgResult(ctx, msgID, streamID, result, resultFormat); err != nil {
+			obsWrapper.end(result, err, time.Since(startTime).Seconds())
+			return "", err
+		}
 	}
 
 	obsWrapper.end(result, nil, time.Since(startTime).Seconds())
@@ -377,6 +379,11 @@ func (ce *customExecutor) Execute(
 
 func (ce *customExecutor) IsBarrierFunction(name string) bool {
 	_, ok := ce.barriers[name]
+	return ok
+}
+
+func (ce *customExecutor) IsFunctionExists(name string) bool {
+	_, ok := ce.handlers[name]
 	return ok
 }
 
