@@ -39,13 +39,13 @@ You can watch the video **PentAGI overview**:
 ## Features
 
 - Secure & Isolated. All operations are performed in a sandboxed Docker environment with complete isolation.
-- Fully Autonomous. AI-powered agent that automatically determines and executes penetration testing steps.
+- Fully Autonomous. AI-powered agent that automatically determines and executes penetration testing steps with optional execution monitoring and intelligent task planning for enhanced reliability.
 - Professional Pentesting Tools. Built-in suite of 20+ professional security tools including nmap, metasploit, sqlmap, and more.
 - Smart Memory System. Long-term storage of research results and successful approaches for future use.
 - Knowledge Graph Integration. Graphiti-powered knowledge graph using Neo4j for semantic relationship tracking and advanced context understanding.
 - Web Intelligence. Built-in browser via [scraper](https://hub.docker.com/r/vxcontrol/scraper) for gathering latest information from web sources.
 - External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/), [Sploitus Search](https://sploitus.com) and [Searxng](https://searxng.org) for comprehensive information gathering.
-- Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks.
+- Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks, enhanced with optional execution monitoring and intelligent task planning for optimal performance with smaller models.
 - Comprehensive Monitoring. Detailed logging and integration with Grafana/Prometheus for real-time system observation.
 - Detailed Reporting. Generation of thorough vulnerability reports with exploitation guides.
 - Smart Container Management. Automatic Docker image selection based on specific task requirements.
@@ -54,7 +54,7 @@ You can watch the video **PentAGI overview**:
 - Persistent Storage. All commands and outputs are stored in PostgreSQL with [pgvector](https://hub.docker.com/r/vxcontrol/pgvector) extension.
 - Scalable Architecture. Microservices-based design supporting horizontal scaling.
 - Self-Hosted Solution. Complete control over your deployment and data.
-- Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), Custom) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/)).
+- Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), Custom) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/)). For production local deployments, see our [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
 - API Token Authentication. Secure Bearer token system for programmatic access to REST and GraphQL APIs.
 - Quick Deployment. Easy setup through [Docker Compose](https://docs.docker.com/compose/) with comprehensive environment configuration.
 
@@ -429,6 +429,77 @@ ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS=3
 
 </details>
 
+<details>
+<summary><b>Advanced Agent Supervision</b> (click to expand)</summary>
+
+PentAGI includes sophisticated multi-layered agent supervision mechanisms to ensure efficient task execution, prevent infinite loops, and provide intelligent recovery from stuck states:
+
+### Execution Monitoring (Beta)
+- **Automatic Mentor Intervention**: Adviser agent (mentor) is automatically invoked when execution patterns indicate potential issues
+- **Pattern Detection**: Monitors identical tool calls (threshold: 5, configurable) and total tool calls (threshold: 10, configurable)
+- **Progress Analysis**: Evaluates whether agent advances toward subtask objective, detects loops and inefficiencies
+- **Alternative Strategies**: Recommends different approaches when current strategy fails
+- **Information Retrieval Guidance**: Suggests searching for established solutions instead of reinventing
+- **Enhanced Response Format**: Tool responses include both `<original_result>` and `<mentor_analysis>` sections
+- **Configurable**: Enable via `EXECUTION_MONITOR_ENABLED` (default: false), customize thresholds with `EXECUTION_MONITOR_SAME_TOOL_LIMIT` and `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT`
+
+**Best for**: Smaller models (< 32B parameters), complex attack scenarios requiring continuous guidance, preventing agents from getting stuck on single approach
+
+**Performance Impact**: 2-3x increase in execution time and token usage, but delivers **2x improvement in result quality** based on testing with Qwen3.5-27B-FP8
+
+### Intelligent Task Planning (Beta)
+- **Automated Decomposition**: Planner (adviser in planning mode) generates 3-7 specific, actionable steps before specialist agents begin work
+- **Context-Aware Plans**: Analyzes full execution context via enricher agent to create informed plans
+- **Structured Assignment**: Original request wrapped in `<task_assignment>` structure with execution plan and instructions
+- **Scope Management**: Prevents scope creep by keeping agents focused on current subtask only
+- **Enriched Instructions**: Plans highlight critical actions, potential pitfalls, and verification points
+- **Configurable**: Enable via `AGENT_PLANNING_STEP_ENABLED` (default: false)
+
+**Best for**: Models < 32B parameters, complex penetration testing workflows, improving success rates on sophisticated tasks
+
+**Enhanced Adviser Configuration**: Works exceptionally well when adviser agent uses stronger model or enhanced settings. Example: using same base model with maximum reasoning mode for adviser (see [`vllm-qwen3.5-27b-fp8.provider.yml`](examples/configs/vllm-qwen3.5-27b-fp8.provider.yml)) enables comprehensive task analysis and strategic planning from identical model architecture.
+
+**Performance Impact**: Adds planning overhead but significantly improves completion rates and reduces redundant work
+
+### Tool Call Limits (Always Active)
+- **Hard Limits**: Prevent runaway executions regardless of supervision mode status
+- **Differentiated by Agent Type**:
+  - General agents (Assistant, Primary Agent, Pentester, Coder, Installer): `MAX_GENERAL_AGENT_TOOL_CALLS` (default: 100)
+  - Limited agents (Searcher, Enricher, Memorist, Generator, Reporter, Adviser, Reflector, Planner): `MAX_LIMITED_AGENT_TOOL_CALLS` (default: 20)
+- **Graceful Termination**: Reflector guides agents to proper completion when approaching limits
+- **Resource Protection**: Ensures system stability and prevents resource exhaustion
+
+### Reflector Integration (Always Active)
+- **Automatic Correction**: Invoked when LLM fails to generate tool calls after 3 attempts
+- **Strategic Guidance**: Analyzes failures and guides agents toward proper tool usage or barrier tools (`done`, `ask`)
+- **Recovery Mechanism**: Provides contextual guidance based on specific failure patterns
+- **Limit Enforcement**: Coordinates graceful termination when tool call limits are reached
+
+### Recommendations for Open Source Models
+
+**Must-Have for Models < 32B Parameters**:
+Testing with Qwen3.5-27B-FP8 demonstrates that enabling both Execution Monitoring and Task Planning is **essential** for smaller open source models:
+- **Quality Improvement**: 2x better results compared to baseline execution without supervision
+- **Loop Prevention**: Significantly reduces infinite loops and redundant work
+- **Attack Diversity**: Encourages exploration of multiple attack vectors instead of fixating on single approach
+- **Air-Gapped Deployments**: Enables production-grade autonomous pentesting in closed network environments with local LLM inference
+
+**Trade-offs**:
+- Token consumption: 2-3x increase due to mentor/planner invocations
+- Execution time: 2-3x longer due to analysis and planning steps
+- Result quality: 2x improvement in completeness, accuracy, and attack coverage
+- Model requirements: Works best when adviser uses enhanced configuration (higher reasoning parameters, stronger model variant, or different model)
+
+**Configuration Strategy**:
+For optimal performance with smaller models, configure adviser agent with enhanced settings:
+- Use same model with maximum reasoning mode (example: [`vllm-qwen3.5-27b-fp8.provider.yml`](examples/configs/vllm-qwen3.5-27b-fp8.provider.yml))
+- Or use stronger model for adviser while keeping base model for other agents
+- Adjust monitoring thresholds based on task complexity and model capabilities
+
+
+
+</details>
+
 The architecture of PentAGI is designed to be modular, scalable, and secure. Here are the key components:
 
 1. **Core Services**
@@ -677,6 +748,8 @@ Visit [localhost:8443](https://localhost:8443) to access PentAGI Web UI (default
 > If you caught an error about `pentagi-network` or `observability-network` or `langfuse-network` you need to run `docker-compose.yml` firstly to create these networks and after that run `docker-compose-langfuse.yml`, `docker-compose-graphiti.yml`, and `docker-compose-observability.yml` to use Langfuse, Graphiti, and Observability services.
 >
 > You have to set at least one Language Model provider (OpenAI, Anthropic, Gemini, AWS Bedrock, or Ollama) to use PentAGI. AWS Bedrock provides enterprise-grade access to multiple foundation models from leading AI companies, while Ollama provides zero-cost local inference if you have sufficient computational resources. Additional API keys for search engines are optional but recommended for better results.
+>
+> **For fully local deployment with advanced models**: See our comprehensive guide on [Running PentAGI with vLLM and Qwen3.5-27B-FP8](examples/guides/vllm-qwen35-27b-fp8.md) for a production-grade local LLM setup. This configuration achieves ~13,000 TPS for prompt processing and ~650 TPS for completion on 4× RTX 5090 GPUs, supporting 12+ concurrent flows with complete independence from cloud providers.
 >
 > `LLM_SERVER_*` environment variables are experimental feature and will be changed in the future. Right now you can use them to specify custom LLM server URL and one model for all agent types.
 >
@@ -1149,7 +1222,10 @@ The token list shows:
 
 ### Custom LLM Provider Configuration
 
-When using custom LLM providers with the `LLM_SERVER_*` variables, you can fine-tune the reasoning format used in requests:
+When using custom LLM providers with the `LLM_SERVER_*` variables, you can fine-tune the reasoning format used in requests.
+
+> [!TIP]
+> For production-grade local deployments, consider using **vLLM** with **Qwen3.5-27B-FP8** for optimal performance. See our [comprehensive deployment guide](examples/guides/vllm-qwen35-27b-fp8.md) which includes hardware requirements, configuration templates ([thinking mode](examples/configs/vllm-qwen3.5-27b-fp8.provider.yml) and [non-thinking mode](examples/configs/vllm-qwen3.5-27b-fp8-no-think.provider.yml)), and performance benchmarks showing 13K TPS prompt processing on 4× RTX 5090 GPUs.
 
 | Variable                        | Default | Description                                                                             |
 | ------------------------------- | ------- | --------------------------------------------------------------------------------------- |
@@ -1457,42 +1533,45 @@ PROXY_URL=http://your-proxy:8080
 
 #### Supported Models
 
-PentAGI supports 7 Claude models with tool calling, streaming, extended thinking, and prompt caching. Models marked with `*` are used in default configuration.
+PentAGI supports 10 Claude models with tool calling, streaming, extended thinking, adaptive thinking, and prompt caching. Models marked with `*` are used in default configuration.
 
-**Claude 4 Series - Most Capable Models (2025)**
-
-| Model ID                 | Thinking | Release Date | Price (Input/Output/Cache R/W) | Use Case                                        |
-| ------------------------ | -------- | ------------ | ------------------------------ | ----------------------------------------------- |
-| `claude-opus-4-5`*       | ✅        | Nov 2025     | $5.00/$25.00/$0.50/$6.25       | Ultimate reasoning with unparalleled depth, critical security research, zero-day discovery, sophisticated red team operations |
-| `claude-sonnet-4-5`*     | ✅        | Sep 2025     | $3.00/$15.00/$0.30/$3.75       | State-of-the-art reasoning with superior tool integration, sophisticated penetration testing, advanced threat analysis |
-| `claude-sonnet-4-0`      | ✅        | May 2025     | $3.00/$15.00/$0.30/$3.75       | High-performance reasoning (superseded by 4-5), complex threat modeling, multi-tool coordination |
-| `claude-haiku-4-5`*      | ❌        | Oct 2025     | $1.00/$5.00/$0.10/$1.25        | Fast and efficient with exceptional function calling, high-frequency scanning, real-time monitoring, bulk testing |
-
-**Claude 3.7 Series - Extended Thinking (2025)**
+**Claude 4 Series - Latest Models (2025-2026)**
 
 | Model ID                 | Thinking | Release Date | Price (Input/Output/Cache R/W) | Use Case                                        |
 | ------------------------ | -------- | ------------ | ------------------------------ | ----------------------------------------------- |
-| `claude-3-7-sonnet-latest` | ✅     | Feb 2025     | $3.00/$15.00/$0.30/$3.75       | Advanced extended chain-of-thought reasoning, methodical attack planning, systematic vulnerability research |
+| `claude-opus-4-6`*       | ✅        | May 2025     | $5.00/$25.00/$0.50/$6.25       | Most intelligent model for autonomous agents and coding. Extended + adaptive thinking for complex exploit development, multi-stage attack simulation |
+| `claude-sonnet-4-6`*     | ✅        | Aug 2025     | $3.00/$15.00/$0.30/$3.75       | Best speed/intelligence balance with adaptive thinking. Multi-phase security assessments, intelligent vulnerability analysis, real-time threat hunting |
+| `claude-haiku-4-5`*      | ✅        | Oct 2025     | $1.00/$5.00/$0.10/$1.25        | Fastest model with near-frontier intelligence. High-frequency scanning, real-time monitoring, bulk automated testing |
 
-**Claude 3.5 Series - Fast and Efficient (2024)**
+**Legacy Models - Still Supported**
 
 | Model ID                 | Thinking | Release Date | Price (Input/Output/Cache R/W) | Use Case                                        |
 | ------------------------ | -------- | ------------ | ------------------------------ | ----------------------------------------------- |
-| `claude-3-5-sonnet-latest` | ❌     | Oct 2024     | $3.00/$15.00/$0.30/$3.75       | High-intelligence balanced model, comprehensive vulnerability analysis, sophisticated penetration testing |
-| `claude-3-5-haiku-latest`  | ❌     | Oct 2024     | $0.80/$4.00/$0.08/$1.00        | Ultra-fast with low latency, rapid vulnerability detection, bulk automated testing, minimal cost |
+| `claude-sonnet-4-5`      | ✅        | Sep 2025     | $3.00/$15.00/$0.30/$3.75       | State-of-the-art reasoning (superseded by 4-6). Sophisticated penetration testing, advanced threat analysis |
+| `claude-opus-4-5`        | ✅        | Nov 2025     | $5.00/$25.00/$0.50/$6.25       | Ultimate reasoning (superseded by opus-4-6). Critical security research, zero-day discovery, red team operations |
+| `claude-opus-4-1`        | ✅        | Aug 2025     | $15.00/$75.00/$1.50/$18.75     | Advanced reasoning (superseded). Complex penetration testing, sophisticated threat modeling |
+| `claude-sonnet-4-0`      | ✅        | May 2025     | $3.00/$15.00/$0.30/$3.75       | High-performance reasoning (superseded). Complex threat modeling, multi-tool coordination |
+| `claude-opus-4-0`        | ✅        | May 2025     | $15.00/$75.00/$1.50/$18.75     | First generation Opus (superseded). Multi-step exploit development, autonomous pentesting workflows |
+
+**Deprecated Models - Migrate to Current Models**
+
+| Model ID                     | Thinking | Release Date | Price (Input/Output/Cache R/W) | Notes                                        |
+| ---------------------------- | -------- | ------------ | ------------------------------ | -------------------------------------------- |
+| `claude-3-haiku-20240307`    | ❌        | Mar 2024     | $0.25/$1.25/$0.03/$0.30        | Will be retired April 19, 2026. Migrate to claude-haiku-4-5 |
 
 **Prices**: Per 1M tokens. Cache pricing includes both Read and Write costs.
 
 **Extended Thinking Configuration**:
-- **Max Tokens 4096**: Generator (claude-opus-4-5) for maximum reasoning depth on complex exploit development
-- **Max Tokens 2048**: Coder (claude-sonnet-4-5) for balanced code analysis and vulnerability research
+- **Max Tokens 4096**: Generator (claude-opus-4-6) for maximum reasoning depth on complex exploit development
+- **Max Tokens 2048**: Coder (claude-sonnet-4-6) for balanced code analysis and vulnerability research  
 - **Max Tokens 1024**: Primary agent, assistant, refiner, adviser, reflector, searcher, installer, pentester for focused reasoning on specific tasks
-- **No Thinking**: Enricher (claude-haiku-4-5) for rapid data processing without extended reasoning overhead
+- **Extended Thinking**: All Claude 4.5+ and 4.6 models support configurable extended thinking for deep reasoning tasks
 
 **Key Features**:
-- **Extended Thinking**: Claude 4 and 3.7 series with configurable chain-of-thought reasoning depths
+- **Extended Thinking**: All Claude 4.5+ and 4.6 models with configurable chain-of-thought reasoning depths for complex security analysis
+- **Adaptive Thinking**: Claude 4.6 series (Opus/Sonnet) dynamically adjusts reasoning depth based on task complexity for optimal performance
 - **Prompt Caching**: Significant cost reduction with separate read/write pricing (10% read, 125% write of input)
-- **200K Context Window**: Comprehensive codebase analysis and extensive documentation review
+- **Extended Context Window**: 200K tokens standard, up to 1M tokens (beta) for Claude Opus/Sonnet 4.6 for comprehensive codebase analysis
 - **Tool Calling**: Robust function calling with exceptional accuracy for security tool orchestration
 - **Streaming**: Real-time response streaming for interactive penetration testing workflows
 - **Safety-First Design**: Built-in safety mechanisms ensuring responsible security testing practices

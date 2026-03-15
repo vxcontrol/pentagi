@@ -68,6 +68,9 @@ enum PromptType {
   short_execution_context
   tool_call_id_collector
   tool_call_id_detector
+  question_execution_monitor
+  question_task_planner
+  task_assignment_wrapper
 }
 
 # AI agent types for autonomous penetration testing
@@ -432,8 +435,11 @@ type ToolsPrompts {
   getShortExecutionContext: DefaultPrompt!
   chooseDockerImage: DefaultPrompt!
   chooseUserLanguage: DefaultPrompt!
-  collectToolCallID: DefaultPrompt!
-  detectToolCallIDPattern: DefaultPrompt!
+  collectToolCallId: DefaultPrompt!
+  detectToolCallIdPattern: DefaultPrompt!
+  monitorAgentExecution: DefaultPrompt!
+  planAgentTask: DefaultPrompt!
+  wrapAgentTask: DefaultPrompt!
 }
 
 # Complete default prompt configuration (read only)

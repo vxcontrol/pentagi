@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/openai"
 	"gopkg.in/yaml.v3"
 )
 
@@ -207,6 +208,7 @@ type AgentConfig struct {
 	ResponseMIMEType  string          `json:"response_mime_type,omitempty" yaml:"response_mime_type,omitempty"`
 	Reasoning         ReasoningConfig `json:"reasoning,omitempty" yaml:"reasoning,omitempty"`
 	Price             *PriceInfo      `json:"price,omitempty" yaml:"price,omitempty"`
+	ExtraBody         map[string]any  `json:"extra_body,omitempty" yaml:"extra_body,omitempty"`
 	raw               map[string]any  `json:"-" yaml:"-"`
 }
 
@@ -580,6 +582,9 @@ func (ac *AgentConfig) BuildOptions() []llms.CallOption {
 			}
 		}
 	}
+	if _, ok := ac.raw["extra_body"]; ok && ac.ExtraBody != nil {
+		options = append(options, openai.WithExtraBody(ac.ExtraBody))
+	}
 
 	return options
 }
@@ -643,6 +648,9 @@ func (ac *AgentConfig) marshalMap() map[string]any {
 	}
 	if ac.Price != nil {
 		output["price"] = ac.Price
+	}
+	if ac.ExtraBody != nil {
+		output["extra_body"] = ac.ExtraBody
 	}
 
 	return output

@@ -302,6 +302,31 @@ func CreateDummyTemplateData() map[string]any {
 				Error:    "Test previous attempt error 3",
 			},
 		},
+
+		// New variables for execution monitor and task planner
+		"SubtaskDescription": "Test subtask description for execution monitoring",
+		"AgentType":          "pentester",
+		"AgentPrompt":        "Test agent system prompt",
+		"RecentMessages": []map[string]string{
+			{
+				"name": "test_tool",
+				"msg":  "Test tool message",
+			},
+		},
+		"ExecutedToolCalls": []map[string]string{
+			{
+				"name":   "test_tool",
+				"args":   "<field name=\"param1\">value1</field>\n<field name=\"param2\">value2</field>",
+				"result": "Test tool result",
+			},
+		},
+		"LastToolName":    "test_tool",
+		"LastToolArgs":    "<field name=\"param1\">value1</field>\n<field name=\"param2\">value2</field>",
+		"LastToolResult":  "Test tool result",
+		"TaskQuestion":    "Test task question for planning",
+		"OriginalRequest": "Test original request for task assignment",
+		"ExecutionPlan":   "1. First step\n2. Second step\n3. Third step",
+		"InitiatorAgent":  database.MsgchainTypePentester,
 	}
 }
 

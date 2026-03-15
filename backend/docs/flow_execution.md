@@ -5,9 +5,9 @@ This document describes the internal architecture and execution workflow of Flow
 ## 1. Core Concepts and Terminology
 
 ### Hierarchy
-- **Flow** - Top-level workflow representing a complete penetration testing session
-- **Task** - Major unit of work within a Flow, representing a significant phase of testing
-- **Subtask** - Specific assignment executed by AI agents within a Task
+- **Flow** - Top-level workflow representing a complete penetration testing session (persistent)
+- **Task** - User-defined objective within a Flow (multiple Tasks can exist in one Flow)
+- **Subtask** - Auto-decomposed sequential step to complete a Task (generated and refined by system)
 - **Action** - Individual operation performed by agents (commands, searches, analyses)
 
 ### Workers
@@ -24,7 +24,7 @@ This document describes the internal architecture and execution workflow of Flow
 ### AI Agents
 - **Primary Agent** - Main orchestrator that coordinates all other agents within a Subtask
 - **Generator Agent** - Decomposes Tasks into ordered lists of Subtasks (max 15)
-- **Refiner Agent** - Reviews and updates Subtask plans based on execution results
+- **Refiner Agent** - Reviews and updates planned Subtask list after each Subtask completion (can add/remove/modify planned Subtasks)
 - **Reporter Agent** - Creates comprehensive final reports for completed Tasks
 - **Coder Agent** - Writes and maintains code for specific requirements
 - **Pentester Agent** - Performs penetration testing and vulnerability assessment
@@ -34,11 +34,11 @@ This document describes the internal architecture and execution workflow of Flow
 - **Enricher Agent** - Enhances information from multiple sources
 - **Adviser Agent** - Provides expert guidance and recommendations
 - **Reflector Agent** - Corrects agents that return unstructured text instead of tool calls
-- **Assistant Agent** - Provides interactive assistance with two modes (UseAgents flag)
+- **Assistant Agent** - Provides interactive assistance, operates autonomously within Flow independently from Task/Subtask (UseAgents flag controls delegation)
 
 ### Tools and Capabilities by Category
 - **Environment Tools** - Terminal commands, file operations within Docker containers
-  - `terminal` - Command execution with 5min default, 20min hard limit
+  - `terminal` - Command execution (default: 5min if not specified, hard limit: 20min)
   - `file` - Read/write operations with absolute path requirements
   
 - **Search Network Tools** - External information sources
@@ -62,7 +62,8 @@ This document describes the internal architecture and execution workflow of Flow
   
 - **Result Storage Tools** - Agent result delivery
   - `maintenance_result`, `code_result`, `hack_result`, `memorist_result`
-  - `search_result`, `enricher_result`, `report_result`, `subtask_list`
+  - `search_result`, `enricher_result`, `report_result`
+  - `subtask_list` (Generator), `subtask_patch` (Refiner)
   
 - **Barrier Tools** - Control flow termination  
   - `done` - Complete subtask, `ask` - Request user input (configurable via ASK_USER env)
@@ -178,14 +179,16 @@ graph TD
     end
     
     subgraph "Assistant Modes"
-        AssistantUA[Assistant Agent<br/>UseAgents=true] --> PA
-        AssistantUA --> Coder
+        AssistantUA[Assistant Agent<br/>UseAgents=true] --> Coder
         AssistantUA --> Pentester
         AssistantUA --> Installer
         AssistantUA --> Memorist
         AssistantUA --> Searcher
+        AssistantUA --> Adviser
         
         AssistantDirect[Assistant Agent<br/>UseAgents=false] --> DirectTools[Direct Tools Only]
+        
+        Note over AssistantUA,AssistantDirect: Operates independently<br/>from Task/Subtask hierarchy
     end
     
     subgraph "Specialist Agent Tools"
@@ -230,10 +233,13 @@ graph TD
         MetaSearch --> Searxng[Searxng - Privacy Meta Search]
     end
     
-    subgraph "Advice Chain"
+    subgraph "Adviser Workflows"
+        Adviser[Adviser Agent<br/>Technical Solution Expert]
         Adviser --> Enricher[Enricher Agent<br/>Context Enhancement]
         Enricher --> Memorist
         Enricher --> Searcher
+        
+        Note over Adviser: Also used for:<br/>- Mentor (execution monitoring)<br/>- Planner (task planning)
     end
     
     subgraph "Error Correction"
@@ -897,6 +903,231 @@ The browser tool provides advanced web interaction capabilities:
 - **IP Analysis** - Automatic detection of private vs public targets
 - **Scraper Selection** - Private scraper for internal IPs, public for external
 - **Security Isolation** - Web scraping isolated from main execution container
+
+## Advanced Agent Supervision
+
+PentAGI implements a sophisticated multi-layered agent supervision system to ensure efficient task execution, prevent infinite loops, and provide intelligent recovery from stuck states.
+
+### Execution Monitoring System
+
+**ExecutionMonitorDetector** continuously monitors agent tool call patterns and automatically invokes the Adviser agent for progress reviews:
+
+**Trigger Conditions**:
+- **Same Tool Threshold**: Triggered after 5 consecutive calls to the same tool (configurable via `EXECUTION_MONITOR_SAME_TOOL_LIMIT`)
+- **Total Tool Threshold**: Triggered after 10 total tool calls regardless of variety (configurable via `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT`)
+- **Reset Behavior**: Counters reset after adviser intervention or when different tools are used
+
+**Monitoring Process**:
+1. **Pattern Detection**: `execToolCall` method checks detector before executing each tool
+2. **Context Collection**: Gathers recent messages, executed tool calls, subtask description, and agent prompt
+3. **Mentor Invocation**: Calls `performMentor` with comprehensive execution context
+4. **Enhanced Response**: Mentor analysis is formatted as `<mentor_analysis>` alongside `<original_result>`
+5. **Counter Reset**: Monitor state resets after successful intervention
+
+**Mentor Analysis Provides**:
+- **Progress Assessment**: Evaluation of whether agent is advancing toward subtask objective
+- **Issue Identification**: Detection of loops, inefficiencies, or incorrect approaches
+- **Alternative Strategies**: Recommendations for different approaches when current strategy fails
+- **Information Retrieval Guidance**: Suggestions to search for established solutions instead of reinventing
+- **Termination Guidance**: Clear indication if task is impossible or should be completed with completion function call
+
+**Configuration**:
+- `EXECUTION_MONITOR_ENABLED` (default: false) - Enable/disable automatic monitoring
+- `EXECUTION_MONITOR_SAME_TOOL_LIMIT` (default: 5) - Consecutive same-tool threshold
+- `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT` (default: 10) - Total tool calls threshold
+
+### Enhanced Reflector Integration
+
+**Automatic Reflector on Generation Failures**:
+
+When LLM fails to generate valid tool calls after 3 attempts in `callWithRetries`, the system now automatically invokes the Reflector agent instead of failing:
+
+**Invocation Process**:
+1. **Failure Detection**: `callWithRetries` reaches `maxRetriesToCallAgentChain` (3 attempts)
+2. **Context Preparation**: Builds reflector message describing all failed attempts and errors
+3. **Reflector Call**: Invokes `performReflector` to analyze situation and provide guidance
+4. **Recovery Options**: Reflector guides agent to either:
+   - Fix the issue with specific corrective instructions
+   - Use barrier tool to report completion or request assistance
+
+**Benefits**:
+- Prevents premature task termination due to transient LLM issues
+- Provides contextual guidance based on specific failure patterns
+- Maintains conversation flow rather than hard errors
+- Enables graceful degradation and adaptive recovery
+
+### Hard Limit Graceful Termination
+
+**Max Tool Calls Per Agent Execution**:
+
+To prevent runaway executions, each agent has a hard limit on tool calls. The limit varies by agent type to balance capabilities with efficiency:
+
+**Agent Types and Limits**:
+- **General Agents** (Assistant, Primary Agent, Pentester, Coder, Installer):
+  - Default: 100 tool calls
+  - Configurable via `MAX_GENERAL_AGENT_TOOL_CALLS`
+  - Designed for complex, multi-step workflows requiring extensive tool usage
+  
+- **Limited Agents** (Searcher, Enricher, Memorist, Generator, Reporter, Adviser, Reflector, Planner):
+  - Default: 20 tool calls
+  - Configurable via `MAX_LIMITED_AGENT_TOOL_CALLS`
+  - Designed for focused, specific tasks with limited scope
+
+**Termination Process**:
+1. **Limit Check**: Before each `callWithRetries` in `performAgentChain`, system checks `iteration` against agent-specific limit
+2. **Reflector Invocation**: When approaching limit (within 3 iterations), reflector is called with termination context
+3. **Graceful Completion**: Reflector guides agent to use barrier tool (`done` or `ask`) to:
+   - Report successful completion if objective was achieved
+   - Report partial progress with clear blocker explanation
+   - Request user assistance if critical information is missing
+4. **Forced Exit**: After reflector guidance, execution terminates gracefully
+
+**Configuration**:
+- `MAX_GENERAL_AGENT_TOOL_CALLS` (default: 100) - Maximum tool calls for general agents before forced termination
+- `MAX_LIMITED_AGENT_TOOL_CALLS` (default: 20) - Maximum tool calls for limited agents before forced termination
+
+**Why Differentiated Limits**:
+- **Resource Efficiency**: Limited agents handle focused tasks and don't require extensive iteration
+- **Task Complexity**: General agents need more autonomy for complex penetration testing, coding, and installation workflows
+- **System Stability**: Prevents resource exhaustion while maintaining necessary capabilities for each agent type
+
+### Intelligent Task Planning (Planner)
+
+**Planner-Generated Execution Plans**:
+
+When specialist agents (Pentester, Coder, Installer) are invoked, the Planner (adviser in planning mode) optionally generates a structured execution plan before task execution:
+
+**Planning Process**:
+1. **Context Analysis**: Planner analyzes full execution context via enricher agent
+2. **Plan Generation**: Creates 3-7 specific, actionable steps via `PromptTypeQuestionTaskPlanner` template
+3. **Scope Limitation**: Ensures plan focuses only on current subtask objective
+4. **Plan Wrapping**: Original task question is wrapped in `<task_assignment>` structure with plan
+5. **Agent Execution**: Specialist receives both original request and decomposed execution plan
+
+**Plan Structure**:
+```xml
+<task_assignment>
+  <original_request>[Original task from delegating agent]</original_request>
+  <execution_plan>
+  1. [First critical action/verification]
+  2. [Second step with specific details]
+  ...
+  </execution_plan>
+  <instructions>
+  Follow the execution plan above to complete this task efficiently.
+  You may deviate from the plan if you discover better approaches.
+  </instructions>
+</task_assignment>
+```
+
+**Benefits**:
+- **Prevents scope creep**: Keeps agents focused on current subtask only
+- **Reduces redundancy**: Leverages enriched context to avoid duplicate work
+- **Improves success rate**: Breaks complex tasks into manageable steps
+- **Provides guardrails**: Highlights potential pitfalls and verification points
+
+**Configuration**:
+- `AGENT_PLANNING_STEP_ENABLED` (default: false) - Enable/disable automatic task planning
+
+### Mentor Supervision Protocol
+
+All agents with adviser handler access (Primary, Pentester, Coder, Installer, Assistant) now include explicit awareness of mentor supervision in their system prompts:
+
+**Enhanced Response Format**:
+Agents are instructed to expect tool responses containing both:
+- `<original_result>`: Actual tool execution output
+- `<mentor_analysis>`: Mentor's evaluation with progress assessment, identified issues, alternative approaches, information retrieval suggestions, and next steps
+
+**Agent Instructions**:
+- Agents must read and integrate BOTH sections into decision-making
+- Mentor analysis should guide next actions when provided
+- Agents can explicitly request advice via `advice` tool
+- Automatic mentor reviews occur at configured thresholds (not revealed to agents)
+
+### Supervision System Integration
+
+```mermaid
+graph TB
+    subgraph "Execution Monitoring (Mentor)"
+        ToolCall[Tool Call Execution]
+        EMD[ExecutionMonitorDetector]
+        MentorCheck{Threshold<br/>Reached?}
+        InvokeMentor[performMentor]
+        Analysis[Mentor Analysis]
+        EnhancedResp[Enhanced Response]
+    end
+    
+    subgraph "Generation Failure Recovery"
+        CallRetries[callWithRetries Loop]
+        MaxRetries{Max Retries<br/>Reached?}
+        InvokeReflector1[Invoke Reflector]
+        Guidance[Corrective Guidance]
+    end
+    
+    subgraph "Hard Limit Termination"
+        AgentChain[performAgentChain Loop]
+        LimitCheck{Tool Call<br/>Limit?}
+        InvokeReflector2[Invoke Reflector]
+        GracefulExit[Graceful Termination]
+    end
+    
+    subgraph "Task Planning (Planner)"
+        SpecialistStart[Specialist Agent Start]
+        PlanCheck{Planning<br/>Enabled?}
+        GetPlan[performPlanner]
+        WrapPrompt[Wrap with Plan]
+        Execute[Execute with Plan]
+    end
+    
+    ToolCall --> EMD
+    EMD --> MentorCheck
+    MentorCheck -->|Yes| InvokeMentor
+    MentorCheck -->|No| Continue[Continue Execution]
+    InvokeMentor --> Analysis
+    Analysis --> EnhancedResp
+    
+    CallRetries --> MaxRetries
+    MaxRetries -->|Yes| InvokeReflector1
+    MaxRetries -->|No| Retry[Retry Call]
+    InvokeReflector1 --> Guidance
+    
+    AgentChain --> LimitCheck
+    LimitCheck -->|Limit Exceeded| InvokeReflector2
+    LimitCheck -->|Within Limit| Continue
+    InvokeReflector2 --> GracefulExit
+    
+    SpecialistStart --> PlanCheck
+    PlanCheck -->|Yes| GetPlan
+    PlanCheck -->|No| Execute
+    GetPlan --> WrapPrompt
+    WrapPrompt --> Execute
+```
+
+### Implementation Details
+
+**Key Components**:
+- `executionMonitorDetector` struct in `helpers.go` - Tracks tool call patterns
+- `performMentor` method in `performer.go` - Coordinates mentor invocation for execution monitoring
+- `performPlanner` method in `performers.go` - Generates execution plans via adviser
+- `formatEnhancedToolResponse` function in `helpers.go` - Formats mentor analysis
+- Template `question_execution_monitor.tmpl` - Question format for execution monitoring
+- Template `question_task_planner.tmpl` - Question format for task planning
+
+**Modified Methods**:
+- `execToolCall`: Integrated execution monitor checks before tool execution
+- `callWithRetries`: Calls reflector on max retries instead of returning error
+- `performAgentChain`: Checks hard limit and invokes reflector for graceful termination
+- `performPentester/Coder/Installer`: Apply task planning before execution
+
+**Execution Limits Updated**:
+- **Repeating Tool Threshold**: 3 identical calls (existing)
+- **Execution Monitor Same Tool**: 5 identical calls (new)
+- **Execution Monitor Total Tools**: 10 total calls (new)
+- **Max Retries per Call**: 3 attempts (existing)
+- **Max Retries per Chain**: 3 attempts → Reflector invocation (modified)
+- **Max Tool Calls per Subtask**: 100 calls → Reflector termination (new)
+- **Max Reflector Iterations**: 3 per chain (existing)
+- **Max Agent Chain Iterations**: 100 total (existing)
 
 ## Summary
 

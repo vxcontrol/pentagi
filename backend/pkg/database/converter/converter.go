@@ -387,6 +387,9 @@ func ConvertDefaultPrompts(prompts *templates.DefaultPrompts) *model.DefaultProm
 			ChooseUserLanguage:       ConvertDefaultPrompt(&prompts.ToolsPrompts.ChooseUserLanguage),
 			CollectToolCallID:        ConvertDefaultPrompt(&prompts.ToolsPrompts.CollectToolCallID),
 			DetectToolCallIDPattern:  ConvertDefaultPrompt(&prompts.ToolsPrompts.DetectToolCallIDPattern),
+			MonitorAgentExecution:    ConvertDefaultPrompt(&prompts.ToolsPrompts.QuestionExecutionMonitor),
+			PlanAgentTask:            ConvertDefaultPrompt(&prompts.ToolsPrompts.QuestionTaskPlanner),
+			WrapAgentTask:            ConvertDefaultPrompt(&prompts.ToolsPrompts.TaskAssignmentWrapper),
 		},
 	}
 }

@@ -84,11 +84,14 @@ func NewTester(
 	flowExecutor.SetGraphitiClient(providerController.GraphitiClient())
 
 	// Initialize tool executor
-	toolExecutor := newToolExecutor(
+	toolExecutor, err := newToolExecutor(
 		flowExecutor, cfg, db, dockerClient, nil, proxies,
 		flowID, taskID, subtaskID, providerController.Embedder(),
 		providerController.GraphitiClient(),
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tool executor: %w", err)
+	}
 
 	t := &tester{
 		db:           db,

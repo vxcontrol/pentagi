@@ -26,13 +26,15 @@ import (
 )
 
 const (
-	maxRetriesToCallSimpleChain     = 3
-	maxRetriesToCallAgentChain      = 3
-	maxRetriesToCallFunction        = 3
-	maxReflectorCallsPerChain       = 3
-	maxAgentChainIterations         = 100
-	maxSoftDetectionsBeforeAbort    = 4
-	delayBetweenRetries             = 5 * time.Second
+	maxRetriesToCallSimpleChain    = 3
+	maxRetriesToCallAgentChain     = 3
+	maxRetriesToCallFunction       = 3
+	maxReflectorCallsPerChain      = 3
+	maxGeneralAgentChainIterations = 100
+	maxLimitedAgentChainIterations = 20
+	maxAgentShutdownIterations     = 3
+	maxSoftDetectionsBeforeAbort   = 4
+	delayBetweenRetries            = 5 * time.Second
 )
 
 type callResult struct {
@@ -57,6 +59,7 @@ func (fp *flowProvider) performAgentChain(
 
 	var (
 		wantToStop        bool
+		monitor           = fp.buildMonitor()
 		detector          = &repeatingDetector{}
 		summarizerHandler = fp.GetSummarizeResultHandler(taskID, subtaskID)
 	)
@@ -93,22 +96,55 @@ func (fp *flowProvider) performAgentChain(
 	groupID := fmt.Sprintf("flow-%d", fp.flowID)
 	toolTypeMapping := tools.GetToolTypeMapping()
 
+	var maxCallsLimit int
+	switch optAgentType {
+	case pconfig.OptionsTypeAssistant, pconfig.OptionsTypePrimaryAgent,
+		pconfig.OptionsTypePentester, pconfig.OptionsTypeCoder, pconfig.OptionsTypeInstaller:
+		if fp.maxGACallsLimit <= 0 {
+			maxCallsLimit = maxGeneralAgentChainIterations
+		} else {
+			maxCallsLimit = max(fp.maxGACallsLimit, maxAgentShutdownIterations*2)
+		}
+	default:
+		if fp.maxLACallsLimit <= 0 {
+			maxCallsLimit = maxLimitedAgentChainIterations
+		} else {
+			maxCallsLimit = max(fp.maxLACallsLimit, maxAgentShutdownIterations*2)
+		}
+	}
+
 	for iteration := 0; ; iteration++ {
-		if iteration >= maxAgentChainIterations {
-			msg := fmt.Sprintf("agent chain exceeded maximum iterations (%d)", maxAgentChainIterations)
+		if iteration >= maxCallsLimit {
+			msg := fmt.Sprintf("agent chain exceeded maximum iterations (%d)", maxCallsLimit)
 			logger.WithField("iteration", iteration).Error(msg)
 			return errors.New(msg)
 		}
 
-		result, err := fp.callWithRetries(ctx, chain, optAgentType, executor)
-		if err != nil {
-			logger.WithError(err).Error("failed to call agent chain")
-			return err
-		}
+		var result *callResult
+		if iteration >= maxCallsLimit-maxAgentShutdownIterations {
+			logger.WithFields(logrus.Fields{
+				"iteration": iteration,
+				"limit":     maxCallsLimit,
+			}).Warn("max tool calls limit will be reached soon, invoking reflector for graceful termination")
 
-		if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, rollLastUpdateTime()); err != nil {
-			logger.WithError(err).Error("failed to update msg chain usage")
-			return err
+			// Format reflector message for graceful termination
+			result = &callResult{
+				content: fmt.Sprintf(
+					"I can’t continue this multi-turn chain because I’m too close to the AI agent iteration limit (%d).",
+					maxCallsLimit,
+				),
+			}
+		} else {
+			result, err = fp.callWithRetries(ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, executionContext)
+			if err != nil {
+				logger.WithError(err).Error("failed to call agent chain")
+				return err
+			}
+
+			if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, rollLastUpdateTime()); err != nil {
+				logger.WithError(err).Error("failed to update msg chain usage")
+				return err
+			}
 		}
 
 		if len(result.funcCalls) == 0 {
@@ -123,10 +159,10 @@ func (fp *flowProvider) performAgentChain(
 				}
 				result, err = fp.performReflector(
 					ctx, optAgentType, chainID, taskID, subtaskID,
-					append(chain, reflectorMsg),
-					fp.getLastHumanMessage(chain), result.content, executionContext, executor, 1)
+					append(chain, reflectorMsg), executor,
+					fp.getLastHumanMessage(chain), result.content, executionContext, 1)
 				if err != nil {
-					fields := make(logrus.Fields)
+					fields := logrus.Fields{}
 					if result != nil {
 						fields["content"] = result.content[:min(1000, len(result.content))]
 						if !result.thinking.IsEmpty() {
@@ -163,7 +199,9 @@ func (fp *flowProvider) performAgentChain(
 			}
 
 			funcName := toolCall.FunctionCall.Name
-			response, err := fp.execToolCall(ctx, chainID, idx, result, detector, executor)
+			response, err := fp.execToolCall(
+				ctx, optAgentType, chainID, idx, result, monitor, detector, executor, taskID, subtaskID, chain,
+			)
 
 			if toolTypeMapping[funcName] != tools.AgentToolType {
 				fp.storeToolExecutionToGraphiti(
@@ -231,11 +269,15 @@ func (fp *flowProvider) performAgentChain(
 
 func (fp *flowProvider) execToolCall(
 	ctx context.Context,
+	optAgentType pconfig.ProviderOptionsType,
 	chainID int64,
 	toolCallIDx int,
 	result *callResult,
+	monitor *executionMonitor,
 	detector *repeatingDetector,
 	executor tools.ContextToolsExecutor,
+	taskID, subtaskID *int64,
+	chain []llms.MessageContent,
 ) (string, error) {
 	var (
 		streamID int64
@@ -251,6 +293,10 @@ func (fp *flowProvider) execToolCall(
 	}
 
 	toolCall := result.funcCalls[toolCallIDx]
+	if toolCall.FunctionCall == nil {
+		return "", fmt.Errorf("tool call function call is nil")
+	}
+
 	funcName := toolCall.FunctionCall.Name
 	funcArgs := json.RawMessage(toolCall.FunctionCall.Arguments)
 
@@ -302,7 +348,7 @@ func (fp *flowProvider) execToolCall(
 			return "", fmt.Errorf("failed to exec function '%s': %w", funcName, err)
 		}
 
-		response, err = executor.Execute(ctx, streamID, toolCall.ID, funcName, thinking, funcArgs)
+		response, err = executor.Execute(ctx, streamID, toolCall.ID, funcName, funcName, thinking, funcArgs)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return "", err
@@ -327,14 +373,34 @@ func (fp *flowProvider) execToolCall(
 		}
 	}
 
+	if monitor.shouldInvokeMentor(toolCall) && executor.IsFunctionExists(tools.AdviceToolName) {
+		logger.WithFields(logrus.Fields{
+			"same_tool_count":  monitor.sameToolCount,
+			"total_call_count": monitor.totalCallCount,
+		}).Debug("execution monitor threshold reached, invoking mentor for progress review")
+
+		mentorResponse, err := fp.performMentor(
+			ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, toolCall, response,
+		)
+		if err != nil {
+			logger.WithError(err).Warn("failed to invoke execution mentor, continuing with normal execution")
+		} else {
+			monitor.reset()
+			response = formatEnhancedToolResponse(response, mentorResponse)
+		}
+	}
+
 	return response, nil
 }
 
 func (fp *flowProvider) callWithRetries(
 	ctx context.Context,
-	chain []llms.MessageContent,
 	optAgentType pconfig.ProviderOptionsType,
+	chainID int64,
+	taskID, subtaskID *int64,
+	chain []llms.MessageContent,
 	executor tools.ContextToolsExecutor,
+	executionContext string,
 ) (*callResult, error) {
 	var (
 		err     error
@@ -396,8 +462,15 @@ func (fp *flowProvider) callWithRetries(
 
 	for idx := 0; idx <= maxRetriesToCallAgentChain; idx++ {
 		if idx == maxRetriesToCallAgentChain {
-			msg := fmt.Sprintf("failed to call agent chain: max retries reached, %d", idx)
-			return nil, fmt.Errorf(msg+": %w", errors.Join(errs...))
+			reflectorResult, err := fp.performCallerReflector(
+				ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, executionContext, errs,
+			)
+			if err != nil {
+				msg := fmt.Sprintf("failed to call agent chain: max retries reached, %d", idx)
+				return nil, fmt.Errorf(msg+": %w", errors.Join(append(errs, err)...))
+			}
+
+			return reflectorResult, nil
 		}
 
 		var streamCb streaming.Callback
@@ -477,8 +550,8 @@ func (fp *flowProvider) performReflector(
 	chainID int64,
 	taskID, subtaskID *int64,
 	chain []llms.MessageContent,
-	humanMessage, content, executionContext string,
 	executor tools.ContextToolsExecutor,
+	humanMessage, content, executionContext string,
 	iteration int,
 ) (*callResult, error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.performReflector")
@@ -596,7 +669,7 @@ func (fp *flowProvider) performReflector(
 	}()
 
 	chain = append(chain, llms.TextParts(llms.ChatMessageTypeHuman, advice))
-	result, err := fp.callWithRetries(ctx, chain, optOriginType, executor)
+	result, err := fp.callWithRetries(ctx, optOriginType, chainID, taskID, subtaskID, chain, executor, executionContext)
 	if err != nil {
 		logger.WithError(err).Error("failed to call agent chain by reflector")
 		opts = append(opts,
@@ -623,12 +696,52 @@ func (fp *flowProvider) performReflector(
 	}
 	chain = append(chain, reflectorMsg)
 	if len(result.funcCalls) == 0 {
-		return fp.performReflector(ctx, optOriginType, chainID, taskID, subtaskID, chain,
-			humanMessage, result.content, executionContext, executor, iteration+1)
+		return fp.performReflector(ctx, optOriginType, chainID, taskID, subtaskID, chain, executor,
+			humanMessage, result.content, executionContext, iteration+1)
 	}
 
 	opts = append(opts, langfuse.WithAgentStatus("success"))
 	return result, nil
+}
+
+func (fp *flowProvider) performCallerReflector(
+	ctx context.Context,
+	optAgentType pconfig.ProviderOptionsType,
+	chainID int64,
+	taskID, subtaskID *int64,
+	chain []llms.MessageContent,
+	executor tools.ContextToolsExecutor,
+	executionContext string,
+	errs []error,
+) (*callResult, error) {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.performCallerReflector")
+	defer span.End()
+
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"chain_id":   chainID,
+		"task_id":    taskID,
+		"subtask_id": subtaskID,
+		"agent_type": optAgentType,
+	}).WithError(errors.Join(errs...))
+	logger.Warn("max retries reached, invoking caller reflector for guidance")
+
+	reflectorContent := fmt.Sprintf(
+		"I'm having trouble generating a proper tool call response. "+
+			"I've attempted %d times but each attempt failed with errors:\n\n%s\n\n"+
+			"I'm not sure how to proceed correctly. Should I try a different approach, "+
+			"or should I use one of the barrier tools to report this issue?",
+		len(errs), errors.Join(errs...).Error(),
+	)
+
+	reflectorResult, err := fp.performReflector(
+		ctx, optAgentType, chainID, taskID, subtaskID, chain, executor,
+		fp.getLastHumanMessage(chain), reflectorContent, executionContext, 1,
+	)
+	if err == nil {
+		return reflectorResult, nil
+	}
+
+	return nil, fmt.Errorf("failed to perform caller reflector: %w", err)
 }
 
 func (fp *flowProvider) getLastHumanMessage(chain []llms.MessageContent) string {

@@ -197,8 +197,15 @@ func cloneChain(chain []llms.MessageContent) []llms.MessageContent {
 
 func newFlowProvider() *flowProvider {
 	return &flowProvider{
-		mx:          &sync.RWMutex{},
-		callCounter: &atomic.Int64{},
+		mx:              &sync.RWMutex{},
+		callCounter:     &atomic.Int64{},
+		maxGACallsLimit: maxGeneralAgentChainIterations,
+		maxLACallsLimit: maxLimitedAgentChainIterations,
+		buildMonitor: func() *executionMonitor {
+			return &executionMonitor{
+				enabled: false,
+			}
+		},
 	}
 }
 
@@ -1024,4 +1031,143 @@ func TestClearCallArguments(t *testing.T) {
 			assert.Equal(t, tt.expectedArgs, result.Arguments)
 		})
 	}
+}
+
+func TestExecutionMonitorDetector_ShouldInvokeAdviser(t *testing.T) {
+	tests := []struct {
+		name      string
+		threshold struct{ same, total int }
+		calls     []string
+		expected  []bool
+	}{
+		{
+			name:      "trigger on same tool limit",
+			threshold: struct{ same, total int }{5, 10},
+			calls:     []string{"tool1", "tool1", "tool1", "tool1", "tool1"},
+			expected:  []bool{false, false, false, false, true},
+		},
+		{
+			name:      "trigger on total tool limit",
+			threshold: struct{ same, total int }{5, 10},
+			calls:     []string{"tool1", "tool2", "tool3", "tool4", "tool5", "tool6", "tool7", "tool8", "tool9", "tool10"},
+			expected:  []bool{false, false, false, false, false, false, false, false, false, true},
+		},
+		{
+			name:      "reset after different tool",
+			threshold: struct{ same, total int }{3, 10},
+			calls:     []string{"tool1", "tool1", "tool2", "tool1", "tool1"},
+			expected:  []bool{false, false, false, false, false},
+		},
+		{
+			name:      "mixed tools reaching total limit",
+			threshold: struct{ same, total int }{5, 10},
+			calls:     []string{"tool1", "tool2", "tool1", "tool3", "tool1", "tool2", "tool3", "tool4", "tool5", "tool6"},
+			expected:  []bool{false, false, false, false, false, false, false, false, false, true},
+		},
+		{
+			name:      "disabled detector",
+			threshold: struct{ same, total int }{5, 10},
+			calls:     []string{"tool1", "tool1", "tool1", "tool1", "tool1", "tool1"},
+			expected:  []bool{false, false, false, false, false, false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			emd := &executionMonitor{
+				enabled:        tt.name != "disabled detector",
+				sameThreshold:  tt.threshold.same,
+				totalThreshold: tt.threshold.total,
+			}
+
+			for i, call := range tt.calls {
+				result := emd.shouldInvokeMentor(mockToolCall(call))
+				if result != tt.expected[i] {
+					t.Errorf("call %d (%s): expected %v, got %v", i, call, tt.expected[i], result)
+				}
+			}
+		})
+	}
+}
+
+func TestExecutionMonitorDetector_Reset(t *testing.T) {
+	emd := &executionMonitor{
+		enabled:        true,
+		sameThreshold:  5,
+		totalThreshold: 10,
+		sameToolCount:  3,
+		totalCallCount: 7,
+		lastToolName:   "tool1",
+	}
+
+	emd.reset()
+
+	if emd.sameToolCount != 0 {
+		t.Errorf("expected sameToolCount to be 0 after reset, got %d", emd.sameToolCount)
+	}
+	if emd.totalCallCount != 0 {
+		t.Errorf("expected totalCallCount to be 0 after reset, got %d", emd.totalCallCount)
+	}
+	if emd.lastToolName != "" {
+		t.Errorf("expected lastToolName to be empty after reset, got %s", emd.lastToolName)
+	}
+}
+
+func TestExecutionMonitorDetector_SameToolSequence(t *testing.T) {
+	emd := &executionMonitor{
+		enabled:        true,
+		sameThreshold:  3,
+		totalThreshold: 100,
+	}
+
+	// First 2 calls should not trigger
+	if emd.shouldInvokeMentor(mockToolCall("search")) {
+		t.Error("first call should not trigger adviser")
+	}
+	if emd.shouldInvokeMentor(mockToolCall("search")) {
+		t.Error("second call should not trigger adviser")
+	}
+
+	// Third call should trigger on same tool threshold
+	if !emd.shouldInvokeMentor(mockToolCall("search")) {
+		t.Error("third identical call should trigger adviser")
+	}
+
+	// After reset, same tool should not trigger immediately
+	emd.reset()
+	if emd.shouldInvokeMentor(mockToolCall("search")) {
+		t.Error("first call after reset should not trigger adviser")
+	}
+}
+
+func TestExecutionMonitorDetector_TotalCallsSequence(t *testing.T) {
+	emd := &executionMonitor{
+		enabled:        true,
+		sameThreshold:  100,
+		totalThreshold: 5,
+	}
+
+	tools := []string{"tool1", "tool2", "tool3", "tool4", "tool5"}
+
+	// First 4 calls should not trigger
+	for i := 0; i < 4; i++ {
+		if emd.shouldInvokeMentor(mockToolCall(tools[i])) {
+			t.Errorf("call %d should not trigger adviser", i)
+		}
+	}
+
+	// Fifth call should trigger on total threshold
+	if !emd.shouldInvokeMentor(mockToolCall(tools[4])) {
+		t.Error("fifth call should trigger adviser on total threshold")
+	}
+
+	// After reset, counter should restart
+	emd.reset()
+	if emd.totalCallCount != 0 {
+		t.Error("total count should be 0 after reset")
+	}
+}
+
+func mockToolCall(name string) llms.ToolCall {
+	return llms.ToolCall{FunctionCall: &llms.FunctionCall{Name: name}}
 }

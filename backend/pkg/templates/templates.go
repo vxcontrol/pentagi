@@ -26,42 +26,45 @@ var ErrTemplateNotFound = errors.New("template not found")
 type PromptType string
 
 const (
-	PromptTypePrimaryAgent          PromptType = "primary_agent"           // orchestrates subtask execution using AI agents
-	PromptTypeAssistant             PromptType = "assistant"               // interactive AI assistant for user conversations
-	PromptTypePentester             PromptType = "pentester"               // executes security tests and vulnerability scanning
-	PromptTypeQuestionPentester     PromptType = "question_pentester"      // human input requesting penetration testing
-	PromptTypeCoder                 PromptType = "coder"                   // develops exploits and custom security tools
-	PromptTypeQuestionCoder         PromptType = "question_coder"          // human input requesting code development
-	PromptTypeInstaller             PromptType = "installer"               // sets up testing environment and tools
-	PromptTypeQuestionInstaller     PromptType = "question_installer"      // human input requesting system installation
-	PromptTypeSearcher              PromptType = "searcher"                // gathers intelligence from web sources
-	PromptTypeQuestionSearcher      PromptType = "question_searcher"       // human input requesting information search
-	PromptTypeMemorist              PromptType = "memorist"                // retrieves knowledge from vector memory store
-	PromptTypeQuestionMemorist      PromptType = "question_memorist"       // human input querying past experiences
-	PromptTypeAdviser               PromptType = "adviser"                 // provides security recommendations and guidance
-	PromptTypeQuestionAdviser       PromptType = "question_adviser"        // human input seeking expert advice
-	PromptTypeGenerator             PromptType = "generator"               // creates structured subtask breakdown
-	PromptTypeSubtasksGenerator     PromptType = "subtasks_generator"      // human input for task decomposition
-	PromptTypeRefiner               PromptType = "refiner"                 // optimizes and adjusts planned subtasks
-	PromptTypeSubtasksRefiner       PromptType = "subtasks_refiner"        // human input for task refinement
-	PromptTypeReporter              PromptType = "reporter"                // generates comprehensive security reports
-	PromptTypeTaskReporter          PromptType = "task_reporter"           // human input for result documentation
-	PromptTypeReflector             PromptType = "reflector"               // analyzes outcomes and suggests improvements
-	PromptTypeQuestionReflector     PromptType = "question_reflector"      // human input for self-assessment
-	PromptTypeEnricher              PromptType = "enricher"                // adds context and details to requests
-	PromptTypeQuestionEnricher      PromptType = "question_enricher"       // human input for context enhancement
-	PromptTypeToolCallFixer         PromptType = "toolcall_fixer"          // corrects malformed security tool commands
-	PromptTypeInputToolCallFixer    PromptType = "input_toolcall_fixer"    // human input for tool argument fixing
-	PromptTypeSummarizer            PromptType = "summarizer"              // condenses long conversations and results
-	PromptTypeImageChooser          PromptType = "image_chooser"           // selects appropriate Docker containers
-	PromptTypeLanguageChooser       PromptType = "language_chooser"        // determines user's preferred language
-	PromptTypeFlowDescriptor        PromptType = "flow_descriptor"         // generates flow titles from user requests
-	PromptTypeTaskDescriptor        PromptType = "task_descriptor"         // generates task titles from user requests
-	PromptTypeExecutionLogs         PromptType = "execution_logs"          // formats execution history for display
-	PromptTypeFullExecutionContext  PromptType = "full_execution_context"  // prepares complete context for summarization
-	PromptTypeShortExecutionContext PromptType = "short_execution_context" // prepares minimal context for quick processing
-	PromptTypeToolCallIDCollector   PromptType = "tool_call_id_collector"  // requests function call to collect tool call ID sample
-	PromptTypeToolCallIDDetector    PromptType = "tool_call_id_detector"   // analyzes tool call ID samples to detect pattern template
+	PromptTypePrimaryAgent             PromptType = "primary_agent"              // orchestrates subtask execution using AI agents
+	PromptTypeAssistant                PromptType = "assistant"                  // interactive AI assistant for user conversations
+	PromptTypePentester                PromptType = "pentester"                  // executes security tests and vulnerability scanning
+	PromptTypeQuestionPentester        PromptType = "question_pentester"         // human input requesting penetration testing
+	PromptTypeCoder                    PromptType = "coder"                      // develops exploits and custom security tools
+	PromptTypeQuestionCoder            PromptType = "question_coder"             // human input requesting code development
+	PromptTypeInstaller                PromptType = "installer"                  // sets up testing environment and tools
+	PromptTypeQuestionInstaller        PromptType = "question_installer"         // human input requesting system installation
+	PromptTypeSearcher                 PromptType = "searcher"                   // gathers intelligence from web sources
+	PromptTypeQuestionSearcher         PromptType = "question_searcher"          // human input requesting information search
+	PromptTypeMemorist                 PromptType = "memorist"                   // retrieves knowledge from vector memory store
+	PromptTypeQuestionMemorist         PromptType = "question_memorist"          // human input querying past experiences
+	PromptTypeAdviser                  PromptType = "adviser"                    // provides security recommendations and guidance
+	PromptTypeQuestionAdviser          PromptType = "question_adviser"           // human input seeking expert advice
+	PromptTypeGenerator                PromptType = "generator"                  // creates structured subtask breakdown
+	PromptTypeSubtasksGenerator        PromptType = "subtasks_generator"         // human input for task decomposition
+	PromptTypeRefiner                  PromptType = "refiner"                    // optimizes and adjusts planned subtasks
+	PromptTypeSubtasksRefiner          PromptType = "subtasks_refiner"           // human input for task refinement
+	PromptTypeReporter                 PromptType = "reporter"                   // generates comprehensive security reports
+	PromptTypeTaskReporter             PromptType = "task_reporter"              // human input for result documentation
+	PromptTypeReflector                PromptType = "reflector"                  // analyzes outcomes and suggests improvements
+	PromptTypeQuestionReflector        PromptType = "question_reflector"         // human input for self-assessment
+	PromptTypeEnricher                 PromptType = "enricher"                   // adds context and details to requests
+	PromptTypeQuestionEnricher         PromptType = "question_enricher"          // human input for context enhancement
+	PromptTypeToolCallFixer            PromptType = "toolcall_fixer"             // corrects malformed security tool commands
+	PromptTypeInputToolCallFixer       PromptType = "input_toolcall_fixer"       // human input for tool argument fixing
+	PromptTypeSummarizer               PromptType = "summarizer"                 // condenses long conversations and results
+	PromptTypeImageChooser             PromptType = "image_chooser"              // selects appropriate Docker containers
+	PromptTypeLanguageChooser          PromptType = "language_chooser"           // determines user's preferred language
+	PromptTypeFlowDescriptor           PromptType = "flow_descriptor"            // generates flow titles from user requests
+	PromptTypeTaskDescriptor           PromptType = "task_descriptor"            // generates task titles from user requests
+	PromptTypeExecutionLogs            PromptType = "execution_logs"             // formats execution history for display
+	PromptTypeFullExecutionContext     PromptType = "full_execution_context"     // prepares complete context for summarization
+	PromptTypeShortExecutionContext    PromptType = "short_execution_context"    // prepares minimal context for quick processing
+	PromptTypeToolCallIDCollector      PromptType = "tool_call_id_collector"     // requests function call to collect tool call ID sample
+	PromptTypeToolCallIDDetector       PromptType = "tool_call_id_detector"      // analyzes tool call ID samples to detect pattern template
+	PromptTypeQuestionExecutionMonitor PromptType = "question_execution_monitor" // question for adviser to monitor agent execution progress
+	PromptTypeQuestionTaskPlanner      PromptType = "question_task_planner"      // question for adviser to create execution plan for agent
+	PromptTypeTaskAssignmentWrapper    PromptType = "task_assignment_wrapper"    // wraps original request with execution plan for specialist agents
 )
 
 var PromptVariables = map[PromptType][]string{
@@ -221,8 +224,23 @@ var PromptVariables = map[PromptType][]string{
 	PromptTypeAdviser: {
 		"ExecutionContext",
 		"CurrentTime",
+		"FinalyToolName",
+		"PentesterToolName",
+		"HackResultToolName",
+		"CoderToolName",
+		"CodeResultToolName",
+		"MaintenanceToolName",
+		"MaintenanceResultToolName",
+		"SearchToolName",
+		"SearchResultToolName",
+		"MemoristToolName",
+		"AdviceToolName",
+		"DockerImage",
+		"Cwd",
+		"ContainerPorts",
 	},
 	PromptTypeQuestionAdviser: {
+		"InitiatorAgent",
 		"Question",
 		"Code",
 		"Output",
@@ -303,6 +321,12 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"SearchInMemoryToolName",
+		"GraphitiEnabled",
+		"GraphitiSearchToolName",
+		"FileToolName",
+		"TerminalToolName",
+		"BrowserToolName",
 	},
 	PromptTypeQuestionEnricher: {
 		"Question",
@@ -368,6 +392,24 @@ var PromptVariables = map[PromptType][]string{
 		"Samples",
 		"PreviousAttempts",
 	},
+	PromptTypeQuestionExecutionMonitor: {
+		"SubtaskDescription",
+		"AgentType",
+		"AgentPrompt",
+		"RecentMessages",
+		"ExecutedToolCalls",
+		"LastToolName",
+		"LastToolArgs",
+		"LastToolResult",
+	},
+	PromptTypeQuestionTaskPlanner: {
+		"AgentType",
+		"TaskQuestion",
+	},
+	PromptTypeTaskAssignmentWrapper: {
+		"OriginalRequest",
+		"ExecutionPlan",
+	},
 }
 
 type Prompt struct {
@@ -413,6 +455,9 @@ type ToolsPrompts struct {
 	ChooseUserLanguage       Prompt
 	CollectToolCallID        Prompt
 	DetectToolCallIDPattern  Prompt
+	QuestionExecutionMonitor Prompt
+	QuestionTaskPlanner      Prompt
+	TaskAssignmentWrapper    Prompt
 }
 
 type DefaultPrompts struct {
@@ -515,6 +560,9 @@ func GetDefaultPrompts() (*DefaultPrompts, error) {
 			ChooseUserLanguage:       getPrompt(PromptTypeLanguageChooser),
 			CollectToolCallID:        getPrompt(PromptTypeToolCallIDCollector),
 			DetectToolCallIDPattern:  getPrompt(PromptTypeToolCallIDDetector),
+			QuestionExecutionMonitor: getPrompt(PromptTypeQuestionExecutionMonitor),
+			QuestionTaskPlanner:      getPrompt(PromptTypeQuestionTaskPlanner),
+			TaskAssignmentWrapper:    getPrompt(PromptTypeTaskAssignmentWrapper),
 		},
 	}, nil
 }

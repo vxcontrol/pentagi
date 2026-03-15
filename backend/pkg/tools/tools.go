@@ -14,6 +14,8 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
+	"github.com/vxcontrol/cloud/anonymizer"
+	"github.com/vxcontrol/cloud/anonymizer/patterns"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
@@ -147,6 +149,7 @@ type flowToolsExecutor struct {
 	primaryID      int64
 	primaryLID     string
 	functions      *Functions
+	replacer       anonymizer.Replacer
 
 	definitions map[string]llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
@@ -154,8 +157,9 @@ type flowToolsExecutor struct {
 
 type ContextToolsExecutor interface {
 	Tools() []llms.Tool
-	Execute(ctx context.Context, streamID int64, id, name, thinking string, args json.RawMessage) (string, error)
+	Execute(ctx context.Context, streamID int64, id, name, obsName, thinking string, args json.RawMessage) (string, error)
 	IsBarrierFunction(name string) bool
+	IsFunctionExists(name string) bool
 	GetBarrierToolNames() []string
 	GetBarrierTools() []FunctionInfo
 	GetToolSchema(name string) (*schema.Schema, error)
@@ -260,9 +264,8 @@ type MemoristExecutorConfig struct {
 type EnricherExecutorConfig struct {
 	TaskID         *int64
 	SubtaskID      *int64
-	Memorist       ExecutorHandler
-	Searcher       ExecutorHandler
 	EnricherResult ExecutorHandler
+	Summarizer     SummarizeHandler
 }
 
 type ReporterExecutorConfig struct {
@@ -307,10 +310,24 @@ func NewFlowToolsExecutor(
 	functions *Functions,
 	flowID int64,
 ) (FlowToolsExecutor, error) {
+	allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load all patterns: %v", err)
+	}
+
+	// combine with config secret patterns
+	allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
+
+	replacer, err := anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create replacer: %v", err)
+	}
+
 	return &flowToolsExecutor{
 		db:          db,
 		docker:      docker,
 		functions:   functions,
+		replacer:    replacer,
 		cfg:         cfg,
 		flowID:      flowID,
 		definitions: make(map[string]llms.FunctionDefinition),
@@ -562,6 +579,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 
 		guide := NewGuideTool(
 			fte.flowID, nil, nil,
+			fte.replacer,
 			fte.store,
 			fte.vslp,
 		)
@@ -572,6 +590,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 
 		search := NewSearchTool(
 			fte.flowID, nil, nil,
+			fte.replacer,
 			fte.store,
 			fte.vslp,
 		)
@@ -582,6 +601,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 
 		code := NewCodeTool(
 			fte.flowID, nil, nil,
+			fte.replacer,
 			fte.store,
 			fte.vslp,
 		)
@@ -829,6 +849,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.replacer,
 		fte.store,
 		fte.vslp,
 	)
@@ -909,6 +930,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.replacer,
 		fte.store,
 		fte.vslp,
 	)
@@ -1025,6 +1047,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.replacer,
 		fte.store,
 		fte.vslp,
 	)
@@ -1197,6 +1220,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.replacer,
 		fte.store,
 		fte.vslp,
 	)
@@ -1413,15 +1437,22 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		return nil, fmt.Errorf("enricher result handler is required")
 	}
 
-	if cfg.Memorist == nil {
-		return nil, fmt.Errorf("memorist handler is required")
+	container, err := fte.db.GetFlowPrimaryContainer(context.Background(), fte.flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container %d: %w", fte.flowID, err)
 	}
 
-	if cfg.Searcher == nil {
-		return nil, fmt.Errorf("searcher handler is required")
-	}
+	term := NewTerminalTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		container.ID,
+		container.LocalID.String,
+		fte.docker,
+		fte.tlp,
+	)
 
-	return &customExecutor{
+	ce := &customExecutor{
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
@@ -1430,17 +1461,54 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		db:        fte.db,
 		store:     fte.store,
 		definitions: []llms.FunctionDefinition{
-			registryDefinitions[MemoristToolName],
-			registryDefinitions[SearchToolName],
 			registryDefinitions[EnricherResultToolName],
+			registryDefinitions[TerminalToolName],
+			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
-			MemoristToolName:       cfg.Memorist,
-			SearchToolName:         cfg.Searcher,
 			EnricherResultToolName: cfg.EnricherResult,
+			TerminalToolName:       term.Handle,
+			FileToolName:           term.Handle,
 		},
 		barriers: map[string]struct{}{EnricherResultToolName: {}},
-	}, nil
+	}
+
+	memory := NewMemoryTool(
+		fte.flowID,
+		fte.store,
+		fte.vslp,
+	)
+	if memory.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[SearchInMemoryToolName])
+		ce.handlers[SearchInMemoryToolName] = memory.Handle
+	}
+
+	graphitiSearch := NewGraphitiSearchTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.graphitiClient,
+	)
+	if graphitiSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
+		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
+	}
+
+	browser := NewBrowserTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.cfg.DataDir,
+		fte.cfg.ScraperPrivateURL,
+		fte.cfg.ScraperPublicURL,
+		fte.scp,
+	)
+	if browser.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
+		ce.handlers[BrowserToolName] = browser.Handle
+	}
+
+	return ce, nil
 }
 
 func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (ContextToolsExecutor, error) {
@@ -1464,7 +1532,7 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 
 func enrichLogrusFields(flowID int64, taskID, subtaskID *int64, fields logrus.Fields) logrus.Fields {
 	if fields == nil {
-		fields = make(logrus.Fields)
+		fields = logrus.Fields{}
 	}
 
 	fields["flow_id"] = flowID
