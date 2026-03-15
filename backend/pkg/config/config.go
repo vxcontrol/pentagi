@@ -190,6 +190,10 @@ type Config struct {
 	ExternalSSLCAPath   string `env:"EXTERNAL_SSL_CA_PATH" envDefault:""`
 	ExternalSSLInsecure bool   `env:"EXTERNAL_SSL_INSECURE" envDefault:"false"`
 
+	// HTTP client timeout in seconds for external API calls (LLM providers, search tools, etc.)
+	// A value of 0 means no timeout (not recommended).
+	HTTPClientTimeout int `env:"HTTP_CLIENT_TIMEOUT" envDefault:"600"`
+
 	// Telemetry (observability OpenTelemetry collector)
 	TelemetryEndpoint string `env:"OTEL_HOST"`
 
