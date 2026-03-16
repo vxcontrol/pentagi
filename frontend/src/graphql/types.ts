@@ -3137,6 +3137,66 @@ export type AssistantLogsQueryHookResult = ReturnType<typeof useAssistantLogsQue
 export type AssistantLogsLazyQueryHookResult = ReturnType<typeof useAssistantLogsLazyQuery>;
 export type AssistantLogsSuspenseQueryHookResult = ReturnType<typeof useAssistantLogsSuspenseQuery>;
 export type AssistantLogsQueryResult = Apollo.QueryResult<AssistantLogsQuery, AssistantLogsQueryVariables>;
+
+// ===== allAssistantLogs query =====
+
+export type AllAssistantLogsQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type AllAssistantLogsQuery = { allAssistantLogs?: Array<AssistantLogFragmentFragment> | null };
+
+export const AllAssistantLogsDocument = gql`
+    query allAssistantLogs($flowId: ID!) {
+        allAssistantLogs(flowId: $flowId) {
+            ...assistantLogFragment
+        }
+    }
+    ${AssistantLogFragmentFragmentDoc}
+`;
+
+/**
+ * __useAllAssistantLogsQuery__
+ *
+ * To run a query within a React component, call `useAllAssistantLogsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useAllAssistantLogsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useAllAssistantLogsQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useAllAssistantLogsQuery(
+    baseOptions: Apollo.QueryHookOptions<AllAssistantLogsQuery, AllAssistantLogsQueryVariables> &
+        ({ variables: AllAssistantLogsQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<AllAssistantLogsQuery, AllAssistantLogsQueryVariables>(AllAssistantLogsDocument, options);
+}
+
+export function useAllAssistantLogsLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<AllAssistantLogsQuery, AllAssistantLogsQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<AllAssistantLogsQuery, AllAssistantLogsQueryVariables>(AllAssistantLogsDocument, options);
+}
+
+export function useAllAssistantLogsSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<AllAssistantLogsQuery, AllAssistantLogsQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<AllAssistantLogsQuery, AllAssistantLogsQueryVariables>(AllAssistantLogsDocument, options);
+}
+
+export type AllAssistantLogsQueryHookResult = ReturnType<typeof useAllAssistantLogsQuery>;
+export type AllAssistantLogsLazyQueryHookResult = ReturnType<typeof useAllAssistantLogsLazyQuery>;
+export type AllAssistantLogsSuspenseQueryHookResult = ReturnType<typeof useAllAssistantLogsSuspenseQuery>;
+export type AllAssistantLogsQueryResult = Apollo.QueryResult<AllAssistantLogsQuery, AllAssistantLogsQueryVariables>;
 export const FlowReportDocument = gql`
     query flowReport($id: ID!) {
         flow(flowId: $id) {

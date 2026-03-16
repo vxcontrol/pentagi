@@ -1227,6 +1227,38 @@ func (r *queryResolver) AssistantLogs(ctx context.Context, flowID int64, assista
 	return converter.ConvertAssistantLogs(logs), nil
 }
 
+// AllAssistantLogs is the resolver for the allAssistantLogs field.
+func (r *queryResolver) AllAssistantLogs(ctx context.Context, flowID int64) ([]*model.AssistantLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "assistantlogs.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("get all assistant logs for flow")
+
+	assistants, err := r.DB.GetFlowAssistants(ctx, flowID)
+	if err != nil {
+		return nil, err
+	}
+
+	var allLogs []*model.AssistantLog
+	for _, assistant := range assistants {
+		logs, err := r.DB.GetFlowAssistantLogs(ctx, database.GetFlowAssistantLogsParams{
+			FlowID:      flowID,
+			AssistantID: assistant.ID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		allLogs = append(allLogs, converter.ConvertAssistantLogs(logs)...)
+	}
+
+	return allLogs, nil
+}
+
 // UsageStatsTotal is the resolver for the usageStatsTotal field.
 func (r *queryResolver) UsageStatsTotal(ctx context.Context) (*model.UsageStats, error) {
 	uid, _, err := validatePermission(ctx, "usage.view")

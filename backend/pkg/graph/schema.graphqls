@@ -792,6 +792,8 @@ type Query {
   searchLogs(flowId: ID!): [SearchLog!]
   vectorStoreLogs(flowId: ID!): [VectorStoreLog!]
   assistantLogs(flowId: ID!, assistantId: ID!): [AssistantLog!]
+  # Get all assistant logs for a flow across all assistants
+  allAssistantLogs(flowId: ID!): [AssistantLog!]
 
   # Usage statistics and analytics
   usageStatsTotal: UsageStats!

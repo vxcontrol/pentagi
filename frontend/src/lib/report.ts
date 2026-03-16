@@ -1,8 +1,8 @@
 import GithubSlugger from 'github-slugger';
 
-import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
+import type { AssistantLogFragmentFragment, FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
 
-import { StatusType } from '@/graphql/types';
+import { MessageLogType, StatusType } from '@/graphql/types';
 
 import { Log } from './log';
 
@@ -94,8 +94,108 @@ const generateTableOfContents = (tasks: TaskFragmentFragment[], flow?: FlowFragm
     return `${toc}\n---\n\n`;
 };
 
+// Helper function to generate report content from assistant logs (chat-style flows)
+const generateAssistantReport = (
+    assistantLogs: AssistantLogFragmentFragment[],
+    flow?: FlowFragmentFragment | null,
+): string => {
+    const flowEmoji = flow ? getStatusEmoji(flow.status) : '📝';
+    const flowHeader = flow ? `# ${flowEmoji} ${flow.id}. ${flow.title}\n\n` : '# Assistant Flow Report\n\n';
+
+    if (!assistantLogs || assistantLogs.length === 0) {
+        return `${flowHeader}No conversation logs available for this flow.`;
+    }
+
+    // Merge appendPart logs into their parent messages
+    const mergedLogs: AssistantLogFragmentFragment[] = [];
+    for (const log of assistantLogs) {
+        if (log.appendPart && mergedLogs.length > 0) {
+            const last = mergedLogs[mergedLogs.length - 1];
+            if (last.type === log.type) {
+                // Merge by appending content to the last log
+                mergedLogs[mergedLogs.length - 1] = {
+                    ...last,
+                    message: last.message + log.message,
+                    result: (last.result || '') + (log.result || ''),
+                };
+                continue;
+            }
+        }
+        mergedLogs.push({ ...log });
+    }
+
+    let report = flowHeader;
+
+    // Build conversation sections: group input → answer pairs
+    let messageIndex = 0;
+    for (let i = 0; i < mergedLogs.length; i++) {
+        const log = mergedLogs[i];
+
+        if (log.type === MessageLogType.Input) {
+            // User message
+            messageIndex++;
+            report += `## 💬 Message ${messageIndex}\n\n`;
+            report += `**User:**\n\n${log.message.trim()}\n\n`;
+
+            // Look ahead for the answer to this input
+            const nextAnswer = mergedLogs.slice(i + 1).find((l) => l.type === MessageLogType.Answer);
+            if (nextAnswer) {
+                const answerContent = nextAnswer.result?.trim() || nextAnswer.message?.trim();
+                if (answerContent) {
+                    report += `**Assistant:**\n\n${shiftMarkdownHeaders(answerContent, 2)}\n\n`;
+                }
+                // Skip to after this answer in the next iteration
+                i = mergedLogs.indexOf(nextAnswer, i + 1);
+            }
+
+            report += '---\n\n';
+        } else if (log.type === MessageLogType.Answer && i === 0) {
+            // Standalone answer at the start (no preceding input)
+            messageIndex++;
+            report += `## 💬 Message ${messageIndex}\n\n`;
+            const answerContent = log.result?.trim() || log.message?.trim();
+            if (answerContent) {
+                report += `**Assistant:**\n\n${shiftMarkdownHeaders(answerContent, 2)}\n\n`;
+            }
+            report += '---\n\n';
+        }
+    }
+
+    // If no input/answer pairs found, fall back to showing all answer logs
+    if (messageIndex === 0) {
+        const answerLogs = mergedLogs.filter(
+            (l) => l.type === MessageLogType.Answer && (l.result?.trim() || l.message?.trim()),
+        );
+        if (answerLogs.length > 0) {
+            answerLogs.forEach((log, idx) => {
+                report += `## 💬 Response ${idx + 1}\n\n`;
+                const content = log.result?.trim() || log.message?.trim();
+                if (content) {
+                    report += `${shiftMarkdownHeaders(content, 2)}\n\n`;
+                }
+                if (idx < answerLogs.length - 1) {
+                    report += '---\n\n';
+                }
+            });
+        } else {
+            report += 'No conversation content available for this flow.';
+        }
+    }
+
+    return report.trim();
+};
+
 // Helper function to generate report content
-export const generateReport = (tasks: TaskFragmentFragment[], flow?: FlowFragmentFragment | null): string => {
+export const generateReport = (
+    tasks: TaskFragmentFragment[],
+    flow?: FlowFragmentFragment | null,
+    assistantLogs?: AssistantLogFragmentFragment[],
+): string => {
+    // If no tasks but have assistant logs, generate assistant-style report
+    if ((!tasks || tasks.length === 0) && assistantLogs && assistantLogs.length > 0) {
+        return generateAssistantReport(assistantLogs, flow);
+    }
+
     if (!tasks || tasks.length === 0) {
         if (flow) {
             const flowEmoji = getStatusEmoji(flow.status);

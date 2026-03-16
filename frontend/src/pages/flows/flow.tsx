@@ -1,3 +1,4 @@
+ 
 import { ChevronDown, Copy, Download, ExternalLink, GripVertical, Loader2, NotepadText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -25,7 +26,7 @@ import { formatName } from '@/lib/utils/format';
 import { useFlow } from '@/providers/flow-provider';
 
 const FlowReportDropdown = () => {
-    const { flowData, flowId } = useFlow();
+    const { assistantLogs, flowData, flowId } = useFlow();
     const flow = flowData?.flow;
     const tasks = flowData?.tasks ?? [];
 
@@ -38,7 +39,7 @@ const FlowReportDropdown = () => {
             return;
         }
 
-        const reportContent = generateReport(tasks, flow);
+        const reportContent = generateReport(tasks, flow, assistantLogs);
         const success = await copyToClipboard(reportContent);
 
         if (success) {
@@ -56,7 +57,7 @@ const FlowReportDropdown = () => {
 
         try {
             // Generate report content
-            const reportContent = generateReport(tasks, flow);
+            const reportContent = generateReport(tasks, flow, assistantLogs);
 
             // Generate file name
             const baseFileName = generateFileName(flow);
@@ -199,7 +200,7 @@ const Flow = () => {
                             </BreadcrumbList>
                         </Breadcrumb>
                     </div>
-                    {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
+                    {!!flowData?.flow && <FlowReportDropdown />}
                 </div>
             </header>
             <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">

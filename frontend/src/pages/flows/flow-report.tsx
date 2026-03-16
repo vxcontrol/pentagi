@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/logo';
 import Markdown from '@/components/shared/markdown';
-import { useFlowReportQuery } from '@/graphql/types';
+import { useAllAssistantLogsQuery, useFlowReportQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
@@ -29,6 +29,18 @@ const FlowReport = () => {
         variables: { id: flowId! },
     });
 
+    const hasTasks = (data?.tasks?.length ?? 0) > 0;
+
+    // Fetch all assistant logs for assistant-mode flows (when no tasks exist)
+    const {
+        data: allLogsData,
+        loading: allLogsLoading,
+    } = useAllAssistantLogsQuery({
+        errorPolicy: 'all',
+        skip: !flowId || loading || hasTasks,
+        variables: { flowId: flowId! },
+    });
+
     // Reset state when component mounts or flowId changes
     useEffect(() => {
         setState('loading');
@@ -37,7 +49,13 @@ const FlowReport = () => {
     }, [flowId]);
 
     useEffect(() => {
+        // Wait for all needed data to finish loading
         if (loading) {
+            return;
+        }
+
+        // For assistant flows, wait for assistant logs to load
+        if (!hasTasks && allLogsLoading) {
             return;
         }
 
@@ -48,8 +66,10 @@ const FlowReport = () => {
             return;
         }
 
-        // Generate report content using flow and tasks from GraphQL response
-        const content = generateReport(data.tasks || [], data.flow);
+        // Generate report content: use tasks for task-based flows,
+        // fall back to assistant logs for assistant-mode flows
+        const assistantLogs = allLogsData?.allAssistantLogs ?? [];
+        const content = generateReport(data.tasks || [], data.flow, assistantLogs);
         setReportContent(content);
 
         if (download) {
@@ -75,7 +95,7 @@ const FlowReport = () => {
         } else {
             setState('content');
         }
-    }, [data, loading, queryError, download, silent]);
+    }, [data, loading, queryError, download, silent, allLogsLoading, allLogsData, hasTasks]);
 
     // Loading state (for all modes during initial loading and PDF generation)
     if (state === 'loading' || state === 'generating') {
