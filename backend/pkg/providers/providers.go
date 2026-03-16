@@ -597,7 +597,16 @@ func (pc *providerController) NewAssistantProvider(
 			prompter:       prompter,
 			executor:       executor,
 			streamCb:       streamCb,
-			summarizer:     pc.summarizerAgent,
+			summarizer:      pc.summarizerAgent,
+			maxGACallsLimit: pc.cfg.MaxGeneralAgentToolCalls,
+			maxLACallsLimit: pc.cfg.MaxLimitedAgentToolCalls,
+			buildMonitor: func() *executionMonitor {
+				return &executionMonitor{
+					enabled:        pc.cfg.ExecutionMonitorEnabled,
+					sameThreshold:  pc.cfg.ExecutionMonitorSameToolLimit,
+					totalThreshold: pc.cfg.ExecutionMonitorTotalToolLimit,
+				}
+			},
 			Provider:       prv,
 		},
 	}
@@ -640,7 +649,16 @@ func (pc *providerController) LoadAssistantProvider(
 			prompter:       prompter,
 			executor:       executor,
 			streamCb:       streamCb,
-			summarizer:     pc.summarizerAgent,
+			summarizer:      pc.summarizerAgent,
+			maxGACallsLimit: pc.cfg.MaxGeneralAgentToolCalls,
+			maxLACallsLimit: pc.cfg.MaxLimitedAgentToolCalls,
+			buildMonitor: func() *executionMonitor {
+				return &executionMonitor{
+					enabled:        pc.cfg.ExecutionMonitorEnabled,
+					sameThreshold:  pc.cfg.ExecutionMonitorSameToolLimit,
+					totalThreshold: pc.cfg.ExecutionMonitorTotalToolLimit,
+				}
+			},
 			Provider:       prv,
 		},
 	}
