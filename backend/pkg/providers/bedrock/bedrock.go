@@ -19,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	smithybearer "github.com/aws/smithy-go/auth/bearer"
+	"github.com/invopop/jsonschema"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/bedrock"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
@@ -194,10 +195,6 @@ func (p *bedrockProvider) CallEx(
 	chain []llms.MessageContent,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
-	options := []llms.CallOption{
-		llms.WithStreamingFunc(streamCb),
-	}
-
 	// The AWS Bedrock Converse API requires toolConfig to be defined whenever the
 	// conversation history contains toolUse or toolResult content blocks — even when
 	// no new tools are being offered in the current turn.  Without it the API returns:
@@ -205,9 +202,18 @@ func (p *bedrockProvider) CallEx(
 	//   toolUse and toolResult content blocks.
 	// We reconstruct minimal tool definitions from the tool-call names already
 	// present in the chain so that the library sets toolConfig automatically.
-	options = append(options, p.providerConfig.GetOptionsForType(opt)...)
-	tools := extractToolsFromOptions(options)
+	configOptions := p.providerConfig.GetOptionsForType(opt)
+
+	// Extract and restore tools
+	tools := extractToolsFromOptions(configOptions)
 	tools = restoreMissedToolsFromChain(chain, tools)
+
+	// Clean tools from $schema field
+	tools = cleanToolSchemas(tools)
+
+	// Build final options: streaming + config + cleaned tools LAST (to override any dirty tools from config)
+	options := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	options = append(options, configOptions...)
 	options = append(options, llms.WithTools(tools))
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
@@ -226,13 +232,15 @@ func (p *bedrockProvider) CallWithTools(
 	// includes toolConfig in the request.
 	tools = restoreMissedToolsFromChain(chain, tools)
 
-	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithTools(tools),
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
-	)
+	// Clean tools from $schema field
+	tools = cleanToolSchemas(tools)
+
+	configOptions := p.providerConfig.GetOptionsForType(opt)
+
+	// Build final options: config + streaming + cleaned tools LAST (to override any dirty tools from config)
+	options := append(configOptions, llms.WithStreamingFunc(streamCb), llms.WithTools(tools))
+
+	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }
 
 func (p *bedrockProvider) GetUsage(info map[string]any) pconfig.CallUsage {
@@ -386,4 +394,61 @@ func inferPropertyType(value any) string {
 	default:
 		return "object"
 	}
+}
+
+// cleanToolSchemas removes the $schema field from tool parameters to ensure
+// compatibility with AWS Bedrock Converse API, which rejects schemas containing
+// the $schema metadata field (returns ValidationException).
+func cleanToolSchemas(tools []llms.Tool) []llms.Tool {
+	if len(tools) == 0 {
+		return tools
+	}
+
+	cleaned := make([]llms.Tool, len(tools))
+	for i, tool := range tools {
+		cleaned[i] = tool
+		if tool.Function != nil && tool.Function.Parameters != nil {
+			cleanedParams := cleanParameters(tool.Function.Parameters)
+			if cleanedParams != nil {
+				cleanedFunc := *tool.Function
+				cleanedFunc.Parameters = cleanedParams
+				cleaned[i].Function = &cleanedFunc
+			}
+		}
+	}
+
+	return cleaned
+}
+
+// cleanParameters removes $schema field from parameters of any type
+func cleanParameters(params any) any {
+	// Case 1: *jsonschema.Schema - convert to map[string]any without $schema
+	if schema, ok := params.(*jsonschema.Schema); ok {
+		data, err := schema.MarshalJSON()
+		if err != nil {
+			return params
+		}
+
+		var result map[string]any
+		if err := json.Unmarshal(data, &result); err != nil {
+			return params
+		}
+
+		delete(result, "$schema")
+		return result
+	}
+
+	// Case 2: map[string]any - just remove $schema
+	if paramsMap, ok := params.(map[string]any); ok {
+		cleanedParams := make(map[string]any, len(paramsMap))
+		for key, value := range paramsMap {
+			if key != "$schema" {
+				cleanedParams[key] = value
+			}
+		}
+		return cleanedParams
+	}
+
+	// Case 3: other types - return as is
+	return params
 }

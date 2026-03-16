@@ -1,6 +1,7 @@
 package bedrock
 
 import (
+	"fmt"
 	"sort"
 	"testing"
 
@@ -8,6 +9,7 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 
+	"github.com/invopop/jsonschema"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/bedrock"
 )
@@ -970,4 +972,160 @@ func TestAuthenticationErrors(t *testing.T) {
 			t.Error("Expected error when only secret key is provided")
 		}
 	})
+}
+
+// TestCleanToolSchemas verifies that $schema field is removed from tool parameters.
+func TestCleanToolSchemas(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         []llms.Tool
+		wantCount     int
+		checkSchema   bool
+		checkOriginal bool
+	}{
+		{
+			name:      "empty tools",
+			input:     nil,
+			wantCount: 0,
+		},
+		{
+			name:        "removes $schema from parameters",
+			input:       []llms.Tool{createToolWithSchema("test_tool", "draft/2020-12")},
+			wantCount:   1,
+			checkSchema: true,
+		},
+		{
+			name:        "preserves tools without $schema",
+			input:       []llms.Tool{createToolWithoutSchema("clean_tool")},
+			wantCount:   1,
+			checkSchema: false,
+		},
+		{
+			name: "handles multiple tools",
+			input: []llms.Tool{
+				createToolWithSchema("tool1", "draft/2020-12"),
+				createToolWithoutSchema("tool2"),
+				createToolWithSchema("tool3", "draft-07"),
+			},
+			wantCount:   3,
+			checkSchema: true,
+		},
+		{
+			name:      "handles nil Function",
+			input:     []llms.Tool{{Type: "function", Function: nil}},
+			wantCount: 1,
+		},
+		{
+			name: "handles nil Parameters",
+			input: []llms.Tool{{
+				Type:     "function",
+				Function: &llms.FunctionDefinition{Name: "no_params", Parameters: nil},
+			}},
+			wantCount: 1,
+		},
+		{
+			name: "handles non-map Parameters",
+			input: []llms.Tool{{
+				Type:     "function",
+				Function: &llms.FunctionDefinition{Name: "string_params", Parameters: "not a map"},
+			}},
+			wantCount: 1,
+		},
+		{
+			name:          "does not modify original",
+			input:         []llms.Tool{createToolWithSchema("original", "draft/2020-12")},
+			wantCount:     1,
+			checkOriginal: true,
+		},
+		{
+			name:        "handles *jsonschema.Schema parameters",
+			input:       []llms.Tool{createToolWithJsonSchemaType("json_schema_tool")},
+			wantCount:   1,
+			checkSchema: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var originalParams map[string]any
+			if tt.checkOriginal && len(tt.input) > 0 && tt.input[0].Function != nil {
+				originalParams, _ = tt.input[0].Function.Parameters.(map[string]any)
+			}
+
+			result := cleanToolSchemas(tt.input)
+
+			if len(result) != tt.wantCount {
+				t.Errorf("got %d tools, want %d", len(result), tt.wantCount)
+			}
+
+			if tt.checkSchema && len(result) > 0 {
+				for i, tool := range result {
+					if tool.Function == nil || tool.Function.Parameters == nil {
+						continue
+					}
+					if params, ok := tool.Function.Parameters.(map[string]any); ok {
+						if _, exists := params["$schema"]; exists {
+							t.Errorf("tool[%d] still has $schema field", i)
+						}
+					}
+				}
+			}
+
+			if tt.checkOriginal && originalParams != nil {
+				if _, exists := originalParams["$schema"]; !exists {
+					t.Error("original parameters were modified")
+				}
+			}
+		})
+	}
+}
+
+func createToolWithSchema(name, schemaVersion string) llms.Tool {
+	return llms.Tool{
+		Type: "function",
+		Function: &llms.FunctionDefinition{
+			Name: name,
+			Parameters: map[string]any{
+				"$schema": fmt.Sprintf("https://json-schema.org/%s/schema", schemaVersion),
+				"type":    "object",
+				"properties": map[string]any{
+					"arg": map[string]any{"type": "string"},
+				},
+			},
+		},
+	}
+}
+
+func createToolWithoutSchema(name string) llms.Tool {
+	return llms.Tool{
+		Type: "function",
+		Function: &llms.FunctionDefinition{
+			Name: name,
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"arg": map[string]any{"type": "string"},
+				},
+			},
+		},
+	}
+}
+
+func createToolWithJsonSchemaType(name string) llms.Tool {
+	type TestStruct struct {
+		Arg string `json:"arg" jsonschema:"required,description=Test argument"`
+	}
+
+	reflector := &jsonschema.Reflector{
+		DoNotReference: true,
+		ExpandedStruct: true,
+	}
+
+	return llms.Tool{
+		Type: "function",
+		Function: &llms.FunctionDefinition{
+			Name:       name,
+			Parameters: reflector.Reflect(&TestStruct{}),
+		},
+	}
 }
