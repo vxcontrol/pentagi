@@ -119,9 +119,10 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         variables: { assistantId: selectedAssistantId ?? '', flowId: flowId ?? '' },
     });
 
-    // Subscriptions
+    // Subscriptions — skip until the initial flow query has loaded
+    // to ensure cache fields exist before subscription data arrives
     const subscriptionVariables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
-    const subscriptionSkip = useMemo(() => !flowId, [flowId]);
+    const subscriptionSkip = !flowId || isLoading;
 
     // Global flow subscription - updates flow status (e.g., when stopped/finished)
     useFlowUpdatedSubscription();
