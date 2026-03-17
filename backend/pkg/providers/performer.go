@@ -406,15 +406,6 @@ func (fp *flowProvider) callWithRetries(
 		"agent_type":   optAgentType,
 	}))
 
-	// Check if we are already in a reflector retry cycle to prevent recursion.
-	if isReflectorRetry(ctx) {
-		logger.Error("detected reflector recursion attempt, preventing infinite retry loop")
-		return nil, errors.New("reflector recursion detected: cannot retry after reflector advice failed")
-	}
-
-	// Mark context as being in retry cycle for next invocation (via reflector).
-	ctx = markReflectorRetry(ctx)
-
 	ticker := time.NewTicker(delayBetweenRetries)
 	defer ticker.Stop()
 
@@ -699,6 +690,13 @@ func (fp *flowProvider) performReflector(
 	}
 	chain = append(chain, reflectorMsg)
 	if len(result.funcCalls) == 0 {
+		// Check if we are already in a reflector retry cycle to prevent infinite recursion.
+		// This blocks recursive performReflector calls after caller reflector was invoked.
+		if isReflectorRetry(ctx) {
+			logger.Error("reflector recursion detected: cannot recursively call reflector after caller reflector")
+			return nil, errors.New("reflector recursion detected: LLM returned no tool calls after reflector advice")
+		}
+
 		return fp.performReflector(ctx, optOriginType, chainID, taskID, subtaskID, chain, executor,
 			humanMessage, result.content, executionContext, iteration+1)
 	}
@@ -726,6 +724,21 @@ func (fp *flowProvider) performCallerReflector(
 		"msg_chain_id": chainID,
 		"errors_count": len(errs),
 	})).WithError(errors.Join(errs...))
+
+	// Check if we are already in a reflector retry cycle to prevent infinite recursion.
+	// This blocks repeated calls to performCallerReflector after reflector advice failed.
+	if isReflectorRetry(ctx) {
+		logger.Error("reflector recursion detected: caller reflector already invoked in this chain")
+		return nil, errors.New("reflector recursion detected: cannot invoke caller reflector again after reflector advice failed")
+	}
+
+	// Mark context to prevent any further reflector recursion.
+	// This flag will be checked in:
+	// 1. performCallerReflector (here) - if reflector advice fails again
+	// 2. performReflector - before recursive call when no tool calls returned
+	ctx = markReflectorRetry(ctx)
+	logger = logger.WithContext(ctx)
+
 	logger.Warn("max retries reached, invoking caller reflector for guidance")
 
 	reflectorContent := fmt.Sprintf(
