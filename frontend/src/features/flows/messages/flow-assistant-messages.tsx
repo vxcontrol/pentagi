@@ -17,7 +17,7 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { StatusType } from '@/graphql/types';
-import { useChatScroll } from '@/hooks/use-chat-scroll';
+import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
@@ -306,8 +306,16 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCanceling, setIsCanceling] = useState(false);
 
-    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(
-        logs ?? [],
+    const selectedAssistantLogs = useMemo(() => {
+        if (!logs?.length || !selectedAssistantId) {
+            return [];
+        }
+
+        return logs.filter((log) => log.assistantId === selectedAssistantId);
+    }, [logs, selectedAssistantId]);
+
+    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useAutoScroll(
+        selectedAssistantLogs,
         selectedAssistantId ?? null,
     );
 
@@ -380,37 +388,20 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         return !!searchValue.trim();
     }, [searchValue]);
 
-    // Memoize filtered logs to avoid recomputing on every render
-    // Use debouncedSearchValue for filtering to improve performance
     const filteredLogs = useMemo(() => {
-        if (!logs) {
-            return [];
-        }
-
-        // First filter by selected assistant
-        let assistantFilteredLogs = logs;
-
-        if (selectedAssistantId) {
-            assistantFilteredLogs = logs.filter((log) => log.assistantId === selectedAssistantId);
-        } else {
-            // If no assistant is selected, show no logs
-            assistantFilteredLogs = [];
-        }
-
-        // Then filter by search query if present
         const search = debouncedSearchValue.toLowerCase().trim();
 
         if (!search) {
-            return assistantFilteredLogs;
+            return selectedAssistantLogs;
         }
 
-        return assistantFilteredLogs.filter(
+        return selectedAssistantLogs.filter(
             (log) =>
                 log.message.toLowerCase().includes(search) ||
                 (log.result && log.result.toLowerCase().includes(search)) ||
                 (log.thinking && log.thinking.toLowerCase().includes(search)),
         );
-    }, [logs, debouncedSearchValue, selectedAssistantId]);
+    }, [selectedAssistantLogs, debouncedSearchValue]);
 
     // Handlers for interacting with assistant
     const handleAssistantDelete = (assistantId: string) => {
@@ -617,14 +608,18 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
                             <div ref={endRef} />
                         </div>
 
-                        {hasNewMessages && !isScrolledToBottom && (
+                        {!isScrolledToBottom && (
                             <Button
-                                className="absolute right-4 bottom-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
+                                className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                                 onClick={() => scrollToEnd()}
-                                size="icon"
+                                size="icon-sm"
                                 type="button"
+                                variant="outline"
                             >
                                 <ChevronDown />
+                                {hasNewMessages && (
+                                    <span className="bg-primary absolute -top-1.5 -right-1.5 size-3 rounded-full" />
+                                )}
                             </Button>
                         )}
                     </div>

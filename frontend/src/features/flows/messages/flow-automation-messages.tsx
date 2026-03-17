@@ -10,7 +10,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { StatusType } from '@/graphql/types';
-import { useChatScroll } from '@/hooks/use-chat-scroll';
+import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/flow-provider';
 
@@ -42,7 +42,7 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCanceling, setIsCanceling] = useState(false);
 
-    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useChatScroll(logs, flowId);
+    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useAutoScroll(logs, flowId);
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         defaultValues: {
@@ -279,14 +279,18 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
                         <div ref={endRef} />
                     </div>
 
-                    {hasNewMessages && !isScrolledToBottom && (
+                    {!isScrolledToBottom && (
                         <Button
-                            className="absolute right-4 bottom-4 z-10 size-9 rounded-full shadow-md hover:shadow-lg"
+                            className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                             onClick={() => scrollToEnd()}
-                            size="icon"
+                            size="icon-sm"
                             type="button"
+                            variant="outline"
                         >
                             <ChevronDown />
+                            {hasNewMessages && (
+                                <span className="bg-primary absolute -top-1.5 -right-1.5 size-3 rounded-full" />
+                            )}
                         </Button>
                     )}
                 </div>

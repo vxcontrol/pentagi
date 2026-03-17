@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { ListFilter, Search, Wrench, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ListFilter, Search, Wrench, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useFlow } from '@/providers/flow-provider';
 
 import FlowTasksDropdown from '../flow-tasks-dropdown';
@@ -28,14 +29,9 @@ const FlowTools = () => {
     const { flowData, flowId } = useFlow();
 
     const logs = useMemo(() => flowData?.searchLogs ?? [], [flowData?.searchLogs]);
-    const searchesEndRef = useRef<HTMLDivElement>(null);
-
-    // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
 
-    const scrollSearches = () => {
-        searchesEndRef.current?.scrollIntoView();
-    };
+    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useAutoScroll(logs, flowId);
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         defaultValues: {
@@ -140,12 +136,6 @@ const FlowTools = () => {
 
     const hasLogs = filteredLogs && filteredLogs.length > 0;
 
-    useEffect(() => {
-        if (hasLogs) {
-            scrollSearches();
-        }
-    }, [logs, hasLogs]);
-
     // Reset filters handler
     const handleResetFilters = () => {
         form.reset({
@@ -214,15 +204,35 @@ const FlowTools = () => {
             </div>
 
             {hasLogs ? (
-                <div className="flex flex-1 flex-col gap-4 overflow-auto">
-                    {filteredLogs.map((log) => (
-                        <FlowTool
-                            key={log.id}
-                            log={log}
-                            searchValue={debouncedSearchValue}
-                        />
-                    ))}
-                    <div ref={searchesEndRef} />
+                <div className="relative flex-1 overflow-y-hidden">
+                    <div
+                        className="flex h-full flex-col gap-4 overflow-y-auto"
+                        ref={containerRef}
+                    >
+                        {filteredLogs.map((log) => (
+                            <FlowTool
+                                key={log.id}
+                                log={log}
+                                searchValue={debouncedSearchValue}
+                            />
+                        ))}
+                        <div ref={endRef} />
+                    </div>
+
+                    {!isScrolledToBottom && (
+                        <Button
+                            className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
+                            onClick={() => scrollToEnd()}
+                            size="icon-sm"
+                            type="button"
+                            variant="outline"
+                        >
+                            <ChevronDown />
+                            {hasNewMessages && (
+                                <span className="bg-primary absolute -top-1.5 -right-1.5 size-3 rounded-full" />
+                            )}
+                        </Button>
+                    )}
                 </div>
             ) : hasActiveFilters ? (
                 <Empty>

@@ -95,7 +95,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
                         </Markdown>
                     </div>
 
-                    {hasSubtasks && progress < 100 && (
+                    {hasSubtasks && (
                         <div className="flex items-center gap-2">
                             <Progress
                                 className="h-1.5 flex-1"

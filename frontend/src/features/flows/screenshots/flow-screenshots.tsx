@@ -1,13 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { Camera, Search, X } from 'lucide-react';
+import { Camera, ChevronDown, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useFlow } from '@/providers/flow-provider';
 
 import FlowScreenshot from './flow-screenshot';
@@ -20,8 +22,12 @@ const FlowScreenshots = () => {
     const { flowData, flowId } = useFlow();
 
     const screenshots = useMemo(() => flowData?.screenshots ?? [], [flowData?.screenshots]);
-    // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
+
+    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useAutoScroll(
+        screenshots,
+        flowId,
+    );
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         defaultValues: {
@@ -123,13 +129,34 @@ const FlowScreenshots = () => {
             </div>
 
             {hasScreenshots ? (
-                <div className="flex flex-1 flex-col gap-4 overflow-auto">
-                    {filteredScreenshots.map((screenshot) => (
-                        <FlowScreenshot
-                            key={screenshot.id}
-                            screenshot={screenshot}
-                        />
-                    ))}
+                <div className="relative flex-1 overflow-y-hidden">
+                    <div
+                        className="flex h-full flex-col gap-4 overflow-y-auto"
+                        ref={containerRef}
+                    >
+                        {filteredScreenshots.map((screenshot) => (
+                            <FlowScreenshot
+                                key={screenshot.id}
+                                screenshot={screenshot}
+                            />
+                        ))}
+                        <div ref={endRef} />
+                    </div>
+
+                    {!isScrolledToBottom && (
+                        <Button
+                            className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
+                            onClick={() => scrollToEnd()}
+                            size="icon-sm"
+                            type="button"
+                            variant="outline"
+                        >
+                            <ChevronDown />
+                            {hasNewMessages && (
+                                <span className="bg-primary absolute -top-1.5 -right-1.5 size-3 rounded-full" />
+                            )}
+                        </Button>
+                    )}
                 </div>
             ) : (
                 <Empty>
