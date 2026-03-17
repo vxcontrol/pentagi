@@ -64,20 +64,11 @@ func (fp *flowProvider) performAgentChain(
 		summarizerHandler = fp.GetSummarizeResultHandler(taskID, subtaskID)
 	)
 
-	fields := logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(fp.flowID, taskID, subtaskID, logrus.Fields{
 		"provider":     fp.Type(),
 		"agent":        optAgentType,
-		"flow_id":      fp.flowID,
 		"msg_chain_id": chainID,
-	}
-	if taskID != nil {
-		fields["task_id"] = *taskID
-	}
-	if subtaskID != nil {
-		fields["subtask_id"] = *subtaskID
-	}
-
-	logger := logrus.WithContext(ctx).WithFields(fields)
+	}))
 
 	// Track execution time for duration calculation
 	lastUpdateTime := time.Now()
@@ -300,14 +291,13 @@ func (fp *flowProvider) execToolCall(
 	funcName := toolCall.FunctionCall.Name
 	funcArgs := json.RawMessage(toolCall.FunctionCall.Arguments)
 
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(fp.flowID, taskID, subtaskID, logrus.Fields{
 		"agent":        fp.Type(),
-		"flow_id":      fp.flowID,
 		"func_name":    funcName,
 		"func_args":    string(funcArgs)[:min(1000, len(funcArgs))],
 		"tool_call_id": toolCall.ID,
 		"msg_chain_id": chainID,
-	})
+	}))
 
 	if detector.detect(toolCall) {
 		if len(detector.funcCalls) >= RepeatingToolCallThreshold+maxSoftDetectionsBeforeAbort {
@@ -409,6 +399,21 @@ func (fp *flowProvider) callWithRetries(
 		resp    *llms.ContentResponse
 		result  callResult
 	)
+
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(fp.flowID, taskID, subtaskID, logrus.Fields{
+		"agent":        fp.Type(),
+		"msg_chain_id": chainID,
+		"agent_type":   optAgentType,
+	}))
+
+	// Check if we are already in a reflector retry cycle to prevent recursion.
+	if isReflectorRetry(ctx) {
+		logger.Error("detected reflector recursion attempt, preventing infinite retry loop")
+		return nil, errors.New("reflector recursion detected: cannot retry after reflector advice failed")
+	}
+
+	// Mark context as being in retry cycle for next invocation (via reflector).
+	ctx = markReflectorRetry(ctx)
 
 	ticker := time.NewTicker(delayBetweenRetries)
 	defer ticker.Stop()
@@ -516,6 +521,10 @@ func (fp *flowProvider) callWithRetries(
 			break
 		} else {
 			errs = append(errs, err)
+			logger.WithFields(logrus.Fields{
+				"retry_iteration": idx,
+				"error":           err.Error()[:min(200, len(err.Error()))],
+			}).Warn("agent chain call failed, will retry")
 		}
 
 		ticker.Reset(delayBetweenRetries)
@@ -562,22 +571,13 @@ func (fp *flowProvider) performReflector(
 		msgChainType = database.MsgchainTypeReflector
 	)
 
-	fields := logrus.Fields{
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(fp.flowID, taskID, subtaskID, logrus.Fields{
 		"provider":     fp.Type(),
 		"agent":        optAgentType,
 		"origin":       optOriginType,
-		"flow_id":      fp.flowID,
 		"msg_chain_id": chainID,
 		"iteration":    iteration,
-	}
-	if taskID != nil {
-		fields["task_id"] = *taskID
-	}
-	if subtaskID != nil {
-		fields["subtask_id"] = *subtaskID
-	}
-
-	logger := logrus.WithContext(ctx).WithFields(fields)
+	}))
 
 	if iteration > maxReflectorCallsPerChain {
 		msg := "reflector called too many times"
@@ -588,6 +588,9 @@ func (fp *flowProvider) performReflector(
 			langfuse.WithEventStatus("failed"),
 			langfuse.WithEventLevel(langfuse.ObservationLevelError),
 			langfuse.WithEventOutput(msg),
+			langfuse.WithEventMetadata(map[string]any{
+				"iteration": iteration,
+			}),
 		)
 		logger.WithField("content", content[:min(1000, len(content))]).Warn(msg)
 		return nil, errors.New(msg)
@@ -717,12 +720,12 @@ func (fp *flowProvider) performCallerReflector(
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.performCallerReflector")
 	defer span.End()
 
-	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
-		"chain_id":   chainID,
-		"task_id":    taskID,
-		"subtask_id": subtaskID,
-		"agent_type": optAgentType,
-	}).WithError(errors.Join(errs...))
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(fp.flowID, taskID, subtaskID, logrus.Fields{
+		"provider":     fp.Type(),
+		"agent":        optAgentType,
+		"msg_chain_id": chainID,
+		"errors_count": len(errs),
+	})).WithError(errors.Join(errs...))
 	logger.Warn("max retries reached, invoking caller reflector for guidance")
 
 	reflectorContent := fmt.Sprintf(

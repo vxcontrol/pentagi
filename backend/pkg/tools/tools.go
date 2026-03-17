@@ -1470,7 +1470,10 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 			TerminalToolName:       term.Handle,
 			FileToolName:           term.Handle,
 		},
-		barriers: map[string]struct{}{EnricherResultToolName: {}},
+		barriers: map[string]struct{}{
+			EnricherResultToolName: {},
+		},
+		summarizer: cfg.Summarizer,
 	}
 
 	memory := NewMemoryTool(

@@ -333,6 +333,14 @@ func (ce *customExecutor) Execute(
 				return "", resultFormat, fmt.Errorf("failed to summarize result: %w", err)
 			}
 			resultFormat = database.MsglogResultFormatMarkdown
+		} else if allowSummarize && len(result) > DefaultResultSizeLimit*2 {
+			result = fmt.Sprintf("%s\n[0:%d bytes]\n... [truncated] ...\n[%d:%d bytes]\n%s",
+				result[:DefaultResultSizeLimit],
+				DefaultResultSizeLimit,
+				len(result)-DefaultResultSizeLimit,
+				len(result),
+				result[len(result)-DefaultResultSizeLimit:],
+			)
 		}
 
 		durationDelta := time.Since(startTime).Seconds()

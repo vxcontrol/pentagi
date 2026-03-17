@@ -43,6 +43,21 @@ type dummyMessage struct {
 	Message string `json:"message"`
 }
 
+type reflectorRetryContextKey struct{}
+
+// isReflectorRetry checks if we are already in a reflector retry cycle
+func isReflectorRetry(ctx context.Context) bool {
+	if isRetry, ok := ctx.Value(reflectorRetryContextKey{}).(bool); ok {
+		return isRetry
+	}
+	return false
+}
+
+// markReflectorRetry marks context as being in a reflector retry cycle
+func markReflectorRetry(ctx context.Context) context.Context {
+	return context.WithValue(ctx, reflectorRetryContextKey{}, true)
+}
+
 type repeatingDetector struct {
 	funcCalls []llms.FunctionCall
 }
@@ -769,16 +784,16 @@ func (fp *flowProvider) subtasksToMarkdown(subtasks []tools.SubtaskInfo) string 
 func (fp *flowProvider) getContainerPortsDescription() string {
 	ports := docker.GetPrimaryContainerPorts(fp.flowID)
 	var buffer strings.Builder
-	
+
 	buffer.WriteString("**OOB Attack Infrastructure:**\n\n")
 	buffer.WriteString("This container has TCP ports bound for receiving out-of-band (OOB) callbacks:\n\n")
-	
+
 	for _, port := range ports {
 		buffer.WriteString(fmt.Sprintf("- Port %d/tcp (container) → %s:%d (external)\n", port, fp.publicIP, port))
 	}
-	
+
 	buffer.WriteString("\n**Usage for OOB Attacks:**\n")
-	
+
 	if fp.publicIP == "0.0.0.0" {
 		buffer.WriteString("The bind IP is 0.0.0.0 (all interfaces). To receive external callbacks:\n")
 		buffer.WriteString("1. Discover your public IP: `curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip`\n")
@@ -790,7 +805,7 @@ func (fp *flowProvider) getContainerPortsDescription() string {
 		buffer.WriteString("Use this IP in exploit payloads requiring callbacks (DNS exfiltration, reverse shells, XXE OOB, SSRF verification, etc.)\n")
 		buffer.WriteString("Listen on the container ports above to receive incoming connections.\n")
 	}
-	
+
 	return buffer.String()
 }
 
@@ -1033,4 +1048,20 @@ func appendNewToolCallsToHistory(history string, toolCalls []map[string]string) 
 
 func combineHistoryToolCallsToHumanMessage(history, msg string) string {
 	return fmt.Sprintf("%s\n\n%s\n\n%s", msg, toolCallsHistorySeparator, history)
+}
+
+func enrichLogrusFields(flowID int64, taskID, subtaskID *int64, fields logrus.Fields) logrus.Fields {
+	if fields == nil {
+		fields = logrus.Fields{}
+	}
+
+	fields["flow_id"] = flowID
+	if taskID != nil {
+		fields["task_id"] = *taskID
+	}
+	if subtaskID != nil {
+		fields["subtask_id"] = *subtaskID
+	}
+
+	return fields
 }
