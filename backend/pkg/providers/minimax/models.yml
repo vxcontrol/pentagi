@@ -1,3 +1,17 @@
+- name: MiniMax-M2.7
+  description: MiniMax-M2.7 - Latest flagship model with enhanced reasoning and coding capabilities. Supports tool calling, JSON output, and streaming.
+  thinking: false
+  price:
+    input: 0.40
+    output: 1.10
+
+- name: MiniMax-M2.7-highspeed
+  description: MiniMax-M2.7-highspeed - High-speed version of M2.7 for low-latency scenarios. Same capabilities with improved response latency.
+  thinking: false
+  price:
+    input: 0.40
+    output: 1.10
+
 - name: MiniMax-M2.5
   description: MiniMax-M2.5 - High-performance large language model with 204K context window. Supports tool calling, JSON output, and streaming. Suitable for general dialogue, code generation, and complex reasoning tasks.
   thinking: false

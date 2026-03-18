@@ -19,7 +19,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const MiniMaxAgentModel = "MiniMax-M2.5"
+const MiniMaxAgentModel = "MiniMax-M2.7"
 
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
