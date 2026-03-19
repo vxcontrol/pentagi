@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowUpIcon, Check, ChevronDown, Square, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -123,6 +123,18 @@ export const FlowForm = ({
 
     const isFormDisabled = isDisabled || isLoading || isSubmitting || isCanceling;
 
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const previousFormDisabledRef = useRef(isFormDisabled);
+
+    useEffect(() => {
+        const isDisabled = previousFormDisabledRef.current;
+        previousFormDisabledRef.current = isFormDisabled;
+
+        if (isDisabled && !isFormDisabled) {
+            textareaRef.current?.focus();
+        }
+    }, [isFormDisabled]);
+
     const handleSubmit = async (values: FlowFormValues) => {
         await onSubmit(values);
         resetField('message');
@@ -157,6 +169,10 @@ export const FlowForm = ({
                                     minRows={1}
                                     onKeyDown={handleKeyDown}
                                     placeholder={placeholder}
+                                    ref={(element) => {
+                                        field.ref(element);
+                                        textareaRef.current = element;
+                                    }}
                                 />
                                 <InputGroupAddon align="block-end">
                                     <FormField

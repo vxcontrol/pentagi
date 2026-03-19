@@ -36,6 +36,7 @@ type Querier interface {
 	DeleteAssistant(ctx context.Context, id int64) (Assistant, error)
 	DeleteFavoriteFlow(ctx context.Context, arg DeleteFavoriteFlowParams) (UserPreference, error)
 	DeleteFlow(ctx context.Context, id int64) (Flow, error)
+	DeleteFlowAssistantLog(ctx context.Context, id int64) error
 	DeletePrompt(ctx context.Context, id int64) error
 	DeleteProvider(ctx context.Context, id int64) (Provider, error)
 	DeleteSubtask(ctx context.Context, id int64) error

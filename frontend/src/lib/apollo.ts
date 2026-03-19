@@ -19,6 +19,7 @@ const ASSISTANT_LOG_TYPENAME = 'AssistantLog';
 const MAX_RETRY_DELAY_MS = 30_000;
 const STREAMING_CACHE_MAX_ENTRIES = 500;
 const STREAMING_CACHE_TTL_MS = 1000 * 60 * 5;
+const STREAMING_THROTTLE_MS = 100;
 
 // --- Types ---
 
@@ -61,9 +62,7 @@ const isSubscriptionOperation = ({ query }: Operation): boolean => {
 
 // --- Link helpers ---
 
-const createInterceptLink = (
-    transform: (result: FetchResult, operation: Operation) => FetchResult,
-): ApolloLink =>
+const createInterceptLink = (transform: (result: FetchResult, operation: Operation) => FetchResult): ApolloLink =>
     new ApolloLink(
         (operation: Operation, forward) =>
             new Observable((observer) => {
@@ -151,7 +150,7 @@ const cacheActionStrategies: Record<SubscriptionAction, CacheActionApplier> = {
     add: (existingArray, newRef, itemExists) => (itemExists ? existingArray : [...existingArray, newRef]),
     create: (existingArray, newRef, itemExists) => (itemExists ? existingArray : [newRef, ...existingArray]),
     delete: (existingArray, _newRef, itemExists, filterOutById) => (itemExists ? filterOutById() : existingArray),
-    update: (existingArray) => existingArray,
+    update: (existingArray, newRef, itemExists) => (itemExists ? existingArray : [...existingArray, newRef]),
 };
 
 const updateCacheForSubscription = (
@@ -194,18 +193,19 @@ const updateCacheForSubscription = (
                         return existingArray;
                     }
 
-                    const newRef = toReference(newItem as StoreObject, true);
+                    const itemExists = existingArray.some((ref) => readField('id', ref) === newItem.id);
+
+                    let newRef = toReference(newItem as StoreObject, true);
+
+                    if (!newRef && !itemExists && subscriptionName === 'assistantLogUpdated') {
+                        newRef = toReference(newItem as StoreObject);
+                    }
 
                     if (!newRef) {
                         return existingArray;
                     }
 
-                    const itemExists = existingArray.some((ref) => readField('id', ref) === newItem.id);
                     const action = resolveSubscriptionAction(subscriptionName);
-
-                    Log.debug(
-                        `[CacheUpdate] ${subscriptionName} | id: ${newItem.id} | exists: ${itemExists} | count: ${existingArray.length}`,
-                    );
 
                     return cacheActionStrategies[action](existingArray, newRef, itemExists, () =>
                         existingArray.filter((ref) => readField('id', ref) !== newItem.id),
@@ -230,6 +230,8 @@ const createStreamingLink = (): ApolloLink => {
         ttl: STREAMING_CACHE_TTL_MS,
     });
 
+    const lastUpdateTimestamps = new Map<string, number>();
+
     const accumulateStreamingLog = (logUpdate: AssistantLogFragmentFragment): StreamingLogEntry => {
         const cacheKey = `${ASSISTANT_LOG_TYPENAME}:${logUpdate.id}`;
         const cachedLog = streamingLogs.get(cacheKey) ?? EMPTY_LOG_ENTRY;
@@ -245,40 +247,92 @@ const createStreamingLink = (): ApolloLink => {
         return accumulatedLog;
     };
 
-    return createInterceptLink((result, _operation) => {
-        const logUpdate = result.data?.assistantLogUpdated as AssistantLogFragmentFragment | undefined;
+    const shouldEmitUpdate = (logId: string): boolean => {
+        const now = Date.now();
+        const lastUpdate = lastUpdateTimestamps.get(logId);
 
-        if (!logUpdate) {
-            return result;
+        if (!lastUpdate || now - lastUpdate >= STREAMING_THROTTLE_MS) {
+            lastUpdateTimestamps.set(logId, now);
+
+            return true;
         }
 
-        try {
-            if (logUpdate.appendPart && logUpdate.id) {
-                const accumulatedLog = accumulateStreamingLog(logUpdate);
+        return false;
+    };
 
-                return {
-                    ...result,
-                    data: {
-                        ...result.data,
-                        assistantLogUpdated: {
-                            ...logUpdate,
-                            appendPart: false,
-                            message: accumulatedLog.message ?? '',
-                            result: accumulatedLog.result ?? '',
-                            thinking: accumulatedLog.thinking,
-                        },
-                    },
-                };
-            }
+    return new ApolloLink((operation, forward) => {
+        return new Observable((observer) => {
+            const subscription = forward(operation).subscribe({
+                complete: observer.complete.bind(observer),
+                error: observer.error.bind(observer),
+                next: (result) => {
+                    const logUpdate = result.data?.assistantLogUpdated as AssistantLogFragmentFragment | undefined;
 
-            if (logUpdate.id) {
-                streamingLogs.delete(`${ASSISTANT_LOG_TYPENAME}:${logUpdate.id}`);
-            }
-        } catch (error) {
-            Log.error('Error processing streaming assistant log:', error);
-        }
+                    if (!logUpdate) {
+                        observer.next(result);
 
-        return result;
+                        return;
+                    }
+
+                    try {
+                        if (logUpdate.appendPart && logUpdate.id) {
+                            const accumulatedLog = accumulateStreamingLog(logUpdate);
+
+                            if (!shouldEmitUpdate(logUpdate.id)) {
+                                return;
+                            }
+
+                            observer.next({
+                                ...result,
+                                data: {
+                                    ...result.data,
+                                    assistantLogUpdated: {
+                                        ...logUpdate,
+                                        appendPart: false,
+                                        message: accumulatedLog.message ?? '',
+                                        result: accumulatedLog.result ?? '',
+                                        thinking: accumulatedLog.thinking,
+                                    },
+                                },
+                            });
+
+                            return;
+                        }
+
+                        if (logUpdate.id) {
+                            const cacheKey = `${ASSISTANT_LOG_TYPENAME}:${logUpdate.id}`;
+                            const cachedLog = streamingLogs.get(cacheKey);
+
+                            streamingLogs.delete(cacheKey);
+                            lastUpdateTimestamps.delete(logUpdate.id);
+
+                            if (cachedLog) {
+                                observer.next({
+                                    ...result,
+                                    data: {
+                                        ...result.data,
+                                        assistantLogUpdated: {
+                                            ...logUpdate,
+                                            message: concatStrings(cachedLog.message, logUpdate.message) ?? '',
+                                            result: concatStrings(cachedLog.result, logUpdate.result) ?? '',
+                                            thinking: concatStrings(cachedLog.thinking, logUpdate.thinking),
+                                        },
+                                    },
+                                });
+
+                                return;
+                            }
+                        }
+                    } catch (error) {
+                        Log.error('Error processing streaming assistant log:', error);
+                    }
+
+                    observer.next(result);
+                },
+            });
+
+            return () => subscription.unsubscribe();
+        });
     });
 };
 

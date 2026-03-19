@@ -134,7 +134,7 @@ function InputGroupTextarea({ className, ...props }: React.ComponentProps<'texta
     );
 }
 
-function InputGroupTextareaAutosize({ className, ...props }: React.ComponentPropsWithoutRef<typeof TextareaAutosize>) {
+function InputGroupTextareaAutosize({ className, ...props }: React.ComponentProps<typeof TextareaAutosize>) {
     return (
         <TextareaAutosize
             className={cn(
