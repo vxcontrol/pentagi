@@ -280,7 +280,7 @@ func (ce *customExecutor) Execute(
 
 	var err error
 	msgID, msg := int64(0), ce.getMessage(args)
-	if msg != "" {
+	if strings.Trim(msg, " \t\n\r") != "" {
 		msgType := getMessageType(name)
 		msgID, err = ce.mlp.PutMsg(ctx, msgType, ce.taskID, ce.subtaskID, streamID, thinking, msg)
 		if err != nil {

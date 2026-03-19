@@ -70,3 +70,7 @@ UPDATE assistantlogs
 SET result = $1, result_format = $2
 WHERE id = $3
 RETURNING *;
+
+-- name: DeleteFlowAssistantLog :exec
+DELETE FROM assistantlogs
+WHERE id = $1;
