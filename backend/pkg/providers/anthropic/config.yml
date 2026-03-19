@@ -2,7 +2,7 @@ simple:
   model: claude-haiku-4-5
   temperature: 0.5
   n: 1
-  max_tokens: 4000
+  max_tokens: 8192
   price:
     input: 1.0
     output: 5.0
@@ -13,7 +13,7 @@ simple_json:
   model: claude-haiku-4-5
   temperature: 0.5
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   json: true
   price:
     input: 1.0
@@ -25,7 +25,7 @@ primary_agent:
   model: claude-sonnet-4-5
   temperature: 1.0
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   reasoning:
     max_tokens: 1024
   price:
@@ -38,7 +38,7 @@ assistant:
   model: claude-sonnet-4-5
   temperature: 1.0
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   reasoning:
     max_tokens: 1024
   price:
@@ -51,7 +51,7 @@ generator:
   model: claude-opus-4-5
   temperature: 1.0
   n: 1
-  max_tokens: 16384
+  max_tokens: 32768
   reasoning:
     max_tokens: 4096
   price:
@@ -64,7 +64,7 @@ refiner:
   model: claude-sonnet-4-5
   temperature: 1.0
   n: 1
-  max_tokens: 8192
+  max_tokens: 20480
   reasoning:
     max_tokens: 1024
   price:
@@ -90,7 +90,7 @@ reflector:
   model: claude-haiku-4-5
   temperature: 0.7
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   reasoning:
     max_tokens: 1024
   price:
@@ -103,7 +103,7 @@ searcher:
   model: claude-haiku-4-5
   temperature: 1.0
   n: 1
-  max_tokens: 6000
+  max_tokens: 8192
   reasoning:
     max_tokens: 1024
   price:
@@ -116,7 +116,7 @@ enricher:
   model: claude-haiku-4-5
   temperature: 1.0
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
     input: 1.0
     output: 5.0
@@ -127,7 +127,7 @@ coder:
   model: claude-sonnet-4-5
   temperature: 1.0
   n: 1
-  max_tokens: 16384
+  max_tokens: 20480
   reasoning:
     max_tokens: 2048
   price:
@@ -140,7 +140,7 @@ installer:
   model: claude-sonnet-4-5
   temperature: 1.0
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   reasoning:
     max_tokens: 1024
   price:
