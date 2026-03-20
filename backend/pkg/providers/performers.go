@@ -10,7 +10,9 @@ import (
 
 	"pentagi/pkg/cast"
 	"pentagi/pkg/database"
+	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers/pconfig"
+	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
 	"github.com/sirupsen/logrus"
@@ -33,6 +35,8 @@ func (fp *flowProvider) performTaskResultReporter(
 		llms.TextParts(llms.ChatMessageTypeSystem, systemReporterTmpl),
 		llms.TextParts(llms.ChatMessageTypeHuman, userReporterTmpl),
 	}
+
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.ReporterExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
@@ -67,7 +71,6 @@ func (fp *flowProvider) performTaskResultReporter(
 		return nil, fmt.Errorf("failed to create msg chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChain.ID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task reporter result: %w", err)
@@ -114,6 +117,7 @@ func (fp *flowProvider) performSubtasksGenerator(
 		return nil, fmt.Errorf("failed to get searcher handler: %w", err)
 	}
 
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.GeneratorExecutorConfig{
 		TaskID:   taskID,
 		Memorist: memorist,
@@ -148,7 +152,6 @@ func (fp *flowProvider) performSubtasksGenerator(
 		return nil, fmt.Errorf("failed to create msg chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChain.ID, &taskID, nil, chain, executor, fp.summarizer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subtasks generator result: %w", err)
@@ -213,8 +216,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 		systemSection := ast.Sections[0] // there may be multiple sections due to reflector agent
 		systemMessage := llms.TextParts(llms.ChatMessageTypeSystem, systemRefinerTmpl)
 		systemSection.Header.SystemMessage = &systemMessage
-		humanMessage := llms.TextParts(llms.ChatMessageTypeHuman, userRefinerTmpl)
-		systemSection.Header.HumanMessage = &humanMessage
+
 		// remove the last report with subtasks list/patch
 		for idx := len(systemSection.Body) - 1; idx >= 0; idx-- {
 			if systemSection.Body[idx].Type == cast.RequestResponse {
@@ -222,13 +224,18 @@ func (fp *flowProvider) performSubtasksRefiner(
 				break
 			}
 		}
-		// remove all past completions
-		for idx := len(systemSection.Body) - 1; idx >= 0; idx-- {
-			if systemSection.Body[idx].Type != cast.Completion {
-				systemSection.Body = systemSection.Body[:idx+1]
-				break
-			}
-		}
+
+		// build human message with tool calls history
+		// we combine the history into single part for better LLMs compatibility
+		toolCalls := extractToolCallsFromChain(systemSection.Messages())
+		toolCallsHistory := extractHistoryFromHumanMessage(systemSection.Header.HumanMessage)
+		combinedToolCallsHistory := appendNewToolCallsToHistory(toolCallsHistory, toolCalls)
+		combinedUserRefinerTmpl := combineHistoryToolCallsToHumanMessage(combinedToolCallsHistory, userRefinerTmpl)
+		humanMessage := llms.TextParts(llms.ChatMessageTypeHuman, combinedUserRefinerTmpl)
+		systemSection.Header.HumanMessage = &humanMessage
+
+		// reset messages in the chain, it's already saved in the header
+		systemSection.Body = []*cast.BodyPair{}
 
 		// restore the chain
 		return systemSection.Messages(), nil
@@ -273,6 +280,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 		return nil, fmt.Errorf("failed to get searcher handler: %w", err)
 	}
 
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.RefinerExecutorConfig{
 		TaskID:   taskID,
 		Memorist: memorist,
@@ -318,7 +326,6 @@ func (fp *flowProvider) performSubtasksRefiner(
 
 	logger.WithField("msg_chain_id", msgChain.ID).Debug("created msg chain for refiner")
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChain.ID, &taskID, nil, chain, executor, fp.summarizer)
 	if err != nil {
 		logger.WithError(err).Error("failed to perform subtasks refiner agent chain")
@@ -385,6 +392,7 @@ func (fp *flowProvider) performCoder(
 		return "", fmt.Errorf("failed to get searcher handler: %w", err)
 	}
 
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.CoderExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
@@ -406,6 +414,17 @@ func (fp *flowProvider) performCoder(
 		return "", fmt.Errorf("failed to get coder executor: %w", err)
 	}
 
+	if fp.planning {
+		userCoderTmplWithPlan, err := fp.performPlanner(
+			ctx, taskID, subtaskID, optAgentType, executor, userCoderTmpl, question,
+		)
+		if err != nil {
+			logrus.WithContext(ctx).WithError(err).Warn("failed to get task plan from planner, proceeding without plan")
+		} else {
+			userCoderTmpl = userCoderTmplWithPlan
+		}
+	}
+
 	msgChainID, chain, err := fp.restoreChain(
 		ctx, taskID, subtaskID, optAgentType, msgChainType, systemCoderTmpl, userCoderTmpl,
 	)
@@ -413,7 +432,6 @@ func (fp *flowProvider) performCoder(
 		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task coder result: %w", err)
@@ -460,6 +478,7 @@ func (fp *flowProvider) performInstaller(
 		return "", fmt.Errorf("failed to get searcher handler: %w", err)
 	}
 
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.InstallerExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
@@ -480,6 +499,17 @@ func (fp *flowProvider) performInstaller(
 		return "", fmt.Errorf("failed to get installer executor: %w", err)
 	}
 
+	if fp.planning {
+		userInstallerTmplWithPlan, err := fp.performPlanner(
+			ctx, taskID, subtaskID, optAgentType, executor, userInstallerTmpl, question,
+		)
+		if err != nil {
+			logrus.WithContext(ctx).WithError(err).Warn("failed to get task plan from planner, proceeding without plan")
+		} else {
+			userInstallerTmpl = userInstallerTmplWithPlan
+		}
+	}
+
 	msgChainID, chain, err := fp.restoreChain(
 		ctx, taskID, subtaskID, optAgentType, msgChainType, systemInstallerTmpl, userInstallerTmpl,
 	)
@@ -487,7 +517,6 @@ func (fp *flowProvider) performInstaller(
 		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task installer result: %w", err)
@@ -519,6 +548,7 @@ func (fp *flowProvider) performMemorist(
 		msgChainType   = database.MsgchainTypeMemorist
 	)
 
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.MemoristExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
@@ -543,7 +573,6 @@ func (fp *flowProvider) performMemorist(
 		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task memorist result: %w", err)
@@ -600,6 +629,7 @@ func (fp *flowProvider) performPentester(
 		return "", fmt.Errorf("failed to get searcher handler: %w", err)
 	}
 
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.PentesterExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
@@ -622,6 +652,17 @@ func (fp *flowProvider) performPentester(
 		return "", fmt.Errorf("failed to get pentester executor: %w", err)
 	}
 
+	if fp.planning {
+		userPentesterTmplWithPlan, err := fp.performPlanner(
+			ctx, taskID, subtaskID, optAgentType, executor, userPentesterTmpl, question,
+		)
+		if err != nil {
+			logrus.WithContext(ctx).WithError(err).Warn("failed to get task plan from planner, proceeding without plan")
+		} else {
+			userPentesterTmpl = userPentesterTmplWithPlan
+		}
+	}
+
 	msgChainID, chain, err := fp.restoreChain(
 		ctx, taskID, subtaskID, optAgentType, msgChainType, systemPentesterTmpl, userPentesterTmpl,
 	)
@@ -629,7 +670,6 @@ func (fp *flowProvider) performPentester(
 		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task pentester result: %w", err)
@@ -666,6 +706,7 @@ func (fp *flowProvider) performSearcher(
 		return "", fmt.Errorf("failed to get memorist handler: %w", err)
 	}
 
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.SearcherExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
@@ -691,7 +732,6 @@ func (fp *flowProvider) performSearcher(
 		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task searcher result: %w", err)
@@ -723,21 +763,10 @@ func (fp *flowProvider) performEnricher(
 		msgChainType   = database.MsgchainTypeEnricher
 	)
 
-	memorist, err := fp.GetMemoristHandler(ctx, taskID, subtaskID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get memorist handler: %w", err)
-	}
-
-	searcher, err := fp.GetSubtaskSearcherHandler(ctx, taskID, subtaskID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get searcher handler: %w", err)
-	}
-
+	ctx = tools.PutAgentContext(ctx, msgChainType)
 	cfg := tools.EnricherExecutorConfig{
 		TaskID:    taskID,
 		SubtaskID: subtaskID,
-		Memorist:  memorist,
-		Searcher:  searcher,
 		EnricherResult: func(ctx context.Context, name string, args json.RawMessage) (string, error) {
 			err := json.Unmarshal(args, &enricherResult)
 			if err != nil {
@@ -745,6 +774,7 @@ func (fp *flowProvider) performEnricher(
 			}
 			return "enrich result successfully processed", nil
 		},
+		Summarizer: fp.GetSummarizeResultHandler(taskID, subtaskID),
 	}
 	executor, err := fp.executor.GetEnricherExecutor(cfg)
 	if err != nil {
@@ -758,7 +788,6 @@ func (fp *flowProvider) performEnricher(
 		return "", fmt.Errorf("failed to restore chain: %w", err)
 	}
 
-	ctx = tools.PutAgentContext(ctx, msgChainType)
 	err = fp.performAgentChain(ctx, optAgentType, msgChainID, taskID, subtaskID, chain, executor, fp.summarizer)
 	if err != nil {
 		return "", fmt.Errorf("failed to get task enricher result: %w", err)
@@ -777,6 +806,152 @@ func (fp *flowProvider) performEnricher(
 	}
 
 	return enricherResult.Result, nil
+}
+
+// performPlanner invokes adviser to create an execution plan for agent tasks
+func (fp *flowProvider) performPlanner(
+	ctx context.Context,
+	taskID, subtaskID *int64,
+	opt pconfig.ProviderOptionsType,
+	executor tools.ContextToolsExecutor,
+	userTmpl, question string,
+) (string, error) {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.performPlanner")
+	defer span.End()
+
+	toolCallID := templates.GenerateFromPattern(fp.tcIDTemplate, tools.AdviceToolName)
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"task_id":      taskID,
+		"subtask_id":   subtaskID,
+		"agent_type":   string(opt),
+		"tool_call_id": toolCallID,
+	})
+
+	logger.Debug("requesting task plan from adviser (planner)")
+
+	// 1. Format Question for task planning
+	planQuestionData := map[string]any{
+		"AgentType":    string(opt),
+		"TaskQuestion": question,
+	}
+
+	planQuestion, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionTaskPlanner, planQuestionData)
+	if err != nil {
+		return "", fmt.Errorf("failed to render task planner question: %w", err)
+	}
+
+	// 2. Call adviser handler with custom observation name "planner"
+	askAdvice := tools.AskAdvice{
+		Question: planQuestion,
+	}
+
+	askAdviceJSON, err := json.Marshal(askAdvice)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal ask advice: %w", err)
+	}
+
+	logger.Debug("executing adviser handler for task planning")
+	plan, err := executor.Execute(ctx, 0, toolCallID, tools.AdviceToolName, "planner", "", askAdviceJSON)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute adviser handler: %w", err)
+	}
+
+	logger.WithField("plan_length", len(plan)).Debug("task plan created successfully")
+
+	// Wrap original request with execution plan using template
+	taskAssignment, err := fp.prompter.RenderTemplate(templates.PromptTypeTaskAssignmentWrapper, map[string]any{
+		"OriginalRequest": userTmpl,
+		"ExecutionPlan":   plan,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to render task assignment wrapper: %w", err)
+	}
+
+	return taskAssignment, nil
+}
+
+// performMentor invokes adviser to monitor agent execution progress
+func (fp *flowProvider) performMentor(
+	ctx context.Context,
+	opt pconfig.ProviderOptionsType,
+	chainID int64,
+	taskID, subtaskID *int64,
+	chain []llms.MessageContent,
+	executor tools.ContextToolsExecutor,
+	lastToolCall llms.ToolCall,
+	lastToolResult string,
+) (string, error) {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.performMentor")
+	defer span.End()
+
+	if lastToolCall.FunctionCall == nil {
+		return "", fmt.Errorf("last tool call function call is nil")
+	}
+
+	toolCallID := templates.GenerateFromPattern(fp.tcIDTemplate, tools.AdviceToolName)
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"chain_id":       chainID,
+		"task_id":        taskID,
+		"subtask_id":     subtaskID,
+		"last_tool_name": lastToolCall.FunctionCall.Name,
+		"agent_type":     string(opt),
+		"tool_call_id":   toolCallID,
+	})
+
+	logger.Debug("invoking execution adviser for progress monitoring (mentor)")
+
+	// 1. Collect recent messages from chain
+	recentMessages := getRecentMessages(chain)
+
+	// 2. Extract all executed tool calls from chain
+	executedToolCalls := extractToolCallsFromChain(chain)
+
+	// 3. Get subtask description
+	subtaskDesc := ""
+	if subtaskID != nil {
+		if subtask, err := fp.db.GetSubtask(ctx, *subtaskID); err == nil {
+			subtaskDesc = subtask.Description
+		}
+	}
+
+	// 4. Extract original agent prompt from chain
+	agentPrompt := extractAgentPromptFromChain(chain)
+
+	// 5. Format Question through new template
+	questionData := map[string]any{
+		"SubtaskDescription": subtaskDesc,
+		"AgentType":          string(opt),
+		"AgentPrompt":        agentPrompt,
+		"RecentMessages":     recentMessages,
+		"ExecutedToolCalls":  executedToolCalls,
+		"LastToolName":       lastToolCall.FunctionCall.Name,
+		"LastToolArgs":       formatToolCallArguments(lastToolCall.FunctionCall.Arguments),
+		"LastToolResult":     cutString(lastToolResult, 4096),
+	}
+
+	question, err := fp.prompter.RenderTemplate(templates.PromptTypeQuestionExecutionMonitor, questionData)
+	if err != nil {
+		return "", fmt.Errorf("failed to render execution monitor question: %w", err)
+	}
+
+	// 6. Call adviser handler with custom observation name "mentor"
+	askAdvice := tools.AskAdvice{
+		Question: question,
+	}
+
+	askAdviceJSON, err := json.Marshal(askAdvice)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal ask advice: %w", err)
+	}
+
+	logger.Debug("executing adviser handler for execution monitoring")
+	result, err := executor.Execute(ctx, 0, toolCallID, tools.AdviceToolName, "mentor", "", askAdviceJSON)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute adviser handler: %w", err)
+	}
+
+	logger.WithField("result_length", len(result)).Debug("execution mentor completed successfully")
+	return result, nil
 }
 
 func (fp *flowProvider) performSimpleChain(

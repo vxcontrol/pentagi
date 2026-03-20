@@ -27,9 +27,9 @@ func TestPromptTemplatesIntegrity(t *testing.T) {
 	if agents > 27 {
 		t.Fatalf("agents prompts amount is %d, expected 27", agents)
 	}
-	// According to the code, structure ToolsPrompts should have 9 prompts
-	if tools > 9 {
-		t.Fatalf("tools prompts amount is %d, expected 9", tools)
+	// According to the code, structure ToolsPrompts should have 12 prompts
+	if tools > 12 {
+		t.Fatalf("tools prompts amount is %d, expected 12", tools)
 	}
 }
 
@@ -845,5 +845,250 @@ func TestPatternEdgeCases(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.test(t, tc.pattern)
 		})
+	}
+}
+
+// TestQuestionExecutionMonitorPrompt tests the question_execution_monitor template
+func TestQuestionExecutionMonitorPrompt(t *testing.T) {
+	defaultPrompts, err := templates.GetDefaultPrompts()
+	if err != nil {
+		t.Fatalf("Failed to load default prompts: %v", err)
+	}
+
+	dummyData := validator.CreateDummyTemplateData()
+	template := defaultPrompts.ToolsPrompts.QuestionExecutionMonitor.Template
+
+	rendered, err := templates.RenderPrompt(
+		string(templates.PromptTypeQuestionExecutionMonitor),
+		template,
+		dummyData,
+	)
+	if err != nil {
+		t.Fatalf("Failed to render question_execution_monitor template: %v", err)
+	}
+
+	// Verify all required variables are present in rendered output
+	requiredContents := []struct {
+		name  string
+		value string
+	}{
+		{"SubtaskDescription", dummyData["SubtaskDescription"].(string)},
+		{"AgentType", dummyData["AgentType"].(string)},
+		{"AgentPrompt", dummyData["AgentPrompt"].(string)},
+		{"LastToolName", dummyData["LastToolName"].(string)},
+		{"LastToolArgs", dummyData["LastToolArgs"].(string)},
+		{"LastToolResult", dummyData["LastToolResult"].(string)},
+	}
+
+	for _, rc := range requiredContents {
+		if !strings.Contains(rendered, rc.value) {
+			t.Errorf("Rendered template missing %s: expected to contain '%s'", rc.name, rc.value)
+		}
+	}
+
+	// Verify RecentMessages are included
+	recentMessages := dummyData["RecentMessages"].([]map[string]string)
+	if len(recentMessages) > 0 {
+		if !strings.Contains(rendered, recentMessages[0]["name"]) {
+			t.Errorf("Rendered template missing RecentMessages tool name")
+		}
+		if !strings.Contains(rendered, recentMessages[0]["msg"]) {
+			t.Errorf("Rendered template missing RecentMessages message")
+		}
+	}
+
+	// Verify ExecutedToolCalls are included
+	executedToolCalls := dummyData["ExecutedToolCalls"].([]map[string]string)
+	if len(executedToolCalls) > 0 {
+		if !strings.Contains(rendered, executedToolCalls[0]["name"]) {
+			t.Errorf("Rendered template missing ExecutedToolCalls name")
+		}
+		if !strings.Contains(rendered, executedToolCalls[0]["result"]) {
+			t.Errorf("Rendered template missing ExecutedToolCalls result")
+		}
+	}
+
+	// Verify template contains key structural elements
+	structuralElements := []string{
+		"my_current_assignment",
+		"my_role_and_capabilities",
+		"recent_conversation_history",
+		"all_tool_calls_i_executed",
+		"my_most_recent_action",
+	}
+
+	for _, element := range structuralElements {
+		if !strings.Contains(rendered, element) {
+			t.Errorf("Rendered template missing structural element: %s", element)
+		}
+	}
+
+	// Verify critical questions are present
+	criticalQuestions := []string{
+		"making real, measurable progress",
+		"repeating the same actions",
+		"stuck in a loop",
+		"completely different strategy",
+		"impossible to complete",
+		"critical and actionable next steps",
+	}
+
+	for _, question := range criticalQuestions {
+		if !strings.Contains(rendered, question) {
+			t.Errorf("Rendered template missing critical question phrase: %s", question)
+		}
+	}
+}
+
+// TestQuestionTaskPlannerPrompt tests the question_task_planner template
+func TestQuestionTaskPlannerPrompt(t *testing.T) {
+	defaultPrompts, err := templates.GetDefaultPrompts()
+	if err != nil {
+		t.Fatalf("Failed to load default prompts: %v", err)
+	}
+
+	dummyData := validator.CreateDummyTemplateData()
+	template := defaultPrompts.ToolsPrompts.QuestionTaskPlanner.Template
+
+	rendered, err := templates.RenderPrompt(
+		string(templates.PromptTypeQuestionTaskPlanner),
+		template,
+		dummyData,
+	)
+	if err != nil {
+		t.Fatalf("Failed to render question_task_planner template: %v", err)
+	}
+
+	// Verify all required variables are present in rendered output
+	requiredContents := []struct {
+		name  string
+		value string
+	}{
+		{"AgentType", dummyData["AgentType"].(string)},
+		{"TaskQuestion", dummyData["TaskQuestion"].(string)},
+	}
+
+	for _, rc := range requiredContents {
+		if !strings.Contains(rendered, rc.value) {
+			t.Errorf("Rendered template missing %s: expected to contain '%s'", rc.name, rc.value)
+		}
+	}
+
+	// Verify template contains key structural elements
+	structuralElements := []string{
+		"my_task",
+		"structured execution plan",
+		"concise checklist",
+		"actionable steps",
+	}
+
+	for _, element := range structuralElements {
+		if !strings.Contains(rendered, element) {
+			t.Errorf("Rendered template missing structural element: %s", element)
+		}
+	}
+
+	// Verify plan requirements are present
+	planRequirements := []string{
+		"specific, actionable steps",
+		"check or verify",
+		"potential pitfalls",
+		"stay focused only on this current task",
+		"avoid redundant work",
+		"efficient task completion",
+	}
+
+	for _, requirement := range planRequirements {
+		if !strings.Contains(rendered, requirement) {
+			t.Errorf("Rendered template missing plan requirement: %s", requirement)
+		}
+	}
+
+	// Verify formatting instructions are present
+	if !strings.Contains(rendered, "numbered checklist") {
+		t.Error("Rendered template missing formatting instruction for numbered checklist")
+	}
+	if !strings.Contains(rendered, "1. [First critical action") {
+		t.Error("Rendered template missing example formatting")
+	}
+}
+
+// TestTaskAssignmentWrapperPrompt tests the task_assignment_wrapper template
+func TestTaskAssignmentWrapperPrompt(t *testing.T) {
+	defaultPrompts, err := templates.GetDefaultPrompts()
+	if err != nil {
+		t.Fatalf("Failed to load default prompts: %v", err)
+	}
+
+	dummyData := validator.CreateDummyTemplateData()
+	template := defaultPrompts.ToolsPrompts.TaskAssignmentWrapper.Template
+
+	rendered, err := templates.RenderPrompt(
+		string(templates.PromptTypeTaskAssignmentWrapper),
+		template,
+		dummyData,
+	)
+	if err != nil {
+		t.Fatalf("Failed to render task_assignment_wrapper template: %v", err)
+	}
+
+	// Verify all required variables are present in rendered output
+	requiredContents := []struct {
+		name  string
+		value string
+	}{
+		{"OriginalRequest", dummyData["OriginalRequest"].(string)},
+		{"ExecutionPlan", dummyData["ExecutionPlan"].(string)},
+	}
+
+	for _, rc := range requiredContents {
+		if !strings.Contains(rendered, rc.value) {
+			t.Errorf("Rendered template missing %s: expected to contain '%s'", rc.name, rc.value)
+		}
+	}
+
+	// Verify template contains key structural elements
+	structuralElements := []string{
+		"task_assignment",
+		"original_request",
+		"execution_plan",
+		"hint",
+	}
+
+	for _, element := range structuralElements {
+		if !strings.Contains(rendered, element) {
+			t.Errorf("Rendered template missing structural element: %s", element)
+		}
+	}
+
+	// Verify hint content is present
+	hintElements := []string{
+		"primary objective",
+		"prepared by analyzing the broader context",
+		"decomposing the task",
+		"suggested steps",
+		"Use this plan as guidance",
+		"adapt your actions",
+		"staying aligned with the objective",
+	}
+
+	for _, element := range hintElements {
+		if !strings.Contains(rendered, element) {
+			t.Errorf("Rendered template missing hint element: %s", element)
+		}
+	}
+
+	// Verify proper XML structure
+	if !strings.Contains(rendered, "</task_assignment>") {
+		t.Error("Rendered template missing closing task_assignment tag")
+	}
+	if !strings.Contains(rendered, "</original_request>") {
+		t.Error("Rendered template missing closing original_request tag")
+	}
+	if !strings.Contains(rendered, "</execution_plan>") {
+		t.Error("Rendered template missing closing execution_plan tag")
+	}
+	if !strings.Contains(rendered, "</hint>") {
+		t.Error("Rendered template missing closing hint tag")
 	}
 }

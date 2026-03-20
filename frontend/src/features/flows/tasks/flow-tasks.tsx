@@ -1,13 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import { ListTodo, Search, X } from 'lucide-react';
+import { ChevronDown, ListTodo, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useFlow } from '@/providers/flow-provider';
 
 import FlowTask from './flow-task';
@@ -29,8 +31,9 @@ const FlowTasks = () => {
     const { flowData, flowId } = useFlow();
 
     const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
-    // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
+
+    const { containerRef, endRef, hasNewMessages, isScrolledToBottom, scrollToEnd } = useAutoScroll(tasks, flowId);
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
         defaultValues: {
@@ -144,14 +147,35 @@ const FlowTasks = () => {
             </div>
 
             {hasTasks ? (
-                <div className="flex flex-1 flex-col gap-4 overflow-auto">
-                    {sortedTasks.map((task) => (
-                        <FlowTask
-                            key={task.id}
-                            searchValue={debouncedSearchValue}
-                            task={task}
-                        />
-                    ))}
+                <div className="relative flex-1 overflow-y-hidden">
+                    <div
+                        className="flex h-full flex-col gap-4 overflow-y-auto"
+                        ref={containerRef}
+                    >
+                        {sortedTasks.map((task) => (
+                            <FlowTask
+                                key={task.id}
+                                searchValue={debouncedSearchValue}
+                                task={task}
+                            />
+                        ))}
+                        <div ref={endRef} />
+                    </div>
+
+                    {!isScrolledToBottom && (
+                        <Button
+                            className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
+                            onClick={() => scrollToEnd()}
+                            size="icon-sm"
+                            type="button"
+                            variant="outline"
+                        >
+                            <ChevronDown />
+                            {hasNewMessages && (
+                                <span className="bg-primary absolute -top-1 -right-1 size-3 rounded-full" />
+                            )}
+                        </Button>
+                    )}
                 </div>
             ) : (
                 <Empty>

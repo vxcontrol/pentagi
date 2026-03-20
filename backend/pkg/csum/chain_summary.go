@@ -514,6 +514,21 @@ func summarizeQAPairs(
 		return nil
 	}
 
+	// Determine how many recent sections to keep for later create new AST with summary + recent sections
+	sectionsToKeep := determineRecentSectionsToKeep(ast, keepQASections, maxQASections, maxQABytes)
+	sectionsToSummarize := ast.Sections[:len(ast.Sections)-sectionsToKeep]
+
+	// Prevent double summarization of the first section with already summarized content
+	switch len(sectionsToSummarize) {
+	case 0:
+		return nil
+	case 1:
+		firstSectionBody := sectionsToSummarize[0].Body
+		if len(firstSectionBody) == 1 && containsSummarizedContent(firstSectionBody[0]) {
+			return nil
+		}
+	}
+
 	// Generate human message summary if it exists and needed
 	var humanMsg *llms.MessageContent
 	if len(humanMessages) > 0 {
@@ -535,17 +550,19 @@ func summarizeQAPairs(
 	}
 
 	// Generate summary
-	aiSummary, err := GenerateSummary(ctx, handler, humanMessages, aiMessages)
-	if err != nil {
-		return fmt.Errorf("QA (ai) summary generation failed: %w", err)
+	var (
+		err       error
+		aiSummary string
+	)
+	if len(aiMessages) > 0 {
+		aiSummary, err = GenerateSummary(ctx, handler, humanMessages, aiMessages)
+		if err != nil {
+			return fmt.Errorf("QA (ai) summary generation failed: %w", err)
+		}
 	}
-
-	// Create a new AST with summary + recent sections
-	sectionsToKeep := determineRecentSectionsToKeep(ast, keepQASections, maxQASections, maxQABytes)
 
 	// Create a summarization body pair with the generated summary
 	var summaryPair *cast.BodyPair
-	sectionsToSummarize := ast.Sections[:len(ast.Sections)-sectionsToKeep]
 	switch t := determineTypeToSummarizedSections(sectionsToSummarize); t {
 	case cast.Summarization:
 		summaryPair = cast.NewBodyPairFromSummarization(aiSummary, tcIDTemplate, false, nil)

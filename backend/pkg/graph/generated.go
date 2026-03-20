@@ -586,6 +586,9 @@ type ComplexityRoot struct {
 		GetFullExecutionContext  func(childComplexity int) int
 		GetShortExecutionContext func(childComplexity int) int
 		GetTaskDescription       func(childComplexity int) int
+		MonitorAgentExecution    func(childComplexity int) int
+		PlanAgentTask            func(childComplexity int) int
+		WrapAgentTask            func(childComplexity int) int
 	}
 
 	UsageStats struct {
@@ -3627,14 +3630,14 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ToolsPrompts.ChooseUserLanguage(childComplexity), true
 
-	case "ToolsPrompts.collectToolCallID":
+	case "ToolsPrompts.collectToolCallId":
 		if e.complexity.ToolsPrompts.CollectToolCallID == nil {
 			break
 		}
 
 		return e.complexity.ToolsPrompts.CollectToolCallID(childComplexity), true
 
-	case "ToolsPrompts.detectToolCallIDPattern":
+	case "ToolsPrompts.detectToolCallIdPattern":
 		if e.complexity.ToolsPrompts.DetectToolCallIDPattern == nil {
 			break
 		}
@@ -3675,6 +3678,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ToolsPrompts.GetTaskDescription(childComplexity), true
+
+	case "ToolsPrompts.monitorAgentExecution":
+		if e.complexity.ToolsPrompts.MonitorAgentExecution == nil {
+			break
+		}
+
+		return e.complexity.ToolsPrompts.MonitorAgentExecution(childComplexity), true
+
+	case "ToolsPrompts.planAgentTask":
+		if e.complexity.ToolsPrompts.PlanAgentTask == nil {
+			break
+		}
+
+		return e.complexity.ToolsPrompts.PlanAgentTask(childComplexity), true
+
+	case "ToolsPrompts.wrapAgentTask":
+		if e.complexity.ToolsPrompts.WrapAgentTask == nil {
+			break
+		}
+
+		return e.complexity.ToolsPrompts.WrapAgentTask(childComplexity), true
 
 	case "UsageStats.totalUsageCacheIn":
 		if e.complexity.UsageStats.TotalUsageCacheIn == nil {
@@ -11625,10 +11649,16 @@ func (ec *executionContext) fieldContext_DefaultPrompts_tools(_ context.Context,
 				return ec.fieldContext_ToolsPrompts_chooseDockerImage(ctx, field)
 			case "chooseUserLanguage":
 				return ec.fieldContext_ToolsPrompts_chooseUserLanguage(ctx, field)
-			case "collectToolCallID":
-				return ec.fieldContext_ToolsPrompts_collectToolCallID(ctx, field)
-			case "detectToolCallIDPattern":
-				return ec.fieldContext_ToolsPrompts_detectToolCallIDPattern(ctx, field)
+			case "collectToolCallId":
+				return ec.fieldContext_ToolsPrompts_collectToolCallId(ctx, field)
+			case "detectToolCallIdPattern":
+				return ec.fieldContext_ToolsPrompts_detectToolCallIdPattern(ctx, field)
+			case "monitorAgentExecution":
+				return ec.fieldContext_ToolsPrompts_monitorAgentExecution(ctx, field)
+			case "planAgentTask":
+				return ec.fieldContext_ToolsPrompts_planAgentTask(ctx, field)
+			case "wrapAgentTask":
+				return ec.fieldContext_ToolsPrompts_wrapAgentTask(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ToolsPrompts", field.Name)
 		},
@@ -26316,8 +26346,8 @@ func (ec *executionContext) fieldContext_ToolsPrompts_chooseUserLanguage(_ conte
 	return fc, nil
 }
 
-func (ec *executionContext) _ToolsPrompts_collectToolCallID(ctx context.Context, field graphql.CollectedField, obj *model.ToolsPrompts) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_ToolsPrompts_collectToolCallID(ctx, field)
+func (ec *executionContext) _ToolsPrompts_collectToolCallId(ctx context.Context, field graphql.CollectedField, obj *model.ToolsPrompts) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolsPrompts_collectToolCallId(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -26347,7 +26377,7 @@ func (ec *executionContext) _ToolsPrompts_collectToolCallID(ctx context.Context,
 	return ec.marshalNDefaultPrompt2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐDefaultPrompt(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_ToolsPrompts_collectToolCallID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ToolsPrompts_collectToolCallId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ToolsPrompts",
 		Field:      field,
@@ -26368,8 +26398,8 @@ func (ec *executionContext) fieldContext_ToolsPrompts_collectToolCallID(_ contex
 	return fc, nil
 }
 
-func (ec *executionContext) _ToolsPrompts_detectToolCallIDPattern(ctx context.Context, field graphql.CollectedField, obj *model.ToolsPrompts) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_ToolsPrompts_detectToolCallIDPattern(ctx, field)
+func (ec *executionContext) _ToolsPrompts_detectToolCallIdPattern(ctx context.Context, field graphql.CollectedField, obj *model.ToolsPrompts) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolsPrompts_detectToolCallIdPattern(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -26399,7 +26429,163 @@ func (ec *executionContext) _ToolsPrompts_detectToolCallIDPattern(ctx context.Co
 	return ec.marshalNDefaultPrompt2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐDefaultPrompt(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_ToolsPrompts_detectToolCallIDPattern(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ToolsPrompts_detectToolCallIdPattern(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolsPrompts",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_DefaultPrompt_type(ctx, field)
+			case "template":
+				return ec.fieldContext_DefaultPrompt_template(ctx, field)
+			case "variables":
+				return ec.fieldContext_DefaultPrompt_variables(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DefaultPrompt", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolsPrompts_monitorAgentExecution(ctx context.Context, field graphql.CollectedField, obj *model.ToolsPrompts) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolsPrompts_monitorAgentExecution(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.MonitorAgentExecution, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.DefaultPrompt)
+	fc.Result = res
+	return ec.marshalNDefaultPrompt2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐDefaultPrompt(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolsPrompts_monitorAgentExecution(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolsPrompts",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_DefaultPrompt_type(ctx, field)
+			case "template":
+				return ec.fieldContext_DefaultPrompt_template(ctx, field)
+			case "variables":
+				return ec.fieldContext_DefaultPrompt_variables(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DefaultPrompt", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolsPrompts_planAgentTask(ctx context.Context, field graphql.CollectedField, obj *model.ToolsPrompts) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolsPrompts_planAgentTask(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.PlanAgentTask, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.DefaultPrompt)
+	fc.Result = res
+	return ec.marshalNDefaultPrompt2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐDefaultPrompt(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolsPrompts_planAgentTask(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolsPrompts",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_DefaultPrompt_type(ctx, field)
+			case "template":
+				return ec.fieldContext_DefaultPrompt_template(ctx, field)
+			case "variables":
+				return ec.fieldContext_DefaultPrompt_variables(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DefaultPrompt", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolsPrompts_wrapAgentTask(ctx context.Context, field graphql.CollectedField, obj *model.ToolsPrompts) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolsPrompts_wrapAgentTask(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.WrapAgentTask, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.DefaultPrompt)
+	fc.Result = res
+	return ec.marshalNDefaultPrompt2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐDefaultPrompt(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolsPrompts_wrapAgentTask(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ToolsPrompts",
 		Field:      field,
@@ -33641,13 +33827,28 @@ func (ec *executionContext) _ToolsPrompts(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "collectToolCallID":
-			out.Values[i] = ec._ToolsPrompts_collectToolCallID(ctx, field, obj)
+		case "collectToolCallId":
+			out.Values[i] = ec._ToolsPrompts_collectToolCallId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "detectToolCallIDPattern":
-			out.Values[i] = ec._ToolsPrompts_detectToolCallIDPattern(ctx, field, obj)
+		case "detectToolCallIdPattern":
+			out.Values[i] = ec._ToolsPrompts_detectToolCallIdPattern(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "monitorAgentExecution":
+			out.Values[i] = ec._ToolsPrompts_monitorAgentExecution(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "planAgentTask":
+			out.Values[i] = ec._ToolsPrompts_planAgentTask(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "wrapAgentTask":
+			out.Values[i] = ec._ToolsPrompts_wrapAgentTask(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

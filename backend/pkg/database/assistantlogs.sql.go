@@ -106,6 +106,16 @@ func (q *Queries) CreateResultAssistantLog(ctx context.Context, arg CreateResult
 	return i, err
 }
 
+const deleteFlowAssistantLog = `-- name: DeleteFlowAssistantLog :exec
+DELETE FROM assistantlogs
+WHERE id = $1
+`
+
+func (q *Queries) DeleteFlowAssistantLog(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteFlowAssistantLog, id)
+	return err
+}
+
 const getFlowAssistantLog = `-- name: GetFlowAssistantLog :one
 SELECT
   al.id, al.type, al.message, al.result, al.result_format, al.flow_id, al.assistant_id, al.created_at, al.thinking

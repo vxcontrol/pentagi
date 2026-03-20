@@ -1,30 +1,30 @@
 simple:
-  model: gpt-4.1-mini
+  model: gpt-5.4-nano
   temperature: 0.5
   top_p: 0.5
   n: 1
-  max_tokens: 4000
+  max_tokens: 8192
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.1
+    input: 0.2
+    output: 1.25
+    cache_read: 0.02
 
 simple_json:
-  model: gpt-4.1-mini
+  model: gpt-5.4-nano
   temperature: 0.5
   top_p: 0.5
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   json: true
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.1
+    input: 0.2
+    output: 1.25
+    cache_read: 0.02
 
 primary_agent:
   model: o4-mini
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   reasoning:
     effort: medium
   price:
@@ -35,7 +35,7 @@ primary_agent:
 assistant:
   model: o4-mini
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   reasoning:
     effort: medium
   price:
@@ -46,7 +46,7 @@ assistant:
 generator:
   model: o3
   n: 1
-  max_tokens: 8192
+  max_tokens: 32768
   reasoning:
     effort: medium
   price:
@@ -57,7 +57,7 @@ generator:
 refiner:
   model: o3
   n: 1
-  max_tokens: 8192
+  max_tokens: 20480
   reasoning:
     effort: high
   price:
@@ -66,20 +66,20 @@ refiner:
     cache_read: 0.5
 
 adviser:
-  model: gpt-5.2
+  model: gpt-5.4
   n: 1
-  max_tokens: 6000
+  max_tokens: 8192
   reasoning:
     effort: low
   price:
-    input: 1.75
-    output: 14.0
-    cache_read: 0.175
+    input: 2.5
+    output: 15.0
+    cache_read: 0.25
 
 reflector:
   model: o4-mini
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   reasoning:
     effort: medium
   price:
@@ -92,7 +92,7 @@ searcher:
   temperature: 0.7
   top_p: 0.8
   n: 1
-  max_tokens: 4000
+  max_tokens: 8192
   price:
     input: 0.4
     output: 1.6
@@ -103,7 +103,7 @@ enricher:
   temperature: 0.7
   top_p: 0.8
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
     input: 0.4
     output: 1.6
@@ -112,7 +112,7 @@ enricher:
 coder:
   model: o3
   n: 1
-  max_tokens: 16384
+  max_tokens: 20480
   reasoning:
     effort: low
   price:
@@ -123,7 +123,7 @@ coder:
 installer:
   model: o4-mini
   n: 1
-  max_tokens: 8192
+  max_tokens: 16384
   reasoning:
     effort: low
   price:

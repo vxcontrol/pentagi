@@ -5,10 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strings"
 
 	"github.com/caarlos0/env/v10"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	"github.com/vxcontrol/cloud/anonymizer/patterns"
 	"github.com/vxcontrol/cloud/sdk"
 )
 
@@ -203,6 +206,18 @@ type Config struct {
 	GraphitiEnabled bool   `env:"GRAPHITI_ENABLED" envDefault:"false"`
 	GraphitiTimeout int    `env:"GRAPHITI_TIMEOUT" envDefault:"30"`
 	GraphitiURL     string `env:"GRAPHITI_URL"`
+
+	// Execution Monitor Detector settings
+	ExecutionMonitorEnabled        bool `env:"EXECUTION_MONITOR_ENABLED" envDefault:"false"`
+	ExecutionMonitorSameToolLimit  int  `env:"EXECUTION_MONITOR_SAME_TOOL_LIMIT" envDefault:"5"`
+	ExecutionMonitorTotalToolLimit int  `env:"EXECUTION_MONITOR_TOTAL_TOOL_LIMIT" envDefault:"10"`
+
+	// Agent execution tool calls limit
+	MaxGeneralAgentToolCalls int `env:"MAX_GENERAL_AGENT_TOOL_CALLS" envDefault:"100"`
+	MaxLimitedAgentToolCalls int `env:"MAX_LIMITED_AGENT_TOOL_CALLS" envDefault:"20"`
+
+	// Agent planning step for pentester, coder, installer
+	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
 }
 
 func NewConfig() (*Config, error) {
@@ -263,4 +278,61 @@ func ensureLicenseKey(config *Config) {
 	} else if !info.IsValid() {
 		config.LicenseKey = ""
 	}
+}
+
+// GetSecretPatterns returns a list of patterns for all secrets in the config
+func (c *Config) GetSecretPatterns() []patterns.Pattern {
+	var result []patterns.Pattern
+
+	secrets := []struct {
+		value string
+		name  string
+	}{
+		{c.DatabaseURL, "Database URL"},
+		{c.LicenseKey, "License Key"},
+		{c.CookieSigningSalt, "Cookie Salt"},
+		{c.OpenAIKey, "OpenAI Key"},
+		{c.AnthropicAPIKey, "Anthropic Key"},
+		{c.EmbeddingKey, "Embedding Key"},
+		{c.LLMServerKey, "LLM Server Key"},
+		{c.OllamaServerAPIKey, "Ollama Key"},
+		{c.GeminiAPIKey, "Gemini Key"},
+		{c.BedrockBearerToken, "Bedrock Token"},
+		{c.BedrockAccessKey, "Bedrock Access Key"},
+		{c.BedrockSecretKey, "Bedrock Secret Key"},
+		{c.BedrockSessionToken, "Bedrock Session Token"},
+		{c.DeepSeekAPIKey, "DeepSeek Key"},
+		{c.GLMAPIKey, "GLM Key"},
+		{c.KimiAPIKey, "Kimi Key"},
+		{c.QwenAPIKey, "Qwen Key"},
+		{c.GoogleAPIKey, "Google API Key"},
+		{c.GoogleCXKey, "Google CX Key"},
+		{c.OAuthGoogleClientID, "Google Client ID"},
+		{c.OAuthGoogleClientSecret, "Google Client Secret"},
+		{c.OAuthGithubClientID, "Github Client ID"},
+		{c.OAuthGithubClientSecret, "Github Client Secret"},
+		{c.TraversaalAPIKey, "Traversaal Key"},
+		{c.TavilyAPIKey, "Tavily Key"},
+		{c.PerplexityAPIKey, "Perplexity Key"},
+		{c.ProxyURL, "Proxy URL"},
+		{c.LangfusePublicKey, "Langfuse Public Key"},
+		{c.LangfuseSecretKey, "Langfuse Secret Key"},
+	}
+
+	for _, s := range secrets {
+		trimmed := strings.TrimSpace(s.value)
+		if trimmed == "" {
+			continue
+		}
+
+		// escape regex special characters
+		escaped := regexp.QuoteMeta(trimmed)
+		pattern := patterns.Pattern{
+			Name:  s.name,
+			Regex: "(?P<replace>" + escaped + ")",
+		}
+		result = append(result, pattern)
+	}
+
+	return result
 }

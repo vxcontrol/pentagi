@@ -1,0 +1,50 @@
+I am a {{.AgentType}} agent currently executing a subtask, and I need your guidance to ensure I'm making efficient progress and not wasting efforts.
+
+<my_current_assignment>
+{{.SubtaskDescription}}
+</my_current_assignment>
+
+<my_role_and_capabilities>
+{{.AgentPrompt}}
+</my_role_and_capabilities>
+
+{{- if .RecentMessages }}
+<recent_conversation_history>
+{{- range .RecentMessages }}
+<message tool_call="{{.name}}">{{.msg}}</message>
+{{- end }}
+</recent_conversation_history>
+{{- end }}
+
+{{- if .ExecutedToolCalls }}
+<all_tool_calls_i_executed>
+{{- range .ExecutedToolCalls }}
+<tool_call>
+<name>{{.name}}</name>
+<arguments>
+{{.args}}
+</arguments>
+<result>{{.result}}</result>
+</tool_call>
+{{- end }}
+</all_tool_calls_i_executed>
+{{- end }}
+
+<my_most_recent_action>
+<tool_name>{{.LastToolName}}</tool_name>
+<arguments>
+{{.LastToolArgs}}
+</arguments>
+<result>{{.LastToolResult}}</result>
+</my_most_recent_action>
+
+Based on my execution history above, I need your expert analysis on the following critical questions:
+
+1. Am I making real, measurable progress toward completing my subtask objective, or am I just spinning my wheels?
+2. Have I been repeating the same actions or tool calls without achieving meaningful results?
+3. Am I stuck in a loop or heading in the wrong direction with my current approach?
+4. Should I try a completely different strategy? If yes, what specific alternative approaches would you recommend?
+5. Is this task impossible to complete as currently defined? Should I report what I've accomplished and terminate, or request assistance from the user?
+6. What are the most critical and actionable next steps I should take right now to move forward effectively?
+
+Please provide specific, concrete recommendations based on what you see in my execution history. I need clear guidance on whether to continue with my current approach, pivot to a different strategy, or conclude my work.

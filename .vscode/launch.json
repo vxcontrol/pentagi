@@ -86,7 +86,7 @@
                 // "-report", "${workspaceFolder}/examples/tests/ollama-llama318b-instruct-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/ollama-qwq-32b-fp16-tc-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/ollama-qwen332b-fp16-tc-report.md",
-                // "-report", "${workspaceFolder}/examples/tests/vllm-qwen3.5-27b-fp8.provider.md",
+                // "-report", "${workspaceFolder}/examples/tests/vllm-qwen3.5-27b-fp8.report.md",
                 // "-report", "${workspaceFolder}/examples/tests/vllm-qwen332b-fp16-report.md",
                 "-report", "${workspaceFolder}/examples/tests/moonshot-report.md",
                 // "-report", "${workspaceFolder}/examples/tests/deepseek-report.md",

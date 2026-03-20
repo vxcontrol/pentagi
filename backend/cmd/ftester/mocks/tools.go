@@ -346,7 +346,10 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Search in memory:")
-		terminal.PrintKeyValue("Question", searchMemoryArgs.Question)
+		terminal.PrintKeyValueFormat("Questions count", "%d", len(searchMemoryArgs.Questions))
+		for i, q := range searchMemoryArgs.Questions {
+			terminal.PrintKeyValueFormat(fmt.Sprintf("Question %d", i+1), "%s", q)
+		}
 
 		if searchMemoryArgs.TaskID != nil {
 			terminal.PrintKeyValueFormat("Task ID filter", "%d", searchMemoryArgs.TaskID.Int64())
@@ -354,6 +357,8 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		if searchMemoryArgs.SubtaskID != nil {
 			terminal.PrintKeyValueFormat("Subtask ID filter", "%d", searchMemoryArgs.SubtaskID.Int64())
 		}
+
+		questionsText := strings.Join(searchMemoryArgs.Questions, " | ")
 
 		var builder strings.Builder
 		builder.WriteString("# Match score 0.92\n\n")
@@ -366,12 +371,12 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		builder.WriteString("# Tool Name 'terminal'\n\n")
 		builder.WriteString("# Tool Description\n\nCalls a terminal command in blocking mode with hard limit timeout 1200 seconds and optimum timeout 60 seconds\n\n")
 		builder.WriteString("# Chunk\n\n")
-		builder.WriteString(fmt.Sprintf("This is a memory chunk related to your question '%s'. It contains information about previous commands, outputs, and relevant context that was stored in the vector database.\n\n", searchMemoryArgs.Question))
+		builder.WriteString(fmt.Sprintf("This is a memory chunk related to your questions '%s'. It contains information about previous commands, outputs, and relevant context that was stored in the vector database.\n\n", questionsText))
 		builder.WriteString("---------------------------\n")
 		builder.WriteString("# Match score 0.85\n\n")
 		builder.WriteString("# Tool Name 'file'\n\n")
 		builder.WriteString("# Chunk\n\n")
-		builder.WriteString("This is another memory chunk that provides additional context to your question. It contains information about file operations and relevant content changes.\n")
+		builder.WriteString("This is another memory chunk that provides additional context to your questions. It contains information about file operations and relevant content changes.\n")
 		builder.WriteString("---------------------------\n")
 
 		resultObj = builder.String()
@@ -383,15 +388,20 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Search guide:")
-		terminal.PrintKeyValue("Question", searchGuideArgs.Question)
+		terminal.PrintKeyValueFormat("Questions count", "%d", len(searchGuideArgs.Questions))
+		for i, q := range searchGuideArgs.Questions {
+			terminal.PrintKeyValueFormat(fmt.Sprintf("Question %d", i+1), "%s", q)
+		}
 		terminal.PrintKeyValue("Guide type", searchGuideArgs.Type)
 
+		questionsText := strings.Join(searchGuideArgs.Questions, " | ")
+
 		if searchGuideArgs.Type == "pentest" {
-			resultObj = fmt.Sprintf("# Original Guide Type: pentest\n\n# Original Guide Question\n\n%s\n\n## Penetration Testing Guide\n\nThis guide provides a step-by-step approach for conducting a penetration test on the target system.\n\n### 1. Reconnaissance\n- Gather information about the target using OSINT tools\n- Identify potential entry points and attack surfaces\n\n### 2. Scanning\n- Use tools like Nmap to scan for open ports and services\n- Identify vulnerabilities using automated scanners\n\n### 3. Exploitation\n- Attempt to exploit identified vulnerabilities\n- Document successful attack vectors\n\n### 4. Post-Exploitation\n- Maintain access and explore the system\n- Identify sensitive data and potential lateral movement paths\n\n### 5. Reporting\n- Document all findings with proof of concept\n- Provide remediation recommendations\n\n", searchGuideArgs.Question)
+			resultObj = fmt.Sprintf("# Original Guide Type: pentest\n\n# Original Guide Questions\n\n%s\n\n## Penetration Testing Guide\n\nThis guide provides a step-by-step approach for conducting a penetration test on the target system.\n\n### 1. Reconnaissance\n- Gather information about the target using OSINT tools\n- Identify potential entry points and attack surfaces\n\n### 2. Scanning\n- Use tools like Nmap to scan for open ports and services\n- Identify vulnerabilities using automated scanners\n\n### 3. Exploitation\n- Attempt to exploit identified vulnerabilities\n- Document successful attack vectors\n\n### 4. Post-Exploitation\n- Maintain access and explore the system\n- Identify sensitive data and potential lateral movement paths\n\n### 5. Reporting\n- Document all findings with proof of concept\n- Provide remediation recommendations\n\n", questionsText)
 		} else if searchGuideArgs.Type == "install" {
-			resultObj = fmt.Sprintf("# Original Guide Type: install\n\n# Original Guide Question\n\n%s\n\n## Installation Guide\n\n### Prerequisites\n- Operating System: Linux/macOS/Windows\n- Required dependencies: [list]\n\n### Installation Steps\n1. Download the software from the official repository\n   ```bash\n   git clone https://github.com/example/software.git\n   ```\n\n2. Navigate to the project directory\n   ```bash\n   cd software\n   ```\n\n3. Install dependencies\n   ```bash\n   npm install\n   ```\n\n4. Build the project\n   ```bash\n   npm run build\n   ```\n\n5. Verify installation\n   ```bash\n   npm test\n   ```\n\n### Troubleshooting\n- Common issue 1: [solution]\n- Common issue 2: [solution]\n\n", searchGuideArgs.Question)
+			resultObj = fmt.Sprintf("# Original Guide Type: install\n\n# Original Guide Questions\n\n%s\n\n## Installation Guide\n\n### Prerequisites\n- Operating System: Linux/macOS/Windows\n- Required dependencies: [list]\n\n### Installation Steps\n1. Download the software from the official repository\n   ```bash\n   git clone https://github.com/example/software.git\n   ```\n\n2. Navigate to the project directory\n   ```bash\n   cd software\n   ```\n\n3. Install dependencies\n   ```bash\n   npm install\n   ```\n\n4. Build the project\n   ```bash\n   npm run build\n   ```\n\n5. Verify installation\n   ```bash\n   npm test\n   ```\n\n### Troubleshooting\n- Common issue 1: [solution]\n- Common issue 2: [solution]\n\n", questionsText)
 		} else {
-			resultObj = fmt.Sprintf("# Original Guide Type: %s\n\n# Original Guide Question\n\n%s\n\n## Guide Content\n\nThis is a comprehensive guide for the requested type '%s'. It contains detailed instructions, best practices, and examples tailored to your specific question.\n\n### Section 1: Getting Started\n[Detailed content would be here]\n\n### Section 2: Main Procedures\n[Step-by-step instructions would be here]\n\n### Section 3: Advanced Techniques\n[Advanced content would be here]\n\n### Section 4: Troubleshooting\n[Common issues and solutions would be here]\n\n", searchGuideArgs.Type, searchGuideArgs.Question, searchGuideArgs.Type)
+			resultObj = fmt.Sprintf("# Original Guide Type: %s\n\n# Original Guide Questions\n\n%s\n\n## Guide Content\n\nThis is a comprehensive guide for the requested type '%s'. It contains detailed instructions, best practices, and examples tailored to your specific questions.\n\n### Section 1: Getting Started\n[Detailed content would be here]\n\n### Section 2: Main Procedures\n[Step-by-step instructions would be here]\n\n### Section 3: Advanced Techniques\n[Advanced content would be here]\n\n### Section 4: Troubleshooting\n[Common issues and solutions would be here]\n\n", searchGuideArgs.Type, questionsText, searchGuideArgs.Type)
 		}
 
 	case tools.StoreGuideToolName:
@@ -414,13 +424,18 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Search answer:")
-		terminal.PrintKeyValue("Question", searchAnswerArgs.Question)
+		terminal.PrintKeyValueFormat("Questions count", "%d", len(searchAnswerArgs.Questions))
+		for i, q := range searchAnswerArgs.Questions {
+			terminal.PrintKeyValueFormat(fmt.Sprintf("Question %d", i+1), "%s", q)
+		}
 		terminal.PrintKeyValue("Answer type", searchAnswerArgs.Type)
 
+		questionsText := strings.Join(searchAnswerArgs.Questions, " | ")
+
 		if searchAnswerArgs.Type == "vulnerability" {
-			resultObj = fmt.Sprintf("# Original Answer Type: vulnerability\n\n# Original Search Question\n\n%s\n\n## Vulnerability Details\n\n### CVE-2023-12345\n\n**Severity**: High\n\n**Affected Systems**: Linux servers running Apache 2.4.x before 2.4.56\n\n**Description**:\nA buffer overflow vulnerability in Apache HTTP Server allows attackers to execute arbitrary code via a crafted request.\n\n**Exploitation**:\nAttackers can send a specially crafted HTTP request that triggers the buffer overflow, leading to remote code execution with the privileges of the web server process.\n\n**Remediation**:\n- Update Apache HTTP Server to version 2.4.56 or later\n- Apply the security patch provided by the vendor\n- Implement network filtering to block malicious requests\n\n**References**:\n- https://example.com/cve-2023-12345\n- https://example.com/apache-advisory\n", searchAnswerArgs.Question)
+			resultObj = fmt.Sprintf("# Original Answer Type: vulnerability\n\n# Original Search Questions\n\n%s\n\n## Vulnerability Details\n\n### CVE-2023-12345\n\n**Severity**: High\n\n**Affected Systems**: Linux servers running Apache 2.4.x before 2.4.56\n\n**Description**:\nA buffer overflow vulnerability in Apache HTTP Server allows attackers to execute arbitrary code via a crafted request.\n\n**Exploitation**:\nAttackers can send a specially crafted HTTP request that triggers the buffer overflow, leading to remote code execution with the privileges of the web server process.\n\n**Remediation**:\n- Update Apache HTTP Server to version 2.4.56 or later\n- Apply the security patch provided by the vendor\n- Implement network filtering to block malicious requests\n\n**References**:\n- https://example.com/cve-2023-12345\n- https://example.com/apache-advisory\n", questionsText)
 		} else {
-			resultObj = fmt.Sprintf("# Original Answer Type: %s\n\n# Original Search Question\n\n%s\n\n## Comprehensive Answer\n\nThis is a detailed answer to your question related to the type '%s'. The answer provides comprehensive information, examples, and best practices.\n\n### Key Points\n1. First important point about your question\n2. Second important aspect to consider\n3. Technical details relevant to your inquiry\n\n### Examples\n```\nExample code or configuration would be here\n```\n\n### Additional Resources\n- Resource 1: [description]\n- Resource 2: [description]\n\n", searchAnswerArgs.Type, searchAnswerArgs.Question, searchAnswerArgs.Type)
+			resultObj = fmt.Sprintf("# Original Answer Type: %s\n\n# Original Search Questions\n\n%s\n\n## Comprehensive Answer\n\nThis is a detailed answer to your questions related to the type '%s'. The answer provides comprehensive information, examples, and best practices.\n\n### Key Points\n1. First important point about your questions\n2. Second important aspect to consider\n3. Technical details relevant to your inquiry\n\n### Examples\n```\nExample code or configuration would be here\n```\n\n### Additional Resources\n- Resource 1: [description]\n- Resource 2: [description]\n\n", searchAnswerArgs.Type, questionsText, searchAnswerArgs.Type)
 		}
 
 	case tools.StoreAnswerToolName:
@@ -443,8 +458,13 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Search code:")
-		terminal.PrintKeyValue("Question", searchCodeArgs.Question)
+		terminal.PrintKeyValueFormat("Questions count", "%d", len(searchCodeArgs.Questions))
+		for i, q := range searchCodeArgs.Questions {
+			terminal.PrintKeyValueFormat(fmt.Sprintf("Question %d", i+1), "%s", q)
+		}
 		terminal.PrintKeyValue("Language", searchCodeArgs.Lang)
+
+		questionsText := strings.Join(searchCodeArgs.Questions, " | ")
 
 		var mockCode string
 		if searchCodeArgs.Lang == "python" {
@@ -455,7 +475,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 			mockCode = fmt.Sprintf("// Example code in %s language\n// This is a mock code snippet that would be returned from the vector database\n\n// Main function definition\nfunction exampleFunction(param) {\n  // Initialization\n  const result = [];\n  \n  // Processing logic\n  for (let i = 0; i < param.length; i++) {\n    result.push(processItem(param[i]));\n  }\n  \n  return result;\n}\n\n// Helper function\nfunction processItem(item) {\n  return item.transform();\n}", searchCodeArgs.Lang)
 		}
 
-		resultObj = fmt.Sprintf("# Original Code Question\n\n%s\n\n# Original Code Description\n\nThis code sample demonstrates the implementation pattern for handling the specific scenario you asked about. It includes proper error handling, input validation, and follows best practices for %s.\n\n```%s\n%s\n```\n\n", searchCodeArgs.Question, searchCodeArgs.Lang, searchCodeArgs.Lang, mockCode)
+		resultObj = fmt.Sprintf("# Original Code Questions\n\n%s\n\n# Original Code Description\n\nThis code sample demonstrates the implementation pattern for handling the specific scenarios you asked about. It includes proper error handling, input validation, and follows best practices for %s.\n\n```%s\n%s\n```\n\n", questionsText, searchCodeArgs.Lang, searchCodeArgs.Lang, mockCode)
 
 	case tools.StoreCodeToolName:
 		var storeCodeArgs tools.StoreCodeAction

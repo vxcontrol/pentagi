@@ -63,10 +63,14 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Usage Details](#usage-details-11)
   - [Graphiti Knowledge Graph Settings](#graphiti-knowledge-graph-settings)
     - [Usage Details](#usage-details-12)
+  - [Agent Supervision Settings](#agent-supervision-settings)
+    - [Usage Details](#usage-details-13)
+    - [Supervision System Integration](#supervision-system-integration)
+    - [Recommended Settings](#recommended-settings)
   - [Observability Settings](#observability-settings)
     - [Telemetry](#telemetry)
     - [Langfuse](#langfuse)
-    - [Usage Details](#usage-details-13)
+    - [Usage Details](#usage-details-14)
 
 ## Configuration Basics
 
@@ -1546,6 +1550,165 @@ These settings enable:
 - Learning from past successful approaches and strategies
 
 The integration is designed to be non-blocking - if Graphiti operations fail, they are logged but don't interrupt the agent workflow.
+
+## Agent Supervision Settings
+
+These settings control the agent supervision system, including execution monitoring and tool call limits for different agent types.
+
+| Option                         | Environment Variable                | Default Value | Description                                                            |
+| ------------------------------ | ----------------------------------- | ------------- | ---------------------------------------------------------------------- |
+| ExecutionMonitorEnabled        | `EXECUTION_MONITOR_ENABLED`         | `false`       | Enable automatic execution monitoring (mentor/adviser supervision)     |
+| ExecutionMonitorSameToolLimit  | `EXECUTION_MONITOR_SAME_TOOL_LIMIT` | `5`           | Threshold for consecutive identical tool calls before mentor review    |
+| ExecutionMonitorTotalToolLimit | `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT`| `10`          | Threshold for total tool calls before mentor review                    |
+| MaxGeneralAgentToolCalls       | `MAX_GENERAL_AGENT_TOOL_CALLS`      | `100`         | Maximum tool calls for general agents (Assistant, Primary, Pentester, Coder, Installer) |
+| MaxLimitedAgentToolCalls       | `MAX_LIMITED_AGENT_TOOL_CALLS`      | `20`          | Maximum tool calls for limited agents (Searcher, Enricher, etc.)       |
+| AgentPlanningStepEnabled       | `AGENT_PLANNING_STEP_ENABLED`       | `false`       | Enable automatic task planning for specialist agents                   |
+
+### Usage Details
+
+The agent supervision settings are used in `pkg/providers/providers.go` and `pkg/providers/performer.go` to configure supervision mechanisms:
+
+- **ExecutionMonitorEnabled**: Controls whether execution monitoring (mentor) is active:
+  ```go
+  buildMonitor: func() *executionMonitor {
+      return &executionMonitor{
+          enabled:        pc.cfg.ExecutionMonitorEnabled,
+          sameThreshold:  pc.cfg.ExecutionMonitorSameToolLimit,
+          totalThreshold: pc.cfg.ExecutionMonitorTotalToolLimit,
+      }
+  }
+  ```
+
+- **ExecutionMonitorSameToolLimit**: Sets the threshold for identical consecutive tool calls:
+  ```go
+  // In executionMonitor.shouldInvokeMentor
+  if emd.sameToolCount >= emd.sameThreshold {
+      // Invoke mentor (adviser agent) for execution review
+  }
+  ```
+  When an agent calls the same tool this many times consecutively, the execution monitor automatically invokes the mentor (adviser agent) to analyze progress and provide guidance.
+
+- **ExecutionMonitorTotalToolLimit**: Sets the threshold for total tool calls:
+  ```go
+  // In executionMonitor.shouldInvokeMentor
+  if emd.totalCallCount >= emd.totalThreshold {
+      // Invoke mentor (adviser agent) for execution review
+  }
+  ```
+  When an agent makes this many total tool calls since the last mentor review, the execution monitor automatically invokes the mentor to prevent inefficient loops and provide strategic guidance.
+
+- **MaxGeneralAgentToolCalls**: Maximum iterations for general-purpose agents with full capabilities:
+  ```go
+  // In performAgentChain
+  switch optAgentType {
+  case pconfig.OptionsTypeAssistant, pconfig.OptionsTypePrimaryAgent,
+      pconfig.OptionsTypePentester, pconfig.OptionsTypeCoder, pconfig.OptionsTypeInstaller:
+      if fp.maxGACallsLimit <= 0 {
+          maxCallsLimit = maxGeneralAgentChainIterations // fallback: 100
+      } else {
+          maxCallsLimit = max(fp.maxGACallsLimit, maxAgentShutdownIterations*2)
+      }
+  }
+  ```
+  General agents (Assistant, Primary Agent, Pentester, Coder, Installer) are designed for complex, multi-step workflows and have a higher tool call limit to complete sophisticated tasks.
+
+- **MaxLimitedAgentToolCalls**: Maximum iterations for specialized, limited-scope agents:
+  ```go
+  // In performAgentChain
+  default:
+      if fp.maxLACallsLimit <= 0 {
+          maxCallsLimit = maxLimitedAgentChainIterations // fallback: 20
+      } else {
+          maxCallsLimit = max(fp.maxLACallsLimit, maxAgentShutdownIterations*2)
+      }
+  }
+  ```
+  Limited agents (Searcher, Enricher, Memorist, Generator, Reporter, Adviser, Reflector, Planner) are designed for focused, specific tasks and have a lower tool call limit to ensure efficient execution.
+
+- **AgentPlanningStepEnabled**: Controls automatic task planning for specialist agents:
+  ```go
+  // In flowProvider initialization
+  planning: pc.cfg.AgentPlanningStepEnabled
+  
+  // Used when invoking specialist agents
+  if fp.planning {
+      // Generate execution plan via planner before specialist execution
+  }
+  ```
+  When enabled, the planner (adviser in planning mode) generates a structured 3-7 step execution plan before specialist agents (Pentester, Coder, Installer) begin their work, improving task completion rates and preventing scope creep.
+
+These settings enable:
+- **Automatic supervision**: Mentor reviews execution patterns to detect loops and inefficiencies
+- **Graceful termination**: Reflector guides agents to proper completion when approaching limits
+- **Differentiated capabilities**: General agents have more autonomy for complex workflows
+- **Efficient execution**: Limited agents stay focused on their specific scope
+- **Strategic planning**: Automatic task decomposition for better execution quality
+
+### Supervision System Integration
+
+The supervision settings work together as a comprehensive system:
+
+1. **Execution Monitoring** (via ExecutionMonitor settings):
+   - Detects repetitive patterns (same tool called N times)
+   - Detects excessive exploration (total tools called N times)
+   - Automatically invokes mentor for guidance and correction
+   - Resets counters after mentor review
+
+2. **Tool Call Limits** (via MaxGeneralAgentToolCalls and MaxLimitedAgentToolCalls):
+   - Prevents runaway executions with hard limits
+   - Invokes reflector for graceful termination near limit
+   - Different limits for different agent capabilities
+   - Ensures system stability and resource efficiency
+
+3. **Task Planning** (via AgentPlanningStepEnabled):
+   - Generates structured execution plans before specialist work
+   - Prevents scope creep and maintains focus
+   - Improves success rates for complex tasks
+   - Provides clear verification points
+
+### Recommended Settings
+
+1. **Production Environment**:
+   ```
+   ExecutionMonitorEnabled: false
+   ExecutionMonitorSameToolLimit: 5
+   ExecutionMonitorTotalToolLimit: 10
+   MaxGeneralAgentToolCalls: 100
+   MaxLimitedAgentToolCalls: 20
+   AgentPlanningStepEnabled: false
+   ```
+   Default settings provide stable execution without beta features.
+
+2. **High-Complexity Workflows**:
+   ```
+   ExecutionMonitorEnabled: false
+   ExecutionMonitorSameToolLimit: 7
+   ExecutionMonitorTotalToolLimit: 15
+   MaxGeneralAgentToolCalls: 150
+   MaxLimitedAgentToolCalls: 30
+   AgentPlanningStepEnabled: false
+   ```
+   Increased limits for tasks requiring extensive exploration and iteration.
+
+3. **Resource-Constrained Environment**:
+   ```
+   ExecutionMonitorEnabled: false
+   ExecutionMonitorSameToolLimit: 3
+   ExecutionMonitorTotalToolLimit: 7
+   MaxGeneralAgentToolCalls: 50
+   MaxLimitedAgentToolCalls: 15
+   AgentPlanningStepEnabled: false
+   ```
+   Tighter limits to reduce resource usage.
+
+4. **Debugging Mode**:
+   ```
+   ExecutionMonitorEnabled: false
+   MaxGeneralAgentToolCalls: 200
+   MaxLimitedAgentToolCalls: 50
+   AgentPlanningStepEnabled: false
+   ```
+   Disabled supervision for debugging to observe natural agent behavior.
 
 ## Observability Settings
 

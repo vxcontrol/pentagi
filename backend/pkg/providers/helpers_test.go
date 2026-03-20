@@ -197,8 +197,15 @@ func cloneChain(chain []llms.MessageContent) []llms.MessageContent {
 
 func newFlowProvider() *flowProvider {
 	return &flowProvider{
-		mx:          &sync.RWMutex{},
-		callCounter: &atomic.Int64{},
+		mx:              &sync.RWMutex{},
+		callCounter:     &atomic.Int64{},
+		maxGACallsLimit: maxGeneralAgentChainIterations,
+		maxLACallsLimit: maxLimitedAgentChainIterations,
+		buildMonitor: func() *executionMonitor {
+			return &executionMonitor{
+				enabled: false,
+			}
+		},
 	}
 }
 
@@ -814,4 +821,353 @@ func TestEnsureChainConsistency(t *testing.T) {
 			}
 		})
 	}
+}
+
+// makeToolCall is a helper to create a ToolCall with the given function name and arguments.
+func makeToolCall(name, args string) llms.ToolCall {
+	return llms.ToolCall{
+		ID:   "test-id",
+		Type: "function",
+		FunctionCall: &llms.FunctionCall{
+			Name:      name,
+			Arguments: args,
+		},
+	}
+}
+
+// maxSoftDetectionsBeforeAbort mirrors the constant in performer.go.
+// Keep in sync with performer.go:maxSoftDetectionsBeforeAbort.
+const testMaxSoftDetectionsBeforeAbort = 4
+
+func TestRepeatingDetector(t *testing.T) {
+	tests := []struct {
+		name             string
+		calls            []llms.ToolCall
+		expectedDetected []bool // expected detect() return for each call
+		expectedLen      int    // expected len(funcCalls) after all calls
+	}{
+		{
+			name: "nil function call returns false",
+			calls: []llms.ToolCall{
+				{ID: "test", Type: "function", FunctionCall: nil},
+			},
+			expectedDetected: []bool{false},
+			expectedLen:      0,
+		},
+		{
+			name: "first call returns false",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test"}`),
+			},
+			expectedDetected: []bool{false},
+			expectedLen:      1,
+		},
+		{
+			name: "two identical calls below threshold",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("search", `{"query":"test"}`),
+			},
+			expectedDetected: []bool{false, false},
+			expectedLen:      2,
+		},
+		{
+			name: "three identical calls triggers detection",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("search", `{"query":"test"}`),
+			},
+			expectedDetected: []bool{false, false, true},
+			expectedLen:      3,
+		},
+		{
+			name: "different call resets funcCalls",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("search", `{"query":"test"}`),
+				makeToolCall("browse", `{"url":"http://example.com"}`),
+			},
+			expectedDetected: []bool{false, false, false},
+			expectedLen:      1,
+		},
+		{
+			name: "same name different args resets funcCalls",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test","limit":"10"}`),
+				makeToolCall("search", `{"query":"test","limit":"10"}`),
+				makeToolCall("search", `{"query":"different","limit":"20"}`),
+			},
+			expectedDetected: []bool{false, false, false},
+			expectedLen:      1,
+		},
+		{
+			name: "six identical calls still below escalation threshold",
+			calls: func() []llms.ToolCall {
+				tc := makeToolCall("search", `{"query":"test"}`)
+				return []llms.ToolCall{tc, tc, tc, tc, tc, tc}
+			}(),
+			expectedDetected: []bool{false, false, true, true, true, true},
+			expectedLen:      6,
+		},
+		{
+			name: "seven identical calls reaches escalation threshold",
+			calls: func() []llms.ToolCall {
+				tc := makeToolCall("search", `{"query":"test"}`)
+				return []llms.ToolCall{tc, tc, tc, tc, tc, tc, tc}
+			}(),
+			expectedDetected: []bool{false, false, true, true, true, true, true},
+			expectedLen:      7,
+		},
+		{
+			name: "message field stripped treats calls as identical",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test","message":"first attempt"}`),
+				makeToolCall("search", `{"query":"test","message":"second attempt"}`),
+				makeToolCall("search", `{"query":"test","message":"third attempt"}`),
+			},
+			expectedDetected: []bool{false, false, true},
+			expectedLen:      3,
+		},
+		{
+			name: "different JSON key order treated as identical",
+			calls: []llms.ToolCall{
+				makeToolCall("search", `{"query":"test","limit":"10"}`),
+				makeToolCall("search", `{"limit":"10","query":"test"}`),
+				makeToolCall("search", `{"query":"test","limit":"10"}`),
+			},
+			expectedDetected: []bool{false, false, true},
+			expectedLen:      3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			detector := &repeatingDetector{}
+
+			for i, call := range tt.calls {
+				detected := detector.detect(call)
+				assert.Equal(t, tt.expectedDetected[i], detected,
+					"call %d: expected detect=%v, got %v", i, tt.expectedDetected[i], detected)
+			}
+
+			assert.Equal(t, tt.expectedLen, len(detector.funcCalls),
+				"expected funcCalls length %d, got %d", tt.expectedLen, len(detector.funcCalls))
+		})
+	}
+}
+
+func TestRepeatingDetectorEscalationThreshold(t *testing.T) {
+	// This test validates the escalation math used in performer.go:
+	// len(detector.funcCalls) >= RepeatingToolCallThreshold + maxSoftDetectionsBeforeAbort
+	// With threshold=3 and maxSoftDetections=4, abort triggers at len >= 7
+
+	detector := &repeatingDetector{}
+	tc := makeToolCall("search", `{"query":"test"}`)
+
+	for i := 0; i < 7; i++ {
+		detector.detect(tc)
+	}
+
+	assert.Equal(t, 7, len(detector.funcCalls))
+	assert.True(t, len(detector.funcCalls) >= RepeatingToolCallThreshold+testMaxSoftDetectionsBeforeAbort,
+		"7 calls should reach escalation threshold: %d >= %d+%d",
+		len(detector.funcCalls), RepeatingToolCallThreshold, testMaxSoftDetectionsBeforeAbort)
+
+	// Verify 6 calls is below threshold
+	detector2 := &repeatingDetector{}
+	for i := 0; i < 6; i++ {
+		detector2.detect(tc)
+	}
+
+	assert.Equal(t, 6, len(detector2.funcCalls))
+	assert.False(t, len(detector2.funcCalls) >= RepeatingToolCallThreshold+testMaxSoftDetectionsBeforeAbort,
+		"6 calls should NOT reach escalation threshold: %d < %d+%d",
+		len(detector2.funcCalls), RepeatingToolCallThreshold, 4)
+}
+
+func TestClearCallArguments(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        llms.FunctionCall
+		expectedName string
+		expectedArgs string
+	}{
+		{
+			name: "strips message field",
+			input: llms.FunctionCall{
+				Name:      "search",
+				Arguments: `{"cmd":"ls","message":"please run this"}`,
+			},
+			expectedName: "search",
+			expectedArgs: "cmd: ls\n",
+		},
+		{
+			name: "sorts keys alphabetically",
+			input: llms.FunctionCall{
+				Name:      "execute",
+				Arguments: `{"z_param":"1","a_param":"2","m_param":"3"}`,
+			},
+			expectedName: "execute",
+			expectedArgs: "a_param: 2\nm_param: 3\nz_param: 1\n",
+		},
+		{
+			name: "invalid JSON returns original",
+			input: llms.FunctionCall{
+				Name:      "search",
+				Arguments: "not valid json",
+			},
+			expectedName: "search",
+			expectedArgs: "not valid json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			detector := &repeatingDetector{}
+			result := detector.clearCallArguments(&tt.input)
+
+			assert.Equal(t, tt.expectedName, result.Name)
+			assert.Equal(t, tt.expectedArgs, result.Arguments)
+		})
+	}
+}
+
+func TestExecutionMonitorDetector_ShouldInvokeAdviser(t *testing.T) {
+	tests := []struct {
+		name      string
+		threshold struct{ same, total int }
+		calls     []string
+		expected  []bool
+	}{
+		{
+			name:      "trigger on same tool limit",
+			threshold: struct{ same, total int }{5, 10},
+			calls:     []string{"tool1", "tool1", "tool1", "tool1", "tool1"},
+			expected:  []bool{false, false, false, false, true},
+		},
+		{
+			name:      "trigger on total tool limit",
+			threshold: struct{ same, total int }{5, 10},
+			calls:     []string{"tool1", "tool2", "tool3", "tool4", "tool5", "tool6", "tool7", "tool8", "tool9", "tool10"},
+			expected:  []bool{false, false, false, false, false, false, false, false, false, true},
+		},
+		{
+			name:      "reset after different tool",
+			threshold: struct{ same, total int }{3, 10},
+			calls:     []string{"tool1", "tool1", "tool2", "tool1", "tool1"},
+			expected:  []bool{false, false, false, false, false},
+		},
+		{
+			name:      "mixed tools reaching total limit",
+			threshold: struct{ same, total int }{5, 10},
+			calls:     []string{"tool1", "tool2", "tool1", "tool3", "tool1", "tool2", "tool3", "tool4", "tool5", "tool6"},
+			expected:  []bool{false, false, false, false, false, false, false, false, false, true},
+		},
+		{
+			name:      "disabled detector",
+			threshold: struct{ same, total int }{5, 10},
+			calls:     []string{"tool1", "tool1", "tool1", "tool1", "tool1", "tool1"},
+			expected:  []bool{false, false, false, false, false, false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			emd := &executionMonitor{
+				enabled:        tt.name != "disabled detector",
+				sameThreshold:  tt.threshold.same,
+				totalThreshold: tt.threshold.total,
+			}
+
+			for i, call := range tt.calls {
+				result := emd.shouldInvokeMentor(mockToolCall(call))
+				if result != tt.expected[i] {
+					t.Errorf("call %d (%s): expected %v, got %v", i, call, tt.expected[i], result)
+				}
+			}
+		})
+	}
+}
+
+func TestExecutionMonitorDetector_Reset(t *testing.T) {
+	emd := &executionMonitor{
+		enabled:        true,
+		sameThreshold:  5,
+		totalThreshold: 10,
+		sameToolCount:  3,
+		totalCallCount: 7,
+		lastToolName:   "tool1",
+	}
+
+	emd.reset()
+
+	if emd.sameToolCount != 0 {
+		t.Errorf("expected sameToolCount to be 0 after reset, got %d", emd.sameToolCount)
+	}
+	if emd.totalCallCount != 0 {
+		t.Errorf("expected totalCallCount to be 0 after reset, got %d", emd.totalCallCount)
+	}
+	if emd.lastToolName != "" {
+		t.Errorf("expected lastToolName to be empty after reset, got %s", emd.lastToolName)
+	}
+}
+
+func TestExecutionMonitorDetector_SameToolSequence(t *testing.T) {
+	emd := &executionMonitor{
+		enabled:        true,
+		sameThreshold:  3,
+		totalThreshold: 100,
+	}
+
+	// First 2 calls should not trigger
+	if emd.shouldInvokeMentor(mockToolCall("search")) {
+		t.Error("first call should not trigger adviser")
+	}
+	if emd.shouldInvokeMentor(mockToolCall("search")) {
+		t.Error("second call should not trigger adviser")
+	}
+
+	// Third call should trigger on same tool threshold
+	if !emd.shouldInvokeMentor(mockToolCall("search")) {
+		t.Error("third identical call should trigger adviser")
+	}
+
+	// After reset, same tool should not trigger immediately
+	emd.reset()
+	if emd.shouldInvokeMentor(mockToolCall("search")) {
+		t.Error("first call after reset should not trigger adviser")
+	}
+}
+
+func TestExecutionMonitorDetector_TotalCallsSequence(t *testing.T) {
+	emd := &executionMonitor{
+		enabled:        true,
+		sameThreshold:  100,
+		totalThreshold: 5,
+	}
+
+	tools := []string{"tool1", "tool2", "tool3", "tool4", "tool5"}
+
+	// First 4 calls should not trigger
+	for i := 0; i < 4; i++ {
+		if emd.shouldInvokeMentor(mockToolCall(tools[i])) {
+			t.Errorf("call %d should not trigger adviser", i)
+		}
+	}
+
+	// Fifth call should trigger on total threshold
+	if !emd.shouldInvokeMentor(mockToolCall(tools[4])) {
+		t.Error("fifth call should trigger adviser on total threshold")
+	}
+
+	// After reset, counter should restart
+	emd.reset()
+	if emd.totalCallCount != 0 {
+		t.Error("total count should be 0 after reset")
+	}
+}
+
+func mockToolCall(name string) llms.ToolCall {
+	return llms.ToolCall{FunctionCall: &llms.FunctionCall{Name: name}}
 }

@@ -292,6 +292,7 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 	contentBuf := bytes.NewBuffer(contentData)
 	thinkingData := make([]byte, 0, defaultMaxMessageLength)
 	thinkingBuf := bytes.NewBuffer(thinkingData)
+	wasUpdated := false // track if we actually updated the record
 
 	msgLog, err := aslw.db.GetFlowAssistantLog(ctx, msgID)
 	if err != nil {
@@ -336,15 +337,18 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 				ID:       msgID,
 			})
 			if err == nil {
+				wasUpdated = true
 				aslw.pub.AssistantLogUpdated(ctx, msgLog, false)
 			}
 
 		case providers.StreamMessageChunkTypeContent:
 			contentBuf.WriteString(chunk.Content)
+			wasUpdated = true
 			aslw.pub.AssistantLogUpdated(ctx, newLog(chunk.MsgType, chunk.Content, ""), true)
 
 		case providers.StreamMessageChunkTypeThinking:
 			thinkingBuf.WriteString(aslw.getThinkingString(chunk.Thinking))
+			wasUpdated = true
 			aslw.pub.AssistantLogUpdated(ctx, newLog(chunk.MsgType, "", aslw.getThinkingString(chunk.Thinking)), true)
 
 		case providers.StreamMessageChunkTypeResult:
@@ -360,6 +364,7 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 				ID:           msgID,
 			})
 			if err == nil {
+				wasUpdated = true
 				aslw.pub.AssistantLogUpdated(ctx, msgLog, false)
 			}
 		}
@@ -375,7 +380,10 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 				processChunk(<-ch)
 			}
 
-			if msgLog, err = aslw.db.GetFlowAssistantLog(ctx, msgID); err == nil {
+			// If record was never updated, delete it (empty message case)
+			if !wasUpdated {
+				_ = aslw.db.DeleteFlowAssistantLog(ctx, msgID)
+			} else if msgLog, err = aslw.db.GetFlowAssistantLog(ctx, msgID); err == nil {
 				content, thinking := contentBuf.String(), thinkingBuf.String()
 				_, _ = aslw.db.UpdateAssistantLog(ctx, database.UpdateAssistantLogParams{
 					Type:         msgLog.Type,

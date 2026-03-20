@@ -65,7 +65,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
             return 0;
         }
 
-        return subtasks.filter((subtask) => subtask.status === StatusType.Finished).length;
+        return subtasks.filter((subtask) => [StatusType.Failed, StatusType.Finished].includes(subtask.status)).length;
     }, [subtasks]);
 
     // Calculate progress based on completed subtasks
@@ -95,7 +95,7 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
                         </Markdown>
                     </div>
 
-                    {hasSubtasks && progress < 100 && (
+                    {hasSubtasks && (
                         <div className="flex items-center gap-2">
                             <Progress
                                 className="h-1.5 flex-1"
