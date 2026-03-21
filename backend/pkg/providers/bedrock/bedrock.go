@@ -30,6 +30,8 @@ var configFS embed.FS
 
 const BedrockAgentModel = bedrock.ModelAnthropicClaudeSonnet4
 
+const BedrockToolCallIDTemplate = "tooluse_{r:22:x}"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(BedrockAgentModel),
@@ -248,7 +250,7 @@ func (p *bedrockProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *bedrockProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, BedrockToolCallIDTemplate)
 }
 
 func extractToolsFromOptions(options []llms.CallOption) []llms.Tool {

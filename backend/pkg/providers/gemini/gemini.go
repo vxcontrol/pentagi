@@ -25,6 +25,8 @@ const GeminiAgentModel = "gemini-2.5-flash"
 
 const defaultGeminiHost = "generativelanguage.googleapis.com"
 
+const GeminiToolCallIDTemplate = "{r:8:x}"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(GeminiAgentModel),
@@ -186,5 +188,5 @@ func (p *geminiProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *geminiProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, GeminiToolCallIDTemplate)
 }

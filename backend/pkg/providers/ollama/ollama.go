@@ -295,5 +295,5 @@ func (p *ollamaProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *ollamaProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, "")
 }

@@ -21,6 +21,8 @@ var configFS embed.FS
 
 const KimiAgentModel = "kimi-k2-turbo-preview"
 
+const KimiToolCallIDTemplate = "{f}:{r:1:d}"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(KimiAgentModel),
@@ -175,5 +177,5 @@ func (p *kimiProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *kimiProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, KimiToolCallIDTemplate)
 }

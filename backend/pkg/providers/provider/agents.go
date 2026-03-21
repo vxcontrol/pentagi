@@ -46,6 +46,44 @@ func storeInCache(provider Provider, template string) {
 	cacheTemplates.Store(provider.Type(), template)
 }
 
+// testTemplate validates a template by collecting a single sample from the LLM
+// and checking if it matches the provided template pattern.
+// Returns true if the template is valid, false otherwise (including any errors).
+// This function makes a real LLM call to collect samples for validation.
+func testTemplate(
+	ctx context.Context,
+	provider Provider,
+	opt pconfig.ProviderOptionsType,
+	prompter templates.Prompter,
+	template string,
+) bool {
+	// If no template provided, skip validation
+	if template == "" {
+		return false
+	}
+
+	// Collect one sample to validate the template
+	samples, err := runToolCallIDCollector(ctx, provider, opt, prompter)
+	if err != nil {
+		// Any error means validation failed
+		return false
+	}
+
+	// If no samples collected, validation failed
+	if len(samples) == 0 {
+		return false
+	}
+
+	// Validate the template against collected samples
+	if err := templates.ValidatePattern(template, samples); err != nil {
+		// Template doesn't match
+		return false
+	}
+
+	// Template validated successfully
+	return true
+}
+
 // DetermineToolCallIDTemplate analyzes tool call ID format by collecting samples
 // and using AI to detect the pattern, with fallback to heuristic analysis
 func DetermineToolCallIDTemplate(
@@ -53,6 +91,7 @@ func DetermineToolCallIDTemplate(
 	provider Provider,
 	opt pconfig.ProviderOptionsType,
 	prompter templates.Prompter,
+	defaultTemplate string,
 ) (string, error) {
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	agent := observation.Agent(
@@ -82,6 +121,12 @@ func DetermineToolCallIDTemplate(
 	// Step 0: Check if template is already in cache
 	if template, ok := lookupInCache(provider); ok {
 		return wrapEndAgentSpan(template, "found in cache", nil)
+	}
+
+	// Step 0.5: Test default template if provided (makes one LLM call for validation)
+	if defaultTemplate != "" && testTemplate(ctx, provider, opt, prompter, defaultTemplate) {
+		storeInCache(provider, defaultTemplate)
+		return wrapEndAgentSpan(defaultTemplate, "validated default template", nil)
 	}
 
 	// Step 1: Collect 5 sample tool call IDs in parallel
@@ -244,8 +289,14 @@ func runToolCallIDCollector(
 	// Call LLM with tool
 	messages := []llms.MessageContent{
 		{
-			Role:  llms.ChatMessageTypeHuman,
+			Role:  llms.ChatMessageTypeSystem,
 			Parts: []llms.ContentPart{llms.TextContent{Text: prompt}},
+		},
+		{
+			Role: llms.ChatMessageTypeHuman,
+			Parts: []llms.ContentPart{llms.TextContent{
+				Text: fmt.Sprintf("Call the %s function", testFunctionName),
+			}},
 		},
 	}
 
@@ -332,8 +383,14 @@ func detectPatternWithAI(
 	// Call LLM with tool
 	messages := []llms.MessageContent{
 		{
-			Role:  llms.ChatMessageTypeHuman,
+			Role:  llms.ChatMessageTypeSystem,
 			Parts: []llms.ContentPart{llms.TextContent{Text: prompt}},
+		},
+		{
+			Role: llms.ChatMessageTypeHuman,
+			Parts: []llms.ContentPart{llms.TextContent{
+				Text: fmt.Sprintf("Submit the detected pattern template for the function %s", patternFunctionName),
+			}},
 		},
 	}
 

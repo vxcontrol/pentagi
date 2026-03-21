@@ -19,7 +19,7 @@ const ASSISTANT_LOG_TYPENAME = 'AssistantLog';
 const MAX_RETRY_DELAY_MS = 30_000;
 const STREAMING_CACHE_MAX_ENTRIES = 500;
 const STREAMING_CACHE_TTL_MS = 1000 * 60 * 5;
-const STREAMING_THROTTLE_MS = 100;
+const STREAMING_THROTTLE_MS = 50;
 
 // --- Types ---
 
@@ -35,8 +35,17 @@ type SubscriptionAction = 'add' | 'create' | 'delete' | 'update';
 
 const EMPTY_LOG_ENTRY: StreamingLogEntry = { message: null, result: null, thinking: null };
 
-const concatStrings = (existing: null | string | undefined, incoming: null | string | undefined): null | string =>
-    existing && incoming ? `${existing}${incoming}` : (existing ?? incoming ?? null);
+const concatStrings = (existing: null | string | undefined, incoming: null | string | undefined): null | string => {
+    if (existing === null || existing === undefined) {
+        return incoming ?? null;
+    }
+
+    if (incoming === null || incoming === undefined) {
+        return existing;
+    }
+
+    return `${existing}${incoming}`;
+};
 
 const resolveSubscriptionAction = (name: string): SubscriptionAction => {
     if (name.endsWith('Deleted')) {

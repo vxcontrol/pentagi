@@ -21,6 +21,8 @@ var configFS embed.FS
 
 const DeepSeekAgentModel = "deepseek-chat"
 
+const DeepSeekToolCallIDTemplate = "call_{r:2:d}_{r:24:b}"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(DeepSeekAgentModel),
@@ -175,5 +177,5 @@ func (p *deepseekProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *deepseekProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, DeepSeekToolCallIDTemplate)
 }

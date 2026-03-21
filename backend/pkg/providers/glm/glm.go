@@ -21,6 +21,8 @@ var configFS embed.FS
 
 const GLMAgentModel = "glm-4.7-flashx"
 
+const GLMToolCallIDTemplate = "call_-{r:19:d}"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(GLMAgentModel),
@@ -173,5 +175,5 @@ func (p *glmProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *glmProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, GLMToolCallIDTemplate)
 }

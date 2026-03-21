@@ -14,8 +14,13 @@ DO NOT:
 - Describe your analysis in plain text
 - Explain your reasoning before calling the function
 - Ask questions or request clarification
+- End your turn without making a function call
+- Provide a text response as a substitute for a function call
 
 REQUIRED ACTION: Call {{.FunctionName}} function immediately with the detected pattern template.
+
+COMPLETION REQUIREMENT: Your work is NOT complete until you have successfully invoked the {{.FunctionName}} function.
+DO NOT terminate, finish, or end your response without making this function call.
 
 Any response that does not include a function call will be treated as a CRITICAL ERROR and will force a retry.
 </mandatory_protocol>
