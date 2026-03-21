@@ -94,6 +94,14 @@ func (m *ServerSettingsFormModel) BuildForm() tea.Cmd {
 		true,
 	))
 
+	// http client timeout
+	fields = append(fields, m.createTextField("http_client_timeout",
+		locale.ServerSettingsHTTPClientTimeout,
+		locale.ServerSettingsHTTPClientTimeoutDesc,
+		config.HTTPClientTimeout,
+		false,
+	))
+
 	// external ssl settings
 	fields = append(fields, m.createTextField("external_ssl_ca_path",
 		locale.ServerSettingsExternalSSLCAPath,
@@ -265,6 +273,14 @@ func (m *ServerSettingsFormModel) GetCurrentConfiguration() string {
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsProxyPasswordHint, proxyPassword))
 	}
 
+	if httpTimeout := cfg.HTTPClientTimeout.Value; httpTimeout != "" {
+		httpTimeout = m.GetStyles().Info.Render(httpTimeout + "s")
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsHTTPClientTimeoutHint, httpTimeout))
+	} else if httpTimeout := cfg.HTTPClientTimeout.Default; httpTimeout != "" {
+		httpTimeout = m.GetStyles().Muted.Render(httpTimeout + "s")
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsHTTPClientTimeoutHint, httpTimeout))
+	}
+
 	if externalSSLCAPath := cfg.ExternalSSLCAPath.Value; externalSSLCAPath != "" {
 		externalSSLCAPath = m.GetStyles().Info.Render(externalSSLCAPath)
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsExternalSSLCAPathHint, externalSSLCAPath))
@@ -334,6 +350,8 @@ func (m *ServerSettingsFormModel) GetHelpContent() string {
 			sections = append(sections, locale.ServerSettingsCORSOriginsHelp)
 		case "proxy_url":
 			sections = append(sections, locale.ServerSettingsProxyURLHelp)
+		case "http_client_timeout":
+			sections = append(sections, locale.ServerSettingsHTTPClientTimeoutHelp)
 		case "external_ssl_ca_path":
 			sections = append(sections, locale.ServerSettingsExternalSSLCAPathHelp)
 		case "external_ssl_insecure":
@@ -363,6 +381,7 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 		CorsOrigins:         cfg.CorsOrigins,
 		CookieSigningSalt:   cfg.CookieSigningSalt,
 		ProxyURL:            cfg.ProxyURL,
+		HTTPClientTimeout:   cfg.HTTPClientTimeout,
 		ExternalSSLCAPath:   cfg.ExternalSSLCAPath,
 		ExternalSSLInsecure: cfg.ExternalSSLInsecure,
 		SSLDir:              cfg.SSLDir,
@@ -402,6 +421,15 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 			newCfg.ProxyUsername = value
 		case "proxy_password":
 			newCfg.ProxyPassword = value
+		case "http_client_timeout":
+			if value != "" {
+				if timeout, err := strconv.Atoi(value); err != nil {
+					return fmt.Errorf("invalid HTTP client timeout: must be a number")
+				} else if timeout < 0 {
+					return fmt.Errorf("invalid HTTP client timeout: must be >= 0")
+				}
+			}
+			newCfg.HTTPClientTimeout.Value = value
 		case "external_ssl_ca_path":
 			newCfg.ExternalSSLCAPath.Value = value
 		case "external_ssl_insecure":

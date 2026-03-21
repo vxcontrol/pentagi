@@ -81,10 +81,11 @@ func GetHTTPClient(cfg *config.Config) (*http.Client, error) {
 		return nil, err
 	}
 
-	timeout := defaultHTTPClientTimeout
-	if cfg.HTTPClientTimeout > 0 {
-		timeout = time.Duration(cfg.HTTPClientTimeout) * time.Second
-	}
+	// Convert timeout from config (in seconds) to time.Duration
+	// 0 = no timeout (unlimited), >0 = timeout in seconds
+	// Default value (600) is automatically set in config.go via envDefault:"600" tag
+	// when HTTP_CLIENT_TIMEOUT environment variable is not set
+	timeout := max(time.Duration(cfg.HTTPClientTimeout)*time.Second, 0)
 
 	if cfg.ProxyURL != "" {
 		httpClient = &http.Client{

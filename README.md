@@ -2870,6 +2870,7 @@ EMBEDDING_STRIP_NEW_LINES=true  # Whether to remove new lines from text before e
 
 # Advanced settings
 PROXY_URL=                      # Optional proxy for all API calls
+HTTP_CLIENT_TIMEOUT=600         # Timeout in seconds for external API calls (default: 600, 0 = no timeout)
 
 # SSL/TLS Certificate Configuration (for external communication with LLM backends and tool servers)
 EXTERNAL_SSL_CA_PATH=           # Path to custom CA certificate file (PEM format) inside the container
