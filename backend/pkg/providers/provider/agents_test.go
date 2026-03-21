@@ -150,11 +150,69 @@ func TestDetermineMinimalCharset(t *testing.T) {
 			chars:    []byte{'0', '5', 'a', 'z'},
 			expected: "x", // digit + lower but no upper = alnum
 		},
+		{
+			name:     "digit_upper_only",
+			chars:    []byte{'0', '5', 'A', 'Z'},
+			expected: "x", // digit + upper but no lower = alnum
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := determineMinimalCharset(tc.chars)
+			if result != tc.expected {
+				t.Errorf("Expected charset '%s', got '%s'", tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestDetermineCommonCharset(t *testing.T) {
+	testCases := []struct {
+		name     string
+		chars    [][]byte
+		expected string
+	}{
+		{
+			name: "all digits across positions",
+			chars: [][]byte{
+				{'1', '2', '3'},
+				{'4', '5', '6'},
+				{'7', '8', '9'},
+			},
+			expected: "d",
+		},
+		{
+			name: "hex lowercase across positions",
+			chars: [][]byte{
+				{'a', 'b', 'c'},
+				{'d', 'e', 'f'},
+				{'0', '1', '2'},
+			},
+			expected: "h",
+		},
+		{
+			name: "base62 across positions",
+			chars: [][]byte{
+				{'a', 'B', 'c'},
+				{'D', 'e', 'F'},
+				{'0', '1', '2'},
+			},
+			expected: "b",
+		},
+		{
+			name: "only lowercase across positions",
+			chars: [][]byte{
+				{'a', 'b', 'c'},
+				{'x', 'y', 'z'},
+			},
+			expected: "h",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := determineCommonCharset(tc.chars)
 			if result != tc.expected {
 				t.Errorf("Expected charset '%s', got '%s'", tc.expected, result)
 			}

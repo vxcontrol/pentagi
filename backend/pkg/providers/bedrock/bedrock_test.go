@@ -731,64 +731,88 @@ func TestRestoreMissedToolsFromChain(t *testing.T) {
 			}
 		}
 	})
-}
 
-// TestToolConfigPresentWhenChainContainsToolBlocks verifies the fix for issue #160:
-// the Bedrock Converse API requires toolConfig whenever the message history contains
-// toolUse or toolResult content blocks, even when the current turn provides no tools.
-func TestToolConfigPresentWhenChainContainsToolBlocks(t *testing.T) {
-	// Simulate a conversation chain that contains tool calls and responses
-	// but where the current turn provides NO explicit tools.
-	chainWithToolBlocks := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeHuman, "scan port 80"),
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "call_001",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "nmap_scan",
-						Arguments: `{"target":"10.0.0.1","port":"80"}`,
+	t.Run("nil and empty tools both trigger restoration", func(t *testing.T) {
+		chain := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.ToolCall{
+						ID:   "c1",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "scan_tool",
+							Arguments: `{"target":"10.0.0.1"}`,
+						},
 					},
 				},
 			},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: "call_001",
-					Name:       "nmap_scan",
-					Content:    "port 80 open",
+		}
+
+		// Both nil and empty slice should restore tools from chain
+		resultNil := restoreMissedToolsFromChain(chain, nil)
+		resultEmpty := restoreMissedToolsFromChain(chain, []llms.Tool{})
+
+		if len(resultNil) == 0 {
+			t.Error("expected tools restored from nil input")
+		}
+		if len(resultEmpty) == 0 {
+			t.Error("expected tools restored from empty slice input")
+		}
+		if len(resultNil) != len(resultEmpty) {
+			t.Errorf("nil and empty should produce same result: got %d vs %d", len(resultNil), len(resultEmpty))
+		}
+
+		// Verify the tool was properly inferred
+		if resultNil[0].Function == nil || resultNil[0].Function.Name != "scan_tool" {
+			t.Error("expected scan_tool to be restored")
+		}
+	})
+
+	t.Run("integration with extractToolsFromOptions", func(t *testing.T) {
+		chain := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.ToolCall{
+						ID:   "c1",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "nmap_scan",
+							Arguments: `{"port":"443"}`,
+						},
+					},
 				},
 			},
-		},
-		llms.TextParts(llms.ChatMessageTypeAI, "Port 80 is open."),
-		llms.TextParts(llms.ChatMessageTypeHuman, "now check port 443"),
-	}
+		}
 
-	t.Run("CallWithTools with nil tools restores from chain", func(t *testing.T) {
-		restored := restoreMissedToolsFromChain(chainWithToolBlocks, nil)
+		// Simulate real usage: options with no tools, followed by restoration from chain
+		options := []llms.CallOption{
+			llms.WithTemperature(0.7),
+			llms.WithMaxTokens(1000),
+		}
+
+		extractedTools := extractToolsFromOptions(options)
+		if len(extractedTools) > 0 {
+			t.Error("expected no tools from options without WithTools")
+		}
+
+		restored := restoreMissedToolsFromChain(chain, extractedTools)
 		if len(restored) == 0 {
-			t.Fatal("expected non-empty tools after restoring from chain with toolUse/toolResult blocks")
+			t.Fatal("expected tools to be restored from chain when options contain no tools")
 		}
 
 		found := false
 		for _, tool := range restored {
 			if tool.Function != nil && tool.Function.Name == "nmap_scan" {
 				found = true
-				// Verify schema was inferred from the arguments
 				schema, ok := tool.Function.Parameters.(map[string]any)
 				if !ok {
-					t.Fatal("expected inferred schema")
+					t.Fatal("expected inferred schema to be map[string]any")
 				}
 				props, ok := schema["properties"].(map[string]any)
 				if !ok {
 					t.Fatal("expected properties in inferred schema")
-				}
-				if _, exists := props["target"]; !exists {
-					t.Error("expected 'target' property in inferred schema")
 				}
 				if _, exists := props["port"]; !exists {
 					t.Error("expected 'port' property in inferred schema")
@@ -797,52 +821,7 @@ func TestToolConfigPresentWhenChainContainsToolBlocks(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Error("expected nmap_scan tool to be restored from chain")
-		}
-	})
-
-	t.Run("CallWithTools with empty tools restores from chain", func(t *testing.T) {
-		restored := restoreMissedToolsFromChain(chainWithToolBlocks, []llms.Tool{})
-		if len(restored) == 0 {
-			t.Fatal("expected non-empty tools when passing empty slice with tool-containing chain")
-		}
-	})
-
-	t.Run("CallEx option building restores tools from chain", func(t *testing.T) {
-		// Simulate CallEx option building: extract tools from options (none),
-		// then restore from chain.
-		options := []llms.CallOption{
-			llms.WithTemperature(0.7),
-			llms.WithMaxTokens(1000),
-		}
-		tools := extractToolsFromOptions(options)
-		tools = restoreMissedToolsFromChain(chainWithToolBlocks, tools)
-		if len(tools) == 0 {
-			t.Fatal("expected tools to be restored from chain in CallEx flow")
-		}
-	})
-
-	t.Run("chain with only ToolCallResponse restores tools", func(t *testing.T) {
-		// Edge case: chain has tool results but no tool calls (e.g., truncated history)
-		chainOnlyResults := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{
-						ToolCallID: "call_099",
-						Name:       "curl_request",
-						Content:    "HTTP 200 OK",
-					},
-				},
-			},
-		}
-
-		restored := restoreMissedToolsFromChain(chainOnlyResults, nil)
-		if len(restored) == 0 {
-			t.Fatal("expected tool restored from ToolCallResponse-only chain")
-		}
-		if restored[0].Function == nil || restored[0].Function.Name != "curl_request" {
-			t.Error("expected curl_request tool definition")
+			t.Error("expected nmap_scan tool to be restored")
 		}
 	})
 }

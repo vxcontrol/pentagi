@@ -681,7 +681,7 @@ func TestGetHTTPClient_CustomTimeout(t *testing.T) {
 	}
 }
 
-func TestGetHTTPClient_ZeroTimeoutUsesDefault(t *testing.T) {
+func TestGetHTTPClient_ZeroTimeoutMeansNoTimeout(t *testing.T) {
 	cfg := &config.Config{
 		HTTPClientTimeout: 0,
 	}
@@ -691,8 +691,8 @@ func TestGetHTTPClient_ZeroTimeoutUsesDefault(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	if client.Timeout != defaultHTTPClientTimeout {
-		t.Errorf("expected default timeout %v for zero config, got %v", defaultHTTPClientTimeout, client.Timeout)
+	if client.Timeout != 0 {
+		t.Errorf("expected no timeout (0) when explicitly set to 0, got %v", client.Timeout)
 	}
 }
 
@@ -710,6 +710,38 @@ func TestGetHTTPClient_TimeoutWithProxy(t *testing.T) {
 	expected := 300 * time.Second
 	if client.Timeout != expected {
 		t.Errorf("expected timeout %v with proxy, got %v", expected, client.Timeout)
+	}
+}
+
+func TestGetHTTPClient_NegativeTimeoutClampsToZero(t *testing.T) {
+	cfg := &config.Config{
+		HTTPClientTimeout: -100,
+	}
+
+	client, err := GetHTTPClient(cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	// Negative values are clamped to 0 by max() function
+	if client.Timeout != 0 {
+		t.Errorf("expected timeout 0 (clamped from negative), got %v", client.Timeout)
+	}
+}
+
+func TestGetHTTPClient_LargeTimeout(t *testing.T) {
+	cfg := &config.Config{
+		HTTPClientTimeout: 3600, // 1 hour
+	}
+
+	client, err := GetHTTPClient(cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	expected := 3600 * time.Second
+	if client.Timeout != expected {
+		t.Errorf("expected timeout %v, got %v", expected, client.Timeout)
 	}
 }
 

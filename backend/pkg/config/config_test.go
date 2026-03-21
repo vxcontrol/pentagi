@@ -307,9 +307,12 @@ func clearConfigEnv(t *testing.T) {
 		"ASSISTANT_SUMMARIZER_LAST_SEC_BYTES", "ASSISTANT_SUMMARIZER_MAX_BP_BYTES",
 		"ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS", "ASSISTANT_SUMMARIZER_MAX_QA_BYTES",
 		"ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS",
-		"PROXY_URL", "EXTERNAL_SSL_CA_PATH", "EXTERNAL_SSL_INSECURE",
+		"PROXY_URL", "EXTERNAL_SSL_CA_PATH", "EXTERNAL_SSL_INSECURE", "HTTP_CLIENT_TIMEOUT",
 		"OTEL_HOST", "LANGFUSE_BASE_URL", "LANGFUSE_PROJECT_ID", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY",
 		"GRAPHITI_ENABLED", "GRAPHITI_TIMEOUT", "GRAPHITI_URL",
+		"EXECUTION_MONITOR_ENABLED", "EXECUTION_MONITOR_SAME_TOOL_LIMIT", "EXECUTION_MONITOR_TOTAL_TOOL_LIMIT",
+		"MAX_GENERAL_AGENT_TOOL_CALLS", "MAX_LIMITED_AGENT_TOOL_CALLS",
+		"AGENT_PLANNING_STEP_ENABLED",
 	}
 	for _, v := range envVars {
 		t.Setenv(v, "")
@@ -518,4 +521,66 @@ func TestNewConfig_OllamaDefaults(t *testing.T) {
 	assert.Equal(t, 600, config.OllamaServerPullModelsTimeout)
 	assert.Equal(t, false, config.OllamaServerPullModelsEnabled)
 	assert.Equal(t, false, config.OllamaServerLoadModelsEnabled)
+}
+
+func TestNewConfig_HTTPClientTimeout(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
+	t.Run("default timeout", func(t *testing.T) {
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 600, config.HTTPClientTimeout)
+	})
+
+	t.Run("custom timeout", func(t *testing.T) {
+		t.Setenv("HTTP_CLIENT_TIMEOUT", "300")
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 300, config.HTTPClientTimeout)
+	})
+
+	t.Run("zero timeout", func(t *testing.T) {
+		t.Setenv("HTTP_CLIENT_TIMEOUT", "0")
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 0, config.HTTPClientTimeout)
+	})
+}
+
+func TestNewConfig_AgentSupervisionDefaults(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
+	config, err := NewConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, false, config.ExecutionMonitorEnabled)
+	assert.Equal(t, 5, config.ExecutionMonitorSameToolLimit)
+	assert.Equal(t, 10, config.ExecutionMonitorTotalToolLimit)
+	assert.Equal(t, 100, config.MaxGeneralAgentToolCalls)
+	assert.Equal(t, 20, config.MaxLimitedAgentToolCalls)
+	assert.Equal(t, false, config.AgentPlanningStepEnabled)
+}
+
+func TestNewConfig_AgentSupervisionOverride(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
+	t.Setenv("EXECUTION_MONITOR_ENABLED", "true")
+	t.Setenv("EXECUTION_MONITOR_SAME_TOOL_LIMIT", "7")
+	t.Setenv("EXECUTION_MONITOR_TOTAL_TOOL_LIMIT", "15")
+	t.Setenv("MAX_GENERAL_AGENT_TOOL_CALLS", "150")
+	t.Setenv("MAX_LIMITED_AGENT_TOOL_CALLS", "30")
+	t.Setenv("AGENT_PLANNING_STEP_ENABLED", "true")
+
+	config, err := NewConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, true, config.ExecutionMonitorEnabled)
+	assert.Equal(t, 7, config.ExecutionMonitorSameToolLimit)
+	assert.Equal(t, 15, config.ExecutionMonitorTotalToolLimit)
+	assert.Equal(t, 150, config.MaxGeneralAgentToolCalls)
+	assert.Equal(t, 30, config.MaxLimitedAgentToolCalls)
+	assert.Equal(t, true, config.AgentPlanningStepEnabled)
 }
