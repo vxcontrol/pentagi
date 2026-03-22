@@ -1199,6 +1199,9 @@ const (
 	ServerSettingsProxyPassword     = "Proxy Password"
 	ServerSettingsProxyPasswordDesc = "Password for proxy authentication (optional)"
 
+	ServerSettingsHTTPClientTimeout     = "HTTP Client Timeout"
+	ServerSettingsHTTPClientTimeoutDesc = "Timeout in seconds for external API calls (LLM providers, search engines, etc.)"
+
 	ServerSettingsExternalSSLCAPath     = "Custom CA Certificate Path"
 	ServerSettingsExternalSSLCAPathDesc = "Path inside container to custom root CA cert (e.g., /opt/pentagi/ssl/ca-bundle.pem)"
 
@@ -1223,6 +1226,7 @@ const (
 	ServerSettingsProxyURLHint            = "Proxy URL"
 	ServerSettingsProxyUsernameHint       = "Proxy Username"
 	ServerSettingsProxyPasswordHint       = "Proxy Password"
+	ServerSettingsHTTPClientTimeoutHint   = "HTTP Timeout"
 	ServerSettingsExternalSSLCAPathHint   = "Custom CA Path"
 	ServerSettingsExternalSSLInsecureHint = "Skip SSL Verification"
 	ServerSettingsSSLDirHint              = "SSL Directory"
@@ -1255,6 +1259,16 @@ Examples:
 	ServerSettingsCORSOriginsHelp = `Comma-separated allowed origins for browser access.`
 
 	ServerSettingsProxyURLHelp = `HTTP or HTTPS proxy for outbound requests to LLM providers and external tools. Not used for Docker API communication.`
+
+	ServerSettingsHTTPClientTimeoutHelp = `Timeout in seconds for all external HTTP/HTTPS API calls including:
+• LLM provider requests (OpenAI, Anthropic, Bedrock, etc.)
+• Search engine queries (Google, Tavily, Perplexity, etc.)
+• External tool integrations
+• Embedding generation requests
+
+Default: 600 seconds (10 minutes)
+Setting to 0 disables timeout (not recommended in production)
+Too low values may cause legitimate long-running requests to fail.`
 
 	ServerSettingsExternalSSLCAPathHelp = `Path to custom CA certificate file (PEM format) inside the container.
 
@@ -2248,6 +2262,7 @@ const (
 	EnvDesc_CORS_ORIGINS                      = "PentAGI CORS Origins"
 	EnvDesc_COOKIE_SIGNING_SALT               = "PentAGI Cookie Signing Salt"
 	EnvDesc_PROXY_URL                         = "HTTP/HTTPS Proxy URL"
+	EnvDesc_HTTP_CLIENT_TIMEOUT               = "HTTP Client Timeout (seconds)"
 	EnvDesc_EXTERNAL_SSL_CA_PATH              = "Custom CA Certificate Path"
 	EnvDesc_EXTERNAL_SSL_INSECURE             = "Skip SSL Verification"
 	EnvDesc_PENTAGI_SSL_DIR                   = "PentAGI SSL Directory"

@@ -8,8 +8,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"pentagi/pkg/config"
+)
+
+const (
+	// defaultHTTPClientTimeout is the fallback timeout when no config is provided.
+	defaultHTTPClientTimeout = 10 * time.Minute
 )
 
 func getHostname() string {
@@ -65,7 +71,9 @@ func GetHTTPClient(cfg *config.Config) (*http.Client, error) {
 	var httpClient *http.Client
 
 	if cfg == nil {
-		return http.DefaultClient, nil
+		return &http.Client{
+			Timeout: defaultHTTPClientTimeout,
+		}, nil
 	}
 
 	rootCAPool, err := GetSystemCertPool(cfg)
@@ -73,8 +81,15 @@ func GetHTTPClient(cfg *config.Config) (*http.Client, error) {
 		return nil, err
 	}
 
+	// Convert timeout from config (in seconds) to time.Duration
+	// 0 = no timeout (unlimited), >0 = timeout in seconds
+	// Default value (600) is automatically set in config.go via envDefault:"600" tag
+	// when HTTP_CLIENT_TIMEOUT environment variable is not set
+	timeout := max(time.Duration(cfg.HTTPClientTimeout)*time.Second, 0)
+
 	if cfg.ProxyURL != "" {
 		httpClient = &http.Client{
+			Timeout: timeout,
 			Transport: &http.Transport{
 				Proxy: func(req *http.Request) (*url.URL, error) {
 					return url.Parse(cfg.ProxyURL)
@@ -87,6 +102,7 @@ func GetHTTPClient(cfg *config.Config) (*http.Client, error) {
 		}
 	} else {
 		httpClient = &http.Client{
+			Timeout: timeout,
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
 					RootCAs:            rootCAPool,

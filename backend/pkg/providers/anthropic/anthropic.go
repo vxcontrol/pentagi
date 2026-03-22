@@ -20,6 +20,8 @@ var configFS embed.FS
 
 const AnthropicAgentModel = "claude-sonnet-4-20250514"
 
+const AnthropicToolCallIDTemplate = "toolu_{r:24:b}"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(AnthropicAgentModel),
@@ -177,5 +179,5 @@ func (p *anthropicProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *anthropicProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, AnthropicToolCallIDTemplate)
 }

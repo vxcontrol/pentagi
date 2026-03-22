@@ -1437,15 +1437,16 @@ These settings enable:
 
 Having multiple search engine options ensures redundancy and provides different search algorithms for varied information needs. Sploitus is specifically designed for security research, providing comprehensive exploit and vulnerability information essential for penetration testing. Searxng is particularly useful as it provides aggregated results from multiple search engines while offering enhanced privacy and customization options.
 
-## Proxy Settings
+## Network and Proxy Settings
 
-These settings control the HTTP proxy used for outbound connections, which is important for network security and access control.
+These settings control HTTP proxy, SSL configuration, and network timeouts for outbound connections, which are important for network security and access control.
 
 | Option              | Environment Variable    | Default Value | Description                                                      |
 | ------------------- | ----------------------- | ------------- | ---------------------------------------------------------------- |
 | ProxyURL            | `PROXY_URL`             | *(none)*      | URL for HTTP proxy (e.g., `http://user:pass@proxy:8080`)         |
 | ExternalSSLCAPath   | `EXTERNAL_SSL_CA_PATH`  | *(none)*      | Path to trusted CA certificate for external LLM SSL connections  |
 | ExternalSSLInsecure | `EXTERNAL_SSL_INSECURE` | `false`       | Skip SSL certificate verification for external connections       |
+| HTTPClientTimeout   | `HTTP_CLIENT_TIMEOUT`   | `600`         | Timeout in seconds for external API calls (0 = no timeout)       |
 
 ### Usage Details
 
@@ -1502,6 +1503,26 @@ The SSL settings provide additional security configuration:
   }
   ```
   **Warning**: Only use this in development or trusted environments. Skipping certificate verification exposes connections to man-in-the-middle attacks.
+
+- **HTTPClientTimeout**: Sets the timeout for all external HTTP requests (LLM providers, search engines, etc.):
+  ```go
+  // Used in pkg/system/utils.go for HTTP client configuration
+  timeout := defaultHTTPClientTimeout
+  if cfg.HTTPClientTimeout > 0 {
+      timeout = time.Duration(cfg.HTTPClientTimeout) * time.Second
+  }
+  
+  httpClient := &http.Client{
+      Timeout: timeout,
+  }
+  ```
+  The default value of 600 seconds (10 minutes) is suitable for most LLM API calls, including long-running operations. Setting this to 0 disables the timeout (not recommended in production), while very low values may cause legitimate requests to fail. This setting affects:
+  - All LLM provider API calls (OpenAI, Anthropic, Bedrock, etc.)
+  - Search engine requests (Google, Tavily, Perplexity, etc.)
+  - External tool integrations
+  - Embedding generation requests
+
+  Adjust this value based on your network conditions and the complexity of operations being performed.
 
 ## Graphiti Knowledge Graph Settings
 

@@ -14,8 +14,13 @@ DO NOT:
 - Describe what you will do instead of doing it
 - Explain your reasoning before calling the function
 - Ask questions or request clarification
+- End your turn without making function calls
+- Provide a text response as a substitute for function calls
 
 REQUIRED ACTION: Call {{.FunctionName}} function exactly three times in parallel with value=42.
+
+COMPLETION REQUIREMENT: Your work is NOT complete until you have successfully invoked the {{.FunctionName}} function exactly three times.
+DO NOT terminate, finish, or end your response without making these function calls.
 
 Any response that does not include exactly three function calls will be treated as a CRITICAL ERROR.
 </mandatory_protocol>

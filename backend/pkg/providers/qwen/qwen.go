@@ -21,6 +21,8 @@ var configFS embed.FS
 
 const QwenAgentModel = "qwen-plus"
 
+const QwenToolCallIDTemplate = "call_{r:24:h}"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(QwenAgentModel),
@@ -174,5 +176,5 @@ func (p *qwenProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *qwenProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, QwenToolCallIDTemplate)
 }

@@ -731,6 +731,99 @@ func TestRestoreMissedToolsFromChain(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("nil and empty tools both trigger restoration", func(t *testing.T) {
+		chain := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.ToolCall{
+						ID:   "c1",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "scan_tool",
+							Arguments: `{"target":"10.0.0.1"}`,
+						},
+					},
+				},
+			},
+		}
+
+		// Both nil and empty slice should restore tools from chain
+		resultNil := restoreMissedToolsFromChain(chain, nil)
+		resultEmpty := restoreMissedToolsFromChain(chain, []llms.Tool{})
+
+		if len(resultNil) == 0 {
+			t.Error("expected tools restored from nil input")
+		}
+		if len(resultEmpty) == 0 {
+			t.Error("expected tools restored from empty slice input")
+		}
+		if len(resultNil) != len(resultEmpty) {
+			t.Errorf("nil and empty should produce same result: got %d vs %d", len(resultNil), len(resultEmpty))
+		}
+
+		// Verify the tool was properly inferred
+		if resultNil[0].Function == nil || resultNil[0].Function.Name != "scan_tool" {
+			t.Error("expected scan_tool to be restored")
+		}
+	})
+
+	t.Run("integration with extractToolsFromOptions", func(t *testing.T) {
+		chain := []llms.MessageContent{
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.ToolCall{
+						ID:   "c1",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "nmap_scan",
+							Arguments: `{"port":"443"}`,
+						},
+					},
+				},
+			},
+		}
+
+		// Simulate real usage: options with no tools, followed by restoration from chain
+		options := []llms.CallOption{
+			llms.WithTemperature(0.7),
+			llms.WithMaxTokens(1000),
+		}
+
+		extractedTools := extractToolsFromOptions(options)
+		if len(extractedTools) > 0 {
+			t.Error("expected no tools from options without WithTools")
+		}
+
+		restored := restoreMissedToolsFromChain(chain, extractedTools)
+		if len(restored) == 0 {
+			t.Fatal("expected tools to be restored from chain when options contain no tools")
+		}
+
+		found := false
+		for _, tool := range restored {
+			if tool.Function != nil && tool.Function.Name == "nmap_scan" {
+				found = true
+				schema, ok := tool.Function.Parameters.(map[string]any)
+				if !ok {
+					t.Fatal("expected inferred schema to be map[string]any")
+				}
+				props, ok := schema["properties"].(map[string]any)
+				if !ok {
+					t.Fatal("expected properties in inferred schema")
+				}
+				if _, exists := props["port"]; !exists {
+					t.Error("expected 'port' property in inferred schema")
+				}
+				break
+			}
+		}
+		if !found {
+			t.Error("expected nmap_scan tool to be restored")
+		}
+	})
 }
 
 // TestExtractToolsFromOptions verifies tool extraction from CallOptions.

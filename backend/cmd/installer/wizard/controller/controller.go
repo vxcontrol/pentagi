@@ -1912,6 +1912,7 @@ type ServerSettingsConfig struct {
 	CorsOrigins         loader.EnvVar // CORS_ORIGINS
 	CookieSigningSalt   loader.EnvVar // COOKIE_SIGNING_SALT
 	ProxyURL            loader.EnvVar // PROXY_URL
+	HTTPClientTimeout   loader.EnvVar // HTTP_CLIENT_TIMEOUT
 	ExternalSSLCAPath   loader.EnvVar // EXTERNAL_SSL_CA_PATH
 	ExternalSSLInsecure loader.EnvVar // EXTERNAL_SSL_INSECURE
 	SSLDir              loader.EnvVar // PENTAGI_SSL_DIR
@@ -1932,6 +1933,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		"CORS_ORIGINS",
 		"COOKIE_SIGNING_SALT",
 		"PROXY_URL",
+		"HTTP_CLIENT_TIMEOUT",
 		"EXTERNAL_SSL_CA_PATH",
 		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
@@ -1946,6 +1948,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		"CORS_ORIGINS":          "https://localhost:8443",
 		"PENTAGI_DATA_DIR":      "pentagi-data",
 		"PENTAGI_SSL_DIR":       "pentagi-ssl",
+		"HTTP_CLIENT_TIMEOUT":   "600",
 		"EXTERNAL_SSL_INSECURE": "false",
 	}
 
@@ -1964,6 +1967,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		CorsOrigins:         vars["CORS_ORIGINS"],
 		CookieSigningSalt:   vars["COOKIE_SIGNING_SALT"],
 		ProxyURL:            vars["PROXY_URL"],
+		HTTPClientTimeout:   vars["HTTP_CLIENT_TIMEOUT"],
 		ExternalSSLCAPath:   vars["EXTERNAL_SSL_CA_PATH"],
 		ExternalSSLInsecure: vars["EXTERNAL_SSL_INSECURE"],
 		SSLDir:              vars["PENTAGI_SSL_DIR"],
@@ -2002,6 +2006,7 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 		"CORS_ORIGINS":          config.CorsOrigins.Value,
 		"COOKIE_SIGNING_SALT":   config.CookieSigningSalt.Value,
 		"PROXY_URL":             proxyURL,
+		"HTTP_CLIENT_TIMEOUT":   config.HTTPClientTimeout.Value,
 		"EXTERNAL_SSL_CA_PATH":  config.ExternalSSLCAPath.Value,
 		"EXTERNAL_SSL_INSECURE": config.ExternalSSLInsecure.Value,
 		"PENTAGI_SSL_DIR":       config.SSLDir.Value,
@@ -2025,6 +2030,7 @@ func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 		"CORS_ORIGINS",
 		"COOKIE_SIGNING_SALT",
 		"PROXY_URL",
+		"HTTP_CLIENT_TIMEOUT",
 		"EXTERNAL_SSL_CA_PATH",
 		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",

@@ -20,6 +20,8 @@ var configFS embed.FS
 
 const OpenAIAgentModel = "o4-mini"
 
+const OpenAIToolCallIDTemplate = "call_{r:24:b}"
+
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(OpenAIAgentModel),
@@ -169,5 +171,5 @@ func (p *openaiProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 }
 
 func (p *openaiProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter)
+	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, OpenAIToolCallIDTemplate)
 }
