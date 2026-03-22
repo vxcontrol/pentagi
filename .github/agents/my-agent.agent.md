@@ -1,0 +1,50 @@
+{
+    "name": "self-evolving-agent-system",
+    "version": "1.0.0",
+    "description": "نظام وكيل ذاتي التطوير والتعلم مع ربط متعدد مزودي الذكاء الاصطناعي",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "ts-node src/index.ts",
+        "evolve": "ts-node src/self-improver.ts",
+        "test": "jest",
+        "memory:export": "ts-node src/memory.ts export",
+        "memory:stats": "ts-node src/memory.ts stats",
+        "figma-server": "npm run build && node dist/socket.js",
+        "start:figma-server": "npm run figma-server",
+        "figma-server:pm2": "npm run build && pm2 start dist/socket.js --name figma-server --watch",
+        "figma-server:pm2:stop": "pm2 stop figma-server && pm2 delete figma-server",
+        "figma-server:pm2:logs": "pm2 logs figma-server"
+    },
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.24.0",
+        "@google/generative-ai": "^0.14.0",
+        "@types/ws": "^8.18.1",
+        "axios": "^1.7.2",
+        "chalk": "^5.3.0",
+        "cohere-ai": "^7.11.0",
+        "date-fns": "^3.6.0",
+        "dotenv": "^16.4.5",
+        "fs-extra": "^11.2.0",
+        "groq-sdk": "^0.5.0",
+        "js-tiktoken": "^1.0.14",
+        "lodash": "^4.17.21",
+        "openai": "^4.47.0",
+        "ora": "^8.0.1",
+        "readline": "^1.3.0",
+        "uuid": "^10.0.0",
+        "ws": "^8.19.0",
+        "zod": "^3.23.8"
+    },
+    "devDependencies": {
+        "@types/fs-extra": "^11.0.4",
+        "@types/jest": "^29.5.12",
+        "@types/lodash": "^4.17.5",
+        "@types/node": "^20.14.2",
+        "@types/uuid": "^10.0.0",
+        "jest": "^29.7.0",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.4.5"
+    }
+}
