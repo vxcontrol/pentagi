@@ -1,0 +1,93 @@
+simple:
+  model: "nemotron-3-super:cloud"
+  temperature: 1
+  top_p: 0.9
+  n: 1
+  max_tokens: 65536
+
+simple_json:
+  model: "nemotron-3-super:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 65536
+  json: true
+
+primary_agent:
+  model: "qwen3-coder-next:cloud"
+  temperature: 1
+  top_p: 0.9
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+
+assistant:
+  model: "nemotron-3-super:cloud"
+  temperature: 1
+  top_p: 0.9
+  n: 1
+  max_tokens: 65536
+
+generator:
+  model: "qwen3-coder-next:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 32768
+
+refiner:
+  model: "glm-5:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 65536
+
+adviser:
+  model: "minimax-m2.7:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 65536
+
+reflector:
+  model: "glm-5:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 65536
+
+searcher:
+  model: "qwen3.5:397b-cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 65536
+
+enricher:
+  model: "minimax-m2.7:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 65536
+
+coder:
+  model: "qwen3-coder-next:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 32768
+
+installer:
+  model: "devstral-2:123b-cloud"
+  temperature: 1
+  top_p: 0.9
+  n: 1
+  max_tokens: 65536
+
+pentester:
+  model: "qwen3-coder-next:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 32768

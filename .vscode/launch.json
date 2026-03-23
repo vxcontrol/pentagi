@@ -67,6 +67,7 @@
                 // "-type", "qwen",
                 "-config", "${workspaceFolder}/examples/configs/moonshot.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/deepseek.provider.yml",
+                // "-config", "${workspaceFolder}/examples/configs/ollama-cloud.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/ollama-llama318b.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/ollama-llama318b-instruct.provider.yml",
                 // "-config", "${workspaceFolder}/examples/configs/ollama-qwq32b-fp16-tc.provider.yml",
