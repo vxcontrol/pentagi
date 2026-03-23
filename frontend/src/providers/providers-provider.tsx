@@ -4,6 +4,7 @@ import type { Provider } from '@/models/provider';
 
 import { useProvidersQuery } from '@/graphql/types';
 import { findProviderByName, sortProviders } from '@/models/provider';
+import { useUser } from '@/providers/user-provider';
 
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
 
@@ -20,7 +21,11 @@ interface ProvidersProviderProps {
 }
 
 export const ProvidersProvider = ({ children }: ProvidersProviderProps) => {
-    const { data: providersData } = useProvidersQuery();
+    const { isAuthenticated } = useUser();
+
+    const { data: providersData } = useProvidersQuery({
+        skip: !isAuthenticated(),
+    });
 
     // Create sorted providers list to ensure consistent order
     const providers = sortProviders(providersData?.providers || []);

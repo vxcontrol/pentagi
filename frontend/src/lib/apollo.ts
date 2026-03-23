@@ -389,7 +389,27 @@ const createApolloClient = () => {
                 closed: () => Log.debug('GraphQL WebSocket closed'),
                 connected: () => Log.debug('GraphQL WebSocket connected'),
                 connecting: () => Log.debug('GraphQL WebSocket connecting...'),
-                error: (error) => Log.error('GraphQL WebSocket error:', error),
+                error: (error) => {
+                    Log.error('GraphQL WebSocket error:', error);
+
+                    // Check if error is authorization-related
+                    if (error && typeof error === 'object') {
+                        const errorMessage = 'message' in error ? String(error.message) : '';
+                        const errorString = errorMessage.toLowerCase();
+
+                        // Detect 403/401 errors or auth-related messages
+                        if (
+                            errorString.includes('403') ||
+                            errorString.includes('401') ||
+                            errorString.includes('unauthorized') ||
+                            errorString.includes('auth required') ||
+                            errorString.includes('forbidden')
+                        ) {
+                            Log.warn('WebSocket authorization error detected, refreshing auth info');
+                            window.dispatchEvent(new Event('auth:refresh'));
+                        }
+                    }
+                },
                 ping: () => Log.debug('GraphQL WebSocket ping'),
                 pong: () => Log.debug('GraphQL WebSocket pong'),
             },
@@ -407,17 +427,41 @@ const createApolloClient = () => {
 
     const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
         if (graphQLErrors) {
-            for (const { locations, message, path } of graphQLErrors) {
+            for (const { extensions, locations, message, path } of graphQLErrors) {
                 Log.error(`[GraphQL Error] ${message}`, {
                     locations,
                     operation: operation.operationName,
                     path,
                 });
+
+                // Check for authorization errors in GraphQL responses
+                const errorCode = extensions?.code as string | undefined;
+
+                if (
+                    errorCode === 'UNAUTHENTICATED' ||
+                    errorCode === 'FORBIDDEN' ||
+                    message.toLowerCase().includes('auth required') ||
+                    message.toLowerCase().includes('unauthorized') ||
+                    message.toLowerCase().includes('forbidden')
+                ) {
+                    Log.warn('GraphQL authorization error detected, refreshing auth info');
+                    window.dispatchEvent(new Event('auth:refresh'));
+                }
             }
         }
 
         if (networkError) {
             Log.error(`[Network Error] ${networkError.message}`, networkError);
+
+            // Check for HTTP 401/403 errors
+            if ('statusCode' in networkError) {
+                const statusCode = (networkError as { statusCode?: number }).statusCode;
+
+                if (statusCode === 401 || statusCode === 403) {
+                    Log.warn('Network authorization error detected, refreshing auth info');
+                    window.dispatchEvent(new Event('auth:refresh'));
+                }
+            }
         }
     });
 

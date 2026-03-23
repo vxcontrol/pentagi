@@ -28,11 +28,12 @@ const FavoritesContext = createContext<FavoritesContextValue | undefined>(undefi
 const FAVORITES_STORAGE_KEY = 'favorites';
 
 export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
-    const { authInfo } = useUser();
+    const { authInfo, isAuthenticated } = useUser();
 
     // Only fetch user preferences if user is authenticated and not a guest
     // authInfo must exist and type must be 'user' or 'api' (not 'guest' and not null/undefined)
-    const shouldFetchPreferences = Boolean(authInfo && authInfo.type !== 'guest');
+    // Also check isAuthenticated() to ensure session is valid
+    const shouldFetchPreferences = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
     // GraphQL query for user preferences
     const { data: userPreferencesData, loading: isLoadingPreferences } = useSettingsUserQuery({
