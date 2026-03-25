@@ -1,0 +1,16 @@
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+*~
+
+.cursorrules
+.cursorignore
+.cursor/
+
+build/*
+data/*
+.bak/*
+!.gitkeep
+.claude/
