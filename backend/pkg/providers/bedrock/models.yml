@@ -1,0 +1,200 @@
+# Amazon Nova Series - Advanced multimodal models with state-of-the-art performance
+- name: us.amazon.nova-2-lite-v1:0
+  description: Advanced multimodal model with adaptive reasoning and efficient thinking, intelligently balances performance and efficiency by dynamically adjusting reasoning depth based on task complexity
+  thinking: false
+  release_date: 2025-12-02
+  price:
+    input: 0.33
+    output: 2.75
+
+- name: us.amazon.nova-premier-v1:0
+  description: Most capable multimodal model for complex reasoning tasks, frontier intelligence for advanced analysis, and the best teacher for distilling custom models with exceptional problem-solving capabilities
+  thinking: false
+  release_date: 2025-04-30
+  price:
+    input: 2.5
+    output: 12.5
+
+- name: us.amazon.nova-pro-v1:0
+  description: Highly capable multimodal model with optimal balance of accuracy, speed, and cost for wide range of penetration testing tasks and complex security analysis workflows
+  thinking: false
+  release_date: 2024-12-03
+  price:
+    input: 0.8
+    output: 3.2
+
+- name: us.amazon.nova-lite-v1:0
+  description: Very low-cost multimodal model optimized for lightning-fast processing of security assessments, rapid vulnerability scanning, and high-volume pentesting operations
+  thinking: false
+  release_date: 2024-12-03
+  price:
+    input: 0.06
+    output: 0.24
+
+- name: us.amazon.nova-micro-v1:0
+  description: Ultra-efficient text-only model delivering lowest latency responses for real-time security monitoring, quick threat analysis, and automated incident response
+  thinking: false
+  release_date: 2024-12-03
+  price:
+    input: 0.035
+    output: 0.14
+
+# Anthropic Claude 4.6 Series - Latest generation with world-class coding and agentic capabilities
+- name: us.anthropic.claude-opus-4-6-v1
+  description: World's best model for coding, enterprise agents, and professional work with industry-leading reliability for agentic workflows and security analysis
+  thinking: true
+  release_date: 2026-02-05
+  price:
+    input: 5.0
+    output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25
+
+- name: us.anthropic.claude-sonnet-4-6
+  description: Frontier intelligence at scale built for coding, agents, and enterprise workflows with sustained reasoning and adaptive decision-making
+  thinking: true
+  release_date: 2026-02-17
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Anthropic Claude 4.5 Series - Advanced reasoning models with extended thinking
+- name: us.anthropic.claude-opus-4-5-20251101-v1:0
+  description: Next generation most intelligent model delivering multi-day software development projects in hours with frontier intelligence and deep technical capabilities
+  thinking: true
+  release_date: 2025-11-24
+  price:
+    input: 5.0
+    output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25
+
+- name: us.anthropic.claude-haiku-4-5-20251001-v1:0
+  description: Near-frontier performance with exceptional speed and cost efficiency, outstanding coding and agent model for free products and high-volume experiences
+  thinking: true
+  release_date: 2025-10-15
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+- name: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  description: Most powerful model for real-world agents with industry-leading coding and computer use capabilities, ideal balance of performance and practicality
+  thinking: true
+  release_date: 2025-09-29
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Anthropic Claude 4 Series - State-of-the-art coding and agentic capabilities
+- name: us.anthropic.claude-sonnet-4-20250514-v1:0
+  description: Balanced performance for coding with optimal speed and cost for high-volume use cases, handles production-ready AI assistants and efficient research
+  thinking: true
+  release_date: 2025-05-22
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Anthropic Claude 3.5 Series - Enhanced performance and cost-effectiveness
+- name: us.anthropic.claude-3-5-haiku-20241022-v1:0
+  description: Fastest and most cost-effective model perfect for rapid security scanning, automated vulnerability detection, and high-throughput threat intelligence processing
+  thinking: false
+  release_date: 2024-11-04
+  price:
+    input: 0.8
+    output: 4.0
+    cache_read: 0.08
+    cache_write: 1
+
+# Cohere Command Series - Advanced retrieval and tool use for enterprise security
+- name: cohere.command-r-plus-v1:0
+  description: Highly performant generative model optimized for large-scale security operations, advanced threat research, and complex penetration testing with superior RAG capabilities
+  thinking: false
+  release_date: 2024-04-29
+  price:
+    input: 3.0
+    output: 15.0
+
+# DeepSeek Series - Advanced reasoning and efficiency models
+- name: deepseek.v3.2
+  description: Harmonizes high computational efficiency with superior reasoning and agent performance, excels at long-context reasoning and agentic tasks with sparse attention design
+  thinking: false
+  release_date: 2025-12-01
+  price:
+    input: 0.58
+    output: 1.68
+
+# OpenAI GPT OSS Series - Open-source reasoning models
+- name: openai.gpt-oss-120b-1:0
+  description: Performance comparable to leading alternatives in coding, scientific analysis, and mathematical reasoning for intelligent automation and complex problem-solving
+  thinking: true
+  release_date: 2025-08-20
+  price:
+    input: 0.15
+    output: 0.6
+
+- name: openai.gpt-oss-20b-1:0
+  description: Efficient model with strong coding and scientific analysis capabilities for intelligent automation and software development workflows
+  thinking: true
+  release_date: 2025-08-20
+  price:
+    input: 0.07
+    output: 0.3
+
+# Qwen3 Series - Cutting-edge MoE models with ultra-long context
+- name: qwen.qwen3-next-80b-a3b
+  description: Cutting-edge MoE and hybrid attention for ultra-long-context workflows, flagship-level reasoning and coding with only 3B active parameters per token
+  thinking: false
+  release_date: 2025-09-11
+  price:
+    input: 0.15
+    output: 1.2
+
+- name: qwen.qwen3-32b-v1:0
+  description: Balanced dense model with strong reasoning and general-purpose performance, surpasses many larger models in reasoning, coding, and research use cases
+  thinking: false
+  release_date: 2025-04-28
+  price:
+    input: 0.15
+    output: 0.6
+
+- name: qwen.qwen3-coder-30b-a3b-v1:0
+  description: Strong coding and reasoning performance in compact MoE design, excels at vibe coding, natural-language-first programming, and debugging workflows
+  thinking: false
+  release_date: 2025-09-18
+  price:
+    input: 0.15
+    output: 0.6
+
+- name: qwen.qwen3-coder-next
+  description: Open-weight language model built for coding with high capability at modest active parameter counts, optimized for tool use and function calling
+  thinking: false
+  release_date: 2026-02-02
+  price:
+    input: 0.45
+    output: 1.8
+
+# Mistral Series - Advanced multimodal models with long context
+- name: mistral.mistral-large-3-675b-instruct
+  description: Most advanced open-weight multimodal model with granular MoE architecture, state-of-the-art reliability and long-context reasoning for production assistants
+  thinking: false
+  release_date: 2025-12-02
+  price:
+    input: 4.0
+    output: 12.0
+
+# Moonshot Kimi Series - Multimodal and thinking agent models
+- name: moonshotai.kimi-k2.5
+  description: Strong vision, language, and code capabilities in single natively multimodal architecture, handles complex tasks mixing images and text with high accuracy
+  thinking: false
+  release_date: 2026-01-27
+  price:
+    input: 0.6
+    output: 3.0

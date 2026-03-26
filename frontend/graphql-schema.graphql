@@ -1,0 +1,1176 @@
+# ==================== Fragments ====================
+
+fragment settingsFragment on Settings {
+    debug
+    askUser
+    dockerInside
+    assistantUseAgents
+}
+
+fragment flowFragment on Flow {
+    id
+    title
+    status
+    terminals {
+        ...terminalFragment
+    }
+    provider {
+        ...providerFragment
+    }
+    createdAt
+    updatedAt
+}
+
+fragment terminalFragment on Terminal {
+    id
+    type
+    name
+    image
+    connected
+    createdAt
+}
+
+fragment taskFragment on Task {
+    id
+    title
+    status
+    input
+    result
+    flowId
+    subtasks {
+        ...subtaskFragment
+    }
+    createdAt
+    updatedAt
+}
+
+fragment subtaskFragment on Subtask {
+    id
+    status
+    title
+    description
+    result
+    taskId
+    createdAt
+    updatedAt
+}
+
+fragment terminalLogFragment on TerminalLog {
+    id
+    flowId
+    taskId
+    subtaskId
+    type
+    text
+    terminal
+    createdAt
+}
+
+fragment messageLogFragment on MessageLog {
+    id
+    type
+    message
+    thinking
+    result
+    resultFormat
+    flowId
+    taskId
+    subtaskId
+    createdAt
+}
+
+fragment screenshotFragment on Screenshot {
+    id
+    flowId
+    taskId
+    subtaskId
+    name
+    url
+    createdAt
+}
+
+fragment agentLogFragment on AgentLog {
+    id
+    flowId
+    initiator
+    executor
+    task
+    result
+    taskId
+    subtaskId
+    createdAt
+}
+
+fragment searchLogFragment on SearchLog {
+    id
+    flowId
+    initiator
+    executor
+    engine
+    query
+    result
+    taskId
+    subtaskId
+    createdAt
+}
+
+fragment vectorStoreLogFragment on VectorStoreLog {
+    id
+    flowId
+    initiator
+    executor
+    filter
+    query
+    action
+    result
+    taskId
+    subtaskId
+    createdAt
+}
+
+fragment assistantFragment on Assistant {
+    id
+    title
+    status
+    provider {
+        ...providerFragment
+    }
+    flowId
+    useAgents
+    createdAt
+    updatedAt
+}
+
+fragment assistantLogFragment on AssistantLog {
+    id
+    type
+    message
+    thinking
+    result
+    resultFormat
+    appendPart
+    flowId
+    assistantId
+    createdAt
+}
+
+fragment testResultFragment on TestResult {
+    name
+    type
+    result
+    reasoning
+    streaming
+    latency
+    error
+}
+
+fragment agentTestResultFragment on AgentTestResult {
+    tests {
+        ...testResultFragment
+    }
+}
+
+fragment providerTestResultFragment on ProviderTestResult {
+    simple {
+        ...agentTestResultFragment
+    }
+    simpleJson {
+        ...agentTestResultFragment
+    }
+    primaryAgent {
+        ...agentTestResultFragment
+    }
+    assistant {
+        ...agentTestResultFragment
+    }
+    generator {
+        ...agentTestResultFragment
+    }
+    refiner {
+        ...agentTestResultFragment
+    }
+    adviser {
+        ...agentTestResultFragment
+    }
+    reflector {
+        ...agentTestResultFragment
+    }
+    searcher {
+        ...agentTestResultFragment
+    }
+    enricher {
+        ...agentTestResultFragment
+    }
+    coder {
+        ...agentTestResultFragment
+    }
+    installer {
+        ...agentTestResultFragment
+    }
+    pentester {
+        ...agentTestResultFragment
+    }
+}
+
+fragment modelConfigFragment on ModelConfig {
+    name
+    price {
+        input
+        output
+        cacheRead
+        cacheWrite
+    }
+}
+
+fragment providerFragment on Provider {
+    name
+    type
+}
+
+fragment providerConfigFragment on ProviderConfig {
+    id
+    name
+    type
+    agents {
+        ...agentsConfigFragment
+    }
+    createdAt
+    updatedAt
+}
+
+fragment agentsConfigFragment on AgentsConfig {
+    simple {
+        ...agentConfigFragment
+    }
+    simpleJson {
+        ...agentConfigFragment
+    }
+    primaryAgent {
+        ...agentConfigFragment
+    }
+    assistant {
+        ...agentConfigFragment
+    }
+    generator {
+        ...agentConfigFragment
+    }
+    refiner {
+        ...agentConfigFragment
+    }
+    adviser {
+        ...agentConfigFragment
+    }
+    reflector {
+        ...agentConfigFragment
+    }
+    searcher {
+        ...agentConfigFragment
+    }
+    enricher {
+        ...agentConfigFragment
+    }
+    coder {
+        ...agentConfigFragment
+    }
+    installer {
+        ...agentConfigFragment
+    }
+    pentester {
+        ...agentConfigFragment
+    }
+}
+
+fragment agentConfigFragment on AgentConfig {
+    model
+    maxTokens
+    temperature
+    topK
+    topP
+    minLength
+    maxLength
+    repetitionPenalty
+    frequencyPenalty
+    presencePenalty
+    reasoning {
+        effort
+        maxTokens
+    }
+    price {
+        input
+        output
+        cacheRead
+        cacheWrite
+    }
+}
+
+fragment userPromptFragment on UserPrompt {
+    id
+    type
+    template
+    createdAt
+    updatedAt
+}
+
+fragment defaultPromptFragment on DefaultPrompt {
+    type
+    template
+    variables
+}
+
+fragment promptValidationResultFragment on PromptValidationResult {
+    result
+    errorType
+    message
+    line
+    details
+}
+
+fragment apiTokenFragment on APIToken {
+    id
+    tokenId
+    userId
+    roleId
+    name
+    ttl
+    status
+    createdAt
+    updatedAt
+}
+
+fragment apiTokenWithSecretFragment on APITokenWithSecret {
+    id
+    tokenId
+    userId
+    roleId
+    name
+    ttl
+    status
+    createdAt
+    updatedAt
+    token
+}
+
+fragment usageStatsFragment on UsageStats {
+    totalUsageIn
+    totalUsageOut
+    totalUsageCacheIn
+    totalUsageCacheOut
+    totalUsageCostIn
+    totalUsageCostOut
+}
+
+fragment dailyUsageStatsFragment on DailyUsageStats {
+    date
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment providerUsageStatsFragment on ProviderUsageStats {
+    provider
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment modelUsageStatsFragment on ModelUsageStats {
+    model
+    provider
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
+    agentType
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment toolcallsStatsFragment on ToolcallsStats {
+    totalCount
+    totalDurationSeconds
+}
+
+fragment dailyToolcallsStatsFragment on DailyToolcallsStats {
+    date
+    stats {
+        ...toolcallsStatsFragment
+    }
+}
+
+fragment functionToolcallsStatsFragment on FunctionToolcallsStats {
+    functionName
+    isAgent
+    totalCount
+    totalDurationSeconds
+    avgDurationSeconds
+}
+
+fragment flowsStatsFragment on FlowsStats {
+    totalFlowsCount
+    totalTasksCount
+    totalSubtasksCount
+    totalAssistantsCount
+}
+
+fragment flowStatsFragment on FlowStats {
+    totalTasksCount
+    totalSubtasksCount
+    totalAssistantsCount
+}
+
+fragment dailyFlowsStatsFragment on DailyFlowsStats {
+    date
+    stats {
+        ...flowsStatsFragment
+    }
+}
+
+fragment subtaskExecutionStatsFragment on SubtaskExecutionStats {
+    subtaskId
+    subtaskTitle
+    totalDurationSeconds
+    totalToolcallsCount
+}
+
+fragment taskExecutionStatsFragment on TaskExecutionStats {
+    taskId
+    taskTitle
+    totalDurationSeconds
+    totalToolcallsCount
+    subtasks {
+        ...subtaskExecutionStatsFragment
+    }
+}
+
+fragment flowExecutionStatsFragment on FlowExecutionStats {
+    flowId
+    flowTitle
+    totalDurationSeconds
+    totalToolcallsCount
+    totalAssistantsCount
+    tasks {
+        ...taskExecutionStatsFragment
+    }
+}
+
+# ==================== Queries ====================
+
+query flows {
+    flows {
+        ...flowFragment
+    }
+}
+
+query providers {
+    providers {
+        ...providerFragment
+    }
+}
+
+query settings {
+    settings {
+        ...settingsFragment
+    }
+}
+
+query settingsProviders {
+    settingsProviders {
+        enabled {
+            openai
+            anthropic
+            gemini
+            bedrock
+            ollama
+            custom
+            deepseek
+            glm
+            kimi
+            qwen
+        }
+        default {
+            openai {
+                ...providerConfigFragment
+            }
+            anthropic {
+                ...providerConfigFragment
+            }
+            gemini {
+                ...providerConfigFragment
+            }
+            bedrock {
+                ...providerConfigFragment
+            }
+            ollama {
+                ...providerConfigFragment
+            }
+            custom {
+                ...providerConfigFragment
+            }
+            deepseek {
+                ...providerConfigFragment
+            }
+            glm {
+                ...providerConfigFragment
+            }
+            kimi {
+                ...providerConfigFragment
+            }
+            qwen {
+                ...providerConfigFragment
+            }
+        }
+        userDefined {
+            ...providerConfigFragment
+        }
+        models {
+            openai {
+                ...modelConfigFragment
+            }
+            anthropic {
+                ...modelConfigFragment
+            }
+            gemini {
+                ...modelConfigFragment
+            }
+            bedrock {
+                ...modelConfigFragment
+            }
+            ollama {
+                ...modelConfigFragment
+            }
+            custom {
+                ...modelConfigFragment
+            }
+            deepseek {
+                ...modelConfigFragment
+            }
+            glm {
+                ...modelConfigFragment
+            }
+            kimi {
+                ...modelConfigFragment
+            }
+            qwen {
+                ...modelConfigFragment
+            }
+        }
+    }
+}
+
+query settingsPrompts {
+    settingsPrompts {
+        default {
+            agents {
+                primaryAgent {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                }
+                assistant {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                }
+                pentester {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                coder {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                installer {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                searcher {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                memorist {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                adviser {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                generator {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                refiner {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                reporter {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                reflector {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                enricher {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                toolCallFixer {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                    human {
+                        ...defaultPromptFragment
+                    }
+                }
+                summarizer {
+                    system {
+                        ...defaultPromptFragment
+                    }
+                }
+            }
+            tools {
+                getFlowDescription {
+                    ...defaultPromptFragment
+                }
+                getTaskDescription {
+                    ...defaultPromptFragment
+                }
+                getExecutionLogs {
+                    ...defaultPromptFragment
+                }
+                getFullExecutionContext {
+                    ...defaultPromptFragment
+                }
+                getShortExecutionContext {
+                    ...defaultPromptFragment
+                }
+                chooseDockerImage {
+                    ...defaultPromptFragment
+                }
+                chooseUserLanguage {
+                    ...defaultPromptFragment
+                }
+                collectToolCallId {
+                    ...defaultPromptFragment
+                }
+                detectToolCallIdPattern {
+                    ...defaultPromptFragment
+                }
+                monitorAgentExecution {
+                    ...defaultPromptFragment
+                }
+                planAgentTask {
+                    ...defaultPromptFragment
+                }
+                wrapAgentTask {
+                    ...defaultPromptFragment
+                }
+            }
+        }
+        userDefined {
+            ...userPromptFragment
+        }
+    }
+}
+
+query flow($id: ID!) {
+    flow(flowId: $id) {
+        ...flowFragment
+    }
+    tasks(flowId: $id) {
+        ...taskFragment
+    }
+    screenshots(flowId: $id) {
+        ...screenshotFragment
+    }
+    terminalLogs(flowId: $id) {
+        ...terminalLogFragment
+    }
+    messageLogs(flowId: $id) {
+        ...messageLogFragment
+    }
+    agentLogs(flowId: $id) {
+        ...agentLogFragment
+    }
+    searchLogs(flowId: $id) {
+        ...searchLogFragment
+    }
+    vectorStoreLogs(flowId: $id) {
+        ...vectorStoreLogFragment
+    }
+}
+
+query tasks($flowId: ID!) {
+    tasks(flowId: $flowId) {
+        ...taskFragment
+    }
+}
+
+query assistants($flowId: ID!) {
+    assistants(flowId: $flowId) {
+        ...assistantFragment
+    }
+}
+
+query assistantLogs($flowId: ID!, $assistantId: ID!) {
+    assistantLogs(flowId: $flowId, assistantId: $assistantId) {
+        ...assistantLogFragment
+    }
+}
+
+query flowReport($id: ID!) {
+    flow(flowId: $id) {
+        ...flowFragment
+    }
+    tasks(flowId: $id) {
+        ...taskFragment
+    }
+}
+
+query usageStatsTotal {
+    usageStatsTotal {
+        ...usageStatsFragment
+    }
+}
+
+query usageStatsByPeriod($period: UsageStatsPeriod!) {
+    usageStatsByPeriod(period: $period) {
+        ...dailyUsageStatsFragment
+    }
+}
+
+query usageStatsByProvider {
+    usageStatsByProvider {
+        ...providerUsageStatsFragment
+    }
+}
+
+query usageStatsByModel {
+    usageStatsByModel {
+        ...modelUsageStatsFragment
+    }
+}
+
+query usageStatsByAgentType {
+    usageStatsByAgentType {
+        ...agentTypeUsageStatsFragment
+    }
+}
+
+query usageStatsByFlow($flowId: ID!) {
+    usageStatsByFlow(flowId: $flowId) {
+        ...usageStatsFragment
+    }
+}
+
+query usageStatsByAgentTypeForFlow($flowId: ID!) {
+    usageStatsByAgentTypeForFlow(flowId: $flowId) {
+        ...agentTypeUsageStatsFragment
+    }
+}
+
+query toolcallsStatsTotal {
+    toolcallsStatsTotal {
+        ...toolcallsStatsFragment
+    }
+}
+
+query toolcallsStatsByPeriod($period: UsageStatsPeriod!) {
+    toolcallsStatsByPeriod(period: $period) {
+        ...dailyToolcallsStatsFragment
+    }
+}
+
+query toolcallsStatsByFunction {
+    toolcallsStatsByFunction {
+        ...functionToolcallsStatsFragment
+    }
+}
+
+query toolcallsStatsByFlow($flowId: ID!) {
+    toolcallsStatsByFlow(flowId: $flowId) {
+        ...toolcallsStatsFragment
+    }
+}
+
+query toolcallsStatsByFunctionForFlow($flowId: ID!) {
+    toolcallsStatsByFunctionForFlow(flowId: $flowId) {
+        ...functionToolcallsStatsFragment
+    }
+}
+
+query flowsStatsTotal {
+    flowsStatsTotal {
+        ...flowsStatsFragment
+    }
+}
+
+query flowsStatsByPeriod($period: UsageStatsPeriod!) {
+    flowsStatsByPeriod(period: $period) {
+        ...dailyFlowsStatsFragment
+    }
+}
+
+query flowStatsByFlow($flowId: ID!) {
+    flowStatsByFlow(flowId: $flowId) {
+        ...flowStatsFragment
+    }
+}
+
+query flowsExecutionStatsByPeriod($period: UsageStatsPeriod!) {
+    flowsExecutionStatsByPeriod(period: $period) {
+        ...flowExecutionStatsFragment
+    }
+}
+
+query apiTokens {
+    apiTokens {
+        ...apiTokenFragment
+    }
+}
+
+query apiToken($tokenId: String!) {
+    apiToken(tokenId: $tokenId) {
+        ...apiTokenFragment
+    }
+}
+
+fragment userPreferencesFragment on UserPreferences {
+    id
+    favoriteFlows
+}
+
+# ==================== Queries ====================
+
+query settingsUser {
+    settingsUser {
+        ...userPreferencesFragment
+    }
+}
+
+# ==================== Mutations ====================
+
+mutation addFavoriteFlow($flowId: ID!) {
+    addFavoriteFlow(flowId: $flowId)
+}
+
+mutation deleteFavoriteFlow($flowId: ID!) {
+    deleteFavoriteFlow(flowId: $flowId)
+}
+
+mutation createFlow($modelProvider: String!, $input: String!) {
+    createFlow(modelProvider: $modelProvider, input: $input) {
+        ...flowFragment
+    }
+}
+
+mutation deleteFlow($flowId: ID!) {
+    deleteFlow(flowId: $flowId)
+}
+
+mutation putUserInput($flowId: ID!, $input: String!) {
+    putUserInput(flowId: $flowId, input: $input)
+}
+
+mutation finishFlow($flowId: ID!) {
+    finishFlow(flowId: $flowId)
+}
+
+mutation stopFlow($flowId: ID!) {
+    stopFlow(flowId: $flowId)
+}
+
+mutation renameFlow($flowId: ID!, $title: String!) {
+    renameFlow(flowId: $flowId, title: $title)
+}
+
+mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!) {
+    createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents) {
+        flow {
+            ...flowFragment
+        }
+        assistant {
+            ...assistantFragment
+        }
+    }
+}
+
+mutation callAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean!) {
+    callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents)
+}
+
+mutation stopAssistant($flowId: ID!, $assistantId: ID!) {
+    stopAssistant(flowId: $flowId, assistantId: $assistantId) {
+        ...assistantFragment
+    }
+}
+
+mutation deleteAssistant($flowId: ID!, $assistantId: ID!) {
+    deleteAssistant(flowId: $flowId, assistantId: $assistantId)
+}
+
+mutation testAgent($type: ProviderType!, $agentType: AgentConfigType!, $agent: AgentConfigInput!) {
+    testAgent(type: $type, agentType: $agentType, agent: $agent) {
+        ...agentTestResultFragment
+    }
+}
+
+mutation testProvider($type: ProviderType!, $agents: AgentsConfigInput!) {
+    testProvider(type: $type, agents: $agents) {
+        ...providerTestResultFragment
+    }
+}
+
+mutation createProvider($name: String!, $type: ProviderType!, $agents: AgentsConfigInput!) {
+    createProvider(name: $name, type: $type, agents: $agents) {
+        ...providerConfigFragment
+    }
+}
+
+mutation updateProvider($providerId: ID!, $name: String!, $agents: AgentsConfigInput!) {
+    updateProvider(providerId: $providerId, name: $name, agents: $agents) {
+        ...providerConfigFragment
+    }
+}
+
+mutation deleteProvider($providerId: ID!) {
+    deleteProvider(providerId: $providerId)
+}
+
+mutation validatePrompt($type: PromptType!, $template: String!) {
+    validatePrompt(type: $type, template: $template) {
+        ...promptValidationResultFragment
+    }
+}
+
+mutation createPrompt($type: PromptType!, $template: String!) {
+    createPrompt(type: $type, template: $template) {
+        ...userPromptFragment
+    }
+}
+
+mutation updatePrompt($promptId: ID!, $template: String!) {
+    updatePrompt(promptId: $promptId, template: $template) {
+        ...userPromptFragment
+    }
+}
+
+mutation deletePrompt($promptId: ID!) {
+    deletePrompt(promptId: $promptId)
+}
+
+mutation createAPIToken($input: CreateAPITokenInput!) {
+    createAPIToken(input: $input) {
+        ...apiTokenWithSecretFragment
+    }
+}
+
+mutation updateAPIToken($tokenId: String!, $input: UpdateAPITokenInput!) {
+    updateAPIToken(tokenId: $tokenId, input: $input) {
+        ...apiTokenFragment
+    }
+}
+
+mutation deleteAPIToken($tokenId: String!) {
+    deleteAPIToken(tokenId: $tokenId)
+}
+
+# ==================== Subscriptions ====================
+
+subscription terminalLogAdded($flowId: ID!) {
+    terminalLogAdded(flowId: $flowId) {
+        ...terminalLogFragment
+    }
+}
+
+subscription messageLogAdded($flowId: ID!) {
+    messageLogAdded(flowId: $flowId) {
+        ...messageLogFragment
+    }
+}
+
+subscription messageLogUpdated($flowId: ID!) {
+    messageLogUpdated(flowId: $flowId) {
+        ...messageLogFragment
+    }
+}
+
+subscription screenshotAdded($flowId: ID!) {
+    screenshotAdded(flowId: $flowId) {
+        ...screenshotFragment
+    }
+}
+
+subscription agentLogAdded($flowId: ID!) {
+    agentLogAdded(flowId: $flowId) {
+        ...agentLogFragment
+    }
+}
+
+subscription searchLogAdded($flowId: ID!) {
+    searchLogAdded(flowId: $flowId) {
+        ...searchLogFragment
+    }
+}
+
+subscription vectorStoreLogAdded($flowId: ID!) {
+    vectorStoreLogAdded(flowId: $flowId) {
+        ...vectorStoreLogFragment
+    }
+}
+
+subscription assistantCreated($flowId: ID!) {
+    assistantCreated(flowId: $flowId) {
+        ...assistantFragment
+    }
+}
+
+subscription assistantUpdated($flowId: ID!) {
+    assistantUpdated(flowId: $flowId) {
+        ...assistantFragment
+    }
+}
+
+subscription assistantDeleted($flowId: ID!) {
+    assistantDeleted(flowId: $flowId) {
+        ...assistantFragment
+    }
+}
+
+subscription assistantLogAdded($flowId: ID!) {
+    assistantLogAdded(flowId: $flowId) {
+        ...assistantLogFragment
+    }
+}
+
+subscription assistantLogUpdated($flowId: ID!) {
+    assistantLogUpdated(flowId: $flowId) {
+        ...assistantLogFragment
+    }
+}
+
+subscription flowCreated {
+    flowCreated {
+        ...flowFragment
+    }
+}
+
+subscription flowDeleted {
+    flowDeleted {
+        ...flowFragment
+    }
+}
+
+subscription flowUpdated {
+    flowUpdated {
+        ...flowFragment
+    }
+}
+
+subscription taskCreated($flowId: ID!) {
+    taskCreated(flowId: $flowId) {
+        ...taskFragment
+    }
+}
+
+subscription taskUpdated($flowId: ID!) {
+    taskUpdated(flowId: $flowId) {
+        id
+        status
+        result
+        subtasks {
+            ...subtaskFragment
+        }
+        updatedAt
+    }
+}
+
+subscription providerCreated {
+    providerCreated {
+        ...providerConfigFragment
+    }
+}
+
+subscription providerUpdated {
+    providerUpdated {
+        ...providerConfigFragment
+    }
+}
+
+subscription providerDeleted {
+    providerDeleted {
+        ...providerConfigFragment
+    }
+}
+
+subscription apiTokenCreated {
+    apiTokenCreated {
+        ...apiTokenFragment
+    }
+}
+
+subscription apiTokenUpdated {
+    apiTokenUpdated {
+        ...apiTokenFragment
+    }
+}
+
+subscription apiTokenDeleted {
+    apiTokenDeleted {
+        ...apiTokenFragment
+    }
+}
+
+subscription settingsUserUpdated {
+    settingsUserUpdated {
+        ...userPreferencesFragment
+    }
+}

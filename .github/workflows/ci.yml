@@ -1,0 +1,217 @@
+name: Docker build and push
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Go setup and cache
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.24'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      # Cache Go dependencies
+      - name: Go Mod Cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      # Node.js setup and cache
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '23'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      # Cache npm dependencies
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+
+      - name: Cache npm packages
+        uses: actions/cache@v5
+        id: npm-cache
+        with:
+          path: |
+            ${{ steps.npm-cache-dir.outputs.dir }}
+            frontend/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      # Frontend lint and test
+      - name: Frontend - Install dependencies
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: npm ci
+        continue-on-error: true
+
+      - name: Frontend - Prettier
+        working-directory: frontend
+        run: npm run prettier
+        continue-on-error: true
+
+      - name: Frontend - Lint
+        working-directory: frontend
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Frontend - Test
+        working-directory: frontend
+        run: npm run test
+        continue-on-error: true
+
+      # Backend lint and test
+      - name: Backend - Download dependencies
+        working-directory: backend
+        run: go mod download
+        continue-on-error: true
+
+      - name: Backend - Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: latest
+          working-directory: backend
+          args: --timeout=5m --issues-exit-code=0
+        continue-on-error: true
+
+      - name: Backend - Test
+        working-directory: backend
+        run: go test ./... -v
+        continue-on-error: true
+
+      - name: Backend - Test Build
+        working-directory: backend
+        env:
+          CGO_ENABLED: 0
+          GO111MODULE: on
+        run: |
+          # Get version information
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          PACKAGE_VER=${LATEST_TAG#v}
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG" 2>/dev/null || echo "")
+          
+          if [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
+            PACKAGE_REV=$(git rev-parse --short HEAD)
+          else
+            PACKAGE_REV=""
+          fi
+          
+          LDFLAGS="-X pentagi/pkg/version.PackageName=pentagi -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}"
+          
+          echo "Building with version: ${PACKAGE_VER}${PACKAGE_REV:+-$PACKAGE_REV}"
+          
+          # Build for AMD64
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o /tmp/pentagi-amd64 ./cmd/pentagi
+          echo "✓ Successfully built for linux/amd64"
+
+          # Build for ARM64
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o /tmp/pentagi-arm64 ./cmd/pentagi
+          echo "✓ Successfully built for linux/arm64"
+        continue-on-error: true
+
+  docker-build:
+    needs: lint-and-test
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Extract version from tag (without 'v' prefix) and split into parts
+      - name: Extract version and revision
+        id: version
+        run: |
+          # Get latest tag version (without 'v' prefix)
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          VERSION=${LATEST_TAG#v}
+          
+          # Get current commit hash
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          
+          # Get commit hash of the latest tag
+          TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG" 2>/dev/null || echo "")
+          
+          # Set revision only if current commit differs from tag commit
+          if [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
+            PACKAGE_REV=$(git rev-parse --short HEAD)
+            echo "revision=${PACKAGE_REV}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "Building development version: ${VERSION}-${PACKAGE_REV}"
+            echo " Docker tags: latest only"
+          else
+            echo "revision=" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "Building release version: ${VERSION}"
+            
+            # Split version into major.minor.patch for Docker tags (only for releases)
+            IFS='.' read -r major minor patch <<< "$VERSION"
+            echo "major=${major}" >> $GITHUB_OUTPUT
+            echo "minor=${major}.${minor}" >> $GITHUB_OUTPUT
+            echo "patch=${VERSION}" >> $GITHUB_OUTPUT
+            echo "  Docker tags: latest, ${major}, ${major}.${minor}, ${VERSION}"
+          fi
+          
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: vxcontrol/pentagi
+          tags: |
+            # For master branch - latest tag
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            # For release builds only - tag with major, minor and patch versions
+            type=raw,value=${{ steps.version.outputs.major }},enable=${{ steps.version.outputs.is_release == 'true' }}
+            type=raw,value=${{ steps.version.outputs.minor }},enable=${{ steps.version.outputs.is_release == 'true' }}
+            type=raw,value=${{ steps.version.outputs.patch }},enable=${{ steps.version.outputs.is_release == 'true' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64/v8
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            PACKAGE_VER=${{ steps.version.outputs.version }}
+            PACKAGE_REV=${{ steps.version.outputs.revision }}

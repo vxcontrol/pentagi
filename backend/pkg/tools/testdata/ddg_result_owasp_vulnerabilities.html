@@ -1,0 +1,648 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!--[if IE 6]><html class="ie6" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if IE 7]><html class="lt-ie8 lt-ie9" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if IE 8]><html class="lt-ie9" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if gt IE 8]><!--><html xmlns="http://www.w3.org/1999/xhtml"><!--<![endif]-->
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=1" />
+  <meta name="referrer" content="origin" />
+  <meta name="HandheldFriendly" content="true" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>OWASP top 10 vulnerabilities at DuckDuckGo</title>
+  <link title="DuckDuckGo (HTML)" type="application/opensearchdescription+xml" rel="search" href="//duckduckgo.com/opensearch_html_v2.xml" />
+  <link href="//duckduckgo.com/favicon.ico" rel="shortcut icon" />
+  <link rel="icon" href="//duckduckgo.com/favicon.ico" type="image/x-icon" />
+  <link id="icon60" rel="apple-touch-icon" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_60x60.png?v=2"/>
+  <link id="icon76" rel="apple-touch-icon" sizes="76x76" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_76x76.png?v=2"/>
+  <link id="icon120" rel="apple-touch-icon" sizes="120x120" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_120x120.png?v=2"/>
+  <link id="icon152" rel="apple-touch-icon" sizes="152x152" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_152x152.png?v=2"/>
+  <link rel="image_src" href="//duckduckgo.com/assets/icons/meta/DDG-icon_256x256.png">
+  <link rel="stylesheet" media="handheld, all" href="//duckduckgo.com/dist/h.048d08a46e4d9eef6e45.css" type="text/css"/>
+</head>
+
+<body class="body--html">
+  <a name="top" id="top"></a>
+
+  <form action="/html/" method="post">
+    <input type="text" name="state_hidden" id="state_hidden" />
+  </form>
+
+  <div>
+    <div class="site-wrapper-border"></div>
+
+    <div id="header" class="header cw header--html">
+      <a title="DuckDuckGo" href="/html/" class="header__logo-wrap"></a>
+
+      <form name="x" class="header__form" action="/html/" method="post">
+        <div class="search search--header">
+          <input name="q" autocomplete="off" class="search__input" id="search_form_input_homepage" type="text" value="OWASP top 10 vulnerabilities" />
+          <input name="b" id="search_button_homepage" class="search__button search__button--html" value="" title="Search" alt="Search" type="submit" />
+        </div>
+
+        
+        
+        
+        
+
+        <div class="frm__select">
+          <select name="kl">
+            
+              <option value="" >All Regions</option>
+            
+              <option value="ar-es" >Argentina</option>
+            
+              <option value="au-en" >Australia</option>
+            
+              <option value="at-de" >Austria</option>
+            
+              <option value="be-fr" >Belgium (fr)</option>
+            
+              <option value="be-nl" >Belgium (nl)</option>
+            
+              <option value="br-pt" >Brazil</option>
+            
+              <option value="bg-bg" >Bulgaria</option>
+            
+              <option value="ca-en" >Canada (en)</option>
+            
+              <option value="ca-fr" >Canada (fr)</option>
+            
+              <option value="ct-ca" >Catalonia</option>
+            
+              <option value="cl-es" >Chile</option>
+            
+              <option value="cn-zh" >China</option>
+            
+              <option value="co-es" >Colombia</option>
+            
+              <option value="hr-hr" >Croatia</option>
+            
+              <option value="cz-cs" >Czech Republic</option>
+            
+              <option value="dk-da" >Denmark</option>
+            
+              <option value="ee-et" >Estonia</option>
+            
+              <option value="fi-fi" >Finland</option>
+            
+              <option value="fr-fr" >France</option>
+            
+              <option value="de-de" >Germany</option>
+            
+              <option value="gr-el" >Greece</option>
+            
+              <option value="hk-tzh" >Hong Kong</option>
+            
+              <option value="hu-hu" >Hungary</option>
+            
+              <option value="is-is" >Iceland</option>
+            
+              <option value="in-en" >India (en)</option>
+            
+              <option value="id-en" >Indonesia (en)</option>
+            
+              <option value="ie-en" >Ireland</option>
+            
+              <option value="il-en" >Israel (en)</option>
+            
+              <option value="it-it" >Italy</option>
+            
+              <option value="jp-jp" >Japan</option>
+            
+              <option value="kr-kr" >Korea</option>
+            
+              <option value="lv-lv" >Latvia</option>
+            
+              <option value="lt-lt" >Lithuania</option>
+            
+              <option value="my-en" >Malaysia (en)</option>
+            
+              <option value="mx-es" >Mexico</option>
+            
+              <option value="nl-nl" >Netherlands</option>
+            
+              <option value="nz-en" >New Zealand</option>
+            
+              <option value="no-no" >Norway</option>
+            
+              <option value="pk-en" >Pakistan (en)</option>
+            
+              <option value="pe-es" >Peru</option>
+            
+              <option value="ph-en" >Philippines (en)</option>
+            
+              <option value="pl-pl" >Poland</option>
+            
+              <option value="pt-pt" >Portugal</option>
+            
+              <option value="ro-ro" >Romania</option>
+            
+              <option value="ru-ru" >Russia</option>
+            
+              <option value="xa-ar" >Saudi Arabia</option>
+            
+              <option value="sg-en" >Singapore</option>
+            
+              <option value="sk-sk" >Slovakia</option>
+            
+              <option value="sl-sl" >Slovenia</option>
+            
+              <option value="za-en" >South Africa</option>
+            
+              <option value="es-ca" >Spain (ca)</option>
+            
+              <option value="es-es" >Spain (es)</option>
+            
+              <option value="se-sv" >Sweden</option>
+            
+              <option value="ch-de" >Switzerland (de)</option>
+            
+              <option value="ch-fr" >Switzerland (fr)</option>
+            
+              <option value="tw-tzh" >Taiwan</option>
+            
+              <option value="th-en" >Thailand (en)</option>
+            
+              <option value="tr-tr" >Turkey</option>
+            
+              <option value="us-en" selected>US (English)</option>
+            
+              <option value="us-es" >US (Spanish)</option>
+            
+              <option value="ua-uk" >Ukraine</option>
+            
+              <option value="uk-en" >United Kingdom</option>
+            
+              <option value="vn-en" >Vietnam (en)</option>
+            
+          </select>
+        </div>
+
+        <div class="frm__select frm__select--last">
+          <select class="" name="df">
+            
+              <option value="" >Any Time</option>
+            
+              <option value="d" >Past Day</option>
+            
+              <option value="w" >Past Week</option>
+            
+              <option value="m" >Past Month</option>
+            
+              <option value="y" selected>Past Year</option>
+            
+          </select>
+        </div>
+      </form>
+    </div>
+
+    
+
+    
+      <!-- Web results are present -->
+      <div>
+        <div class="serp__results">
+          <div id="links" class="results">
+            
+
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://www.sitelock.com/blog/top-10-owasp-vulnerabilities/">OWASP Top 10 Vulnerabilities - The Latest List | SiteLock</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://www.sitelock.com/blog/top-10-owasp-vulnerabilities/">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.sitelock.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://www.sitelock.com/blog/top-10-owasp-vulnerabilities/">
+                            www.sitelock.com/blog/top-10-owasp-vulnerabilities/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-08-29T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://www.sitelock.com/blog/top-10-owasp-vulnerabilities/">The <b>OWASP</b> <b>Top</b> <b>10</b> is a list of web application <b>vulnerabilities</b> representing today&#x27;s biggest cybersecurity threats. See the list &amp; learn about the 2025 update.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://www.invicti.com/blog/web-security/owasp-top-10">OWASP Top 10 for 2025 - Invicti</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://www.invicti.com/blog/web-security/owasp-top-10">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.invicti.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://www.invicti.com/blog/web-security/owasp-top-10">
+                            www.invicti.com/blog/web-security/owasp-top-10
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-11-14T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://www.invicti.com/blog/web-security/owasp-top-10">Broken access control, security misconfigurations, and software supply chain risks <b>top</b> the updated <b>OWASP</b> <b>Top</b> <b>10</b> for 2025. Learn what&#x27;s new and changed in the latest edition of the most popular <b>OWASP</b> software security document.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://securityboulevard.com/2025/05/the-owasp-top-10-vulnerabilities/">The OWASP Top 10 Vulnerabilities - Security Boulevard</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://securityboulevard.com/2025/05/the-owasp-top-10-vulnerabilities/">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/securityboulevard.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://securityboulevard.com/2025/05/the-owasp-top-10-vulnerabilities/">
+                            securityboulevard.com/2025/05/the-owasp-top-10-vulnerabilities/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-05-29T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://securityboulevard.com/2025/05/the-owasp-top-10-vulnerabilities/">What is the <b>OWASP</b> <b>Top</b> <b>10</b>? The <b>OWASP</b> <b>Top</b> <b>10</b> is a security research project that outlines the ten most critical security risks to web applications. Published by the Open Worldwide Application Security Project (<b>OWASP</b>), it serves as a widely recognized benchmark for web application security. The list is ...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://www.webasha.com/blog/understanding-owasp-top-10-vulnerabilities-with-real-world-examples-and-prevention-tips">Understanding OWASP Top 10 Vulnerabilities in 2026 with Real-World ...</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://www.webasha.com/blog/understanding-owasp-top-10-vulnerabilities-with-real-world-examples-and-prevention-tips">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.webasha.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://www.webasha.com/blog/understanding-owasp-top-10-vulnerabilities-with-real-world-examples-and-prevention-tips">
+                            www.webasha.com/blog/understanding-owasp-top-10-vulnerabilities-with-real-world-examples-and-prevention-tips
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-05-12T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://www.webasha.com/blog/understanding-owasp-top-10-vulnerabilities-with-real-world-examples-and-prevention-tips">Explore the <b>OWASP</b> <b>Top</b> <b>10</b> <b>vulnerabilities</b> of 2025 with real-world examples, risks, and proven prevention strategies. Stay ahead of threats with this expert guide to web application security.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://www.geeksforgeeks.org/ethical-hacking/owasp-top-10-vulnerabilities-and-preventions/">OWASP Top 10 Vulnerabilities - GeeksforGeeks</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://www.geeksforgeeks.org/ethical-hacking/owasp-top-10-vulnerabilities-and-preventions/">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.geeksforgeeks.org.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://www.geeksforgeeks.org/ethical-hacking/owasp-top-10-vulnerabilities-and-preventions/">
+                            www.geeksforgeeks.org/ethical-hacking/owasp-top-10-vulnerabilities-and-preventions/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-12-17T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://www.geeksforgeeks.org/ethical-hacking/owasp-top-10-vulnerabilities-and-preventions/"><b>OWASP</b> stands for the Open Web Application Security Project. It is a non-profit global online community consisting of tens of thousands of members and hundreds of chapters that produces articles, documentation, tools, and technologies in the field of web application security. <b>OWASP</b> releases the <b>Top</b> <b>10</b> Web Application Security Risks every 3-4 years based on real-world vulnerability data. The ...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://blog.securelayer7.net/owasp-top-10-security-risks/">OWASP Top 10 Security Risks (2025): A Comprehensive Guide</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://blog.securelayer7.net/owasp-top-10-security-risks/">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/blog.securelayer7.net.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://blog.securelayer7.net/owasp-top-10-security-risks/">
+                            blog.securelayer7.net/owasp-top-10-security-risks/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-07-23T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://blog.securelayer7.net/owasp-top-10-security-risks/">What are the <b>OWASP</b> <b>Top</b> <b>10</b> Risks? The Open Web Application Security Project, also known as <b>OWASP</b>, is a non-profit organization that ranks the most critical security risks facing web applications. <b>OWASP</b> <b>Top</b> <b>10</b> security risks, updated usually every four years, are based on the severity of <b>vulnerabilities</b>, compiled with the inputs received from thousands of real security professionals around the ...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://www.reflectiz.com/blog/owasp-top-ten-2025/">OWASP Top Ten 2025 - The Complete Guide - Reflectiz</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://www.reflectiz.com/blog/owasp-top-ten-2025/">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.reflectiz.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://www.reflectiz.com/blog/owasp-top-ten-2025/">
+                            www.reflectiz.com/blog/owasp-top-ten-2025/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-08-26T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://www.reflectiz.com/blog/owasp-top-ten-2025/"><b>OWASP</b> <b>top</b> ten 2025 is a big deal because this list of the <b>10</b> most serious web app security <b>vulnerabilities</b> ranks them in order of risk.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://parrot-ctfs.com/blog/owasp-top-10-security-vulnerabilities-complete-guide-with-ctf-training-examples/">OWASP Top 10 Security Vulnerabilities: Complete Guide with CTF Training ...</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://parrot-ctfs.com/blog/owasp-top-10-security-vulnerabilities-complete-guide-with-ctf-training-examples/">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/parrot-ctfs.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://parrot-ctfs.com/blog/owasp-top-10-security-vulnerabilities-complete-guide-with-ctf-training-examples/">
+                            parrot-ctfs.com/blog/owasp-top-10-security-vulnerabilities-complete-guide-with-ctf-training-examples/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-09-21T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://parrot-ctfs.com/blog/owasp-top-10-security-vulnerabilities-complete-guide-with-ctf-training-examples/">The <b>OWASP</b> <b>Top</b> <b>10</b> represents the foundation of web application security knowledge that every cybersecurity professional must master. Traditional training methods often fall short of providing the practical, hands-on experience needed to truly understand these <b>vulnerabilities</b> and their real-world impact.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://www.appsecmaster.net/blog/a-complete-guide-to-owasp-top-10-vulnerabilities/">A Complete Guide to OWASP Top 10 Vulnerabilities</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://www.appsecmaster.net/blog/a-complete-guide-to-owasp-top-10-vulnerabilities/">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.appsecmaster.net.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://www.appsecmaster.net/blog/a-complete-guide-to-owasp-top-10-vulnerabilities/">
+                            www.appsecmaster.net/blog/a-complete-guide-to-owasp-top-10-vulnerabilities/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-10-03T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://www.appsecmaster.net/blog/a-complete-guide-to-owasp-top-10-vulnerabilities/">The <b>OWASP</b> <b>Top</b> <b>10</b> vulnerability Guide is a community-driven list that highlights the most critical web application security risks. It&#x27;s not a standards body, but its guidance is widely used as a baseline for secure development, audits, and training.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="https://www.jit.io/resources/security-standards/the-in-depth-guide-to-owasps-top-10-vulnerabilities">The In-Depth Guide to OWASP Top 10 Vulnerabilities | Jit</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="https://www.jit.io/resources/security-standards/the-in-depth-guide-to-owasps-top-10-vulnerabilities">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.jit.io.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="https://www.jit.io/resources/security-standards/the-in-depth-guide-to-owasps-top-10-vulnerabilities">
+                            www.jit.io/resources/security-standards/the-in-depth-guide-to-owasps-top-10-vulnerabilities
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-08-07T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="https://www.jit.io/resources/security-standards/the-in-depth-guide-to-owasps-top-10-vulnerabilities">Learn about the latest <b>OWASP</b> <b>Top</b> <b>10</b> list of the most common web application security risks and how to prevent them. Find out how Jit Security can help you automate vulnerability scanning and prioritization within your development environment.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+
+            
+              
+              
+                <div class="nav-link">
+                  <form action="/html/" method="post">
+                    <input type="submit" class='btn btn--alt' value="Next" />
+                    <input type="hidden" name="q" value="OWASP top 10 vulnerabilities" />
+                    <input type="hidden" name="s" value="10" />
+                    <input type="hidden" name="nextParams" value="" />
+                    <input type="hidden" name="v" value="l" />
+                    <input type="hidden" name="o" value="json" />
+                    <input type="hidden" name="dc" value="11" />
+                    <input type="hidden" name="api" value="d.js" />
+                    <input type="hidden" name="vqd" value="4-101456713114988443812322561904529168264" />
+
+                    
+                    
+                    
+                      <input name="kl" value="us-en" type="hidden" />
+                    
+                    
+                    
+                    
+                      <input name="df" value="y" type="hidden" />
+                    
+                  </form>
+                </div>
+              
+            
+
+            <div class="feedback-btn">
+              <a rel="nofollow" href="//duckduckgo.com/feedback.html" target="_new">Feedback</a>
+            </div>
+            <div class="clear"></div>
+          </div>
+        </div>
+      </div> <!-- links wrapper //-->
+    
+  </div>
+
+  <div id="bottom_spacing2"></div>
+
+  
+    <img src="//duckduckgo.com/t/sl_h"/>
+  
+</body>
+</html>

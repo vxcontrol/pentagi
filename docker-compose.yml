@@ -1,0 +1,249 @@
+volumes:
+  pentagi-data:
+    driver: local
+  pentagi-ssl:
+    driver: local
+  pentagi-ollama:
+    driver: local
+  scraper-ssl:
+    driver: local
+  pentagi-postgres-data:
+    driver: local
+
+networks:
+  pentagi-network:
+    driver: bridge
+    name: pentagi-network
+  observability-network:
+    driver: bridge
+    name: observability-network
+  langfuse-network:
+    driver: bridge
+    name: langfuse-network
+
+services:
+  pentagi:
+    image: ${PENTAGI_IMAGE:-vxcontrol/pentagi:latest}
+    restart: unless-stopped
+    container_name: pentagi
+    hostname: pentagi
+    expose:
+      - 8443/tcp
+    ports:
+      - ${PENTAGI_LISTEN_IP:-127.0.0.1}:${PENTAGI_LISTEN_PORT:-8443}:8443
+    depends_on:
+      pgvector:
+        condition: service_started
+    environment:
+      - DEBUG=${DEBUG:-false}
+      - DOCKER_GID=998
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - COOKIE_SIGNING_SALT=${COOKIE_SIGNING_SALT:-}
+      - INSTALLATION_ID=${INSTALLATION_ID:-}
+      - LICENSE_KEY=${LICENSE_KEY:-}
+      - ASK_USER=${ASK_USER:-false}
+      - OPEN_AI_KEY=${OPEN_AI_KEY:-}
+      - OPEN_AI_SERVER_URL=${OPEN_AI_SERVER_URL:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_SERVER_URL=${ANTHROPIC_SERVER_URL:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_SERVER_URL=${GEMINI_SERVER_URL:-}
+      - BEDROCK_REGION=${BEDROCK_REGION:-}
+      - BEDROCK_DEFAULT_AUTH=${BEDROCK_DEFAULT_AUTH:-}
+      - BEDROCK_BEARER_TOKEN=${BEDROCK_BEARER_TOKEN:-}
+      - BEDROCK_ACCESS_KEY_ID=${BEDROCK_ACCESS_KEY_ID:-}
+      - BEDROCK_SECRET_ACCESS_KEY=${BEDROCK_SECRET_ACCESS_KEY:-}
+      - BEDROCK_SESSION_TOKEN=${BEDROCK_SESSION_TOKEN:-}
+      - BEDROCK_SERVER_URL=${BEDROCK_SERVER_URL:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_SERVER_URL=${DEEPSEEK_SERVER_URL:-}
+      - DEEPSEEK_PROVIDER=${DEEPSEEK_PROVIDER:-}
+      - GLM_API_KEY=${GLM_API_KEY:-}
+      - GLM_SERVER_URL=${GLM_SERVER_URL:-}
+      - GLM_PROVIDER=${GLM_PROVIDER:-}
+      - KIMI_API_KEY=${KIMI_API_KEY:-}
+      - KIMI_SERVER_URL=${KIMI_SERVER_URL:-}
+      - KIMI_PROVIDER=${KIMI_PROVIDER:-}
+      - QWEN_API_KEY=${QWEN_API_KEY:-}
+      - QWEN_SERVER_URL=${QWEN_SERVER_URL:-}
+      - QWEN_PROVIDER=${QWEN_PROVIDER:-}
+      - LLM_SERVER_URL=${LLM_SERVER_URL:-}
+      - LLM_SERVER_KEY=${LLM_SERVER_KEY:-}
+      - LLM_SERVER_MODEL=${LLM_SERVER_MODEL:-}
+      - LLM_SERVER_PROVIDER=${LLM_SERVER_PROVIDER:-}
+      - LLM_SERVER_CONFIG_PATH=${LLM_SERVER_CONFIG_PATH:-}
+      - LLM_SERVER_LEGACY_REASONING=${LLM_SERVER_LEGACY_REASONING:-}
+      - LLM_SERVER_PRESERVE_REASONING=${LLM_SERVER_PRESERVE_REASONING:-}
+      - OLLAMA_SERVER_URL=${OLLAMA_SERVER_URL:-}
+      - OLLAMA_SERVER_API_KEY=${OLLAMA_SERVER_API_KEY:-}
+      - OLLAMA_SERVER_MODEL=${OLLAMA_SERVER_MODEL:-}
+      - OLLAMA_SERVER_CONFIG_PATH=${OLLAMA_SERVER_CONFIG_PATH:-}
+      - OLLAMA_SERVER_PULL_MODELS_TIMEOUT=${OLLAMA_SERVER_PULL_MODELS_TIMEOUT:-}
+      - OLLAMA_SERVER_PULL_MODELS_ENABLED=${OLLAMA_SERVER_PULL_MODELS_ENABLED:-}
+      - OLLAMA_SERVER_LOAD_MODELS_ENABLED=${OLLAMA_SERVER_LOAD_MODELS_ENABLED:-}
+      - EMBEDDING_URL=${EMBEDDING_URL:-}
+      - EMBEDDING_KEY=${EMBEDDING_KEY:-}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}
+      - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-}
+      - EMBEDDING_STRIP_NEW_LINES=${EMBEDDING_STRIP_NEW_LINES:-}
+      - SUMMARIZER_PRESERVE_LAST=${SUMMARIZER_PRESERVE_LAST:-}
+      - SUMMARIZER_USE_QA=${SUMMARIZER_USE_QA:-}
+      - SUMMARIZER_SUM_MSG_HUMAN_IN_QA=${SUMMARIZER_SUM_MSG_HUMAN_IN_QA:-}
+      - SUMMARIZER_LAST_SEC_BYTES=${SUMMARIZER_LAST_SEC_BYTES:-}
+      - SUMMARIZER_MAX_BP_BYTES=${SUMMARIZER_MAX_BP_BYTES:-}
+      - SUMMARIZER_MAX_QA_SECTIONS=${SUMMARIZER_MAX_QA_SECTIONS:-}
+      - SUMMARIZER_MAX_QA_BYTES=${SUMMARIZER_MAX_QA_BYTES:-}
+      - SUMMARIZER_KEEP_QA_SECTIONS=${SUMMARIZER_KEEP_QA_SECTIONS:-}
+      - ASSISTANT_USE_AGENTS=${ASSISTANT_USE_AGENTS:-}
+      - ASSISTANT_SUMMARIZER_PRESERVE_LAST=${ASSISTANT_SUMMARIZER_PRESERVE_LAST:-}
+      - ASSISTANT_SUMMARIZER_LAST_SEC_BYTES=${ASSISTANT_SUMMARIZER_LAST_SEC_BYTES:-}
+      - ASSISTANT_SUMMARIZER_MAX_BP_BYTES=${ASSISTANT_SUMMARIZER_MAX_BP_BYTES:-}
+      - ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS=${ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS:-}
+      - ASSISTANT_SUMMARIZER_MAX_QA_BYTES=${ASSISTANT_SUMMARIZER_MAX_QA_BYTES:-}
+      - ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS=${ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS:-}
+      - EXECUTION_MONITOR_ENABLED=${EXECUTION_MONITOR_ENABLED:-}
+      - EXECUTION_MONITOR_SAME_TOOL_LIMIT=${EXECUTION_MONITOR_SAME_TOOL_LIMIT:-}
+      - EXECUTION_MONITOR_TOTAL_TOOL_LIMIT=${EXECUTION_MONITOR_TOTAL_TOOL_LIMIT:-}
+      - MAX_GENERAL_AGENT_TOOL_CALLS=${MAX_GENERAL_AGENT_TOOL_CALLS:-}
+      - MAX_LIMITED_AGENT_TOOL_CALLS=${MAX_LIMITED_AGENT_TOOL_CALLS:-}
+      - AGENT_PLANNING_STEP_ENABLED=${AGENT_PLANNING_STEP_ENABLED:-}
+      - PROXY_URL=${PROXY_URL:-}
+      - EXTERNAL_SSL_CA_PATH=${EXTERNAL_SSL_CA_PATH:-}
+      - EXTERNAL_SSL_INSECURE=${EXTERNAL_SSL_INSECURE:-}
+      - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-}
+      - SCRAPER_PUBLIC_URL=${SCRAPER_PUBLIC_URL:-}
+      - SCRAPER_PRIVATE_URL=${SCRAPER_PRIVATE_URL:-}
+      - GRAPHITI_ENABLED=${GRAPHITI_ENABLED:-}
+      - GRAPHITI_TIMEOUT=${GRAPHITI_TIMEOUT:-}
+      - GRAPHITI_URL=${GRAPHITI_URL:-}
+      - PUBLIC_URL=${PUBLIC_URL:-}
+      - STATIC_DIR=${STATIC_DIR:-}
+      - STATIC_URL=${STATIC_URL:-}
+      - SERVER_PORT=${SERVER_PORT:-8443}
+      - SERVER_HOST=${SERVER_HOST:-0.0.0.0}
+      - SERVER_SSL_CRT=${SERVER_SSL_CRT:-}
+      - SERVER_SSL_KEY=${SERVER_SSL_KEY:-}
+      - SERVER_USE_SSL=${SERVER_USE_SSL:-true}
+      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
+      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID:-}
+      - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET:-}
+      - DATABASE_URL=postgres://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
+      - DUCKDUCKGO_ENABLED=${DUCKDUCKGO_ENABLED:-}
+      - DUCKDUCKGO_REGION=${DUCKDUCKGO_REGION:-}
+      - DUCKDUCKGO_SAFESEARCH=${DUCKDUCKGO_SAFESEARCH:-}
+      - DUCKDUCKGO_TIME_RANGE=${DUCKDUCKGO_TIME_RANGE:-}
+      - SPLOITUS_ENABLED=${SPLOITUS_ENABLED:-}
+      - SEARXNG_URL=${SEARXNG_URL:-}
+      - SEARXNG_CATEGORIES=${SEARXNG_CATEGORIES:-}
+      - SEARXNG_LANGUAGE=${SEARXNG_LANGUAGE:-}
+      - SEARXNG_SAFESEARCH=${SEARXNG_SAFESEARCH:-}
+      - SEARXNG_TIME_RANGE=${SEARXNG_TIME_RANGE:-}
+      - SEARXNG_TIMEOUT=${SEARXNG_TIMEOUT:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GOOGLE_CX_KEY=${GOOGLE_CX_KEY:-}
+      - GOOGLE_LR_KEY=${GOOGLE_LR_KEY:-}
+      - TRAVERSAAL_API_KEY=${TRAVERSAAL_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      - PERPLEXITY_MODEL=${PERPLEXITY_MODEL:-sonar}
+      - PERPLEXITY_CONTEXT_SIZE=${PERPLEXITY_CONTEXT_SIZE:-low}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
+      - LANGFUSE_PROJECT_ID=${LANGFUSE_PROJECT_ID:-}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - OTEL_HOST=${OTEL_HOST:-}
+      - DOCKER_HOST=${DOCKER_HOST:-unix:///var/run/docker.sock}
+      - DOCKER_TLS_VERIFY=${DOCKER_TLS_VERIFY:-}
+      - DOCKER_CERT_PATH=${DOCKER_CERT_PATH:-}
+      - DOCKER_INSIDE=${DOCKER_INSIDE:-false}
+      - DOCKER_NET_ADMIN=${DOCKER_NET_ADMIN:-false}
+      - DOCKER_SOCKET=${DOCKER_SOCKET:-}
+      - DOCKER_NETWORK=${DOCKER_NETWORK:-}
+      - DOCKER_PUBLIC_IP=${DOCKER_PUBLIC_IP:-}
+      - DOCKER_WORK_DIR=${DOCKER_WORK_DIR:-}
+      - DOCKER_DEFAULT_IMAGE=${DOCKER_DEFAULT_IMAGE:-}
+      - DOCKER_DEFAULT_IMAGE_FOR_PENTEST=${DOCKER_DEFAULT_IMAGE_FOR_PENTEST:-}
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - ${PENTAGI_DATA_DIR:-pentagi-data}:/opt/pentagi/data
+      - ${PENTAGI_SSL_DIR:-pentagi-ssl}:/opt/pentagi/ssl
+      - ${PENTAGI_OLLAMA_DIR:-pentagi-ollama}:/root/.ollama
+      - ${PENTAGI_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${PENTAGI_LLM_SERVER_CONFIG_PATH:-./example.custom.provider.yml}:/opt/pentagi/conf/custom.provider.yml
+      - ${PENTAGI_OLLAMA_SERVER_CONFIG_PATH:-./example.ollama.provider.yml}:/opt/pentagi/conf/ollama.provider.yml
+      - ${PENTAGI_DOCKER_CERT_PATH:-./docker-ssl}:/opt/pentagi/docker/ssl
+    user: root:root # while using docker.sock
+    networks:
+      - pentagi-network
+      - observability-network
+      - langfuse-network
+
+  pgvector:
+    image: vxcontrol/pgvector:latest
+    restart: unless-stopped
+    container_name: pgvector
+    hostname: pgvector
+    expose:
+      - 5432/tcp
+    ports:
+      - ${PGVECTOR_LISTEN_IP:-127.0.0.1}:${PGVECTOR_LISTEN_PORT:-5432}:5432
+    environment:
+      POSTGRES_USER: ${PENTAGI_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${PENTAGI_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${PENTAGI_POSTGRES_DB:-pentagidb}
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - pentagi-postgres-data:/var/lib/postgresql/data
+    networks:
+      - pentagi-network
+
+  pgexporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    restart: unless-stopped
+    depends_on:
+      - pgvector
+    container_name: pgexporter
+    hostname: pgexporter
+    expose:
+      - 9187/tcp
+    ports:
+      - ${POSTGRES_EXPORTER_LISTEN_IP:-127.0.0.1}:${POSTGRES_EXPORTER_LISTEN_PORT:-9187}:9187
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${PENTAGI_POSTGRES_USER:-postgres}:${PENTAGI_POSTGRES_PASSWORD:-postgres}@pgvector:5432/${PENTAGI_POSTGRES_DB:-pentagidb}?sslmode=disable
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    networks:
+      - pentagi-network
+
+  scraper:
+    image: vxcontrol/scraper:latest
+    restart: unless-stopped
+    container_name: scraper
+    hostname: scraper
+    expose:
+      - 443/tcp
+    ports:
+      - ${SCRAPER_LISTEN_IP:-127.0.0.1}:${SCRAPER_LISTEN_PORT:-9443}:443
+    environment:
+      - MAX_CONCURRENT_SESSIONS=${LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS:-10}
+      - USERNAME=${LOCAL_SCRAPER_USERNAME:-someuser}
+      - PASSWORD=${LOCAL_SCRAPER_PASSWORD:-somepass}
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - scraper-ssl:/usr/src/app/ssl
+    networks:
+      - pentagi-network
+    shm_size: 2g

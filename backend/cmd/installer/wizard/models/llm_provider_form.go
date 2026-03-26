@@ -1,0 +1,796 @@
+package models
+
+import (
+	"fmt"
+	"os"
+	"slices"
+	"strings"
+
+	"pentagi/cmd/installer/wizard/controller"
+	"pentagi/cmd/installer/wizard/locale"
+	"pentagi/cmd/installer/wizard/logger"
+	"pentagi/cmd/installer/wizard/styles"
+	"pentagi/cmd/installer/wizard/window"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// LLMProviderFormModel represents the LLM Provider configuration form
+type LLMProviderFormModel struct {
+	*BaseScreen
+
+	// screen-specific components
+	providerID   LLMProviderID
+	providerName string
+}
+
+// NewLLMProviderFormModel creates a new LLM Provider form model
+func NewLLMProviderFormModel(
+	c controller.Controller, s styles.Styles, w window.Window, pid LLMProviderID,
+) *LLMProviderFormModel {
+	m := &LLMProviderFormModel{
+		providerID:   pid,
+		providerName: c.GetLLMProviderConfig(string(pid)).Name,
+	}
+
+	// create base screen with this model as handler (no list handler needed)
+	m.BaseScreen = NewBaseScreen(c, s, w, m, nil)
+
+	return m
+}
+
+// BaseScreenHandler interface implementation
+
+func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
+	config := m.GetController().GetLLMProviderConfig(string(m.providerID))
+	fields := []FormField{}
+
+	// Add fields based on provider type
+	switch m.providerID {
+	case LLMProviderOpenAI, LLMProviderAnthropic, LLMProviderGemini:
+		fields = append(fields, m.createBaseURLField(config))
+		fields = append(fields, m.createAPIKeyField(config))
+
+	case LLMProviderBedrock:
+		fields = append(fields, m.createRegionField(config))
+		fields = append(fields, m.createDefaultAuthField(config))
+		fields = append(fields, m.createBearerTokenField(config))
+		fields = append(fields, m.createAccessKeyField(config))
+		fields = append(fields, m.createSecretKeyField(config))
+		fields = append(fields, m.createSessionTokenField(config))
+		fields = append(fields, m.createBaseURLField(config))
+
+	case LLMProviderOllama:
+		fields = append(fields, m.createBaseURLField(config))
+		fields = append(fields, m.createOllamaAPIKeyField(config))
+		fields = append(fields, m.createModelField(config))
+		fields = append(fields, m.createConfigPathField(config))
+		fields = append(fields, m.createPullTimeoutField(config))
+		fields = append(fields, m.createPullEnabledField(config))
+		fields = append(fields, m.createLoadModelsEnabledField(config))
+
+	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen:
+		fields = append(fields, m.createBaseURLField(config))
+		fields = append(fields, m.createAPIKeyField(config))
+		fields = append(fields, m.createProviderNameField(config))
+
+	case LLMProviderCustom:
+		fields = append(fields, m.createBaseURLField(config))
+		fields = append(fields, m.createAPIKeyField(config))
+		fields = append(fields, m.createModelField(config))
+		fields = append(fields, m.createConfigPathField(config))
+		fields = append(fields, m.createLegacyReasoningField(config))
+		fields = append(fields, m.createPreserveReasoningField(config))
+		fields = append(fields, m.createProviderNameField(config))
+	}
+
+	m.SetFormFields(fields)
+	return nil
+}
+
+func (m *LLMProviderFormModel) createBaseURLField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.BaseURL)
+	input.Placeholder = m.getDefaultBaseURL()
+
+	return FormField{
+		Key:         "base_url",
+		Title:       locale.LLMFormFieldBaseURL,
+		Description: locale.LLMFormBaseURLDesc,
+		Required:    true,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createAPIKeyField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.APIKey)
+
+	return FormField{
+		Key:         "api_key",
+		Title:       locale.LLMFormFieldAPIKey,
+		Description: locale.LLMFormAPIKeyDesc,
+		Required:    true,
+		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createDefaultAuthField(config *controller.LLMProviderConfig) FormField {
+	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.DefaultAuth)
+
+	return FormField{
+		Key:         "default_auth",
+		Title:       locale.LLMFormFieldDefaultAuth,
+		Description: locale.LLMFormDefaultAuthDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createBearerTokenField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.BearerToken)
+
+	return FormField{
+		Key:         "bearer_token",
+		Title:       locale.LLMFormFieldBearerToken,
+		Description: locale.LLMFormBearerTokenDesc,
+		Required:    false,
+		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createAccessKeyField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.AccessKey)
+
+	return FormField{
+		Key:         "access_key",
+		Title:       locale.LLMFormFieldAccessKey,
+		Description: locale.LLMFormAccessKeyDesc,
+		Required:    false,
+		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createSecretKeyField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.SecretKey)
+
+	return FormField{
+		Key:         "secret_key",
+		Title:       locale.LLMFormFieldSecretKey,
+		Description: locale.LLMFormSecretKeyDesc,
+		Required:    false,
+		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createSessionTokenField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.SessionToken)
+
+	return FormField{
+		Key:         "session_token",
+		Title:       locale.LLMFormFieldSessionToken,
+		Description: locale.LLMFormSessionTokenDesc,
+		Required:    false,
+		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createRegionField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.Region)
+	input.Placeholder = "us-east-1"
+
+	return FormField{
+		Key:         "region",
+		Title:       locale.LLMFormFieldRegion,
+		Description: locale.LLMFormRegionDesc,
+		Required:    true,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createModelField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.Model)
+
+	return FormField{
+		Key:         "model",
+		Title:       locale.LLMFormFieldModel,
+		Description: locale.LLMFormModelDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createConfigPathField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.HostConfigPath)
+	if config.HostConfigPath.Default == "" {
+		input.Placeholder = "/opt/pentagi/conf/config.yml"
+	}
+
+	return FormField{
+		Key:         "config_path",
+		Title:       locale.LLMFormFieldConfigPath,
+		Description: locale.LLMFormConfigPathDesc,
+		Suggestions: config.EmbeddedLLMConfigsPath,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createLegacyReasoningField(config *controller.LLMProviderConfig) FormField {
+	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.LegacyReasoning)
+
+	return FormField{
+		Key:         "legacy_reasoning",
+		Title:       locale.LLMFormFieldLegacyReasoning,
+		Description: locale.LLMFormLegacyReasoningDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createPreserveReasoningField(config *controller.LLMProviderConfig) FormField {
+	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.PreserveReasoning)
+
+	return FormField{
+		Key:         "preserve_reasoning",
+		Title:       locale.LLMFormFieldPreserveReasoning,
+		Description: locale.LLMFormPreserveReasoningDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createProviderNameField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.ProviderName)
+	input.Placeholder = "openrouter"
+
+	return FormField{
+		Key:         "provider_name",
+		Title:       locale.LLMFormFieldProviderName,
+		Description: locale.LLMFormProviderNameDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createPullTimeoutField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.PullTimeout)
+	input.Placeholder = config.PullTimeout.Default
+
+	return FormField{
+		Key:         "pull_timeout",
+		Title:       locale.LLMFormFieldPullTimeout,
+		Description: locale.LLMFormPullTimeoutDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createPullEnabledField(config *controller.LLMProviderConfig) FormField {
+	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.PullEnabled)
+	input.Placeholder = config.PullEnabled.Default
+
+	return FormField{
+		Key:         "pull_enabled",
+		Title:       locale.LLMFormFieldPullEnabled,
+		Description: locale.LLMFormPullEnabledDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createLoadModelsEnabledField(config *controller.LLMProviderConfig) FormField {
+	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.LoadModelsEnabled)
+	input.Placeholder = config.LoadModelsEnabled.Default
+
+	return FormField{
+		Key:         "load_models_enabled",
+		Title:       locale.LLMFormFieldLoadModelsEnabled,
+		Description: locale.LLMFormLoadModelsEnabledDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: input.AvailableSuggestions(),
+	}
+}
+
+func (m *LLMProviderFormModel) createOllamaAPIKeyField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.APIKey)
+
+	return FormField{
+		Key:         "ollama_api_key",
+		Title:       locale.LLMFormFieldAPIKey,
+		Description: locale.LLMFormOllamaAPIKeyDesc,
+		Required:    false,
+		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) GetFormTitle() string {
+	return fmt.Sprintf(locale.LLMProviderFormTitle, m.providerName)
+}
+
+func (m *LLMProviderFormModel) GetFormDescription() string {
+	switch m.providerID {
+	case LLMProviderOpenAI:
+		return locale.LLMProviderOpenAIDesc
+	case LLMProviderAnthropic:
+		return locale.LLMProviderAnthropicDesc
+	case LLMProviderGemini:
+		return locale.LLMProviderGeminiDesc
+	case LLMProviderBedrock:
+		return locale.LLMProviderBedrockDesc
+	case LLMProviderOllama:
+		return locale.LLMProviderOllamaDesc
+	case LLMProviderDeepSeek:
+		return locale.LLMProviderDeepSeekDesc
+	case LLMProviderGLM:
+		return locale.LLMProviderGLMDesc
+	case LLMProviderKimi:
+		return locale.LLMProviderKimiDesc
+	case LLMProviderQwen:
+		return locale.LLMProviderQwenDesc
+	case LLMProviderCustom:
+		return locale.LLMProviderCustomDesc
+	default:
+		return locale.LLMProviderFormDescription
+	}
+}
+
+func (m *LLMProviderFormModel) GetFormName() string {
+	switch m.providerID {
+	case LLMProviderOpenAI:
+		return locale.LLMProviderOpenAI
+	case LLMProviderAnthropic:
+		return locale.LLMProviderAnthropic
+	case LLMProviderGemini:
+		return locale.LLMProviderGemini
+	case LLMProviderBedrock:
+		return locale.LLMProviderBedrock
+	case LLMProviderOllama:
+		return locale.LLMProviderOllama
+	case LLMProviderDeepSeek:
+		return locale.LLMProviderDeepSeek
+	case LLMProviderGLM:
+		return locale.LLMProviderGLM
+	case LLMProviderKimi:
+		return locale.LLMProviderKimi
+	case LLMProviderQwen:
+		return locale.LLMProviderQwen
+	case LLMProviderCustom:
+		return locale.LLMProviderCustom
+	default:
+		return fmt.Sprintf(locale.LLMProviderFormName, m.providerName)
+	}
+}
+
+func (m *LLMProviderFormModel) GetFormSummary() string {
+	return ""
+}
+
+func (m *LLMProviderFormModel) GetFormOverview() string {
+	var sections []string
+
+	sections = append(sections, m.GetStyles().Subtitle.Render(fmt.Sprintf(locale.LLMProviderFormTitle, m.providerName)))
+	sections = append(sections, "")
+	sections = append(sections, m.GetStyles().Paragraph.Bold(true).Render(locale.LLMProviderFormDescription))
+	sections = append(sections, "")
+	sections = append(sections, m.GetStyles().Paragraph.Render(locale.LLMProviderFormOverview))
+
+	return strings.Join(sections, "\n")
+}
+
+func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
+	var sections []string
+
+	sections = append(sections, m.GetStyles().Subtitle.Render(m.providerName))
+
+	config := m.GetController().GetLLMProviderConfig(string(m.providerID))
+
+	if config.Configured {
+		sections = append(sections, fmt.Sprintf("• %s%s",
+			locale.UIStatus, m.GetStyles().Success.Render(locale.StatusConfigured)))
+	} else {
+		sections = append(sections, fmt.Sprintf("• %s%s",
+			locale.UIStatus, m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
+	}
+
+	getMaskedValue := func(value string) string {
+		maskedValue := strings.Repeat("*", len(value))
+		if len(value) > 15 {
+			maskedValue = maskedValue[:15] + "..."
+		}
+		return maskedValue
+	}
+
+	// Show configured fields (without values for security)
+	switch m.providerID {
+	case LLMProviderOpenAI, LLMProviderAnthropic, LLMProviderGemini:
+		if config.BaseURL.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
+		}
+		if config.APIKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldAPIKey, m.GetStyles().Muted.Render(getMaskedValue(config.APIKey.Value))))
+		}
+
+	case LLMProviderBedrock:
+		if config.Region.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldRegion, m.GetStyles().Info.Render(config.Region.Value)))
+		}
+		if config.DefaultAuth.Value == "true" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldDefaultAuth, m.GetStyles().Success.Render("enabled")))
+		}
+		if config.BearerToken.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBearerToken, m.GetStyles().Muted.Render(getMaskedValue(config.BearerToken.Value))))
+		}
+		if config.AccessKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldAccessKey, m.GetStyles().Muted.Render(getMaskedValue(config.AccessKey.Value))))
+		}
+		if config.SecretKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldSecretKey, m.GetStyles().Muted.Render(getMaskedValue(config.SecretKey.Value))))
+		}
+		if config.SessionToken.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldSessionToken, m.GetStyles().Muted.Render(getMaskedValue(config.SessionToken.Value))))
+		}
+		if config.BaseURL.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
+		}
+
+	case LLMProviderOllama:
+		if config.BaseURL.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(config.BaseURL.Value)))
+		}
+		if config.APIKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldAPIKey, m.GetStyles().Muted.Render(getMaskedValue(config.APIKey.Value))))
+		}
+		if config.Model.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldModel, m.GetStyles().Info.Render(config.Model.Value)))
+		}
+		if config.HostConfigPath.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldConfigPath, m.GetStyles().Info.Render(config.HostConfigPath.Value)))
+		}
+		if config.PullTimeout.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldPullTimeout, m.GetStyles().Info.Render(config.PullTimeout.Value)))
+		}
+		if config.PullEnabled.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldPullEnabled, m.GetStyles().Info.Render(config.PullEnabled.Value)))
+		}
+		if config.LoadModelsEnabled.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldLoadModelsEnabled, m.GetStyles().Info.Render(config.LoadModelsEnabled.Value)))
+		}
+
+	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen:
+		if config.BaseURL.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
+		}
+		if config.APIKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldAPIKey, m.GetStyles().Muted.Render(getMaskedValue(config.APIKey.Value))))
+		}
+		if config.ProviderName.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldProviderName, m.GetStyles().Info.Render(config.ProviderName.Value)))
+		}
+
+	case LLMProviderCustom:
+		if config.BaseURL.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(config.BaseURL.Value)))
+		}
+		if config.APIKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldAPIKey, m.GetStyles().Muted.Render(getMaskedValue(config.APIKey.Value))))
+		}
+		if config.Model.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldModel, m.GetStyles().Info.Render(config.Model.Value)))
+		}
+		if config.HostConfigPath.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldConfigPath, m.GetStyles().Info.Render(config.HostConfigPath.Value)))
+		}
+		if config.LegacyReasoning.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldLegacyReasoning, m.GetStyles().Info.Render(config.LegacyReasoning.Value)))
+		}
+		if config.PreserveReasoning.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldPreserveReasoning, m.GetStyles().Info.Render(config.PreserveReasoning.Value)))
+		}
+		if config.ProviderName.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldProviderName, m.GetStyles().Info.Render(config.ProviderName.Value)))
+		}
+	}
+
+	return strings.Join(sections, "\n")
+}
+
+func (m *LLMProviderFormModel) IsConfigured() bool {
+	return m.GetController().GetLLMProviderConfig(string(m.providerID)).Configured
+}
+
+func (m *LLMProviderFormModel) GetHelpContent() string {
+	var sections []string
+
+	sections = append(sections, m.GetStyles().Subtitle.Render(fmt.Sprintf(locale.LLMProviderFormTitle, m.providerName)))
+	sections = append(sections, "")
+
+	switch m.providerID {
+	case LLMProviderOpenAI:
+		sections = append(sections, locale.LLMFormOpenAIHelp)
+	case LLMProviderAnthropic:
+		sections = append(sections, locale.LLMFormAnthropicHelp)
+	case LLMProviderGemini:
+		sections = append(sections, locale.LLMFormGeminiHelp)
+	case LLMProviderBedrock:
+		sections = append(sections, locale.LLMFormBedrockHelp)
+	case LLMProviderOllama:
+		sections = append(sections, locale.LLMFormOllamaHelp)
+	case LLMProviderDeepSeek:
+		sections = append(sections, locale.LLMFormDeepSeekHelp)
+	case LLMProviderGLM:
+		sections = append(sections, locale.LLMFormGLMHelp)
+	case LLMProviderKimi:
+		sections = append(sections, locale.LLMFormKimiHelp)
+	case LLMProviderQwen:
+		sections = append(sections, locale.LLMFormQwenHelp)
+	case LLMProviderCustom:
+		sections = append(sections, locale.LLMFormCustomHelp)
+	}
+
+	return strings.Join(sections, "\n")
+}
+
+func (m *LLMProviderFormModel) HandleSave() error {
+	config := m.GetController().GetLLMProviderConfig(string(m.providerID))
+	fields := m.GetFormFields()
+
+	// create a working copy of the current config to modify
+	newConfig := &controller.LLMProviderConfig{
+		Name: config.Name,
+		// copy current EnvVar fields - they preserve metadata like Line, IsPresent, etc.
+		BaseURL:                config.BaseURL,
+		APIKey:                 config.APIKey,
+		Model:                  config.Model,
+		DefaultAuth:            config.DefaultAuth,
+		BearerToken:            config.BearerToken,
+		AccessKey:              config.AccessKey,
+		SecretKey:              config.SecretKey,
+		SessionToken:           config.SessionToken,
+		Region:                 config.Region,
+		ConfigPath:             config.ConfigPath,
+		HostConfigPath:         config.HostConfigPath,
+		LegacyReasoning:        config.LegacyReasoning,
+		PreserveReasoning:      config.PreserveReasoning,
+		ProviderName:           config.ProviderName,
+		PullTimeout:            config.PullTimeout,
+		PullEnabled:            config.PullEnabled,
+		LoadModelsEnabled:      config.LoadModelsEnabled,
+		EmbeddedLLMConfigsPath: config.EmbeddedLLMConfigsPath,
+	}
+
+	// update field values based on form input
+	for _, field := range fields {
+		value := strings.TrimSpace(field.Input.Value())
+
+		switch field.Key {
+		case "base_url":
+			newConfig.BaseURL.Value = value
+		case "api_key":
+			newConfig.APIKey.Value = value
+		case "model":
+			newConfig.Model.Value = value
+		case "default_auth":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for default auth: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.DefaultAuth.Value = value
+		case "bearer_token":
+			newConfig.BearerToken.Value = value
+		case "access_key":
+			newConfig.AccessKey.Value = value
+		case "secret_key":
+			newConfig.SecretKey.Value = value
+		case "session_token":
+			newConfig.SessionToken.Value = value
+		case "region":
+			newConfig.Region.Value = value
+		case "ollama_api_key":
+			newConfig.APIKey.Value = value
+		case "config_path":
+			// User edits HostConfigPath, ConfigPath is auto-generated on save
+			// validate config path if provided (skip validation for embedded configs)
+			if value != "" {
+				// embedded configs don't need validation (they're inside the docker image)
+				isEmbedded := slices.Contains(newConfig.EmbeddedLLMConfigsPath, value)
+
+				// only validate custom (non-embedded) configs on host filesystem
+				if !isEmbedded {
+					info, err := os.Stat(value)
+					if err != nil {
+						if os.IsNotExist(err) {
+							return fmt.Errorf("config file does not exist: %s", value)
+						}
+						return fmt.Errorf("cannot access config file %s: %v", value, err)
+					}
+					if info.IsDir() {
+						return fmt.Errorf("config path must be a file, not a directory: %s", value)
+					}
+				}
+			}
+			newConfig.HostConfigPath.Value = value
+		case "legacy_reasoning":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for legacy reasoning: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.LegacyReasoning.Value = value
+		case "preserve_reasoning":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for preserve reasoning: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.PreserveReasoning.Value = value
+		case "provider_name":
+			newConfig.ProviderName.Value = value
+		case "pull_timeout":
+			newConfig.PullTimeout.Value = value
+		case "pull_enabled":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for pull enabled: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.PullEnabled.Value = value
+		case "load_models_enabled":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for load models enabled: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.LoadModelsEnabled.Value = value
+		}
+	}
+
+	// determine if configured based on provider type
+	switch m.providerID {
+	case LLMProviderBedrock:
+		// Configured if any of three auth methods is set: DefaultAuth, BearerToken, or AccessKey+SecretKey
+		newConfig.Configured = newConfig.DefaultAuth.Value == "true" ||
+			newConfig.BearerToken.Value != "" ||
+			(newConfig.AccessKey.Value != "" && newConfig.SecretKey.Value != "")
+	case LLMProviderOllama:
+		newConfig.Configured = newConfig.BaseURL.Value != ""
+	default:
+		newConfig.Configured = newConfig.APIKey.Value != ""
+	}
+
+	// save the configuration
+	if err := m.GetController().UpdateLLMProviderConfig(string(m.providerID), newConfig); err != nil {
+		logger.Errorf("[LLMProviderFormModel] SAVE: error updating LLM provider config: %v", err)
+		return err
+	}
+
+	logger.Log("[LLMProviderFormModel] SAVE: success for provider %s", m.providerID)
+	return nil
+}
+
+func (m *LLMProviderFormModel) HandleReset() {
+	// reset config to defaults
+	m.GetController().ResetLLMProviderConfig(string(m.providerID))
+
+	// rebuild form with reset values
+	m.BuildForm()
+}
+
+func (m *LLMProviderFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue string) {
+	// additional validation could be added here if needed
+}
+
+func (m *LLMProviderFormModel) GetFormFields() []FormField {
+	return m.BaseScreen.fields
+}
+
+func (m *LLMProviderFormModel) SetFormFields(fields []FormField) {
+	m.BaseScreen.fields = fields
+}
+
+// Update method - handle screen-specific input
+func (m *LLMProviderFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		// then handle field input
+		if cmd := m.HandleFieldInput(msg); cmd != nil {
+			return m, cmd
+		}
+	}
+
+	// delegate to base screen for common handling
+	cmd := m.BaseScreen.Update(msg)
+	return m, cmd
+}
+
+// Helper methods
+
+func (m *LLMProviderFormModel) getDefaultBaseURL() string {
+	switch m.providerID {
+	case LLMProviderOpenAI:
+		return "https://api.openai.com/v1"
+	case LLMProviderAnthropic:
+		return "https://api.anthropic.com/v1"
+	case LLMProviderGemini:
+		return "https://generativelanguage.googleapis.com/v1beta"
+	case LLMProviderBedrock:
+		return "" // Bedrock uses regional endpoints
+	case LLMProviderOllama:
+		return "http://ollama-server:11434"
+	case LLMProviderDeepSeek:
+		return "https://api.deepseek.com"
+	case LLMProviderGLM:
+		return "https://api.z.ai/api/paas/v4"
+	case LLMProviderKimi:
+		return "https://api.moonshot.ai/v1"
+	case LLMProviderQwen:
+		return "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
+	case LLMProviderCustom:
+		return "http://llm-server:8000"
+	default:
+		return ""
+	}
+}
+
+// Compile-time interface validation
+var _ BaseScreenModel = (*LLMProviderFormModel)(nil)
+var _ BaseScreenHandler = (*LLMProviderFormModel)(nil)

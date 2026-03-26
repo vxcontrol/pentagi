@@ -1,0 +1,62 @@
+<execution_context>
+{{if .Task}}
+<global_task>
+{{.Task.Input}}
+</global_task>
+{{end}}
+
+<previous_tasks>
+{{if .Tasks}}
+{{range .Tasks}}
+<task>
+<id>{{.ID}}</id>
+<title>{{.Title}}</title>
+<status>{{.Status}}</status>
+</task>
+{{end}}
+{{else}}
+<status>none</status>
+<message>No previous tasks for the customer's input, Look at the global task above.</message>
+{{end}}
+</previous_tasks>
+
+<completed_subtasks>
+{{if .CompletedSubtasks}}
+{{range .CompletedSubtasks}}
+<subtask>
+<id>{{.ID}}</id>
+<title>{{.Title}}</title>
+<status>{{.Status}}</status>
+</subtask>
+{{end}}
+{{else}}
+<status>none</status>
+<message>No completed subtasks for the customer's task, it's the first subtask in the backlog.</message>
+{{end}}
+</completed_subtasks>
+
+{{if .Subtask}}
+<current_subtask>
+<id>{{.Subtask.ID}}</id>
+<title>{{.Subtask.Title}}</title>
+<description>{{.Subtask.Description}}</description>
+</current_subtask>
+{{else}}
+<status>none</status>
+<message>No current subtask for this task in progress. Look at the planned subtasks below and completed subtasks above.</message>
+{{end}}
+
+<planned_subtasks>
+{{if .PlannedSubtasks}}
+{{range .PlannedSubtasks}}
+<subtask>
+<id>{{.ID}}</id>
+<title>{{.Title}}</title>
+</subtask>
+{{end}}
+{{else}}
+<status>none</status>
+<message>No planned subtasks for this task in the backlog. All subtasks are completed{{if .Subtask}} except the current one{{end}}.</message>
+{{end}}
+</planned_subtasks>
+</execution_context>

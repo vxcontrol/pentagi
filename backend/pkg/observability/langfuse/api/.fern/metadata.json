@@ -1,0 +1,11 @@
+{
+  "cliVersion": "3.69.0",
+  "generatorName": "fernapi/fern-go-sdk",
+  "generatorVersion": "1.24.0",
+  "generatorConfig": {
+    "importPath": "pentagi/pkg/observability/langfuse/api",
+    "packageName": "api",
+    "inlinePathParameters": true,
+    "enableWireTests": false
+  }
+}

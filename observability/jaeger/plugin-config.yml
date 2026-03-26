@@ -1,0 +1,49 @@
+address: clickstore:9000
+# Directory with .sql files to run at plugin startup, mainly for integration tests.
+# Depending on the value of "init_tables", this can be run as a
+# replacement or supplement to creating default tables for span storage.
+# If init_tables is also enabled, the scripts in this directory will be run first.
+init_sql_scripts_dir:
+# Whether to automatically attempt to create tables in ClickHouse.
+# By default, this is enabled if init_sql_scripts_dir is empty,
+# or disabled if init_sql_scripts_dir is provided.
+init_tables:
+# Maximal amount of spans that can be pending writes at a time.
+# New spans exceeding this limit will be discarded,
+# keeping memory in check if there are issues writing to ClickHouse.
+# Check the "jaeger_clickhouse_discarded_spans" metric to keep track of discards.
+# If 0, no limit is set. Default 10_000_000.
+max_span_count:
+# Batch write size. Default 10_000.
+batch_write_size:
+# Batch flush interval. Default 5s.
+batch_flush_interval:
+# Encoding of stored data. Either json or protobuf. Default json.
+encoding:
+# Path to CA TLS certificate.
+ca_file:
+# Username for connection to ClickHouse. Default is "default".
+username: clickhouse
+# Password for connection to ClickHouse.
+password: clickhouse
+# ClickHouse database name. The database must be created manually before Jaeger starts. Default is "default".
+database: jaeger
+# If non-empty, enables a tenant column in tables, and uses the provided tenant name for this instance.
+# Default is empty. See guide-multitenancy.md for more information.
+tenant:
+# Endpoint for serving prometheus metrics. Default localhost:9090.
+metrics_endpoint: 0.0.0.0:9090
+# Whether to use sql scripts supporting replication and sharding.
+# Replication can be used only on database with Atomic engine.
+# Default false.
+replication:
+# Table with spans. Default "jaeger_spans_local" or "jaeger_spans" when replication is enabled.
+spans_table:
+# Span index table. Default "jaeger_index_local" or "jaeger_index" when replication is enabled.
+spans_index_table:
+# Operations table. Default "jaeger_operations_local" or "jaeger_operations" when replication is enabled.
+operations_table:
+# TTL for data in tables in days. If 0, no TTL is set. Default 0.
+ttl:
+# The maximum number of spans to fetch per trace. If 0, no limit is set. Default 0.
+max_num_spans:

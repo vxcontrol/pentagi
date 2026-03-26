@@ -1,0 +1,70 @@
+<refinement_context>
+  <instruction>
+  Your goal is to optimize the remaining subtasks to accomplish the PRIMARY USER REQUEST provided in the <user_task><input> field below.
+  
+  The <user_task><input> contains the MAIN OBJECTIVE that the user requested - this is the ultimate goal you must achieve.
+  Based on completed subtask results, refine the remaining plan to accomplish this exact user request more efficiently.
+  All modifications (add/remove/modify) must be focused on achieving what the user asked for in <user_task><input>.
+  Remove subtasks that don't contribute to the user's goal, add subtasks that fill critical gaps toward the goal.
+  </instruction>
+
+  <user_task>
+    <input>{{.Task.Input}}</input>
+  </user_task>
+
+  {{if .Tasks}}
+  <previous_tasks>
+    {{range .Tasks}}
+    <task>
+      <id>{{.ID}}</id>
+      <input>{{.Input}}</input>
+      <status>{{.Status}}</status>
+      <result>{{.Result}}</result>
+    </task>
+    {{end}}
+  </previous_tasks>
+  {{end}}
+
+  {{if .CompletedSubtasks}}
+  <completed_subtasks>
+    {{range .CompletedSubtasks}}
+    <subtask>
+      <id>{{.ID}}</id>
+      <title>{{.Title}}</title>
+      <description>{{.Description}}</description>
+      <status>{{.Status}}</status>
+      <result>{{.Result}}</result>
+    </subtask>
+    {{end}}
+  </completed_subtasks>
+  {{end}}
+
+  {{if .PlannedSubtasks}}
+  <planned_subtasks>
+    {{range .PlannedSubtasks}}
+    <subtask>
+      <id>{{.ID}}</id>
+      <title>{{.Title}}</title>
+      <description>{{.Description}}</description>
+    </subtask>
+    {{end}}
+  </planned_subtasks>
+  {{else}}
+  <planned_subtasks>
+    <status>empty</status>
+    <message>All subtasks have been completed. Review their statuses and results.</message>
+  </planned_subtasks>
+  {{end}}
+
+  {{if .ExecutionState}}
+  <execution_state>
+  {{.ExecutionState}}
+  </execution_state>
+  {{end}}
+
+  {{if .ExecutionLogs}}
+  <execution_logs>
+  {{.ExecutionLogs}}
+  </execution_logs>
+  {{end}}
+</refinement_context>

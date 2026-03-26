@@ -1,0 +1,128 @@
+simple:
+  model: "openai/gpt-4.1-mini"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.4
+    output: 1.6
+
+simple_json:
+  model: "openai/gpt-4.1-mini"
+  temperature: 0.7
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.4
+    output: 1.6
+
+primary_agent:
+  model: "openai/gpt-5" # x-ai/grok-3-mini, openai/o4-mini
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.25
+    output: 10.0
+
+assistant:
+  model: "openai/gpt-5" # x-ai/grok-4, x-ai/grok-3-mini, google/gemini-2.5-flash, openai/o4-mini
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.25
+    output: 10.0
+
+generator:
+  model: "anthropic/claude-sonnet-4.5"
+  n: 1
+  max_tokens: 12000
+  reasoning:
+    max_tokens: 4000
+  price:
+    input: 3.0
+    output: 15.0
+
+refiner:
+  model: "google/gemini-2.5-pro"
+  n: 1
+  max_tokens: 10000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.25
+    output: 10.0
+
+adviser:
+  model: "google/gemini-2.5-pro"
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: high
+  price:
+    input: 1.25
+    output: 10.0
+
+reflector:
+  model: "openai/gpt-4.1-mini"
+  temperature: 0.8
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.4
+    output: 1.6
+
+searcher:
+  model: "x-ai/grok-3-mini"
+  n: 1
+  max_tokens: 4000
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 0.3
+    output: 0.5
+
+enricher:
+  model: "openai/gpt-4.1-mini"
+  temperature: 0.95
+  top_p: 1.0
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.4
+    output: 1.6
+
+coder:
+  model: "anthropic/claude-sonnet-4.5"
+  n: 1
+  max_tokens: 8000
+  reasoning:
+    max_tokens: 2000
+  price:
+    input: 3.0
+    output: 15.0
+
+installer:
+  model: "google/gemini-2.5-flash"
+  n: 1
+  max_tokens: 4000
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 0.3
+    output: 2.5
+
+pentester:
+  model: "moonshotai/kimi-k2-0905"
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.4
+    output: 2.0

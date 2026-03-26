@@ -1,0 +1,39 @@
+<instructions>
+TASK: Create a concise, chronological summary of AI agent execution logs that shows progress, successes, and challenges
+
+DATA:
+- <execution_logs> contains a timestamped journal of actions taken by AI agents during subtask execution
+- Each <log> entry represents a specific action or step taken by an agent
+- Log entries include: subtask_id, type, message (what was attempted), and result (outcome)
+- Multiple logs may belong to the same subtask, showing progressive steps toward completion
+
+REQUIREMENTS:
+1. Create a cohesive narrative that shows the progression of work chronologically
+2. Highlight key milestones, successes, and important discoveries
+3. Identify challenges encountered and how they were addressed (or not)
+4. Preserve critical technical details about actions taken and their outcomes
+5. Indicate which tasks were completed successfully and which encountered issues
+6. Capture the reasoning and approach the AI agents used to solve problems
+7. Exclude routine or repetitive actions that don't contribute to understanding progress
+
+FORMAT:
+- Present as a flowing narrative describing what happened, not as a list of events
+- Use objective language focused on actions and outcomes
+- Group related actions that contribute to the same subtask or objective
+- Emphasize turning points, breakthroughs, and significant obstacles
+- Do NOT preserve XML markup in the summary
+- Balance detail with brevity to maintain readability
+
+The summary should give the reader a clear understanding of how the work progressed, what was accomplished, what challenges were faced, and how effectively they were overcome.
+</instructions>
+
+<execution_logs>
+  {{range .MsgLogs}}
+  <log>
+	<subtask_id>{{.SubtaskID}}</subtask_id>
+	<type>{{.Type}}</type>
+	<message>{{.Message}}</message>
+	<result>{{.Result}}</result>
+  </log>
+  {{end}}
+</execution_logs>

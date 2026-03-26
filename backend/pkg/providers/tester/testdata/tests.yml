@@ -1,0 +1,730 @@
+# Basic completion tests
+- id: "math_simple"
+  name: "Simple Math"
+  type: "completion"
+  group: "basic"
+  prompt: "What is 2+2? Write only the number without any other text."
+  expected: "4"
+  streaming: false
+
+- id: "text_uppercase"
+  name: "Text Transform Uppercase"
+  type: "completion"
+  group: "basic"
+  prompt: "Write 'Hello World' in uppercase without any other text."
+  expected: "HELLO WORLD"
+  streaming: false
+
+# System-user prompt tests
+- id: "count_sequence"
+  name: "Count from 1 to 5"
+  type: "completion"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely. Always keep your responses concise and exact."
+    - role: "user"
+      content: "Count from 1 to 5, separated by commas, without any additional text and spaces."
+  expected: "1,2,3,4,5"
+  streaming: false
+
+- id: "math_multiplication"
+  name: "Math Calculation"
+  type: "completion"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: "You are a math assistant that provides concise answers."
+    - role: "user"
+      content: "Calculate 5 * 10 and provide only the result."
+  expected: "50"
+  streaming: false
+
+# JSON response tests
+- id: "person_info_json"
+  name: "Person Information JSON"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: |
+        Return a JSON with a person's information with correct types:
+        name='John Doe', age=30, city='New York';
+        age must be a number, name and city must be a string
+  expected:
+    name: "John Doe"
+    age: 30
+    city: "New York"
+  streaming: false
+
+- id: "project_info_json"
+  name: "Project Information JSON"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Create a JSON object with fields: title='Test Project', completed=false, priority=1"
+  expected:
+    title: "Test Project"
+    completed: false
+    priority: 1
+  streaming: false
+
+- id: "user_profile_json"
+  name: "User Profile JSON"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Generate a JSON response for a user profile with username='user123', email='user@example.com', active=true"
+  expected:
+    username: "user123"
+    email: "user@example.com"
+    active: true
+  streaming: false
+
+# Basic function calling tests
+- id: "echo_function_basic"
+  name: "Basic Echo Function"
+  type: "tool"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: |
+        You are a helpful assistant that follows instructions precisely.
+        You must use tools instead of generating text.
+        You must use only provided tools to figure out a question.
+    - role: "user"
+      content: "JUST choose the echo function and call it with this message: Hello from function test"
+  tools:
+    - name: "echo"
+      description: "Echoes back the input message"
+      parameters:
+        type: "object"
+        properties:
+          message:
+            type: "string"
+            description: "Message to echo back"
+        required: ["message"]
+  expected:
+    - function_name: "echo"
+      arguments:
+        message: "Hello from function test"
+  streaming: false
+
+# Advanced function calling tests
+- id: "json_response_function"
+  name: "JSON Response Function"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: |
+        You are a helpful assistant that follows instructions precisely.
+        You must use tools instead of generating text.
+        You must use only provided tools to figure out a question.
+    - role: "user"
+      content: "Call function respond_with_json to create a JSON with name=test and value=123"
+  tools:
+    - name: "respond_with_json"
+      description: "Response with JSON structure"
+      parameters:
+        type: "object"
+        properties:
+          name:
+            type: "string"
+            description: "Name value"
+          value:
+            type: "integer"
+            description: "Numeric value"
+        required: ["name", "value"]
+  expected:
+    - function_name: "respond_with_json"
+      arguments:
+        name: "test"
+        value: 123
+  streaming: false
+
+- id: "search_function"
+  name: "Search Query Function"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: |
+        You are a helpful assistant that follows instructions precisely.
+        You must use tools instead of generating text.
+        You must use only provided tools to figure out a question.
+    - role: "user"
+      content: "Find information about Golang programming language by calling the search function"
+  tools:
+    - name: "search"
+      description: "Performs search for a given query"
+      parameters:
+        type: "object"
+        properties:
+          query:
+            type: "string"
+            description: "Search query"
+        required: ["query"]
+  expected:
+    - function_name: "search"
+      arguments:
+        query: "Golang programming language"
+  streaming: false
+
+- id: "advice_function"
+  name: "Ask Advice Function"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: |
+        You are a tool-only assistant.
+        You cannot speak or write text.
+        You can only use functions.
+        Every user message requires a function call response.
+    - role: "user"
+      content: "Call provide_advice with problem='cannot find package' and solution='Check import paths and module dependencies'"
+  tools:
+    - name: "provide_advice"
+      description: "Provides advice to the user about the problem"
+      parameters:
+        type: "object"
+        properties:
+          problem:
+            type: "string"
+            description: "Problem to solve"
+          solution:
+            type: "string"
+            description: "Solution to the problem"
+        required: ["problem", "solution"]
+  expected:
+    - function_name: "provide_advice"
+      arguments:
+        problem: "cannot find package"
+        solution: "Check import paths and module dependencies"
+  streaming: false
+
+# Knowledge tests - penetration testing and cybersecurity domain
+- id: "pentesting_methodology"
+  name: "Penetration Testing Methodology"
+  type: "completion"
+  group: "knowledge"
+  prompt: |
+    The first tactic in penetration testing involves gathering information about the target.
+    This tactic is called:
+    * reconnaissance
+    * exploitation
+    * scanning
+    * persistence
+  expected: "reconnaissance"
+  streaming: false
+
+- id: "vulnerability_scanning"
+  name: "Vulnerability Assessment Tools"
+  type: "completion"
+  group: "knowledge"
+  prompt: "What does 'nmap' tool primarily do in penetration testing? Answer: network"
+  expected: "network"
+  streaming: false
+
+- id: "sql_injection_basics"
+  name: "SQL Injection Attack Type"
+  type: "completion"
+  group: "knowledge"
+  prompt: "Complete this: SQL _____ is a code injection technique. One word."
+  expected: "injection"
+  streaming: false
+
+- id: "penetration_testing_framework"
+  name: "Penetration Testing Framework"
+  type: "completion"
+  group: "knowledge"
+  prompt: |
+    Metasploit is primarily used for what activity in pentesting?
+    Choose one of the following:
+    * exploitation
+    * reconnaissance
+    * scanning
+    * persistence
+    * privilege escalation
+    * lateral movement
+    * credential access
+    * discovery
+  expected: "exploitation"
+  streaming: false
+
+- id: "web_vulnerability_scanner"
+  name: "Web Application Security Scanner"
+  type: "completion"
+  group: "knowledge"
+  prompt: |
+    What type of testing does Burp Suite primarily perform?
+    Choose one of the following:
+    * web
+    * network
+    * mobile
+    * operating system
+    * database
+    * binaries
+    * other
+  expected: "web"
+  streaming: false
+
+- id: "pentest_tool_selection"
+  name: "Penetration Testing Tool Selection"
+  type: "tool"
+  group: "knowledge"
+  messages:
+    - role: "system"
+      content: |
+        You are a cybersecurity tool selector.
+        CRITICAL: You MUST NEVER generate text responses.
+        You can ONLY communicate by calling the provided functions.
+        When asked about a tool, immediately call the appropriate function.
+        You must use tools to help users and remember what you did.
+    - role: "user"
+      content: |
+        I need network scanning capabilities.
+        Call nmap tool for scanning target 192.168.1.1 with TCP scan.
+  tools:
+    - name: "nmap"
+      description: "Network discovery and security auditing tool for port scanning"
+      parameters:
+        type: "object"
+        properties:
+          target:
+            type: "string"
+            description: "Target IP address or network range"
+          scan_type:
+            type: "string"
+            enum: ["TCP", "UDP"]
+            description: "Type of scan to perform"
+        required: ["target", "scan_type"]
+    - name: "burp_suite"
+      description: "Web application security testing platform"
+      parameters:
+        type: "object"
+        properties:
+          url:
+            type: "string"
+            description: "Target web application URL"
+        required: ["url"]
+  expected:
+    - function_name: "nmap"
+      arguments:
+        target: "192.168.1.1"
+        scan_type: "TCP"
+  streaming: false
+
+# Streaming tests for all types
+- id: "math_simple_streaming"
+  name: "Simple Math Streaming"
+  type: "completion"
+  group: "basic"
+  prompt: "What is 3+3? Write only the number without any other text."
+  expected: "6"
+  streaming: true
+
+- id: "count_sequence_streaming"
+  name: "Count from 1 to 3 Streaming"
+  type: "completion"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: |
+        You are a helpful assistant that follows instructions precisely.
+        Always keep your responses concise and exact.
+    - role: "user"
+      content: "Count from 1 to 3, separated by commas, without any additional text and spaces."
+  expected: "1,2,3"
+  streaming: true
+
+- id: "person_info_json_streaming"
+  name: "Person Information JSON Streaming"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Return a JSON with a person's information: name='Jane Doe', age=25, city='Boston'"
+  expected:
+    name: "Jane Doe"
+    age: 25
+    city: "Boston"
+  streaming: true
+
+- id: "echo_function_streaming"
+  name: "Basic Echo Function Streaming"
+  type: "tool"
+  group: "basic"
+  messages:
+    - role: "system"
+      content: |
+        You are a helpful assistant that follows instructions precisely.
+        You must use tools instead of generating text.
+        You must use only provided tools to figure out a question.
+    - role: "user"
+      content: "JUST choose the echo function and call it with this message: Hello from streaming test"
+  tools:
+    - name: "echo"
+      description: "Echoes back the input message"
+      parameters:
+        type: "object"
+        properties:
+          message:
+            type: "string"
+            description: "Message to echo back"
+        required: ["message"]
+  expected:
+    - function_name: "echo"
+      arguments:
+        message: "Hello from streaming test"
+  streaming: true
+
+- id: "search_function_streaming"
+  name: "Search Query Function Streaming"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: |
+        You are a helpful assistant that follows instructions precisely.
+        You must use tools instead of generating text.
+        You must use only provided tools to figure out a question.
+    - role: "user"
+      content: "Find information about 'Python programming language' by calling the search function"
+  tools:
+    - name: "search"
+      description: "Performs search for a given query"
+      parameters:
+        type: "object"
+        properties:
+          query:
+            type: "string"
+            description: "Search query"
+        required: ["query"]
+  expected:
+    - function_name: "search"
+      arguments:
+        query: "Python programming language"
+  streaming: true
+
+# Memory tests with extended message chains - testing multi-turn context retention
+- id: "context_memory_basic"
+  name: "Basic Context Memory Test"
+  type: "completion"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that remembers conversation context."
+    - role: "user"
+      content: "My favorite color is blue and I work as a software engineer."
+    - role: "assistant"
+      content: "I understand that your favorite color is blue and you work as a software engineer. How can I help you today?"
+    - role: "user"
+      content: "What did I tell you about my job?"
+  expected: "software engineer"
+  streaming: false
+
+- id: "function_argument_memory"
+  name: "Function Argument Memory Test"
+  type: "completion"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a tool-using assistant. Use tools to help users and remember what you did."
+    - role: "user"
+      content: "Search for information about Go programming language"
+    - role: "assistant"
+      content: "I'll search for information about Go programming language for you."
+      tool_calls:
+        - id: "call_1"
+          type: "function"
+          function:
+            name: "search"
+            arguments:
+              query: "Go programming language"
+    - role: "tool"
+      tool_call_id: "call_1"
+      name: "search"
+      content: |
+        Go is a programming language developed by Google.
+        It is statically typed, compiled, and designed for simplicity and efficiency.
+    - role: "user"
+      content: |
+        What search query did you use in the previous search?
+        Answer only with the exact query argument value without any other text.
+  expected: "Go programming language"
+  streaming: false
+
+- id: "function_response_memory"
+  name: "Function Response Memory Test"
+  type: "completion"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that uses tools and remembers their responses."
+    - role: "user"
+      content: "Get the current weather for New York"
+    - role: "assistant"
+      content: "I'll check the current weather for New York."
+      tool_calls:
+        - id: "call_weather_1"
+          type: "function"
+          function:
+            name: "get_weather"
+            arguments:
+              location: "New York"
+    - role: "tool"
+      tool_call_id: "call_weather_1"
+      name: "get_weather"
+      content: "The weather in New York is sunny with 22°C temperature."
+    - role: "user"
+      content: |
+        What temperature was reported for New York?
+        Answer only with the number celsius degrees without any other text.
+  expected: "22"
+  streaming: false
+
+- id: "pentest_memory_tool_call"
+  name: "Penetration Testing Memory with Tool Call"
+  type: "tool"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: |
+        You are a cybersecurity assistant that helps with penetration testing tasks.
+        Remember all previous actions and use appropriate tools.
+        You must use tools to help users and remember what you did.
+    - role: "user"
+      content: "I need to perform a security assessment of target 192.168.1.100"
+    - role: "assistant"
+      content: "I'll help you with the security assessment of 192.168.1.100. Let's start with network discovery."
+    - role: "user"
+      content: "First, scan for open ports"
+    - role: "assistant"
+      content: "I'll scan for open ports on the target."
+      tool_calls:
+        - id: "call_nmap_1"
+          type: "function"
+          function:
+            name: "nmap"
+            arguments:
+              target: "192.168.1.100"
+              scan_type: "TCP"
+    - role: "tool"
+      tool_call_id: "call_nmap_1"
+      name: "nmap"
+      content: "Ports 22, 80, 443 are open on 192.168.1.100"
+    - role: "user"
+      content: "Now check the web application on port 80"
+    - role: "assistant"
+      content: "I'll scan the web application on port 80."
+      tool_calls:
+        - id: "call_web_1"
+          type: "function"
+          function:
+            name: "web_scan"
+            arguments:
+              url: "http://192.168.1.100:80"
+    - role: "tool"
+      tool_call_id: "call_web_1"
+      name: "web_scan"
+      content: "Found SQL injection vulnerability in login form"
+    - role: "user"
+      content: "Generate a summary report via tool call with the original target IP and all findings"
+  tools:
+    - name: "nmap"
+      description: "Network discovery and security auditing tool"
+      parameters:
+        type: "object"
+        properties:
+          target:
+            type: "string"
+            description: "Target IP address"
+          scan_type:
+            type: "string"
+            enum: ["TCP", "UDP"]
+            description: "Type of scan"
+        required: ["target", "scan_type"]
+    - name: "web_scan"
+      description: "Scans web applications for vulnerabilities"
+      parameters:
+        type: "object"
+        properties:
+          url:
+            type: "string"
+            description: "Target URL"
+        required: ["url"]
+    - name: "generate_report"
+      description: "Generates security assessment report"
+      parameters:
+        type: "object"
+        properties:
+          target:
+            type: "string"
+            description: "Target that was assessed"
+          findings:
+            type: "array"
+            items:
+              type: "string"
+            description: "List of security findings"
+        required: ["target", "findings"]
+  expected:
+    - function_name: "generate_report"
+      arguments:
+        target: "192.168.1.100"
+        findings: ["Ports", "22", "80", "443", "SQL injection"]
+  streaming: false
+
+- id: "cybersec_workflow_memory"
+  name: "Cybersecurity Workflow Memory Test"
+  type: "completion"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: |
+        You are an expert cybersecurity analyst.
+        Remember all information and provide accurate responses based on previous context.
+        You must use tools to help users and remember what you did.
+    - role: "user"
+      content: "I'm testing domain example.com with IP 10.0.0.50"
+    - role: "assistant"
+      content: "I'll help you test domain example.com at IP 10.0.0.50. What would you like to start with?"
+    - role: "user"
+      content: "Run a port scan first"
+    - role: "assistant"
+      content: "I'll perform a port scan on the target."
+      tool_calls:
+        - id: "scan_1"
+          type: "function"
+          function:
+            name: "port_scan"
+            arguments:
+              target: "10.0.0.50"
+              ports: "1-1000"
+    - role: "tool"
+      tool_call_id: "scan_1"
+      name: "port_scan"
+      content: "Open ports found: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3306 (MySQL)"
+    - role: "user"
+      content: "Check for SQL injection on the web service"
+    - role: "assistant"
+      content: "I'll test the web service for SQL injection vulnerabilities."
+      tool_calls:
+        - id: "sqli_1"
+          type: "function"
+          function:
+            name: "sql_injection_test"
+            arguments:
+              url: "http://10.0.0.50"
+              parameters: ["login", "search"]
+    - role: "tool"
+      tool_call_id: "sqli_1"
+      name: "sql_injection_test"
+      content: "SQL injection vulnerability found in login parameter. Database: MySQL 8.0, Tables: users, products, orders"
+    - role: "user"
+      content: "Test SSH brute force"
+    - role: "assistant"
+      content: "I'll test SSH for weak credentials."
+      tool_calls:
+        - id: "ssh_1"
+          type: "function"
+          function:
+            name: "ssh_bruteforce"
+            arguments:
+              target: "10.0.0.50"
+              port: 22
+              userlist: ["admin", "root", "user"]
+    - role: "tool"
+      tool_call_id: "ssh_1"
+      name: "ssh_bruteforce"
+      content: "Weak credentials found: admin/password123"
+    - role: "user"
+      content: "What is the domain associated with 10.0.0.50? Answer only with the domain name without any other text."
+  expected: "example.com"
+  streaming: false
+
+- id: "vulnerability_report_memory"
+  name: "Vulnerability Report Memory Test"
+  type: "json"
+  group: "advanced"
+  messages:
+    - role: "system"
+      content: "You are a cybersecurity analyst. You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Start a vulnerability assessment for target server 10.1.1.50"
+    - role: "assistant"
+      content: "I'll start the vulnerability assessment for target server 10.1.1.50."
+    - role: "user"
+      content: "Run a port scan first"
+    - role: "assistant"
+      content: "I'll perform a port scan on the target."
+      tool_calls:
+        - id: "port_scan_1"
+          type: "function"
+          function:
+            name: "nmap_scan"
+            arguments:
+              target: "10.1.1.50"
+              scan_type: "full"
+    - role: "tool"
+      tool_call_id: "port_scan_1"
+      name: "nmap_scan"
+      content: "Open ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3389 (RDP)"
+    - role: "user"
+      content: "Check for web vulnerabilities"
+    - role: "assistant"
+      content: "I'll scan for web vulnerabilities."
+      tool_calls:
+        - id: "web_vuln_1"
+          type: "function"
+          function:
+            name: "web_vulnerability_scan"
+            arguments:
+              url: "http://10.1.1.50"
+              scan_depth: "deep"
+    - role: "tool"
+      tool_call_id: "web_vuln_1"
+      name: "web_vulnerability_scan"
+      content: "Found: Cross-Site Scripting (XSS) in search parameter, SQL Injection in login form"
+    - role: "user"
+      content: |
+        Generate a JSON vulnerability report with the target IP, open ports, and vulnerabilities found
+        The report must be valid JSON Object and specify the following schema:
+        {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string"
+            },
+            "open_ports": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "vulnerabilities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["target", "open_ports", "vulnerabilities"]
+        }
+  expected:
+    target: "10.1.1.50"
+    open_ports: ["22", "80", "443", "3389"]
+    vulnerabilities: ["Cross-Site Scripting", "SQL Injection"]
+  streaming: false

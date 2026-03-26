@@ -1,0 +1,175 @@
+# Simple tasks - reasoning model for better quality
+simple:
+  model: openai.gpt-oss-120b-1:0
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.15
+    output: 0.6
+
+simple_json:
+  model: openai.gpt-oss-120b-1:0
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.15
+    output: 0.6
+
+# Primary agent - multimodal with thinking capabilities
+primary_agent:
+  model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 2048
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Assistant - main working agent with multimodal capabilities
+assistant:
+  model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Generator - maximum quality for creative tasks
+generator:
+  model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 4096
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Refiner - refinement and improvement with reasoning
+refiner:
+  model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 12000
+  reasoning:
+    max_tokens: 2048
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Adviser - strategic planning with world-class intelligence
+adviser:
+  model: us.anthropic.claude-opus-4-6-v1
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 4096
+  price:
+    input: 5.0
+    output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25
+
+# Reflector - result analysis with efficiency
+reflector:
+  model: us.anthropic.claude-haiku-4-5-20251001-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+# Searcher - information retrieval, high-frequency calls
+searcher:
+  model: us.anthropic.claude-haiku-4-5-20251001-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+# Enricher - data enrichment with long-context efficiency
+enricher:
+  model: us.anthropic.claude-haiku-4-5-20251001-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+# Coder - code generation with industry-leading coding capabilities
+coder:
+  model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 2048
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Installer - installation and configuration with extensive software knowledge
+installer:
+  model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+# Pentester - security testing with multimodal and thinking capabilities
+pentester:
+  model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75

@@ -1,0 +1,28 @@
+package graph
+
+import (
+	"pentagi/pkg/config"
+	"pentagi/pkg/controller"
+	"pentagi/pkg/database"
+	"pentagi/pkg/graph/subscriptions"
+	"pentagi/pkg/providers"
+	"pentagi/pkg/server/auth"
+	"pentagi/pkg/templates"
+
+	"github.com/sirupsen/logrus"
+)
+
+// This file will not be regenerated automatically.
+//
+// It serves as dependency injection for your app, add any dependencies you require here.
+
+type Resolver struct {
+	DB              database.Querier
+	Config          *config.Config
+	Logger          *logrus.Entry
+	TokenCache      *auth.TokenCache
+	DefaultPrompter templates.Prompter
+	ProvidersCtrl   providers.ProviderController
+	Controller      controller.FlowController
+	Subscriptions   subscriptions.SubscriptionsController
+}

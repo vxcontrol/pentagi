@@ -1,0 +1,36 @@
+{
+    "$schema": "https://json.schemastore.org/prettierrc",
+    "printWidth": 120,
+    "tabWidth": 4,
+    "useTabs": false,
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "singleAttributePerLine": true,
+    "bracketSpacing": true,
+    "arrowParens": "always",
+    "endOfLine": "lf",
+    "plugins": ["prettier-plugin-tailwindcss"],
+    "tailwindFunctions": ["cn"],
+    "overrides": [
+        {
+            "files": ["src/graphql/types.ts"],
+            "options": {
+                "tabWidth": 4
+            }
+        },
+        {
+            "files": ["*.yml"],
+            "options": {
+                "tabWidth": 2
+            }
+        },
+        {
+            "files": ["*.xml"],
+            "options": {
+                "parser": "xml",
+                "plugins": ["@prettier/plugin-xml"]
+            }
+        }
+    ]
+}

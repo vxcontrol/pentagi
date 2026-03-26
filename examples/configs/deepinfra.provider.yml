@@ -1,0 +1,119 @@
+simple:
+  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.14
+    output: 1.4
+
+simple_json:
+  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  temperature: 0.7
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.14
+    output: 1.4
+
+primary_agent:
+  model: "moonshotai/Kimi-K2-Instruct-0905"
+  temperature: 1.0
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.4
+    output: 2.0
+
+assistant:
+  model: "moonshotai/Kimi-K2-Instruct-0905"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 0.4
+    output: 2.0
+
+generator:
+  model: "google/gemini-2.5-pro"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 1.25
+    output: 10.0
+
+refiner:
+  model: "deepseek-ai/DeepSeek-R1-0528-Turbo"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 1.0
+    output: 3.0
+
+adviser:
+  model: "google/gemini-2.5-pro"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 1.25
+    output: 10.0
+
+reflector:
+  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.14
+    output: 1.4
+
+searcher:
+  model: "Qwen/Qwen3-32B"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.1
+    output: 0.3
+
+enricher:
+  model: "Qwen/Qwen3-32B"
+  temperature: 1.0
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.1
+    output: 0.3
+
+coder:
+  model: "anthropic/claude-4-sonnet"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 3.3
+    output: 16.5
+
+installer:
+  model: "google/gemini-2.5-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.3
+    output: 2.5
+
+pentester:
+  model: "moonshotai/Kimi-K2-Instruct-0905"
+  temperature: 1.0
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.4
+    output: 2.0

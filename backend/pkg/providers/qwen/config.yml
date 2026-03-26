@@ -1,0 +1,130 @@
+simple:
+  model: "qwen3.5-flash"
+  temperature: 0.6
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.1
+    output: 0.4
+    cache_read: 0.02
+
+simple_json:
+  model: "qwen3.5-flash"
+  temperature: 0.6
+  n: 1
+  max_tokens: 4096
+  json: true
+  price:
+    input: 0.1
+    output: 0.4
+    cache_read: 0.02
+
+primary_agent:
+  model: "qwen3.5-plus"
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.4
+    output: 2.4
+    cache_read: 0.08
+
+assistant:
+  model: "qwen3.5-plus"
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.4
+    output: 2.4
+    cache_read: 0.08
+
+generator:
+  model: "qwen3-max"
+  temperature: 1.0
+  n: 1
+  max_tokens: 32768
+  price:
+    input: 2.4
+    output: 12.0
+    cache_read: 0.48
+
+refiner:
+  model: "qwen3-max"
+  temperature: 1.0
+  n: 1
+  max_tokens: 20480
+  price:
+    input: 2.4
+    output: 12.0
+    cache_read: 0.48
+
+adviser:
+  model: "qwen3-max"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 2.4
+    output: 12.0
+    cache_read: 0.48
+
+reflector:
+  model: "qwen3.5-flash"
+  temperature: 0.7
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.1
+    output: 0.4
+    cache_read: 0.02
+
+searcher:
+  model: "qwen3.5-flash"
+  temperature: 0.7
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.1
+    output: 0.4
+    cache_read: 0.02
+
+enricher:
+  model: "qwen3.5-flash"
+  temperature: 0.7
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.1
+    output: 0.4
+    cache_read: 0.02
+
+coder:
+  model: "qwen3.5-plus"
+  temperature: 1.0
+  n: 1
+  max_tokens: 20480
+  price:
+    input: 0.4
+    output: 2.4
+    cache_read: 0.08
+
+installer:
+  model: "qwen3.5-plus"
+  temperature: 0.7
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.4
+    output: 2.4
+    cache_read: 0.08
+
+pentester:
+  model: "qwen3.5-plus"
+  temperature: 0.8
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.4
+    output: 2.4
+    cache_read: 0.08

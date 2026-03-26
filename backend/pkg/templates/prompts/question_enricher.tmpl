@@ -1,0 +1,22 @@
+<question_enricher_context>
+  <instruction>
+  Thoroughly enhance the user's question by incorporating the given context and utilizing the provided tools effectively.
+  Ensure the enriched question is comprehensive and precise. Use <code_snippet> and <command_output> to provide examples of how to use the tools.
+  </instruction>
+
+  <user_question>
+  {{.Question}}
+  </user_question>
+
+  {{if .Code}}
+  <code_snippet>
+  {{.Code}}
+  </code_snippet>
+  {{end}}
+
+  {{if .Output}}
+  <command_output>
+  {{.Output}}
+  </command_output>
+  {{end}}
+</question_enricher_context>

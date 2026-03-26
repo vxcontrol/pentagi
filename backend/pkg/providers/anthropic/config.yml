@@ -1,0 +1,163 @@
+simple:
+  model: claude-haiku-4-5
+  temperature: 0.5
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+simple_json:
+  model: claude-haiku-4-5
+  temperature: 0.5
+  n: 1
+  max_tokens: 4096
+  json: true
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+primary_agent:
+  model: claude-sonnet-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+assistant:
+  model: claude-sonnet-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+generator:
+  model: claude-opus-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    max_tokens: 4096
+  price:
+    input: 5.0
+    output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25
+
+refiner:
+  model: claude-sonnet-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 20480
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+adviser:
+  model: claude-sonnet-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    max_tokens: 4096
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+reflector:
+  model: claude-haiku-4-5
+  temperature: 0.7
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+searcher:
+  model: claude-haiku-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+enricher:
+  model: claude-haiku-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+coder:
+  model: claude-sonnet-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 20480
+  reasoning:
+    max_tokens: 2048
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+installer:
+  model: claude-sonnet-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+pentester:
+  model: claude-sonnet-4-5
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75

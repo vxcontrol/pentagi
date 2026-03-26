@@ -1,0 +1,34 @@
+{
+    "go.lintFlags": [
+        "-checks=\"all,-ST1005\""
+    ],
+    "go.testTimeout": "300s",
+    "go.testEnvVars": {
+      "INSTALLER_LOG_FILE": "${workspaceFolder}/build/log.json"
+    },
+    "go.testExplorer.enable": true,
+    "search.useIgnoreFiles": true,
+    "search.exclude": {
+      "**/frontend/coverage/**": true,
+      "**/frontend/dist/**": true,
+      "**/frontend/node_modules/**": true,
+    },
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    },
+    "eslint.validate": [
+      "javascript",
+      "javascriptreact",
+      "typescript",
+      "typescriptreact"
+    ],
+    "editor.formatOnSave": false,
+    "[typescript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.formatOnSave": true
+    },
+    "[typescriptreact]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.formatOnSave": true
+    },
+}

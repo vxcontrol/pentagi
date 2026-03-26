@@ -1,0 +1,65 @@
+# GraphQL schema source files (supports glob patterns)
+schema:
+  - pkg/graph/*.graphqls
+
+# Generated GraphQL server implementation
+exec:
+  filename: pkg/graph/generated.go
+  package: graph
+
+# Generated GraphQL type models
+model:
+  filename: pkg/graph/model/models_gen.go
+  package: model
+
+# Resolver code generation configuration
+resolver:
+  layout: follow-schema
+  dir: pkg/graph
+  package: graph
+  filename_template: "{name}.resolvers.go"
+
+# Automatic type binding from existing Go packages
+autobind:
+#  - "pentagi/pkg/database"
+#  - "pentagi/pkg/graph/model"
+#  - "pentagi/pkg/providers"
+
+# GraphQL to Go type mappings
+models:
+  # Scalar type mappings for ID fields (primary: Int64)
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.Int64
+      - github.com/99designs/gqlgen/graphql.Uint
+      - github.com/99designs/gqlgen/graphql.ID
+      - github.com/99designs/gqlgen/graphql.Int
+      - github.com/99designs/gqlgen/graphql.Int32
+  
+  # Integer type mappings
+  Int:
+    model:
+      - github.com/99designs/gqlgen/graphql.Int
+      - github.com/99designs/gqlgen/graphql.Int64
+      - github.com/99designs/gqlgen/graphql.Int32
+      - github.com/99designs/gqlgen/graphql.Uint
+  
+  # Unsigned integer mappings
+  Uint:
+    model:
+      - github.com/99designs/gqlgen/graphql.Uint
+  
+  # JSON field mapping to RawMessage
+  JSON:
+    model:
+      - encoding/json.RawMessage
+  
+  # Reuse existing Go types for input objects (avoids duplication)
+  ReasoningConfigInput:
+    model: pentagi/pkg/graph/model.ReasoningConfig
+  ModelPriceInput:
+    model: pentagi/pkg/graph/model.ModelPrice
+  AgentConfigInput:
+    model: pentagi/pkg/graph/model.AgentConfig
+  AgentsConfigInput:
+    model: pentagi/pkg/graph/model.AgentsConfig

@@ -1,0 +1,67 @@
+package models
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/jinzhu/gorm"
+)
+
+type TermlogType string
+
+const (
+	TermlogTypeStdin  TermlogType = "stdin"
+	TermlogTypeStdout TermlogType = "stdout"
+	TermlogTypeStderr TermlogType = "stderr"
+)
+
+func (s TermlogType) String() string {
+	return string(s)
+}
+
+// Valid is function to control input/output data
+func (s TermlogType) Valid() error {
+	switch s {
+	case TermlogTypeStdin, TermlogTypeStdout, TermlogTypeStderr:
+		return nil
+	default:
+		return fmt.Errorf("invalid TermlogType: %s", s)
+	}
+}
+
+// Validate is function to use callback to control input/output data
+func (s TermlogType) Validate(db *gorm.DB) {
+	if err := s.Valid(); err != nil {
+		db.AddError(err)
+	}
+}
+
+// Termlog is model to contain termlog information
+// nolint:lll
+type Termlog struct {
+	ID          uint64      `form:"id" json:"id" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;PRIMARY_KEY;AUTO_INCREMENT"`
+	Type        TermlogType `form:"type" json:"type" validate:"valid,required" gorm:"type:TERMLOG_TYPE;NOT NULL"`
+	Text        string      `form:"text" json:"text" validate:"required" gorm:"type:TEXT;NOT NULL"`
+	ContainerID uint64      `form:"container_id" json:"container_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
+	FlowID      uint64      `form:"flow_id" json:"flow_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
+	TaskID      *uint64     `form:"task_id,omitempty" json:"task_id,omitempty" validate:"omitnil,min=0" gorm:"type:BIGINT"`
+	SubtaskID   *uint64     `form:"subtask_id,omitempty" json:"subtask_id,omitempty" validate:"omitnil,min=0" gorm:"type:BIGINT"`
+	CreatedAt   time.Time   `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
+}
+
+// TableName returns the table name string to guaranty use correct table
+func (tl *Termlog) TableName() string {
+	return "termlogs"
+}
+
+// Valid is function to control input/output data
+func (tl Termlog) Valid() error {
+	return validate.Struct(tl)
+}
+
+// Validate is function to use callback to control input/output data
+func (tl Termlog) Validate(db *gorm.DB) {
+	if err := tl.Valid(); err != nil {
+		db.AddError(err)
+	}
+}

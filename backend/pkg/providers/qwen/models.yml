@@ -1,0 +1,269 @@
+# Wide availability models (available in most regions)
+- name: qwen3-max
+  description: Wide (Intr/Global/CH). Latest flagship reasoning model with thinking capability, strong instruction following and complex task handling
+  thinking: true
+  price:
+    input: 2.4
+    output: 12.0
+    cache_read: 0.48
+
+- name: qwen3-max-preview
+  description: Wide (Intr/Global/CH). Preview version with extended thinking capabilities for complex analysis
+  thinking: true
+  price:
+    input: 2.4
+    output: 12.0
+    cache_read: 0.48
+
+- name: qwen-max
+  description: Intr/CH. Flagship reasoning model with strong instruction following, suitable for complex security analysis
+  thinking: false
+  price:
+    input: 1.6
+    output: 6.4
+    cache_read: 0.32
+
+- name: qwen3.5-plus
+  description: Wide (Intr/Global/CH). Advanced balanced model with thinking mode support, excellent for complex dialogue and analysis
+  thinking: true
+  price:
+    input: 0.4
+    output: 2.4
+    cache_read: 0.08
+
+- name: qwen-plus
+  description: Wide (Intr/Global/US/CH). Balanced performance model with thinking mode, suitable for general dialogue and code generation
+  thinking: true
+  price:
+    input: 0.4
+    output: 4.0
+    cache_read: 0.08
+
+- name: qwen3.5-flash
+  description: Wide (Intr/Global/CH). Ultra-fast lightweight model optimized for high-throughput scenarios
+  thinking: true
+  price:
+    input: 0.1
+    output: 0.4
+    cache_read: 0.02
+
+- name: qwen-flash
+  description: Wide (Intr/Global/US/CH). Fast lightweight model with context caching support for efficient processing
+  thinking: false
+  price:
+    input: 0.05
+    output: 0.4
+    cache_read: 0.01
+
+- name: qwen-turbo
+  description: Intr/CH. Fastest lightweight model with thinking mode, suitable for simple tasks and real-time response (deprecated, use qwen-flash)
+  thinking: true
+  price:
+    input: 0.05
+    output: 0.5
+    cache_read: 0.01
+
+- name: qwq-plus
+  description: Intr/CH. Deep reasoning model with extended chain-of-thought capabilities for complex logic and security analysis
+  thinking: true
+  price:
+    input: 0.8
+    output: 2.4
+    cache_read: 0.16
+
+# Region-specific models
+- name: qwen-plus-us
+  description: US only. Balanced performance model optimized for US region deployment
+  thinking: true
+  price:
+    input: 0.4
+    output: 4.0
+    cache_read: 0.08
+
+- name: qwen-long-latest
+  description: CH only. Specialized model for ultra-long context processing up to 10M tokens
+  thinking: false
+  price:
+    input: 0.072
+    output: 0.287
+    cache_read: 0.014
+
+# Open source models - Qwen3.5 series
+- name: qwen3.5-397b-a17b
+  description: Wide (Intr/Global/CH). Largest open-source model with 397B parameters, exceptional reasoning capabilities
+  thinking: true
+  price:
+    input: 0.6
+    output: 3.6
+    cache_read: 0.12
+
+- name: qwen3.5-122b-a10b
+  description: Wide (Intr/Global/CH). Large open-source model with 122B parameters, strong performance
+  thinking: true
+  price:
+    input: 0.4
+    output: 3.2
+    cache_read: 0.08
+
+- name: qwen3.5-27b
+  description: Wide (Intr/Global/CH). Medium open-source model with 27B parameters, balanced performance
+  thinking: true
+  price:
+    input: 0.3
+    output: 2.4
+    cache_read: 0.06
+
+- name: qwen3.5-35b-a3b
+  description: Wide (Intr/Global/CH). Efficient open-source model with 35B parameters and 3B active
+  thinking: true
+  price:
+    input: 0.25
+    output: 2.0
+    cache_read: 0.05
+
+# Open source models - Qwen3 series
+- name: qwen3-next-80b-a3b-thinking
+  description: Wide (Intr/Global/CH). Next-gen 80B model optimized for thinking mode only
+  thinking: true
+  price:
+    input: 0.15
+    output: 1.434
+    cache_read: 0.03
+
+- name: qwen3-next-80b-a3b-instruct
+  description: Wide (Intr/Global/CH). Next-gen 80B instruction-following model, non-thinking mode
+  thinking: false
+  price:
+    input: 0.15
+    output: 1.2
+    cache_read: 0.03
+
+- name: qwen3-235b-a22b
+  description: Wide (Intr/Global/CH). Dual-mode 235B model supporting both thinking and non-thinking modes
+  thinking: true
+  price:
+    input: 0.7
+    output: 8.4
+    cache_read: 0.14
+
+- name: qwen3-32b
+  description: Wide (Intr/Global/CH). Versatile 32B model with dual-mode capabilities
+  thinking: true
+  price:
+    input: 0.287
+    output: 2.868
+    cache_read: 0.057
+
+- name: qwen3-30b-a3b
+  description: Wide (Intr/Global/CH). Efficient 30B model with MoE architecture
+  thinking: true
+  price:
+    input: 0.2
+    output: 2.4
+    cache_read: 0.04
+
+- name: qwen3-14b
+  description: Wide (Intr/Global/CH). Medium-sized 14B model with good performance-cost balance
+  thinking: true
+  price:
+    input: 0.35
+    output: 4.2
+    cache_read: 0.07
+
+- name: qwen3-8b
+  description: Wide (Intr/Global/CH). Compact 8B model optimized for efficiency
+  thinking: true
+  price:
+    input: 0.18
+    output: 2.1
+    cache_read: 0.036
+
+- name: qwen3-4b
+  description: Intr/CH. Lightweight 4B model for simple tasks
+  thinking: true
+  price:
+    input: 0.11
+    output: 1.26
+    cache_read: 0.022
+
+- name: qwen3-1.7b
+  description: Intr/CH. Ultra-compact 1.7B model for basic tasks
+  thinking: true
+  price:
+    input: 0.11
+    output: 1.26
+    cache_read: 0.022
+
+- name: qwen3-0.6b
+  description: Intr/CH. Smallest 0.6B model for minimal resource usage
+  thinking: true
+  price:
+    input: 0.11
+    output: 1.26
+    cache_read: 0.022
+
+# Open source QwQ reasoning models
+- name: qwq-32b
+  description: Wide. Open-source 32B reasoning model with powerful logic capabilities for deep security research
+  thinking: true
+  price:
+    input: 0.287
+    output: 0.861
+    cache_read: 0.057
+
+# Open source Qwen2.5 series
+- name: qwen2.5-14b-instruct-1m
+  description: Wide (Intr/CH). Extended context 14B model supporting up to 1M tokens
+  thinking: false
+  price:
+    input: 0.805
+    output: 3.22
+    cache_read: 0.161
+
+- name: qwen2.5-7b-instruct-1m
+  description: Wide (Intr/CH). Extended context 7B model supporting up to 1M tokens
+  thinking: false
+  price:
+    input: 0.368
+    output: 1.47
+    cache_read: 0.074
+
+- name: qwen2.5-72b-instruct
+  description: Wide (Intr/CH). Large 72B instruction-following model
+  thinking: false
+  price:
+    input: 1.4
+    output: 5.6
+    cache_read: 0.28
+
+- name: qwen2.5-32b-instruct
+  description: Wide (Intr/CH). Medium 32B instruction-following model
+  thinking: false
+  price:
+    input: 0.7
+    output: 2.8
+    cache_read: 0.14
+
+- name: qwen2.5-14b-instruct
+  description: Wide (Intr/CH). Compact 14B instruction-following model
+  thinking: false
+  price:
+    input: 0.35
+    output: 1.4
+    cache_read: 0.07
+
+- name: qwen2.5-7b-instruct
+  description: Wide (Intr/CH). Small 7B instruction-following model
+  thinking: false
+  price:
+    input: 0.175
+    output: 0.7
+    cache_read: 0.035
+
+- name: qwen2.5-3b-instruct
+  description: CH only. Lightweight 3B instruction model for Chinese Mainland
+  thinking: false
+  price:
+    input: 0.044
+    output: 0.130
+    cache_read: 0.009

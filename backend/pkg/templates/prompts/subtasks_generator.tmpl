@@ -1,0 +1,41 @@
+<task_context>
+  <instruction>
+  Your goal is to generate optimized subtasks that will accomplish the PRIMARY USER REQUEST provided in the <user_task><input> field below.
+  
+  The <user_task><input> contains the MAIN OBJECTIVE that the user requested - this is the ultimate goal you must achieve.
+  All subtasks you create MUST be designed to work together to accomplish this exact user request.
+  Focus your subtasks on solving what the user asked for in <user_task><input>, not on tangential activities.
+  </instruction>
+
+  <user_task>
+    <input>{{.Task.Input}}</input>
+  </user_task>
+
+  {{if .Tasks}}
+  <previous_tasks>
+    {{range .Tasks}}
+    <task>
+      <id>{{.ID}}</id>
+      <input>{{.Input}}</input>
+      <status>{{.Status}}</status>
+      <result>{{.Result}}</result>
+    </task>
+    {{end}}
+  </previous_tasks>
+  {{end}}
+
+  {{if .Subtasks}}
+  <previous_subtasks>
+    {{range .Subtasks}}
+    <subtask>
+      <task_id>{{.TaskID}}</task_id>
+      <id>{{.ID}}</id>
+      <title>{{.Title}}</title>
+      <description>{{.Description}}</description>
+      <status>{{.Status}}</status>
+      <result>{{.Result}}</result>
+    </subtask>
+    {{end}}
+  </previous_subtasks>
+  {{end}}
+</task_context>

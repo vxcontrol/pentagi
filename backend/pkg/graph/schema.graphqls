@@ -1,0 +1,905 @@
+scalar Time
+
+# Core execution status for flows, tasks and agents
+enum StatusType {
+  created
+  running
+  waiting
+  finished
+  failed
+}
+
+# LLM provider types supported by PentAGI
+enum ProviderType {
+  openai
+  anthropic
+  gemini
+  bedrock
+  ollama
+  custom
+  deepseek
+  glm
+  kimi
+  qwen
+}
+
+# Reasoning effort levels for advanced AI models (OpenAI format)
+enum ReasoningEffort {
+  high
+  medium
+  low
+}
+
+# Template types for AI agent prompts and system operations
+enum PromptType {
+  primary_agent
+  assistant
+  pentester
+  question_pentester
+  coder
+  question_coder
+  installer
+  question_installer
+  searcher
+  question_searcher
+  memorist
+  question_memorist
+  adviser
+  question_adviser
+  generator
+  subtasks_generator
+  refiner
+  subtasks_refiner
+  reporter
+  task_reporter
+  reflector
+  question_reflector
+  enricher
+  question_enricher
+  toolcall_fixer
+  input_toolcall_fixer
+  summarizer
+  image_chooser
+  language_chooser
+  flow_descriptor
+  task_descriptor
+  execution_logs
+  full_execution_context
+  short_execution_context
+  tool_call_id_collector
+  tool_call_id_detector
+  question_execution_monitor
+  question_task_planner
+  task_assignment_wrapper
+}
+
+# AI agent types for autonomous penetration testing
+enum AgentType {
+  primary_agent
+  reporter
+  generator
+  refiner
+  reflector
+  enricher
+  adviser
+  coder
+  memorist
+  searcher
+  installer
+  pentester
+  summarizer
+  tool_call_fixer
+  assistant
+}
+
+# AI agent type for provider configuration
+enum AgentConfigType {
+  simple
+  simple_json
+  primary_agent
+  assistant
+  generator
+  refiner
+  adviser
+  reflector
+  searcher
+  enricher
+  coder
+  installer
+  pentester
+}
+
+# Terminal output stream types
+enum TerminalLogType {
+  stdin
+  stdout
+  stderr
+}
+
+# Message types for agent communication and logging
+enum MessageLogType {
+  answer
+  report
+  thoughts
+  browser
+  terminal
+  file
+  search
+  advice
+  ask
+  input
+  done
+}
+
+# Output format types for responses
+enum ResultFormat {
+  plain
+  markdown
+  terminal
+}
+
+enum ResultType {
+  success
+  error
+}
+
+enum TerminalType {
+  primary
+  secondary
+}
+
+enum VectorStoreAction {
+  retrieve
+  store
+}
+
+# ==================== Core System Types ====================
+
+type Settings {
+  debug: Boolean!
+  askUser: Boolean!
+  dockerInside: Boolean!
+  assistantUseAgents: Boolean!
+}
+
+# ==================== User Preferences Types ====================
+
+type UserPreferences {
+  id: ID!
+  favoriteFlows: [ID!]!
+}
+
+# ==================== Flow Management Types ====================
+
+type Terminal {
+  id: ID!
+  type: TerminalType!
+  name: String!
+  image: String!
+  connected: Boolean!
+  createdAt: Time!
+}
+
+type Assistant {
+  id: ID!
+  title: String!
+  status: StatusType!
+  provider: Provider!
+  flowId: ID!
+  useAgents: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type FlowAssistant {
+  flow: Flow!
+  assistant: Assistant!
+}
+
+type Flow {
+  id: ID!
+  title: String!
+  status: StatusType!
+  terminals: [Terminal!]
+  provider: Provider!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type Task {
+  id: ID!
+  title: String!
+  status: StatusType!
+  input: String!
+  result: String!
+  flowId: ID!
+  subtasks: [Subtask!]
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type Subtask {
+  id: ID!
+  status: StatusType!
+  title: String!
+  description: String!
+  result: String!
+  taskId: ID!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+# ==================== Logging Types ====================
+
+type AssistantLog {
+  id: ID!
+  type: MessageLogType!
+  message: String!
+  thinking: String
+  result: String!
+  resultFormat: ResultFormat!
+  appendPart: Boolean!
+  flowId: ID!
+  assistantId: ID!
+  createdAt: Time!
+}
+
+type AgentLog {
+  id: ID!
+  initiator: AgentType!
+  executor: AgentType!
+  task: String!
+  result: String!
+  flowId: ID!
+  taskId: ID
+  subtaskId: ID
+  createdAt: Time!
+}
+
+type MessageLog {
+  id: ID!
+  type: MessageLogType!
+  message: String!
+  thinking: String
+  result: String!
+  resultFormat: ResultFormat!
+  flowId: ID!
+  taskId: ID
+  subtaskId: ID
+  createdAt: Time!
+}
+
+type SearchLog {
+  id: ID!
+  initiator: AgentType!
+  executor: AgentType!
+  engine: String!
+  query: String!
+  result: String!
+  flowId: ID!
+  taskId: ID
+  subtaskId: ID
+  createdAt: Time!
+}
+
+type TerminalLog {
+  id: ID!
+  flowId: ID!
+  taskId: ID
+  subtaskId: ID
+  type: TerminalLogType!
+  text: String!
+  terminal: ID!
+  createdAt: Time!
+}
+
+type VectorStoreLog {
+  id: ID!
+  initiator: AgentType!
+  executor: AgentType!
+  filter: String!
+  query: String!
+  action: VectorStoreAction!
+  result: String!
+  flowId: ID!
+  taskId: ID
+  subtaskId: ID
+  createdAt: Time!
+}
+
+type Screenshot {
+  id: ID!
+  flowId: ID!
+  taskId: ID
+  subtaskId: ID
+  name: String!
+  url: String!
+  createdAt: Time!
+}
+
+# =================== API Tokens types ===================
+
+enum TokenStatus {
+  active
+  revoked
+  expired
+}
+
+type APIToken {
+  id: ID!
+  tokenId: String!
+  userId: ID!
+  roleId: ID!
+  name: String
+  ttl: Int!
+  status: TokenStatus!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+type APITokenWithSecret {
+  id: ID!
+  tokenId: String!
+  userId: ID!
+  roleId: ID!
+  name: String
+  ttl: Int!
+  status: TokenStatus!
+  createdAt: Time!
+  updatedAt: Time!
+  token: String!
+}
+
+input CreateAPITokenInput {
+  name: String
+  ttl: Int!
+}
+
+input UpdateAPITokenInput {
+  name: String
+  status: TokenStatus
+}
+
+# ==================== Prompt Management Types ====================
+
+# Validation error types for user-provided prompts
+enum PromptValidationErrorType {
+  syntax_error
+  unauthorized_variable
+  rendering_failed
+  empty_template
+  variable_type_mismatch
+  unknown_type
+}
+
+type PromptValidationResult {
+  result: ResultType!
+  errorType: PromptValidationErrorType
+  message: String
+  line: Int
+  details: String
+}
+
+# Default system prompt with available variables
+type DefaultPrompt {
+  type: PromptType!
+  template: String!
+  variables: [String!]!
+}
+
+# User-customized prompt template
+type UserPrompt {
+  id: ID!
+  type: PromptType!
+  template: String!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+# Single system prompt AI agent configuration
+type AgentPrompt {
+  system: DefaultPrompt!
+}
+
+# System and human prompt pair AI agent configuration
+type AgentPrompts {
+  system: DefaultPrompt!
+  human: DefaultPrompt!
+}
+
+# All agent prompt configurations
+type AgentsPrompts {
+  primaryAgent: AgentPrompt!
+  assistant: AgentPrompt!
+  pentester: AgentPrompts!
+  coder: AgentPrompts!
+  installer: AgentPrompts!
+  searcher: AgentPrompts!
+  memorist: AgentPrompts!
+  adviser: AgentPrompts!
+  generator: AgentPrompts!
+  refiner: AgentPrompts!
+  reporter: AgentPrompts!
+  reflector: AgentPrompts!
+  enricher: AgentPrompts!
+  toolCallFixer: AgentPrompts!
+  summarizer: AgentPrompt!
+}
+
+# Tool-specific prompt configurations
+type ToolsPrompts {
+  getFlowDescription: DefaultPrompt!
+  getTaskDescription: DefaultPrompt!
+  getExecutionLogs: DefaultPrompt!
+  getFullExecutionContext: DefaultPrompt!
+  getShortExecutionContext: DefaultPrompt!
+  chooseDockerImage: DefaultPrompt!
+  chooseUserLanguage: DefaultPrompt!
+  collectToolCallId: DefaultPrompt!
+  detectToolCallIdPattern: DefaultPrompt!
+  monitorAgentExecution: DefaultPrompt!
+  planAgentTask: DefaultPrompt!
+  wrapAgentTask: DefaultPrompt!
+}
+
+# Complete default prompt configuration (read only)
+type DefaultPrompts {
+  agents: AgentsPrompts!
+  tools: ToolsPrompts!
+}
+
+# Prompts configuration including user customizations
+type PromptsConfig {
+  default: DefaultPrompts!
+  userDefined: [UserPrompt!]
+}
+
+# ==================== Testing & Validation Types ====================
+
+type TestResult {
+  name: String!
+  type: String!
+  result: Boolean!
+  reasoning: Boolean!
+  streaming: Boolean!
+  latency: Int
+  error: String
+}
+
+type AgentTestResult {
+  tests: [TestResult!]!
+}
+
+type ProviderTestResult {
+  simple: AgentTestResult!
+  simpleJson: AgentTestResult!
+  primaryAgent: AgentTestResult!
+  assistant: AgentTestResult!
+  generator: AgentTestResult!
+  refiner: AgentTestResult!
+  adviser: AgentTestResult!
+  reflector: AgentTestResult!
+  searcher: AgentTestResult!
+  enricher: AgentTestResult!
+  coder: AgentTestResult!
+  installer: AgentTestResult!
+  pentester: AgentTestResult!
+}
+
+# ==================== Analytics & Usage Statistics Types ====================
+
+# Usage statistics data for LLM token usage
+type UsageStats {
+  totalUsageIn: Int!
+  totalUsageOut: Int!
+  totalUsageCacheIn: Int!
+  totalUsageCacheOut: Int!
+  totalUsageCostIn: Float!
+  totalUsageCostOut: Float!
+}
+
+# Toolcalls statistics data
+type ToolcallsStats {
+  totalCount: Int!
+  totalDurationSeconds: Float!
+}
+
+# Flows statistics data for all flows
+type FlowsStats {
+  totalFlowsCount: Int!
+  totalTasksCount: Int!
+  totalSubtasksCount: Int!
+  totalAssistantsCount: Int!
+}
+
+# Flow statistics data for a specific flow
+type FlowStats {
+  totalTasksCount: Int!
+  totalSubtasksCount: Int!
+  totalAssistantsCount: Int!
+}
+
+# Daily usage statistics
+type DailyUsageStats {
+  date: Time!
+  stats: UsageStats!
+}
+
+# Provider-specific usage statistics
+type ProviderUsageStats {
+  provider: String!
+  stats: UsageStats!
+}
+
+# Model-specific usage statistics
+type ModelUsageStats {
+  model: String!
+  provider: String!
+  stats: UsageStats!
+}
+
+# Agent type usage statistics
+type AgentTypeUsageStats {
+  agentType: AgentType!
+  stats: UsageStats!
+}
+
+# Daily toolcalls statistics
+type DailyToolcallsStats {
+  date: Time!
+  stats: ToolcallsStats!
+}
+
+# Function-specific toolcalls statistics
+type FunctionToolcallsStats {
+  functionName: String!
+  isAgent: Boolean!
+  totalCount: Int!
+  totalDurationSeconds: Float!
+  avgDurationSeconds: Float!
+}
+
+# Daily flows statistics
+type DailyFlowsStats {
+  date: Time!
+  stats: FlowsStats!
+}
+
+# Subtask execution time statistics
+type SubtaskExecutionStats {
+  subtaskId: ID!
+  subtaskTitle: String!
+  totalDurationSeconds: Float!
+  totalToolcallsCount: Int!
+}
+
+# Task execution time statistics
+type TaskExecutionStats {
+  taskId: ID!
+  taskTitle: String!
+  totalDurationSeconds: Float!
+  totalToolcallsCount: Int!
+  subtasks: [SubtaskExecutionStats!]!
+}
+
+# Flow execution time statistics
+type FlowExecutionStats {
+  flowId: ID!
+  flowTitle: String!
+  totalDurationSeconds: Float!
+  totalToolcallsCount: Int!
+  totalAssistantsCount: Int!
+  tasks: [TaskExecutionStats!]!
+}
+
+# Time period for usage statistics queries
+enum UsageStatsPeriod {
+  week
+  month
+  quarter
+}
+
+# ==================== Provider Configuration Types ====================
+
+# Short provider view for selector
+type Provider {
+  name: String!
+  type: ProviderType!
+}
+
+# Provider model manifest
+type ModelConfig {
+  name: String!
+  description: String
+  releaseDate: Time
+  thinking: Boolean
+  price: ModelPrice
+}
+
+# Available models for each provider type
+type ProvidersModelsList {
+  openai: [ModelConfig!]!
+  anthropic: [ModelConfig!]!
+  gemini: [ModelConfig!]!
+  bedrock: [ModelConfig!]
+  ollama: [ModelConfig!]
+  custom: [ModelConfig!]
+  deepseek: [ModelConfig!]
+  glm: [ModelConfig!]
+  kimi: [ModelConfig!]
+  qwen: [ModelConfig!]
+}
+
+# Provider availability status
+type ProvidersReadinessStatus {
+  openai: Boolean!
+  anthropic: Boolean!
+  gemini: Boolean!
+  bedrock: Boolean!
+  ollama: Boolean!
+  custom: Boolean!
+  deepseek: Boolean!
+  glm: Boolean!
+  kimi: Boolean!
+  qwen: Boolean!
+}
+
+# Default provider configurations
+type DefaultProvidersConfig {
+  openai: ProviderConfig!
+  anthropic: ProviderConfig!
+  gemini: ProviderConfig
+  bedrock: ProviderConfig
+  ollama: ProviderConfig
+  custom: ProviderConfig
+  deepseek: ProviderConfig
+  glm: ProviderConfig
+  kimi: ProviderConfig
+  qwen: ProviderConfig
+}
+
+# Complete providers configuration
+type ProvidersConfig {
+  enabled: ProvidersReadinessStatus!
+  default: DefaultProvidersConfig!
+  userDefined: [ProviderConfig!]
+  models: ProvidersModelsList!
+}
+
+# Individual provider configuration
+type ProviderConfig {
+  id: ID!
+  name: String!
+  type: ProviderType!
+  agents: AgentsConfig!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+# AI model reasoning configuration
+type ReasoningConfig {
+  effort: ReasoningEffort
+  maxTokens: Int
+}
+
+# Model pricing information
+type ModelPrice {
+  input: Float!
+  output: Float!
+  cacheRead: Float!
+  cacheWrite: Float!
+}
+
+# AI agent configuration parameters
+type AgentConfig {
+  model: String!
+  maxTokens: Int
+  temperature: Float
+  topK: Int
+  topP: Float
+  minLength: Int
+  maxLength: Int
+  repetitionPenalty: Float
+  frequencyPenalty: Float
+  presencePenalty: Float
+  reasoning: ReasoningConfig
+  price: ModelPrice
+}
+
+# All agent type configurations for a provider
+type AgentsConfig {
+  simple: AgentConfig!
+  simpleJson: AgentConfig!
+  primaryAgent: AgentConfig!
+  assistant: AgentConfig!
+  generator: AgentConfig!
+  refiner: AgentConfig!
+  adviser: AgentConfig!
+  reflector: AgentConfig!
+  searcher: AgentConfig!
+  enricher: AgentConfig!
+  coder: AgentConfig!
+  installer: AgentConfig!
+  pentester: AgentConfig!
+}
+
+# ==================== Input Types ====================
+
+# Input type for ReasoningConfig
+input ReasoningConfigInput {
+  effort: ReasoningEffort
+  maxTokens: Int
+}
+
+# Input type for ModelPrice
+input ModelPriceInput {
+  input: Float!
+  output: Float!
+  cacheRead: Float!
+  cacheWrite: Float!
+}
+
+# Input type for AgentConfig
+input AgentConfigInput {
+  model: String!
+  maxTokens: Int
+  temperature: Float
+  topK: Int
+  topP: Float
+  minLength: Int
+  maxLength: Int
+  repetitionPenalty: Float
+  frequencyPenalty: Float
+  presencePenalty: Float
+  reasoning: ReasoningConfigInput
+  price: ModelPriceInput
+}
+
+# Input type for AgentsConfig
+input AgentsConfigInput {
+  simple: AgentConfigInput!
+  simpleJson: AgentConfigInput!
+  primaryAgent: AgentConfigInput!
+  assistant: AgentConfigInput!
+  generator: AgentConfigInput!
+  refiner: AgentConfigInput!
+  adviser: AgentConfigInput!
+  reflector: AgentConfigInput!
+  searcher: AgentConfigInput!
+  enricher: AgentConfigInput!
+  coder: AgentConfigInput!
+  installer: AgentConfigInput!
+  pentester: AgentConfigInput!
+}
+
+# ==================== GraphQL Operations ====================
+
+type Query {
+  # Provider management
+  providers: [Provider!]!
+
+  # Flow and assistant management
+  assistants(flowId: ID!): [Assistant!]
+  flows: [Flow!]
+  flow(flowId: ID!): Flow!
+
+  # Task and execution logs
+  tasks(flowId: ID!): [Task!]
+  screenshots(flowId: ID!): [Screenshot!]
+  terminalLogs(flowId: ID!): [TerminalLog!]
+  messageLogs(flowId: ID!): [MessageLog!]
+  agentLogs(flowId: ID!): [AgentLog!]
+  searchLogs(flowId: ID!): [SearchLog!]
+  vectorStoreLogs(flowId: ID!): [VectorStoreLog!]
+  assistantLogs(flowId: ID!, assistantId: ID!): [AssistantLog!]
+
+  # Usage statistics and analytics
+  usageStatsTotal: UsageStats!
+  usageStatsByPeriod(period: UsageStatsPeriod!): [DailyUsageStats!]!
+  usageStatsByProvider: [ProviderUsageStats!]!
+  usageStatsByModel: [ModelUsageStats!]!
+  usageStatsByAgentType: [AgentTypeUsageStats!]!
+  usageStatsByFlow(flowId: ID!): UsageStats!
+  usageStatsByAgentTypeForFlow(flowId: ID!): [AgentTypeUsageStats!]!
+
+  # Toolcalls statistics and analytics
+  toolcallsStatsTotal: ToolcallsStats!
+  toolcallsStatsByPeriod(period: UsageStatsPeriod!): [DailyToolcallsStats!]!
+  toolcallsStatsByFunction: [FunctionToolcallsStats!]!
+  toolcallsStatsByFlow(flowId: ID!): ToolcallsStats!
+  toolcallsStatsByFunctionForFlow(flowId: ID!): [FunctionToolcallsStats!]!
+
+  # Flows statistics and analytics
+  flowsStatsTotal: FlowsStats!
+  flowsStatsByPeriod(period: UsageStatsPeriod!): [DailyFlowsStats!]!
+  flowStatsByFlow(flowId: ID!): FlowStats!
+
+  # Flows/Tasks/Subtasks execution time analytics
+  flowsExecutionStatsByPeriod(period: UsageStatsPeriod!): [FlowExecutionStats!]!
+
+  # System settings
+  settings: Settings!
+  settingsProviders: ProvidersConfig!
+  settingsPrompts: PromptsConfig!
+  settingsUser: UserPreferences!
+
+  # API Tokens management
+  apiToken(tokenId: String!): APIToken
+  apiTokens: [APIToken!]!
+}
+
+type Mutation {
+  # Flow management
+  createFlow(modelProvider: String!, input: String!): Flow!
+  putUserInput(flowId: ID!, input: String!): ResultType!
+  stopFlow(flowId: ID!): ResultType!
+  finishFlow(flowId: ID!): ResultType!
+  deleteFlow(flowId: ID!): ResultType!
+  renameFlow(flowId: ID!, title: String!): ResultType!
+
+  # Assistant management
+  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!): FlowAssistant!
+  callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!): ResultType!
+  stopAssistant(flowId: ID!, assistantId: ID!): Assistant!
+  deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!
+
+  # Testing and validation
+  testAgent(type: ProviderType!, agentType: AgentConfigType!, agent: AgentConfigInput!): AgentTestResult!
+  testProvider(type: ProviderType!, agents: AgentsConfigInput!): ProviderTestResult!
+  createProvider(name: String!, type: ProviderType!, agents: AgentsConfigInput!): ProviderConfig!
+  updateProvider(providerId: ID!, name: String!, agents: AgentsConfigInput!): ProviderConfig!
+  deleteProvider(providerId: ID!): ResultType!
+
+  # Prompt management
+  validatePrompt(type: PromptType!, template: String!): PromptValidationResult!
+  createPrompt(type: PromptType!, template: String!): UserPrompt!
+  updatePrompt(promptId: ID!, template: String!): UserPrompt!
+  deletePrompt(promptId: ID!): ResultType!
+
+  # API Tokens management
+  createAPIToken(input: CreateAPITokenInput!): APITokenWithSecret!
+  updateAPIToken(tokenId: String!, input: UpdateAPITokenInput!): APIToken!
+  deleteAPIToken(tokenId: String!): Boolean!
+
+  # User preferences management
+  addFavoriteFlow(flowId: ID!): ResultType!
+  deleteFavoriteFlow(flowId: ID!): ResultType!
+}
+
+type Subscription {
+  # Flow events
+  flowCreated: Flow!
+  flowDeleted: Flow!
+  flowUpdated: Flow!
+  taskCreated(flowId: ID!): Task!
+  taskUpdated(flowId: ID!): Task!
+
+  # Assistant events
+  assistantCreated(flowId: ID!): Assistant!
+  assistantUpdated(flowId: ID!): Assistant!
+  assistantDeleted(flowId: ID!): Assistant!
+
+  # Log events
+  screenshotAdded(flowId: ID!): Screenshot!
+  terminalLogAdded(flowId: ID!): TerminalLog!
+  messageLogAdded(flowId: ID!): MessageLog!
+  messageLogUpdated(flowId: ID!): MessageLog!
+  agentLogAdded(flowId: ID!): AgentLog!
+  searchLogAdded(flowId: ID!): SearchLog!
+  vectorStoreLogAdded(flowId: ID!): VectorStoreLog!
+  assistantLogAdded(flowId: ID!): AssistantLog!
+  assistantLogUpdated(flowId: ID!): AssistantLog!
+
+  # Provider events
+  providerCreated: ProviderConfig!
+  providerUpdated: ProviderConfig!
+  providerDeleted: ProviderConfig!
+
+  # API token events
+  apiTokenCreated: APIToken!
+  apiTokenUpdated: APIToken!
+  apiTokenDeleted: APIToken!
+
+  # User preferences events
+  settingsUserUpdated: UserPreferences!
+}
