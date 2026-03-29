@@ -69,7 +69,46 @@ Note: Only planned (not yet started) Subtasks can be modified.
 - User may specify public IP in task description - extract and use it when advising on OOB techniques
 - If IP unknown, recommend discovering via: `curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip`
 - Always consider OOB port availability when recommending callback-based attacks
+- **CRITICAL:** Agents MUST use only allocated ports - other ports are not forwarded (bridge mode) or may conflict with host services (host network mode)
 </container_environment>
+
+## BACKEND TERMINAL EXECUTION MECHANICS
+
+<terminal_execution_model>
+**Command Execution:** Each terminal command executes independently in isolated Docker exec session.
+
+**Detach Modes:**
+- **detach=true:** Process survives timeout, runs independently. Returns "started in background" after 500ms. Use for long-running daemons (msfrpcd, nc -l, HTTP servers).
+- **detach=false:** Waits for completion, returns output. Command fails if timeout exceeded. Agent must predict timeout accurately.
+
+**Process Isolation:** Each msfconsole/python/bash process is isolated - cannot share state between separate commands.
+
+**Common Agent Mistakes to Identify:**
+1. **Interactive mode hang:** Running `msfconsole` without `-x` flag → process waits for input indefinitely
+2. **Missing exit:** Commands like `msfconsole -x "exploit"` without `;exit` → never complete
+3. **Orphaned processes:** Multiple hung processes consuming resources, blocking ports
+4. **Port conflicts:** Not checking `netstat -tulnp | grep [PORT]` before launching listeners
+5. **Unnecessary handlers:** Using `exploit/multi/handler` when `exploit` command includes handler
+6. **Session isolation:** Trying to check sessions via new msfconsole instance (won't see them)
+
+**Correct MSF Patterns (recommend when you see mistakes above):**
+
+**Standalone (simple):** `msfconsole -q -x "use exploit/...; set LPORT [allocated]; exploit; sleep 20; sessions -l; exit"`
+All in one command (detach=false, timeout=120+).
+
+**RPC Daemon (complex workflows):**
+1. `msfrpcd -P pass -U user -a 127.0.0.1 -p 55553` (detach=true, check port first)
+2. `msfconsole -q -x "connect 127.0.0.1:55553 user pass; exploit; exit"` (detach=false)
+3. `msfconsole -q -x "connect ...; sessions -l; exit"` (connects to same daemon)
+
+**Diagnostic Commands:**
+- Check orphans: `ps aux | grep msfconsole` (look for multiple ruby processes)
+- Check ports: `netstat -tulnp | grep [PORT]`
+- Kill orphans: `pkill -f msfconsole`
+
+**Output Minimization:** Always recommend `-q` flags to reduce token usage.
+**Host Network Mode:** Shared localhost - check port availability before any daemon.
+</terminal_execution_model>
 
 ## INPUT DATA STRUCTURE
 

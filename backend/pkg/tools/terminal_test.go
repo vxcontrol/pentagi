@@ -40,17 +40,17 @@ type contextAwareMockDockerClient struct {
 	ctxWasCanceled bool
 }
 
-func (m *contextAwareMockDockerClient) LaunchContainer(_ context.Context, _ string, _ database.ContainerType,
+func (m *contextAwareMockDockerClient) RunContainer(_ context.Context, _ string, _ database.ContainerType,
 	_ int64, _ *container.Config, _ *container.HostConfig) (database.Container, error) {
 	return database.Container{}, nil
 }
-func (m *contextAwareMockDockerClient) HaltContainer(_ context.Context, _ string, _ int64) error {
+func (m *contextAwareMockDockerClient) StopContainer(_ context.Context, _ string, _ int64) error {
 	return nil
 }
-func (m *contextAwareMockDockerClient) PurgeContainer(_ context.Context, _ string, _ int64) error {
+func (m *contextAwareMockDockerClient) RemoveContainer(_ context.Context, _ string, _ int64) error {
 	return nil
 }
-func (m *contextAwareMockDockerClient) VerifyContainerRuntime(_ context.Context, _ string) (bool, error) {
+func (m *contextAwareMockDockerClient) IsContainerRunning(_ context.Context, _ string) (bool, error) {
 	return m.isRunning, nil
 }
 func (m *contextAwareMockDockerClient) ContainerExecCreate(_ context.Context, _ string, _ container.ExecOptions) (container.ExecCreateResponse, error) {
@@ -97,8 +97,8 @@ func (m *contextAwareMockDockerClient) CopyToContainer(_ context.Context, _ stri
 func (m *contextAwareMockDockerClient) CopyFromContainer(_ context.Context, _ string, _ string) (io.ReadCloser, container.PathStat, error) {
 	return io.NopCloser(nil), container.PathStat{}, nil
 }
-func (m *contextAwareMockDockerClient) CleanupAllResources(_ context.Context) error { return nil }
-func (m *contextAwareMockDockerClient) GetDefaultImage() string                     { return "test-image" }
+func (m *contextAwareMockDockerClient) Cleanup(_ context.Context) error { return nil }
+func (m *contextAwareMockDockerClient) GetDefaultImage() string         { return "test-image" }
 
 var _ docker.DockerClient = (*contextAwareMockDockerClient)(nil)
 

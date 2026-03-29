@@ -1505,7 +1505,7 @@ Configuration combines based on scenario: enable both capabilities for full pent
 	ToolsDockerSocket       = "Docker Socket"
 	ToolsDockerSocketDesc   = "Path to Docker socket on host filesystem"
 	ToolsDockerNetwork      = "Docker Network"
-	ToolsDockerNetworkDesc  = "Custom network name for worker containers"
+	ToolsDockerNetworkDesc  = "Custom network name for worker containers, or 'host' for direct host network access"
 	ToolsDockerPublicIP     = "Public IP Address"
 	ToolsDockerPublicIPDesc = "Public IP for reverse connections in OOB attacks"
 
@@ -1549,13 +1549,27 @@ When using DinD, use the path to the Docker socket file of the DinD container wh
 
 Example: /var/run/docker.sock`
 
-	ToolsDockerNetworkHelp = `Custom Docker Network provides isolation for worker containers. Allows fine-grained firewall rules and network policies.
+	ToolsDockerNetworkHelp = `Docker Network controls network isolation mode for worker containers:
 
-Useful for:
-• Isolating worker traffic
-• Custom network configurations
+Bridge Mode (custom network name):
+• Isolated communication between containers
+• Port forwarding from container to host
 • Enhanced security boundaries
-• Network-based monitoring`
+• Network-based monitoring and filtering
+• Recommended for most use cases
+
+Host Mode (value: 'host'):
+• Direct access to host network interfaces
+• No port forwarding - ports bind directly to host
+• Required for raw packet manipulation
+• Advanced network testing capabilities
+• Lower isolation - use with caution
+
+Examples:
+• 'pentagi-network' - creates isolated bridge network
+• 'host' - enables direct host network access
+
+Security Note: Host network mode reduces container isolation. Only use when necessary for advanced penetration testing tasks requiring direct network stack access.`
 
 	ToolsDockerPublicIPHelp = `Public IP Address enables out-of-band (OOB) attack techniques by providing workers with a reachable address for reverse connections.
 

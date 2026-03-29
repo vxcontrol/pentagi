@@ -135,6 +135,7 @@ type providerController struct {
 	cfg            *config.Config
 	docker         docker.DockerClient
 	publicIP       string
+	dockerNetwork  string
 	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
 
@@ -357,6 +358,7 @@ func NewProviderController(
 		cfg:            cfg,
 		docker:         docker,
 		publicIP:       cfg.DockerPublicIP,
+		dockerNetwork:  cfg.DockerNetwork,
 		embedder:       embedder,
 		graphitiClient: graphitiClient,
 
@@ -446,6 +448,7 @@ func (pc *providerController) NewFlowProvider(
 		graphitiClient:  pc.graphitiClient,
 		flowID:          flowID,
 		publicIP:        pc.publicIP,
+		dockerNetwork:   pc.dockerNetwork,
 		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
 		image:           image,
 		title:           title,
@@ -495,6 +498,7 @@ func (pc *providerController) LoadFlowProvider(
 		graphitiClient:  pc.graphitiClient,
 		flowID:          flowID,
 		publicIP:        pc.publicIP,
+		dockerNetwork:   pc.dockerNetwork,
 		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
 		image:           image,
 		title:           title,
@@ -589,6 +593,7 @@ func (pc *providerController) NewAssistantProvider(
 			graphitiClient:  pc.graphitiClient,
 			flowID:          flowID,
 			publicIP:        pc.publicIP,
+			dockerNetwork:   pc.dockerNetwork,
 			callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
 			image:           image,
 			title:           title,
@@ -641,6 +646,7 @@ func (pc *providerController) LoadAssistantProvider(
 			graphitiClient:  pc.graphitiClient,
 			flowID:          flowID,
 			publicIP:        pc.publicIP,
+			dockerNetwork:   pc.dockerNetwork,
 			callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
 			image:           image,
 			title:           title,

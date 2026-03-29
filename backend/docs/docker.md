@@ -92,8 +92,8 @@ The Docker client is configured through several environment variables defined in
 | `DOCKER_INSIDE` | `false` | Whether PentAGI communicates with host Docker daemon from containers |
 | `DOCKER_NET_ADMIN` | `false` | Whether PentAGI grants the primary container NET_ADMIN capability for advanced networking. |
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | Path to Docker socket on host |
-| `DOCKER_NETWORK` | | Docker network for container communication |
-| `DOCKER_PUBLIC_IP` | `0.0.0.0` | Public IP for port binding |
+| `DOCKER_NETWORK` | | Docker network for container communication (bridge mode) or `host` for host network mode |
+| `DOCKER_PUBLIC_IP` | `0.0.0.0` | Public IP for port binding (bridge mode only) |
 | `DOCKER_WORK_DIR` | | Custom work directory path on host |
 | `DOCKER_DEFAULT_IMAGE` | `debian:latest` | Fallback image if AI-selected image fails |
 | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
@@ -173,10 +173,25 @@ PentAGI supports running inside Docker containers while still managing other con
 
 ### Network Configuration
 
-When `DOCKER_NETWORK` is specified, all containers are automatically connected to this network, enabling:
-- Isolated communication between PentAGI components
-- Controlled access to external networks
-- Service discovery within the PentAGI ecosystem
+PentAGI supports two network modes for container isolation:
+
+#### Bridge Network Mode (Default)
+
+When `DOCKER_NETWORK` is set to a custom network name (e.g., `pentagi-network`), containers are connected to an isolated bridge network:
+- **Isolated Communication**: Containers communicate only within the defined network
+- **Port Mapping**: Container ports are mapped to host ports for external access
+- **Service Discovery**: Enables internal DNS-based service discovery
+- **Enhanced Security**: Network-level isolation from other containers
+
+#### Host Network Mode
+
+When `DOCKER_NETWORK` is set to the special value `host`, containers use the host's network stack directly:
+- **Direct Network Access**: Container shares the host's network interfaces
+- **No Port Mapping**: Ports are directly accessible on host interfaces (no NAT)
+- **Performance**: Eliminates network virtualization overhead
+- **Use Cases**: Advanced network testing, raw packet manipulation, network monitoring
+
+**Security Consideration**: Host network mode reduces isolation. Use only when necessary for penetration testing tasks requiring direct host network access.
 
 ## Core Interfaces
 
@@ -187,10 +202,10 @@ The main interface defines all Docker operations available to PentAGI components
 ```go
 type DockerClient interface {
     // Container lifecycle management
-    SpawnContainer(ctx context.Context, containerName string, containerType database.ContainerType,
+    RunContainer(ctx context.Context, containerName string, containerType database.ContainerType,
         flowID int64, config *container.Config, hostConfig *container.HostConfig) (database.Container, error)
     StopContainer(ctx context.Context, containerID string, dbID int64) error
-    DeleteContainer(ctx context.Context, containerID string, dbID int64) error
+    RemoveContainer(ctx context.Context, containerID string, dbID int64) error
     IsContainerRunning(ctx context.Context, containerID string) (bool, error)
 
     // Command execution
@@ -229,7 +244,7 @@ type dockerClient struct {
 
 ### Container Creation Process
 
-The `SpawnContainer` method handles the complete container creation workflow:
+The `RunContainer` method handles the complete container creation workflow:
 
 1. **Preparation**:
    - Creates flow-specific work directory
@@ -253,9 +268,9 @@ The `SpawnContainer` method handles the complete container creation workflow:
    - Optionally mounts Docker socket for Docker-in-Docker
 
 5. **Network and Ports**:
-   - Assigns flow-specific ports using deterministic algorithm
-   - Connects to specified Docker network if configured
-   - Binds ports to public IP
+   - **Bridge Mode**: Assigns flow-specific ports using deterministic algorithm, binds to public IP
+   - **Host Mode** (`DOCKER_NETWORK=host`): Uses host network stack, skips port bindings
+   - Connects to specified Docker network (unless host mode)
 
 6. **Container Startup**:
    - Creates container with all configurations
@@ -451,7 +466,7 @@ if err != nil {
 
 // Create container for a flow
 containerName := docker.PrimaryTerminalName(flowID)
-container, err := dockerClient.SpawnContainer(
+container, err := dockerClient.RunContainer(
     ctx,
     containerName,
     database.ContainerTypePrimary,
@@ -513,7 +528,7 @@ isRunning, err := dockerClient.IsContainerRunning(ctx, containerID)
 err = dockerClient.StopContainer(ctx, containerID, dbID)
 
 // Remove container and volumes
-err = dockerClient.DeleteContainer(ctx, containerID, dbID)
+err = dockerClient.RemoveContainer(ctx, containerID, dbID)
 
 // Global cleanup (usually called on startup)
 err = dockerClient.Cleanup(ctx)
@@ -523,7 +538,7 @@ err = dockerClient.Cleanup(ctx)
 
 ```go
 // The client implements comprehensive error handling
-container, err := dockerClient.SpawnContainer(ctx, name, containerType, flowID, config, hostConfig)
+container, err := dockerClient.RunContainer(ctx, name, containerType, flowID, config, hostConfig)
 if err != nil {
     // Errors include:
     // - Image pull failures (handled with fallback)

@@ -42,7 +42,7 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 	r.Logger.WithFields(logrus.Fields{
 		"uid":      uid,
 		"provider": modelProvider,
-		"input":    input,
+		"input":    input[:min(len(input), 1000)],
 	}).Debug("create flow")
 
 	if modelProvider == "" {

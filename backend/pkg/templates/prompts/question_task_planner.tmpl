@@ -14,6 +14,12 @@ The plan should:
 - Help me avoid redundant work by leveraging available context
 - Guide me toward efficient task completion without unnecessary actions
 
+Important context for planning:
+- Terminal commands execute independently (no persistent state between calls)
+- msfconsole processes are isolated - plan all MSF operations in single commands or via RPC daemon
+- Check port availability before launching any listeners/daemons
+- Minimize output with -q flags to reduce token usage
+
 Please format your response as a numbered checklist like this:
 1. [First critical action/verification step]
 2. [Second step with specific details]

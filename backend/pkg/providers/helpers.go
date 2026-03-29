@@ -786,24 +786,62 @@ func (fp *flowProvider) getContainerPortsDescription() string {
 	var buffer strings.Builder
 
 	buffer.WriteString("**OOB Attack Infrastructure:**\n\n")
-	buffer.WriteString("This container has TCP ports bound for receiving out-of-band (OOB) callbacks:\n\n")
 
-	for _, port := range ports {
-		buffer.WriteString(fmt.Sprintf("- Port %d/tcp (container) → %s:%d (external)\n", port, fp.publicIP, port))
-	}
+	// Host network mode: container has direct access to host network interfaces
+	if fp.dockerNetwork == "host" {
+		buffer.WriteString("This container uses **host network mode** with direct access to host network interfaces.\n\n")
+		buffer.WriteString("**MANDATORY PORTS - YOU MUST USE ONLY THESE:**\n\n")
 
-	buffer.WriteString("\n**Usage for OOB Attacks:**\n")
+		for _, port := range ports {
+			buffer.WriteString(fmt.Sprintf("- Port %d/tcp (REQUIRED)\n", port))
+		}
 
-	if fp.publicIP == "0.0.0.0" {
-		buffer.WriteString("The bind IP is 0.0.0.0 (all interfaces). To receive external callbacks:\n")
-		buffer.WriteString("1. Discover your public IP: `curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip`\n")
-		buffer.WriteString("2. Use discovered IP in exploit payloads for callbacks\n")
-		buffer.WriteString("3. Listen on container ports (shown above) to receive connections\n\n")
-		buffer.WriteString("**Important:** Check Task.Input - user may have specified the public IP to use.\n")
+		buffer.WriteString("\n**Network Access:**\n")
+		buffer.WriteString("- Direct access to all host network interfaces\n")
+		buffer.WriteString("- No port forwarding - services bind directly to host ports\n")
+		buffer.WriteString("- **CRITICAL**: DO NOT use any other ports - this may interfere with other running applications on the host system\n")
+		buffer.WriteString("- Using non-allocated ports could cause conflicts with system services and impact host stability\n")
+		buffer.WriteString("- All host network interfaces are accessible for binding\n\n")
+
+		buffer.WriteString("**Usage for OOB Attacks:**\n")
+		if fp.publicIP == "0.0.0.0" {
+			buffer.WriteString("To determine the public IP for callbacks:\n")
+			buffer.WriteString("1. Discover your public IP: `curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip`\n")
+			buffer.WriteString("2. Use discovered IP in exploit payloads for callbacks\n")
+			buffer.WriteString("3. Listen on allocated ports (shown above) to receive connections\n\n")
+			buffer.WriteString("**Important:** Check Task.Input - user may have specified the public IP to use.\n")
+		} else {
+			buffer.WriteString(fmt.Sprintf("Your external IP is: **%s**\n\n", fp.publicIP))
+			buffer.WriteString("Use this IP in exploit payloads requiring callbacks (DNS exfiltration, reverse shells, XXE OOB, SSRF verification, etc.)\n")
+			buffer.WriteString("Listen on the allocated ports above to receive incoming connections.\n")
+		}
 	} else {
-		buffer.WriteString(fmt.Sprintf("Your external IP is: %s\n", fp.publicIP))
-		buffer.WriteString("Use this IP in exploit payloads requiring callbacks (DNS exfiltration, reverse shells, XXE OOB, SSRF verification, etc.)\n")
-		buffer.WriteString("Listen on the container ports above to receive incoming connections.\n")
+		// Bridge network mode: traditional port forwarding
+		buffer.WriteString("**MANDATORY FORWARDED PORTS - YOU MUST USE ONLY THESE:**\n\n")
+
+		for _, port := range ports {
+			buffer.WriteString(fmt.Sprintf("- Port %d/tcp (container) → %s:%d (external)\n", port, fp.publicIP, port))
+		}
+
+		buffer.WriteString("\n**Port Usage Rules:**\n")
+		buffer.WriteString("- **YOU MUST use ONLY the ports listed above** for all listeners and reverse connections\n")
+		buffer.WriteString("- **CRITICAL**: Any reverse connections (shells, callbacks) will FAIL on other ports - only allocated ports are forwarded\n")
+		buffer.WriteString("- Standard ports like 4444, 8080, 9001 are NOT forwarded and will NOT work\n")
+		buffer.WriteString(fmt.Sprintf("- Example: For Metasploit reverse shell, use LPORT=%d (not 4444)\n\n", ports[0]))
+
+		buffer.WriteString("**Usage for OOB Attacks:**\n")
+
+		if fp.publicIP == "0.0.0.0" {
+			buffer.WriteString("The bind IP is 0.0.0.0 (all interfaces). To receive external callbacks:\n")
+			buffer.WriteString("1. Discover your public IP: `curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip`\n")
+			buffer.WriteString("2. Use discovered IP in exploit payloads for callbacks\n")
+			buffer.WriteString("3. Listen on container ports (shown above) to receive connections\n\n")
+			buffer.WriteString("**Important:** Check Task.Input - user may have specified the public IP to use.\n")
+		} else {
+			buffer.WriteString(fmt.Sprintf("Your external IP is: %s\n", fp.publicIP))
+			buffer.WriteString("Use this IP in exploit payloads requiring callbacks (DNS exfiltration, reverse shells, XXE OOB, SSRF verification, etc.)\n")
+			buffer.WriteString("Listen on the container ports above to receive incoming connections.\n")
+		}
 	}
 
 	return buffer.String()

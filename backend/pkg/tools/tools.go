@@ -402,7 +402,7 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 			fte.primaryLID = cnt.LocalID.String
 			return nil
 		default:
-			fte.docker.PurgeContainer(ctx, cnt.LocalID.String, cnt.ID)
+			fte.docker.RemoveContainer(ctx, cnt.LocalID.String, cnt.ID)
 		}
 	}
 
@@ -412,7 +412,7 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 	}
 
 	containerName := PrimaryTerminalName(fte.flowID)
-	cnt, err := fte.docker.LaunchContainer(
+	cnt, err := fte.docker.RunContainer(
 		ctx,
 		containerName,
 		database.ContainerTypePrimary,
@@ -426,7 +426,7 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to spawn container '%s': %w", containerName, err)
+		return fmt.Errorf("failed to launch container '%s': %w", containerName, err)
 	}
 
 	fte.primaryID = cnt.ID
@@ -441,7 +441,7 @@ func (fte *flowToolsExecutor) Release(ctx context.Context) error {
 	}
 
 	// TODO: here better to get flow containers list and purge all of them
-	if err := fte.docker.PurgeContainer(ctx, fte.primaryLID, fte.primaryID); err != nil {
+	if err := fte.docker.RemoveContainer(ctx, fte.primaryLID, fte.primaryID); err != nil {
 		containerName := PrimaryTerminalName(fte.flowID)
 		return fmt.Errorf("failed to purge container '%s': %w", containerName, err)
 	}

@@ -6,18 +6,18 @@ import (
 	"strings"
 )
 
-type CodeAction string
+type FileOp string
 
 const (
-	ReadFile   CodeAction = "read_file"
-	UpdateFile CodeAction = "update_file"
+	ReadFile   FileOp = "read_file"
+	UpdateFile FileOp = "update_file"
 )
 
 type FileAction struct {
-	Action  CodeAction `json:"action" jsonschema:"required,enum=read_file,enum=update_file" jsonschema_description:"Action to perform with the code. 'read_file' - Returns the content of the file. 'update_file' - Updates the content of the file"`
-	Content string     `json:"content" jsonschema_description:"Content to write to the file"`
-	Path    string     `json:"path" jsonschema:"required" jsonschema_description:"Path to the file to read or update"`
-	Message string     `json:"message" jsonschema:"required,title=File action message" jsonschema_description:"Not so long message which explain what do you want to read or to write to the file and explain written content to send to the user in user's language only"`
+	Action  FileOp `json:"action" jsonschema:"required,enum=read_file,enum=update_file" jsonschema_description:"Action to perform with the code. 'read_file' - Returns the content of the file. 'update_file' - Updates the content of the file"`
+	Content string `json:"content" jsonschema_description:"Content to write to the file"`
+	Path    string `json:"path" jsonschema:"required" jsonschema_description:"Path to the file to read or update"`
+	Message string `json:"message" jsonschema:"required,title=File action message" jsonschema_description:"Not so long message which explain what do you want to read or to write to the file and explain written content to send to the user in user's language only"`
 }
 
 type BrowserAction string
@@ -93,8 +93,8 @@ type Done struct {
 type TerminalAction struct {
 	Input   string `json:"input" jsonschema:"required" jsonschema_description:"Command to be run in the docker container terminal according to rules to execute commands"`
 	Cwd     string `json:"cwd" jsonschema:"required" jsonschema_description:"Custom current working directory to execute commands in or default directory otherwise if it's not specified"`
-	Detach  Bool   `json:"detach" jsonschema:"required,type=boolean" jsonschema_description:"True if the command should be executed in the background, use timeout argument to limit of the execution time and you can not get output from the command if you use detach"`
-	Timeout Int64  `json:"timeout" jsonschema:"required,type=integer" jsonschema_description:"Limit in seconds for command execution in terminal to prevent blocking of the agent and it depends on the specific command (minimum 10; maximum 1200; default 60)"`
+	Detach  Bool   `json:"detach" jsonschema:"required,type=boolean" jsonschema_description:"Set to true for INTERACTIVE or LONG-RUNNING commands: shells (msfconsole, bash, python), listeners (nc -lvnp, socat TCP-LISTEN), servers (python -m http.server, php -S), monitors (tcpdump, tail -f). These commands expect user input or run indefinitely. When true: command runs in background, you get immediate confirmation, no stdout/stderr captured. When false: command must complete within timeout and return output. For quick batch commands (nmap, curl, ls) use false"`
+	Timeout Int64  `json:"timeout" jsonschema:"required,type=integer" jsonschema_description:"Execution time limit in seconds (minimum 10; maximum 1200; default 60). For batch commands that may run long, use the 'timeout' shell utility INSIDE your command to ensure clean completion with full output: 'timeout 55 nmap -sV target' (set 5-10 seconds less than this parameter). For interactive/long-running commands, use detach=true instead of relying solely on timeout"`
 	Message string `json:"message" jsonschema:"required,title=Terminal command message" jsonschema_description:"Not so long message which explain what do you want to achieve and to execute in terminal to send to the user in user's language only"`
 }
 

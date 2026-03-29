@@ -26,7 +26,7 @@ import (
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
-const ToolPlaceholder = "Always use your function calling functionality, instead of returning a text result."
+const ToolPlaceholder = "Execute operations via function invocation - textual responses are not acceptable for task completion."
 
 const TasksNumberLimit = 15
 
@@ -129,8 +129,9 @@ type flowProvider struct {
 	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
 
-	flowID   int64
-	publicIP string
+	flowID        int64
+	publicIP      string
+	dockerNetwork string
 
 	callCounter *atomic.Int64
 

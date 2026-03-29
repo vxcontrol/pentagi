@@ -313,19 +313,20 @@ func (b *browser) resolveUrl(targetURL string) (*url.URL, error) {
 	return url.Parse(scraperURL)
 }
 
-func (b *browser) saveScreenshotData(imageData []byte) (string, error) {
+func (b *browser) saveScreenshotData(screenshot []byte) (string, error) {
 	flowDirName := fmt.Sprintf("flow-%d", b.flowID)
-	targetDir := filepath.Join(b.dataDir, "screenshots", flowDirName)
+	screenshotDir := filepath.Join(b.dataDir, "screenshots", flowDirName)
 
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
+	err := os.MkdirAll(screenshotDir, os.ModePerm)
+	if err != nil {
 		return "", fmt.Errorf("failed to prepare screenshot directory: %w", err)
 	}
 
-	timestamp := time.Now().Unix()
-	screenshotName := fmt.Sprintf("screenshot-%d.png", timestamp)
-	fullPath := filepath.Join(targetDir, screenshotName)
+	screenshotName := fmt.Sprintf("screenshot-%d.png", time.Now().Unix())
+	path := filepath.Join(screenshotDir, screenshotName)
 
-	if err := os.WriteFile(fullPath, imageData, 0644); err != nil {
+	err = os.WriteFile(path, screenshot, 0644)
+	if err != nil {
 		return "", fmt.Errorf("screenshot write operation failed: %w", err)
 	}
 

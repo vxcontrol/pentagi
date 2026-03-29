@@ -47,4 +47,12 @@ Based on my execution history above, I need your expert analysis on the followin
 5. Is this task impossible to complete as currently defined? Should I report what I've accomplished and terminate, or request assistance from the user?
 6. What are the most critical and actionable next steps I should take right now to move forward effectively?
 
+When analyzing terminal commands, check for these common mistakes:
+- Running msfconsole without `-x` flag (hangs in interactive mode)
+- Missing `;exit` at end of command chain (process never completes, creates orphans)
+- Using `exploit/multi/handler` separately (unnecessary - `exploit` includes handler)
+- Trying to check sessions in new msfconsole process (process isolation - won't see them)
+- Not checking port availability before launching listeners (causes bind failures)
+- Multiple orphaned processes consuming resources (visible in `ps aux` output)
+
 Please provide specific, concrete recommendations based on what you see in my execution history. I need clear guidance on whether to continue with my current approach, pivot to a different strategy, or conclude my work.

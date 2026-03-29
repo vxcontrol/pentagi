@@ -53,17 +53,17 @@ type dockerClient struct {
 }
 
 type DockerClient interface {
-	LaunchContainer(ctx context.Context, containerName string, containerType database.ContainerType,
+	RunContainer(ctx context.Context, containerName string, containerType database.ContainerType,
 		flowID int64, config *container.Config, hostConfig *container.HostConfig) (database.Container, error)
-	HaltContainer(ctx context.Context, containerID string, dbID int64) error
-	PurgeContainer(ctx context.Context, containerID string, dbID int64) error
-	VerifyContainerRuntime(ctx context.Context, containerID string) (bool, error)
+	StopContainer(ctx context.Context, containerID string, dbID int64) error
+	RemoveContainer(ctx context.Context, containerID string, dbID int64) error
+	IsContainerRunning(ctx context.Context, containerID string) (bool, error)
 	ContainerExecCreate(ctx context.Context, container string, config container.ExecOptions) (container.ExecCreateResponse, error)
 	ContainerExecAttach(ctx context.Context, execID string, config container.ExecAttachOptions) (types.HijackedResponse, error)
 	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
 	CopyToContainer(ctx context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
 	CopyFromContainer(ctx context.Context, containerID string, srcPath string) (io.ReadCloser, container.PathStat, error)
-	CleanupAllResources(ctx context.Context) error
+	Cleanup(ctx context.Context) error
 	GetDefaultImage() string
 }
 
@@ -151,7 +151,7 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 	}, nil
 }
 
-func (dc *dockerClient) LaunchContainer(
+func (dc *dockerClient) RunContainer(
 	ctx context.Context,
 	containerName string,
 	containerType database.ContainerType,
@@ -181,7 +181,7 @@ func (dc *dockerClient) LaunchContainer(
 		"work_dir": workDir,
 		"host_dir": hostDir,
 	})
-	logger.Info("spawning container")
+	logger.Info("running container")
 
 	dbContainer, err := dc.db.CreateContainer(ctx, database.CreateContainerParams{
 		Type:     containerType,
@@ -275,29 +275,38 @@ func (dc *dockerClient) LaunchContainer(
 		},
 	}
 
-	if hostConfig.PortBindings == nil {
-		hostConfig.PortBindings = nat.PortMap{}
-	}
-	if config.ExposedPorts == nil {
-		config.ExposedPorts = nat.PortSet{}
-	}
-	for _, port := range GetPrimaryContainerPorts(flowID) {
-		natPort := nat.Port(fmt.Sprintf("%d/tcp", port))
-		hostConfig.PortBindings[natPort] = []nat.PortBinding{
-			{
-				HostIP:   dc.publicIP,
-				HostPort: fmt.Sprintf("%d", port),
-			},
-		}
-		config.ExposedPorts[natPort] = struct{}{}
-	}
-
+	// Configure network mode and port bindings
 	var networkingConfig *network.NetworkingConfig
-	if dc.network != "" {
-		networkingConfig = &network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{
-				dc.network: {},
-			},
+	if dc.network == "host" {
+		// Host network mode: container uses host network stack directly
+		// No port bindings needed as container has direct access to host interfaces
+		hostConfig.NetworkMode = container.NetworkMode("host")
+		logger.Debug("using host network mode - container will have direct access to host network interfaces")
+	} else {
+		// Bridge network mode: configure port bindings and custom network
+		if hostConfig.PortBindings == nil {
+			hostConfig.PortBindings = nat.PortMap{}
+		}
+		if config.ExposedPorts == nil {
+			config.ExposedPorts = nat.PortSet{}
+		}
+		for _, port := range GetPrimaryContainerPorts(flowID) {
+			natPort := nat.Port(fmt.Sprintf("%d/tcp", port))
+			hostConfig.PortBindings[natPort] = []nat.PortBinding{
+				{
+					HostIP:   dc.publicIP,
+					HostPort: fmt.Sprintf("%d", port),
+				},
+			}
+			config.ExposedPorts[natPort] = struct{}{}
+		}
+
+		if dc.network != "" {
+			networkingConfig = &network.NetworkingConfig{
+				EndpointsConfig: map[string]*network.EndpointSettings{
+					dc.network: {},
+				},
+			}
 		}
 	}
 
@@ -356,7 +365,7 @@ func (dc *dockerClient) LaunchContainer(
 	return dbContainer, nil
 }
 
-func (dc *dockerClient) HaltContainer(ctx context.Context, containerID string, dbID int64) error {
+func (dc *dockerClient) StopContainer(ctx context.Context, containerID string, dbID int64) error {
 	logger := dc.logger.WithContext(ctx).WithField("local_id", containerID)
 	logger.Info("initiating container shutdown sequence")
 
@@ -369,23 +378,25 @@ func (dc *dockerClient) HaltContainer(ctx context.Context, containerID string, d
 		}
 	}
 
-	if _, err := dc.db.UpdateContainerStatus(ctx, database.UpdateContainerStatusParams{
+	_, err := dc.db.UpdateContainerStatus(ctx, database.UpdateContainerStatusParams{
 		Status: database.ContainerStatusStopped,
 		ID:     dbID,
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("database status update failed during container stop: %w", err)
 	}
 
 	logger.Info("container shutdown completed successfully")
+
 	return nil
 }
 
-func (dc *dockerClient) PurgeContainer(ctx context.Context, containerID string, dbID int64) error {
+func (dc *dockerClient) RemoveContainer(ctx context.Context, containerID string, dbID int64) error {
 	logger := dc.logger.WithContext(ctx).WithField("local_id", containerID)
-	logger.Info("purging container and associated resources")
+	logger.Info("removing container and associated resources")
 
-	if err := dc.HaltContainer(ctx, containerID, dbID); err != nil {
-		return fmt.Errorf("failed to halt container before purge: %w", err)
+	if err := dc.StopContainer(ctx, containerID, dbID); err != nil {
+		return fmt.Errorf("failed to stop container: %w", err)
 	}
 
 	options := container.RemoveOptions{
@@ -413,7 +424,7 @@ func (dc *dockerClient) PurgeContainer(ctx context.Context, containerID string, 
 	return nil
 }
 
-func (dc *dockerClient) CleanupAllResources(ctx context.Context) error {
+func (dc *dockerClient) Cleanup(ctx context.Context) error {
 	logger := dc.logger.WithContext(ctx).WithField("docker", "cleanup")
 	logger.Info("cleaning up containers and making all flows finished...")
 
@@ -437,12 +448,12 @@ func (dc *dockerClient) CleanupAllResources(ctx context.Context) error {
 	}
 
 	var wg sync.WaitGroup
-	deleteContainer := func(containerID string, dbID int64) {
+	removeContainer := func(containerID string, dbID int64) {
 		defer wg.Done()
 		logger := logger.WithField("local_id", containerID)
 
-		if err := dc.PurgeContainer(ctx, containerID, dbID); err != nil {
-			logger.WithError(err).Errorf("failed to delete container")
+		if err := dc.RemoveContainer(ctx, containerID, dbID); err != nil {
+			logger.WithError(err).Errorf("failed to remove container")
 		}
 
 		_, err := dc.db.UpdateContainerStatus(ctx, database.UpdateContainerStatusParams{
@@ -492,7 +503,7 @@ func (dc *dockerClient) CleanupAllResources(ctx context.Context) error {
 				switch container.Status {
 				case database.ContainerStatusStarting, database.ContainerStatusRunning:
 					wg.Add(1)
-					go deleteContainer(container.LocalID.String, container.ID)
+					go removeContainer(container.LocalID.String, container.ID)
 				}
 			}
 		}
@@ -504,7 +515,7 @@ func (dc *dockerClient) CleanupAllResources(ctx context.Context) error {
 	return nil
 }
 
-func (dc *dockerClient) VerifyContainerRuntime(ctx context.Context, containerID string) (bool, error) {
+func (dc *dockerClient) IsContainerRunning(ctx context.Context, containerID string) (bool, error) {
 	inspection, err := dc.client.ContainerInspect(ctx, containerID)
 	if err != nil {
 		return false, fmt.Errorf("container inspection failed: %w", err)
@@ -582,7 +593,7 @@ func (dc *dockerClient) pullImage(ctx context.Context, imageName string) error {
 
 	pullStream, err := dc.client.ImagePull(ctx, imageName, image.PullOptions{})
 	if err != nil {
-		return fmt.Errorf("image pull request failed: %w", err)
+		return fmt.Errorf("failed to pull image: %w", err)
 	}
 	defer pullStream.Close()
 
@@ -591,7 +602,8 @@ func (dc *dockerClient) pullImage(ctx context.Context, imageName string) error {
 		return fmt.Errorf("image download stream processing failed: %w", err)
 	}
 
-	dc.logger.WithContext(ctx).WithField("image", imageName).Debug("image download completed")
+	dc.logger.WithContext(ctx).WithField("image", imageName).Debug("image pull completed")
+
 	return nil
 }
 
@@ -705,8 +717,9 @@ func getHostDataDir(ctx context.Context, cli *client.Client, dataDir, workDir st
 
 // ensureDockerNetwork verifies that a docker network with the given name exists;
 // if it does not, it attempts to create it.
+// Special case: "host" network mode is built-in and doesn't need creation.
 func ensureDockerNetwork(ctx context.Context, cli *client.Client, name string) error {
-	if name == "" {
+	if name == "" || name == "host" {
 		return nil
 	}
 

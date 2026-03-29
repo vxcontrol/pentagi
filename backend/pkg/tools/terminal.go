@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,10 +27,10 @@ const (
 	defaultQuickCheckTimeout  = 500 * time.Millisecond
 
 	// ANSI terminal color codes (aligned with PentAGI UI palette)
-	ansiColorInputCmd    = "\033[96m" // Bright Cyan - matches UI blue accents
-	ansiColorSystemMsg   = "\033[92m" // Bright Green - universal success/info
-	ansiColorReset       = "\033[0m"  // Reset to default
-	ansiLineTerminator   = "\r\n"     // CRLF for terminal compatibility
+	ansiColorInputCmd  = "\033[96m" // Bright Cyan - matches UI blue accents
+	ansiColorSystemMsg = "\033[92m" // Bright Green - universal success/info
+	ansiColorReset     = "\033[0m"  // Reset to default
+	ansiLineTerminator = "\r\n"     // CRLF for terminal compatibility
 )
 
 type execResult struct {
@@ -152,7 +153,7 @@ func (t *terminal) ExecCommand(
 	}
 
 	// verify container runtime status
-	isRunning, err := t.dockerClient.VerifyContainerRuntime(ctx, t.containerLID)
+	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
 		return "", fmt.Errorf("runtime verification failed: %w", err)
 	}
@@ -245,8 +246,15 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 		// Wait for the copy goroutine to finish
 		<-errChan
 
-		result := fmt.Sprintf("temporary output: %s", dst.String())
-		return "", fmt.Errorf("timeout value is too low, use greater value if you need so: %w: %s", ctx.Err(), result)
+		suggestedTimeout := max(int(timeout.Seconds())-10, 10)
+		return "", fmt.Errorf(
+			"command execution timeout (%v). Partial output: %s. "+
+				"HINT: If this is an interactive command (shell/REPL/listener), use detach=true. "+
+				"For long batch commands, wrap with shell timeout utility: 'timeout %d <command>' to ensure clean completion",
+			ctx.Err(),
+			truncateString(dst.String(), 500),
+			suggestedTimeout,
+		)
 	}
 
 	// wait for the exec process to finish
@@ -264,7 +272,7 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 	}
 
 	if results == "" {
-		results = "Process terminated with status 0. No console output generated"
+		results = "Command completed successfully with exit code 0. No output produced (silent success)"
 	}
 
 	return results, nil
@@ -273,7 +281,7 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (string, error) {
 	containerName := PrimaryTerminalName(flowID)
 
-	isRunning, err := t.dockerClient.VerifyContainerRuntime(ctx, t.containerLID)
+	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
 		return "", fmt.Errorf("runtime verification failed: %w", err)
 	}
@@ -355,7 +363,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, path string) (string, error) {
 	containerName := PrimaryTerminalName(flowID)
 
-	isRunning, err := t.dockerClient.VerifyContainerRuntime(ctx, t.containerLID)
+	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
 		return "", fmt.Errorf("container runtime check failed: %w", err)
 	}
@@ -364,50 +372,45 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	}
 
 	// Docker SDK requires TAR format for file transfer
-	tarBuffer := new(bytes.Buffer)
+	tarBuffer := &bytes.Buffer{}
 	archiveWriter := tar.NewWriter(tarBuffer)
+	defer archiveWriter.Close()
 
-	baseFilename := filepath.Base(path)
+	filename := filepath.Base(path)
 	fileDescriptor := &tar.Header{
-		Name: baseFilename,
-		Mode: 0644,
+		Name: filename,
+		Mode: 0600,
 		Size: int64(len(content)),
 	}
-	
-	if err := archiveWriter.WriteHeader(fileDescriptor); err != nil {
-		archiveWriter.Close()
+	err = archiveWriter.WriteHeader(fileDescriptor)
+	if err != nil {
 		return "", fmt.Errorf("tar archive header generation failed: %w", err)
 	}
 
-	bytesWritten, err := archiveWriter.Write([]byte(content))
+	_, err = archiveWriter.Write([]byte(content))
 	if err != nil {
-		archiveWriter.Close()
 		return "", fmt.Errorf("tar archive content serialization failed: %w", err)
 	}
-	if bytesWritten != len(content) {
-		archiveWriter.Close()
-		return "", fmt.Errorf("incomplete tar write: expected %d bytes, wrote %d", len(content), bytesWritten)
+
+	err = archiveWriter.Close()
+	if err != nil {
+		return "", fmt.Errorf("failed to close tar writer: %w", err)
 	}
 
-	if err := archiveWriter.Close(); err != nil {
-		return "", fmt.Errorf("tar archive finalization failed: %w", err)
-	}
-
-	targetDirectory := filepath.Dir(path)
-	copyOptions := container.CopyToContainerOptions{
+	dir := filepath.Dir(path)
+	err = t.dockerClient.CopyToContainer(ctx, containerName, dir, tarBuffer, container.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
-		CopyUIDGID:                false,
-	}
-	
-	if err := t.dockerClient.CopyToContainer(ctx, containerName, targetDirectory, tarBuffer, copyOptions); err != nil {
-		return "", fmt.Errorf("container file transfer failed for '%s': %w", path, err)
+	})
+	if err != nil {
+		return "", fmt.Errorf("container file transfer failed: %w", err)
 	}
 
 	// Format success message with styling
-	successText := fmt.Sprintf("File successfully saved to %s", path)
-	styledSuccess := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, successText, ansiColorReset, ansiLineTerminator)
-	if _, err := t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledSuccess, t.containerID, t.taskID, t.subtaskID); err != nil {
-		return "", fmt.Errorf("terminal log recording failed: %w", err)
+	successMsg := fmt.Sprintf("File successfully saved to %s", path)
+	styledMsg := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, successMsg, ansiColorReset, ansiLineTerminator)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledMsg, t.containerID, t.taskID, t.subtaskID)
+	if err != nil {
+		return "", fmt.Errorf("failed to put terminal log (write file cmd): %w", err)
 	}
 
 	return fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path), nil
@@ -419,4 +422,11 @@ func PrimaryTerminalName(flowID int64) string {
 
 func (t *terminal) IsAvailable() bool {
 	return t.dockerClient != nil
+}
+
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "... [truncated full size is " + strconv.Itoa(len(s)) + " bytes]"
 }

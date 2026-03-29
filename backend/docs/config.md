@@ -59,7 +59,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Perplexity Search](#perplexity-search)
     - [Searxng Search](#searxng-search)
     - [Usage Details](#usage-details-10)
-  - [Proxy Settings](#proxy-settings)
+  - [Network and Proxy Settings](#network-and-proxy-settings)
     - [Usage Details](#usage-details-11)
   - [Graphiti Knowledge Graph Settings](#graphiti-knowledge-graph-settings)
     - [Usage Details](#usage-details-12)
@@ -199,16 +199,16 @@ if cfg.LicenseKey != "" {
 
 These settings control how PentAGI interacts with Docker, which is used for terminal isolation and executing commands in a controlled environment. They're crucial for the security and functionality of tool execution.
 
-| Option                       | Environment Variable               | Default Value          | Description                                                                                |
-| ---------------------------- | ---------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------ |
-| DockerInside                 | `DOCKER_INSIDE`                    | `false`                | Set to `true` if PentAGI runs inside Docker and needs to access the host Docker daemon.    |
+| Option                       | Environment Variable               | Default Value          | Description |
+| ---------------------------- | ---------------------------------- | ---------------------- | ----------- |
+| DockerInside                 | `DOCKER_INSIDE`                    | `false`                | Set to `true` if PentAGI runs inside Docker and needs to access the host Docker daemon. |
 | DockerNetAdmin               | `DOCKER_NET_ADMIN`                 | `false`                | Set to `true` to grant the primary container NET_ADMIN capability for advanced networking. |
-| DockerSocket                 | `DOCKER_SOCKET`                    | *(none)*               | Path to Docker socket for container management                                             |
-| DockerNetwork                | `DOCKER_NETWORK`                   | *(none)*               | Docker network name for container communication                                            |
-| DockerPublicIP               | `DOCKER_PUBLIC_IP`                 | `0.0.0.0`              | Public IP address for Docker containers' port bindings                                     |
-| DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers                                          |
-| DockerDefaultImage           | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for containers when specific images fail                              |
-| DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks                                         |
+| DockerSocket                 | `DOCKER_SOCKET`                    | *(none)*               | Path to Docker socket for container management |
+| DockerNetwork                | `DOCKER_NETWORK`                   | *(none)*               | Docker network name for bridge mode, or `host` for host network mode. See network modes below. |
+| DockerPublicIP               | `DOCKER_PUBLIC_IP`                 | `0.0.0.0`              | Public IP address for Docker containers' port bindings (bridge mode only) |
+| DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers |
+| DockerDefaultImage           | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for containers when specific images fail |
+| DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
 
 
 ### Usage Details
@@ -227,17 +227,35 @@ The Docker settings are primarily used in `pkg/docker/client.go` which implement
   }
   ```
 
-- **DockerNetwork**: Sets the network that containers should join, enabling container-to-container communication:
+- **DockerNetwork**: Controls the network isolation mode for containers. Supports two modes:
+  
+  **Bridge Mode** (custom network name, e.g., `pentagi-network`):
+  - Containers run in an isolated bridge network
+  - Port forwarding maps container ports to host ports
+  - Enhanced security through network isolation
+  - Recommended for most deployments
+  
+  **Host Mode** (special value: `host`):
+  - Containers share the host's network stack directly
+  - No port forwarding - services bind directly to host interfaces
+  - Required for advanced network testing (raw packets, custom protocols)
+  - Reduced isolation - use with caution
+  
   ```go
   network := cfg.DockerNetwork
 
-  // Used when creating network configuration
-  if dc.network != "" {
+  // Host network mode
+  if dc.network == "host" {
+      hostConfig.NetworkMode = container.NetworkMode("host")
+      // No port bindings needed
+  } else if dc.network != "" {
+      // Bridge mode with custom network
       networkingConfig = &network.NetworkingConfig{
           EndpointsConfig: map[string]*network.EndpointSettings{
               dc.network: {},
           },
       }
+      // Port bindings are configured
   }
   ```
 
