@@ -31,6 +31,12 @@ COPY frontend/ .
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --include=dev
 
+# Generate license report for frontend dependencies
+RUN npm install -g license-checker && \
+    mkdir -p /licenses/frontend && \
+    license-checker --production --json > /licenses/frontend/licenses.json && \
+    license-checker --production --csv > /licenses/frontend/licenses.csv
+
 # Build frontend with optimizations and parallel processing
 RUN npm run build -- \
     --mode production \
@@ -70,6 +76,15 @@ COPY backend/ .
 # Fetch Go module dependencies (cached for faster rebuilds)
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download && go mod verify
+
+# Install go-licenses tool for license extraction
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go install github.com/google/go-licenses@latest
+
+# Generate license reports for backend dependencies
+RUN mkdir -p /licenses/backend && \
+    go list -m all > /licenses/backend/dependencies.txt && \
+    GOROOT=$(go env GOROOT) GOTOOLCHAIN=auto go-licenses csv ./cmd/pentagi > /licenses/backend/licenses.csv 2>/dev/null || true
 
 # Compile main application binary with embedded version metadata
 RUN go build -trimpath \
@@ -137,6 +152,8 @@ COPY --from=api-builder /ctester /opt/pentagi/bin/ctester
 COPY --from=api-builder /ftester /opt/pentagi/bin/ftester
 COPY --from=api-builder /etester /opt/pentagi/bin/etester
 COPY --from=frontend-compiler /app/ui/dist /opt/pentagi/fe
+COPY --from=api-builder /licenses/backend /opt/pentagi/licenses/backend
+COPY --from=frontend-compiler /licenses/frontend /opt/pentagi/licenses/frontend
 
 # Copy provider configuration files
 COPY examples/configs/custom-openai.provider.yml /opt/pentagi/conf/
