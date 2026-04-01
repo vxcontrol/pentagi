@@ -2,8 +2,10 @@ import { Avatar, AvatarFallback } from '@radix-ui/react-avatar';
 import {
     ChevronsUpDown,
     Clock,
+    FileText,
     GitFork,
     KeyRound,
+    LayoutDashboard,
     LogOut,
     Monitor,
     Moon,
@@ -15,8 +17,9 @@ import {
     UserIcon,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link, useLocation, useMatch, useParams } from 'react-router-dom';
+import { Link, useMatch, useParams } from 'react-router-dom';
 
+import type { Flow } from '@/providers/sidebar-flows-provider';
 import type { Theme } from '@/providers/theme-provider';
 
 import Logo from '@/components/icons/logo';
@@ -50,18 +53,48 @@ import { useFavorites } from '@/providers/favorites-provider';
 import { useSidebarFlows } from '@/providers/sidebar-flows-provider';
 import { useUser } from '@/providers/user-provider';
 
-const MainSidebar = () => {
-    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-    const [clickedButtons, setClickedButtons] = useState<Set<string>>(new Set());
+interface FlowMenuItemProps {
+    activeFlowId: null | number;
+    flow: Flow;
+    isFavorite: boolean;
+    onToggleFavorite: (flowId: string) => void;
+}
 
+const FlowMenuItem = ({ activeFlowId, flow, isFavorite, onToggleFavorite }: FlowMenuItemProps) => {
+    return (
+        <SidebarMenuItem>
+            <SidebarMenuButton
+                asChild
+                isActive={activeFlowId === Number(flow.id)}
+            >
+                <Link to={`/flows/${flow.id}`}>
+                    <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
+                        {flow.id}
+                    </span>
+                    <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
+                        {flow.id}
+                    </span>
+                    <span className="truncate">{flow.title}</span>
+                </Link>
+            </SidebarMenuButton>
+            <SidebarMenuAction
+                className="data-[state=open]:bg-accent rounded-sm"
+                onClick={() => onToggleFavorite(flow.id)}
+                showOnHover
+            >
+                <Star className={isFavorite ? 'fill-yellow-500 stroke-yellow-500' : ''} />
+            </SidebarMenuAction>
+        </SidebarMenuItem>
+    );
+};
+
+export const MainSidebar = () => {
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const isDashboardActive = useMatch('/dashboard');
+    const isFlowsActive = useMatch('/flows/*');
+    const isTemplatesActive = useMatch('/templates/*');
     const isSettingsActive = useMatch('/settings/*');
     const { flowId: flowIdParam } = useParams<{ flowId: string }>();
-    const location = useLocation();
-
-    // Flows button is active only on /flows list and /flows/new, not on specific flow pages
-    const isFlowsActive = useMemo(() => {
-        return location.pathname === '/flows' || location.pathname === '/flows/new';
-    }, [location.pathname]);
 
     const { authInfo, logout } = useUser();
     const user = authInfo?.user;
@@ -69,64 +102,24 @@ const MainSidebar = () => {
     const { addFavoriteFlow, favoriteFlowIds, removeFavoriteFlow } = useFavorites();
     const { flows } = useSidebarFlows();
 
-    // Convert flowId to number for comparison
-    const flowId = useMemo(() => {
-        return flowIdParam ? +flowIdParam : null;
-    }, [flowIdParam]);
+    const flowId = useMemo(() => (flowIdParam ? Number(flowIdParam) : null), [flowIdParam]);
 
-    // Check if we're on a specific flow page (not /flows/new)
-    const isOnFlowPage = useMemo(() => {
-        return location.pathname.startsWith('/flows/') && flowIdParam && flowIdParam !== 'new';
-    }, [location.pathname, flowIdParam]);
+    const favoriteFlows = useMemo(
+        () =>
+            flows
+                .filter((flow) => favoriteFlowIds.includes(Number(flow.id)))
+                .sort((a, b) => Number(b.id) - Number(a.id)),
+        [flows, favoriteFlowIds],
+    );
 
-    // Get favorite flows (full objects)
-    const favoriteFlows = useMemo(() => {
-        const filtered = flows
-            .filter((flow) => {
-                const numericFlowId = typeof flow.id === 'string' ? +flow.id : flow.id;
-
-                return favoriteFlowIds.includes(numericFlowId);
-            })
-            .sort((a, b) => +b.id - +a.id);
-
-        return filtered;
-    }, [flows, favoriteFlowIds]);
-
-    // Get recent flows (5 latest non-favorites, sorted by createdAt desc)
-    const recentFlows = useMemo(() => {
-        const nonFavoriteFlows = flows.filter((flow) => {
-            const numericFlowId = typeof flow.id === 'string' ? +flow.id : flow.id;
-
-            return !favoriteFlowIds.includes(numericFlowId);
-        });
-        const sortedByDate = [...nonFavoriteFlows].sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        );
-
-        return sortedByDate.slice(0, 5);
-    }, [flows, favoriteFlowIds]);
-
-    // Get current flow (if on flow page and not in recent/favorites)
-    const currentFlow = useMemo(() => {
-        if (!isOnFlowPage || !flowId) {
-            return null;
-        }
-
-        const isInRecent = recentFlows.some((flow) => +flow.id === flowId);
-        const isInFavorites = favoriteFlows.some((flow) => +flow.id === flowId);
-
-        if (isInRecent || isInFavorites) {
-            return null;
-        }
-
-        const found = flows.find((flow) => +flow.id === flowId) || null;
-
-        return found;
-    }, [isOnFlowPage, flowId, flows, recentFlows, favoriteFlows]);
-
-    const handlePasswordChangeSuccess = () => {
-        setIsPasswordModalOpen(false);
-    };
+    const recentFlows = useMemo(
+        () =>
+            flows
+                .filter((flow) => !favoriteFlowIds.includes(Number(flow.id)))
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, 5),
+        [flows, favoriteFlowIds],
+    );
 
     return (
         <Sidebar collapsible="icon">
@@ -157,6 +150,17 @@ const MainSidebar = () => {
                             <SidebarMenuItem>
                                 <SidebarMenuButton
                                     asChild
+                                    isActive={!!isDashboardActive}
+                                >
+                                    <Link to="/dashboard">
+                                        <LayoutDashboard />
+                                        Dashboard
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
                                     isActive={!!isFlowsActive}
                                 >
                                     <Link to="/flows">
@@ -174,77 +178,29 @@ const MainSidebar = () => {
                                     </Link>
                                 </SidebarMenuAction>
                             </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={!!isTemplatesActive}
+                                >
+                                    <Link to="/templates">
+                                        <FileText />
+                                        Templates
+                                    </Link>
+                                </SidebarMenuButton>
+                                <SidebarMenuAction
+                                    asChild
+                                    className="data-[state=open]:bg-accent rounded-sm"
+                                    showOnHover
+                                >
+                                    <Link to="/templates/new">
+                                        <Plus />
+                                    </Link>
+                                </SidebarMenuAction>
+                            </SidebarMenuItem>
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
-
-                {currentFlow && (
-                    <SidebarGroup>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                <SidebarMenuItem
-                                    onMouseLeave={(e) => {
-                                        const menuItem = e.currentTarget;
-                                        menuItem.querySelectorAll('button, a').forEach((el) => {
-                                            if (el instanceof HTMLElement) {
-                                                el.blur();
-                                            }
-                                        });
-
-                                        const key = `current-${currentFlow.id}`;
-                                        setClickedButtons((prev) => {
-                                            const next = new Set(prev);
-                                            next.delete(key);
-
-                                            return next;
-                                        });
-                                    }}
-                                >
-                                    <SidebarMenuButton
-                                        asChild
-                                        isActive={true}
-                                    >
-                                        <Link to={`/flows/${currentFlow.id}`}>
-                                            <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
-                                                {currentFlow.id}
-                                            </span>
-                                            <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
-                                                {currentFlow.id}
-                                            </span>
-                                            <span className="truncate">{currentFlow.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                    <SidebarMenuAction
-                                        className={`data-[state=open]:bg-accent rounded-sm ${clickedButtons.has(`current-${currentFlow.id}`) ? 'pointer-events-none! opacity-0!' : ''}`}
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-
-                                            const button = e.currentTarget;
-                                            button.blur();
-
-                                            const key = `current-${currentFlow.id}`;
-                                            setClickedButtons((prev) => new Set(prev).add(key));
-                                            addFavoriteFlow(currentFlow.id);
-
-                                            setTimeout(() => {
-                                                setClickedButtons((prev) => {
-                                                    const next = new Set(prev);
-                                                    next.delete(key);
-
-                                                    return next;
-                                                });
-                                            }, 600);
-                                        }}
-                                        showOnHover
-                                    >
-                                        <Star />
-                                    </SidebarMenuAction>
-                                </SidebarMenuItem>
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-                )}
 
                 {recentFlows.length > 0 && (
                     <SidebarGroup>
@@ -255,65 +211,13 @@ const MainSidebar = () => {
                         <SidebarGroupContent>
                             <SidebarMenu>
                                 {recentFlows.map((flow) => (
-                                    <SidebarMenuItem
+                                    <FlowMenuItem
+                                        activeFlowId={flowId}
+                                        flow={flow}
+                                        isFavorite={false}
                                         key={flow.id}
-                                        onMouseLeave={(e) => {
-                                            const menuItem = e.currentTarget;
-                                            menuItem.querySelectorAll('button, a').forEach((el) => {
-                                                if (el instanceof HTMLElement) {
-                                                    el.blur();
-                                                }
-                                            });
-
-                                            const key = `recent-${flow.id}`;
-                                            setClickedButtons((prev) => {
-                                                const next = new Set(prev);
-                                                next.delete(key);
-
-                                                return next;
-                                            });
-                                        }}
-                                    >
-                                        <SidebarMenuButton
-                                            asChild
-                                            isActive={flowId === +flow.id}
-                                        >
-                                            <Link to={`/flows/${flow.id}`}>
-                                                <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
-                                                    {flow.id}
-                                                </span>
-                                                <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
-                                                    {flow.id}
-                                                </span>
-                                                <span className="truncate">{flow.title}</span>
-                                            </Link>
-                                        </SidebarMenuButton>
-                                        <SidebarMenuAction
-                                            className={`data-[state=open]:bg-accent rounded-sm ${clickedButtons.has(`recent-${flow.id}`) ? 'pointer-events-none! opacity-0!' : ''}`}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                const button = e.currentTarget;
-                                                button.blur();
-
-                                                const key = `recent-${flow.id}`;
-                                                setClickedButtons((prev) => new Set(prev).add(key));
-                                                addFavoriteFlow(flow.id);
-
-                                                setTimeout(() => {
-                                                    setClickedButtons((prev) => {
-                                                        const next = new Set(prev);
-                                                        next.delete(key);
-
-                                                        return next;
-                                                    });
-                                                }, 600);
-                                            }}
-                                            showOnHover
-                                        >
-                                            <Star />
-                                        </SidebarMenuAction>
-                                    </SidebarMenuItem>
+                                        onToggleFavorite={addFavoriteFlow}
+                                    />
                                 ))}
                             </SidebarMenu>
                         </SidebarGroupContent>
@@ -329,65 +233,13 @@ const MainSidebar = () => {
                         <SidebarGroupContent>
                             <SidebarMenu>
                                 {favoriteFlows.map((flow) => (
-                                    <SidebarMenuItem
+                                    <FlowMenuItem
+                                        activeFlowId={flowId}
+                                        flow={flow}
+                                        isFavorite
                                         key={flow.id}
-                                        onMouseLeave={(e) => {
-                                            const menuItem = e.currentTarget;
-                                            menuItem.querySelectorAll('button, a').forEach((el) => {
-                                                if (el instanceof HTMLElement) {
-                                                    el.blur();
-                                                }
-                                            });
-
-                                            const key = `favorite-${flow.id}`;
-                                            setClickedButtons((prev) => {
-                                                const next = new Set(prev);
-                                                next.delete(key);
-
-                                                return next;
-                                            });
-                                        }}
-                                    >
-                                        <SidebarMenuButton
-                                            asChild
-                                            isActive={flowId === +flow.id}
-                                        >
-                                            <Link to={`/flows/${flow.id}`}>
-                                                <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
-                                                    {flow.id}
-                                                </span>
-                                                <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
-                                                    {flow.id}
-                                                </span>
-                                                <span className="truncate">{flow.title}</span>
-                                            </Link>
-                                        </SidebarMenuButton>
-                                        <SidebarMenuAction
-                                            className={`data-[state=open]:bg-accent rounded-sm ${clickedButtons.has(`favorite-${flow.id}`) ? 'pointer-events-none! opacity-0!' : ''}`}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                const button = e.currentTarget;
-                                                button.blur();
-
-                                                const key = `favorite-${flow.id}`;
-                                                setClickedButtons((prev) => new Set(prev).add(key));
-                                                removeFavoriteFlow(flow.id);
-
-                                                setTimeout(() => {
-                                                    setClickedButtons((prev) => {
-                                                        const next = new Set(prev);
-                                                        next.delete(key);
-
-                                                        return next;
-                                                    });
-                                                }, 600);
-                                            }}
-                                            showOnHover
-                                        >
-                                            <Star className="fill-yellow-500 stroke-yellow-500" />
-                                        </SidebarMenuAction>
-                                    </SidebarMenuItem>
+                                        onToggleFavorite={removeFavoriteFlow}
+                                    />
                                 ))}
                             </SidebarMenu>
                         </SidebarGroupContent>
@@ -415,10 +267,6 @@ const MainSidebar = () => {
                                     size="lg"
                                 >
                                     <Avatar className="bg-background dark:bg-muted size-8 rounded-lg">
-                                        {/* <AvatarImage
-                                            alt={user.name}
-                                            src={user.avatar}
-                                        /> */}
                                         <AvatarFallback className="flex size-8 items-center justify-center">
                                             <UserIcon className="size-4" />
                                         </AvatarFallback>
@@ -508,7 +356,7 @@ const MainSidebar = () => {
             <SidebarRail />
 
             <Dialog
-                onOpenChange={(open) => setIsPasswordModalOpen(open)}
+                onOpenChange={setIsPasswordModalOpen}
                 open={isPasswordModalOpen}
             >
                 <DialogContent className="sm:max-w-[425px]">
@@ -517,12 +365,10 @@ const MainSidebar = () => {
                     </DialogHeader>
                     <PasswordChangeForm
                         onCancel={() => setIsPasswordModalOpen(false)}
-                        onSuccess={handlePasswordChangeSuccess}
+                        onSuccess={() => setIsPasswordModalOpen(false)}
                     />
                 </DialogContent>
             </Dialog>
         </Sidebar>
     );
 };
-
-export default MainSidebar;

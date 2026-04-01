@@ -6,7 +6,6 @@ import type { FlowFormValues } from '@/features/flows/flow-form';
 import type { FlowFragmentFragment, FlowsQuery } from '@/graphql/types';
 
 import {
-    ResultType,
     useCreateAssistantMutation,
     useCreateFlowMutation,
     useDeleteFlowMutation,
@@ -164,9 +163,6 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
 
             try {
                 await deleteFlowMutation({
-                    optimisticResponse: {
-                        deleteFlow: ResultType.Success,
-                    },
                     variables: { flowId },
                 });
 

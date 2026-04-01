@@ -17,6 +17,8 @@ node_modules
 .cursorrules
 .cursorignore
 .cursor/
+.agents/
+skills-lock.json
 
 build/*
 data/*

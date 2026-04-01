@@ -1,4 +1,4 @@
-import { ChevronDown, Copy, Download, ExternalLink, GripVertical, Loader2, NotepadText } from 'lucide-react';
+import { ChevronDown, Copy, Download, ExternalLink, GripVertical, Loader2, NotepadText, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -19,9 +19,11 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import FlowCentralTabs from '@/features/flows/flow-central-tabs';
 import FlowTabs from '@/features/flows/flow-tabs';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
 import { Log } from '@/lib/log';
 import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 import { formatName } from '@/lib/utils/format';
+import { useFavorites } from '@/providers/favorites-provider';
 import { useFlow } from '@/providers/flow-provider';
 
 const FlowReportDropdown = () => {
@@ -144,8 +146,8 @@ const Flow = () => {
     const { isDesktop } = useBreakpoint();
     const navigate = useNavigate();
 
-    // Get flow data from FlowProvider
-    const { flowData, flowError, isLoading: isFlowLoading } = useFlow();
+    const { flowData, flowError, flowId, isLoading: isFlowLoading } = useFlow();
+    const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
 
     // Redirect to flows list if there's an error loading flow data or flow not found
     useEffect(() => {
@@ -154,15 +156,21 @@ const Flow = () => {
         }
     }, [flowError, flowData, isFlowLoading, navigate]);
 
-    // State for preserving active tabs when switching flows
-    const [activeTabsTab, setActiveTabsTab] = useState<string>(!isDesktop ? 'automation' : 'terminal');
+    // Desktop: side panel defaults to 'terminal'
+    const [desktopTabsTab, setDesktopTabsTab] = useState<string>('terminal');
+
+    // Mobile: use the same auto-detection logic as FlowCentralTabs
+    const { handleTabChange: handleMobileTabChange, resolvedTab: mobileAutoTab } = useFlowTabDetection();
+
+    const activeTabsTab = isDesktop ? desktopTabsTab : mobileAutoTab;
+    const handleTabsTabChange = isDesktop ? setDesktopTabsTab : handleMobileTabChange;
 
     const tabsCard = (
         <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
-            <div className="flex-1 overflow-auto py-4 pl-4 pr-0">
+            <div className="flex-1 overflow-auto py-4 pr-0 pl-4">
                 <FlowTabs
                     activeTab={activeTabsTab}
-                    onTabChange={setActiveTabsTab}
+                    onTabChange={handleTabsTabChange}
                 />
             </div>
         </div>
@@ -170,7 +178,7 @@ const Flow = () => {
 
     return (
         <>
-            <header className="sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+            <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
                 <div className="flex w-full items-center justify-between gap-2 px-4">
                     <div className="flex items-center gap-2">
                         <SidebarTrigger className="-ml-1" />
@@ -199,12 +207,24 @@ const Flow = () => {
                             </BreadcrumbList>
                         </Breadcrumb>
                     </div>
-                    {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
+                    <div className="flex items-center gap-2">
+                        {flowId && (
+                            <Button
+                                className="shrink-0"
+                                onClick={() => toggleFavoriteFlow(flowId)}
+                                size="icon"
+                                variant="ghost"
+                            >
+                                <Star className={isFavoriteFlow(flowId) ? 'fill-yellow-500 stroke-yellow-500' : ''} />
+                            </Button>
+                        )}
+                        {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
+                    </div>
                 </div>
             </header>
             <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
                 {isFlowLoading && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50">
+                    <div className="bg-background/50 absolute inset-0 z-50 flex items-center justify-center">
                         <Loader2 className="size-16 animate-spin" />
                     </div>
                 )}
@@ -218,7 +238,7 @@ const Flow = () => {
                             minSize={30}
                         >
                             <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
-                                <div className="flex-1 overflow-auto py-4 pl-4 pr-0">
+                                <div className="flex-1 overflow-auto py-4 pr-0 pl-4">
                                     <FlowCentralTabs />
                                 </div>
                             </div>

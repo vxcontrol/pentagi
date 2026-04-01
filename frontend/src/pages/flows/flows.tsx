@@ -5,10 +5,7 @@ import { enUS } from 'date-fns/locale';
 import {
     ArrowDown,
     ArrowUp,
-    Check,
-    CheckCircle2,
     Eye,
-    FileText,
     GitFork,
     Loader2,
     MoreHorizontal,
@@ -17,11 +14,12 @@ import {
     Plus,
     Star,
     Trash,
-    X,
-    XCircle,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Check, CheckCircle2, X, XCircle } from 'lucide-react';
+import { useState } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
@@ -30,6 +28,7 @@ import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
+import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable } from '@/components/ui/data-table';
 import {
     DropdownMenu,
@@ -38,14 +37,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResultType, StatusType, type TerminalFragmentFragment, useRenameFlowMutation } from '@/graphql/types';
-import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
 import { useFavorites } from '@/providers/favorites-provider';
 import { type Flow, useFlows } from '@/providers/flows-provider';
 
@@ -103,19 +101,6 @@ const Flows = () => {
     const [editingFlowId, setEditingFlowId] = useState<null | string>(null);
     const [editingFlowTitle, setEditingFlowTitle] = useState('');
     const [renameFlowMutation, { loading: isRenameLoading }] = useRenameFlowMutation();
-
-    const { columnVisibility, updateColumnVisibility } = useAdaptiveColumnVisibility({
-        columns: [
-            { alwaysVisible: true, id: 'id', priority: 0 },
-            { alwaysVisible: true, id: 'title', priority: 0 },
-            { id: 'status', priority: 1 },
-            { id: 'provider', priority: 2 },
-            { id: 'createdAt', priority: 3 },
-            { id: 'updatedAt', priority: 4 },
-            { id: 'terminals', priority: 5 },
-        ],
-        tableKey: 'flows',
-    });
 
     // Three-way sorting handler: null -> asc -> desc -> null
     const handleColumnSort = useMemo(
@@ -285,21 +270,44 @@ const Flows = () => {
 
                     if (isEditing) {
                         return (
-                            <Input
-                                autoFocus
+                            <InputGroup
                                 className="h-8"
-                                onChange={(e) => setEditingFlowTitle(e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        handleFlowRenameSave();
-                                    } else if (e.key === 'Escape') {
-                                        handleFlowRenameCancel();
-                                    }
-                                }}
-                                placeholder="Flow title"
-                                value={editingFlowTitle}
-                            />
+                            >
+                                <InputGroupInput
+                                    autoFocus
+                                    onChange={(e) => setEditingFlowTitle(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            handleFlowRenameSave();
+
+                                            return;
+                                        }
+
+                                        if (e.key === 'Escape') {
+                                            handleFlowRenameCancel();
+
+                                            return;
+                                        }
+                                    }}
+                                    placeholder="Flow title"
+                                    value={editingFlowTitle}
+                                />
+                                <InputGroupAddon
+                                    align="inline-end"
+                                    className="gap-0 pr-2"
+                                >
+                                    <InputGroupButton
+                                        disabled={isRenameLoading || !editingFlowTitle.trim()}
+                                        onClick={() => handleFlowRenameSave()}
+                                    >
+                                        {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
+                                    </InputGroupButton>
+                                    <InputGroupButton onClick={() => handleFlowRenameCancel()}>
+                                        <X />
+                                    </InputGroupButton>
+                                </InputGroupAddon>
+                            </InputGroup>
                         );
                     }
 
@@ -571,39 +579,6 @@ const Flows = () => {
                 cell: ({ row }) => {
                     const flow = row.original;
                     const isRunning = ![StatusType.Failed, StatusType.Finished].includes(flow.status);
-                    const isEditing = editingFlowId === flow.id;
-
-                    if (isEditing) {
-                        return (
-                            <div className="flex items-center justify-end gap-1">
-                                <Button
-                                    className="size-8 p-0"
-                                    disabled={isRenameLoading || !editingFlowTitle.trim()}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleFlowRenameSave();
-                                    }}
-                                    variant="ghost"
-                                >
-                                    {isRenameLoading ? (
-                                        <Loader2 className="size-4 animate-spin" />
-                                    ) : (
-                                        <Check className="size-4" />
-                                    )}
-                                </Button>
-                                <Button
-                                    className="size-8 p-0"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleFlowRenameCancel();
-                                    }}
-                                    variant="ghost"
-                                >
-                                    <X className="size-4" />
-                                </Button>
-                            </div>
-                        );
-                    }
 
                     return (
                         <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -687,6 +662,7 @@ const Flows = () => {
                 header: () => null,
                 id: 'actions',
                 maxSize: 100,
+                meta: { preventRowClick: true },
                 minSize: 90,
                 size: 96,
             },
@@ -709,7 +685,58 @@ const Flows = () => {
         ],
     );
 
-    // Memoize onRowClick to prevent unnecessary rerenders
+    const renderRowContextMenu = useCallback(
+        (flow: Flow) => {
+            const isRunning = ![StatusType.Failed, StatusType.Finished].includes(flow.status);
+
+            return (
+                <>
+                    <ContextMenuItem onClick={async () => toggleFavoriteFlow(flow.id)}>
+                        <Star />
+                        {isFavoriteFlow(flow.id) ? 'Remove from favorites' : 'Add to favorites'}
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onClick={() => handleFlowOpen(flow.id)}>
+                        <Eye />
+                        View
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => handleFlowRenameStart(flow)}>
+                        <Pencil />
+                        Rename
+                    </ContextMenuItem>
+
+                    {isRunning && (
+                        <ContextMenuItem
+                            disabled={finishingFlowIds.has(flow.id)}
+                            onClick={() => handleFlowFinish(flow)}
+                        >
+                            <Pause />
+                            {finishingFlowIds.has(flow.id) ? 'Finishing...' : 'Finish'}
+                        </ContextMenuItem>
+                    )}
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                        disabled={deletingFlowIds.has(flow.id)}
+                        onClick={() => handleFlowDeleteDialogOpen(flow)}
+                    >
+                        <Trash />
+                        {deletingFlowIds.has(flow.id) ? 'Deleting...' : 'Delete'}
+                    </ContextMenuItem>
+                </>
+            );
+        },
+        [
+            deletingFlowIds,
+            finishingFlowIds,
+            handleFlowDeleteDialogOpen,
+            handleFlowFinish,
+            handleFlowOpen,
+            handleFlowRenameStart,
+            isFavoriteFlow,
+            toggleFavoriteFlow,
+        ],
+    );
+
     const handleRowClick = useCallback(
         (flow: Flow) => {
             if (editingFlowId !== flow.id) {
@@ -776,12 +803,12 @@ const Flows = () => {
                                 onClick={() => navigate('/flows/new')}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 New Flow
                             </Button>
                         }
                         description="Get started by creating your first conversation flow"
-                        icon={<FileText className="text-muted-foreground size-8" />}
+                        icon={<GitFork className="text-muted-foreground size-8" />}
                         title="No flows found"
                     />
                 </div>
@@ -795,21 +822,13 @@ const Flows = () => {
             <div className="flex flex-col gap-4 p-4 pt-0">
                 <DataTable<Flow>
                     columns={columns}
-                    columnVisibility={columnVisibility}
                     data={flows}
                     filterColumn="title"
                     filterPlaceholder="Filter flows..."
-                    onColumnVisibilityChange={(visibility) => {
-                        Object.entries(visibility).forEach(([columnId, isVisible]) => {
-                            if (columnVisibility[columnId] !== isVisible) {
-                                updateColumnVisibility(columnId, isVisible);
-                            }
-                        });
-                    }}
                     onPageChange={handlePageChange}
                     onRowClick={handleRowClick}
                     pageIndex={currentPage}
-                    tableKey="flows"
+                    renderRowContextMenu={renderRowContextMenu}
                 />
 
                 <ConfirmationDialog

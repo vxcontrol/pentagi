@@ -110,7 +110,7 @@ const OAuthResult = () => {
 
     return (
         <div className="flex h-screen w-full items-center justify-center bg-linear-to-r from-slate-800 to-slate-950">
-            <Logo className="m-auto size-32 animate-logo-spin text-white delay-10000" />
+            <Logo className="animate-logo-spin m-auto size-32 text-white delay-10000" />
             <div className="fixed bottom-4 text-sm text-white">{statusMessage}</div>
         </div>
     );
