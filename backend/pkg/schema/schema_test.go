@@ -56,6 +56,11 @@ func TestSchemaValid(t *testing.T) {
 			schema:  Schema{Type: Type{Type: "number"}},
 			wantErr: false,
 		},
+		{
+			name:    "invalid schema with bad ref",
+			schema:  Schema{Type: Type{Ref: "not-a-valid-ref-uri\x00"}},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -93,6 +98,15 @@ func TestSchemaGetValidator(t *testing.T) {
 		v, err := s.GetValidator()
 		require.NoError(t, err)
 		assert.NotNil(t, v)
+	})
+
+	t.Run("invalid schema with bad ref fails", func(t *testing.T) {
+		t.Parallel()
+		s := Schema{
+			Type: Type{Ref: "not-a-valid-ref-uri\x00"},
+		}
+		_, err := s.GetValidator()
+		assert.Error(t, err)
 	})
 }
 
@@ -157,6 +171,12 @@ func TestSchemaValidateBytes(t *testing.T) {
 		result, err := intSchema.ValidateBytes([]byte(`"not a number"`))
 		require.NoError(t, err)
 		assert.False(t, result.Valid())
+	})
+
+	t.Run("malformed json", func(t *testing.T) {
+		t.Parallel()
+		_, err := intSchema.ValidateBytes([]byte("{invalid json"))
+		assert.Error(t, err)
 	})
 }
 
