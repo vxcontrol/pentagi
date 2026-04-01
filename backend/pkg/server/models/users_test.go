@@ -398,8 +398,9 @@ func TestUserPreferencesValid(t *testing.T) {
 	t.Run("zero user id", func(t *testing.T) {
 		t.Parallel()
 		up := UserPreferences{UserID: 0}
-		assert.Error(t, up.Valid())
-		assert.Contains(t, up.Valid().Error(), "user_id is required")
+		err := up.Valid()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "user_id")
 	})
 }
 
@@ -421,11 +422,25 @@ func TestNewUserPreferences(t *testing.T) {
 func TestAuthCallbackValid(t *testing.T) {
 	t.Parallel()
 
+	// JWT token with 3 dot-separated base64 segments (header.payload.signature)
+	validJWT := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.POstGetfAytaZS82wHcjoTyoqhMyxXiWdR7Nn7A29DNSl0EiXLdwJ6xC6AfgZWF1bOsS_TuYI3OG85AmiExREkrS6tDfTQ2B3WXlrr-wp5AokiRbz3_oB4OxG-W9KcEEbDRcZc0nH3L7LzYptiy1PtAylQGxHTWZXtGz4ht0bAecBgmpdgXMguEIcoqPJ1n3pIWk_dUZegpqx0Lka21H6XxUTxiy8OcaarA8zdnPUnV6AmNP3ecFawIFYdvJB_cm-GvpCSbr8G8y_Mllj8f4x9nBH8pQux89_6gUY618iYv7tuPWBFfEbLxtF2pZS6YC1aSfLQxaOoaBSTNRg"
+
+	t.Run("valid callback", func(t *testing.T) {
+		t.Parallel()
+		ac := AuthCallback{
+			Code:    "auth-code-123",
+			IdToken: validJWT,
+			Scope:   "openid email profile",
+			State:   "random-state-value",
+		}
+		assert.NoError(t, ac.Valid())
+	})
+
 	t.Run("missing code", func(t *testing.T) {
 		t.Parallel()
 		ac := AuthCallback{
 			Code:    "",
-			IdToken: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.POstGetfAytaZS82wHcjoTyoqhMyxXiWdR7Nn7A29DNSl0EiXLdwJ6xC6AfgZWF1bOsS_TuYI3OG85AmiExREkrS6tDfTQ2B3WXlrr-wp5AokiRbz3_oB4OxG-W9KcEEbDRcZc0nH3L7LzYptiy1PtAylQGxHTWZXtGz4ht0bAecBgmpdgXMguEIcoqPJ1n3pIWk_dUZegpqx0Lka21H6XxUTxiy8OcaarA8zdnPUnV6AmNP3ecFawIFYdvJB_cm-GvpCSbr8G8y_Mllj8f4x9nBH8pQux89_6gUY618iYv7tuPWBFfEbLxtF2pZS6YC1aSfLQxaOoaBSTNRg",
+			IdToken: validJWT,
 			Scope:   "openid email",
 			State:   "state123",
 		}
@@ -436,7 +451,7 @@ func TestAuthCallbackValid(t *testing.T) {
 		t.Parallel()
 		ac := AuthCallback{
 			Code:    "code123",
-			IdToken: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.POstGetfAytaZS82wHcjoTyoqhMyxXiWdR7Nn7A29DNSl0EiXLdwJ6xC6AfgZWF1bOsS_TuYI3OG85AmiExREkrS6tDfTQ2B3WXlrr-wp5AokiRbz3_oB4OxG-W9KcEEbDRcZc0nH3L7LzYptiy1PtAylQGxHTWZXtGz4ht0bAecBgmpdgXMguEIcoqPJ1n3pIWk_dUZegpqx0Lka21H6XxUTxiy8OcaarA8zdnPUnV6AmNP3ecFawIFYdvJB_cm-GvpCSbr8G8y_Mllj8f4x9nBH8pQux89_6gUY618iYv7tuPWBFfEbLxtF2pZS6YC1aSfLQxaOoaBSTNRg",
+			IdToken: validJWT,
 			Scope:   "email profile",
 			State:   "state123",
 		}
@@ -491,5 +506,53 @@ func TestUserRoleValid(t *testing.T) {
 			User: User{Mail: ""},
 		}
 		assert.Error(t, ur.Valid())
+	})
+}
+
+func TestUserRolePrivilegesValid(t *testing.T) {
+	t.Parallel()
+
+	validUserForRole := User{
+		Hash:   "abcdef1234567890abcdef1234567890",
+		Type:   UserTypeLocal,
+		Mail:   "test@example.com",
+		Status: UserStatusActive,
+		RoleID: RoleUser,
+	}
+
+	t.Run("valid user role privileges", func(t *testing.T) {
+		t.Parallel()
+		urp := UserRolePrivileges{
+			Role: RolePrivileges{
+				Privileges: []Privilege{{Name: "read"}},
+				Role:       Role{ID: 1, Name: "admin"},
+			},
+			User: validUserForRole,
+		}
+		assert.NoError(t, urp.Valid())
+	})
+
+	t.Run("invalid role privileges", func(t *testing.T) {
+		t.Parallel()
+		urp := UserRolePrivileges{
+			Role: RolePrivileges{
+				Privileges: []Privilege{{Name: ""}},
+				Role:       Role{ID: 1, Name: "admin"},
+			},
+			User: validUserForRole,
+		}
+		assert.Error(t, urp.Valid())
+	})
+
+	t.Run("invalid user", func(t *testing.T) {
+		t.Parallel()
+		urp := UserRolePrivileges{
+			Role: RolePrivileges{
+				Privileges: []Privilege{{Name: "read"}},
+				Role:       Role{ID: 1, Name: "admin"},
+			},
+			User: User{Mail: ""},
+		}
+		assert.Error(t, urp.Valid())
 	})
 }

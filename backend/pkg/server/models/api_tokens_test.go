@@ -164,6 +164,52 @@ func TestUpdateAPITokenRequestValid(t *testing.T) {
 	})
 }
 
+func TestAPITokenWithSecretValid(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	validJWT := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.POstGetfAytaZS82wHcjoTyoqhMyxXiWdR7Nn7A29DNSl0EiXLdwJ6xC6AfgZWF1bOsS_TuYI3OG85AmiExREkrS6tDfTQ2B3WXlrr-wp5AokiRbz3_oB4OxG-W9KcEEbDRcZc0nH3L7LzYptiy1PtAylQGxHTWZXtGz4ht0bAecBgmpdgXMguEIcoqPJ1n3pIWk_dUZegpqx0Lka21H6XxUTxiy8OcaarA8zdnPUnV6AmNP3ecFawIFYdvJB_cm-GvpCSbr8G8y_Mllj8f4x9nBH8pQux89_6gUY618iYv7tuPWBFfEbLxtF2pZS6YC1aSfLQxaOoaBSTNRg"
+
+	baseToken := APIToken{
+		TokenID:   "abcdefghij",
+		UserID:    1,
+		RoleID:    1,
+		TTL:       3600,
+		Status:    TokenStatusActive,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	t.Run("valid token with secret", func(t *testing.T) {
+		t.Parallel()
+		ats := APITokenWithSecret{
+			APIToken: baseToken,
+			Token:    validJWT,
+		}
+		assert.NoError(t, ats.Valid())
+	})
+
+	t.Run("invalid embedded api token", func(t *testing.T) {
+		t.Parallel()
+		badToken := baseToken
+		badToken.Status = TokenStatus("invalid")
+		ats := APITokenWithSecret{
+			APIToken: badToken,
+			Token:    validJWT,
+		}
+		assert.Error(t, ats.Valid())
+	})
+
+	t.Run("invalid jwt token string", func(t *testing.T) {
+		t.Parallel()
+		ats := APITokenWithSecret{
+			APIToken: baseToken,
+			Token:    "not-a-jwt",
+		}
+		assert.Error(t, ats.Valid())
+	})
+}
+
 func TestAPITokenClaimsValid(t *testing.T) {
 	t.Parallel()
 

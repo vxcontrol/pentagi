@@ -348,10 +348,180 @@ func TestRolePrivilegesTableName(t *testing.T) {
 	assert.Equal(t, "roles", rp.TableName())
 }
 
+func TestFlowValid(t *testing.T) {
+	t.Parallel()
+
+	traceID := "trace-123"
+	validFlow := Flow{
+		Status:             FlowStatusCreated,
+		Title:              "test flow",
+		Model:              "gpt-4",
+		ModelProviderName:  "openai",
+		ModelProviderType:  ProviderType("openai"),
+		Language:           "en",
+		ToolCallIDTemplate: "call_{id}",
+		TraceID:            &traceID,
+		UserID:             1,
+	}
+
+	t.Run("valid flow", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, validFlow.Valid())
+	})
+
+	t.Run("missing title", func(t *testing.T) {
+		t.Parallel()
+		f := validFlow
+		f.Title = ""
+		assert.Error(t, f.Valid())
+	})
+
+	t.Run("invalid status", func(t *testing.T) {
+		t.Parallel()
+		f := validFlow
+		f.Status = FlowStatus("invalid")
+		assert.Error(t, f.Valid())
+	})
+
+	t.Run("invalid provider type", func(t *testing.T) {
+		t.Parallel()
+		f := validFlow
+		f.ModelProviderType = ProviderType("invalid")
+		assert.Error(t, f.Valid())
+	})
+}
+
+func TestFlowTasksSubtasksValid(t *testing.T) {
+	t.Parallel()
+
+	traceID := "trace-123"
+	validFlow := Flow{
+		Status:             FlowStatusCreated,
+		Title:              "test flow",
+		Model:              "gpt-4",
+		ModelProviderName:  "openai",
+		ModelProviderType:  ProviderType("openai"),
+		Language:           "en",
+		ToolCallIDTemplate: "call_{id}",
+		TraceID:            &traceID,
+		UserID:             1,
+	}
+
+	validTask := Task{
+		Status: TaskStatusCreated,
+		Title:  "task1",
+		Input:  "input1",
+		FlowID: 1,
+	}
+	validSubtask := Subtask{
+		Status:      SubtaskStatusCreated,
+		Title:       "subtask1",
+		Description: "desc1",
+		TaskID:      1,
+	}
+
+	t.Run("valid flow tasks subtasks", func(t *testing.T) {
+		t.Parallel()
+		fts := FlowTasksSubtasks{
+			Tasks: []TaskSubtasks{{
+				Subtasks: []Subtask{validSubtask},
+				Task:     validTask,
+			}},
+			Flow: validFlow,
+		}
+		assert.NoError(t, fts.Valid())
+	})
+
+	t.Run("invalid flow", func(t *testing.T) {
+		t.Parallel()
+		badFlow := validFlow
+		badFlow.Title = ""
+		fts := FlowTasksSubtasks{
+			Tasks: []TaskSubtasks{{
+				Subtasks: []Subtask{validSubtask},
+				Task:     validTask,
+			}},
+			Flow: badFlow,
+		}
+		assert.Error(t, fts.Valid())
+	})
+
+	t.Run("invalid nested subtask", func(t *testing.T) {
+		t.Parallel()
+		badSubtask := validSubtask
+		badSubtask.Title = ""
+		fts := FlowTasksSubtasks{
+			Tasks: []TaskSubtasks{{
+				Subtasks: []Subtask{badSubtask},
+				Task:     validTask,
+			}},
+			Flow: validFlow,
+		}
+		assert.Error(t, fts.Valid())
+	})
+}
+
 func TestFlowTasksSubtasksTableName(t *testing.T) {
 	t.Parallel()
 	fts := &FlowTasksSubtasks{}
 	assert.Equal(t, "flows", fts.TableName())
+}
+
+func TestFlowContainersValid(t *testing.T) {
+	t.Parallel()
+
+	traceID := "trace-123"
+	validFlow := Flow{
+		Status:             FlowStatusCreated,
+		Title:              "test flow",
+		Model:              "gpt-4",
+		ModelProviderName:  "openai",
+		ModelProviderType:  ProviderType("openai"),
+		Language:           "en",
+		ToolCallIDTemplate: "call_{id}",
+		TraceID:            &traceID,
+		UserID:             1,
+	}
+	validContainer := Container{
+		Type:     ContainerTypePrimary,
+		Name:     "test-container",
+		Image:    "alpine:latest",
+		Status:   ContainerStatusRunning,
+		LocalID:  "abc123",
+		LocalDir: "/tmp/test",
+		FlowID:   1,
+	}
+
+	t.Run("valid flow containers", func(t *testing.T) {
+		t.Parallel()
+		fc := FlowContainers{
+			Containers: []Container{validContainer},
+			Flow:       validFlow,
+		}
+		assert.NoError(t, fc.Valid())
+	})
+
+	t.Run("invalid flow", func(t *testing.T) {
+		t.Parallel()
+		badFlow := validFlow
+		badFlow.Title = ""
+		fc := FlowContainers{
+			Containers: []Container{validContainer},
+			Flow:       badFlow,
+		}
+		assert.Error(t, fc.Valid())
+	})
+
+	t.Run("invalid container", func(t *testing.T) {
+		t.Parallel()
+		badContainer := validContainer
+		badContainer.Name = ""
+		fc := FlowContainers{
+			Containers: []Container{badContainer},
+			Flow:       validFlow,
+		}
+		assert.Error(t, fc.Valid())
+	})
 }
 
 func TestFlowContainersTableName(t *testing.T) {
@@ -360,8 +530,177 @@ func TestFlowContainersTableName(t *testing.T) {
 	assert.Equal(t, "flows", fc.TableName())
 }
 
+func TestTaskValid(t *testing.T) {
+	t.Parallel()
+
+	validTask := Task{
+		Status: TaskStatusCreated,
+		Title:  "test task",
+		Input:  "test input",
+		FlowID: 1,
+	}
+
+	t.Run("valid task", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, validTask.Valid())
+	})
+
+	t.Run("missing title", func(t *testing.T) {
+		t.Parallel()
+		tk := validTask
+		tk.Title = ""
+		assert.Error(t, tk.Valid())
+	})
+
+	t.Run("missing input", func(t *testing.T) {
+		t.Parallel()
+		tk := validTask
+		tk.Input = ""
+		assert.Error(t, tk.Valid())
+	})
+
+	t.Run("invalid status", func(t *testing.T) {
+		t.Parallel()
+		tk := validTask
+		tk.Status = TaskStatus("invalid")
+		assert.Error(t, tk.Valid())
+	})
+}
+
+func TestTaskSubtasksValid(t *testing.T) {
+	t.Parallel()
+
+	validTask := Task{
+		Status: TaskStatusCreated,
+		Title:  "task1",
+		Input:  "input1",
+		FlowID: 1,
+	}
+	validSubtask := Subtask{
+		Status:      SubtaskStatusCreated,
+		Title:       "subtask1",
+		Description: "desc1",
+		TaskID:      1,
+	}
+
+	t.Run("valid task subtasks", func(t *testing.T) {
+		t.Parallel()
+		ts := TaskSubtasks{
+			Subtasks: []Subtask{validSubtask},
+			Task:     validTask,
+		}
+		assert.NoError(t, ts.Valid())
+	})
+
+	t.Run("invalid task", func(t *testing.T) {
+		t.Parallel()
+		badTask := validTask
+		badTask.Title = ""
+		ts := TaskSubtasks{
+			Subtasks: []Subtask{validSubtask},
+			Task:     badTask,
+		}
+		assert.Error(t, ts.Valid())
+	})
+
+	t.Run("invalid subtask", func(t *testing.T) {
+		t.Parallel()
+		badSubtask := validSubtask
+		badSubtask.Title = ""
+		ts := TaskSubtasks{
+			Subtasks: []Subtask{badSubtask},
+			Task:     validTask,
+		}
+		assert.Error(t, ts.Valid())
+	})
+}
+
 func TestTaskSubtasksTableName(t *testing.T) {
 	t.Parallel()
 	ts := &TaskSubtasks{}
 	assert.Equal(t, "tasks", ts.TableName())
+}
+
+func TestSubtaskValid(t *testing.T) {
+	t.Parallel()
+
+	validSubtask := Subtask{
+		Status:      SubtaskStatusCreated,
+		Title:       "subtask1",
+		Description: "description1",
+		TaskID:      1,
+	}
+
+	t.Run("valid subtask", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, validSubtask.Valid())
+	})
+
+	t.Run("missing title", func(t *testing.T) {
+		t.Parallel()
+		s := validSubtask
+		s.Title = ""
+		assert.Error(t, s.Valid())
+	})
+
+	t.Run("missing description", func(t *testing.T) {
+		t.Parallel()
+		s := validSubtask
+		s.Description = ""
+		assert.Error(t, s.Valid())
+	})
+
+	t.Run("invalid status", func(t *testing.T) {
+		t.Parallel()
+		s := validSubtask
+		s.Status = SubtaskStatus("invalid")
+		assert.Error(t, s.Valid())
+	})
+}
+
+func TestContainerValid(t *testing.T) {
+	t.Parallel()
+
+	validContainer := Container{
+		Type:     ContainerTypePrimary,
+		Name:     "test-container",
+		Image:    "alpine:latest",
+		Status:   ContainerStatusRunning,
+		LocalID:  "abc123",
+		LocalDir: "/tmp/test",
+		FlowID:   1,
+	}
+
+	t.Run("valid container", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, validContainer.Valid())
+	})
+
+	t.Run("missing name", func(t *testing.T) {
+		t.Parallel()
+		c := validContainer
+		c.Name = ""
+		assert.Error(t, c.Valid())
+	})
+
+	t.Run("missing image", func(t *testing.T) {
+		t.Parallel()
+		c := validContainer
+		c.Image = ""
+		assert.Error(t, c.Valid())
+	})
+
+	t.Run("invalid status", func(t *testing.T) {
+		t.Parallel()
+		c := validContainer
+		c.Status = ContainerStatus("invalid")
+		assert.Error(t, c.Valid())
+	})
+
+	t.Run("invalid type", func(t *testing.T) {
+		t.Parallel()
+		c := validContainer
+		c.Type = ContainerType("invalid")
+		assert.Error(t, c.Valid())
+	})
 }
