@@ -1,0 +1,178 @@
+# GLM Flash configuration for AWS Bedrock (zai.glm-4.7-flash)
+# Exported from the glm_flash provider stored in the database.
+# To use, set BEDROCK_CONFIG_PATH=./glm_flash_bedrock.yml in your .env file.
+
+simple:
+  model: zai.glm-4.7-flash
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.15
+    output: 0.6
+    cache_read: 0
+    cache_write: 0
+
+simple_json:
+  model: zai.glm-4.7-flash
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 63998
+  json: true
+  price:
+    input: 0.15
+    output: 0.6
+    cache_read: 0
+    cache_write: 0
+
+primary_agent:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 63999
+  reasoning:
+    effort: high
+    max_tokens: 2048
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+assistant:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 63998
+  reasoning:
+    effort: low
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+generator:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 63998
+  reasoning:
+    max_tokens: 4096
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+refiner:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 63998
+  reasoning:
+    effort: medium
+    max_tokens: 2048
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+adviser:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 63998
+  reasoning:
+    effort: high
+    max_tokens: 64000
+  price:
+    input: 5.0
+    output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25
+
+reflector:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    effort: low
+    max_tokens: 1024
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+searcher:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+enricher:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 63998
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
+
+coder:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 63997
+  reasoning:
+    effort: high
+    max_tokens: 2048
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+installer:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 63996
+  reasoning:
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+pentester:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 128000
+  reasoning:
+    effort: high
+    max_tokens: 1024
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75

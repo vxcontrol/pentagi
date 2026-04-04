@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"sync"
 
@@ -48,8 +49,16 @@ func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	return providerConfig, nil
 }
 
-func DefaultProviderConfig() (*pconfig.ProviderConfig, error) {
-	configData, err := configFS.ReadFile("config.yml")
+func DefaultProviderConfig(cfg *config.Config) (*pconfig.ProviderConfig, error) {
+	var (
+		configData []byte
+		err        error
+	)
+	if cfg.BedrockConfig == "" {
+		configData, err = configFS.ReadFile("config.yml")
+	} else {
+		configData, err = os.ReadFile(cfg.BedrockConfig)
+	}
 	if err != nil {
 		return nil, err
 	}

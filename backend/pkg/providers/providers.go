@@ -186,7 +186,7 @@ func NewProviderController(
 		defaultConfigs[provider.ProviderGemini] = config
 	}
 
-	if config, err := bedrock.DefaultProviderConfig(); err != nil {
+	if config, err := bedrock.DefaultProviderConfig(cfg); err != nil {
 		return nil, fmt.Errorf("failed to create bedrock provider config: %w", err)
 	} else {
 		defaultConfigs[provider.ProviderBedrock] = config
