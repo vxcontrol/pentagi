@@ -24,6 +24,7 @@ func TestUserStatusValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.status.Valid()
@@ -62,6 +63,7 @@ func TestUserTypeValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.userType.Valid()
@@ -119,6 +121,7 @@ func TestLoginValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.login.Valid()
@@ -196,6 +199,7 @@ func TestPasswordValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.pw.Valid()

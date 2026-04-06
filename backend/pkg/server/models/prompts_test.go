@@ -26,6 +26,7 @@ func TestPromptTypeValid(t *testing.T) {
 	}
 
 	for _, tt := range validTypes {
+		tt := tt
 		t.Run("valid_"+tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.NoError(t, tt.pt.Valid())
@@ -42,6 +43,7 @@ func TestPromptTypeValid(t *testing.T) {
 	}
 
 	for _, tt := range invalidTypes {
+		tt := tt
 		t.Run("invalid_"+tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.pt.Valid()

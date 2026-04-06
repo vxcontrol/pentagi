@@ -25,6 +25,7 @@ func TestFlowStatusValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.status.Valid()
@@ -146,6 +147,7 @@ func TestTaskStatusValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.status.Valid()
@@ -183,6 +185,7 @@ func TestSubtaskStatusValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.status.Valid()
@@ -220,6 +223,7 @@ func TestContainerStatusValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.status.Valid()
@@ -248,6 +252,7 @@ func TestContainerTypeValid(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.ct.Valid()

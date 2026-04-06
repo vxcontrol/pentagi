@@ -35,6 +35,7 @@ func TestStrongPasswordValidator(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := GetValidator().Var(tt.pw, "stpass")
@@ -65,6 +66,7 @@ func TestEmailValidator(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := GetValidator().Var(tt.email, "vmail")
@@ -94,6 +96,7 @@ func TestOAuthMinScopeValidator(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := GetValidator().Var(tt.scope, "oauth_min_scope")
@@ -125,6 +128,7 @@ func TestSolidValidator(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := GetValidator().Var(tt.input, "solid")
@@ -155,6 +159,7 @@ func TestSemverValidator(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := GetValidator().Var(tt.input, "semver")
@@ -185,6 +190,7 @@ func TestSemverExValidator(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := GetValidator().Var(tt.input, "semverex")
