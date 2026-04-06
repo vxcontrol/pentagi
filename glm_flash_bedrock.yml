@@ -2,6 +2,8 @@
 # Exported from the glm_flash provider stored in the database.
 # To use, set BEDROCK_CONFIG_PATH=./glm_flash_bedrock.yml in your .env file.
 
+name: glm_flash
+
 simple:
   model: zai.glm-4.7-flash
   temperature: 0.5
