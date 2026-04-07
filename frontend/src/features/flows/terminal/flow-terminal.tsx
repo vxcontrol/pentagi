@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/flow-provider';
 
 import FlowTasksDropdown from '../flow-tasks-dropdown';
@@ -227,14 +228,13 @@ const FlowTerminal = () => {
                     </div>
                 </Form>
             </div>
-            {hasLogs ? (
-                <Terminal
-                    className="w-full grow"
-                    logs={filteredLogs}
-                    ref={terminalRef}
-                    searchValue={debouncedSearchValue}
-                />
-            ) : hasActiveFilters ? (
+            <Terminal
+                className={cn('w-full grow', hasActiveFilters && !hasLogs && 'hidden')}
+                logs={filteredLogs}
+                ref={terminalRef}
+                searchValue={debouncedSearchValue}
+            />
+            {hasActiveFilters && !hasLogs && (
                 <Empty>
                     <EmptyHeader>
                         <EmptyMedia variant="icon">
@@ -253,13 +253,6 @@ const FlowTerminal = () => {
                         </Button>
                     </EmptyContent>
                 </Empty>
-            ) : (
-                <Terminal
-                    className="w-full grow"
-                    logs={filteredLogs}
-                    ref={terminalRef}
-                    searchValue={debouncedSearchValue}
-                />
             )}
         </div>
     );
