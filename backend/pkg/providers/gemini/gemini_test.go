@@ -26,7 +26,7 @@ func TestConfigLoading(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameGemini, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestProviderType(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameGemini, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestGetUsage(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameGemini, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestGeminiProviderWithProxyConfiguration(t *testing.T) {
 				ProxyURL:        tc.proxyURL,
 			}
 
-			prov, err := New(cfg, providerConfig)
+			prov, err := New(cfg, provider.DefaultProviderNameGemini, providerConfig)
 
 			if tc.wantErr {
 				if err == nil {

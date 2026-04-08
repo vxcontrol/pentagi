@@ -59,11 +59,16 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 type qwenProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 	providerPrefix string
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	if cfg.QwenAPIKey == "" {
 		return nil, fmt.Errorf("missing QWEN_API_KEY environment variable")
 	}
@@ -91,6 +96,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 	return &qwenProvider{
 		llm:            client,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 		providerPrefix: cfg.QwenProvider,
 	}, nil
@@ -98,6 +104,10 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 
 func (p *qwenProvider) Type() provider.ProviderType {
 	return provider.ProviderQwen
+}
+
+func (p *qwenProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *qwenProvider) GetRawConfig() []byte {

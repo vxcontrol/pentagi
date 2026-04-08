@@ -957,8 +957,8 @@ mutation deleteFlow($flowId: ID!) {
     deleteFlow(flowId: $flowId)
 }
 
-mutation putUserInput($flowId: ID!, $input: String!) {
-    putUserInput(flowId: $flowId, input: $input)
+mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String) {
+    putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider)
 }
 
 mutation finishFlow($flowId: ID!) {

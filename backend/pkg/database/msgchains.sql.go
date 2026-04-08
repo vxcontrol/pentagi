@@ -1243,19 +1243,27 @@ func (q *Queries) GetUserTotalUsageStats(ctx context.Context, userID int64) (Get
 
 const updateMsgChain = `-- name: UpdateMsgChain :one
 UPDATE msgchains
-SET chain = $1, duration_seconds = duration_seconds + $2
-WHERE id = $3
+SET chain = $1, duration_seconds = duration_seconds + $2, model = $3, model_provider = $4
+WHERE id = $5
 RETURNING id, type, model, model_provider, usage_in, usage_out, chain, flow_id, task_id, subtask_id, created_at, updated_at, usage_cache_in, usage_cache_out, usage_cost_in, usage_cost_out, duration_seconds
 `
 
 type UpdateMsgChainParams struct {
 	Chain           json.RawMessage `json:"chain"`
 	DurationSeconds float64         `json:"duration_seconds"`
+	Model           string          `json:"model"`
+	ModelProvider   string          `json:"model_provider"`
 	ID              int64           `json:"id"`
 }
 
 func (q *Queries) UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error) {
-	row := q.db.QueryRowContext(ctx, updateMsgChain, arg.Chain, arg.DurationSeconds, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateMsgChain,
+		arg.Chain,
+		arg.DurationSeconds,
+		arg.Model,
+		arg.ModelProvider,
+		arg.ID,
+	)
 	var i Msgchain
 	err := row.Scan(
 		&i.ID,

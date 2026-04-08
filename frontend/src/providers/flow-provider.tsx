@@ -194,13 +194,14 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 return;
             }
 
-            const { message: input } = values;
+            const { message: input, providerName } = values;
 
             try {
                 await putUserInput({
                     variables: {
                         flowId,
                         input,
+                        modelProvider: providerName || undefined,
                     },
                 });
             } catch (error) {

@@ -59,11 +59,16 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 type kimiProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 	providerPrefix string
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	if cfg.KimiAPIKey == "" {
 		return nil, fmt.Errorf("missing KIMI_API_KEY environment variable")
 	}
@@ -92,6 +97,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 	return &kimiProvider{
 		llm:            client,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 		providerPrefix: cfg.KimiProvider,
 	}, nil
@@ -99,6 +105,10 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 
 func (p *kimiProvider) Type() provider.ProviderType {
 	return provider.ProviderKimi
+}
+
+func (p *kimiProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *kimiProvider) GetRawConfig() []byte {

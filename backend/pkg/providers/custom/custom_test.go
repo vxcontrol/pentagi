@@ -54,7 +54,7 @@ func TestConfigLoading(t *testing.T) {
 				t.Fatalf("Failed to create provider config: %v", err)
 			}
 
-			prov, err := New(&testCfg, providerConfig)
+			prov, err := New(&testCfg, provider.DefaultProviderNameCustom, providerConfig)
 			if err != nil {
 				t.Fatalf("Failed to create provider: %v", err)
 			}
@@ -102,7 +102,7 @@ func TestProviderType(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameCustom, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestProviderModelsIntegration(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameCustom, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}

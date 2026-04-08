@@ -39,7 +39,7 @@ type FlowWorker interface {
 	DeleteAssistant(ctx context.Context, assistantID int64) error
 	ListAssistants(ctx context.Context) []AssistantWorker
 	ListTasks(ctx context.Context) []TaskWorker
-	PutInput(ctx context.Context, input string) error
+	PutInput(ctx context.Context, input string, prv provider.Provider) error
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
@@ -219,6 +219,7 @@ func NewFlowWorker(
 		DB:         fwc.db,
 		UserID:     fwc.userID,
 		FlowID:     flow.ID,
+		TraceID:    observation.TraceID(),
 		Executor:   executor,
 		Provider:   flowProvider,
 		Publisher:  pub,
@@ -263,7 +264,7 @@ func NewFlowWorker(
 	go fw.worker()
 
 	if !fwc.dryRun {
-		if err := fw.PutInput(ctx, fwc.input); err != nil {
+		if err := fw.PutInput(ctx, fwc.input, nil); err != nil {
 			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to run flow worker", err)
 		}
 	}
@@ -368,6 +369,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		DB:         fwc.db,
 		UserID:     flow.UserID,
 		FlowID:     flow.ID,
+		TraceID:    observation.TraceID(),
 		Executor:   executor,
 		Provider:   flowProvider,
 		Publisher:  pub,
@@ -565,9 +567,17 @@ func (fw *flowWorker) ListTasks(ctx context.Context) []TaskWorker {
 	return fw.tc.ListTasks(ctx)
 }
 
-func (fw *flowWorker) PutInput(ctx context.Context, input string) error {
+func (fw *flowWorker) PutInput(
+	ctx context.Context,
+	input string,
+	prv provider.Provider,
+) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.PutInput")
 	defer span.End()
+
+	if err := fw.switchProvider(ctx, prv); err != nil {
+		return fmt.Errorf("failed to switch provider: %w", err)
+	}
 
 	flin := flowInput{input: input, done: make(chan error, 1)}
 	select {
@@ -672,6 +682,58 @@ func (fw *flowWorker) Rename(ctx context.Context, title string) error {
 	}
 
 	fw.flowCtx.Publisher.FlowUpdated(ctx, flow, containers)
+
+	return nil
+}
+
+// switchProvider performs runtime provider switch for the flow
+func (fw *flowWorker) switchProvider(ctx context.Context, prv provider.Provider) error {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.switchProvider")
+	defer span.End()
+
+	if prv == nil {
+		return nil // no provider to switch to
+	}
+
+	logger := fw.logger.WithFields(logrus.Fields{
+		"old_provider_name": fw.flowCtx.Provider.Name().String(),
+		"old_provider_type": fw.flowCtx.Provider.Type().String(),
+		"new_provider_name": prv.Name().String(),
+		"new_provider_type": prv.Type().String(),
+	})
+
+	if fw.flowCtx.Provider.Name() == prv.Name() {
+		logger.Debug("provider is the same, skipping switch")
+		return nil
+	}
+
+	logger.Info("switching flow provider")
+
+	if err := fw.flowCtx.Provider.SetProvider(ctx, prv); err != nil {
+		logger.WithError(err).Error("failed to set provider")
+		return fmt.Errorf("failed to set provider: %w", err)
+	}
+
+	flow, err := fw.flowCtx.DB.UpdateFlowProvider(ctx, database.UpdateFlowProviderParams{
+		ModelProviderName:  prv.Name().String(),
+		ModelProviderType:  database.ProviderType(prv.Type()),
+		ToolCallIDTemplate: fw.flowCtx.Provider.ToolCallIDTemplate(),
+		Model:              fw.flowCtx.Provider.Model(pconfig.OptionsTypePrimaryAgent),
+		ID:                 fw.flowCtx.FlowID,
+	})
+	if err != nil {
+		logger.WithError(err).Error("failed to update flow provider in DB")
+		return fmt.Errorf("failed to update flow provider in DB: %w", err)
+	}
+
+	logger.WithFields(logrus.Fields{
+		"new_tool_call_id_template": fw.flowCtx.Provider.ToolCallIDTemplate(),
+		"new_model":                 fw.flowCtx.Provider.Model(pconfig.OptionsTypePrimaryAgent),
+	}).Info("provider switched successfully")
+
+	if containers, err := fw.flowCtx.DB.GetFlowContainers(ctx, fw.flowCtx.FlowID); err == nil {
+		fw.flowCtx.Publisher.FlowUpdated(ctx, flow, containers)
+	}
 
 	return nil
 }

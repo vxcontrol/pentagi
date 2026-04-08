@@ -129,7 +129,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating custom provider config: %w", err)
 		}
-		return custom.New(cfg, providerConfig)
+		return custom.New(cfg, provider.DefaultProviderNameCustom, providerConfig)
 
 	case "openai":
 		if cfg.OpenAIKey == "" {
@@ -139,7 +139,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating openai provider config: %w", err)
 		}
-		return openai.New(cfg, providerConfig)
+		return openai.New(cfg, provider.DefaultProviderNameOpenAI, providerConfig)
 
 	case "anthropic":
 		if cfg.AnthropicAPIKey == "" {
@@ -149,7 +149,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating anthropic provider config: %w", err)
 		}
-		return anthropic.New(cfg, providerConfig)
+		return anthropic.New(cfg, provider.DefaultProviderNameAnthropic, providerConfig)
 
 	case "gemini":
 		if cfg.GeminiAPIKey == "" {
@@ -159,7 +159,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating gemini provider config: %w", err)
 		}
-		return gemini.New(cfg, providerConfig)
+		return gemini.New(cfg, provider.DefaultProviderNameGemini, providerConfig)
 
 	case "bedrock":
 		if !cfg.BedrockDefaultAuth && cfg.BedrockBearerToken == "" &&
@@ -172,7 +172,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating bedrock provider config: %w", err)
 		}
-		return bedrock.New(cfg, providerConfig)
+		return bedrock.New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 
 	case "ollama":
 		if cfg.OllamaServerURL == "" {
@@ -182,7 +182,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating ollama provider config: %w", err)
 		}
-		return ollama.New(cfg, providerConfig)
+		return ollama.New(cfg, provider.DefaultProviderNameOllama, providerConfig)
 
 	case "deepseek":
 		if cfg.DeepSeekAPIKey == "" {
@@ -192,7 +192,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating deepseek provider config: %w", err)
 		}
-		return deepseek.New(cfg, providerConfig)
+		return deepseek.New(cfg, provider.DefaultProviderNameDeepSeek, providerConfig)
 
 	case "glm":
 		if cfg.GLMAPIKey == "" {
@@ -202,7 +202,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating glm provider config: %w", err)
 		}
-		return glm.New(cfg, providerConfig)
+		return glm.New(cfg, provider.DefaultProviderNameGLM, providerConfig)
 
 	case "kimi":
 		if cfg.KimiAPIKey == "" {
@@ -212,7 +212,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating kimi provider config: %w", err)
 		}
-		return kimi.New(cfg, providerConfig)
+		return kimi.New(cfg, provider.DefaultProviderNameKimi, providerConfig)
 
 	case "qwen":
 		if cfg.QwenAPIKey == "" {
@@ -222,7 +222,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating qwen provider config: %w", err)
 		}
-		return qwen.New(cfg, providerConfig)
+		return qwen.New(cfg, provider.DefaultProviderNameQwen, providerConfig)
 
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", providerType)

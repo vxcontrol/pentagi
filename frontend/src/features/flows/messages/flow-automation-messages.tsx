@@ -208,6 +208,7 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
 
     const isFormDisabled = flowStatus === StatusType.Finished || flowStatus === StatusType.Failed;
     const isFormLoading = flowStatus === StatusType.Created || flowStatus === StatusType.Running;
+    const isProviderChangeAllowed = flowStatus === StatusType.Waiting;
 
     return (
         <div className={cn('flex h-full flex-col', className)}>
@@ -336,7 +337,7 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
                     isCanceling={isCanceling}
                     isDisabled={isFormDisabled}
                     isLoading={isFormLoading}
-                    isProviderDisabled={true}
+                    isProviderDisabled={!isProviderChangeAllowed}
                     isSubmitting={isSubmitting}
                     onCancel={handleStopAutomation}
                     onSubmit={handleSubmitMessage}

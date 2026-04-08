@@ -59,11 +59,16 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 type deepseekProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 	providerPrefix string
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	if cfg.DeepSeekAPIKey == "" {
 		return nil, fmt.Errorf("missing DEEPSEEK_API_KEY environment variable")
 	}
@@ -92,6 +97,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 	return &deepseekProvider{
 		llm:            client,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 		providerPrefix: cfg.DeepSeekProvider,
 	}, nil
@@ -99,6 +105,10 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 
 func (p *deepseekProvider) Type() provider.ProviderType {
 	return provider.ProviderDeepSeek
+}
+
+func (p *deepseekProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *deepseekProvider) GetRawConfig() []byte {

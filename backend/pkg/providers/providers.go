@@ -230,7 +230,7 @@ func NewProviderController(
 	}
 
 	if cfg.OpenAIKey != "" {
-		p, err := openai.New(cfg, defaultConfigs[provider.ProviderOpenAI])
+		p, err := openai.New(cfg, provider.DefaultProviderNameOpenAI, defaultConfigs[provider.ProviderOpenAI])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create openai provider: %w", err)
 		}
@@ -239,7 +239,7 @@ func NewProviderController(
 	}
 
 	if cfg.AnthropicAPIKey != "" {
-		p, err := anthropic.New(cfg, defaultConfigs[provider.ProviderAnthropic])
+		p, err := anthropic.New(cfg, provider.DefaultProviderNameAnthropic, defaultConfigs[provider.ProviderAnthropic])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create anthropic provider: %w", err)
 		}
@@ -248,7 +248,7 @@ func NewProviderController(
 	}
 
 	if cfg.GeminiAPIKey != "" {
-		p, err := gemini.New(cfg, defaultConfigs[provider.ProviderGemini])
+		p, err := gemini.New(cfg, provider.DefaultProviderNameGemini, defaultConfigs[provider.ProviderGemini])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create gemini provider: %w", err)
 		}
@@ -262,7 +262,7 @@ func NewProviderController(
 	// 3. Static credentials (BedrockAccessKey + BedrockSecretKey)
 	if cfg.BedrockDefaultAuth || cfg.BedrockBearerToken != "" ||
 		(cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "") {
-		p, err := bedrock.New(cfg, defaultConfigs[provider.ProviderBedrock])
+		p, err := bedrock.New(cfg, provider.DefaultProviderNameBedrock, defaultConfigs[provider.ProviderBedrock])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bedrock provider: %w", err)
 		}
@@ -270,7 +270,7 @@ func NewProviderController(
 	}
 
 	if cfg.OllamaServerURL != "" {
-		p, err := ollama.New(cfg, defaultConfigs[provider.ProviderOllama])
+		p, err := ollama.New(cfg, provider.DefaultProviderNameOllama, defaultConfigs[provider.ProviderOllama])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ollama provider: %w", err)
 		}
@@ -278,7 +278,7 @@ func NewProviderController(
 	}
 
 	if cfg.LLMServerURL != "" && (cfg.LLMServerModel != "" || cfg.LLMServerConfig != "") {
-		p, err := custom.New(cfg, defaultConfigs[provider.ProviderCustom])
+		p, err := custom.New(cfg, provider.DefaultProviderNameCustom, defaultConfigs[provider.ProviderCustom])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create custom provider: %w", err)
 		}
@@ -287,7 +287,7 @@ func NewProviderController(
 	}
 
 	if cfg.DeepSeekAPIKey != "" {
-		p, err := deepseek.New(cfg, defaultConfigs[provider.ProviderDeepSeek])
+		p, err := deepseek.New(cfg, provider.DefaultProviderNameDeepSeek, defaultConfigs[provider.ProviderDeepSeek])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create deepseek provider: %w", err)
 		}
@@ -296,7 +296,7 @@ func NewProviderController(
 	}
 
 	if cfg.GLMAPIKey != "" {
-		p, err := glm.New(cfg, defaultConfigs[provider.ProviderGLM])
+		p, err := glm.New(cfg, provider.DefaultProviderNameGLM, defaultConfigs[provider.ProviderGLM])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create glm provider: %w", err)
 		}
@@ -305,7 +305,7 @@ func NewProviderController(
 	}
 
 	if cfg.KimiAPIKey != "" {
-		p, err := kimi.New(cfg, defaultConfigs[provider.ProviderKimi])
+		p, err := kimi.New(cfg, provider.DefaultProviderNameKimi, defaultConfigs[provider.ProviderKimi])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create kimi provider: %w", err)
 		}
@@ -314,7 +314,7 @@ func NewProviderController(
 	}
 
 	if cfg.QwenAPIKey != "" {
-		p, err := qwen.New(cfg, defaultConfigs[provider.ProviderQwen])
+		p, err := qwen.New(cfg, provider.DefaultProviderNameQwen, defaultConfigs[provider.ProviderQwen])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create qwen provider: %w", err)
 		}
@@ -759,6 +759,7 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 	}
 
 	// Check if the provider type is available via check default one
+	providerName := provider.ProviderName(prv.Name)
 	providerType := provider.ProviderType(prv.Type)
 	if !pc.ListTypes().Contains(providerType) {
 		return nil, fmt.Errorf("provider type '%s' is not available", prv.Type)
@@ -770,61 +771,61 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 		if err != nil {
 			return nil, fmt.Errorf("failed to build openai provider config: %w", err)
 		}
-		return openai.New(pc.cfg, openaiConfig)
+		return openai.New(pc.cfg, providerName, openaiConfig)
 	case provider.ProviderAnthropic:
 		anthropicConfig, err := anthropic.BuildProviderConfig(prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build anthropic provider config: %w", err)
 		}
-		return anthropic.New(pc.cfg, anthropicConfig)
+		return anthropic.New(pc.cfg, providerName, anthropicConfig)
 	case provider.ProviderGemini:
 		geminiConfig, err := gemini.BuildProviderConfig(prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build gemini provider config: %w", err)
 		}
-		return gemini.New(pc.cfg, geminiConfig)
+		return gemini.New(pc.cfg, providerName, geminiConfig)
 	case provider.ProviderBedrock:
 		bedrockConfig, err := bedrock.BuildProviderConfig(prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build bedrock provider config: %w", err)
 		}
-		return bedrock.New(pc.cfg, bedrockConfig)
+		return bedrock.New(pc.cfg, providerName, bedrockConfig)
 	case provider.ProviderOllama:
 		ollamaConfig, err := ollama.BuildProviderConfig(pc.cfg, prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build ollama provider config: %w", err)
 		}
-		return ollama.New(pc.cfg, ollamaConfig)
+		return ollama.New(pc.cfg, providerName, ollamaConfig)
 	case provider.ProviderCustom:
 		customConfig, err := custom.BuildProviderConfig(pc.cfg, prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build custom provider config: %w", err)
 		}
-		return custom.New(pc.cfg, customConfig)
+		return custom.New(pc.cfg, providerName, customConfig)
 	case provider.ProviderDeepSeek:
 		deepseekConfig, err := deepseek.BuildProviderConfig(prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build deepseek provider config: %w", err)
 		}
-		return deepseek.New(pc.cfg, deepseekConfig)
+		return deepseek.New(pc.cfg, providerName, deepseekConfig)
 	case provider.ProviderGLM:
 		glmConfig, err := glm.BuildProviderConfig(prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build glm provider config: %w", err)
 		}
-		return glm.New(pc.cfg, glmConfig)
+		return glm.New(pc.cfg, providerName, glmConfig)
 	case provider.ProviderKimi:
 		kimiConfig, err := kimi.BuildProviderConfig(prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build kimi provider config: %w", err)
 		}
-		return kimi.New(pc.cfg, kimiConfig)
+		return kimi.New(pc.cfg, providerName, kimiConfig)
 	case provider.ProviderQwen:
 		qwenConfig, err := qwen.BuildProviderConfig(prv.Config)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build qwen provider config: %w", err)
 		}
-		return qwen.New(pc.cfg, qwenConfig)
+		return qwen.New(pc.cfg, providerName, qwenConfig)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", prv.Type)
 	}
@@ -985,7 +986,8 @@ func (pc *providerController) TestAgent(
 	}
 
 	// Create temporary provider for testing using existing provider logic
-	tempProvider, err := pc.buildProviderFromConfig(prvtype, patchedConfig)
+	providerName := provider.ProviderName("test-provider")
+	tempProvider, err := pc.buildProviderFromConfig(prvtype, providerName, patchedConfig)
 	if err != nil {
 		return result, fmt.Errorf("failed to create provider for testing: %w", err)
 	}
@@ -1054,7 +1056,8 @@ func (pc *providerController) TestProvider(
 	}
 
 	// Create provider for testing
-	testProvider, err := pc.buildProviderFromConfig(prvtype, patchedConfig)
+	providerName := provider.ProviderName("test-provider")
+	testProvider, err := pc.buildProviderFromConfig(prvtype, providerName, patchedConfig)
 	if err != nil {
 		return results, fmt.Errorf("failed to create provider for testing: %w", err)
 	}
@@ -1137,29 +1140,30 @@ func (pc *providerController) patchProviderConfig(
 
 func (pc *providerController) buildProviderFromConfig(
 	prvtype provider.ProviderType,
+	prvname provider.ProviderName,
 	config *pconfig.ProviderConfig,
 ) (provider.Provider, error) {
 	switch prvtype {
 	case provider.ProviderOpenAI:
-		return openai.New(pc.cfg, config)
+		return openai.New(pc.cfg, prvname, config)
 	case provider.ProviderAnthropic:
-		return anthropic.New(pc.cfg, config)
+		return anthropic.New(pc.cfg, prvname, config)
 	case provider.ProviderCustom:
-		return custom.New(pc.cfg, config)
+		return custom.New(pc.cfg, prvname, config)
 	case provider.ProviderGemini:
-		return gemini.New(pc.cfg, config)
+		return gemini.New(pc.cfg, prvname, config)
 	case provider.ProviderBedrock:
-		return bedrock.New(pc.cfg, config)
+		return bedrock.New(pc.cfg, prvname, config)
 	case provider.ProviderOllama:
-		return ollama.New(pc.cfg, config)
+		return ollama.New(pc.cfg, prvname, config)
 	case provider.ProviderDeepSeek:
-		return deepseek.New(pc.cfg, config)
+		return deepseek.New(pc.cfg, prvname, config)
 	case provider.ProviderGLM:
-		return glm.New(pc.cfg, config)
+		return glm.New(pc.cfg, prvname, config)
 	case provider.ProviderKimi:
-		return kimi.New(pc.cfg, config)
+		return kimi.New(pc.cfg, prvname, config)
 	case provider.ProviderQwen:
-		return qwen.New(pc.cfg, config)
+		return qwen.New(pc.cfg, prvname, config)
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", prvtype)
 	}

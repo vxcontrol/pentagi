@@ -468,7 +468,17 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 			return
 		}
 
-		if err := fw.PutInput(c, *patchFlow.Input); err != nil {
+		var prv provider.Provider
+		if patchFlow.Provider != nil && *patchFlow.Provider != "" {
+			prv, err = s.pc.GetProvider(c, provider.ProviderName(*patchFlow.Provider), int64(uid))
+			if err != nil {
+				logger.FromContext(c).WithError(err).Errorf("error getting provider by name")
+				response.Error(c, response.ErrInternal, err)
+				return
+			}
+		}
+
+		if err := fw.PutInput(c, *patchFlow.Input, prv); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error sending input to flow")
 			response.Error(c, response.ErrInternal, err)
 			return

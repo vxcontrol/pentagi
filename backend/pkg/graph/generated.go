@@ -322,7 +322,7 @@ type ComplexityRoot struct {
 		DeletePrompt       func(childComplexity int, promptID int64) int
 		DeleteProvider     func(childComplexity int, providerID int64) int
 		FinishFlow         func(childComplexity int, flowID int64) int
-		PutUserInput       func(childComplexity int, flowID int64, input string) int
+		PutUserInput       func(childComplexity int, flowID int64, input string, modelProvider *string) int
 		RenameFlow         func(childComplexity int, flowID int64, title string) int
 		StopAssistant      func(childComplexity int, flowID int64, assistantID int64) int
 		StopFlow           func(childComplexity int, flowID int64) int
@@ -647,7 +647,7 @@ type ComplexityRoot struct {
 
 type MutationResolver interface {
 	CreateFlow(ctx context.Context, modelProvider string, input string) (*model.Flow, error)
-	PutUserInput(ctx context.Context, flowID int64, input string) (model.ResultType, error)
+	PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string) (model.ResultType, error)
 	StopFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	FinishFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	DeleteFlow(ctx context.Context, flowID int64) (model.ResultType, error)
@@ -2139,7 +2139,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.PutUserInput(childComplexity, args["flowId"].(int64), args["input"].(string)), true
+		return e.complexity.Mutation.PutUserInput(childComplexity, args["flowId"].(int64), args["input"].(string), args["modelProvider"].(*string)), true
 
 	case "Mutation.renameFlow":
 		if e.complexity.Mutation.RenameFlow == nil {
@@ -4982,6 +4982,11 @@ func (ec *executionContext) field_Mutation_putUserInput_args(ctx context.Context
 		return nil, err
 	}
 	args["input"] = arg1
+	arg2, err := ec.field_Mutation_putUserInput_argsModelProvider(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["modelProvider"] = arg2
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_putUserInput_argsFlowID(
@@ -5025,6 +5030,28 @@ func (ec *executionContext) field_Mutation_putUserInput_argsInput(
 	}
 
 	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_putUserInput_argsModelProvider(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["modelProvider"]
+	if !ok {
+		var zeroVal *string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("modelProvider"))
+	if tmp, ok := rawArgs["modelProvider"]; ok {
+		return ec.unmarshalOString2ᚖstring(ctx, tmp)
+	}
+
+	var zeroVal *string
 	return zeroVal, nil
 }
 
@@ -15093,7 +15120,7 @@ func (ec *executionContext) _Mutation_putUserInput(ctx context.Context, field gr
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().PutUserInput(rctx, fc.Args["flowId"].(int64), fc.Args["input"].(string))
+		return ec.resolvers.Mutation().PutUserInput(rctx, fc.Args["flowId"].(int64), fc.Args["input"].(string), fc.Args["modelProvider"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)

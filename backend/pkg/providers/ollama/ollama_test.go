@@ -67,7 +67,7 @@ func TestNew(t *testing.T) {
 	providerConfig, err := DefaultProviderConfig(cfg)
 	require.NoError(t, err)
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameOllama, providerConfig)
 	require.NoError(t, err)
 	assert.NotNil(t, prov)
 
@@ -99,7 +99,7 @@ func TestOllamaProviderWithProxy(t *testing.T) {
 	providerConfig, err := DefaultProviderConfig(cfg)
 	require.NoError(t, err)
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameOllama, providerConfig)
 	require.NoError(t, err)
 	assert.NotNil(t, prov)
 }
@@ -114,7 +114,7 @@ func TestOllamaProviderWithCustomConfig(t *testing.T) {
 	providerConfig, err := DefaultProviderConfig(cfg)
 	if err == nil {
 		// if file exists, check that provider can be created
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameOllama, providerConfig)
 		require.NoError(t, err)
 		assert.NotNil(t, prov)
 	} else {
@@ -123,7 +123,7 @@ func TestOllamaProviderWithCustomConfig(t *testing.T) {
 		providerConfig, err := DefaultProviderConfig(cfg)
 		require.NoError(t, err)
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameOllama, providerConfig)
 		require.NoError(t, err)
 		assert.NotNil(t, prov)
 	}
@@ -137,7 +137,7 @@ func TestOllamaProviderPricing(t *testing.T) {
 	providerConfig, err := DefaultProviderConfig(cfg)
 	require.NoError(t, err)
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameOllama, providerConfig)
 	require.NoError(t, err)
 
 	// ollama is free local inference, so pricing should be nil for most cases
@@ -163,7 +163,7 @@ func TestGetUsageEdgeCases(t *testing.T) {
 	providerConfig, err := DefaultProviderConfig(cfg)
 	require.NoError(t, err)
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameOllama, providerConfig)
 	require.NoError(t, err)
 
 	// test empty info

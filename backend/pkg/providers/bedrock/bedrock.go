@@ -69,6 +69,7 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 type bedrockProvider struct {
 	llm            *bedrock.LLM
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 
 	toolCallIDTemplate     string
@@ -76,7 +77,11 @@ type bedrockProvider struct {
 	toolCallIDTemplateErr  error
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	opts := []func(*bconfig.LoadOptions) error{
 		bconfig.WithRegion(cfg.BedrockRegion),
 	}
@@ -141,12 +146,17 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 	return &bedrockProvider{
 		llm:            client,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 	}, nil
 }
 
 func (p *bedrockProvider) Type() provider.ProviderType {
 	return provider.ProviderBedrock
+}
+
+func (p *bedrockProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *bedrockProvider) GetRawConfig() []byte {

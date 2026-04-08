@@ -106,8 +106,8 @@ RETURNING *;
 
 -- name: UpdateMsgChain :one
 UPDATE msgchains
-SET chain = $1, duration_seconds = duration_seconds + $2
-WHERE id = $3
+SET chain = $1, duration_seconds = duration_seconds + $2, model = $3, model_provider = $4
+WHERE id = $5
 RETURNING *;
 
 -- name: UpdateMsgChainUsage :one

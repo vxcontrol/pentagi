@@ -146,10 +146,15 @@ type ollamaProvider struct {
 	llm            *ollama.LLM
 	model          string
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	httpClient, err := system.GetHTTPClient(cfg)
 	if err != nil {
 		return nil, err
@@ -210,12 +215,17 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		llm:            client,
 		model:          baseModel,
 		models:         availableModels,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 	}, nil
 }
 
 func (p *ollamaProvider) Type() provider.ProviderType {
 	return provider.ProviderOllama
+}
+
+func (p *ollamaProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *ollamaProvider) GetRawConfig() []byte {

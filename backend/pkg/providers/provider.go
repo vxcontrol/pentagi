@@ -73,6 +73,7 @@ type FlowProvider interface {
 	ID() int64
 	DB() database.Querier
 	Type() provider.ProviderType
+	Name() provider.ProviderName
 	Model(opt pconfig.ProviderOptionsType) string
 	Image() string
 	Title() string
@@ -85,6 +86,7 @@ type FlowProvider interface {
 	SetTitle(title string)
 	SetAgentLogProvider(agentLog tools.AgentLogProvider)
 	SetMsgLogProvider(msgLog tools.MsgLogProvider)
+	SetProvider(ctx context.Context, newProvider provider.Provider) error
 
 	GetTaskTitle(ctx context.Context, input string) (string, error)
 	GenerateSubtasks(ctx context.Context, taskID int64) ([]tools.SubtaskInfo, error)
@@ -170,6 +172,25 @@ func (fp *flowProvider) SetMsgLogProvider(msgLog tools.MsgLogProvider) {
 	defer fp.mx.Unlock()
 
 	fp.msgLog = msgLog
+}
+
+func (fp *flowProvider) SetProvider(ctx context.Context, newProvider provider.Provider) error {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.SetProvider")
+	defer span.End()
+
+	fp.mx.Lock()
+	defer fp.mx.Unlock()
+
+	// Update provider-specific fields
+	fp.Provider = newProvider
+
+	var err error
+	fp.tcIDTemplate, err = newProvider.GetToolCallIDTemplate(ctx, fp.prompter)
+	if err != nil {
+		return fmt.Errorf("failed to get tool call ID template: %w", err)
+	}
+
+	return nil
 }
 
 func (fp *flowProvider) ID() int64 {
@@ -855,9 +876,11 @@ func (fp *flowProvider) PutInputToAgentChain(ctx context.Context, msgChainID int
 		"input":        input[:min(len(input), 1000)],
 	})
 
-	return fp.processChain(ctx, msgChainID, logger, func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
-		return fp.updateMsgChainResult(chain, tools.AskUserToolName, input)
-	})
+	return fp.processChain(ctx, pconfig.OptionsTypePrimaryAgent, msgChainID, logger,
+		func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
+			return fp.updateMsgChainResult(chain, tools.AskUserToolName, input)
+		},
+	)
 }
 
 // EnsureChainConsistency ensures a message chain is in a consistent state by adding
@@ -872,9 +895,11 @@ func (fp *flowProvider) EnsureChainConsistency(ctx context.Context, msgChainID i
 		"msg_chain_id": msgChainID,
 	})
 
-	return fp.processChain(ctx, msgChainID, logger, func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
-		return fp.ensureChainConsistency(chain)
-	})
+	return fp.processChain(ctx, pconfig.OptionsTypePrimaryAgent, msgChainID, logger,
+		func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
+			return fp.ensureChainConsistency(chain)
+		},
+	)
 }
 
 func (fp *flowProvider) putMsgLog(

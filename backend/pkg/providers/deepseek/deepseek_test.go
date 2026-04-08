@@ -19,7 +19,7 @@ func TestConfigLoading(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameDeepSeek, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestProviderType(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameDeepSeek, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestModelWithPrefix(t *testing.T) {
 	cfg := &config.Config{
 		DeepSeekAPIKey:    "test-key",
 		DeepSeekServerURL: "https://api.deepseek.com",
-		DeepSeekProvider:   "deepseek",
+		DeepSeekProvider:  "deepseek",
 	}
 
 	providerConfig, err := DefaultProviderConfig()
@@ -117,7 +117,7 @@ func TestModelWithPrefix(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameDeepSeek, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestModelWithoutPrefix(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameDeepSeek, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestMissingAPIKey(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	_, err = New(cfg, providerConfig)
+	_, err = New(cfg, provider.DefaultProviderNameDeepSeek, providerConfig)
 	if err == nil {
 		t.Fatal("Expected error when API key is missing")
 	}
@@ -187,7 +187,7 @@ func TestGetUsage(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameDeepSeek, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}

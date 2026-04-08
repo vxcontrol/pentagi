@@ -234,16 +234,29 @@ func (ap *assistantProvider) PutInputToAgentChain(ctx context.Context, input str
 		"input":        input[:min(len(input), 1000)],
 	})
 
-	return ap.fp.processChain(ctx, ap.msgChainID, logger, func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
-		return ap.updateAssistantChain(ctx, chain, input)
-	})
+	return ap.fp.processChain(ctx, pconfig.OptionsTypeAssistant, ap.msgChainID, logger,
+		func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
+			return ap.updateAssistantChain(ctx, chain, input)
+		},
+	)
 }
 
 func (ap *assistantProvider) EnsureChainConsistency(ctx context.Context) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.assistantProvider.EnsureChainConsistency")
 	defer span.End()
 
-	return ap.fp.EnsureChainConsistency(ctx, ap.msgChainID)
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
+		"flow_id":      ap.fp.flowID,
+		"msg_chain_id": ap.msgChainID,
+		"assistant_id": ap.id,
+	})
+
+	return ap.fp.processChain(ctx, pconfig.OptionsTypeAssistant, ap.msgChainID, logger,
+		func(chain []llms.MessageContent) ([]llms.MessageContent, error) {
+			return ap.fp.ensureChainConsistency(chain)
+		},
+	)
 }
 
 func (ap *assistantProvider) updateAssistantChain(

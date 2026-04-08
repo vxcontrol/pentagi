@@ -6596,6 +6596,9 @@ const docTemplate = `{
                 "name": {
                     "type": "string",
                     "example": "new flow name"
+                },
+                "provider": {
+                    "type": "string"
                 }
             }
         },
