@@ -106,6 +106,37 @@ func TestNoopObserver_NewObservation_ExplicitObservationID(t *testing.T) {
 	assert.Equal(t, "my-obs", observation.ID())
 }
 
+func TestNoopObserver_NewObservation_ExplicitObsIDNoParent(t *testing.T) {
+	t.Parallel()
+
+	obs := NewNoopObserver()
+	ctx := context.Background()
+
+	// Explicit observation ID with no parent context
+	_, observation := obs.NewObservation(ctx, WithObservationID("my-obs"))
+	assert.NotEmpty(t, observation.TraceID(), "must generate new trace ID")
+	assert.Len(t, observation.TraceID(), 32)
+	assert.Equal(t, "my-obs", observation.ID())
+}
+
+func TestNoopObserver_NewObservation_ExplicitTraceDoesNotInheritObsID(t *testing.T) {
+	t.Parallel()
+
+	obs := NewNoopObserver()
+	ctx := context.Background()
+
+	// Set parent with both trace and observation IDs
+	ctx = putObservationContext(ctx, observationContext{
+		TraceID:       "parent-trace",
+		ObservationID: "parent-obs",
+	})
+
+	// Explicit trace ID skips the inheritance block entirely
+	_, observation := obs.NewObservation(ctx, WithObservationTraceID("my-trace"))
+	assert.Equal(t, "my-trace", observation.TraceID())
+	assert.Empty(t, observation.ID(), "must NOT inherit parent observation ID when trace is explicit")
+}
+
 func TestNoopObserver_Shutdown(t *testing.T) {
 	t.Parallel()
 
