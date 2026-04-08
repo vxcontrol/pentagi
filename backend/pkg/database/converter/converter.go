@@ -492,6 +492,25 @@ func ConvertAPITokens(tokens []database.ApiToken) []*model.APIToken {
 	return result
 }
 
+func ConvertFlowTemplate(template database.FlowTemplate) *model.FlowTemplate {
+	return &model.FlowTemplate{
+		ID:        template.ID,
+		UserID:    template.UserID,
+		Title:     template.Title,
+		Text:      template.Text,
+		CreatedAt: template.CreatedAt.Time,
+		UpdatedAt: template.UpdatedAt.Time,
+	}
+}
+
+func ConvertFlowTemplates(templates []database.FlowTemplate) []*model.FlowTemplate {
+	result := make([]*model.FlowTemplate, 0, len(templates))
+	for _, template := range templates {
+		result = append(result, ConvertFlowTemplate(template))
+	}
+	return result
+}
+
 func ConvertModels(models pconfig.ModelsConfig) []*model.ModelConfig {
 	gmodels := make([]*model.ModelConfig, 0, len(models))
 	for _, m := range models {

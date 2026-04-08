@@ -1,164 +1,157 @@
-import {
-    createContext,
-    type ReactNode,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useState,
-} from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react';
+import { toast } from 'sonner';
 
+import {
+    useCreateFlowTemplateMutation,
+    useDeleteFlowTemplateMutation,
+    useFlowTemplateCreatedSubscription,
+    useFlowTemplateDeletedSubscription,
+    useFlowTemplatesQuery,
+    useFlowTemplateUpdatedSubscription,
+    useUpdateFlowTemplateMutation,
+} from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { useUser } from '@/providers/user-provider';
 
 export interface Template {
-    createdAt: number;
+    createdAt: Date;
     id: string;
     text: string;
     title: string;
+    updatedAt: Date;
+    userId: string;
 }
 
 interface TemplatesContextValue {
-    createTemplate: (title: string, text: string) => string;
-    deleteTemplate: (id: string) => void;
+    createTemplate: (title: string, text: string) => Promise<void>;
+    deleteTemplate: (id: string) => Promise<void>;
     getTemplate: (id: string) => Template | undefined;
+    isLoading: boolean;
     templates: Template[];
-    updateTemplate: (id: string, payload: { text: string; title: string }) => void;
+    updateTemplate: (id: string, payload: { text: string; title: string }) => Promise<void>;
 }
 
 interface TemplatesProviderProps {
     children: ReactNode;
 }
 
-interface TemplatesStorage {
-    [userId: string]: Template[];
-}
-
 const TemplatesContext = createContext<TemplatesContextValue | undefined>(undefined);
 
-const TEMPLATES_STORAGE_KEY = 'templates';
-
-const loadTemplates = (): TemplatesStorage => {
-    try {
-        const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
-
-        if (stored) {
-            const parsed = JSON.parse(stored);
-
-            return typeof parsed === 'object' && parsed !== null ? parsed : {};
-        }
-    } catch (error) {
-        Log.error('Error loading templates from storage:', error);
-    }
-
-    return {};
-};
-
-const saveTemplates = (storage: TemplatesStorage): void => {
-    try {
-        localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(storage));
-    } catch (error) {
-        Log.error('Error saving templates to storage:', error);
-    }
-};
-
-const generateId = (): string => {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-};
-
 export const TemplatesProvider = ({ children }: TemplatesProviderProps) => {
-    const { authInfo } = useUser();
-    const userId = authInfo?.user?.id?.toString() ?? 'guest';
+    const { authInfo, isAuthenticated } = useUser();
 
-    const [storage, setStorage] = useState<TemplatesStorage>(() => loadTemplates());
+    const shouldFetchTemplates = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
+    // GraphQL query for templates
+    const { data: templatesData, loading: isLoadingTemplates } = useFlowTemplatesQuery({
+        fetchPolicy: 'cache-and-network',
+        skip: !shouldFetchTemplates,
+    });
+
+    // GraphQL mutations
+    const [createTemplateMutation] = useCreateFlowTemplateMutation();
+    const [updateTemplateMutation] = useUpdateFlowTemplateMutation();
+    const [deleteTemplateMutation] = useDeleteFlowTemplateMutation();
+
+    // GraphQL subscriptions (only for authenticated users)
+    useFlowTemplateCreatedSubscription({
+        skip: !shouldFetchTemplates,
+    });
+
+    useFlowTemplateUpdatedSubscription({
+        skip: !shouldFetchTemplates,
+    });
+
+    useFlowTemplateDeletedSubscription({
+        skip: !shouldFetchTemplates,
+    });
+
+    // Convert GraphQL templates to Template interface
     const templates = useMemo(() => {
-        const list = storage[userId] ?? [];
+        const rawTemplates = templatesData?.flowTemplates ?? [];
 
-        return [...list].sort((a, b) => b.createdAt - a.createdAt);
-    }, [storage, userId]);
-
-    useEffect(() => {
-        saveTemplates(storage);
-    }, [storage]);
+        return rawTemplates.map((t) => ({
+            createdAt: new Date(t.createdAt),
+            id: t.id,
+            text: t.text,
+            title: t.title,
+            updatedAt: new Date(t.updatedAt),
+            userId: t.userId,
+        }));
+    }, [templatesData?.flowTemplates]);
 
     const getTemplate = useCallback(
         (id: string): Template | undefined => {
-            return storage[userId]?.find((t) => t.id === id);
+            return templates.find((t) => t.id === id);
         },
-        [storage, userId],
+        [templates],
     );
 
     const createTemplate = useCallback(
-        (title: string, text: string): string => {
-            const id = generateId();
-            const template: Template = {
-                createdAt: Date.now(),
-                id,
-                text,
-                title,
-            };
-
-            setStorage((previous) => {
-                const list = previous[userId] ?? [];
-
-                return {
-                    ...previous,
-                    [userId]: [...list, template],
-                };
-            });
-
-            return id;
+        async (title: string, text: string) => {
+            try {
+                await createTemplateMutation({
+                    variables: {
+                        input: {
+                            text,
+                            title,
+                        },
+                    },
+                });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to create template';
+                toast.error('Failed to create template', {
+                    description: errorMessage,
+                });
+                Log.error('Error creating template:', error);
+                throw error;
+            }
         },
-        [userId],
+        [createTemplateMutation],
     );
 
     const updateTemplate = useCallback(
-        (id: string, payload: { text: string; title: string }) => {
-            setStorage((previous) => {
-                const list = previous[userId] ?? [];
-                const index = list.findIndex((t) => t.id === id);
-
-                if (index < 0) {
-                    return previous;
-                }
-
-                const existing = list[index];
-
-                if (!existing) {
-                    return previous;
-                }
-
-                const updated = [...list];
-                updated[index] = {
-                    createdAt: existing.createdAt,
-                    id: existing.id,
-                    text: payload.text,
-                    title: payload.title,
-                };
-
-                return {
-                    ...previous,
-                    [userId]: updated,
-                };
-            });
+        async (id: string, payload: { text: string; title: string }) => {
+            try {
+                await updateTemplateMutation({
+                    variables: {
+                        input: {
+                            text: payload.text,
+                            title: payload.title,
+                        },
+                        templateId: id,
+                    },
+                });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to update template';
+                toast.error('Failed to update template', {
+                    description: errorMessage,
+                });
+                Log.error('Error updating template:', error);
+                throw error;
+            }
         },
-        [userId],
+        [updateTemplateMutation],
     );
 
     const deleteTemplate = useCallback(
-        (id: string) => {
-            setStorage((previous) => {
-                const list = previous[userId] ?? [];
-                const filtered = list.filter((t) => t.id !== id);
-
-                return {
-                    ...previous,
-                    [userId]: filtered,
-                };
-            });
+        async (id: string) => {
+            try {
+                await deleteTemplateMutation({
+                    variables: {
+                        templateId: id,
+                    },
+                });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to delete template';
+                toast.error('Failed to delete template', {
+                    description: errorMessage,
+                });
+                Log.error('Error deleting template:', error);
+                throw error;
+            }
         },
-        [userId],
+        [deleteTemplateMutation],
     );
 
     const value = useMemo(
@@ -166,15 +159,14 @@ export const TemplatesProvider = ({ children }: TemplatesProviderProps) => {
             createTemplate,
             deleteTemplate,
             getTemplate,
+            isLoading: isLoadingTemplates,
             templates,
             updateTemplate,
         }),
-        [createTemplate, deleteTemplate, getTemplate, templates, updateTemplate],
+        [createTemplate, deleteTemplate, getTemplate, isLoadingTemplates, templates, updateTemplate],
     );
 
-    return (
-        <TemplatesContext.Provider value={value}>{children}</TemplatesContext.Provider>
-    );
+    return <TemplatesContext.Provider value={value}>{children}</TemplatesContext.Provider>;
 };
 
 export const useTemplates = () => {

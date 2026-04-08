@@ -937,6 +937,127 @@ func (r *mutationResolver) DeleteFavoriteFlow(ctx context.Context, flowID int64)
 	return model.ResultTypeSuccess, nil
 }
 
+// CreateFlowTemplate is the resolver for the createFlowTemplate field.
+func (r *mutationResolver) CreateFlowTemplate(ctx context.Context, input model.CreateFlowTemplateInput) (*model.FlowTemplate, error) {
+	uid, _, err := validatePermission(ctx, "templates.create")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to create templates")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"title": input.Title,
+	}).Debug("create flow template")
+
+	template, err := r.DB.CreateFlowTemplate(ctx, database.CreateFlowTemplateParams{
+		UserID: uid,
+		Title:  input.Title,
+		Text:   input.Text,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create template: %w", err)
+	}
+
+	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateCreated(ctx, template)
+
+	return converter.ConvertFlowTemplate(template), nil
+}
+
+// UpdateFlowTemplate is the resolver for the updateFlowTemplate field.
+func (r *mutationResolver) UpdateFlowTemplate(ctx context.Context, templateID int64, input model.UpdateFlowTemplateInput) (*model.FlowTemplate, error) {
+	uid, _, err := validatePermission(ctx, "templates.edit")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to update templates")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":        uid,
+		"templateID": templateID,
+	}).Debug("update flow template")
+
+	_, err = r.DB.GetFlowTemplate(ctx, database.GetFlowTemplateParams{
+		ID:     templateID,
+		UserID: uid,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("template not found: %w", err)
+	}
+
+	template, err := r.DB.UpdateFlowTemplate(ctx, database.UpdateFlowTemplateParams{
+		ID:     templateID,
+		UserID: uid,
+		Title:  input.Title,
+		Text:   input.Text,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update template: %w", err)
+	}
+
+	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateUpdated(ctx, template)
+
+	return converter.ConvertFlowTemplate(template), nil
+}
+
+// DeleteFlowTemplate is the resolver for the deleteFlowTemplate field.
+func (r *mutationResolver) DeleteFlowTemplate(ctx context.Context, templateID int64) (model.ResultType, error) {
+	uid, _, err := validatePermission(ctx, "templates.delete")
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	if !isUserSession {
+		return model.ResultTypeError, fmt.Errorf("unauthorized: non-user session is not allowed to delete templates")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":        uid,
+		"templateID": templateID,
+	}).Debug("delete flow template")
+
+	template, err := r.DB.GetFlowTemplate(ctx, database.GetFlowTemplateParams{
+		ID:     templateID,
+		UserID: uid,
+	})
+	if err != nil {
+		return model.ResultTypeError, fmt.Errorf("template not found: %w", err)
+	}
+
+	err = r.DB.DeleteFlowTemplate(ctx, database.DeleteFlowTemplateParams{
+		ID:     templateID,
+		UserID: uid,
+	})
+	if err != nil {
+		return model.ResultTypeError, fmt.Errorf("failed to delete template: %w", err)
+	}
+
+	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateDeleted(ctx, template)
+
+	return model.ResultTypeSuccess, nil
+}
+
 // Providers is the resolver for the providers field.
 func (r *queryResolver) Providers(ctx context.Context) ([]*model.Provider, error) {
 	uid, _, err := validatePermission(ctx, "providers.view")
@@ -1953,6 +2074,69 @@ func (r *queryResolver) APITokens(ctx context.Context) ([]*model.APIToken, error
 	return converter.ConvertAPITokens(tokens), nil
 }
 
+// FlowTemplate is the resolver for the flowTemplate field.
+func (r *queryResolver) FlowTemplate(ctx context.Context, templateID int64) (*model.FlowTemplate, error) {
+	uid, _, err := validatePermission(ctx, "templates.view")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to view templates")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":        uid,
+		"templateID": templateID,
+	}).Debug("get flow template")
+
+	template, err := r.DB.GetFlowTemplate(ctx, database.GetFlowTemplateParams{
+		ID:     templateID,
+		UserID: uid,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("template not found")
+		}
+		return nil, fmt.Errorf("failed to get template: %w", err)
+	}
+
+	return converter.ConvertFlowTemplate(template), nil
+}
+
+// FlowTemplates is the resolver for the flowTemplates field.
+func (r *queryResolver) FlowTemplates(ctx context.Context) ([]*model.FlowTemplate, error) {
+	uid, _, err := validatePermission(ctx, "templates.view")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to view templates")
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid": uid,
+	}).Debug("get flow templates")
+
+	templates, err := r.DB.GetFlowTemplatesByUserID(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get templates: %w", err)
+	}
+
+	return converter.ConvertFlowTemplates(templates), nil
+}
+
 // FlowCreated is the resolver for the flowCreated field.
 func (r *subscriptionResolver) FlowCreated(ctx context.Context) (<-chan *model.Flow, error) {
 	uid, admin, err := validatePermission(ctx, "flows.subscribe")
@@ -2242,6 +2426,63 @@ func (r *subscriptionResolver) SettingsUserUpdated(ctx context.Context) (<-chan 
 	}
 
 	return r.Subscriptions.NewFlowSubscriber(uid, 0).SettingsUserUpdated(ctx)
+}
+
+// FlowTemplateCreated is the resolver for the flowTemplateCreated field.
+func (r *subscriptionResolver) FlowTemplateCreated(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+	uid, _, err := validatePermission(ctx, "templates.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateCreated(ctx)
+}
+
+// FlowTemplateUpdated is the resolver for the flowTemplateUpdated field.
+func (r *subscriptionResolver) FlowTemplateUpdated(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+	uid, _, err := validatePermission(ctx, "templates.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateUpdated(ctx)
+}
+
+// FlowTemplateDeleted is the resolver for the flowTemplateDeleted field.
+func (r *subscriptionResolver) FlowTemplateDeleted(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+	uid, _, err := validatePermission(ctx, "templates.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	isUserSession, err := validateUserType(ctx, userSessionTypes...)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isUserSession {
+		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateDeleted(ctx)
 }
 
 // Mutation returns MutationResolver implementation.

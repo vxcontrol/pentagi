@@ -135,3 +135,15 @@ func (s *flowSubscriber) APITokenDeleted(ctx context.Context) (<-chan *model.API
 func (s *flowSubscriber) SettingsUserUpdated(ctx context.Context) (<-chan *model.UserPreferences, error) {
 	return s.ctrl.settingsUserUpdated.Subscribe(ctx, s.userID), nil
 }
+
+func (s *flowSubscriber) FlowTemplateCreated(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+	return s.ctrl.flowTemplateCreated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *flowSubscriber) FlowTemplateUpdated(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+	return s.ctrl.flowTemplateUpdated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *flowSubscriber) FlowTemplateDeleted(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+	return s.ctrl.flowTemplateDeleted.Subscribe(ctx, s.userID), nil
+}

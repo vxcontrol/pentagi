@@ -946,6 +946,15 @@ type Flow struct {
 	ToolCallIDTemplate string          `json:"tool_call_id_template"`
 }
 
+type FlowTemplate struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	Title     string       `json:"title"`
+	Text      string       `json:"text"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
+}
+
 type Msgchain struct {
 	ID              int64           `json:"id"`
 	Type            MsgchainType    `json:"type"`

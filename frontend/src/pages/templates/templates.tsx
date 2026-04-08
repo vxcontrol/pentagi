@@ -44,8 +44,10 @@ const Templates = () => {
         setDeletingIds((prev) => new Set(prev).add(deletingTemplate.id));
 
         try {
-            deleteTemplate(deletingTemplate.id);
+            await deleteTemplate(deletingTemplate.id);
             setDeletingTemplate(null);
+        } catch {
+            // Error already handled in provider with toast
         } finally {
             setDeletingIds((prev) => {
                 const next = new Set(prev);

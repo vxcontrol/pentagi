@@ -55,6 +55,9 @@ type FlowSubscriber interface {
 	APITokenUpdated(ctx context.Context) (<-chan *model.APIToken, error)
 	APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error)
 	SettingsUserUpdated(ctx context.Context) (<-chan *model.UserPreferences, error)
+	FlowTemplateCreated(ctx context.Context) (<-chan *model.FlowTemplate, error)
+	FlowTemplateUpdated(ctx context.Context) (<-chan *model.FlowTemplate, error)
+	FlowTemplateDeleted(ctx context.Context) (<-chan *model.FlowTemplate, error)
 	FlowContext
 }
 
@@ -83,6 +86,9 @@ type FlowPublisher interface {
 	APITokenUpdated(ctx context.Context, apiToken database.ApiToken)
 	APITokenDeleted(ctx context.Context, apiToken database.ApiToken)
 	SettingsUserUpdated(ctx context.Context, userPreferences database.UserPreference)
+	FlowTemplateCreated(ctx context.Context, template database.FlowTemplate)
+	FlowTemplateUpdated(ctx context.Context, template database.FlowTemplate)
+	FlowTemplateDeleted(ctx context.Context, template database.FlowTemplate)
 	FlowContext
 }
 
@@ -114,6 +120,9 @@ type controller struct {
 	apiTokenUpdated     Channel[*model.APIToken]
 	apiTokenDeleted     Channel[*model.APIToken]
 	settingsUserUpdated Channel[*model.UserPreferences]
+	flowTemplateCreated Channel[*model.FlowTemplate]
+	flowTemplateUpdated Channel[*model.FlowTemplate]
+	flowTemplateDeleted Channel[*model.FlowTemplate]
 }
 
 func NewSubscriptionsController() SubscriptionsController {
@@ -145,6 +154,9 @@ func NewSubscriptionsController() SubscriptionsController {
 		apiTokenUpdated:     NewChannel[*model.APIToken](),
 		apiTokenDeleted:     NewChannel[*model.APIToken](),
 		settingsUserUpdated: NewChannel[*model.UserPreferences](),
+		flowTemplateCreated: NewChannel[*model.FlowTemplate](),
+		flowTemplateUpdated: NewChannel[*model.FlowTemplate](),
+		flowTemplateDeleted: NewChannel[*model.FlowTemplate](),
 	}
 }
 
