@@ -33,7 +33,7 @@ services:
       - ${PENTAGI_LISTEN_IP:-127.0.0.1}:${PENTAGI_LISTEN_PORT:-8443}:8443
     depends_on:
       pgvector:
-        condition: service_started
+        condition: service_healthy
     environment:
       - DEBUG=${DEBUG:-false}
       - DOCKER_GID=998
@@ -200,6 +200,12 @@ services:
       options:
         max-size: 50m
         max-file: "7"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${PENTAGI_POSTGRES_USER:-postgres}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     volumes:
       - pentagi-postgres-data:/var/lib/postgresql/data
     networks:
@@ -209,7 +215,8 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
     restart: unless-stopped
     depends_on:
-      - pgvector
+      pgvector:
+        condition: service_healthy
     container_name: pgexporter
     hostname: pgexporter
     expose:
