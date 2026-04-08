@@ -229,45 +229,100 @@ func TestModelParameters_ToLangfuse(t *testing.T) {
 		v, ok := result["max_tokens"]
 		require.True(t, ok, "max_tokens key must exist")
 		require.NotNil(t, v)
+		require.NotNil(t, v.GetStringOptional())
+		assert.Equal(t, "inf", *v.GetStringOptional())
 	})
 
-	t.Run("temperature and top_p set", func(t *testing.T) {
+	t.Run("temperature and top_p values", func(t *testing.T) {
 		t.Parallel()
 		temp := 0.7
 		topP := 0.9
 		m := &ModelParameters{Temperature: &temp, TopP: &topP}
 		result := m.ToLangfuse()
 		require.NotNil(t, result)
-		assert.Contains(t, result, "temperature")
-		assert.Contains(t, result, "top_p")
+		require.NotNil(t, result["temperature"])
+		require.NotNil(t, result["temperature"].GetStringOptional())
+		assert.Equal(t, "0.7", *result["temperature"].GetStringOptional())
+		require.NotNil(t, result["top_p"])
+		require.NotNil(t, result["top_p"].GetStringOptional())
+		assert.Equal(t, "0.9", *result["top_p"].GetStringOptional())
 	})
 
-	t.Run("max_tokens explicit value", func(t *testing.T) {
+	t.Run("max_tokens explicit integer value", func(t *testing.T) {
 		t.Parallel()
 		maxTokens := 1024
 		m := &ModelParameters{MaxTokens: &maxTokens}
 		result := m.ToLangfuse()
 		require.NotNil(t, result)
-		assert.Contains(t, result, "max_tokens")
+		require.NotNil(t, result["max_tokens"])
+		require.NotNil(t, result["max_tokens"].GetIntegerOptional())
+		assert.Equal(t, 1024, *result["max_tokens"].GetIntegerOptional())
 	})
 
-	t.Run("json mode flag", func(t *testing.T) {
+	t.Run("json mode boolean value", func(t *testing.T) {
 		t.Parallel()
 		m := &ModelParameters{JSONMode: true}
 		result := m.ToLangfuse()
 		require.NotNil(t, result)
-		assert.Contains(t, result, "json")
+		require.NotNil(t, result["json"])
+		require.NotNil(t, result["json"].GetBooleanOptional())
+		assert.True(t, *result["json"].GetBooleanOptional())
 	})
 
-	t.Run("stop words included", func(t *testing.T) {
+	t.Run("stop words list value", func(t *testing.T) {
 		t.Parallel()
 		m := &ModelParameters{StopWords: []string{"END", "STOP"}}
 		result := m.ToLangfuse()
 		require.NotNil(t, result)
-		assert.Contains(t, result, "stop_words")
+		require.NotNil(t, result["stop_words"])
+		assert.Equal(t, []string{"END", "STOP"}, result["stop_words"].GetStringListOptional())
 	})
 
-	t.Run("all optional fields", func(t *testing.T) {
+	t.Run("integer fields serialized correctly", func(t *testing.T) {
+		t.Parallel()
+		topK := 40
+		seed := 42
+		candidateCount := 3
+		n := 2
+		m := &ModelParameters{
+			TopK:           &topK,
+			Seed:           &seed,
+			CandidateCount: &candidateCount,
+			N:              &n,
+		}
+		result := m.ToLangfuse()
+		require.NotNil(t, result)
+		require.NotNil(t, result["top_k"].GetIntegerOptional())
+		assert.Equal(t, 40, *result["top_k"].GetIntegerOptional())
+		require.NotNil(t, result["seed"].GetIntegerOptional())
+		assert.Equal(t, 42, *result["seed"].GetIntegerOptional())
+		require.NotNil(t, result["candidate_count"].GetIntegerOptional())
+		assert.Equal(t, 3, *result["candidate_count"].GetIntegerOptional())
+		require.NotNil(t, result["n"].GetIntegerOptional())
+		assert.Equal(t, 2, *result["n"].GetIntegerOptional())
+	})
+
+	t.Run("float fields formatted as strings", func(t *testing.T) {
+		t.Parallel()
+		minP := 0.1
+		repPenalty := 1.1
+		freqPenalty := 0.5
+		presPenalty := 0.6
+		m := &ModelParameters{
+			MinP:              &minP,
+			RepetitionPenalty: &repPenalty,
+			FrequencyPenalty:  &freqPenalty,
+			PresencePenalty:   &presPenalty,
+		}
+		result := m.ToLangfuse()
+		require.NotNil(t, result)
+		assert.Equal(t, "0.1", *result["min_p"].GetStringOptional())
+		assert.Equal(t, "1.1", *result["repetition_penalty"].GetStringOptional())
+		assert.Equal(t, "0.5", *result["frequency_penalty"].GetStringOptional())
+		assert.Equal(t, "0.6", *result["presence_penalty"].GetStringOptional())
+	})
+
+	t.Run("all optional fields present", func(t *testing.T) {
 		t.Parallel()
 		temp := 0.5
 		topP := 0.9
@@ -301,16 +356,7 @@ func TestModelParameters_ToLangfuse(t *testing.T) {
 		}
 		result := m.ToLangfuse()
 		require.NotNil(t, result)
-
-		expectedKeys := []string{
-			"temperature", "top_p", "min_p", "top_k", "seed",
-			"max_tokens", "candidate_count", "min_length", "max_length",
-			"n", "repetition_penalty", "frequency_penalty", "presence_penalty",
-			"json", "stop_words",
-		}
-		for _, key := range expectedKeys {
-			assert.Contains(t, result, key, "missing key: %s", key)
-		}
+		assert.Len(t, result, 15, "all 15 parameter keys must be present")
 	})
 }
 
@@ -406,6 +452,15 @@ func TestGetCurrentTimeString(t *testing.T) {
 	ts := getCurrentTimeString()
 	_, err := time.Parse(timeFormat8601, ts)
 	assert.NoError(t, err, "must parse with timeFormat8601")
+}
+
+func TestGetCurrentTimeRef(t *testing.T) {
+	t.Parallel()
+
+	ref := getCurrentTimeRef()
+	require.NotNil(t, ref)
+	assert.Equal(t, time.UTC, ref.Location(), "must be UTC")
+	assert.WithinDuration(t, time.Now().UTC(), *ref, 2*time.Second)
 }
 
 func TestGetTimeRef(t *testing.T) {
