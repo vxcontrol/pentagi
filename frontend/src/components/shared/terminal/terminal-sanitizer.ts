@@ -4,7 +4,7 @@ const MAX_CSI_LENGTH = 256;
 const MAX_OSC_LENGTH = 2048;
 const MAX_STRING_SEQUENCE_LENGTH = 100_000;
 
-const SAFE_OSC8_PROTOCOLS = ['http://', 'https://', 'mailto:', 'ssh://', 'telnet://'];
+export const SAFE_PROTOCOLS = ['http://', 'https://', 'mailto:', 'ssh://', 'telnet://'];
 
 /**
  * Quick scan to determine if a string needs full sanitization.
@@ -42,6 +42,10 @@ export function needsSanitization(input: string): boolean {
             }
 
             if ((code >= 0xdc00 && code <= 0xdfff) || code === 0xfffd) {
+                return true;
+            }
+
+            if (isBidiControl(code)) {
                 return true;
             }
 
@@ -102,7 +106,7 @@ export function sanitizeTerminalOutput(input: string): string {
             continue;
         }
 
-        // Valid Unicode (>= 0xA0, excluding lone surrogates and U+FFFD)
+        // Valid Unicode (>= 0xA0, excluding lone surrogates, U+FFFD, and bidi controls)
         if (code >= 0xa0) {
             // Valid surrogate pair (emoji, supplementary chars) — skip both units
             if (code >= 0xd800 && code <= 0xdbff) {
@@ -117,13 +121,13 @@ export function sanitizeTerminalOutput(input: string): string {
                 }
 
                 // Lone/invalid surrogate — falls through to replacement below
-            } else if (code !== 0xfffd && !(code >= 0xdc00 && code <= 0xdfff)) {
+            } else if (code !== 0xfffd && !(code >= 0xdc00 && code <= 0xdfff) && !isBidiControl(code)) {
                 i++;
 
                 continue;
             }
 
-            // Lone surrogates and U+FFFD fall through to replacement below
+            // Lone surrogates, U+FFFD, and bidi controls fall through to replacement below
         }
 
         // We hit a character that needs handling — flush the safe range
@@ -155,6 +159,10 @@ export function sanitizeTerminalOutput(input: string): string {
                     continue;
                 }
 
+                if (parsed.end !== -1) {
+                    i = parsed.end;
+                }
+
                 result.push('.');
                 safeStart = i;
 
@@ -176,6 +184,8 @@ export function sanitizeTerminalOutput(input: string): string {
 
                         continue;
                     }
+
+                    i = end;
                 }
 
                 result.push('.');
@@ -212,6 +222,12 @@ export function sanitizeTerminalOutput(input: string): string {
     }
 
     return result.join('');
+}
+
+function isBidiControl(code: number): boolean {
+    return (
+        (code >= 0x200e && code <= 0x200f) || (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069)
+    );
 }
 
 /**
@@ -301,7 +317,7 @@ function isOscSafe(content: string): boolean {
     // Validate protocol against whitelist (blocks javascript:, data:, ftp:, file:, etc.)
     const uriLower = uri.toLowerCase();
 
-    return SAFE_OSC8_PROTOCOLS.some((protocol) => uriLower.startsWith(protocol));
+    return SAFE_PROTOCOLS.some((protocol) => uriLower.startsWith(protocol));
 }
 
 /**
@@ -313,10 +329,7 @@ function isOscSafe(content: string): boolean {
  * - Intermediate bytes: 0x20-0x2F (space, !, ", etc.)
  * - Final byte: 0x40-0x7E (letters — 'm' for SGR, 'H' for CUP, etc.)
  */
-function parseCsiSequence(
-    input: string,
-    start: number,
-): { end: number; final: string } {
+function parseCsiSequence(input: string, start: number): { end: number; final: string } {
     let i = start;
 
     while (i < input.length && i - start < MAX_CSI_LENGTH) {
@@ -341,7 +354,9 @@ function parseCsiSequence(
  * Returns end index (after terminator), or -1 if invalid.
  *
  * OSC format: ESC ] content BEL  or  ESC ] content ESC \
- * Only ASCII printables and BEL are allowed in content per xterm.js parser.
+ * Allows ASCII printables (0x20-0x7E) and Unicode >= 0xA0 per xterm.js parser
+ * (which accepts "any codepoint greater than C1 as printable").
+ * Blocks C0 controls (except BEL as terminator), DEL, and C1 controls (0x80-0x9F).
  */
 function parseOscSequence(input: string, start: number): number {
     let i = start;
@@ -357,7 +372,11 @@ function parseOscSequence(input: string, start: number): number {
             return i + 2;
         }
 
-        if (code > 0x7e || (code < 0x20 && code !== 0x07)) {
+        if (code < 0x20 && code !== 0x07) {
+            return -1;
+        }
+
+        if (code === 0x7f || (code >= 0x80 && code <= 0x9f)) {
             return -1;
         }
 

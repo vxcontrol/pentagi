@@ -117,52 +117,55 @@ describe('sanitizeTerminalOutput', () => {
         });
     });
 
-    describe('CSI non-SGR — blocked', () => {
-        it('strips ED: erase display', () => {
-            expect(hasEsc(processLog('a\x1b[2Jb'))).toBe(false);
+    describe('CSI non-SGR — blocked with body consumed', () => {
+        it('consumes ED: erase display', () => {
+            expect(processLog('a\x1b[2Jb')).toBe('a.b');
         });
 
-        it('strips ED: erase scrollback', () => {
-            expect(hasEsc(processLog('a\x1b[3Jb'))).toBe(false);
+        it('consumes ED: erase scrollback', () => {
+            expect(processLog('a\x1b[3Jb')).toBe('a.b');
         });
 
-        it('strips CUP: cursor home', () => {
-            expect(hasEsc(processLog('a\x1b[Hb'))).toBe(false);
+        it('consumes CUP: cursor home', () => {
+            expect(processLog('a\x1b[Hb')).toBe('a.b');
         });
 
-        it('strips SU: scroll up', () => {
-            expect(hasEsc(processLog('a\x1b[999Sb'))).toBe(false);
+        it('consumes SU: scroll up', () => {
+            expect(processLog('a\x1b[999Sb')).toBe('a.b');
         });
 
-        it('strips SD: scroll down', () => {
-            expect(hasEsc(processLog('a\x1b[999Tb'))).toBe(false);
+        it('consumes SD: scroll down', () => {
+            expect(processLog('a\x1b[999Tb')).toBe('a.b');
         });
 
-        it('strips DECSET: alternate buffer', () => {
-            expect(hasEsc(processLog('a\x1b[?1049hb'))).toBe(false);
+        it('consumes DECSET: alternate buffer', () => {
+            expect(processLog('a\x1b[?1049hb')).toBe('a.b');
         });
 
-        it('strips DECSET: hide cursor', () => {
-            expect(hasEsc(processLog('a\x1b[?25lb'))).toBe(false);
+        it('consumes DECSET: hide cursor', () => {
+            expect(processLog('a\x1b[?25lb')).toBe('a.b');
         });
 
-        it('strips DL: delete lines', () => {
-            expect(hasEsc(processLog('a\x1b[10Mb'))).toBe(false);
+        it('consumes DL: delete lines', () => {
+            expect(processLog('a\x1b[10Mb')).toBe('a.b');
         });
 
-        it('strips IL: insert lines', () => {
-            expect(hasEsc(processLog('a\x1b[10Lb'))).toBe(false);
+        it('consumes IL: insert lines', () => {
+            expect(processLog('a\x1b[10Lb')).toBe('a.b');
         });
 
-        it('strips ICH: insert characters', () => {
-            expect(hasEsc(processLog('a\x1b[10@b'))).toBe(false);
+        it('consumes ICH: insert characters', () => {
+            expect(processLog('a\x1b[10@b')).toBe('a.b');
         });
 
-        it('preserves surrounding text when stripping CSI', () => {
-            const out = processLog('before\x1b[2Jafter');
+        it('preserves surrounding text when consuming CSI', () => {
+            expect(processLog('before\x1b[2Jafter')).toBe('before.after');
+        });
 
-            expect(out).toContain('before');
-            expect(out).toContain('after');
+        it('does not consume invalid CSI (no final byte)', () => {
+            const out = processLog('\x1b[');
+
+            expect(out).not.toContain('\x1b');
         });
     });
 
@@ -235,79 +238,85 @@ describe('sanitizeTerminalOutput', () => {
     });
 
     describe('OSC 8 hyperlinks — dangerous protocols blocked', () => {
-        it('strips javascript: URI', () => {
+        it('consumes javascript: URI with body', () => {
             const input = '\x1b]8;;javascript:alert(1)\x07Click\x1b]8;;\x07';
             const out = processLog(input);
 
-            expect(out).not.toContain('\x1b]8;;javascript:');
+            expect(out).not.toContain('javascript:');
+            expect(out).toContain('Click');
+            expect(out).toContain('\x1b]8;;\x07');
         });
 
-        it('strips data: URI', () => {
+        it('consumes data: URI with body', () => {
             const input = '\x1b]8;;data:text/html,<h1>XSS</h1>\x07Click\x1b]8;;\x07';
             const out = processLog(input);
 
-            expect(out).not.toContain('\x1b]8;;data:');
+            expect(out).not.toContain('data:');
         });
 
-        it('strips ftp: URI', () => {
+        it('consumes ftp: URI with body', () => {
             const input = '\x1b]8;;ftp://evil.com/shell\x07Click\x1b]8;;\x07';
             const out = processLog(input);
 
-            expect(out).not.toContain('\x1b]8;;ftp:');
+            expect(out).not.toContain('ftp:');
         });
 
-        it('strips file: URI', () => {
+        it('consumes file: URI with body', () => {
             const input = '\x1b]8;;file:///etc/passwd\x07Click\x1b]8;;\x07';
             const out = processLog(input);
 
-            expect(out).not.toContain('\x1b]8;;file:');
+            expect(out).not.toContain('file:');
         });
 
-        it('preserves safe close tag even when open tag is stripped', () => {
+        it('preserves safe close tag even when open tag is consumed', () => {
             const input = '\x1b]8;;javascript:x\x07Click\x1b]8;;\x07';
             const out = processLog(input);
 
             expect(out).toContain('\x1b]8;;\x07');
         });
 
-        it('strips OSC 8 with missing second semicolon', () => {
+        it('consumes OSC 8 with missing second semicolon', () => {
             const input = '\x1b]8;https://example.com\x07Click\x1b]8;;\x07';
             const out = processLog(input);
 
-            expect(out).not.toContain('\x1b]8;https:');
+            expect(out).not.toContain('8;https:');
         });
 
-        it('strips OSC 8 with unknown protocol', () => {
+        it('consumes OSC 8 with unknown protocol', () => {
             const input = '\x1b]8;;custom://something\x07Click\x1b]8;;\x07';
             const out = processLog(input);
 
-            expect(out).not.toContain('\x1b]8;;custom:');
+            expect(out).not.toContain('custom:');
         });
     });
 
-    describe('OSC non-hyperlink — blocked', () => {
-        it('strips OSC 0: window title', () => {
-            expect(hasEsc(processLog('\x1b]0;HACKED\x07'))).toBe(false);
+    describe('OSC non-hyperlink — blocked with body consumed', () => {
+        it('consumes OSC 0: window title', () => {
+            expect(processLog('\x1b]0;HACKED\x07')).toBe('.');
         });
 
-        it('strips OSC 2: window title', () => {
-            expect(hasEsc(processLog('\x1b]2;HACKED\x07'))).toBe(false);
+        it('consumes OSC 2: window title', () => {
+            expect(processLog('\x1b]2;HACKED\x07')).toBe('.');
         });
 
-        it('strips OSC 10: foreground color', () => {
-            expect(hasEsc(processLog('\x1b]10;#ff0000\x07'))).toBe(false);
+        it('consumes OSC 10: foreground color', () => {
+            expect(processLog('\x1b]10;#ff0000\x07')).toBe('.');
         });
 
-        it('strips OSC 11: background color', () => {
-            expect(hasEsc(processLog('\x1b]11;#00ff00\x07'))).toBe(false);
+        it('consumes OSC 11: background color', () => {
+            expect(processLog('\x1b]11;#00ff00\x07')).toBe('.');
         });
 
-        it('strips OSC 12: cursor color', () => {
-            expect(hasEsc(processLog('\x1b]12;#0000ff\x07'))).toBe(false);
+        it('consumes OSC 12: cursor color', () => {
+            expect(processLog('\x1b]12;#0000ff\x07')).toBe('.');
         });
 
-        it('strips OSC 4: palette color', () => {
-            expect(hasEsc(processLog('\x1b]4;1;#ff0000\x07'))).toBe(false);
+        it('consumes OSC 4: palette color', () => {
+            expect(processLog('\x1b]4;1;#ff0000\x07')).toBe('.');
+        });
+
+        it('preserves surrounding text when consuming OSC', () => {
+            expect(processLog('before\x1b]0;TITLE\x07after')).toBe('before.after');
         });
     });
 
@@ -593,6 +602,103 @@ describe('sanitizeTerminalOutput', () => {
             const out = processLog('a\x1bP' + longBody + '\x1b\\b');
 
             expect(out).toBe('a.b');
+        });
+    });
+
+    describe('bidi override characters — stripped', () => {
+        it('strips RTL override U+202E', () => {
+            expect(processLog('hello\u202Eworld')).toBe('hello.world');
+        });
+
+        it('strips LTR mark U+200E', () => {
+            expect(processLog('a\u200Eb')).toBe('a.b');
+        });
+
+        it('strips RTL mark U+200F', () => {
+            expect(processLog('a\u200Fb')).toBe('a.b');
+        });
+
+        it('strips LTR embedding U+202A', () => {
+            expect(processLog('a\u202Ab')).toBe('a.b');
+        });
+
+        it('strips first-strong isolate U+2068', () => {
+            expect(processLog('a\u2068b')).toBe('a.b');
+        });
+
+        it('strips pop directional isolate U+2069', () => {
+            expect(processLog('a\u2069b')).toBe('a.b');
+        });
+
+        it('strips LTR isolate U+2066', () => {
+            expect(processLog('a\u2066b')).toBe('a.b');
+        });
+
+        it('strips multiple bidi controls in sequence', () => {
+            expect(processLog('a\u202E\u202D\u200Fb')).toBe('a...b');
+        });
+
+        it('preserves normal Unicode alongside bidi stripping', () => {
+            expect(processLog('Привет\u202Eмир')).toBe('Привет.мир');
+        });
+
+        it('preserves SGR alongside bidi stripping', () => {
+            const out = processLog('\x1b[31m\u202Etext\x1b[0m');
+
+            expect(out).toBe('\x1b[31m.text\x1b[0m');
+        });
+    });
+
+    describe('needsSanitization — bidi detection', () => {
+        it('returns true for RTL override U+202E', () => {
+            expect(needsSanitization('hello\u202Eworld')).toBe(true);
+        });
+
+        it('returns true for LTR mark U+200E', () => {
+            expect(needsSanitization('text\u200E')).toBe(true);
+        });
+
+        it('returns true for RTL mark U+200F', () => {
+            expect(needsSanitization('text\u200F')).toBe(true);
+        });
+
+        it('returns true for isolate U+2066', () => {
+            expect(needsSanitization('text\u2066')).toBe(true);
+        });
+
+        it('returns false for non-bidi Unicode above 0xA0', () => {
+            expect(needsSanitization('\u2010\u2014\u2026')).toBe(false);
+        });
+    });
+
+    describe('OSC 8 with Unicode URI', () => {
+        it('preserves OSC 8 link with Cyrillic path', () => {
+            const input = '\x1b]8;;https://example.com/путь\x07Click\x1b]8;;\x07';
+            const out = processLog(input);
+
+            expect(out).toContain('https://example.com/путь');
+            expect(out).toContain('\x1b]8;;https://example.com/путь\x07');
+        });
+
+        it('preserves OSC 8 link with CJK path', () => {
+            const input = '\x1b]8;;https://example.com/文档\x07Link\x1b]8;;\x07';
+            const out = processLog(input);
+
+            expect(out).toContain('https://example.com/文档');
+        });
+
+        it('rejects OSC with C1 control in content', () => {
+            const input = '\x1b]8;;\x90https://x\x07Click\x1b]8;;\x07';
+            const out = processLog(input);
+
+            expect(out).not.toContain('\x1b]8;;\x90');
+        });
+
+        it('rejects OSC with DEL in content', () => {
+            const input = '\x1b]8;;\x7fhttps://x\x07Click\x1b]8;;\x07';
+            const out = processLog(input);
+
+            expect(out).not.toContain('\x1b]8;;\x7f');
         });
     });
 
