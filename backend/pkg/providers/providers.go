@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -685,7 +686,19 @@ func (pc *providerController) GetProvider(
 	prvname provider.ProviderName,
 	userID int64,
 ) (provider.Provider, error) {
-	// Lookup default providers first
+	// Lookup user defined providers first so they take precedence over built-in providers
+	prv, err := pc.db.GetUserProviderByName(ctx, database.GetUserProviderByNameParams{
+		Name:   string(prvname),
+		UserID: userID,
+	})
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to get provider '%s' from database: %w", prvname, err)
+	}
+	if err == nil {
+		return pc.NewProvider(prv)
+	}
+
+	// Fall back to built-in default providers
 	switch prvname {
 	case provider.DefaultProviderNameOpenAI:
 		return pc.Providers.Get(provider.DefaultProviderNameOpenAI)
@@ -709,16 +722,7 @@ func (pc *providerController) GetProvider(
 		return pc.Providers.Get(provider.DefaultProviderNameQwen)
 	}
 
-	// Lookup user defined providers by name and build it
-	prv, err := pc.db.GetUserProviderByName(ctx, database.GetUserProviderByNameParams{
-		Name:   string(prvname),
-		UserID: userID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get provider '%s' from database: %w", prvname, err)
-	}
-
-	return pc.NewProvider(prv)
+	return nil, fmt.Errorf("provider '%s' not found", prvname)
 }
 
 func (pc *providerController) GetProviders(
