@@ -59,10 +59,15 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 type anthropicProvider struct {
 	llm            *anthropic.LLM
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	baseURL := cfg.AnthropicServerURL
 	httpClient, err := system.GetHTTPClient(cfg)
 	if err != nil {
@@ -94,12 +99,17 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 	return &anthropicProvider{
 		llm:            client,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 	}, nil
 }
 
 func (p *anthropicProvider) Type() provider.ProviderType {
 	return provider.ProviderAnthropic
+}
+
+func (p *anthropicProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *anthropicProvider) GetRawConfig() []byte {

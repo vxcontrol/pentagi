@@ -65,6 +65,12 @@ SET tool_call_id_template = $1
 WHERE id = $2
 RETURNING *;
 
+-- name: UpdateFlowProvider :one
+UPDATE flows
+SET model_provider_name = $1, model_provider_type = $2, tool_call_id_template = $3, model = $4
+WHERE id = $5
+RETURNING *;
+
 -- name: DeleteFlow :one
 UPDATE flows
 SET deleted_at = CURRENT_TIMESTAMP

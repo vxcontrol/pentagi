@@ -759,6 +759,8 @@ definitions:
       name:
         example: new flow name
         type: string
+      provider:
+        type: string
     required:
     - action
     type: object

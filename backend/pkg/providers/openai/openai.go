@@ -58,10 +58,15 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 type openaiProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	baseURL := cfg.OpenAIServerURL
 	httpClient, err := system.GetHTTPClient(cfg)
 	if err != nil {
@@ -86,12 +91,17 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 	return &openaiProvider{
 		llm:            client,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 	}, nil
 }
 
 func (p *openaiProvider) Type() provider.ProviderType {
 	return provider.ProviderOpenAI
+}
+
+func (p *openaiProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *openaiProvider) GetRawConfig() []byte {

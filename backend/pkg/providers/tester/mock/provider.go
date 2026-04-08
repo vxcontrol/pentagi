@@ -18,6 +18,7 @@ import (
 // Provider implements provider.Provider for testing purposes
 type Provider struct {
 	providerType   provider.ProviderType
+	providerName   provider.ProviderName
 	modelName      string
 	responses      map[string]interface{} // key -> response mapping
 	defaultResp    string
@@ -31,9 +32,10 @@ type ResponseConfig struct {
 }
 
 // NewProvider creates a new mock provider
-func NewProvider(providerType provider.ProviderType, modelName string) *Provider {
+func NewProvider(providerType provider.ProviderType, providerName provider.ProviderName, modelName string) *Provider {
 	return &Provider{
 		providerType:   providerType,
+		providerName:   providerName,
 		modelName:      modelName,
 		responses:      make(map[string]interface{}),
 		defaultResp:    "Mock response",
@@ -61,6 +63,11 @@ func (p *Provider) SetStreamingDelay(delay time.Duration) {
 // Type implements provider.Provider
 func (p *Provider) Type() provider.ProviderType {
 	return p.providerType
+}
+
+// Name implements provider.Provider
+func (p *Provider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 // Model implements provider.Provider

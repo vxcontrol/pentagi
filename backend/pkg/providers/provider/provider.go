@@ -53,6 +53,7 @@ const (
 
 type Provider interface {
 	Type() ProviderType
+	Name() ProviderName
 	Model(opt pconfig.ProviderOptionsType) string
 	// ModelWithPrefix returns model name WITH provider prefix for LLM API calls and Langfuse logging
 	ModelWithPrefix(opt pconfig.ProviderOptionsType) string

@@ -52,11 +52,16 @@ type customProvider struct {
 	llm            *openai.LLM
 	model          string
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 	providerPrefix string
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	baseKey := cfg.LLMServerKey
 	baseURL := cfg.LLMServerURL
 	baseModel := cfg.LLMServerModel
@@ -98,6 +103,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 		llm:            client,
 		model:          baseModel,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 		providerPrefix: cfg.LLMServerProvider,
 	}, nil
@@ -105,6 +111,10 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 
 func (p *customProvider) Type() provider.ProviderType {
 	return provider.ProviderCustom
+}
+
+func (p *customProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *customProvider) GetRawConfig() []byte {

@@ -7,6 +7,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
+	"pentagi/pkg/providers/provider"
 )
 
 func TestCustomProviderUsageModes(t *testing.T) {
@@ -98,7 +99,7 @@ func TestCustomProviderUsageModes(t *testing.T) {
 				t.Fatalf("Failed to create provider config: %v", err)
 			}
 
-			prov, err := New(cfg, providerConfig)
+			prov, err := New(cfg, provider.DefaultProviderNameCustom, providerConfig)
 			if err != nil {
 				t.Fatalf("Failed to create provider: %v", err)
 			}
@@ -182,7 +183,7 @@ func TestCustomProviderConfigValidation(t *testing.T) {
 				t.Fatalf("Unexpected error for %s: %v", tt.description, err)
 			}
 
-			prov, err := New(tt.config, providerConfig)
+			prov, err := New(tt.config, provider.DefaultProviderNameCustom, providerConfig)
 			if err != nil {
 				t.Fatalf("Failed to create provider for %s: %v", tt.description, err)
 			}

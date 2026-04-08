@@ -37,6 +37,7 @@ const (
 	extractLastMessagesCount     = 30
 	extractToolCallsCount        = 10
 	toolCallsHistorySeparator    = "---------------TOOL_CALLS_HISTORY---------------"
+	ChainContinuationMessage     = "Continue from where we left off"
 )
 
 type dummyMessage struct {
@@ -578,8 +579,10 @@ func (fp *flowProvider) restoreChain(
 }
 
 // Eliminates code duplication by abstracting database operations on message chains
+// optAgentType is used to detect model changes within same provider
 func (fp *flowProvider) processChain(
 	ctx context.Context,
+	optAgentType pconfig.ProviderOptionsType,
 	msgChainID int64,
 	logger *logrus.Entry,
 	transform func([]llms.MessageContent) ([]llms.MessageContent, error),
@@ -602,6 +605,48 @@ func (fp *flowProvider) processChain(
 		return fmt.Errorf("failed to transform chain: %w", err)
 	}
 
+	// Check if provider or model has changed since chain was created
+	currentProvider := string(fp.Type())
+	currentModel := fp.Model(optAgentType)
+	providerChanged := msgChain.ModelProvider != currentProvider
+	modelChanged := msgChain.Model != currentModel
+
+	if providerChanged || modelChanged {
+		logger.WithFields(logrus.Fields{
+			"old_provider":     msgChain.ModelProvider,
+			"new_provider":     currentProvider,
+			"old_model":        msgChain.Model,
+			"new_model":        currentModel,
+			"provider_changed": providerChanged,
+			"model_changed":    modelChanged,
+		}).Info("provider or model changed, normalizing chain")
+
+		// Normalize chain for new provider/model
+		ast, err := cast.NewChainAST(updatedChain, true)
+		if err != nil {
+			logger.WithError(err).Warn("failed to create chain AST for normalization")
+		} else {
+			// Normalize tool call IDs to new format
+			if err := ast.NormalizeToolCallIDs(fp.tcIDTemplate); err != nil {
+				logger.WithError(err).Warn("failed to normalize tool call IDs")
+			}
+
+			// Clear provider-specific reasoning signatures
+			if err := ast.ClearReasoning(); err != nil {
+				logger.WithError(err).Warn("failed to clear reasoning")
+			}
+
+			// Check if last message is Human - if not, add continuation message
+			messages := ast.Messages()
+			if len(messages) > 0 && messages[len(messages)-1].Role != llms.ChatMessageTypeHuman {
+				ast.AppendHumanMessage(ChainContinuationMessage)
+				logger.Debug("added continuation human message after provider switch")
+			}
+
+			updatedChain = ast.Messages()
+		}
+	}
+
 	chainBlob, err := json.Marshal(updatedChain)
 	if err != nil {
 		logger.WithError(err).Error("failed to marshal updated chain")
@@ -609,8 +654,11 @@ func (fp *flowProvider) processChain(
 	}
 
 	_, err = fp.db.UpdateMsgChain(ctx, database.UpdateMsgChainParams{
-		Chain: chainBlob,
-		ID:    msgChainID,
+		Chain:           chainBlob,
+		DurationSeconds: 0.0,
+		Model:           currentModel,
+		ModelProvider:   currentProvider,
+		ID:              msgChainID,
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to update message chain")

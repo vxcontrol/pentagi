@@ -26,7 +26,7 @@ func TestConfigLoading(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestProviderType(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestGetUsage(t *testing.T) {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, providerConfig)
+	prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
@@ -889,7 +889,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 			BedrockSecretKey: "test-secret-key",
 		}
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err != nil {
 			t.Fatalf("Failed to create provider with static credentials: %v", err)
 		}
@@ -909,7 +909,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 			BedrockSessionToken: "test-session-token",
 		}
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err != nil {
 			t.Fatalf("Failed to create provider with session token: %v", err)
 		}
@@ -924,7 +924,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 			BedrockBearerToken: "test-bearer-token-value",
 		}
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err != nil {
 			t.Fatalf("Failed to create provider with bearer token: %v", err)
 		}
@@ -939,7 +939,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 			BedrockDefaultAuth: true,
 		}
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err != nil {
 			t.Fatalf("Failed to create provider with default auth: %v", err)
 		}
@@ -956,7 +956,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 			BedrockSecretKey:   "secret-key",
 		}
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err != nil {
 			t.Fatalf("Failed to create provider: %v", err)
 		}
@@ -974,7 +974,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 			BedrockSecretKey:   "secret-key",
 		}
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err != nil {
 			t.Fatalf("Failed to create provider: %v", err)
 		}
@@ -991,7 +991,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 			BedrockSecretKey: "test-secret",
 		}
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err != nil {
 			t.Fatalf("Failed to create provider with custom server URL: %v", err)
 		}
@@ -1008,7 +1008,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 			ProxyURL:         "http://proxy.example.com:8080",
 		}
 
-		prov, err := New(cfg, providerConfig)
+		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err != nil {
 			t.Fatalf("Failed to create provider with proxy: %v", err)
 		}
@@ -1031,7 +1031,7 @@ func TestAuthenticationErrors(t *testing.T) {
 			// No auth credentials set
 		}
 
-		_, err := New(cfg, providerConfig)
+		_, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err == nil {
 			t.Error("Expected error when no authentication method is configured")
 		}
@@ -1047,7 +1047,7 @@ func TestAuthenticationErrors(t *testing.T) {
 			// BedrockSecretKey not set
 		}
 
-		_, err := New(cfg, providerConfig)
+		_, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err == nil {
 			t.Error("Expected error when only access key is provided")
 		}
@@ -1060,7 +1060,7 @@ func TestAuthenticationErrors(t *testing.T) {
 			// BedrockAccessKey not set
 		}
 
-		_, err := New(cfg, providerConfig)
+		_, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
 		if err == nil {
 			t.Error("Expected error when only secret key is provided")
 		}

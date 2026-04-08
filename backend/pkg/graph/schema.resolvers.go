@@ -82,23 +82,43 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 }
 
 // PutUserInput is the resolver for the putUserInput field.
-func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input string) (model.ResultType, error) {
+func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string) (model.ResultType, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "flows.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
 	}
 
-	r.Logger.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"uid":  uid,
 		"flow": flowID,
-	}).Debug("put user input")
+	}
+	if modelProvider != nil {
+		if *modelProvider == "" {
+			fields["modelProvider"] = "empty"
+		} else {
+			fields["modelProvider"] = *modelProvider
+		}
+	} else {
+		fields["modelProvider"] = "unknown"
+	}
+
+	r.Logger.WithFields(fields).Debug("put user input")
 
 	fw, err := r.Controller.GetFlow(ctx, flowID)
 	if err != nil {
 		return model.ResultTypeError, err
 	}
 
-	if err := fw.PutInput(ctx, input); err != nil {
+	var prv provider.Provider
+	if modelProvider != nil && *modelProvider != "" {
+		name := provider.ProviderName(*modelProvider)
+		prv, err = r.ProvidersCtrl.GetProvider(ctx, name, uid)
+		if err != nil {
+			return model.ResultTypeError, fmt.Errorf("failed to get provider '%s': %w", *modelProvider, err)
+		}
+	}
+
+	if err := fw.PutInput(ctx, input, prv); err != nil {
 		return model.ResultTypeError, err
 	}
 

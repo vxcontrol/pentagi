@@ -556,6 +556,49 @@ func (q *Queries) UpdateFlowLanguage(ctx context.Context, arg UpdateFlowLanguage
 	return i, err
 }
 
+const updateFlowProvider = `-- name: UpdateFlowProvider :one
+UPDATE flows
+SET model_provider_name = $1, model_provider_type = $2, tool_call_id_template = $3, model = $4
+WHERE id = $5
+RETURNING id, status, title, model, model_provider_name, language, functions, user_id, created_at, updated_at, deleted_at, trace_id, model_provider_type, tool_call_id_template
+`
+
+type UpdateFlowProviderParams struct {
+	ModelProviderName  string       `json:"model_provider_name"`
+	ModelProviderType  ProviderType `json:"model_provider_type"`
+	ToolCallIDTemplate string       `json:"tool_call_id_template"`
+	Model              string       `json:"model"`
+	ID                 int64        `json:"id"`
+}
+
+func (q *Queries) UpdateFlowProvider(ctx context.Context, arg UpdateFlowProviderParams) (Flow, error) {
+	row := q.db.QueryRowContext(ctx, updateFlowProvider,
+		arg.ModelProviderName,
+		arg.ModelProviderType,
+		arg.ToolCallIDTemplate,
+		arg.Model,
+		arg.ID,
+	)
+	var i Flow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.Title,
+		&i.Model,
+		&i.ModelProviderName,
+		&i.Language,
+		&i.Functions,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.TraceID,
+		&i.ModelProviderType,
+		&i.ToolCallIDTemplate,
+	)
+	return i, err
+}
+
 const updateFlowStatus = `-- name: UpdateFlowStatus :one
 UPDATE flows
 SET status = $1

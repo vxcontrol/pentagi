@@ -16,8 +16,7 @@ import {
     Trash,
 } from 'lucide-react';
 import { Check, CheckCircle2, X, XCircle } from 'lucide-react';
-import { useState } from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -99,7 +98,7 @@ const Flows = () => {
     const [finishingFlowIds, setFinishingFlowIds] = useState<Set<string>>(new Set());
     const [deletingFlowIds, setDeletingFlowIds] = useState<Set<string>>(new Set());
     const [editingFlowId, setEditingFlowId] = useState<null | string>(null);
-    const [editingFlowTitle, setEditingFlowTitle] = useState('');
+    const editingInputRef = useRef<HTMLInputElement>(null);
     const [renameFlowMutation, { loading: isRenameLoading }] = useRenameFlowMutation();
 
     // Three-way sorting handler: null -> asc -> desc -> null
@@ -160,7 +159,6 @@ const Flows = () => {
 
     const handleFlowRenameStart = useCallback((flow: Flow) => {
         setEditingFlowId(flow.id);
-        setEditingFlowTitle(flow.title);
     }, []);
 
     const handleFlowDelete = async () => {
@@ -187,7 +185,9 @@ const Flows = () => {
     };
 
     const handleFlowRenameSave = useCallback(async () => {
-        if (!editingFlowId || !editingFlowTitle.trim()) {
+        const newTitle = editingInputRef.current?.value.trim();
+
+        if (!editingFlowId || !newTitle) {
             return;
         }
 
@@ -195,24 +195,22 @@ const Flows = () => {
             const { data } = await renameFlowMutation({
                 variables: {
                     flowId: editingFlowId,
-                    title: editingFlowTitle.trim(),
+                    title: newTitle,
                 },
             });
 
             if (data?.renameFlow === ResultType.Success) {
                 toast.success('Flow renamed successfully');
                 setEditingFlowId(null);
-                setEditingFlowTitle('');
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to rename flow';
             toast.error(errorMessage);
         }
-    }, [editingFlowId, editingFlowTitle, renameFlowMutation]);
+    }, [editingFlowId, renameFlowMutation]);
 
     const handleFlowRenameCancel = useCallback(() => {
         setEditingFlowId(null);
-        setEditingFlowTitle('');
     }, []);
 
     const handleFlowFinish = useCallback(
@@ -276,7 +274,7 @@ const Flows = () => {
                             >
                                 <InputGroupInput
                                     autoFocus
-                                    onChange={(e) => setEditingFlowTitle(e.target.value)}
+                                    defaultValue={title}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             handleFlowRenameSave();
@@ -291,14 +289,14 @@ const Flows = () => {
                                         }
                                     }}
                                     placeholder="Flow title"
-                                    value={editingFlowTitle}
+                                    ref={editingInputRef}
                                 />
                                 <InputGroupAddon
                                     align="inline-end"
                                     className="gap-0 pr-2"
                                 >
                                     <InputGroupButton
-                                        disabled={isRenameLoading || !editingFlowTitle.trim()}
+                                        disabled={isRenameLoading}
                                         onClick={() => handleFlowRenameSave()}
                                     >
                                         {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
@@ -670,7 +668,6 @@ const Flows = () => {
         [
             deletingFlowIds,
             editingFlowId,
-            editingFlowTitle,
             finishingFlowIds,
             handleColumnSort,
             handleFlowDeleteDialogOpen,

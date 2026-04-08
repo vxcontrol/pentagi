@@ -58,11 +58,16 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 type glmProvider struct {
 	llm            *openai.LLM
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 	providerPrefix string
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	if cfg.GLMAPIKey == "" {
 		return nil, fmt.Errorf("missing GLM_API_KEY environment variable")
 	}
@@ -90,6 +95,7 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 	return &glmProvider{
 		llm:            client,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 		providerPrefix: cfg.GLMProvider,
 	}, nil
@@ -97,6 +103,10 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 
 func (p *glmProvider) Type() provider.ProviderType {
 	return provider.ProviderGLM
+}
+
+func (p *glmProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *glmProvider) GetRawConfig() []byte {

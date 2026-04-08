@@ -290,6 +290,10 @@ func (stw *subtaskWorker) Run(ctx context.Context) error {
 		msgChainID = stw.subtaskCtx.MsgChainID
 	)
 
+	if err := stw.subtaskCtx.Provider.EnsureChainConsistency(ctx, msgChainID); err != nil {
+		return fmt.Errorf("failed to ensure chain consistency for subtask %d: %w", subtaskID, err)
+	}
+
 	performResult, err := stw.subtaskCtx.Provider.PerformAgentChain(ctx, taskID, subtaskID, msgChainID)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {

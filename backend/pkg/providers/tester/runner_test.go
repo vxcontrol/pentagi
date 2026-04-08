@@ -15,7 +15,7 @@ import (
 
 func TestTestProvider(t *testing.T) {
 	// create mock provider
-	mockProvider := mock.NewProvider(provider.ProviderCustom, "test-model")
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "test-model")
 	mockProvider.SetResponses([]mock.ResponseConfig{
 		{Key: "What is 2+2?", Response: "4"},
 		{Key: "Hello World", Response: "HELLO WORLD"},
@@ -64,7 +64,7 @@ func TestTestProvider(t *testing.T) {
 
 func TestTestProviderWithOptions(t *testing.T) {
 	// create mock provider
-	mockProvider := mock.NewProvider(provider.ProviderCustom, "test-model")
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "test-model")
 	mockProvider.SetResponses([]mock.ResponseConfig{
 		{Key: "What is 2+2?", Response: "4"},
 		{Key: "Hello World", Response: "HELLO WORLD"},
@@ -99,7 +99,7 @@ func TestTestProviderWithOptions(t *testing.T) {
 
 func TestTestProviderStreamingMode(t *testing.T) {
 	// create mock provider with streaming delay
-	mockProvider := mock.NewProvider(provider.ProviderCustom, "test-model")
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "test-model")
 	mockProvider.SetStreamingDelay(time.Millisecond * 5)
 	mockProvider.SetResponses([]mock.ResponseConfig{
 		{Key: "What is 2+2?", Response: "The answer is 4"},
@@ -140,7 +140,7 @@ func TestTestProviderStreamingMode(t *testing.T) {
 
 func TestTestProviderJSONTests(t *testing.T) {
 	// create mock provider with JSON responses
-	mockProvider := mock.NewProvider(provider.ProviderCustom, "test-model")
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "test-model")
 	mockProvider.SetResponses([]mock.ResponseConfig{
 		{Key: "Return JSON", Response: `{"name": "John Doe", "age": 30, "city": "New York"}`},
 		{Key: "Create JSON array", Response: `[{"name": "red", "hex": "#FF0000"}]`},
@@ -178,7 +178,7 @@ func TestTestProviderJSONTests(t *testing.T) {
 
 func TestTestProviderToolTests(t *testing.T) {
 	// create mock provider with tool call responses
-	mockProvider := mock.NewProvider(provider.ProviderCustom, "test-model")
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "test-model")
 
 	// set up tool call response
 	toolResponse := &llms.ContentResponse{
@@ -233,7 +233,7 @@ func TestTestProviderToolTests(t *testing.T) {
 
 func TestTestProviderErrorHandling(t *testing.T) {
 	// create mock provider that returns errors for specific requests
-	mockProvider := mock.NewProvider(provider.ProviderCustom, "test-model")
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "test-model")
 	mockProvider.SetResponses([]mock.ResponseConfig{
 		{Key: "What is 2+2?", Response: fmt.Errorf("mock API error")},
 	})
@@ -270,7 +270,7 @@ func TestTestProviderErrorHandling(t *testing.T) {
 
 func TestTestProviderGroups(t *testing.T) {
 	// create mock provider
-	mockProvider := mock.NewProvider(provider.ProviderCustom, "test-model")
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "test-model")
 	mockProvider.SetDefaultResponse("Group test response")
 
 	tests := []struct {

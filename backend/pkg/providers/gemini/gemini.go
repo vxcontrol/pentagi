@@ -64,10 +64,15 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 type geminiProvider struct {
 	llm            *googleai.GoogleAI
 	models         pconfig.ModelsConfig
+	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
 }
 
-func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.Provider, error) {
+func New(
+	cfg *config.Config,
+	providerName provider.ProviderName,
+	providerConfig *pconfig.ProviderConfig,
+) (provider.Provider, error) {
 	opts := []googleai.Option{
 		googleai.WithRest(),
 		googleai.WithAPIKey(cfg.GeminiAPIKey),
@@ -103,12 +108,17 @@ func New(cfg *config.Config, providerConfig *pconfig.ProviderConfig) (provider.P
 	return &geminiProvider{
 		llm:            client,
 		models:         models,
+		providerName:   providerName,
 		providerConfig: providerConfig,
 	}, nil
 }
 
 func (p *geminiProvider) Type() provider.ProviderType {
 	return provider.ProviderGemini
+}
+
+func (p *geminiProvider) Name() provider.ProviderName {
+	return p.providerName
 }
 
 func (p *geminiProvider) GetRawConfig() []byte {

@@ -477,6 +477,7 @@ export type MutationFinishFlowArgs = {
 export type MutationPutUserInputArgs = {
     flowId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
+    modelProvider?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type MutationRenameFlowArgs = {
@@ -1751,6 +1752,7 @@ export type DeleteFlowMutation = { deleteFlow: ResultType };
 export type PutUserInputMutationVariables = Exact<{
     flowId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
+    modelProvider?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 export type PutUserInputMutation = { putUserInput: ResultType };
@@ -5070,8 +5072,8 @@ export type DeleteFlowMutationHookResult = ReturnType<typeof useDeleteFlowMutati
 export type DeleteFlowMutationResult = Apollo.MutationResult<DeleteFlowMutation>;
 export type DeleteFlowMutationOptions = Apollo.BaseMutationOptions<DeleteFlowMutation, DeleteFlowMutationVariables>;
 export const PutUserInputDocument = gql`
-    mutation putUserInput($flowId: ID!, $input: String!) {
-        putUserInput(flowId: $flowId, input: $input)
+    mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String) {
+        putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider)
     }
 `;
 export type PutUserInputMutationFn = Apollo.MutationFunction<PutUserInputMutation, PutUserInputMutationVariables>;
@@ -5091,6 +5093,7 @@ export type PutUserInputMutationFn = Apollo.MutationFunction<PutUserInputMutatio
  *   variables: {
  *      flowId: // value for 'flowId'
  *      input: // value for 'input'
+ *      modelProvider: // value for 'modelProvider'
  *   },
  * });
  */
