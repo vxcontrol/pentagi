@@ -21,6 +21,7 @@ import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable } from '@/components/ui/data-table';
 import {
     DropdownMenu,
@@ -32,8 +33,6 @@ import {
 import { StatusCard } from '@/components/ui/status-card';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
-
 interface McpServerConfigSse {
     headers?: Record<string, string>;
     url: string;
@@ -106,17 +105,6 @@ const formatFullDateTime = (dateString: string) => {
 const SettingsMcpServers = () => {
     const navigate = useNavigate();
 
-    const { columnVisibility, updateColumnVisibility } = useAdaptiveColumnVisibility({
-        columns: [
-            { alwaysVisible: true, id: 'name', priority: 0 },
-            { id: 'transport', priority: 1 },
-            { id: 'tools', priority: 2 },
-            { id: 'createdAt', priority: 3 },
-            { id: 'updatedAt', priority: 4 },
-            { id: 'endpoint', priority: 5 },
-        ],
-        tableKey: 'mcp-servers',
-    });
 
     // Mocked data stored locally. This can be replaced by a real query later.
     const initialData: McpServerItem[] = useMemo(
@@ -507,6 +495,7 @@ const SettingsMcpServers = () => {
             enableHiding: false,
             header: () => null,
             id: 'actions',
+            meta: { preventRowClick: true },
             size: 48,
         },
     ];
@@ -615,6 +604,27 @@ const SettingsMcpServers = () => {
         );
     };
 
+    const renderRowContextMenu = (server: McpServerItem) => (
+        <>
+            <ContextMenuItem onClick={() => handleEdit(server.id)}>
+                <Pencil />
+                Edit
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleClone(server.id)}>
+                <Copy />
+                Clone
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+                disabled={isDeleteLoading && deletingServer?.id === server.id}
+                onClick={() => handleOpenDeleteDialog(server)}
+            >
+                <Trash />
+                {isDeleteLoading && deletingServer?.id === server.id ? 'Deleting...' : 'Delete'}
+            </ContextMenuItem>
+        </>
+    );
+
     if (servers.length === 0) {
         return (
             <div className="flex flex-col gap-4">
@@ -651,17 +661,9 @@ const SettingsMcpServers = () => {
 
             <DataTable<McpServerItem>
                 columns={columns}
-                columnVisibility={columnVisibility}
                 data={servers}
-                onColumnVisibilityChange={(visibility) => {
-                    Object.entries(visibility).forEach(([columnId, isVisible]) => {
-                        if (columnVisibility[columnId] !== isVisible) {
-                            updateColumnVisibility(columnId, isVisible);
-                        }
-                    });
-                }}
+                renderRowContextMenu={renderRowContextMenu}
                 renderSubComponent={renderSubComponent}
-                tableKey="mcp-servers"
             />
 
             <ConfirmationDialog

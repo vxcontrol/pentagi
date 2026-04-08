@@ -41,4 +41,3 @@ const FlowTaskStatusIcon = ({ className, status, tooltip }: FlowTaskStatusIconPr
 };
 
 export default FlowTaskStatusIcon;
-

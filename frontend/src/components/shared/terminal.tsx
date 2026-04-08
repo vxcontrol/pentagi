@@ -9,7 +9,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal as XTerminal } from '@xterm/xterm';
 import debounce from 'lodash/debounce';
-import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useReducer, useRef } from 'react';
 
 import { useTheme } from '@/hooks/use-theme';
 import { Log } from '@/lib/log';
@@ -231,7 +231,6 @@ const terminalOptions: ITerminalOptions = {
     cursorBlink: false,
     customGlyphs: true,
     disableStdin: true,
-    fastScrollModifier: 'alt',
     fastScrollSensitivity: 10,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
     fontSize: 12,
@@ -305,6 +304,11 @@ const lightTheme: ITheme = {
     yellow: '#eab308',
 } as const;
 
+const processLog = (log: string): string =>
+    needsSanitization(log) ? sanitizeTerminalOutput(log) : log;
+
+type TerminalLifecycle = 'idle' | 'opened' | 'ready';
+
 interface TerminalProps {
     className?: string;
     logs: string[];
@@ -328,12 +332,14 @@ const Terminal = ({
     const searchAddonRef = useRef<null | SearchAddon>(null);
     const lastLogIndexRef = useRef<number>(0);
     const webglAddonRef = useRef<null | WebglAddon>(null);
+    const unicodeAddonRef = useRef<null | Unicode11Addon>(null);
+    const webLinksAddonRef = useRef<null | WebLinksAddon>(null);
+    const contextLossDisposableRef = useRef<null | { dispose: () => void }>(null);
     const resizeObserverRef = useRef<null | ResizeObserver>(null);
     const debouncedFitRef = useRef<null | ReturnType<typeof debounce>>(null);
     const { theme } = useTheme();
-    const [isTerminalOpened, setIsTerminalOpened] = useState(false);
-    const [isTerminalReady, setIsTerminalReady] = useState(false);
-    const isTerminalReadyRef = useRef(false);
+    const [lifecycle, setLifecycle] = useReducer((_: TerminalLifecycle, next: TerminalLifecycle) => next, 'idle');
+    const lifecycleRef = useRef<TerminalLifecycle>('idle');
     const prevLogsLengthRef = useRef<number>(0);
     const terminalInitializedRef = useRef(false);
     const isMountedRef = useRef(true);
@@ -473,10 +479,12 @@ const Terminal = ({
             terminal.loadAddon(searchAddon);
 
             const unicodeAddon = new Unicode11Addon();
+            unicodeAddonRef.current = unicodeAddon;
             terminal.loadAddon(unicodeAddon);
             terminal.unicode.activeVersion = '11';
 
             const webLinksAddon = new WebLinksAddon();
+            webLinksAddonRef.current = webLinksAddon;
             terminal.loadAddon(webLinksAddon);
 
             // Add WebGL addon last (and optionally)
@@ -484,7 +492,7 @@ const Terminal = ({
                 const webglAddon = new WebglAddon();
                 webglAddonRef.current = webglAddon;
                 terminal.loadAddon(webglAddon);
-                webglAddon.onContextLoss(() => {
+                contextLossDisposableRef.current = webglAddon.onContextLoss(() => {
                     if (isMountedRef.current && webglAddonRef.current) {
                         webglAddonRef.current.dispose();
                     }
@@ -495,7 +503,7 @@ const Terminal = ({
 
             // Set up resize handler
             const debouncedFit = debounce(() => {
-                if (isMountedRef.current && isTerminalReadyRef.current) {
+                if (isMountedRef.current && lifecycleRef.current === 'ready') {
                     safeFit();
                 }
             }, 150);
@@ -503,7 +511,7 @@ const Terminal = ({
             debouncedFitRef.current = debouncedFit;
 
             const resizeObserver = new ResizeObserver(() => {
-                if (isMountedRef.current && isTerminalReadyRef.current) {
+                if (isMountedRef.current && lifecycleRef.current === 'ready') {
                     debouncedFit();
                 }
             });
@@ -519,7 +527,8 @@ const Terminal = ({
 
                 try {
                     terminal.open(terminalRef.current);
-                    setIsTerminalOpened(true);
+                    lifecycleRef.current = 'opened';
+                    setLifecycle('opened');
 
                     // Observe size changes only after successful terminal opening
                     if (terminalRef.current && resizeObserverRef.current) {
@@ -530,9 +539,8 @@ const Terminal = ({
                     fitTimeoutRef.current = setTimeout(() => {
                         if (isMountedRef.current) {
                             safeFit();
-                            // Mark terminal as fully ready only after successful fit()
-                            isTerminalReadyRef.current = true;
-                            setIsTerminalReady(true);
+                            lifecycleRef.current = 'ready';
+                            setLifecycle('ready');
                         }
                     }, 200);
                 } catch (error: unknown) {
@@ -562,6 +570,26 @@ const Terminal = ({
                     debouncedFitRef.current = null;
                 }
 
+                if (unicodeAddonRef.current) {
+                    try {
+                        unicodeAddonRef.current.dispose();
+                    } catch {
+                        // Ignore errors during disposal
+                    }
+
+                    unicodeAddonRef.current = null;
+                }
+
+                if (webLinksAddonRef.current) {
+                    try {
+                        webLinksAddonRef.current.dispose();
+                    } catch {
+                        // Ignore errors during disposal
+                    }
+
+                    webLinksAddonRef.current = null;
+                }
+
                 if (searchAddonRef.current) {
                     try {
                         searchAddonRef.current.dispose();
@@ -570,6 +598,16 @@ const Terminal = ({
                     }
 
                     searchAddonRef.current = null;
+                }
+
+                if (contextLossDisposableRef.current) {
+                    try {
+                        contextLossDisposableRef.current.dispose();
+                    } catch {
+                        // Ignore errors during disposal
+                    }
+
+                    contextLossDisposableRef.current = null;
                 }
 
                 if (webglAddonRef.current) {
@@ -605,9 +643,8 @@ const Terminal = ({
                 lastLogIndexRef.current = 0;
                 prevLogsLengthRef.current = 0;
                 terminalInitializedRef.current = false;
-                setIsTerminalOpened(false);
-                isTerminalReadyRef.current = false;
-                setIsTerminalReady(false);
+                lifecycleRef.current = 'idle';
+                setLifecycle('idle');
             };
         } catch (error: unknown) {
             Log.error('Terminal initialization failed:', error);
@@ -615,11 +652,12 @@ const Terminal = ({
 
             return;
         }
-    }, [isDarkTheme]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Handle search functionality with decorations
     useEffect(() => {
-        if (!searchAddonRef.current || !isTerminalReady || !isMountedRef.current) {
+        if (!searchAddonRef.current || lifecycle !== 'ready' || !isMountedRef.current) {
             return;
         }
 
@@ -641,7 +679,7 @@ const Terminal = ({
         } catch (error: unknown) {
             Log.error('Terminal search failed:', error);
         }
-    }, [searchValue, isTerminalReady, getSearchDecorations]);
+    }, [searchValue, lifecycle, getSearchDecorations]);
 
     // Update theme and listen to system theme changes
     useEffect(() => {
@@ -674,7 +712,7 @@ const Terminal = ({
 
     // Update logs only when terminal is fully ready
     useEffect(() => {
-        if (!isMountedRef.current || !xtermRef.current || !isTerminalOpened || !isTerminalReady) {
+        if (!isMountedRef.current || !xtermRef.current || lifecycle !== 'ready') {
             return;
         }
 
@@ -702,14 +740,11 @@ const Terminal = ({
                     return;
                 }
 
-                // Add logs in batch for performance optimization
                 safeTerminalOperation(() => {
-                    for (const log of newLogs.filter(Boolean)) {
-                        terminal.writeln(needsSanitization(log) ? sanitizeTerminalOutput(log) : log);
-                    }
+                    const batch = newLogs.filter(Boolean).map(processLog).join('\r\n');
 
-                    // Scroll down only once after adding all logs
-                    if (newLogs.length > 0) {
+                    if (batch) {
+                        terminal.write(batch + '\r\n');
                         terminal.scrollToBottom();
                     }
                 });
@@ -717,13 +752,13 @@ const Terminal = ({
                 lastLogIndexRef.current = logs.length;
                 prevLogsLengthRef.current = logs.length;
             } else {
-                // If logs were reset (became fewer)
                 safeTerminalOperation(() => {
                     terminal.clear();
 
-                    // Add all logs in batch again
-                    for (const log of logs.filter(Boolean)) {
-                        terminal.writeln(needsSanitization(log) ? sanitizeTerminalOutput(log) : log);
+                    const batch = logs.filter(Boolean).map(processLog).join('\r\n');
+
+                    if (batch) {
+                        terminal.write(batch + '\r\n');
                     }
 
                     terminal.scrollToBottom();
@@ -735,12 +770,13 @@ const Terminal = ({
         } catch (error) {
             Log.error('Terminal log update failed:', error);
         }
-    }, [logs, isTerminalOpened, isTerminalReady]);
+    }, [logs, lifecycle]);
 
     return (
         <div
             className={cn('overflow-hidden', className)}
             ref={terminalRef}
+            style={{ contain: 'strict' }}
         />
     );
 };

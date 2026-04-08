@@ -29,6 +29,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -53,7 +54,6 @@ import {
     useDeleteApiTokenMutation,
     useUpdateApiTokenMutation,
 } from '@/graphql/types';
-import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
 import { cn } from '@/lib/utils';
 import { baseUrl } from '@/models/api';
 
@@ -208,16 +208,6 @@ const SettingsAPITokens = () => {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingToken, setDeletingToken] = useState<APIToken | null>(null);
 
-    const { columnVisibility, updateColumnVisibility } = useAdaptiveColumnVisibility({
-        columns: [
-            { alwaysVisible: true, id: 'name', priority: 0 },
-            { alwaysVisible: true, id: 'tokenId', priority: 0 },
-            { id: 'status', priority: 1 },
-            { id: 'createdAt', priority: 2 },
-            { id: 'expires', priority: 3 },
-        ],
-        tableKey: 'api-tokens',
-    });
 
     // Get current page from URL
     const currentPage = useMemo(() => {
@@ -803,6 +793,7 @@ const SettingsAPITokens = () => {
                 enableHiding: false,
                 header: () => null,
                 id: 'actions',
+                meta: { preventRowClick: true },
                 size: 48,
             },
         ],
@@ -825,6 +816,36 @@ const SettingsAPITokens = () => {
             isDeleteLoading,
             isUpdateLoading,
         ],
+    );
+
+    const renderRowContextMenu = useCallback(
+        (token: APIToken) => {
+            if (token.id === 'create-new') {
+                return null;
+            }
+
+            return (
+                <>
+                    <ContextMenuItem onClick={() => handleEdit(token)}>
+                        <Pencil />
+                        Edit
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => handleCopyTokenId(token.tokenId)}>
+                        <Copy />
+                        Copy Token ID
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                        disabled={isDeleteLoading && deletingToken?.tokenId === token.tokenId}
+                        onClick={() => handleDeleteDialogOpen(token)}
+                    >
+                        <Trash />
+                        {isDeleteLoading && deletingToken?.tokenId === token.tokenId ? 'Deleting...' : 'Delete'}
+                    </ContextMenuItem>
+                </>
+            );
+        },
+        [deletingToken, handleCopyTokenId, handleDeleteDialogOpen, handleEdit, isDeleteLoading],
     );
 
     if (isLoading) {
@@ -893,20 +914,12 @@ const SettingsAPITokens = () => {
 
             <DataTable<APIToken>
                 columns={columns}
-                columnVisibility={columnVisibility}
                 data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
                 filterColumn="name"
                 filterPlaceholder="Filter token names..."
-                onColumnVisibilityChange={(visibility) => {
-                    Object.entries(visibility).forEach(([columnId, isVisible]) => {
-                        if (columnVisibility[columnId] !== isVisible) {
-                            updateColumnVisibility(columnId, isVisible);
-                        }
-                    });
-                }}
                 onPageChange={handlePageChange}
                 pageIndex={currentPage}
-                tableKey="api-tokens"
+                renderRowContextMenu={renderRowContextMenu}
             />
 
             <Dialog

@@ -1,10 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUpIcon, Check, ChevronDown, Square, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, Check, ChevronDown, FileSymlink, FileText, Square, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { ProviderIcon } from '@/components/icons/provider-icon';
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -26,6 +28,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getProviderDisplayName } from '@/models/provider';
 import { useProviders } from '@/providers/providers-provider';
+import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const formSchema = z.object({
     message: z.string().trim().min(1, { message: 'Message cannot be empty' }),
@@ -61,7 +64,24 @@ export const FlowForm = ({
     type,
 }: FlowFormProps) => {
     const { providers, setSelectedProvider } = useProviders();
+    const { templates } = useTemplates();
+    const [isReplaceConfirmOpen, setIsReplaceConfirmOpen] = useState(false);
+    const [pendingTemplate, setPendingTemplate] = useState<null | Template>(null);
     const [providerSearch, setProviderSearch] = useState('');
+    const [templateSearch, setTemplateSearch] = useState('');
+
+    const filteredTemplates = useMemo(() => {
+        if (!templateSearch.trim()) {
+            return templates;
+        }
+
+        const searchLower = templateSearch.toLowerCase();
+
+        return templates.filter(
+            (template) =>
+                template.title.toLowerCase().includes(searchLower) || template.text.toLowerCase().includes(searchLower),
+        );
+    }, [templates, templateSearch]);
 
     const filteredProviders = useMemo(() => {
         if (!providerSearch.trim()) {
@@ -150,6 +170,29 @@ export const FlowForm = ({
         event.preventDefault();
         handleFormSubmit(handleSubmit)();
     };
+
+    const handleApplyTemplate = useCallback(
+        (template: Template) => {
+            const currentMessage = getValues('message')?.trim() ?? '';
+
+            if (currentMessage.length > 0) {
+                setPendingTemplate(template);
+                setIsReplaceConfirmOpen(true);
+            } else {
+                setValue('message', template.text, { shouldValidate: true });
+                setTemplateSearch('');
+            }
+        },
+        [getValues, setValue],
+    );
+
+    const handleConfirmReplaceTemplate = useCallback(() => {
+        if (pendingTemplate) {
+            setValue('message', pendingTemplate.text, { shouldValidate: true });
+            setTemplateSearch('');
+            setPendingTemplate(null);
+        }
+    }, [pendingTemplate, setValue]);
 
     return (
         <Form {...form}>
@@ -277,6 +320,7 @@ export const FlowForm = ({
                                             );
                                         }}
                                     />
+
                                     {type === 'assistant' && (
                                         <FormField
                                             control={control}
@@ -313,6 +357,75 @@ export const FlowForm = ({
                                             )}
                                         />
                                     )}
+
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <InputGroupButton
+                                                disabled={isFormDisabled}
+                                                variant="ghost"
+                                            >
+                                                <FileText className="shrink-0" />
+                                                <ChevronDown />
+                                            </InputGroupButton>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            align="start"
+                                            side="top"
+                                        >
+                                            <DropdownMenuGroup className="-m-1 rounded-none p-0">
+                                                <InputGroup className="-mb-1 rounded-none border-0 shadow-none [&:has([data-slot=input-group-control]:focus-visible)]:border-0 [&:has([data-slot=input-group-control]:focus-visible)]:ring-0">
+                                                    <InputGroupInput
+                                                        onChange={(event) => setTemplateSearch(event.target.value)}
+                                                        onClick={(event) => event.stopPropagation()}
+                                                        onKeyDown={(event) => event.stopPropagation()}
+                                                        placeholder="Search..."
+                                                        value={templateSearch}
+                                                    />
+                                                    {templateSearch && (
+                                                        <InputGroupAddon align="inline-end">
+                                                            <InputGroupButton
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    setTemplateSearch('');
+                                                                }}
+                                                            >
+                                                                <X />
+                                                            </InputGroupButton>
+                                                        </InputGroupAddon>
+                                                    )}
+                                                </InputGroup>
+                                                <DropdownMenuSeparator />
+                                            </DropdownMenuGroup>
+                                            <DropdownMenuGroup className="max-h-64 overflow-y-auto">
+                                                {!filteredTemplates.length ? (
+                                                    <DropdownMenuItem
+                                                        className="min-h-16 justify-center"
+                                                        disabled
+                                                    >
+                                                        {templateSearch ? 'No results found' : 'No available templates'}
+                                                    </DropdownMenuItem>
+                                                ) : (
+                                                    filteredTemplates.map((template) => (
+                                                        <DropdownMenuItem
+                                                            key={template.id}
+                                                            onSelect={() => {
+                                                                if (isFormDisabled) {
+                                                                    return;
+                                                                }
+
+                                                                handleApplyTemplate(template);
+                                                            }}
+                                                        >
+                                                            <span className="max-w-80 flex-1 truncate">
+                                                                {template.title}
+                                                            </span>
+                                                        </DropdownMenuItem>
+                                                    ))
+                                                )}
+                                            </DropdownMenuGroup>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+
                                     {!isLoading || isSubmitting ? (
                                         <InputGroupButton
                                             className="ml-auto"
@@ -321,7 +434,7 @@ export const FlowForm = ({
                                             type="submit"
                                             variant="default"
                                         >
-                                            {isSubmitting ? <Spinner variant="circle" /> : <ArrowUpIcon />}
+                                            {isSubmitting ? <Spinner variant="circle" /> : <ArrowUp />}
                                         </InputGroupButton>
                                     ) : (
                                         <InputGroupButton
@@ -341,6 +454,22 @@ export const FlowForm = ({
                     )}
                 />
             </form>
+            <ConfirmationDialog
+                confirmIcon={<FileSymlink />}
+                confirmText="Replace"
+                confirmVariant="default"
+                description="Current message has content. Replace with the selected template?"
+                handleConfirm={handleConfirmReplaceTemplate}
+                handleOpenChange={(open) => {
+                    if (!open) {
+                        setPendingTemplate(null);
+                    }
+
+                    setIsReplaceConfirmOpen(open);
+                }}
+                isOpen={isReplaceConfirmOpen}
+                title="Replace content?"
+            />
         </Form>
     );
 };

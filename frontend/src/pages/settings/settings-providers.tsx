@@ -34,6 +34,7 @@ import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable } from '@/components/ui/data-table';
 import {
     DropdownMenu,
@@ -45,8 +46,6 @@ import {
 import { StatusCard } from '@/components/ui/status-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ProviderType, useDeleteProviderMutation, useSettingsProvidersQuery } from '@/graphql/types';
-import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
-
 type Provider = ProviderConfigFragmentFragment;
 
 const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
@@ -143,15 +142,6 @@ const SettingsProviders = () => {
     const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
     const navigate = useNavigate();
 
-    const { columnVisibility, updateColumnVisibility } = useAdaptiveColumnVisibility({
-        columns: [
-            { alwaysVisible: true, id: 'name', priority: 0 },
-            { id: 'type', priority: 1 },
-            { id: 'createdAt', priority: 2 },
-            { id: 'updatedAt', priority: 3 },
-        ],
-        tableKey: 'providers',
-    });
 
     // Get current page from URL
     const currentPage = useMemo(() => {
@@ -434,6 +424,7 @@ const SettingsProviders = () => {
                 enableHiding: false,
                 header: () => null,
                 id: 'actions',
+                meta: { preventRowClick: true },
                 size: 48,
             },
         ],
@@ -520,6 +511,30 @@ const SettingsProviders = () => {
         );
     };
 
+    const renderRowContextMenu = useCallback(
+        (provider: Provider) => (
+            <>
+                <ContextMenuItem onClick={() => handleProviderEdit(provider.id)}>
+                    <Pencil />
+                    Edit
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => handleProviderClone(provider.id)}>
+                    <Copy />
+                    Clone
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                    disabled={isDeleteLoading && deletingProvider?.id === provider.id}
+                    onClick={() => handleProviderDeleteDialogOpen(provider)}
+                >
+                    <Trash />
+                    {isDeleteLoading && deletingProvider?.id === provider.id ? 'Deleting...' : 'Delete'}
+                </ContextMenuItem>
+            </>
+        ),
+        [deletingProvider, handleProviderClone, handleProviderDeleteDialogOpen, handleProviderEdit, isDeleteLoading],
+    );
+
     if (isLoading) {
         return (
             <div className="flex flex-col gap-4">
@@ -586,21 +601,13 @@ const SettingsProviders = () => {
 
             <DataTable<Provider>
                 columns={columns}
-                columnVisibility={columnVisibility}
                 data={providers}
                 filterColumn="name"
                 filterPlaceholder="Filter provider names..."
-                onColumnVisibilityChange={(visibility) => {
-                    Object.entries(visibility).forEach(([columnId, isVisible]) => {
-                        if (columnVisibility[columnId] !== isVisible) {
-                            updateColumnVisibility(columnId, isVisible);
-                        }
-                    });
-                }}
                 onPageChange={handlePageChange}
                 pageIndex={currentPage}
+                renderRowContextMenu={renderRowContextMenu}
                 renderSubComponent={renderSubComponent}
-                tableKey="providers"
             />
 
             <ConfirmationDialog

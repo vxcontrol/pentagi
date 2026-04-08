@@ -1,6 +1,8 @@
 import type { VisibilityState } from '@tanstack/react-table';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { getColumnStorageKey } from '@/lib/storage-keys';
 
 export interface ColumnPriority {
     alwaysVisible?: boolean;
@@ -23,6 +25,16 @@ const DEFAULT_BREAKPOINTS = [
     { hiddenPriorities: [1, 2, 3, 4, 5], width: 0 },
 ];
 
+function loadUserPreferences(key: string): Record<string, boolean> {
+    try {
+        const stored = localStorage.getItem(key);
+
+        return stored ? JSON.parse(stored) : {};
+    } catch {
+        return {};
+    }
+}
+
 export const useAdaptiveColumnVisibility = ({
     breakpoints = DEFAULT_BREAKPOINTS,
     columns,
@@ -30,33 +42,26 @@ export const useAdaptiveColumnVisibility = ({
 }: UseAdaptiveColumnVisibilityOptions) => {
     const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1400);
 
-    const localStorageKey = `table-column-visibility-${tableKey}`;
+    const localStorageKey = useMemo(() => getColumnStorageKey(tableKey), [tableKey]);
 
-    const getUserPreferences = (): Record<string, boolean> => {
-        try {
-            const stored = localStorage.getItem(localStorageKey);
+    const [userPreferences, setUserPreferences] = useState<Record<string, boolean>>(() =>
+        loadUserPreferences(localStorageKey),
+    );
 
-            return stored ? JSON.parse(stored) : {};
-        } catch {
-            return {};
-        }
-    };
-
-    const [userPreferences, setUserPreferences] = useState<Record<string, boolean>>(getUserPreferences);
-
-    const saveUserPreferences = (preferences: Record<string, boolean>) => {
-        try {
-            localStorage.setItem(localStorageKey, JSON.stringify(preferences));
-            setUserPreferences(preferences);
-        } catch (error) {
-            console.error('Failed to save column visibility preferences:', error);
-        }
-    };
+    const saveUserPreferences = useCallback(
+        (preferences: Record<string, boolean>) => {
+            try {
+                localStorage.setItem(localStorageKey, JSON.stringify(preferences));
+                setUserPreferences(preferences);
+            } catch {
+                /* localStorage may be unavailable */
+            }
+        },
+        [localStorageKey],
+    );
 
     useEffect(() => {
-        const handleResize = () => {
-            setWindowWidth(window.innerWidth);
-        };
+        const handleResize = () => setWindowWidth(window.innerWidth);
 
         window.addEventListener('resize', handleResize);
 
@@ -64,38 +69,37 @@ export const useAdaptiveColumnVisibility = ({
     }, []);
 
     const columnVisibility = useMemo((): VisibilityState => {
-        const activeBreakpoint = breakpoints.find((bp) => windowWidth >= bp.width) ||
-            breakpoints[breakpoints.length - 1] || { hiddenPriorities: [], width: 0 };
+        const activeBreakpoint = breakpoints.find((breakpoint) => windowWidth >= breakpoint.width) ??
+            breakpoints.at(-1) ?? { hiddenPriorities: [], width: 0 };
 
-        const visibility: VisibilityState = {};
+        return Object.fromEntries(
+            columns.map((column) => {
+                if (column.alwaysVisible) {
+                    return [column.id, true];
+                }
 
-        columns.forEach((column) => {
-            if (column.alwaysVisible) {
-                visibility[column.id] = true;
+                const shouldHideByWidth = activeBreakpoint.hiddenPriorities.includes(column.priority);
+                const userPreference = userPreferences[column.id];
 
-                return;
-            }
+                const isVisible =
+                    userPreference !== undefined
+                        ? !shouldHideByWidth && userPreference
+                        : !shouldHideByWidth;
 
-            const shouldHideByWidth = activeBreakpoint.hiddenPriorities.includes(column.priority);
-            const userPreference = userPreferences[column.id];
-
-            if (userPreference !== undefined) {
-                visibility[column.id] = shouldHideByWidth ? false : userPreference;
-            } else {
-                visibility[column.id] = !shouldHideByWidth;
-            }
-        });
-
-        return visibility;
+                return [column.id, isVisible];
+            }),
+        );
     }, [windowWidth, userPreferences, columns, breakpoints]);
 
-    const updateColumnVisibility = (columnId: string, visible: boolean) => {
-        const newPreferences = {
-            ...userPreferences,
-            [columnId]: visible,
-        };
-        saveUserPreferences(newPreferences);
-    };
+    const updateColumnVisibility = useCallback(
+        (columnId: string, visible: boolean) => {
+            saveUserPreferences({
+                ...userPreferences,
+                [columnId]: visible,
+            });
+        },
+        [userPreferences, saveUserPreferences],
+    );
 
     return {
         columnVisibility,

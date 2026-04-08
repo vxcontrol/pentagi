@@ -47,7 +47,7 @@ const NewFlow = () => {
 
     return (
         <>
-            <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b bg-background px-4">
+            <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
                 <SidebarTrigger className="-ml-1" />
                 <Separator
                     className="mr-2 h-4"
@@ -66,7 +66,7 @@ const NewFlow = () => {
                     <CardContent className="flex flex-col gap-4 pt-6">
                         <div className="text-center">
                             <h1 className="text-2xl font-semibold">Create a new flow</h1>
-                            <p className="mt-2 text-muted-foreground">Describe what you would like PentAGI to test</p>
+                            <p className="text-muted-foreground mt-2">Describe what you would like PentAGI to test</p>
                         </div>
                         <Tabs
                             onValueChange={(value) => setFlowType(value as 'assistant' | 'automation')}

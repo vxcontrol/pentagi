@@ -350,6 +350,15 @@ fragment apiTokenWithSecretFragment on APITokenWithSecret {
     token
 }
 
+fragment flowTemplateFragment on FlowTemplate {
+    id
+    userId
+    title
+    text
+    createdAt
+    updatedAt
+}
+
 fragment usageStatsFragment on UsageStats {
     totalUsageIn
     totalUsageOut
@@ -906,6 +915,38 @@ mutation deleteFavoriteFlow($flowId: ID!) {
     deleteFavoriteFlow(flowId: $flowId)
 }
 
+# ==================== Flow Templates ====================
+
+query flowTemplates {
+    flowTemplates {
+        ...flowTemplateFragment
+    }
+}
+
+query flowTemplate($templateId: ID!) {
+    flowTemplate(templateId: $templateId) {
+        ...flowTemplateFragment
+    }
+}
+
+mutation createFlowTemplate($input: CreateFlowTemplateInput!) {
+    createFlowTemplate(input: $input) {
+        ...flowTemplateFragment
+    }
+}
+
+mutation updateFlowTemplate($templateId: ID!, $input: UpdateFlowTemplateInput!) {
+    updateFlowTemplate(templateId: $templateId, input: $input) {
+        ...flowTemplateFragment
+    }
+}
+
+mutation deleteFlowTemplate($templateId: ID!) {
+    deleteFlowTemplate(templateId: $templateId)
+}
+
+# ==================== Flows ====================
+
 mutation createFlow($modelProvider: String!, $input: String!) {
     createFlow(modelProvider: $modelProvider, input: $input) {
         ...flowFragment
@@ -1172,5 +1213,23 @@ subscription apiTokenDeleted {
 subscription settingsUserUpdated {
     settingsUserUpdated {
         ...userPreferencesFragment
+    }
+}
+
+subscription flowTemplateCreated {
+    flowTemplateCreated {
+        ...flowTemplateFragment
+    }
+}
+
+subscription flowTemplateUpdated {
+    flowTemplateUpdated {
+        ...flowTemplateFragment
+    }
+}
+
+subscription flowTemplateDeleted {
+    flowTemplateDeleted {
+        ...flowTemplateFragment
     }
 }

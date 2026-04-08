@@ -1,5 +1,3 @@
-'use client';
-
 import {
     type ColumnDef,
     type ColumnFiltersState,
@@ -10,14 +8,16 @@ import {
     getFilteredRowModel,
     getPaginationRowModel,
     getSortedRowModel,
+    type Row,
     type SortingState,
     useReactTable,
     type VisibilityState,
 } from '@tanstack/react-table';
-import { ChevronDown } from 'lucide-react';
-import * as React from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Fragment, type ReactElement, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -27,14 +27,17 @@ import {
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-// Extend ColumnMeta interface from @tanstack/react-table
-declare module '@tanstack/react-table' {
-    interface ColumnMeta<TData, TValue> {
-        cellClassName?: string;
-        headerClassName?: string;
-    }
-}
+import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
+import { getColumnStorageKey, getPageStorageKey, getSortingStorageKey } from '@/lib/storage-keys';
+import {
+    loadColumnVisibility,
+    loadPageState,
+    loadSorting,
+    saveColumnVisibility,
+    savePageState,
+    saveSorting,
+} from '@/lib/table-storage';
+import { cn } from '@/lib/utils';
 
 interface DataTableProps<TData, TValue = unknown> {
     columns: ColumnDef<TData, TValue>[];
@@ -43,65 +46,78 @@ interface DataTableProps<TData, TValue = unknown> {
     filterColumn?: string;
     filterPlaceholder?: string;
     initialPageSize?: number;
+    initialSorting?: SortingState;
     onColumnVisibilityChange?: (visibility: VisibilityState) => void;
     onPageChange?: (pageIndex: number) => void;
     onRowClick?: (row: TData) => void;
     pageIndex?: number;
-    renderSubComponent?: (props: { row: unknown }) => React.ReactElement;
-    tableKey?: string;
+    renderRowContextMenu?: (row: TData) => ReactNode;
+    renderSubComponent?: (props: { row: Row<TData> }) => ReactElement;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100] as const;
 
-function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
-    const {
-        columns,
-        columnVisibility: externalColumnVisibility,
-        data,
-        filterColumn = 'name',
-        filterPlaceholder = 'Filter...',
-        initialPageSize = 10,
-        onColumnVisibilityChange,
-        onPageChange,
-        onRowClick,
-        pageIndex,
-        renderSubComponent,
-        tableKey,
-    } = props;
+function DataTable<TData, TValue = unknown>({
+    columns,
+    columnVisibility: externalColumnVisibility,
+    data,
+    filterColumn = 'name',
+    filterPlaceholder = 'Filter...',
+    initialPageSize = 10,
+    initialSorting = [],
+    onColumnVisibilityChange,
+    onPageChange,
+    onRowClick,
+    pageIndex: externalPageIndex,
+    renderRowContextMenu,
+    renderSubComponent,
+}: DataTableProps<TData, TValue>) {
+    const isColumnVisibilityControlled = externalColumnVisibility !== undefined;
+    const isPageControlled = externalPageIndex !== undefined;
+    const isRowInteractive = !!onRowClick || !!renderSubComponent;
 
-    // Load page size from localStorage
-    const getStoredPageSize = React.useCallback((): number => {
-        if (!tableKey) {
-            return initialPageSize;
-        }
+    const sortingKey = useMemo(() => getSortingStorageKey(), []);
+    const columnKey = useMemo(() => getColumnStorageKey(), []);
+    const pageKey = useMemo(() => getPageStorageKey(), []);
 
-        try {
-            const stored = localStorage.getItem(`table-page-size-${tableKey}`);
+    const [sorting, setSorting] = useState<SortingState>(() => loadSorting(sortingKey) ?? initialSorting);
+    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+    const [rowSelection, setRowSelection] = useState({});
+    const [expanded, setExpanded] = useState<ExpandedState>({});
 
-            if (stored) {
-                const parsed = Number.parseInt(stored, 10);
+    const [internalColumnVisibility, setInternalColumnVisibility] = useState<VisibilityState>(() =>
+        isColumnVisibilityControlled ? {} : (loadColumnVisibility(columnKey) ?? {}),
+    );
 
-                return Number.isNaN(parsed) ? initialPageSize : parsed;
-            }
-        } catch {
-            // Ignore localStorage errors
-        }
+    const [pagination, setPagination] = useState(() => {
+        const stored = loadPageState(pageKey);
 
-        return initialPageSize;
-    }, [tableKey, initialPageSize]);
-
-    const [sorting, setSorting] = React.useState<SortingState>([]);
-    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-    const [internalColumnVisibility, setInternalColumnVisibility] = React.useState<VisibilityState>({});
-    const [rowSelection, setRowSelection] = React.useState({});
-    const [expanded, setExpanded] = React.useState<ExpandedState>({});
-    const [pagination, setPagination] = React.useState({
-        pageIndex: pageIndex ?? 0,
-        pageSize: getStoredPageSize(),
+        return {
+            pageIndex: isPageControlled ? (externalPageIndex ?? 0) : (stored?.page ?? 0),
+            pageSize: stored?.pageSize ?? initialPageSize,
+        };
     });
 
+    useEffectAfterMount(() => {
+        saveSorting(sortingKey, sorting);
+    }, [sorting, sortingKey]);
+
+    useEffectAfterMount(() => {
+        if (!isColumnVisibilityControlled) {
+            saveColumnVisibility(columnKey, internalColumnVisibility);
+        }
+    }, [internalColumnVisibility, columnKey, isColumnVisibilityControlled]);
+
+    useEffectAfterMount(() => {
+        savePageState(pageKey, {
+            page: isPageControlled ? 0 : pagination.pageIndex,
+            pageSize: pagination.pageSize,
+        });
+    }, [pagination.pageIndex, pagination.pageSize, pageKey, isPageControlled]);
+
     const columnVisibility = externalColumnVisibility ?? internalColumnVisibility;
-    const handleColumnVisibilityChange = React.useCallback(
+
+    const handleColumnVisibilityChange = useCallback(
         (updaterOrValue: ((old: VisibilityState) => VisibilityState) | VisibilityState) => {
             if (onColumnVisibilityChange) {
                 const newValue =
@@ -116,33 +132,43 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
         [onColumnVisibilityChange, externalColumnVisibility],
     );
 
-    // Sync external pageIndex with internal state
-    React.useEffect(() => {
-        if (pageIndex !== undefined && pageIndex !== pagination.pageIndex) {
-            setPagination((prev) => ({ ...prev, pageIndex }));
+    const previousExternalPageIndexReference = useRef(externalPageIndex);
+    useEffectAfterMount(() => {
+        if (externalPageIndex !== undefined && externalPageIndex !== previousExternalPageIndexReference.current) {
+            previousExternalPageIndexReference.current = externalPageIndex;
+            setPagination((previous) => ({ ...previous, pageIndex: externalPageIndex }));
         }
-    }, [pageIndex, pagination.pageIndex]);
+    }, [externalPageIndex]);
 
-    // Save page size to localStorage when it changes
-    const handlePageSizeChange = React.useCallback(
-        (newPageSize: number) => {
-            setPagination(() => ({ pageIndex: 0, pageSize: newPageSize }));
+    const handlePageSizeChange = useCallback((newPageSize: number) => {
+        setPagination({ pageIndex: 0, pageSize: newPageSize });
+    }, []);
 
-            if (tableKey) {
-                try {
-                    localStorage.setItem(`table-page-size-${tableKey}`, String(newPageSize));
-                } catch {
-                    // Ignore localStorage errors
-                }
+    const paginationReference = useRef(pagination);
+    paginationReference.current = pagination;
+
+    const handlePaginationChange = useCallback(
+        (
+            updater:
+                | ((old: { pageIndex: number; pageSize: number }) => { pageIndex: number; pageSize: number })
+                | { pageIndex: number; pageSize: number },
+        ) => {
+            const current = paginationReference.current;
+            const newPagination = typeof updater === 'function' ? updater(current) : updater;
+            setPagination(newPagination);
+
+            if (onPageChange && newPagination.pageIndex !== current.pageIndex) {
+                onPageChange(newPagination.pageIndex);
             }
         },
-        [tableKey],
+        [onPageChange],
     );
 
     const table = useReactTable({
         autoResetPageIndex: false,
         columns,
         data,
+        enableSortingRemoval: true,
         getCoreRowModel: getCoreRowModel(),
         getExpandedRowModel: getExpandedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
@@ -151,14 +177,7 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: handleColumnVisibilityChange,
         onExpandedChange: setExpanded,
-        onPaginationChange: (updater) => {
-            const newPagination = typeof updater === 'function' ? updater(pagination) : updater;
-            setPagination(newPagination);
-
-            if (onPageChange && newPagination.pageIndex !== pagination.pageIndex) {
-                onPageChange(newPagination.pageIndex);
-            }
-        },
+        onPaginationChange: handlePaginationChange,
         onRowSelectionChange: setRowSelection,
         onSortingChange: setSorting,
         state: {
@@ -170,6 +189,23 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
             sorting,
         },
     });
+
+    const handleRowClick = useCallback(
+        (row: Row<TData>) => {
+            if (onRowClick) {
+                onRowClick(row.original);
+            } else {
+                row.toggleExpanded();
+            }
+        },
+        [onRowClick],
+    );
+
+    const pageSizeValue = pagination.pageSize >= data.length && data.length > 0 ? 'all' : String(pagination.pageSize);
+
+    const totalRows = table.getFilteredRowModel().rows.length;
+    const rangeStart = totalRows > 0 ? pagination.pageIndex * pagination.pageSize + 1 : 0;
+    const rangeEnd = Math.min((pagination.pageIndex + 1) * pagination.pageSize, totalRows);
 
     return (
         <div className="w-full">
@@ -195,19 +231,17 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
                         {table
                             .getAllColumns()
                             .filter((column) => column.getCanHide())
-                            .map((column) => {
-                                return (
-                                    <DropdownMenuCheckboxItem
-                                        checked={column.getIsVisible()}
-                                        className="capitalize"
-                                        key={column.id}
-                                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                                        onSelect={(e) => e.preventDefault()}
-                                    >
-                                        {column.id}
-                                    </DropdownMenuCheckboxItem>
-                                );
-                            })}
+                            .map((column) => (
+                                <DropdownMenuCheckboxItem
+                                    checked={column.getIsVisible()}
+                                    className="capitalize"
+                                    key={column.id}
+                                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                                    onSelect={(event) => event.preventDefault()}
+                                >
+                                    {column.id}
+                                </DropdownMenuCheckboxItem>
+                            ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -216,53 +250,46 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id}>
-                                {headerGroup.headers.map((header) => {
-                                    return (
-                                        <TableHead
-                                            className={header.column.columnDef.meta?.headerClassName}
-                                            key={header.id}
-                                            style={
-                                                header.column.columnDef.size
-                                                    ? {
-                                                          maxWidth: header.column.columnDef.size,
-                                                          minWidth: header.column.columnDef.size,
-                                                          width: header.column.columnDef.size,
-                                                      }
-                                                    : undefined
-                                            }
-                                        >
-                                            {header.isPlaceholder
-                                                ? null
-                                                : flexRender(header.column.columnDef.header, header.getContext())}
-                                        </TableHead>
-                                    );
-                                })}
+                                {headerGroup.headers.map((header) => (
+                                    <TableHead
+                                        className={header.column.columnDef.meta?.headerClassName}
+                                        key={header.id}
+                                        style={
+                                            header.column.columnDef.size
+                                                ? {
+                                                      maxWidth: header.column.columnDef.size,
+                                                      minWidth: header.column.columnDef.size,
+                                                      width: header.column.columnDef.size,
+                                                  }
+                                                : undefined
+                                        }
+                                    >
+                                        {header.isPlaceholder
+                                            ? null
+                                            : flexRender(header.column.columnDef.header, header.getContext())}
+                                    </TableHead>
+                                ))}
                             </TableRow>
                         ))}
                     </TableHeader>
                     <TableBody>
-                        {table.getRowModel().rows?.length ? (
-                            table.getRowModel().rows.map((row) => (
-                                <React.Fragment key={row.id}>
+                        {table.getRowModel().rows.length > 0 ? (
+                            table.getRowModel().rows.map((row) => {
+                                const contextMenuContent = renderRowContextMenu?.(row.original);
+
+                                const tableRow = (
                                     <TableRow
-                                        className="group hover:bg-muted/50 cursor-pointer"
+                                        className={cn('group hover:bg-muted/50', isRowInteractive && 'cursor-pointer')}
                                         data-state={row.getIsSelected() && 'selected'}
-                                        onClick={() => {
-                                            if (onRowClick) {
-                                                onRowClick(row.original);
-                                            } else {
-                                                row?.toggleExpanded();
-                                            }
-                                        }}
+                                        onClick={() => handleRowClick(row)}
                                     >
                                         {row.getVisibleCells().map((cell) => (
                                             <TableCell
                                                 className={cell.column.columnDef.meta?.cellClassName}
                                                 key={cell.id}
-                                                onClick={(e) => {
-                                                    // Prevent row click handler when clicking on action buttons
-                                                    if (cell.column.id === 'actions') {
-                                                        e.stopPropagation();
+                                                onClick={(event) => {
+                                                    if (cell.column.columnDef.meta?.preventRowClick) {
+                                                        event.stopPropagation();
                                                     }
                                                 }}
                                                 style={
@@ -279,18 +306,31 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
                                             </TableCell>
                                         ))}
                                     </TableRow>
-                                    {row.getIsExpanded() && renderSubComponent && (
-                                        <TableRow className="cursor-default border-0 hover:bg-transparent">
-                                            <TableCell
-                                                className="p-0"
-                                                colSpan={row.getVisibleCells().length}
-                                            >
-                                                {renderSubComponent({ row })}
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </React.Fragment>
-                            ))
+                                );
+
+                                return (
+                                    <Fragment key={row.id}>
+                                        {contextMenuContent ? (
+                                            <ContextMenu>
+                                                <ContextMenuTrigger asChild>{tableRow}</ContextMenuTrigger>
+                                                <ContextMenuContent>{contextMenuContent}</ContextMenuContent>
+                                            </ContextMenu>
+                                        ) : (
+                                            tableRow
+                                        )}
+                                        {row.getIsExpanded() && renderSubComponent && (
+                                            <TableRow className="cursor-default border-0 hover:bg-transparent">
+                                                <TableCell
+                                                    className="p-0"
+                                                    colSpan={row.getVisibleCells().length}
+                                                >
+                                                    {renderSubComponent({ row })}
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </Fragment>
+                                );
+                            })
                         ) : (
                             <TableRow>
                                 <TableCell
@@ -304,71 +344,84 @@ function DataTableInner<TData, TValue>(props: DataTableProps<TData, TValue>) {
                     </TableBody>
                 </Table>
             </div>
-            <div className="flex items-center justify-between gap-2 py-4">
-                <div className="text-muted-foreground flex-1 text-sm">
-                    {!!table.getFilteredSelectedRowModel().rows.length && (
+            <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4">
+                <div className="text-muted-foreground flex-1 text-xs text-nowrap">
+                    {totalRows > 0 ? (
                         <>
-                            {table.getFilteredSelectedRowModel().rows.length} of{' '}
-                            {table.getFilteredRowModel().rows.length} row(s) selected.
+                            Showing {rangeStart}–{rangeEnd} of {totalRows}
                         </>
+                    ) : (
+                        'No results'
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground text-sm">Rows per page:</span>
-                        <Select
-                            onValueChange={(value) => {
-                                const pageSize = value === 'all' ? data.length : Number.parseInt(value, 10);
-                                handlePageSizeChange(pageSize);
-                            }}
-                            value={
-                                pagination.pageSize >= data.length && data.length > 0
-                                    ? 'all'
-                                    : String(pagination.pageSize)
-                            }
+                    <span className="text-xs font-medium">Rows per page</span>
+                    <Select
+                        onValueChange={(value) => {
+                            const pageSize = value === 'all' ? data.length : Number.parseInt(value, 10);
+                            handlePageSizeChange(pageSize);
+                        }}
+                        value={pageSizeValue}
+                    >
+                        <SelectTrigger className="h-7 w-16 text-xs">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent
+                            className="min-w-16"
+                            side="top"
                         >
-                            <SelectTrigger className="h-8 w-[70px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {PAGE_SIZE_OPTIONS.map((size) => (
-                                    <SelectItem
-                                        key={size}
-                                        value={String(size)}
-                                    >
-                                        {size}
-                                    </SelectItem>
-                                ))}
-                                <SelectItem value="all">All</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {(table.getCanPreviousPage() || table.getCanNextPage()) && (
-                        <div className="flex gap-2">
-                            <Button
-                                disabled={!table.getCanPreviousPage()}
-                                onClick={() => table.previousPage()}
-                                size="sm"
-                                variant="outline"
-                            >
-                                Previous
-                            </Button>
-                            <Button
-                                disabled={!table.getCanNextPage()}
-                                onClick={() => table.nextPage()}
-                                size="sm"
-                                variant="outline"
-                            >
-                                Next
-                            </Button>
-                        </div>
-                    )}
+                            {PAGE_SIZE_OPTIONS.map((size) => (
+                                <SelectItem
+                                    key={size}
+                                    value={String(size)}
+                                >
+                                    {size}
+                                </SelectItem>
+                            ))}
+                            <SelectItem value="all">All</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex items-center justify-center text-xs font-medium lg:w-20">
+                    Page {pagination.pageIndex + 1} of {table.getPageCount()}
+                </div>
+                <div className="flex items-center gap-1">
+                    <Button
+                        disabled={!table.getCanPreviousPage()}
+                        onClick={() => table.firstPage()}
+                        size="icon-xs"
+                        variant="outline"
+                    >
+                        <ChevronsLeft />
+                    </Button>
+                    <Button
+                        disabled={!table.getCanPreviousPage()}
+                        onClick={() => table.previousPage()}
+                        size="icon-xs"
+                        variant="outline"
+                    >
+                        <ChevronLeft />
+                    </Button>
+                    <Button
+                        disabled={!table.getCanNextPage()}
+                        onClick={() => table.nextPage()}
+                        size="icon-xs"
+                        variant="outline"
+                    >
+                        <ChevronRight />
+                    </Button>
+                    <Button
+                        disabled={!table.getCanNextPage()}
+                        onClick={() => table.lastPage()}
+                        size="icon-xs"
+                        variant="outline"
+                    >
+                        <ChevronsRight />
+                    </Button>
                 </div>
             </div>
         </div>
     );
 }
-
-const DataTable = DataTableInner as <TData, TValue = never>(props: DataTableProps<TData, TValue>) => React.ReactElement;
 
 export { DataTable };

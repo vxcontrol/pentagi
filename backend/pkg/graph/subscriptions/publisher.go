@@ -131,3 +131,15 @@ func (p *flowPublisher) APITokenDeleted(ctx context.Context, apiToken database.A
 func (p *flowPublisher) SettingsUserUpdated(ctx context.Context, userPreferences database.UserPreference) {
 	p.ctrl.settingsUserUpdated.Publish(ctx, p.userID, converter.ConvertUserPreferences(userPreferences))
 }
+
+func (p *flowPublisher) FlowTemplateCreated(ctx context.Context, template database.FlowTemplate) {
+	p.ctrl.flowTemplateCreated.Publish(ctx, p.userID, converter.ConvertFlowTemplate(template))
+}
+
+func (p *flowPublisher) FlowTemplateUpdated(ctx context.Context, template database.FlowTemplate) {
+	p.ctrl.flowTemplateUpdated.Publish(ctx, p.userID, converter.ConvertFlowTemplate(template))
+}
+
+func (p *flowPublisher) FlowTemplateDeleted(ctx context.Context, template database.FlowTemplate) {
+	p.ctrl.flowTemplateDeleted.Publish(ctx, p.userID, converter.ConvertFlowTemplate(template))
+}

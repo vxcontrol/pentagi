@@ -169,6 +169,27 @@ type UserPreferences {
   favoriteFlows: [ID!]!
 }
 
+# ==================== Flow Template Types ====================
+
+type FlowTemplate {
+  id: ID!
+  userId: ID!
+  title: String!
+  text: String!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
+input CreateFlowTemplateInput {
+  title: String!
+  text: String!
+}
+
+input UpdateFlowTemplateInput {
+  title: String!
+  text: String!
+}
+
 # ==================== Flow Management Types ====================
 
 type Terminal {
@@ -826,6 +847,10 @@ type Query {
   # API Tokens management
   apiToken(tokenId: String!): APIToken
   apiTokens: [APIToken!]!
+
+  # Flow Templates management
+  flowTemplate(templateId: ID!): FlowTemplate
+  flowTemplates: [FlowTemplate!]!
 }
 
 type Mutation {
@@ -864,6 +889,11 @@ type Mutation {
   # User preferences management
   addFavoriteFlow(flowId: ID!): ResultType!
   deleteFavoriteFlow(flowId: ID!): ResultType!
+
+  # Flow Templates management
+  createFlowTemplate(input: CreateFlowTemplateInput!): FlowTemplate!
+  updateFlowTemplate(templateId: ID!, input: UpdateFlowTemplateInput!): FlowTemplate!
+  deleteFlowTemplate(templateId: ID!): ResultType!
 }
 
 type Subscription {
@@ -902,4 +932,9 @@ type Subscription {
 
   # User preferences events
   settingsUserUpdated: UserPreferences!
+
+  # Flow template events
+  flowTemplateCreated: FlowTemplate!
+  flowTemplateUpdated: FlowTemplate!
+  flowTemplateDeleted: FlowTemplate!
 }

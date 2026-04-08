@@ -183,7 +183,7 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
                                                     toggleSubtaskSelection(subtask.id);
                                                 }}
                                             >
-                                                <div className="flex-1 truncate text-sm text-muted-foreground">
+                                                <div className="text-muted-foreground flex-1 truncate text-sm">
                                                     {subtask.title}
                                                 </div>
                                                 <Check
@@ -198,7 +198,7 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
                             ))
                         ) : (
                             <CommandItem
-                                className="justify-center py-6 text-center text-muted-foreground"
+                                className="text-muted-foreground justify-center py-6 text-center"
                                 disabled
                             >
                                 No available tasks

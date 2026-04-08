@@ -24,6 +24,7 @@ import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable } from '@/components/ui/data-table';
 import {
     DropdownMenu,
@@ -34,8 +35,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
 import { useDeletePromptMutation, useSettingsPromptsQuery } from '@/graphql/types';
-import { useAdaptiveColumnVisibility } from '@/hooks/use-adaptive-column-visibility';
-
 // Types for table data
 type AgentPromptTableData = {
     displayName: string; // Formatted display name
@@ -79,24 +78,6 @@ const SettingsPrompts = () => {
         type: 'all' | 'human' | 'system' | 'tool';
     }>(null);
 
-    const { columnVisibility: agentColumnVisibility, updateColumnVisibility: updateAgentColumnVisibility } =
-        useAdaptiveColumnVisibility({
-            columns: [
-                { alwaysVisible: true, id: 'displayName', priority: 0 },
-                { id: 'systemStatus', priority: 1 },
-                { id: 'humanStatus', priority: 2 },
-            ],
-            tableKey: 'prompts-agents',
-        });
-
-    const { columnVisibility: toolColumnVisibility, updateColumnVisibility: updateToolColumnVisibility } =
-        useAdaptiveColumnVisibility({
-            columns: [
-                { alwaysVisible: true, id: 'displayName', priority: 0 },
-                { id: 'status', priority: 1 },
-            ],
-            tableKey: 'prompts-tools',
-        });
 
     // Three-way sorting handler: null -> asc -> desc -> null
     const handleColumnSort = (column: {
@@ -514,6 +495,7 @@ const SettingsPrompts = () => {
             enableHiding: false,
             header: () => null,
             id: 'actions',
+            meta: { preventRowClick: true },
             size: 48,
         },
     ];
@@ -621,6 +603,7 @@ const SettingsPrompts = () => {
             enableHiding: false,
             header: () => null,
             id: 'actions',
+            meta: { preventRowClick: true },
             size: 48,
         },
     ];
@@ -717,6 +700,99 @@ const SettingsPrompts = () => {
         );
     };
 
+    const renderAgentRowContextMenu = (agent: AgentPromptTableData) => {
+        const hasResetOptions =
+            canResetPrompt(agent.name, 'system') ||
+            canResetPrompt(agent.name, 'human') ||
+            canResetPrompt(agent.name, 'all');
+
+        return (
+            <>
+                <ContextMenuItem onClick={() => handlePromptEdit(agent.name)}>
+                    <Pencil className="size-3" />
+                    Edit
+                </ContextMenuItem>
+                {hasResetOptions && <ContextMenuSeparator />}
+                {canResetPrompt(agent.name, 'system') && (
+                    <ContextMenuItem
+                        disabled={
+                            isDeleteLoading &&
+                            resetOperation?.promptName === agent.name &&
+                            resetOperation?.type === 'system'
+                        }
+                        onClick={() => handleResetDialogOpen('system', agent.name, agent.displayName)}
+                    >
+                        <RotateCcw className="size-3" />
+                        {isDeleteLoading &&
+                        resetOperation?.promptName === agent.name &&
+                        resetOperation?.type === 'system'
+                            ? 'Resetting...'
+                            : 'Reset System'}
+                    </ContextMenuItem>
+                )}
+                {agent.hasHuman && canResetPrompt(agent.name, 'human') && (
+                    <ContextMenuItem
+                        disabled={
+                            isDeleteLoading &&
+                            resetOperation?.promptName === agent.name &&
+                            resetOperation?.type === 'human'
+                        }
+                        onClick={() => handleResetDialogOpen('human', agent.name, agent.displayName)}
+                    >
+                        <RotateCcw className="size-3" />
+                        {isDeleteLoading &&
+                        resetOperation?.promptName === agent.name &&
+                        resetOperation?.type === 'human'
+                            ? 'Resetting...'
+                            : 'Reset Human'}
+                    </ContextMenuItem>
+                )}
+                {canResetPrompt(agent.name, 'all') && (
+                    <ContextMenuItem
+                        disabled={
+                            isDeleteLoading &&
+                            resetOperation?.promptName === agent.name &&
+                            resetOperation?.type === 'all'
+                        }
+                        onClick={() => handleResetDialogOpen('all', agent.name, agent.displayName)}
+                    >
+                        <Trash2 className="size-3" />
+                        {isDeleteLoading && resetOperation?.promptName === agent.name && resetOperation?.type === 'all'
+                            ? 'Resetting...'
+                            : 'Reset All'}
+                    </ContextMenuItem>
+                )}
+            </>
+        );
+    };
+
+    const renderToolRowContextMenu = (tool: ToolPromptTableData) => (
+        <>
+            <ContextMenuItem onClick={() => handlePromptEdit(tool.name)}>
+                <Pencil />
+                Edit
+            </ContextMenuItem>
+            {canResetPrompt(tool.name, 'tool') && (
+                <>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                        disabled={
+                            isDeleteLoading &&
+                            resetOperation?.promptName === tool.name &&
+                            resetOperation?.type === 'tool'
+                        }
+                        onClick={() => handleResetDialogOpen('tool', tool.name, tool.displayName)}
+                    >
+                        <RotateCcw />
+                        {isDeleteLoading && resetOperation?.promptName === tool.name && resetOperation?.type === 'tool'
+                            ? 'Resetting...'
+                            : 'Reset'}
+                    </ContextMenuItem>
+                </>
+            )}
+        </>
+    );
+
     if (isLoading) {
         return (
             <div className="flex flex-col gap-4">
@@ -775,20 +851,12 @@ const SettingsPrompts = () => {
                         <p className="text-muted-foreground text-sm">System and human prompts for AI agents</p>
                         <DataTable<AgentPromptTableData>
                             columns={agentColumns}
-                            columnVisibility={agentColumnVisibility}
                             data={agentPrompts}
                             filterColumn="displayName"
                             filterPlaceholder="Filter agent names..."
                             initialPageSize={1000}
-                            onColumnVisibilityChange={(visibility) => {
-                                Object.entries(visibility).forEach(([columnId, isVisible]) => {
-                                    if (agentColumnVisibility[columnId] !== isVisible) {
-                                        updateAgentColumnVisibility(columnId, isVisible);
-                                    }
-                                });
-                            }}
+                            renderRowContextMenu={renderAgentRowContextMenu}
                             renderSubComponent={renderAgentSubComponent}
-                            tableKey="prompts-agents"
                         />
                     </div>
                 )}
@@ -804,20 +872,12 @@ const SettingsPrompts = () => {
                         <p className="text-muted-foreground text-sm">Prompt templates for system tools and utilities</p>
                         <DataTable<ToolPromptTableData>
                             columns={toolColumns}
-                            columnVisibility={toolColumnVisibility}
                             data={toolPrompts}
                             filterColumn="displayName"
                             filterPlaceholder="Filter tool names..."
                             initialPageSize={1000}
-                            onColumnVisibilityChange={(visibility) => {
-                                Object.entries(visibility).forEach(([columnId, isVisible]) => {
-                                    if (toolColumnVisibility[columnId] !== isVisible) {
-                                        updateToolColumnVisibility(columnId, isVisible);
-                                    }
-                                });
-                            }}
+                            renderRowContextMenu={renderToolRowContextMenu}
                             renderSubComponent={renderToolSubComponent}
-                            tableKey="prompts-tools"
                         />
                     </div>
                 )}

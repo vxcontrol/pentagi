@@ -142,6 +142,11 @@ type CreateAPITokenInput struct {
 	TTL  int     `json:"ttl"`
 }
 
+type CreateFlowTemplateInput struct {
+	Title string `json:"title"`
+	Text  string `json:"text"`
+}
+
 type DailyFlowsStats struct {
 	Date  time.Time   `json:"date"`
 	Stats *FlowsStats `json:"stats"`
@@ -209,6 +214,15 @@ type FlowStats struct {
 	TotalTasksCount      int `json:"totalTasksCount"`
 	TotalSubtasksCount   int `json:"totalSubtasksCount"`
 	TotalAssistantsCount int `json:"totalAssistantsCount"`
+}
+
+type FlowTemplate struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"userId"`
+	Title     string    `json:"title"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type FlowsStats struct {
@@ -476,6 +490,11 @@ type ToolsPrompts struct {
 type UpdateAPITokenInput struct {
 	Name   *string      `json:"name,omitempty"`
 	Status *TokenStatus `json:"status,omitempty"`
+}
+
+type UpdateFlowTemplateInput struct {
+	Title string `json:"title"`
+	Text  string `json:"text"`
 }
 
 type UsageStats struct {
