@@ -10,6 +10,7 @@ import (
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers/embeddings"
+	"pentagi/pkg/sage"
 	"pentagi/pkg/schema"
 
 	"github.com/docker/docker/api/types/container"
@@ -144,6 +145,7 @@ type flowToolsExecutor struct {
 	cfg            *config.Config
 	store          *pgvector.Store
 	graphitiClient *graphiti.Client
+	sageClient     *sage.Client
 	image          string
 	docker         docker.DockerClient
 	primaryID      int64
@@ -286,6 +288,7 @@ type FlowToolsExecutor interface {
 	SetTermLogProvider(tlp TermLogProvider)
 	SetVectorStoreLogProvider(vslp VectorStoreLogProvider)
 	SetGraphitiClient(client *graphiti.Client)
+	SetSageClient(client *sage.Client)
 
 	Prepare(ctx context.Context) error
 	Release(ctx context.Context) error
@@ -392,6 +395,10 @@ func (fte *flowToolsExecutor) SetVectorStoreLogProvider(vslp VectorStoreLogProvi
 
 func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
 	fte.graphitiClient = client
+}
+
+func (fte *flowToolsExecutor) SetSageClient(client *sage.Client) {
+	fte.sageClient = client
 }
 
 func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
@@ -952,6 +959,14 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
+	sageTool := NewSageSearchTool(fte.flowID, cfg.TaskID, cfg.SubtaskID, fte.sageClient)
+	if sageTool.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[SageRecallToolName])
+		ce.definitions = append(ce.definitions, registryDefinitions[SageRememberToolName])
+		ce.handlers[SageRecallToolName] = sageTool.Handle
+		ce.handlers[SageRememberToolName] = sageTool.Handle
+	}
+
 	return ce, nil
 }
 
@@ -1067,6 +1082,14 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 	if graphitiSearch.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
 		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
+	}
+
+	sageTool := NewSageSearchTool(fte.flowID, cfg.TaskID, cfg.SubtaskID, fte.sageClient)
+	if sageTool.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[SageRecallToolName])
+		ce.definitions = append(ce.definitions, registryDefinitions[SageRememberToolName])
+		ce.handlers[SageRecallToolName] = sageTool.Handle
+		ce.handlers[SageRememberToolName] = sageTool.Handle
 	}
 
 	sploitus := NewSploitusTool(
@@ -1429,6 +1452,14 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
+	sageTool := NewSageSearchTool(fte.flowID, cfg.TaskID, cfg.SubtaskID, fte.sageClient)
+	if sageTool.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[SageRecallToolName])
+		ce.definitions = append(ce.definitions, registryDefinitions[SageRememberToolName])
+		ce.handlers[SageRecallToolName] = sageTool.Handle
+		ce.handlers[SageRememberToolName] = sageTool.Handle
+	}
+
 	return ce, nil
 }
 
@@ -1495,6 +1526,14 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 	if graphitiSearch.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
 		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
+	}
+
+	sageTool := NewSageSearchTool(fte.flowID, cfg.TaskID, cfg.SubtaskID, fte.sageClient)
+	if sageTool.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[SageRecallToolName])
+		ce.definitions = append(ce.definitions, registryDefinitions[SageRememberToolName])
+		ce.handlers[SageRecallToolName] = sageTool.Handle
+		ce.handlers[SageRememberToolName] = sageTool.Handle
 	}
 
 	browser := NewBrowserTool(

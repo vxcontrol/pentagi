@@ -222,6 +222,13 @@ type Config struct {
 
 	// === Agent Planning Phase Configuration ===
 	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
+
+	// === SAGE Persistent Memory System ===
+	SAGEEnabled bool   `env:"SAGE_ENABLED" envDefault:"false"`
+	SAGETimeout int    `env:"SAGE_TIMEOUT" envDefault:"30"`
+	SAGEURL     string `env:"SAGE_URL"`
+	SAGEKeyPath string `env:"SAGE_KEY_PATH" envDefault:""`
+	SAGEBotName string `env:"SAGE_BOT_NAME" envDefault:"pentagi"`
 }
 
 func NewConfig() (*Config, error) {
@@ -322,6 +329,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.ProxyURL, "Proxy URL"},
 		{c.LangfusePublicKey, "Langfuse Public Key"},
 		{c.LangfuseSecretKey, "Langfuse Secret Key"},
+		// SAGEKeyPath is a file path, not a secret — omitted from patterns.
 	}
 
 	for _, s := range secrets {

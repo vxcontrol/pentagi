@@ -44,6 +44,8 @@ const (
 	SubtaskPatchToolName      = "subtask_patch"
 	TerminalToolName          = "terminal"
 	FileToolName              = "file"
+	SageRecallToolName        = "sage_recall"
+	SageRememberToolName      = "sage_remember"
 )
 
 type ToolType int
@@ -119,6 +121,8 @@ var toolsTypeMapping = map[string]ToolType{
 	SearchCodeToolName:        SearchVectorDbToolType,
 	StoreCodeToolName:         StoreVectorDbToolType,
 	GraphitiSearchToolName:    SearchVectorDbToolType,
+	SageRecallToolName:        SearchVectorDbToolType,
+	SageRememberToolName:      StoreVectorDbToolType,
 	ReportResultToolName:      StoreAgentResultToolType,
 	SubtaskListToolName:       StoreAgentResultToolType,
 	SubtaskPatchToolName:      StoreAgentResultToolType,
@@ -317,6 +321,24 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"and build on previous findings within the same penetration testing engagement.",
 		Parameters: reflector.Reflect(&GraphitiSearchAction{}),
 	},
+	SageRecallToolName: {
+		Name: SageRecallToolName,
+		Description: "Search SAGE persistent memory for cross-session knowledge from past penetration testing engagements. " +
+			"SAGE memories are consensus-validated, have confidence scores, and persist across sessions. " +
+			"Use this to recall: successful exploitation techniques, reconnaissance patterns, tool usage tips, " +
+			"vulnerability findings from previous engagements, and lessons learned. " +
+			"Unlike in-session memory (search_in_memory), SAGE provides institutional knowledge that survives between tasks and flows.",
+		Parameters: reflector.Reflect(&SageRecallAction{}),
+	},
+	SageRememberToolName: {
+		Name: SageRememberToolName,
+		Description: "Store important knowledge, patterns, or findings in SAGE persistent memory for future recall across sessions. " +
+			"SAGE memories go through consensus validation and have confidence scores that decay over time. " +
+			"Store: successful techniques that should be reused, vulnerability patterns worth remembering, " +
+			"tool configurations that worked, lessons learned from failed approaches, and reconnaissance findings. " +
+			"Anonymize all sensitive data (IPs, domains, credentials) using descriptive placeholders before storing.",
+		Parameters: reflector.Reflect(&SageRememberAction{}),
+	},
 	MemoristToolName: {
 		Name:        MemoristToolName,
 		Description: "Call to Archivist team member who remember all the information about the past work and made tasks and can answer your question about it",
@@ -384,7 +406,8 @@ func getMessageType(name string) database.MsglogType {
 		return database.MsglogTypeBrowser
 	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, TraversaalToolName,
 		PerplexityToolName, SearxngToolName, SploitusToolName,
-		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName:
+		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName,
+		SageRecallToolName, SageRememberToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:
 		return database.MsglogTypeAdvice
