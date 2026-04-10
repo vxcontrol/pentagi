@@ -323,3 +323,21 @@ func (i *Int64) String() string {
 	}
 	return strconv.FormatInt(int64(*i), 10)
 }
+
+// SageRecallAction is the action for searching SAGE persistent memory
+type SageRecallAction struct {
+	Query         string `json:"query" jsonschema:"required" jsonschema_description:"Natural language query describing what knowledge you need from past penetration testing engagements. Be specific about the target type, vulnerability class, technique, or tool you want to recall in English"`
+	Domain        string `json:"domain,omitempty" jsonschema:"enum=pentest-recon,enum=pentest-exploit,enum=pentest-tools,enum=pentest-findings,enum=pentest-general" jsonschema_description:"Optional domain filter to narrow search scope. Use 'pentest-recon' for reconnaissance patterns, 'pentest-exploit' for exploitation techniques, 'pentest-tools' for tool usage guides, 'pentest-findings' for vulnerability findings, 'pentest-general' for general knowledge"`
+	MinConfidence float64 `json:"min_confidence,omitempty" jsonschema:"type=number" jsonschema_description:"Minimum confidence threshold (0.0 to 1.0). Higher values return only well-validated knowledge. Default: 0.6"`
+	MaxResults    *Int64  `json:"max_results,omitempty" jsonschema:"title=Maximum Results,type=integer" jsonschema_description:"Maximum number of results to return (default: 5, max: 10)"`
+	Message       string  `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Not so long message with the summary of what knowledge you're looking for to send to the user in user's language only"`
+}
+
+// SageRememberAction is the action for storing knowledge in SAGE persistent memory
+type SageRememberAction struct {
+	Content    string  `json:"content" jsonschema:"required" jsonschema_description:"The knowledge, pattern, technique, or finding to store for future recall. Write in clear, descriptive natural language. Include context about when this is useful. Anonymize sensitive data (IPs, domains, credentials) using descriptive placeholders in English"`
+	MemoryType string  `json:"memory_type" jsonschema:"required,enum=fact,enum=observation,enum=inference" jsonschema_description:"Type of knowledge: 'fact' for verified truths (confirmed vulnerabilities, working exploits, architecture details), 'observation' for patterns noticed (behavior, responses, timing), 'inference' for conclusions drawn (hypotheses, connections between findings)"`
+	Domain     string  `json:"domain" jsonschema:"required,enum=pentest-recon,enum=pentest-exploit,enum=pentest-tools,enum=pentest-findings,enum=pentest-general" jsonschema_description:"Knowledge domain for organizing memories. Use 'pentest-recon' for reconnaissance, 'pentest-exploit' for exploitation, 'pentest-tools' for tool guides, 'pentest-findings' for findings, 'pentest-general' for general"`
+	Confidence float64 `json:"confidence" jsonschema:"required,type=number" jsonschema_description:"How confident you are in this knowledge (0.0 to 1.0). Use 0.95+ for verified facts, 0.80+ for strong observations, 0.60+ for reasonable inferences"`
+	Message    string  `json:"message" jsonschema:"required,title=Store message" jsonschema_description:"Not so long message with the summary of what knowledge is being stored to send to the user in user's language only"`
+}

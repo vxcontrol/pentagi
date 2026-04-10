@@ -617,6 +617,39 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		resultObj = builder.String()
 
+	case tools.SageRecallToolName:
+		var recallArgs tools.SageRecallAction
+		if err := json.Unmarshal(args, &recallArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling sage recall arguments: %w", err)
+		}
+
+		terminal.PrintMock("SAGE Recall:")
+		terminal.PrintKeyValue("Query", recallArgs.Query)
+		terminal.PrintKeyValue("Domain", recallArgs.Domain)
+
+		var builder strings.Builder
+		builder.WriteString("# SAGE Cross-Session Memory Results\n\n")
+		builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", recallArgs.Query))
+		builder.WriteString("## Memory 1 (confidence: 0.85, type: lesson)\n")
+		builder.WriteString("**Domain:** general\n")
+		builder.WriteString("**Stored:** 2025-01-19T14:00:00Z\n\n")
+		builder.WriteString("Mock cross-session memory: Always verify target scope before scanning.\n")
+		builder.WriteString("---------------------------\n")
+		resultObj = builder.String()
+
+	case tools.SageRememberToolName:
+		var rememberArgs tools.SageRememberAction
+		if err := json.Unmarshal(args, &rememberArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling sage remember arguments: %w", err)
+		}
+
+		terminal.PrintMock("SAGE Remember:")
+		terminal.PrintKeyValue("Domain", rememberArgs.Domain)
+		terminal.PrintKeyValue("Memory Type", rememberArgs.MemoryType)
+		terminal.PrintKeyValueFormat("Content length", "%d chars", len(rememberArgs.Content))
+
+		resultObj = "# SAGE Memory Stored\n\nKnowledge successfully submitted to SAGE persistent memory.\n**Memory ID:** mock-memory-id-123\n**Status:** Submitted for BFT consensus\n"
+
 	default:
 		terminal.PrintMock("Generic mock response:")
 		terminal.PrintKeyValue("Function", funcName)

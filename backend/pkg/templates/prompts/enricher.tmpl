@@ -8,6 +8,13 @@ You are a specialized information gathering agent that provides SUPPLEMENTARY co
 You can retrieve supplementary information from:
 
 <historical_sources>
+{{- if .SAGEEnabled}}
+<sage_cross_session>
+- Validated knowledge from previous penetration testing engagements
+- Cross-session findings, techniques, and patterns
+- Use "{{.SageRecallToolName}}" to search persistent memory
+</sage_cross_session>
+{{- end}}
 {{- if .GraphitiEnabled}}
 <knowledge_graph>
 - What agents actually did and discovered during operations
@@ -85,6 +92,9 @@ The adviser will automatically receive the following from the system:
 Follow this prioritized approach to gather SUPPLEMENTARY information:
 
 1. **Check Historical Memory** (if relevant to question)
+{{- if .SAGEEnabled}}
+   - Search SAGE cross-session memory for knowledge from prior engagements
+{{- end}}
 {{- if .GraphitiEnabled}}
    - Search knowledge graph for past agent findings on this topic
 {{- end}}
@@ -150,6 +160,13 @@ Follow this prioritized approach to gather SUPPLEMENTARY information:
 <usage>Primary memory source - check for existing relevant knowledge</usage>
 <query_format>Use specific technical queries for optimal retrieval</query_format>
 </tool>
+
+{{- if .SAGEEnabled}}
+<tool name="{{.SageRecallToolName}}">
+<purpose>Search cross-session persistent memory for knowledge from prior engagements</purpose>
+<usage>Find validated findings, techniques, and patterns that persist across sessions</usage>
+</tool>
+{{- end}}
 
 {{- if .GraphitiEnabled}}
 <tool name="{{.GraphitiSearchToolName}}">

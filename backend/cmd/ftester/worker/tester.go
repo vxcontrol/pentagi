@@ -82,12 +82,14 @@ func NewTester(
 	flowExecutor.SetTermLogProvider(proxies.GetTermLogProvider())
 	flowExecutor.SetVectorStoreLogProvider(proxies.GetVectorStoreLogProvider())
 	flowExecutor.SetGraphitiClient(providerController.GraphitiClient())
+	flowExecutor.SetSageClient(providerController.SageClient())
 
 	// Initialize tool executor
 	toolExecutor, err := newToolExecutor(
 		flowExecutor, cfg, db, dockerClient, nil, proxies,
 		flowID, taskID, subtaskID, providerController.Embedder(),
 		providerController.GraphitiClient(),
+		providerController.SageClient(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool executor: %w", err)

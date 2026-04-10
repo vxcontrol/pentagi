@@ -13,6 +13,7 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
+	"pentagi/pkg/sage"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/pconfig"
@@ -130,6 +131,7 @@ type flowProvider struct {
 
 	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
+	sageClient     *sage.Client
 
 	flowID        int64
 	publicIP      string
