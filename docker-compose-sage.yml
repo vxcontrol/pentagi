@@ -1,0 +1,87 @@
+volumes:
+  sage-data:
+    driver: local
+  sage-ollama-data:
+    driver: local
+
+networks:
+  pentagi-network:
+    driver: bridge
+    external: true
+    name: pentagi-network
+
+services:
+  sage:
+    image: ghcr.io/l33tdawg/sage:latest
+    restart: unless-stopped
+    container_name: sage
+    hostname: sage
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      sage-ollama-init:
+        condition: service_completed_successfully
+    expose:
+      - 8080/tcp
+    ports:
+      - ${SAGE_LISTEN_IP:-127.0.0.1}:${SAGE_LISTEN_PORT:-9000}:8080
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - sage-data:/root/.sage/data
+    environment:
+      - REST_ADDR=0.0.0.0:8080
+      - SAGE_EMBEDDING_PROVIDER=ollama
+      - OLLAMA_URL=http://sage-ollama:11434
+      - OLLAMA_MODEL=${SAGE_OLLAMA_MODEL:-nomic-embed-text}
+    networks:
+      - pentagi-network
+
+  sage-ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    container_name: sage-ollama
+    hostname: sage-ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    expose:
+      - 11434/tcp
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - sage-ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - pentagi-network
+
+  sage-ollama-init:
+    image: ollama/ollama:latest
+    container_name: sage-ollama-init
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for Ollama to be ready...' &&
+        until ollama list 2>/dev/null; do sleep 2; done &&
+        echo 'Pulling embedding model...' &&
+        ollama pull ${SAGE_OLLAMA_MODEL:-nomic-embed-text} &&
+        echo 'Model ready!'
+      "
+    environment:
+      - OLLAMA_HOST=sage-ollama:11434
+    depends_on:
+      sage-ollama:
+        condition: service_healthy
+    networks:
+      - pentagi-network

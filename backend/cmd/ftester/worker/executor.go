@@ -12,6 +12,7 @@ import (
 	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/embeddings"
+	"pentagi/pkg/sage"
 	"pentagi/pkg/terminal"
 	"pentagi/pkg/tools"
 
@@ -46,6 +47,7 @@ type toolExecutor struct {
 	handlers       providers.FlowProviderHandlers
 	store          *pgvector.Store
 	graphitiClient *graphiti.Client
+	sageClient     *sage.Client
 	proxies        mocks.ProxyProviders
 	flowID         int64
 	taskID         *int64
@@ -64,6 +66,7 @@ func newToolExecutor(
 	taskID, subtaskID *int64,
 	embedder embeddings.Embedder,
 	graphitiClient *graphiti.Client,
+	sageClient *sage.Client,
 ) (*toolExecutor, error) {
 	var store *pgvector.Store
 	if embedder.IsAvailable() {
@@ -101,6 +104,7 @@ func newToolExecutor(
 		handlers:       handlers,
 		store:          store,
 		graphitiClient: graphitiClient,
+		sageClient:     sageClient,
 		proxies:        proxies,
 		flowID:         flowID,
 		taskID:         taskID,
@@ -269,6 +273,14 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.taskID,
 			te.subtaskID,
 			te.graphitiClient,
+		), nil
+
+	case tools.SageRecallToolName, tools.SageRememberToolName:
+		return tools.NewSageSearchTool(
+			te.flowID,
+			te.taskID,
+			te.subtaskID,
+			te.sageClient,
 		), nil
 
 	// AI Agent tools

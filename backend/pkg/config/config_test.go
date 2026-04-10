@@ -313,6 +313,7 @@ func clearConfigEnv(t *testing.T) {
 		"EXECUTION_MONITOR_ENABLED", "EXECUTION_MONITOR_SAME_TOOL_LIMIT", "EXECUTION_MONITOR_TOTAL_TOOL_LIMIT",
 		"MAX_GENERAL_AGENT_TOOL_CALLS", "MAX_LIMITED_AGENT_TOOL_CALLS",
 		"AGENT_PLANNING_STEP_ENABLED",
+		"SAGE_ENABLED", "SAGE_TIMEOUT", "SAGE_URL", "SAGE_KEY_PATH", "SAGE_BOT_NAME",
 	}
 	for _, v := range envVars {
 		t.Setenv(v, "")
@@ -583,4 +584,56 @@ func TestNewConfig_AgentSupervisionOverride(t *testing.T) {
 	assert.Equal(t, 150, config.MaxGeneralAgentToolCalls)
 	assert.Equal(t, 30, config.MaxLimitedAgentToolCalls)
 	assert.Equal(t, true, config.AgentPlanningStepEnabled)
+}
+
+// --- SAGE config tests ---
+
+func TestSAGEConfigDefaults(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
+	config, err := NewConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, false, config.SAGEEnabled)
+	assert.Equal(t, 30, config.SAGETimeout)
+	assert.Equal(t, "", config.SAGEURL)
+	assert.Equal(t, "", config.SAGEKeyPath)
+	assert.Equal(t, "pentagi", config.SAGEBotName)
+}
+
+func TestSAGEConfigFromEnv(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
+	t.Setenv("SAGE_ENABLED", "true")
+	t.Setenv("SAGE_URL", "http://sage:8080")
+	t.Setenv("SAGE_KEY_PATH", "/tmp/test.key")
+	t.Setenv("SAGE_BOT_NAME", "mybot")
+	t.Setenv("SAGE_TIMEOUT", "60")
+
+	config, err := NewConfig()
+	require.NoError(t, err)
+
+	assert.Equal(t, true, config.SAGEEnabled)
+	assert.Equal(t, "http://sage:8080", config.SAGEURL)
+	assert.Equal(t, "/tmp/test.key", config.SAGEKeyPath)
+	assert.Equal(t, "mybot", config.SAGEBotName)
+	assert.Equal(t, 60, config.SAGETimeout)
+}
+
+func TestSAGEKeyPathNotInSecretPatterns(t *testing.T) {
+	cfg := &Config{
+		SAGEKeyPath: "/some/path/to/agent.key",
+		SAGEBotName: "pentagi",
+		SAGEURL:     "http://sage:8080",
+	}
+
+	patterns := cfg.GetSecretPatterns()
+
+	for _, p := range patterns {
+		if p.Name == "SAGE" || p.Name == "SAGE Key Path" || p.Name == "SAGEKeyPath" {
+			t.Errorf("SAGEKeyPath should not appear in secret patterns, found pattern named %q", p.Name)
+		}
+	}
 }

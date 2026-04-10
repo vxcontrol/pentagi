@@ -306,6 +306,8 @@ func getStructTypeForFunction(funcName string) (reflect.Type, error) {
 		tools.SearchCodeToolName:        &tools.SearchCodeAction{},
 		tools.StoreCodeToolName:         &tools.StoreCodeAction{},
 		tools.GraphitiSearchToolName:    &tools.GraphitiSearchAction{},
+		tools.SageRecallToolName:        &tools.SageRecallAction{},
+		tools.SageRememberToolName:      &tools.SageRememberAction{},
 		tools.SearchToolName:            &tools.ComplexSearch{},
 		tools.MaintenanceToolName:       &tools.MaintenanceAction{},
 		tools.CoderToolName:             &tools.CoderAction{},
