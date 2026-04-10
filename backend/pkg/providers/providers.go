@@ -19,6 +19,7 @@ import (
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
+	"pentagi/pkg/sage"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/custom"
@@ -85,6 +86,7 @@ type ProviderController interface {
 
 	Embedder() embeddings.Embedder
 	GraphitiClient() *graphiti.Client
+	SageClient() *sage.Client
 	DefaultProviders() provider.Providers
 	DefaultProvidersConfig() provider.ProvidersConfig
 	GetProvider(
@@ -139,6 +141,7 @@ type providerController struct {
 	dockerNetwork  string
 	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
+	sageClient     *sage.Client
 
 	startCallNumber *atomic.Int64
 
@@ -354,6 +357,19 @@ func NewProviderController(
 		graphitiClient = &graphiti.Client{}
 	}
 
+	var sageClient *sage.Client
+	sageClient, err = sage.NewClient(
+		cfg.SAGEURL,
+		cfg.SAGEKeyPath,
+		cfg.SAGEBotName,
+		time.Duration(cfg.SAGETimeout)*time.Second,
+		cfg.SAGEEnabled && cfg.SAGEURL != "",
+	)
+	if err != nil {
+		logrus.WithError(err).Warn("failed to initialize SAGE client, continuing without persistent memory")
+		sageClient = nil
+	}
+
 	return &providerController{
 		db:             db,
 		cfg:            cfg,
@@ -362,6 +378,7 @@ func NewProviderController(
 		dockerNetwork:  cfg.DockerNetwork,
 		embedder:       embedder,
 		graphitiClient: graphitiClient,
+		sageClient:     sageClient,
 
 		startCallNumber: newAtomicInt64(0), // 0 means to make it random
 
@@ -447,6 +464,7 @@ func (pc *providerController) NewFlowProvider(
 		mx:              &sync.RWMutex{},
 		embedder:        pc.embedder,
 		graphitiClient:  pc.graphitiClient,
+		sageClient:      pc.sageClient,
 		flowID:          flowID,
 		publicIP:        pc.publicIP,
 		dockerNetwork:   pc.dockerNetwork,
@@ -497,6 +515,7 @@ func (pc *providerController) LoadFlowProvider(
 		mx:              &sync.RWMutex{},
 		embedder:        pc.embedder,
 		graphitiClient:  pc.graphitiClient,
+		sageClient:      pc.sageClient,
 		flowID:          flowID,
 		publicIP:        pc.publicIP,
 		dockerNetwork:   pc.dockerNetwork,
@@ -531,6 +550,10 @@ func (pc *providerController) Embedder() embeddings.Embedder {
 
 func (pc *providerController) GraphitiClient() *graphiti.Client {
 	return pc.graphitiClient
+}
+
+func (pc *providerController) SageClient() *sage.Client {
+	return pc.sageClient
 }
 
 func (pc *providerController) NewAssistantProvider(
@@ -592,6 +615,7 @@ func (pc *providerController) NewAssistantProvider(
 			mx:              &sync.RWMutex{},
 			embedder:        pc.embedder,
 			graphitiClient:  pc.graphitiClient,
+			sageClient:      pc.sageClient,
 			flowID:          flowID,
 			publicIP:        pc.publicIP,
 			dockerNetwork:   pc.dockerNetwork,
@@ -645,6 +669,7 @@ func (pc *providerController) LoadAssistantProvider(
 			mx:              &sync.RWMutex{},
 			embedder:        pc.embedder,
 			graphitiClient:  pc.graphitiClient,
+			sageClient:      pc.sageClient,
 			flowID:          flowID,
 			publicIP:        pc.publicIP,
 			dockerNetwork:   pc.dockerNetwork,
