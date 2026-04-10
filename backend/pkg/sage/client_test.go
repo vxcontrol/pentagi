@@ -1,8 +1,16 @@
 package sage
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -224,9 +232,321 @@ func TestIntegration_RememberMultipleAndRecallCrossSession(t *testing.T) {
 	}
 }
 
+// --- Ed25519 signing unit tests (no SAGE server needed) ---
+
+// newTestClient creates a Client with a temporary key file for offline signing tests.
+func newTestClient(t *testing.T) *Client {
+	t.Helper()
+
+	keyPath := filepath.Join(t.TempDir(), "test-agent.key")
+	pub, priv, err := loadOrCreateKey(keyPath)
+	if err != nil {
+		t.Fatalf("loadOrCreateKey failed: %v", err)
+	}
+
+	return &Client{
+		endpoint:   "http://unused:9999",
+		agentName:  "unit-test",
+		publicKey:  pub,
+		privateKey: priv,
+		enabled:    true,
+	}
+}
+
+func TestSignRequest_ProducesValidSignature(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t)
+
+	method := "POST"
+	path := "/v1/memory/submit"
+	body := []byte(`{"content":"test"}`)
+	timestamp := time.Now().Unix()
+
+	sig := client.signRequest(method, path, body, timestamp)
+
+	// Ed25519 signatures are always 64 bytes.
+	if len(sig) != ed25519.SignatureSize {
+		t.Fatalf("signature length = %d, want %d", len(sig), ed25519.SignatureSize)
+	}
+
+	// Recompute the signed message independently and verify.
+	canonical := []byte(method + " " + path + "\n")
+	canonical = append(canonical, body...)
+	bodyHash := sha256.Sum256(canonical)
+
+	tsBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(tsBytes, uint64(timestamp))
+
+	message := make([]byte, 0, len(bodyHash)+8)
+	message = append(message, bodyHash[:]...)
+	message = append(message, tsBytes...)
+
+	if !ed25519.Verify(client.publicKey, message, sig) {
+		t.Fatal("signature verification failed")
+	}
+}
+
+func TestSignRequest_DifferentPathsDifferentSignatures(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t)
+
+	body := []byte(`{"query":"test"}`)
+	ts := time.Now().Unix()
+
+	sig1 := client.signRequest("POST", "/v1/memory/search", body, ts)
+	sig2 := client.signRequest("POST", "/v1/memory/submit", body, ts)
+
+	if bytes.Equal(sig1, sig2) {
+		t.Fatal("signatures for different paths must differ (prevents cross-endpoint replay)")
+	}
+}
+
+func TestSignRequest_DifferentTimestampsDifferentSignatures(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t)
+
+	body := []byte(`{"content":"test"}`)
+	path := "/v1/memory/submit"
+
+	sig1 := client.signRequest("POST", path, body, 1000)
+	sig2 := client.signRequest("POST", path, body, 2000)
+
+	if bytes.Equal(sig1, sig2) {
+		t.Fatal("signatures for different timestamps must differ")
+	}
+}
+
+func TestLoadOrCreateKey_PersistsAndReloads(t *testing.T) {
+	t.Parallel()
+
+	keyPath := filepath.Join(t.TempDir(), "persist.key")
+
+	pub1, priv1, err := loadOrCreateKey(keyPath)
+	if err != nil {
+		t.Fatalf("first loadOrCreateKey: %v", err)
+	}
+
+	// File should exist.
+	if _, err := os.Stat(keyPath); err != nil {
+		t.Fatalf("key file not created: %v", err)
+	}
+
+	// Reload the same file — keys must match.
+	pub2, priv2, err := loadOrCreateKey(keyPath)
+	if err != nil {
+		t.Fatalf("second loadOrCreateKey: %v", err)
+	}
+
+	if !bytes.Equal(pub1, pub2) {
+		t.Fatal("reloaded public key differs from original")
+	}
+	if !bytes.Equal(priv1, priv2) {
+		t.Fatal("reloaded private key differs from original")
+	}
+}
+
 func truncateStr(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// --- Keypair persistence unit tests ---
+
+func TestLoadOrCreateKey_GeneratesNewKey(t *testing.T) {
+	t.Parallel()
+
+	keyFile := filepath.Join(t.TempDir(), "new-agent.key")
+
+	pub, priv, err := loadOrCreateKey(keyFile)
+	if err != nil {
+		t.Fatalf("loadOrCreateKey failed: %v", err)
+	}
+
+	if len(pub) != ed25519.PublicKeySize {
+		t.Fatalf("expected public key length %d, got %d", ed25519.PublicKeySize, len(pub))
+	}
+	if len(priv) != ed25519.PrivateKeySize {
+		t.Fatalf("expected private key length %d, got %d", ed25519.PrivateKeySize, len(priv))
+	}
+
+	// Verify the file was created
+	info, err := os.Stat(keyFile)
+	if err != nil {
+		t.Fatalf("key file was not created: %v", err)
+	}
+
+	// Check file permissions (0600)
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Errorf("expected file permissions 0600, got %04o", perm)
+	}
+
+	// Verify the file contains exactly ed25519.PrivateKeySize bytes
+	data, err := os.ReadFile(keyFile)
+	if err != nil {
+		t.Fatalf("failed to read key file: %v", err)
+	}
+	if len(data) != ed25519.PrivateKeySize {
+		t.Fatalf("expected key file to contain %d bytes, got %d", ed25519.PrivateKeySize, len(data))
+	}
+}
+
+func TestLoadOrCreateKey_LoadsExistingKey(t *testing.T) {
+	t.Parallel()
+
+	keyFile := filepath.Join(t.TempDir(), "existing-agent.key")
+
+	// Generate a keypair manually and write the private key
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	if err := os.WriteFile(keyFile, []byte(priv), 0600); err != nil {
+		t.Fatalf("failed to write key file: %v", err)
+	}
+
+	// Now load via loadOrCreateKey
+	loadedPub, loadedPriv, err := loadOrCreateKey(keyFile)
+	if err != nil {
+		t.Fatalf("loadOrCreateKey failed: %v", err)
+	}
+
+	if !loadedPub.Equal(pub) {
+		t.Error("loaded public key does not match original")
+	}
+	if !loadedPriv.Equal(priv) {
+		t.Error("loaded private key does not match original")
+	}
+}
+
+func TestLoadOrCreateKey_PersistsAcrossCalls(t *testing.T) {
+	t.Parallel()
+
+	keyFile := filepath.Join(t.TempDir(), "persist-across-agent.key")
+
+	pub1, priv1, err := loadOrCreateKey(keyFile)
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+
+	pub2, priv2, err := loadOrCreateKey(keyFile)
+	if err != nil {
+		t.Fatalf("second call failed: %v", err)
+	}
+
+	if !pub1.Equal(pub2) {
+		t.Error("public keys differ across calls — identity not persistent")
+	}
+	if !priv1.Equal(priv2) {
+		t.Error("private keys differ across calls — identity not persistent")
+	}
+}
+
+func TestLoadOrCreateKey_DefaultPath(t *testing.T) {
+	// Not parallel: touches a shared default path in os.TempDir().
+	defaultKeyFile := filepath.Join(os.TempDir(), "pentagi-sage-agent.key")
+
+	// Save any existing key to restore afterwards.
+	existingData, hadExisting := func() ([]byte, bool) {
+		data, err := os.ReadFile(defaultKeyFile)
+		if err != nil {
+			return nil, false
+		}
+		return data, true
+	}()
+	defer func() {
+		if hadExisting {
+			_ = os.WriteFile(defaultKeyFile, existingData, 0600)
+		} else {
+			_ = os.Remove(defaultKeyFile)
+		}
+	}()
+
+	// Remove so we can verify creation
+	_ = os.Remove(defaultKeyFile)
+
+	pub, priv, err := loadOrCreateKey("")
+	if err != nil {
+		t.Fatalf("loadOrCreateKey with empty path failed: %v", err)
+	}
+
+	if len(pub) != ed25519.PublicKeySize {
+		t.Fatalf("expected public key length %d, got %d", ed25519.PublicKeySize, len(pub))
+	}
+	if len(priv) != ed25519.PrivateKeySize {
+		t.Fatalf("expected private key length %d, got %d", ed25519.PrivateKeySize, len(priv))
+	}
+
+	// Verify the file was created at the default path
+	if _, err := os.Stat(defaultKeyFile); err != nil {
+		t.Fatalf("expected key file at default path %s, got error: %v", defaultKeyFile, err)
+	}
+}
+
+func TestLoadOrCreateKey_InvalidKeyFile(t *testing.T) {
+	t.Parallel()
+
+	keyFile := filepath.Join(t.TempDir(), "bad-agent.key")
+
+	// Write garbage data (wrong length — not 64 bytes)
+	garbage := []byte("this is garbage data, not a valid ed25519 key!")
+	if err := os.WriteFile(keyFile, garbage, 0600); err != nil {
+		t.Fatalf("failed to write garbage file: %v", err)
+	}
+
+	pub, priv, err := loadOrCreateKey(keyFile)
+	if err != nil {
+		t.Fatalf("loadOrCreateKey should not fail on invalid key file: %v", err)
+	}
+
+	// Should have generated a new valid key
+	if len(pub) != ed25519.PublicKeySize {
+		t.Fatalf("expected public key length %d, got %d", ed25519.PublicKeySize, len(pub))
+	}
+	if len(priv) != ed25519.PrivateKeySize {
+		t.Fatalf("expected private key length %d, got %d", ed25519.PrivateKeySize, len(priv))
+	}
+
+	// The garbage should have been overwritten with a valid key
+	data, err := os.ReadFile(keyFile)
+	if err != nil {
+		t.Fatalf("failed to read key file after regeneration: %v", err)
+	}
+	if len(data) != ed25519.PrivateKeySize {
+		t.Fatalf("key file should now contain %d bytes, got %d", ed25519.PrivateKeySize, len(data))
+	}
+}
+
+func TestNewClient_PersistentIdentity(t *testing.T) {
+	t.Parallel()
+
+	keyFile := filepath.Join(t.TempDir(), "identity-agent.key")
+
+	// NewClient performs a health check against a live SAGE endpoint,
+	// so we verify persistent identity via loadOrCreateKey + agentID
+	// derivation (hex-encoded public key), which is exactly what
+	// NewClient uses internally.
+	pub1, _, err := loadOrCreateKey(keyFile)
+	if err != nil {
+		t.Fatalf("first loadOrCreateKey failed: %v", err)
+	}
+	agentID1 := hex.EncodeToString(pub1)
+
+	pub2, _, err := loadOrCreateKey(keyFile)
+	if err != nil {
+		t.Fatalf("second loadOrCreateKey failed: %v", err)
+	}
+	agentID2 := hex.EncodeToString(pub2)
+
+	if agentID1 != agentID2 {
+		t.Errorf("agentIDs differ: %s vs %s — identity not persistent across client creations", agentID1, agentID2)
+	}
+
+	if len(agentID1) != ed25519.PublicKeySize*2 {
+		t.Errorf("expected agentID hex length %d, got %d", ed25519.PublicKeySize*2, len(agentID1))
+	}
 }

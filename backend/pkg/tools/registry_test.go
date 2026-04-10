@@ -256,6 +256,58 @@ func TestGetMessageResultFormat(t *testing.T) {
 	}
 }
 
+// --- SAGE-specific tool tests ---
+
+func TestSageToolsRegistered(t *testing.T) {
+	t.Parallel()
+
+	defs := GetRegistryDefinitions()
+
+	for _, name := range []string{SageRecallToolName, SageRememberToolName} {
+		def, ok := defs[name]
+		if !ok {
+			t.Errorf("tool %q not found in registry definitions", name)
+			continue
+		}
+		if def.Description == "" {
+			t.Errorf("tool %q has empty description", name)
+		}
+		if def.Parameters == nil {
+			t.Errorf("tool %q has nil Parameters (JSON schema)", name)
+		}
+	}
+}
+
+func TestSageToolTypeMapping(t *testing.T) {
+	t.Parallel()
+
+	mapping := GetToolTypeMapping()
+
+	if got, ok := mapping[SageRecallToolName]; !ok {
+		t.Errorf("%q not found in tool type mapping", SageRecallToolName)
+	} else if got != SearchVectorDbToolType {
+		t.Errorf("GetToolTypeMapping()[%q] = %v, want %v", SageRecallToolName, got, SearchVectorDbToolType)
+	}
+
+	if got, ok := mapping[SageRememberToolName]; !ok {
+		t.Errorf("%q not found in tool type mapping", SageRememberToolName)
+	} else if got != StoreVectorDbToolType {
+		t.Errorf("GetToolTypeMapping()[%q] = %v, want %v", SageRememberToolName, got, StoreVectorDbToolType)
+	}
+}
+
+func TestSageToolMessageType(t *testing.T) {
+	t.Parallel()
+
+	if got := getMessageType(SageRecallToolName); got != database.MsglogTypeSearch {
+		t.Errorf("getMessageType(%q) = %q, want %q", SageRecallToolName, got, database.MsglogTypeSearch)
+	}
+
+	if got := getMessageType(SageRememberToolName); got != database.MsglogTypeSearch {
+		t.Errorf("getMessageType(%q) = %q, want %q", SageRememberToolName, got, database.MsglogTypeSearch)
+	}
+}
+
 func TestAllowedToolListsContainKnownUniqueTools(t *testing.T) {
 	t.Parallel()
 
