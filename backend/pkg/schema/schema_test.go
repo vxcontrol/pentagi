@@ -57,7 +57,8 @@ func TestSchemaValid(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "invalid schema with bad ref",
+			name: "invalid schema with bad ref containing null byte",
+			// Null byte (\x00) in URI should be rejected by gojsonschema validator
 			schema:  Schema{Type: Type{Ref: "not-a-valid-ref-uri\x00"}},
 			wantErr: true,
 		},
@@ -100,8 +101,9 @@ func TestSchemaGetValidator(t *testing.T) {
 		assert.NotNil(t, v)
 	})
 
-	t.Run("invalid schema with bad ref fails", func(t *testing.T) {
+	t.Run("invalid schema with bad ref (null byte) fails", func(t *testing.T) {
 		t.Parallel()
+		// Null byte in URI should be rejected by the validator
 		s := Schema{
 			Type: Type{Ref: "not-a-valid-ref-uri\x00"},
 		}
