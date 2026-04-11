@@ -16,18 +16,35 @@
 
 ## Table of Contents
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Quick Start](#-quick-start)
-- [API Access](#-api-access)
-- [Advanced Setup](#-advanced-setup)
-- [Development](#-development)
-- [Testing LLM Agents](#-testing-llm-agents)
-- [Embedding Configuration and Testing](#-embedding-configuration-and-testing)
-- [Function Testing with ftester](#-function-testing-with-ftester)
-- [Building](#%EF%B8%8F-building)
-- [Credits](#-credits)
-- [License](#-license)
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+  - [Agent Supervision](#advanced-agent-supervision)
+- [Quick Start](#quick-start)
+- [API Access](#api-access)
+  - [LLM Provider Configuration](#custom-llm-provider-configuration)
+    - [Ollama](#ollama-provider-configuration)
+    - [OpenAI](#openai-provider-configuration)
+    - [Anthropic](#anthropic-provider-configuration)
+    - [Google AI (Gemini)](#google-ai-gemini-provider-configuration)
+    - [AWS Bedrock](#aws-bedrock-provider-configuration)
+    - [DeepSeek](#deepseek-provider-configuration)
+    - [GLM](#glm-provider-configuration)
+    - [Kimi](#kimi-provider-configuration)
+    - [Qwen](#qwen-provider-configuration)
+- [Advanced Setup](#advanced-setup)
+  - [Langfuse Integration](#langfuse-integration)
+  - [Monitoring and Observability](#monitoring-and-observability)
+  - [Knowledge Graph (Graphiti)](#knowledge-graph-integration-graphiti)
+  - [OAuth Integration](#github-and-google-oauth-integration)
+  - [Docker Image Configuration](#docker-image-configuration)
+- [Development](#development)
+- [Testing LLM Agents](#testing-llm-agents)
+- [Embedding Configuration and Testing](#embedding-configuration-and-testing)
+- [Function Testing with ftester](#function-testing-with-ftester)
+- [Building](#building)
+- [Credits](#credits)
+- [License](#license)
 
 ## Overview
 
@@ -429,6 +446,7 @@ ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS=3
 
 </details>
 
+<a id="advanced-agent-supervision"></a>
 <details>
 <summary><b>Advanced Agent Supervision</b> (click to expand)</summary>
 
@@ -919,7 +937,7 @@ The `ASSISTANT_USE_AGENTS` setting affects the initial state of the "Use Agents"
 
 Note that users can always override this setting by toggling the "Use Agents" button in the UI when creating or editing an assistant. This environment variable only controls the initial default state.
 
-## 🔌 API Access
+## API Access
 
 PentAGI provides comprehensive programmatic access through both REST and GraphQL APIs, allowing you to integrate penetration testing workflows into your automation pipelines, CI/CD processes, and custom applications.
 
@@ -2138,7 +2156,7 @@ PentAGI supports 32 Qwen models with tool calling, streaming, thinking modes, an
 
 **LiteLLM Integration**: Set `QWEN_PROVIDER=dashscope` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
 
-## 🔧 Advanced Setup
+## Advanced Setup
 
 ### Langfuse Integration
 
@@ -2345,7 +2363,7 @@ DOCKER_DEFAULT_IMAGE_FOR_PENTEST=mycompany/pentest-tools:v2.0
 > [!NOTE]
 > If a user explicitly specifies a particular Docker image in their task, the system will try to use that exact image, ignoring these settings. These variables only affect the system's automatic image selection process.
 
-## 💻 Development
+## Development
 
 ### Development Requirements
 
@@ -2526,89 +2544,55 @@ The Docker image comes with built-in support for major providers (OpenAI, Anthro
 
 ```bash
 # Test with OpenRouter configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/openrouter.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/openrouter.provider.yml
 
 # Test with DeepInfra configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepinfra.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepinfra.provider.yml
 
 # Test with DeepSeek configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -provider deepseek
+docker exec -it pentagi /opt/pentagi/bin/ctester -provider deepseek
 
 # Test with GLM configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -provider glm
+docker exec -it pentagi /opt/pentagi/bin/ctester -provider glm
 
 # Test with Kimi configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -provider kimi
+docker exec -it pentagi /opt/pentagi/bin/ctester -provider kimi
 
 # Test with Qwen configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -provider qwen
+docker exec -it pentagi /opt/pentagi/bin/ctester -provider qwen
 
 # Test with DeepSeek configuration file for custom provider
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepseek.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepseek.provider.yml
 
 # Test with Moonshot configuration file for custom provider
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/moonshot.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/moonshot.provider.yml
 
 # Test with Novita configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/novita.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/novita.provider.yml
 
 # Test with OpenAI configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -type openai
+docker exec -it pentagi /opt/pentagi/bin/ctester -type openai
 
 # Test with Anthropic configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -type anthropic
+docker exec -it pentagi /opt/pentagi/bin/ctester -type anthropic
 
 # Test with Gemini configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -type gemini
+docker exec -it pentagi /opt/pentagi/bin/ctester -type gemini
 
 # Test with AWS Bedrock configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -type bedrock
+docker exec -it pentagi /opt/pentagi/bin/ctester -type bedrock
 
 # Test with Custom OpenAI configuration
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
 
 # Test with Ollama configuration (local inference)
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-llama318b.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-llama318b.provider.yml
 
 # Test with Ollama Qwen3 32B configuration (requires custom model creation)
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-qwen332b-fp16-tc.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-qwen332b-fp16-tc.provider.yml
 
 # Test with Ollama QwQ 32B configuration (requires custom model creation and 71.3GB VRAM)
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-qwq32b-fp16-tc.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-qwq32b-fp16-tc.provider.yml
 ```
 
 To use these configurations, your `.env` file only needs to contain:
@@ -2701,9 +2685,7 @@ You can test this configuration using:
 
 ```bash
 # Test with custom OpenAI configuration for unverified accounts
-docker run --rm \
-  -v $(pwd)/.env:/opt/pentagi/.env \
-  vxcontrol/pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
 ```
 
 > [!NOTE]
@@ -3028,7 +3010,7 @@ Available search parameters:
 
 </details>
 
-## 🔍 Function Testing with ftester
+## Function Testing with ftester
 
 PentAGI includes a versatile utility called `ftester` for debugging, testing, and developing specific functions and AI agent behaviors. While `ctester` focuses on testing LLM model capabilities, `ftester` allows you to directly invoke individual system functions and AI agent components with precise control over execution context.
 
