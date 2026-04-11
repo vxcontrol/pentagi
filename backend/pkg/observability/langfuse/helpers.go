@@ -104,7 +104,7 @@ func (e GenerationUsageUnit) String() string {
 	case GenerationUsageUnitMilliseconds:
 		return "MILLISECONDS"
 	case GenerationUsageUnitSeconds:
-		return "seconds"
+		return "SECONDS"
 	case GenerationUsageUnitImages:
 		return "IMAGES"
 	case GenerationUsageUnitRequests:

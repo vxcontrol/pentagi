@@ -117,7 +117,7 @@ func TestGenerationUsageUnit_String(t *testing.T) {
 		{"tokens", GenerationUsageUnitTokens, "TOKENS"},
 		{"characters", GenerationUsageUnitCharacters, "CHARACTERS"},
 		{"milliseconds", GenerationUsageUnitMilliseconds, "MILLISECONDS"},
-		{"seconds", GenerationUsageUnitSeconds, "seconds"},
+		{"seconds", GenerationUsageUnitSeconds, "SECONDS"},
 		{"images", GenerationUsageUnitImages, "IMAGES"},
 		{"requests", GenerationUsageUnitRequests, "REQUESTS"},
 		{"unknown returns empty", GenerationUsageUnit(99), ""},
@@ -177,7 +177,7 @@ func TestGenerationUsage_ToLangfuse(t *testing.T) {
 		result := u.ToLangfuse()
 		require.NotNil(t, result)
 		require.NotNil(t, result.Usage.TotalCost)
-		assert.Equal(t, 0.01, *result.Usage.TotalCost)
+		assert.InDelta(t, 0.01, *result.Usage.TotalCost, 1e-9)
 	})
 
 	t.Run("output cost only", func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestGenerationUsage_ToLangfuse(t *testing.T) {
 		result := u.ToLangfuse()
 		require.NotNil(t, result)
 		require.NotNil(t, result.Usage.TotalCost)
-		assert.Equal(t, 0.02, *result.Usage.TotalCost)
+		assert.InDelta(t, 0.02, *result.Usage.TotalCost, 1e-9)
 	})
 
 	t.Run("both costs summed", func(t *testing.T) {
@@ -228,9 +228,12 @@ func TestModelParameters_ToLangfuse(t *testing.T) {
 		require.NotNil(t, result)
 		v, ok := result["max_tokens"]
 		require.True(t, ok, "max_tokens key must exist")
-		require.NotNil(t, v)
-		require.NotNil(t, v.GetStringOptional())
-		assert.Equal(t, "inf", *v.GetStringOptional())
+		require.NotNil(t, v, "max_tokens value must not be nil")
+		strVal := v.GetStringOptional()
+		require.NotNil(t, strVal, "max_tokens must be a string type")
+		assert.Equal(t, "inf", *strVal, "max_tokens must be exactly 'inf' string")
+		// Ensure it's not interpreted as integer or other type
+		assert.Nil(t, v.GetIntegerOptional(), "max_tokens should not be integer when unset")
 	})
 
 	t.Run("temperature and top_p values", func(t *testing.T) {
