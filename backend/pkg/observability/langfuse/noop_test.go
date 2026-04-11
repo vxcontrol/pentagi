@@ -2,6 +2,7 @@ package langfuse
 
 import (
 	"context"
+	"regexp"
 	"testing"
 
 	"pentagi/pkg/observability/langfuse/api"
@@ -13,11 +14,12 @@ import (
 func TestNewNoopObserver_ImplementsObserver(t *testing.T) {
 	t.Parallel()
 
+	// Compile-time interface check independent of constructor behavior
+	var _ Observer = (*noopObserver)(nil)
+
+	// Runtime check that constructor returns non-nil
 	obs := NewNoopObserver()
 	require.NotNil(t, obs)
-
-	// Verify it satisfies the Observer interface at compile time
-	var _ Observer = obs
 }
 
 func TestNoopObserver_NewObservation_NewTrace(t *testing.T) {
@@ -28,14 +30,16 @@ func TestNoopObserver_NewObservation_NewTrace(t *testing.T) {
 
 	newCtx, observation := obs.NewObservation(ctx)
 
-	// Should generate a new trace ID
-	assert.NotEmpty(t, observation.TraceID())
-	assert.Len(t, observation.TraceID(), 32, "trace ID should be 32 hex chars")
+	// Should generate a new trace ID - validate both length and hex format
+	traceID := observation.TraceID()
+	assert.NotEmpty(t, traceID)
+	assert.Len(t, traceID, 32, "trace ID should be 32 characters")
+	assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]{32}$`), traceID, "trace ID must be lowercase hex")
 
 	// Context should contain the observation
 	obsCtx, ok := getObservationContext(newCtx)
 	require.True(t, ok)
-	assert.Equal(t, observation.TraceID(), obsCtx.TraceID)
+	assert.Equal(t, traceID, obsCtx.TraceID)
 }
 
 func TestNoopObserver_NewObservation_InheritsParentTrace(t *testing.T) {
@@ -114,8 +118,10 @@ func TestNoopObserver_NewObservation_ExplicitObsIDNoParent(t *testing.T) {
 
 	// Explicit observation ID with no parent context
 	_, observation := obs.NewObservation(ctx, WithObservationID("my-obs"))
-	assert.NotEmpty(t, observation.TraceID(), "must generate new trace ID")
-	assert.Len(t, observation.TraceID(), 32)
+	traceID := observation.TraceID()
+	assert.NotEmpty(t, traceID, "must generate new trace ID")
+	assert.Len(t, traceID, 32)
+	assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]{32}$`), traceID, "trace ID must be lowercase hex")
 	assert.Equal(t, "my-obs", observation.ID())
 }
 
@@ -156,7 +162,10 @@ func TestNoopObserver_ForceFlush(t *testing.T) {
 func TestNoopObserver_Enqueue_NoPanic(t *testing.T) {
 	t.Parallel()
 
-	obs := NewNoopObserver().(*noopObserver)
+	// Safe type assertion - test should fail gracefully if type changes
+	obs, ok := NewNoopObserver().(*noopObserver)
+	require.True(t, ok, "NewNoopObserver must return *noopObserver")
+
 	// enqueue should be a no-op and not panic
 	assert.NotPanics(t, func() {
 		obs.enqueue(nil)
