@@ -1,7 +1,6 @@
 package graphiti
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -62,60 +61,78 @@ func TestAddMessages_Disabled(t *testing.T) {
 	client, err := NewClient("", 0, false)
 	require.NoError(t, err)
 
-	err = client.AddMessages(context.Background(), AddMessagesRequest{})
+	err = client.AddMessages(t.Context(), AddMessagesRequest{})
 	assert.NoError(t, err)
 }
 
 func TestSearchMethods_Disabled(t *testing.T) {
 	t.Parallel()
 
-	client, err := NewClient("", 0, false)
-	require.NoError(t, err)
-
 	tests := []struct {
 		name string
-		fn   func() (any, error)
+		fn   func(t *testing.T, client *Client)
 	}{
 		{
 			"TemporalWindowSearch",
-			func() (any, error) {
-				return client.TemporalWindowSearch(context.Background(), TemporalSearchRequest{})
+			func(t *testing.T, client *Client) {
+				resp, err := client.TemporalWindowSearch(t.Context(), TemporalSearchRequest{})
+				assert.Nil(t, resp, "response must be nil when disabled")
+				require.Error(t, err)
+				require.ErrorContains(t, err, "graphiti is not enabled")
 			},
 		},
 		{
 			"EntityRelationshipsSearch",
-			func() (any, error) {
-				return client.EntityRelationshipsSearch(context.Background(), EntityRelationshipSearchRequest{})
+			func(t *testing.T, client *Client) {
+				resp, err := client.EntityRelationshipsSearch(t.Context(), EntityRelationshipSearchRequest{})
+				assert.Nil(t, resp, "response must be nil when disabled")
+				require.Error(t, err)
+				require.ErrorContains(t, err, "graphiti is not enabled")
 			},
 		},
 		{
 			"DiverseResultsSearch",
-			func() (any, error) {
-				return client.DiverseResultsSearch(context.Background(), DiverseSearchRequest{})
+			func(t *testing.T, client *Client) {
+				resp, err := client.DiverseResultsSearch(t.Context(), DiverseSearchRequest{})
+				assert.Nil(t, resp, "response must be nil when disabled")
+				require.Error(t, err)
+				require.ErrorContains(t, err, "graphiti is not enabled")
 			},
 		},
 		{
 			"EpisodeContextSearch",
-			func() (any, error) {
-				return client.EpisodeContextSearch(context.Background(), EpisodeContextSearchRequest{})
+			func(t *testing.T, client *Client) {
+				resp, err := client.EpisodeContextSearch(t.Context(), EpisodeContextSearchRequest{})
+				assert.Nil(t, resp, "response must be nil when disabled")
+				require.Error(t, err)
+				require.ErrorContains(t, err, "graphiti is not enabled")
 			},
 		},
 		{
 			"SuccessfulToolsSearch",
-			func() (any, error) {
-				return client.SuccessfulToolsSearch(context.Background(), SuccessfulToolsSearchRequest{})
+			func(t *testing.T, client *Client) {
+				resp, err := client.SuccessfulToolsSearch(t.Context(), SuccessfulToolsSearchRequest{})
+				assert.Nil(t, resp, "response must be nil when disabled")
+				require.Error(t, err)
+				require.ErrorContains(t, err, "graphiti is not enabled")
 			},
 		},
 		{
 			"RecentContextSearch",
-			func() (any, error) {
-				return client.RecentContextSearch(context.Background(), RecentContextSearchRequest{})
+			func(t *testing.T, client *Client) {
+				resp, err := client.RecentContextSearch(t.Context(), RecentContextSearchRequest{})
+				assert.Nil(t, resp, "response must be nil when disabled")
+				require.Error(t, err)
+				require.ErrorContains(t, err, "graphiti is not enabled")
 			},
 		},
 		{
 			"EntityByLabelSearch",
-			func() (any, error) {
-				return client.EntityByLabelSearch(context.Background(), EntityByLabelSearchRequest{})
+			func(t *testing.T, client *Client) {
+				resp, err := client.EntityByLabelSearch(t.Context(), EntityByLabelSearchRequest{})
+				assert.Nil(t, resp, "response must be nil when disabled")
+				require.Error(t, err)
+				require.ErrorContains(t, err, "graphiti is not enabled")
 			},
 		},
 	}
@@ -124,10 +141,10 @@ func TestSearchMethods_Disabled(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			resp, err := tt.fn()
-			assert.Nil(t, resp)
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "graphiti is not enabled")
+			// Create fresh disabled client per subtest to avoid shared state
+			client, err := NewClient("", 0, false)
+			require.NoError(t, err)
+			tt.fn(t, client)
 		})
 	}
 }
