@@ -134,7 +134,7 @@ jobs:
 
   docker-build:
     needs: lint-and-test
-    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -193,8 +193,8 @@ jobs:
         with:
           images: vxcontrol/pentagi
           tags: |
-            # For master branch - latest tag
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/master' }}
+            # For main branch - latest tag
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             # For release builds only - tag with major, minor and patch versions
             type=raw,value=${{ steps.version.outputs.major }},enable=${{ steps.version.outputs.is_release == 'true' }}
             type=raw,value=${{ steps.version.outputs.minor }},enable=${{ steps.version.outputs.is_release == 'true' }}
