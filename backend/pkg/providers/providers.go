@@ -118,6 +118,8 @@ type ProviderController interface {
 		prvID int64,
 	) (database.Provider, error)
 
+	SeedDefaultProviders(ctx context.Context, userID int64) error
+
 	TestAgent(
 		ctx context.Context,
 		prvtype provider.ProviderType,
@@ -187,7 +189,7 @@ func NewProviderController(
 		defaultConfigs[provider.ProviderGemini] = config
 	}
 
-	if config, err := bedrock.DefaultProviderConfig(); err != nil {
+	if config, err := bedrock.DefaultProviderConfig(cfg); err != nil {
 		return nil, fmt.Errorf("failed to create bedrock provider config: %w", err)
 	} else {
 		defaultConfigs[provider.ProviderBedrock] = config
@@ -354,7 +356,7 @@ func NewProviderController(
 		graphitiClient = &graphiti.Client{}
 	}
 
-	return &providerController{
+	pc := &providerController{
 		db:             db,
 		cfg:            cfg,
 		docker:         docker,
@@ -373,7 +375,24 @@ func NewProviderController(
 		defaultConfigs: defaultConfigs,
 
 		Providers: providers,
-	}, nil
+	}
+
+	// Seed configured system providers into the DB for all existing users so
+	// they are immediately available without any UI interaction. This runs on
+	// every startup, so editing a YAML config file and restarting PentAGI
+	// automatically propagates new values.
+	ctx := context.Background()
+	if users, err := db.GetUsers(ctx); err != nil {
+		logrus.WithError(err).Warn("failed to fetch users for provider seeding")
+	} else {
+		for _, u := range users {
+			if err := pc.SeedDefaultProviders(ctx, u.ID); err != nil {
+				logrus.WithError(err).Warnf("failed to seed default providers for user %d", u.ID)
+			}
+		}
+	}
+
+	return pc, nil
 }
 
 func (pc *providerController) NewFlowProvider(
@@ -829,6 +848,52 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 	default:
 		return nil, fmt.Errorf("unknown provider type: %s", prv.Type)
 	}
+}
+
+func (pc *providerController) SeedDefaultProviders(ctx context.Context, userID int64) error {
+	if pc.cfg.BedrockConfig == "" {
+		return nil
+	}
+	if !pc.cfg.BedrockDefaultAuth && pc.cfg.BedrockBearerToken == "" &&
+		(pc.cfg.BedrockAccessKey == "" || pc.cfg.BedrockSecretKey == "") {
+		return nil
+	}
+
+	bedrockCfg, ok := pc.defaultConfigs[provider.ProviderBedrock]
+	if !ok {
+		return nil
+	}
+
+	rawConfig, err := json.Marshal(bedrockCfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal bedrock config: %w", err)
+	}
+
+	prvname := bedrockCfg.Name
+	if prvname == "" {
+		prvname = string(provider.DefaultProviderNameBedrock)
+	}
+	existing, err := pc.db.GetUserProviderByName(ctx, database.GetUserProviderByNameParams{
+		Name:   prvname,
+		UserID: userID,
+	})
+	if err != nil {
+		_, err = pc.db.CreateProvider(ctx, database.CreateProviderParams{
+			UserID: userID,
+			Type:   database.ProviderType(provider.ProviderBedrock),
+			Name:   prvname,
+			Config: rawConfig,
+		})
+		return err
+	}
+
+	_, err = pc.db.UpdateUserProvider(ctx, database.UpdateUserProviderParams{
+		ID:     existing.ID,
+		UserID: userID,
+		Config: rawConfig,
+		Name:   existing.Name,
+	})
+	return err
 }
 
 func (pc *providerController) CreateProvider(

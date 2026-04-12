@@ -55,6 +55,7 @@ services:
       - BEDROCK_SECRET_ACCESS_KEY=${BEDROCK_SECRET_ACCESS_KEY:-}
       - BEDROCK_SESSION_TOKEN=${BEDROCK_SESSION_TOKEN:-}
       - BEDROCK_SERVER_URL=${BEDROCK_SERVER_URL:-}
+      - BEDROCK_CONFIG_PATH=${BEDROCK_CONFIG_PATH:+/opt/pentagi/conf/bedrock.provider.yml}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - DEEPSEEK_SERVER_URL=${DEEPSEEK_SERVER_URL:-}
       - DEEPSEEK_PROVIDER=${DEEPSEEK_PROVIDER:-}
@@ -176,6 +177,7 @@ services:
       - ${PENTAGI_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
       - ${PENTAGI_LLM_SERVER_CONFIG_PATH:-./example.custom.provider.yml}:/opt/pentagi/conf/custom.provider.yml
       - ${PENTAGI_OLLAMA_SERVER_CONFIG_PATH:-./example.ollama.provider.yml}:/opt/pentagi/conf/ollama.provider.yml
+      - ${BEDROCK_CONFIG_PATH:-./glm_flash_bedrock.yml}:/opt/pentagi/conf/bedrock.provider.yml
       - ${PENTAGI_DOCKER_CERT_PATH:-./docker-ssl}:/opt/pentagi/docker/ssl
     user: root:root # while using docker.sock
     networks:

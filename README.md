@@ -1723,6 +1723,7 @@ PentAGI integrates with Amazon Bedrock, offering access to 20+ foundation models
 | `BEDROCK_SECRET_ACCESS_KEY` |             | AWS secret access key for static credentials                                                        |
 | `BEDROCK_SESSION_TOKEN`     |             | AWS session token for temporary credentials (optional, used with static credentials)                |
 | `BEDROCK_SERVER_URL`        |             | Custom Bedrock endpoint (VPC endpoints, local testing)                                              |
+| `BEDROCK_CONFIG_PATH`       |             | Path to a custom YAML provider config file (overrides the built-in default config for model/pricing definitions) |
 
 **Authentication Priority**: `BEDROCK_DEFAULT_AUTH` → `BEDROCK_BEARER_TOKEN` → `BEDROCK_ACCESS_KEY_ID`+`BEDROCK_SECRET_ACCESS_KEY`
 
@@ -2627,6 +2628,7 @@ BEDROCK_ACCESS_KEY_ID=your_aws_access_key        # AWS access key ID (static cre
 BEDROCK_SECRET_ACCESS_KEY=your_aws_secret_key    # AWS secret access key (static credentials)
 BEDROCK_SESSION_TOKEN=                           # AWS session token (optional, for temporary credentials with static auth)
 BEDROCK_SERVER_URL=                              # Optional custom Bedrock endpoint (VPC endpoints, local testing)
+BEDROCK_CONFIG_PATH=                             # Optional path to a custom YAML provider config (overrides built-in model/pricing definitions)
 
 # For Ollama (local server or cloud)
 OLLAMA_SERVER_URL=                               # Local: http://ollama-server:11434, Cloud: https://ollama.com

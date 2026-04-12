@@ -1836,6 +1836,10 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		"uid": uid,
 	}).Debug("get providers")
 
+	if err := r.ProvidersCtrl.SeedDefaultProviders(ctx, uid); err != nil {
+		r.Logger.WithError(err).Warn("failed to seed default providers")
+	}
+
 	config := model.ProvidersConfig{
 		Enabled:     &model.ProvidersReadinessStatus{},
 		Default:     &model.DefaultProvidersConfig{},
