@@ -142,7 +142,6 @@ const SettingsProviders = () => {
     const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
     const navigate = useNavigate();
 
-
     // Get current page from URL
     const currentPage = useMemo(() => {
         const page = searchParams.get('page');

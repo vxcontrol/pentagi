@@ -287,9 +287,7 @@ const parseMarkdownTokens = (markdown: string): ParsedContent[] => {
             }
 
             case 'list': {
-                const tokenItems = (
-                    Array.isArray(token.items) ? token.items : []
-                ) as Array<Record<string, unknown>>;
+                const tokenItems = (Array.isArray(token.items) ? token.items : []) as Array<Record<string, unknown>>;
                 const items = tokenItems.map((item) => ({
                     inlineTokens: parseInlineTokens(String(item.text || '')),
                     raw: String(item.text || ''),

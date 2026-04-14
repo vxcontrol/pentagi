@@ -1,5 +1,5 @@
 import { ListCheck, ListTodo } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import type { SubtaskFragmentFragment } from '@/graphql/types';
 
@@ -41,20 +41,27 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
         };
     }, [searchValue, description, result]);
 
-    // Auto-expand details if they contain search matches
-    useEffect(() => {
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasMatch, setPrevHasMatch] = useState(
+        searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch,
+    );
+
+    const hasMatch = searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch;
+
+    if (searchValue !== prevSearchValue || hasMatch !== prevHasMatch) {
+        setPrevSearchValue(searchValue);
+        setPrevHasMatch(hasMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand details if description or result contains the search term
-            if (searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch) {
+            if (hasMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(false);
         }
-    }, [searchValue, searchChecks.hasDescriptionMatch, searchChecks.hasResultMatch]);
+    }
 
     return (
         <div className="group relative flex gap-2.5 pb-4 pl-0.5">

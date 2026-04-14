@@ -67,7 +67,11 @@ const injectedColorClasses = new Set<string>();
 const rgbStringToHex = (rgb: string): string =>
     rgb
         .split(',')
-        .map((part) => Math.min(255, Math.max(0, parseInt(part.trim(), 10))).toString(16).padStart(2, '0'))
+        .map((part) =>
+            Math.min(255, Math.max(0, parseInt(part.trim(), 10)))
+                .toString(16)
+                .padStart(2, '0'),
+        )
         .join('');
 
 /**

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/logo';
@@ -7,6 +7,7 @@ import { useFlowReportQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
+type PdfPhase = 'done' | 'error' | 'idle';
 type ReportState = 'content' | 'error' | 'generating' | 'loading';
 
 const FlowReport = () => {
@@ -15,9 +16,17 @@ const FlowReport = () => {
     const download = searchParams.has('download');
     const silent = searchParams.has('silent');
 
-    const [state, setState] = useState<ReportState>('loading');
-    const [error, setError] = useState<null | string>(null);
-    const [reportContent, setReportContent] = useState<string>('');
+    const [pdfPhase, setPdfPhase] = useState<PdfPhase>('idle');
+    const [pdfError, setPdfError] = useState<null | string>(null);
+    const pdfTriggered = useRef(false);
+
+    const [prevFlowId, setPrevFlowId] = useState(flowId);
+
+    if (flowId !== prevFlowId) {
+        setPrevFlowId(flowId);
+        setPdfPhase('idle');
+        setPdfError(null);
+    }
 
     const {
         data,
@@ -29,55 +38,58 @@ const FlowReport = () => {
         variables: { id: flowId! },
     });
 
-    // Reset state when component mounts or flowId changes
+    const dataReady = !loading && !queryError && !!data?.flow;
+
+    const reportContent = useMemo(
+        () => (dataReady ? generateReport(data.tasks || [], data.flow!) : ''),
+        [dataReady, data],
+    );
+
     useEffect(() => {
-        setState('loading');
-        setError(null);
-        setReportContent('');
+        pdfTriggered.current = false;
     }, [flowId]);
 
     useEffect(() => {
-        if (loading) {
+        if (!dataReady || !download || pdfTriggered.current || !data?.flow) {
             return;
         }
 
-        if (queryError || !data?.flow) {
-            setError('Failed to load flow data');
-            setState('error');
+        pdfTriggered.current = true;
 
-            return;
-        }
+        const fileName = `${generateFileName(data.flow)}.pdf`;
 
-        // Generate report content using flow and tasks from GraphQL response
-        const content = generateReport(data.tasks || [], data.flow);
-        setReportContent(content);
+        generatePDFFromMarkdown(reportContent, fileName)
+            .then(() => {
+                if (silent) {
+                    setTimeout(() => window.close(), 1000);
+                } else {
+                    setPdfPhase('done');
+                }
+            })
+            .catch((err) => {
+                Log.error('PDF generation failed:', err);
+                setPdfError('Failed to generate PDF');
+                setPdfPhase('error');
+            });
+    }, [dataReady, download, silent, reportContent, data]);
 
-        if (download) {
-            // Download mode - generate PDF and download it
-            setState('generating');
-            const fileName = `${generateFileName(data.flow)}.pdf`;
+    let state: ReportState;
+    let errorMessage: null | string = null;
 
-            generatePDFFromMarkdown(content, fileName)
-                .then(() => {
-                    if (silent) {
-                        // Silent download - close window after successful download
-                        setTimeout(() => window.close(), 1000);
-                    } else {
-                        // Normal download - show content after download
-                        setState('content');
-                    }
-                })
-                .catch((err) => {
-                    Log.error('PDF generation failed:', err);
-                    setError('Failed to generate PDF');
-                    setState('error');
-                });
-        } else {
-            setState('content');
-        }
-    }, [data, loading, queryError, download, silent]);
+    if (loading) {
+        state = 'loading';
+    } else if (queryError || !data?.flow) {
+        state = 'error';
+        errorMessage = 'Failed to load flow data';
+    } else if (pdfPhase === 'error') {
+        state = 'error';
+        errorMessage = pdfError;
+    } else if (download && pdfPhase !== 'done') {
+        state = 'generating';
+    } else {
+        state = 'content';
+    }
 
-    // Loading state (for all modes during initial loading and PDF generation)
     if (state === 'loading' || state === 'generating') {
         return (
             <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -99,7 +111,6 @@ const FlowReport = () => {
         );
     }
 
-    // Error state
     if (state === 'error') {
         return (
             <div className="min-h-screen bg-linear-to-br from-red-50 via-white to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -108,7 +119,7 @@ const FlowReport = () => {
                     <div className="flex flex-col gap-4 text-center">
                         <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400">Error Loading Report</h1>
                         <p className="max-w-md text-gray-600 dark:text-gray-400">
-                            {error || 'An unexpected error occurred while loading the report.'}
+                            {errorMessage || 'An unexpected error occurred while loading the report.'}
                         </p>
                         <button
                             className="mt-4 rounded-md bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700"
@@ -122,7 +133,6 @@ const FlowReport = () => {
         );
     }
 
-    // Content viewing state (normal mode without download)
     return (
         <div className="min-h-screen bg-white dark:bg-gray-900">
             <div className="h-screen w-full overflow-auto p-8">

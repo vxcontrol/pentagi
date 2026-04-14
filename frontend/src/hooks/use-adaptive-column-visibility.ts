@@ -82,9 +82,7 @@ export const useAdaptiveColumnVisibility = ({
                 const userPreference = userPreferences[column.id];
 
                 const isVisible =
-                    userPreference !== undefined
-                        ? !shouldHideByWidth && userPreference
-                        : !shouldHideByWidth;
+                    userPreference !== undefined ? !shouldHideByWidth && userPreference : !shouldHideByWidth;
 
                 return [column.id, isVisible];
             }),

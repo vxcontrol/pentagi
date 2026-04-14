@@ -147,8 +147,8 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
     );
 
     // Optimized helper function to process text nodes recursively
-    const processTextNode = useCallback(
-        (nodeChildren: any): any => {
+    const processTextNode = useMemo(() => {
+        const fn = (nodeChildren: any): any => {
             if (!processedSearch) {
                 return nodeChildren;
             }
@@ -163,15 +163,13 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                         return createHighlightedText(child);
                     }
 
-                    // Avoid deep cloning React elements to prevent memory leaks
-                    // Only process if it's a simple object with props
                     if (child && typeof child === 'object' && child.props && child.props.children !== undefined) {
                         return {
                             ...child,
                             key: child.key || `processed-${index}`,
                             props: {
                                 ...child.props,
-                                children: processTextNode(child.props.children),
+                                children: fn(child.props.children),
                             },
                         };
                     }
@@ -180,7 +178,6 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                 });
             }
 
-            // Handle React elements safely
             if (
                 nodeChildren &&
                 typeof nodeChildren === 'object' &&
@@ -191,25 +188,31 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
                     ...nodeChildren,
                     props: {
                         ...nodeChildren.props,
-                        children: processTextNode(nodeChildren.props.children),
+                        children: fn(nodeChildren.props.children),
                     },
                 };
             }
 
             return nodeChildren;
-        },
-        [processedSearch, createHighlightedText],
-    );
+        };
+
+        return fn;
+    }, [processedSearch, createHighlightedText]);
 
     // Create a simple component renderer factory to avoid recreating functions
     const createComponentRenderer = useCallback(
         (ComponentName: string) => {
-            return ({ children: nodeChildren, ...props }: any) => {
+            const Component = ComponentName as React.ElementType;
+
+            const Renderer = ({ children: nodeChildren, ...props }: Record<string, unknown>) => {
                 const processedChildren = processTextNode(nodeChildren);
-                const Component = ComponentName as any;
 
                 return <Component {...props}>{processedChildren}</Component>;
             };
+
+            Renderer.displayName = `Highlighted(${ComponentName})`;
+
+            return Renderer;
         },
         [processTextNode],
     );
