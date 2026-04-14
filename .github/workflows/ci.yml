@@ -36,50 +36,37 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      # pnpm setup
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       # Node.js setup and cache
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '23'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
-
-      # Cache npm dependencies
-      - name: Get npm cache directory
-        id: npm-cache-dir
-        run: echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
-
-      - name: Cache npm packages
-        uses: actions/cache@v5
-        id: npm-cache
-        with:
-          path: |
-            ${{ steps.npm-cache-dir.outputs.dir }}
-            frontend/node_modules
-          key: ${{ runner.os }}-npm-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
+          cache: 'pnpm'
+          cache-dependency-path: 'frontend/pnpm-lock.yaml'
 
       # Frontend lint and test
       - name: Frontend - Install dependencies
-        if: steps.npm-cache.outputs.cache-hit != 'true'
         working-directory: frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         continue-on-error: true
 
       - name: Frontend - Prettier
         working-directory: frontend
-        run: npm run prettier
+        run: pnpm run prettier
         continue-on-error: true
 
       - name: Frontend - Lint
         working-directory: frontend
-        run: npm run lint
+        run: pnpm run lint
         continue-on-error: true
 
       - name: Frontend - Test
         working-directory: frontend
-        run: npm run test
+        run: pnpm run test
         continue-on-error: true
 
       # Backend lint and test

@@ -42,9 +42,7 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
     }, [searchValue, description, result]);
 
     const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
-    const [prevHasMatch, setPrevHasMatch] = useState(
-        searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch,
-    );
+    const [prevHasMatch, setPrevHasMatch] = useState(searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch);
 
     const hasMatch = searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch;
 

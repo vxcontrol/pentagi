@@ -39,16 +39,16 @@ swag init -g ../../pkg/server/router.go -o pkg/server/docs/ --parseDependency --
 ### Frontend (run from `frontend/`)
 
 ```bash
-npm ci                    # Install dependencies
-npm run dev               # Dev server on http://localhost:8000
-npm run build             # Production build
-npm run lint              # ESLint check
-npm run lint:fix          # ESLint auto-fix
-npm run prettier          # Prettier check
-npm run prettier:fix      # Prettier auto-format
-npm run test              # Vitest
-npm run test:coverage     # Coverage report
-npm run graphql:generate  # Regenerate GraphQL types from schema
+pnpm install              # Install dependencies
+pnpm run dev              # Dev server on http://localhost:8000
+pnpm run build            # Production build
+pnpm run lint             # ESLint check
+pnpm run lint:fix         # ESLint auto-fix
+pnpm run prettier         # Prettier check
+pnpm run prettier:fix     # Prettier auto-format
+pnpm run test             # Vitest
+pnpm run test:coverage    # Coverage report
+pnpm run graphql:generate # Regenerate GraphQL types from schema
 ```
 
 ### Docker (run from repo root)
@@ -139,7 +139,7 @@ State is managed primarily through Apollo Client (GraphQL) with real-time update
 
 ### Code Generation
 
-When modifying `backend/pkg/graph/schema.graphqls`, re-run the gqlgen command to regenerate resolver stubs. When modifying REST handler annotations, re-run swag to update Swagger docs. When modifying `frontend/src/graphql/*.graphql` query files, re-run `npm run graphql:generate` to update TypeScript types.
+When modifying `backend/pkg/graph/schema.graphqls`, re-run the gqlgen command to regenerate resolver stubs. When modifying REST handler annotations, re-run swag to update Swagger docs. When modifying `frontend/src/graphql/*.graphql` query files, re-run `pnpm run graphql:generate` to update TypeScript types.
 
 ### Utility Binaries
 

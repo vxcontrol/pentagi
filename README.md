@@ -2423,23 +2423,23 @@ For running tests `cd backend && go test -v ./...`
 
 #### Frontend Setup
 
-Run once `cd frontend && npm install` to install needed packages.
+Run once `cd frontend && pnpm install` to install needed packages.
 
-For generating graphql files have to run `npm run graphql:generate` which using `graphql-codegen.ts` file.
+For generating graphql files have to run `pnpm run graphql:generate` which using `graphql-codegen.ts` file.
 
 Be sure that you have `graphql-codegen` installed globally:
 
 ```bash
-npm install -g graphql-codegen
+pnpm add -g graphql-codegen
 ```
 
 After that you can run:
-* `npm run prettier` to check if your code is formatted correctly
-* `npm run prettier:fix` to fix it
-* `npm run lint` to check if your code is linted correctly
-* `npm run lint:fix` to fix it
+* `pnpm run prettier` to check if your code is formatted correctly
+* `pnpm run prettier:fix` to fix it
+* `pnpm run lint` to check if your code is linted correctly
+* `pnpm run lint:fix` to fix it
 
-For generating SSL certificates you need to run `npm run ssl:generate` which using `generate-ssl.ts` file or it will be generated automatically when you run `npm run dev`.
+For generating SSL certificates you need to run `pnpm run ssl:generate` which using `generate-ssl.ts` file or it will be generated automatically when you run `pnpm run dev`.
 
 #### Backend Configuration
 
@@ -2473,9 +2473,9 @@ Run the command(s) in `backend` folder:
 #### Frontend
 
 Run the command(s) in `frontend` folder:
-- Run `npm install` to install the dependencies
-- Run `npm run dev` to run the web app
-- Run `npm run build` to build the web app
+- Run `pnpm install` to install the dependencies
+- Run `pnpm run dev` to run the web app
+- Run `pnpm run build` to build the web app
 
 Open your browser and visit the web app URL.
 
