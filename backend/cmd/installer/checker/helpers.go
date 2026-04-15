@@ -236,14 +236,15 @@ func checkDockerCliVersion() DockerVersion {
 }
 
 func checkDockerComposeVersion() DockerVersion {
-	cmd := exec.Command("docker", "compose", "version")
-	output, err := cmd.Output()
+	return checkDockerComposeVersionWithRunner(func(name string, args ...string) ([]byte, error) {
+		return exec.Command(name, args...).Output()
+	})
+}
+
+func checkDockerComposeVersionWithRunner(run func(name string, args ...string) ([]byte, error)) DockerVersion {
+	output, err := run("docker", "compose", "version")
 	if err != nil {
-		cmd = exec.Command("docker-compose", "--version")
-		output, err = cmd.Output()
-		if err != nil {
-			return DockerVersion{Version: "", Valid: false}
-		}
+		return DockerVersion{Version: "", Valid: false}
 	}
 
 	versionStr := extractVersionFromOutput(string(output))

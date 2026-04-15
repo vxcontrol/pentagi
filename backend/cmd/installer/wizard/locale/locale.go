@@ -155,23 +155,27 @@ Required: 20.0.0+`
 
 	// Docker Compose issues
 	TroubleshootComposeTitle = "Docker Compose Not Found"
-	TroubleshootComposeDesc  = "Docker Compose is required but not installed or not in PATH."
+	TroubleshootComposeDesc  = "The Docker Compose v2 plugin is required, but `docker compose` is not available."
 	TroubleshootComposeFix   = `To fix:
-1. Install Docker Desktop (includes Compose) or
-2. Install standalone: https://docs.docker.com/compose/install/
+1. Install or update Docker Desktop, or install the Docker Compose v2 plugin for Docker Engine
+2. Verify the plugin is available: docker compose version
+3. If only legacy docker-compose is installed, remove it or install the v2 plugin as well
 
-Verify installation: docker compose version`
+PentAGI executes "docker compose", so legacy "docker-compose" alone is not sufficient.
+Documentation: https://docs.docker.com/compose/install/`
 
 	// Docker Compose version issues
 	TroubleshootComposeVersionTitle = "Docker Compose Version Too Old"
-	TroubleshootComposeVersionDesc  = "Your Docker Compose version is incompatible. PentAGI requires Docker Compose 1.25.0 or newer."
+	TroubleshootComposeVersionDesc  = "Your `docker compose` version is incompatible. PentAGI requires Docker Compose 1.25.0 or newer."
 	TroubleshootComposeVersionFix   = `Current version: %s
 Required: 1.25.0+
 
 To fix:
-1. Update Docker Desktop to latest version
-2. Or install newer Docker Compose:
-   https://docs.docker.com/compose/install/`
+1. Update Docker Desktop or the Docker Compose v2 plugin to a newer version
+2. Verify the result with: docker compose version
+3. If only legacy docker-compose is installed, install the v2 plugin as well
+
+Documentation: https://docs.docker.com/compose/install/`
 
 	// Worker environment issues
 	TroubleshootWorkerTitle = "Worker Docker Environment Not Accessible"
