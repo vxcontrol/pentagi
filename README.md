@@ -965,6 +965,8 @@ Example:
 Assess https://target.example for common web application vulnerabilities. Focus on authentication, file handling, and injection issues. Stay within the provided target only and summarize confirmed findings with reproduction steps.
 ```
 
+Only test systems you own or are explicitly authorized to assess. See [EULA.md](EULA.md) for the acceptable use requirements.
+
 ### 2. Use templates for repeatable workflows
 
 The new flow form includes a template picker, which can prefill the message box with a saved flow template. This is useful when you run similar assessments repeatedly.
