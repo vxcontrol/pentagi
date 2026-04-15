@@ -21,6 +21,7 @@
 - [Architecture](#architecture)
   - [Agent Supervision](#advanced-agent-supervision)
 - [Quick Start](#quick-start)
+- [How to Use PentAGI After Login](#how-to-use-pentagi-after-login)
 - [API Access](#api-access)
   - [LLM Provider Configuration](#custom-llm-provider-configuration)
     - [Ollama](#ollama-provider-configuration)
@@ -936,6 +937,60 @@ The `ASSISTANT_USE_AGENTS` setting affects the initial state of the "Use Agents"
 - `true`: New assistants are created with agent delegation enabled by default
 
 Note that users can always override this setting by toggling the "Use Agents" button in the UI when creating or editing an assistant. This environment variable only controls the initial default state.
+
+## How to Use PentAGI After Login
+
+Once the stack is running and you can sign in to the web UI, the fastest way to start is through the Flows workflow.
+
+### 1. Create your first flow
+
+1. Open **Flows** in the sidebar.
+2. Click **New Flow**.
+3. Choose the mode that fits your goal:
+   - **Automation**: fully autonomous execution for a testing goal you want PentAGI to carry out end-to-end
+   - **Assistant**: interactive back-and-forth help when you want to steer the investigation step by step
+4. Select the LLM provider you want to use for this flow.
+5. Describe the target and the objective in natural language in the message box.
+
+Good first prompts usually include:
+
+- the target system or URL
+- the type of assessment you want
+- any scope limitations or rules of engagement
+- the result you expect, such as a vulnerability report or validation of a hypothesis
+
+Example:
+
+```text
+Assess https://target.example for common web application vulnerabilities. Focus on authentication, file handling, and injection issues. Stay within the provided target only and summarize confirmed findings with reproduction steps.
+```
+
+### 2. Use templates for repeatable workflows
+
+The new flow form includes a template picker, which can prefill the message box with a saved flow template. This is useful when you run similar assessments repeatedly.
+
+- Use an existing template if you already have one saved in **Templates**
+- Start from the example prompt in [`examples/prompts/base_web_pentest.md`](examples/prompts/base_web_pentest.md) if you need a practical baseline for web testing
+- Adjust the target, scope, and constraints before starting the flow
+
+Templates are starting points. You do not need special syntax to use PentAGI: plain natural-language instructions work well as long as the target and goal are clear.
+
+### 3. Monitor execution and review output
+
+After submitting the flow, PentAGI opens the flow page automatically.
+
+- Use the main flow view to follow messages, agent activity, and task progress
+- Inspect tool activity and terminal output as the flow runs
+- Review generated tasks and subtasks to understand what PentAGI is doing
+
+Once the flow has enough results, use the **Report** menu on the flow page to:
+
+- open the report in a web view
+- copy the generated report to the clipboard
+- download the report as Markdown
+- download the report as PDF
+
+For early testing, start with a narrow target and a single clear objective. This makes the output easier to review and helps you refine your prompts before running larger assessments.
 
 ## API Access
 
