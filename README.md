@@ -39,6 +39,7 @@
   - [OAuth Integration](#github-and-google-oauth-integration)
   - [Docker Image Configuration](#docker-image-configuration)
 - [Development](#development)
+  - [Pentesting Prompt Methodology](#pentesting-prompt-methodology)
 - [Testing LLM Agents](#testing-llm-agents)
 - [Embedding Configuration and Testing](#embedding-configuration-and-testing)
 - [Function Testing with ftester](#function-testing-with-ftester)
@@ -3191,6 +3192,18 @@ When developing new prompt templates or agent behaviors:
 2. Use ftester to directly invoke the agent with different prompts
 3. Observe responses and adjust prompts accordingly
 4. Check Langfuse for detailed traces of all function calls
+
+### Pentesting Prompt Methodology
+
+When refining prompts for offensive security work, give the agent a clear methodology instead of a flat list of payloads:
+
+1. Start with explicit scope, authorization, and success criteria
+2. Map the application first: roles, routes, parameters, uploads, integrations, and trust boundaries
+3. Prioritize attack surfaces systematically instead of testing everything at once
+4. Validate findings with reproducible evidence before escalating to deeper exploitation
+5. Finish with report-ready notes that capture impact, prerequisites, and next steps
+
+For PentAGI-specific prompt guidance, see [`backend/docs/prompt_engineering_pentagi.md`](backend/docs/prompt_engineering_pentagi.md). For a practical starting point, reuse and adapt [`examples/prompts/base_web_pentest.md`](examples/prompts/base_web_pentest.md) to match the target application, technology stack, and engagement scope.
 
 ### Verifying Docker Container Setup
 
