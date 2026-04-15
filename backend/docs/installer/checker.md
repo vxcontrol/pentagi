@@ -77,6 +77,21 @@ Three-tier verification process:
 2. **HTTP Connectivity**: Verifies HTTPS access (proxy-aware)
 3. **Docker Pull Test**: Attempts to pull a small test image
 
+#### Restricted Network Troubleshooting
+
+The current checker validates Docker Hub reachability by resolving `docker.io`, making an HTTPS connectivity check, and attempting a Docker pull with the default test image. This means the installer can fail network validation even when the host has general internet access but Docker itself is not configured for the target network.
+
+Recommended remediation order:
+
+1. Confirm general internet access and DNS resolution for `docker.io`
+2. If your environment requires an outbound proxy, configure it for the installer/update path and for Docker itself
+3. If Docker Hub is blocked or rate-limited, configure an organization-approved Docker registry mirror or registry proxy at the Docker daemon / Docker Desktop level
+4. Restart Docker and rerun the installer checks
+
+PentAGI variables such as `PENTAGI_IMAGE`, `DOCKER_DEFAULT_IMAGE`, and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` do not replace Docker daemon registry configuration. They only influence the PentAGI application image or worker image selection after Docker is already able to pull the required images. Optional stacks may also use registries outside Docker Hub, so mirror coverage depends on your Docker environment.
+
+See Docker's official documentation for [registry mirrors](https://docs.docker.com/docker-hub/image-library/mirror/) and [daemon proxy configuration](https://docs.docker.com/engine/daemon/proxy/).
+
 ### 5. Update Availability Checks
 - Communicates with update server to check latest versions
 - Sends current component versions and configuration

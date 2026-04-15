@@ -2341,10 +2341,13 @@ PentAGI allows you to configure Docker image selection for executing various tas
 
 | Variable                           | Default                | Description                                                 |
 | ---------------------------------- | ---------------------- | ----------------------------------------------------------- |
+| `PENTAGI_IMAGE`                    | `vxcontrol/pentagi:latest` | Docker image used for the main PentAGI application service |
 | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for general tasks and ambiguous cases  |
 | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for security/penetration testing tasks |
 
-When these environment variables are set, AI agents will be limited to the image choices you specify. This is particularly useful for:
+`PENTAGI_IMAGE` changes the image used by the main `pentagi` service in `docker-compose.yml`. The `DOCKER_DEFAULT_IMAGE` and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` variables only affect automatic worker image selection for task execution inside PentAGI. They do not rewrite the rest of the Compose stack, so services such as `pgvector`, `scraper`, and the optional `graphiti` stack still use the image references defined in the compose files.
+
+When `DOCKER_DEFAULT_IMAGE` and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` are set, AI agents will be limited to the image choices you specify. This is particularly useful for:
 
 - **Security Enforcement**: Restricting usage to only verified and trusted images
 - **Environment Standardization**: Using corporate or customized images across all operations
@@ -2353,6 +2356,9 @@ When these environment variables are set, AI agents will be limited to the image
 Configuration examples:
 
 ```bash
+# Using a custom PentAGI application image
+PENTAGI_IMAGE=registry.example.com/security/pentagi:latest
+
 # Using a custom image for general tasks
 DOCKER_DEFAULT_IMAGE=mycompany/custom-debian:latest
 
@@ -2362,6 +2368,29 @@ DOCKER_DEFAULT_IMAGE_FOR_PENTEST=mycompany/pentest-tools:v2.0
 
 > [!NOTE]
 > If a user explicitly specifies a particular Docker image in their task, the system will try to use that exact image, ignoring these settings. These variables only affect the system's automatic image selection process.
+
+#### Restricted Networks, Docker Mirrors, and Proxies
+
+If your environment cannot reach Docker Hub (`docker.io`) directly, changing PentAGI environment variables is usually not enough to fix image download failures. PentAGI still relies on Docker's own registry access for Compose-managed services, and the installer network checks also validate Docker Hub reachability.
+
+For restricted networks:
+
+1. Confirm that the host can resolve and reach `docker.io`.
+2. If your environment requires an outbound proxy, configure it for both PentAGI's outbound HTTP requests and the Docker daemon / Docker Desktop.
+3. If Docker Hub is blocked or heavily rate-limited, configure an organization-approved registry mirror or registry proxy before running the installer or `docker compose up`.
+4. Restart Docker after changing the daemon configuration, then rerun the installer checks or Compose startup.
+
+Example Docker daemon mirror configuration:
+
+```json
+{
+  "registry-mirrors": ["https://mirror.example.com"]
+}
+```
+
+On Linux, this is typically configured in `/etc/docker/daemon.json`. On Docker Desktop, use the equivalent Docker Engine or proxy settings. A Docker Hub mirror can help with Docker Hub-hosted images such as `vxcontrol/*`, but optional stacks may still pull from other registries such as `quay.io` or `gcr.io`, so those registries still need direct access or an approved proxy path.
+
+See the official Docker documentation for [registry mirrors](https://docs.docker.com/docker-hub/image-library/mirror/) and [daemon proxy configuration](https://docs.docker.com/engine/daemon/proxy/).
 
 ## Development
 
