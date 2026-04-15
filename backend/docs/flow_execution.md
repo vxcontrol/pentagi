@@ -239,7 +239,7 @@ graph TD
         Enricher --> Memorist
         Enricher --> Searcher
         
-        AdviserNote[Also used for:<br/>- Mentor execution monitoring<br/>- Planner task planning]
+        AdviserNote["Also used for:<br/>- Mentor (execution monitoring)<br/>- Planner (task planning)"]
     end
     
     subgraph "Error Correction"
