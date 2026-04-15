@@ -1199,8 +1199,10 @@ const (
 	ServerSettingsProxyPassword     = "Proxy Password"
 	ServerSettingsProxyPasswordDesc = "Password for proxy authentication (optional)"
 
-	ServerSettingsHTTPClientTimeout     = "HTTP Client Timeout"
-	ServerSettingsHTTPClientTimeoutDesc = "Timeout in seconds for external API calls (LLM providers, search engines, etc.)"
+	ServerSettingsHTTPClientTimeout       = "HTTP Client Timeout"
+	ServerSettingsHTTPClientTimeoutDesc   = "Timeout in seconds for external API calls (LLM providers, search engines, etc.)"
+	ServerSettingsTerminalToolTimeout     = "Terminal Tool Timeout"
+	ServerSettingsTerminalToolTimeoutDesc = "Default timeout in seconds for terminal tool commands when timeout=0"
 
 	ServerSettingsExternalSSLCAPath     = "Custom CA Certificate Path"
 	ServerSettingsExternalSSLCAPathDesc = "Path inside container to custom root CA cert (e.g., /opt/pentagi/ssl/ca-bundle.pem)"
@@ -1227,6 +1229,7 @@ const (
 	ServerSettingsProxyUsernameHint       = "Proxy Username"
 	ServerSettingsProxyPasswordHint       = "Proxy Password"
 	ServerSettingsHTTPClientTimeoutHint   = "HTTP Timeout"
+	ServerSettingsTerminalToolTimeoutHint = "Terminal Timeout"
 	ServerSettingsExternalSSLCAPathHint   = "Custom CA Path"
 	ServerSettingsExternalSSLInsecureHint = "Skip SSL Verification"
 	ServerSettingsSSLDirHint              = "SSL Directory"
@@ -1269,6 +1272,14 @@ Examples:
 Default: 600 seconds (10 minutes)
 Setting to 0 disables timeout (not recommended in production)
 Too low values may cause legitimate long-running requests to fail.`
+
+	ServerSettingsTerminalToolTimeoutHelp = `Default timeout in seconds for terminal tool commands when the tool call uses timeout=0.
+
+This affects commands executed through the isolated terminal container, including scanners and CLI-based utilities.
+
+Default: 600 seconds (10 minutes)
+Setting to 0 disables the server-side default timeout
+Explicit timeout values provided by the tool call still take precedence when they are within the normal range.`
 
 	ServerSettingsExternalSSLCAPathHelp = `Path to custom CA certificate file (PEM format) inside the container.
 
@@ -2277,6 +2288,7 @@ const (
 	EnvDesc_COOKIE_SIGNING_SALT               = "PentAGI Cookie Signing Salt"
 	EnvDesc_PROXY_URL                         = "HTTP/HTTPS Proxy URL"
 	EnvDesc_HTTP_CLIENT_TIMEOUT               = "HTTP Client Timeout (seconds)"
+	EnvDesc_TERMINAL_TOOL_TIMEOUT             = "Terminal Tool Timeout (seconds)"
 	EnvDesc_EXTERNAL_SSL_CA_PATH              = "Custom CA Certificate Path"
 	EnvDesc_EXTERNAL_SSL_INSECURE             = "Skip SSL Verification"
 	EnvDesc_PENTAGI_SSL_DIR                   = "PentAGI SSL Directory"

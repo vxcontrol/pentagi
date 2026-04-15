@@ -208,3 +208,48 @@ func TestPrimaryTerminalName(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeExecTimeout(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		configured time.Duration
+		requested  time.Duration
+		want       time.Duration
+	}{
+		{
+			name:       "explicit timeout is preserved",
+			configured: 10 * time.Minute,
+			requested:  45 * time.Second,
+			want:       45 * time.Second,
+		},
+		{
+			name:       "zero requested timeout uses configured default",
+			configured: 10 * time.Minute,
+			requested:  0,
+			want:       10 * time.Minute,
+		},
+		{
+			name:       "too large explicit timeout falls back to configured default",
+			configured: 10 * time.Minute,
+			requested:  maxRuntimeExecCommandTimeout + time.Second,
+			want:       10 * time.Minute,
+		},
+		{
+			name:       "configured zero keeps timeout disabled",
+			configured: 0,
+			requested:  0,
+			want:       0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			term := &terminal{defaultExecTimeout: tt.configured}
+			assert.Equal(t, tt.want, term.normalizeExecTimeout(tt.requested))
+		})
+	}
+}
