@@ -3001,6 +3001,19 @@ Available search parameters:
 - `-limit NUMBER`: Maximum number of results (default: 3)
 - `-threshold NUMBER`: Similarity threshold (0.0-1.0, default: 0.7)
 
+### Memory Lifecycle Across Flows
+
+PentAGI stores several kinds of vector documents, and they serve different purposes:
+
+- `memory` captures flow-specific execution history such as tool results and agent observations
+- `guide`, `answer`, and `code` are intended for reusable knowledge that can help future runs
+
+If you want to inspect what happened in one engagement, search the vector store with the related `flow_id`. If you want knowledge to survive beyond a single run, store the durable result explicitly as a `guide`, `answer`, or `code` document instead of relying on execution memory alone.
+
+For example, if a target has recurring setup notes, authentication quirks, or target-specific testing methodology, instruct the agent to save that information as a `guide` and search for it at the beginning of the next engagement. This is the safest current workflow when you want a new flow to start with reusable context.
+
+Flow deletion removes the flow from normal queries through PentAGI's soft-delete mechanism, so reusable knowledge should be treated as a separate concern from per-flow execution history. If you need broader episodic context across operations, enable the optional Graphiti knowledge graph described earlier in this README.
+
 ### Common Troubleshooting Scenarios
 
 1. **After changing embedding provider**: Always run `flush` or `reindex` to ensure consistency
