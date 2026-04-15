@@ -184,6 +184,24 @@ func TestCheckDockerComposeVersionWithRunner(t *testing.T) {
 		}
 	})
 
+	t.Run("parses version from stdout even when error is returned", func(t *testing.T) {
+		calls := 0
+		result := checkDockerComposeVersionWithRunner(func(name string, args ...string) ([]byte, error) {
+			calls++
+			return []byte("Docker Compose version v2.12.2"), errors.New("exit status 1")
+		})
+
+		if calls != 1 {
+			t.Fatalf("expected 1 command invocation, got %d", calls)
+		}
+		if result.Version != "2.12.2" {
+			t.Fatalf("expected version 2.12.2, got %q", result.Version)
+		}
+		if !result.Valid {
+			t.Fatal("expected docker compose version to remain valid when stdout is parseable")
+		}
+	})
+
 	t.Run("fails when docker compose is unavailable", func(t *testing.T) {
 		calls := 0
 		result := checkDockerComposeVersionWithRunner(func(name string, args ...string) ([]byte, error) {

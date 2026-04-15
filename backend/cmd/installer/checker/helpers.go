@@ -243,7 +243,7 @@ func checkDockerComposeVersion() DockerVersion {
 
 func checkDockerComposeVersionWithRunner(run func(name string, args ...string) ([]byte, error)) DockerVersion {
 	output, err := run("docker", "compose", "version")
-	if err != nil {
+	if err != nil && len(output) == 0 {
 		return DockerVersion{Version: "", Valid: false}
 	}
 
