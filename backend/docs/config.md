@@ -382,7 +382,7 @@ These settings control authentication mechanisms, including cookie-based session
 | Option                  | Environment Variable         | Default Value | Description                                            |
 | ----------------------- | ---------------------------- | ------------- | ------------------------------------------------------ |
 | CookieSigningSalt       | `COOKIE_SIGNING_SALT`        | *(none)*      | Salt for signing and securing cookies used in sessions |
-| PublicURL               | `PUBLIC_URL`                 | *(none)*      | Public URL for auth callbacks from OAuth providers     |
+| PublicURL               | `PUBLIC_URL`                 | *(none)*      | Public base URL used to build OAuth callback URLs such as `/auth/login-callback` |
 | OAuthGoogleClientID     | `OAUTH_GOOGLE_CLIENT_ID`     | *(none)*      | Google OAuth client ID for authentication              |
 | OAuthGoogleClientSecret | `OAUTH_GOOGLE_CLIENT_SECRET` | *(none)*      | Google OAuth client secret                             |
 | OAuthGithubClientID     | `OAUTH_GITHUB_CLIENT_ID`     | *(none)*      | GitHub OAuth client ID for authentication              |
@@ -407,6 +407,29 @@ The authentication settings are used in `pkg/server/router.go` to set up authent
   publicURL, err := url.Parse(cfg.PublicURL)
   ```
 
+  The router builds the login callback path by appending `/auth/login-callback` to this public URL:
+  ```go
+  oauthLoginCallbackURL := "/auth/login-callback"
+
+  publicURL, err := url.Parse(cfg.PublicURL)
+  if err == nil {
+      publicURL.Path = path.Join(baseURL, oauthLoginCallbackURL)
+  }
+  ```
+
+  In the default deployment, configure your OAuth providers with:
+  - **Homepage URL**: `PUBLIC_URL`
+  - **Authorization callback URL / Redirect URI**: `${PUBLIC_URL}/auth/login-callback`
+
+  Example:
+  ```bash
+  PUBLIC_URL=https://pentagi.example.com
+  OAUTH_GITHUB_CLIENT_ID=your_github_client_id
+  OAUTH_GITHUB_CLIENT_SECRET=your_github_client_secret
+  OAUTH_GOOGLE_CLIENT_ID=your_google_client_id
+  OAUTH_GOOGLE_CLIENT_SECRET=your_google_client_secret
+  ```
+
 - **OAuth Provider Settings**: Used to configure authentication with Google and GitHub:
   ```go
   // Google OAuth setup
@@ -429,6 +452,8 @@ The authentication settings are used in `pkg/server/router.go` to set up authent
       // ...
   }
   ```
+
+  Google and GitHub both use the same PentAGI login callback endpoint. If the URL configured in the provider console does not exactly match the generated callback URL, authentication will fail with a redirect URI mismatch error.
 
 These settings are essential for:
 - Secure user authentication and session management
