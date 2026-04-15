@@ -231,16 +231,22 @@ func TestNormalizeExecTimeout(t *testing.T) {
 			want:       10 * time.Minute,
 		},
 		{
-			name:       "too large explicit timeout falls back to configured default",
+			name:       "too large explicit timeout clamps to max runtime timeout",
 			configured: 10 * time.Minute,
 			requested:  maxRuntimeExecCommandTimeout + time.Second,
-			want:       10 * time.Minute,
+			want:       maxRuntimeExecCommandTimeout,
 		},
 		{
 			name:       "configured zero keeps timeout disabled",
 			configured: 0,
 			requested:  0,
 			want:       0,
+		},
+		{
+			name:       "configured zero does not disable oversized explicit timeout limit",
+			configured: 0,
+			requested:  maxRuntimeExecCommandTimeout + time.Second,
+			want:       maxRuntimeExecCommandTimeout,
 		},
 	}
 

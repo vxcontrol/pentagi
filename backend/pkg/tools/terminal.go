@@ -83,7 +83,7 @@ func (t *terminal) normalizeExecTimeout(timeout time.Duration) time.Duration {
 	case timeout > 0 && timeout <= maxRuntimeExecCommandTimeout:
 		return timeout
 	case timeout > maxRuntimeExecCommandTimeout:
-		return t.configuredExecTimeout()
+		return maxRuntimeExecCommandTimeout
 	default:
 		return t.configuredExecTimeout()
 	}

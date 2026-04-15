@@ -289,10 +289,10 @@ func (m *ServerSettingsFormModel) GetCurrentConfiguration() string {
 
 	if terminalTimeout := cfg.TerminalToolTimeout.Value; terminalTimeout != "" {
 		terminalTimeout = m.GetStyles().Info.Render(terminalTimeout + "s")
-		sections = append(sections, fmt.Sprintf("â€¢ %s: %s", locale.ServerSettingsTerminalToolTimeoutHint, terminalTimeout))
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsTerminalToolTimeoutHint, terminalTimeout))
 	} else if terminalTimeout := cfg.TerminalToolTimeout.Default; terminalTimeout != "" {
 		terminalTimeout = m.GetStyles().Muted.Render(terminalTimeout + "s")
-		sections = append(sections, fmt.Sprintf("â€¢ %s: %s", locale.ServerSettingsTerminalToolTimeoutHint, terminalTimeout))
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsTerminalToolTimeoutHint, terminalTimeout))
 	}
 
 	if externalSSLCAPath := cfg.ExternalSSLCAPath.Value; externalSSLCAPath != "" {
