@@ -56,6 +56,7 @@ type flowWorker struct {
 	taskMX  *sync.Mutex
 	taskST  context.CancelFunc
 	taskWG  *sync.WaitGroup
+	inputWG *sync.WaitGroup
 	input   chan flowInput
 	discard atomic.Bool
 	flowCtx *FlowContext
@@ -243,6 +244,7 @@ func NewFlowWorker(
 		taskMX:  &sync.Mutex{},
 		taskST:  func() {},
 		taskWG:  &sync.WaitGroup{},
+		inputWG: &sync.WaitGroup{},
 		input:   make(chan flowInput, flowInputQueueSize),
 		flowCtx: flowCtx,
 		logger: logrus.WithFields(logrus.Fields{
@@ -393,6 +395,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		taskMX:  &sync.Mutex{},
 		taskST:  func() {},
 		taskWG:  &sync.WaitGroup{},
+		inputWG: &sync.WaitGroup{},
 		input:   make(chan flowInput, flowInputQueueSize),
 		flowCtx: flowCtx,
 		logger: logrus.WithFields(logrus.Fields{
@@ -659,16 +662,16 @@ func (fw *flowWorker) Stop(ctx context.Context) error {
 	defer span.End()
 
 	fw.taskMX.Lock()
-	defer fw.taskMX.Unlock()
 	fw.discard.Store(true)
-	defer fw.discard.Store(false)
-
 	fw.taskST()
+	fw.taskMX.Unlock()
+	defer fw.discard.Store(false)
 	done := make(chan struct{})
 	timer := time.NewTimer(stopTaskTimeout)
 	defer timer.Stop()
 
 	go func() {
+		fw.inputWG.Wait()
 		fw.taskWG.Wait()
 		close(done)
 	}()
@@ -837,12 +840,17 @@ func (fw *flowWorker) worker() {
 			if err := fw.ctx.Err(); err != nil {
 				return
 			}
+			fw.taskMX.Lock()
 			if fw.discard.Load() {
+				fw.taskMX.Unlock()
 				flin.done <- fw.stoppedQueuedInputError()
 				continue
 			}
+			fw.inputWG.Add(1)
+			fw.taskMX.Unlock()
 
 			if task, err := fw.processInput(flin); err != nil {
+				fw.inputWG.Done()
 				if errors.Is(err, context.Canceled) {
 					getLogger(flin.input, task).Info("flow are going to be stopped by user")
 					return
@@ -853,6 +861,7 @@ func (fw *flowWorker) worker() {
 					_ = fw.SetStatus(fw.ctx, database.FlowStatusWaiting)
 				}
 			} else {
+				fw.inputWG.Done()
 				getLogger(flin.input, task).Info("user input processed")
 			}
 		}
@@ -904,15 +913,23 @@ func (fw *flowWorker) runTask(spanName, input string, task TaskWorker) error {
 	)
 
 	fw.taskMX.Lock()
+	if fw.discard.Load() {
+		fw.taskMX.Unlock()
+		span.End(
+			langfuse.WithSpanStatus("stopped"),
+			langfuse.WithSpanLevel(langfuse.ObservationLevelWarning),
+		)
+		return context.Canceled
+	}
 	fw.taskST()
 	ctx, taskST := context.WithCancel(fw.ctx)
 	fw.taskST = taskST
+	fw.taskWG.Add(1)
 	fw.taskMX.Unlock()
 
 	ctx, _ = span.Observation(ctx)
 	defer taskST()
 
-	fw.taskWG.Add(1)
 	defer fw.taskWG.Done()
 
 	if err := task.Run(ctx); err != nil {

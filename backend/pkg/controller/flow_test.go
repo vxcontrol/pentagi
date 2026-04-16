@@ -41,18 +41,21 @@ func (tc *flowWorkerTestTaskController) GetTask(ctx context.Context, taskID int6
 }
 
 type flowWorkerTestTask struct {
-	id         int64
-	flowID     int64
-	userID     int64
-	title      string
-	mu         sync.Mutex
-	waiting    bool
-	completed  bool
-	inputs     []string
-	runStarted chan struct{}
-	releaseRun chan struct{}
-	ignoreStop bool
-	runOnce    sync.Once
+	id              int64
+	flowID          int64
+	userID          int64
+	title           string
+	mu              sync.Mutex
+	waiting         bool
+	completed       bool
+	inputs          []string
+	runStarted      chan struct{}
+	releaseRun      chan struct{}
+	putInputStarted chan struct{}
+	releasePutInput chan struct{}
+	ignoreStop      bool
+	runOnce         sync.Once
+	putInputOnce    sync.Once
 }
 
 func (task *flowWorkerTestTask) GetTaskID() int64 {
@@ -127,6 +130,16 @@ func (task *flowWorkerTestTask) SetResult(ctx context.Context, result string) er
 }
 
 func (task *flowWorkerTestTask) PutInput(ctx context.Context, input string) error {
+	task.putInputOnce.Do(func() {
+		if task.putInputStarted != nil {
+			close(task.putInputStarted)
+		}
+	})
+
+	if task.releasePutInput != nil {
+		<-task.releasePutInput
+	}
+
 	task.mu.Lock()
 	defer task.mu.Unlock()
 
@@ -172,12 +185,13 @@ func newFlowWorkerForInputTest(buffer int) (*flowWorker, context.CancelFunc) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &flowWorker{
-		ctx:    ctx,
-		cancel: cancel,
-		input:  make(chan flowInput, buffer),
-		taskMX: &sync.Mutex{},
-		taskST: func() {},
-		taskWG: &sync.WaitGroup{},
+		ctx:     ctx,
+		cancel:  cancel,
+		input:   make(chan flowInput, buffer),
+		taskMX:  &sync.Mutex{},
+		taskST:  func() {},
+		taskWG:  &sync.WaitGroup{},
+		inputWG: &sync.WaitGroup{},
 		flowCtx: &FlowContext{
 			FlowID: 42,
 		},
@@ -190,16 +204,17 @@ func newRunningFlowWorkerForInputTest(buffer int, tc TaskController) (*flowWorke
 	logger.SetOutput(io.Discard)
 
 	fw := &flowWorker{
-		tc:     tc,
-		wg:     &sync.WaitGroup{},
-		aws:    map[int64]AssistantWorker{},
-		awsMX:  &sync.Mutex{},
-		ctx:    ctx,
-		cancel: cancel,
-		taskMX: &sync.Mutex{},
-		taskST: func() {},
-		taskWG: &sync.WaitGroup{},
-		input:  make(chan flowInput, buffer),
+		tc:      tc,
+		wg:      &sync.WaitGroup{},
+		aws:     map[int64]AssistantWorker{},
+		awsMX:   &sync.Mutex{},
+		ctx:     ctx,
+		cancel:  cancel,
+		taskMX:  &sync.Mutex{},
+		taskST:  func() {},
+		taskWG:  &sync.WaitGroup{},
+		inputWG: &sync.WaitGroup{},
+		input:   make(chan flowInput, buffer),
 		flowCtx: &FlowContext{
 			FlowID: 42,
 		},
@@ -298,6 +313,8 @@ func TestFlowWorkerStopDropsQueuedInput(t *testing.T) {
 }
 
 func TestFlowWorkerStopTimeoutDropsQueuedInput(t *testing.T) {
+	t.Parallel()
+
 	fw, cancel := newFlowWorkerForInputTest(2)
 	defer cancel()
 
@@ -363,4 +380,74 @@ func TestFlowWorkerStopDrainsQueuedInputWhileWorkerIsRunning(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("queued input was not drained while the worker was stopping")
 	}
+}
+
+func TestFlowWorkerStopWaitsForDequeuedInputBeforeTaskRegistration(t *testing.T) {
+	t.Parallel()
+
+	task := &flowWorkerTestTask{
+		id:              1,
+		flowID:          42,
+		userID:          7,
+		title:           "waiting task",
+		waiting:         true,
+		putInputStarted: make(chan struct{}),
+		releasePutInput: make(chan struct{}),
+		runStarted:      make(chan struct{}),
+	}
+	tc := &flowWorkerTestTaskController{
+		tasks: []TaskWorker{task},
+	}
+
+	fw, cancel := newRunningFlowWorkerForInputTest(2, tc)
+	defer func() {
+		cancel()
+		fw.wg.Wait()
+	}()
+
+	resultCh := make(chan error, 1)
+	go func() {
+		resultCh <- fw.PutInput(context.Background(), "queued instruction", nil)
+	}()
+
+	select {
+	case <-task.putInputStarted:
+	case <-time.After(time.Second):
+		t.Fatal("worker did not start processing the dequeued input")
+	}
+
+	stopResultCh := make(chan error, 1)
+	go func() {
+		stopResultCh <- fw.Stop(context.Background())
+	}()
+
+	select {
+	case err := <-stopResultCh:
+		t.Fatalf("stop returned too early: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(task.releasePutInput)
+
+	select {
+	case err := <-stopResultCh:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("stop did not wait for the dequeued input to finish unwinding")
+	}
+
+	select {
+	case err := <-resultCh:
+		require.NoError(t, err)
+	case <-time.After(flowInputTimeout + time.Second):
+		t.Fatal("PutInput did not finish after the stop sequence completed")
+	}
+
+	select {
+	case <-task.runStarted:
+		t.Fatal("task started running after stop completed")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	require.Equal(t, []string{"queued instruction"}, task.Inputs())
 }
