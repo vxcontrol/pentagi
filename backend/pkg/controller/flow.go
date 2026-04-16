@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"pentagi/pkg/cast"
@@ -56,6 +57,7 @@ type flowWorker struct {
 	taskST  context.CancelFunc
 	taskWG  *sync.WaitGroup
 	input   chan flowInput
+	discard atomic.Bool
 	flowCtx *FlowContext
 	logger  *logrus.Entry
 }
@@ -100,10 +102,12 @@ type flowProviderWorkers struct {
 	sw   FlowScreenshotWorker
 }
 
+const flowInputQueueSize = 16
 const flowInputTimeout = 1 * time.Second
 
 type flowInput struct {
 	input string
+	prv   provider.Provider
 	done  chan error
 }
 
@@ -239,7 +243,7 @@ func NewFlowWorker(
 		taskMX:  &sync.Mutex{},
 		taskST:  func() {},
 		taskWG:  &sync.WaitGroup{},
-		input:   make(chan flowInput),
+		input:   make(chan flowInput, flowInputQueueSize),
 		flowCtx: flowCtx,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
@@ -389,7 +393,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		taskMX:  &sync.Mutex{},
 		taskST:  func() {},
 		taskWG:  &sync.WaitGroup{},
-		input:   make(chan flowInput),
+		input:   make(chan flowInput, flowInputQueueSize),
 		flowCtx: flowCtx,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
@@ -575,18 +579,17 @@ func (fw *flowWorker) PutInput(
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.PutInput")
 	defer span.End()
 
-	if err := fw.switchProvider(ctx, prv); err != nil {
-		return fmt.Errorf("failed to switch provider: %w", err)
+	flin := flowInput{input: input, prv: prv, done: make(chan error, 1)}
+	if err := fw.ctx.Err(); err != nil {
+		close(flin.done)
+		return fmt.Errorf("flow %d stopped: %w", fw.flowCtx.FlowID, err)
+	}
+	if err := ctx.Err(); err != nil {
+		close(flin.done)
+		return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, err)
 	}
 
-	flin := flowInput{input: input, done: make(chan error, 1)}
 	select {
-	case <-fw.ctx.Done():
-		close(flin.done)
-		return fmt.Errorf("flow %d stopped: %w", fw.flowCtx.FlowID, fw.ctx.Err())
-	case <-ctx.Done():
-		close(flin.done)
-		return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, ctx.Err())
 	case fw.input <- flin:
 		timer := time.NewTimer(flowInputTimeout)
 		defer timer.Stop()
@@ -601,6 +604,17 @@ func (fw *flowWorker) PutInput(
 		case <-ctx.Done():
 			return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, ctx.Err())
 		}
+	default:
+		if err := fw.ctx.Err(); err != nil {
+			close(flin.done)
+			return fmt.Errorf("flow %d stopped: %w", fw.flowCtx.FlowID, err)
+		}
+		if err := ctx.Err(); err != nil {
+			close(flin.done)
+			return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, err)
+		}
+		close(flin.done)
+		return fmt.Errorf("flow %d input queue is full", fw.flowCtx.FlowID)
 	}
 }
 
@@ -646,6 +660,8 @@ func (fw *flowWorker) Stop(ctx context.Context) error {
 
 	fw.taskMX.Lock()
 	defer fw.taskMX.Unlock()
+	fw.discard.Store(true)
+	defer fw.discard.Store(false)
 
 	fw.taskST()
 	done := make(chan struct{})
@@ -661,6 +677,7 @@ func (fw *flowWorker) Stop(ctx context.Context) error {
 	case <-timer.C:
 		return fmt.Errorf("task stop timeout")
 	case <-done:
+		fw.drainPendingInput(fw.stoppedQueuedInputError())
 		return nil
 	}
 }
@@ -747,10 +764,24 @@ func (fw *flowWorker) finish() error {
 	}
 
 	fw.cancel()
-	close(fw.input)
 	fw.wg.Wait()
 
 	return nil
+}
+
+func (fw *flowWorker) stoppedQueuedInputError() error {
+	return fmt.Errorf("flow %d stopped before queued input was processed", fw.flowCtx.FlowID)
+}
+
+func (fw *flowWorker) drainPendingInput(err error) {
+	for {
+		select {
+		case flin := <-fw.input:
+			flin.done <- err
+		default:
+			return
+		}
+	}
 }
 
 func (fw *flowWorker) worker() {
@@ -794,24 +825,46 @@ func (fw *flowWorker) worker() {
 	}
 
 	// process user input in regular job
-	for flin := range fw.input {
-		if task, err := fw.processInput(flin); err != nil {
-			if errors.Is(err, context.Canceled) {
-				getLogger(flin.input, task).Info("flow are going to be stopped by user")
+	for {
+		select {
+		case <-fw.ctx.Done():
+			return
+		case flin, ok := <-fw.input:
+			if !ok {
 				return
-			} else {
-				getLogger(flin.input, task).WithError(err).Error("failed to process input")
-
-				// anyway there need to set flow status to Waiting new user input even an error happened
-				_ = fw.SetStatus(fw.ctx, database.FlowStatusWaiting)
 			}
-		} else {
-			getLogger(flin.input, task).Info("user input processed")
+			if err := fw.ctx.Err(); err != nil {
+				return
+			}
+			if fw.discard.Load() {
+				flin.done <- fw.stoppedQueuedInputError()
+				continue
+			}
+
+			if task, err := fw.processInput(flin); err != nil {
+				if errors.Is(err, context.Canceled) {
+					getLogger(flin.input, task).Info("flow are going to be stopped by user")
+					return
+				} else {
+					getLogger(flin.input, task).WithError(err).Error("failed to process input")
+
+					// anyway there need to set flow status to Waiting new user input even an error happened
+					_ = fw.SetStatus(fw.ctx, database.FlowStatusWaiting)
+				}
+			} else {
+				getLogger(flin.input, task).Info("user input processed")
+			}
 		}
 	}
 }
 
 func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
+	if err := fw.switchProvider(fw.ctx, flin.prv); err != nil {
+		err = fmt.Errorf("failed to switch provider: %w", err)
+		flin.done <- err
+		return nil, err
+	}
+
 	for _, task := range fw.tc.ListTasks(fw.ctx) {
 		if !task.IsCompleted() && task.IsWaiting() {
 			if err := task.PutInput(fw.ctx, flin.input); err != nil {

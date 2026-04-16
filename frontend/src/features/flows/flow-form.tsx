@@ -37,6 +37,7 @@ const formSchema = z.object({
 });
 
 export interface FlowFormProps {
+    allowInputWhileLoading?: boolean;
     defaultValues?: Partial<FlowFormValues>;
     isCanceling?: boolean;
     isDisabled?: boolean;
@@ -46,12 +47,14 @@ export interface FlowFormProps {
     onCancel?: () => Promise<void> | void;
     onSubmit: (values: FlowFormValues) => Promise<void> | void;
     placeholder?: string;
+    showCancelButton?: boolean;
     type: 'assistant' | 'automation';
 }
 
 export type FlowFormValues = z.infer<typeof formSchema>;
 
 export const FlowForm = ({
+    allowInputWhileLoading = false,
     defaultValues,
     isCanceling,
     isDisabled,
@@ -61,6 +64,7 @@ export const FlowForm = ({
     onCancel,
     onSubmit,
     placeholder = 'Describe what you would like PentAGI to test...',
+    showCancelButton = false,
     type,
 }: FlowFormProps) => {
     const { providers, setSelectedProvider } = useProviders();
@@ -141,7 +145,9 @@ export const FlowForm = ({
             });
     }, [defaultValues, dirtyFields, setValue, getValues]);
 
-    const isFormDisabled = isDisabled || isLoading || isSubmitting || isCanceling;
+    const isFormDisabled = isDisabled || (isLoading && !allowInputWhileLoading) || isSubmitting || isCanceling;
+    const shouldShowCancelButton = !!onCancel && (showCancelButton || (!allowInputWhileLoading && !!isLoading));
+    const shouldShowSubmitButton = !isLoading || isSubmitting || allowInputWhileLoading;
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const previousFormDisabledRef = useRef(isFormDisabled);
@@ -426,28 +432,29 @@ export const FlowForm = ({
                                         </DropdownMenuContent>
                                     </DropdownMenu>
 
-                                    {!isLoading || isSubmitting ? (
-                                        <InputGroupButton
-                                            className="ml-auto"
-                                            disabled={isSubmitting || !isValid}
-                                            size="icon-xs"
-                                            type="submit"
-                                            variant="default"
-                                        >
-                                            {isSubmitting ? <Spinner variant="circle" /> : <ArrowUp />}
-                                        </InputGroupButton>
-                                    ) : (
-                                        <InputGroupButton
-                                            className="ml-auto"
-                                            disabled={isCanceling || !onCancel}
-                                            onClick={() => onCancel?.()}
-                                            size="icon-xs"
-                                            type="button"
-                                            variant="destructive"
-                                        >
-                                            {isCanceling ? <Spinner variant="circle" /> : <Square />}
-                                        </InputGroupButton>
-                                    )}
+                                    <div className="ml-auto flex items-center gap-1">
+                                        {shouldShowSubmitButton && (
+                                            <InputGroupButton
+                                                disabled={isFormDisabled || isSubmitting || !isValid}
+                                                size="icon-xs"
+                                                type="submit"
+                                                variant="default"
+                                            >
+                                                {isSubmitting ? <Spinner variant="circle" /> : <ArrowUp />}
+                                            </InputGroupButton>
+                                        )}
+                                        {shouldShowCancelButton && (
+                                            <InputGroupButton
+                                                disabled={isCanceling || !onCancel}
+                                                onClick={() => onCancel?.()}
+                                                size="icon-xs"
+                                                type="button"
+                                                variant="destructive"
+                                            >
+                                                {isCanceling ? <Spinner variant="circle" /> : <Square />}
+                                            </InputGroupButton>
+                                        )}
+                                    </div>
                                 </InputGroupAddon>
                             </InputGroup>
                         </FormControl>

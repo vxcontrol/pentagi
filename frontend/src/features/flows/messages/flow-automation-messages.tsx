@@ -158,7 +158,7 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
             }
 
             case StatusType.Running: {
-                return 'PentAGI is working... Click Stop to interrupt';
+                return 'Current work is running. New instructions will be queued for the next task boundary.';
             }
 
             case StatusType.Waiting: {
@@ -208,7 +208,8 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
 
     const isFormDisabled = flowStatus === StatusType.Finished || flowStatus === StatusType.Failed;
     const isFormLoading = flowStatus === StatusType.Created || flowStatus === StatusType.Running;
-    const isProviderChangeAllowed = flowStatus === StatusType.Waiting;
+    const allowInputWhileLoading = flowStatus === StatusType.Running;
+    const showCancelButton = flowStatus === StatusType.Created || flowStatus === StatusType.Running;
 
     return (
         <div className={cn('flex h-full flex-col', className)}>
@@ -330,18 +331,25 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
             )}
 
             <div className="bg-background sticky bottom-0 p-px">
+                {flowStatus === StatusType.Running && (
+                    <p className="text-muted-foreground px-1 pb-2 text-xs">
+                        New instructions are queued and applied after the current task reaches a handoff point.
+                    </p>
+                )}
                 <FlowForm
+                    allowInputWhileLoading={allowInputWhileLoading}
                     defaultValues={{
                         providerName: flowData?.flow?.provider?.name ?? '',
                     }}
                     isCanceling={isCanceling}
                     isDisabled={isFormDisabled}
                     isLoading={isFormLoading}
-                    isProviderDisabled={!isProviderChangeAllowed}
+                    isProviderDisabled={true}
                     isSubmitting={isSubmitting}
                     onCancel={handleStopAutomation}
                     onSubmit={handleSubmitMessage}
                     placeholder={placeholder}
+                    showCancelButton={showCancelButton}
                     type={'automation'}
                 />
             </div>
