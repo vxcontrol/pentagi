@@ -675,6 +675,7 @@ func (fw *flowWorker) Stop(ctx context.Context) error {
 
 	select {
 	case <-timer.C:
+		fw.drainPendingInput(fw.stoppedQueuedInputError())
 		return fmt.Errorf("task stop timeout")
 	case <-done:
 		fw.drainPendingInput(fw.stoppedQueuedInputError())
@@ -878,7 +879,7 @@ func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
 		}
 	}
 
-	// anyway there need to set flow status to Running to disable user input
+	// Mark the flow as running while the queued input creates and executes a new task.
 	_ = fw.SetStatus(fw.ctx, database.FlowStatusRunning)
 
 	if task, err := fw.tc.CreateTask(fw.ctx, flin.input, fw); err != nil {

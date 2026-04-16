@@ -190,7 +190,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
 
     const submitAutomationMessage = useCallback(
         async (values: FlowFormValues) => {
-            if (!flowId || flowStatus === StatusType.Finished) {
+            if (!flowId || flowStatus === StatusType.Finished || flowStatus === StatusType.Failed) {
                 return;
             }
 
