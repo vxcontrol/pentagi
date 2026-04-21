@@ -395,7 +395,7 @@ The authentication settings are used in `pkg/server/router.go` to set up authent
 - **CookieSigningSalt**: Used to secure cookies for session management:
   ```go
   // Used in auth middleware for authentication checks
-  authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.CookieSigningSalt)
+  authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.CookieSigningSalt, tokenCache, userCache)
 
   // Used for cookie store creation
   cookieStore := cookie.NewStore(auth.MakeCookieStoreKey(cfg.CookieSigningSalt)...)
@@ -434,20 +434,20 @@ The authentication settings are used in `pkg/server/router.go` to set up authent
   ```go
   // Google OAuth setup
   if publicURL != nil && cfg.OAuthGoogleClientID != "" && cfg.OAuthGoogleClientSecret != "" {
-      googleOAuth := oauth.NewGoogleOAuthController(
+      googleClient := oauth.NewGoogleOAuthClient(
           cfg.OAuthGoogleClientID,
           cfg.OAuthGoogleClientSecret,
-          *publicURL,
+          publicURL.String(),
       )
       // ...
   }
 
   // GitHub OAuth setup
   if publicURL != nil && cfg.OAuthGithubClientID != "" && cfg.OAuthGithubClientSecret != "" {
-      githubOAuth := oauth.NewGithubOAuthController(
+      githubClient := oauth.NewGithubOAuthClient(
           cfg.OAuthGithubClientID,
           cfg.OAuthGithubClientSecret,
-          *publicURL,
+          publicURL.String(),
       )
       // ...
   }
