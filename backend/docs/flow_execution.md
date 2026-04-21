@@ -188,7 +188,7 @@ graph TD
         
         AssistantDirect[Assistant Agent<br/>UseAgents=false] --> DirectTools[Direct Tools Only]
         
-        Note over AssistantUA,AssistantDirect: Operates independently<br/>from Task/Subtask hierarchy
+        AssistantNote[Operates independently<br/>from Task/Subtask hierarchy]
     end
     
     subgraph "Specialist Agent Tools"
@@ -239,7 +239,7 @@ graph TD
         Enricher --> Memorist
         Enricher --> Searcher
         
-        Note over Adviser: Also used for:<br/>- Mentor (execution monitoring)<br/>- Planner (task planning)
+        AdviserNote["Also used for:<br/>- Mentor (execution monitoring)<br/>- Planner (task planning)"]
     end
     
     subgraph "Error Correction"
