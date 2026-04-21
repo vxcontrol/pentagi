@@ -209,6 +209,7 @@ These settings control how PentAGI interacts with Docker, which is used for term
 | DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers |
 | DockerDefaultImage           | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for containers when specific images fail |
 | DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
+| TerminalToolTimeout          | `TERMINAL_TOOL_TIMEOUT`            | `600`                  | Default timeout in seconds for terminal tool commands when timeout is set to `0` (0 = no default timeout) |
 
 
 ### Usage Details
@@ -226,6 +227,22 @@ The Docker settings are primarily used in `pkg/docker/client.go` which implement
       socket = cfg.DockerSocket
   }
   ```
+
+- **TerminalToolTimeout**: Sets the default execution timeout for terminal tool commands when the tool call uses `timeout=0`:
+  ```go
+  term := NewTerminalTool(
+      flowID,
+      taskID,
+      subtaskID,
+      containerID,
+      containerLID,
+      dockerClient,
+      termLogProvider,
+      time.Duration(cfg.TerminalToolTimeout)*time.Second,
+  )
+  ```
+
+  Use `0` to disable the server-side default timeout. Explicit timeout values provided by the tool call still take precedence when they are within the normal range.
 
 - **DockerNetwork**: Controls the network isolation mode for containers. Supports two modes:
   

@@ -156,8 +156,9 @@ var allowedStoringInMemoryTools = []string{
 var registryDefinitions = map[string]llms.FunctionDefinition{
 	TerminalToolName: {
 		Name: TerminalToolName,
-		Description: "Calls a terminal command in blocking mode with hard limit timeout 1200 seconds and " +
-			"optimum timeout 60 seconds, only one command can be executed at a time",
+		Description: "Calls a terminal command in blocking mode. Use timeout=0 to apply the server default " +
+			"from TERMINAL_TOOL_TIMEOUT (default 600 seconds), or provide an explicit timeout up to 1200 seconds. " +
+			"Only one command can be executed at a time",
 		Parameters: reflector.Reflect(&TerminalAction{}),
 	},
 	FileToolName: {

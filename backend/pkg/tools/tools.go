@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
@@ -528,6 +529,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	definitions := []llms.FunctionDefinition{
@@ -799,6 +801,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
@@ -993,6 +996,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
@@ -1256,6 +1260,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
@@ -1321,6 +1326,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
@@ -1382,6 +1388,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
@@ -1450,6 +1457,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
