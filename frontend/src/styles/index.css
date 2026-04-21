@@ -5,6 +5,15 @@
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
+    font-family: 'Inter Fallback';
+    src: local('Arial');
+    ascent-override: 90%;
+    descent-override: 22.43%;
+    line-gap-override: 0%;
+    size-adjust: 107.64%;
+}
+
+@font-face {
     font-family: 'Inter';
     font-style: normal;
     font-weight: 400;
@@ -297,9 +306,9 @@
         --sidebar-accent-foreground: oklch(0.32 0 0);
         --sidebar-border: oklch(0.93 0.01 240);
         --sidebar-ring: oklch(0.25 0.14 245);
-        --font-sans: Inter, sans-serif;
-        --font-serif: Inter, serif;
-        --font-mono: Roboto Mono, monospace;
+        --font-sans: Inter, 'Inter Fallback', sans-serif;
+        --font-serif: Inter, 'Inter Fallback', serif;
+        --font-mono: 'Roboto Mono', monospace;
         --radius: 0.375rem;
         --shadow-x: 0;
         --shadow-y: 1px;
@@ -352,8 +361,8 @@
         --sidebar-accent-foreground: oklch(0.92 0.02 245);
         --sidebar-border: oklch(0.3 0.04 245);
         --sidebar-ring: oklch(0.5 0.16 245);
-        --font-sans: Inter, sans-serif;
-        --font-serif: Inter, serif;
+        --font-sans: Inter, 'Inter Fallback', sans-serif;
+        --font-serif: Inter, 'Inter Fallback', serif;
         --font-mono: 'Roboto Mono', monospace;
         --radius: 0.5rem;
         --shadow-x: 0;

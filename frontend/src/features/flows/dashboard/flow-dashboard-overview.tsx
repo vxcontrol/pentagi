@@ -3,8 +3,9 @@ import { useMemo } from 'react';
 
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
+import { MetricCard } from '@/components/dashboard';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     useFlowStatsByFlowQuery,
@@ -13,32 +14,7 @@ import {
     useUsageStatsByAgentTypeForFlowQuery,
     useUsageStatsByFlowQuery,
 } from '@/graphql/types';
-import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/pages/dashboard/format-utils';
-
-const StatCard = ({
-    description,
-    icon,
-    loading,
-    title,
-    value,
-}: {
-    description: string;
-    icon: React.ReactNode;
-    loading: boolean;
-    title: string;
-    value: string;
-}) => (
-    <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{title}</CardTitle>
-            {icon}
-        </CardHeader>
-        <CardContent>
-            {loading ? <Skeleton className="h-8 w-24" /> : <div className="text-2xl font-bold">{value}</div>}
-            <p className="text-muted-foreground text-xs">{description}</p>
-        </CardContent>
-    </Card>
-);
+import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 const UsageStatsRow = ({ label, stats }: { label: string; stats: UsageStatsFragmentFragment }) => (
     <TableRow>
@@ -126,33 +102,33 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                <StatCard
-                    description="LLM spending for this flow"
-                    icon={<CircleDollarSign className="text-muted-foreground size-4" />}
+                <MetricCard
+                    description={`Subtasks: ${flowStats?.totalSubtasksCount ?? 0} · Assistants: ${flowStats?.totalAssistantsCount ?? 0}`}
+                    icon={<GitFork className="text-muted-foreground size-4" />}
                     loading={anyLoading}
-                    title="Cost"
-                    value={formatCost(totalCost)}
+                    title="Tasks"
+                    value={flowStats ? formatNumber(flowStats.totalTasksCount) : '0'}
                 />
-                <StatCard
-                    description="Input + Output tokens"
-                    icon={<Cpu className="text-muted-foreground size-4" />}
-                    loading={anyLoading}
-                    title="Tokens"
-                    value={formatTokenCount(totalTokens)}
-                />
-                <StatCard
+                <MetricCard
                     description={`Duration: ${toolcalls ? formatDuration(toolcalls.totalDurationSeconds) : '—'}`}
                     icon={<Activity className="text-muted-foreground size-4" />}
                     loading={anyLoading}
                     title="Tool Calls"
                     value={toolcalls ? formatNumber(toolcalls.totalCount) : '0'}
                 />
-                <StatCard
-                    description={`Subtasks: ${flowStats?.totalSubtasksCount ?? 0} · Assistants: ${flowStats?.totalAssistantsCount ?? 0}`}
-                    icon={<GitFork className="text-muted-foreground size-4" />}
+                <MetricCard
+                    description="Input + Output tokens"
+                    icon={<Cpu className="text-muted-foreground size-4" />}
                     loading={anyLoading}
-                    title="Tasks"
-                    value={flowStats ? formatNumber(flowStats.totalTasksCount) : '0'}
+                    title="Tokens"
+                    value={formatTokenCount(totalTokens)}
+                />
+                <MetricCard
+                    description="LLM spending for this flow"
+                    icon={<CircleDollarSign className="text-muted-foreground size-4" />}
+                    loading={anyLoading}
+                    title="Cost"
+                    value={formatCost(totalCost)}
                 />
             </div>
 
@@ -219,15 +195,9 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
                                         <TableRow key={item.functionName}>
                                             <TableCell className="font-medium">{item.functionName}</TableCell>
                                             <TableCell>
-                                                <span
-                                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                        item.isAgent
-                                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                                                    }`}
-                                                >
+                                                <Badge variant={item.isAgent ? 'secondary' : 'outline'}>
                                                     {item.isAgent ? 'Agent' : 'Tool'}
-                                                </span>
+                                                </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 {formatNumber(item.totalCount)}
