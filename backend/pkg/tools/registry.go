@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"maps"
 	"pentagi/pkg/database"
 
@@ -153,11 +154,25 @@ var allowedStoringInMemoryTools = []string{
 	AdviceToolName,
 }
 
+// TerminalToolDefinition returns a function definition for the terminal tool
+// with the given hard limit and default timeout values (in seconds).
+// This allows the tool description to reflect the actual configured limits.
+func TerminalToolDefinition(hardLimitSec, defaultTimeoutSec int) llms.FunctionDefinition {
+	return llms.FunctionDefinition{
+		Name: TerminalToolName,
+		Description: fmt.Sprintf(
+			"Calls a terminal command in blocking mode with hard limit timeout %d seconds and "+
+				"optimum timeout %d seconds, only one command can be executed at a time",
+			hardLimitSec, defaultTimeoutSec),
+		Parameters: reflector.Reflect(&TerminalAction{}),
+	}
+}
+
 var registryDefinitions = map[string]llms.FunctionDefinition{
 	TerminalToolName: {
 		Name: TerminalToolName,
 		Description: "Calls a terminal command in blocking mode with hard limit timeout 1200 seconds and " +
-			"optimum timeout 60 seconds, only one command can be executed at a time",
+			"optimum timeout 300 seconds, only one command can be executed at a time",
 		Parameters: reflector.Reflect(&TerminalAction{}),
 	},
 	FileToolName: {

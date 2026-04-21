@@ -312,6 +312,7 @@ func clearConfigEnv(t *testing.T) {
 		"GRAPHITI_ENABLED", "GRAPHITI_TIMEOUT", "GRAPHITI_URL",
 		"EXECUTION_MONITOR_ENABLED", "EXECUTION_MONITOR_SAME_TOOL_LIMIT", "EXECUTION_MONITOR_TOTAL_TOOL_LIMIT",
 		"MAX_GENERAL_AGENT_TOOL_CALLS", "MAX_LIMITED_AGENT_TOOL_CALLS",
+		"TERMINAL_TOOL_TIMEOUT", "TERMINAL_TOOL_HARD_LIMIT",
 		"AGENT_PLANNING_STEP_ENABLED",
 	}
 	for _, v := range envVars {
@@ -583,4 +584,50 @@ func TestNewConfig_AgentSupervisionOverride(t *testing.T) {
 	assert.Equal(t, 150, config.MaxGeneralAgentToolCalls)
 	assert.Equal(t, 30, config.MaxLimitedAgentToolCalls)
 	assert.Equal(t, true, config.AgentPlanningStepEnabled)
+}
+
+func TestNewConfig_TerminalToolTimeouts(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
+	t.Run("default values", func(t *testing.T) {
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 300, config.TerminalToolTimeout,
+			"default terminal timeout should be 300 seconds")
+		assert.Equal(t, 1200, config.TerminalToolHardLimit,
+			"default terminal hard limit should be 1200 seconds")
+	})
+
+	t.Run("custom timeout", func(t *testing.T) {
+		t.Setenv("TERMINAL_TOOL_TIMEOUT", "600")
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 600, config.TerminalToolTimeout)
+	})
+
+	t.Run("custom hard limit", func(t *testing.T) {
+		t.Setenv("TERMINAL_TOOL_HARD_LIMIT", "3600")
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 3600, config.TerminalToolHardLimit)
+	})
+
+	t.Run("both custom", func(t *testing.T) {
+		t.Setenv("TERMINAL_TOOL_TIMEOUT", "600")
+		t.Setenv("TERMINAL_TOOL_HARD_LIMIT", "3600")
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 600, config.TerminalToolTimeout)
+		assert.Equal(t, 3600, config.TerminalToolHardLimit)
+	})
+
+	t.Run("zero timeout uses zero (handled by consumer)", func(t *testing.T) {
+		t.Setenv("TERMINAL_TOOL_TIMEOUT", "0")
+		t.Setenv("TERMINAL_TOOL_HARD_LIMIT", "0")
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 0, config.TerminalToolTimeout)
+		assert.Equal(t, 0, config.TerminalToolHardLimit)
+	})
 }

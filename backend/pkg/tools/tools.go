@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
@@ -153,6 +154,33 @@ type flowToolsExecutor struct {
 
 	definitions map[string]llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
+}
+
+// terminalTimeoutConfig returns the TerminalTimeoutConfig derived from
+// the application config. Zero config values fall back to built-in defaults.
+func (fte *flowToolsExecutor) terminalTimeoutConfig() TerminalTimeoutConfig {
+	var tc TerminalTimeoutConfig
+	if fte.cfg != nil && fte.cfg.TerminalToolTimeout > 0 {
+		tc.DefaultTimeout = time.Duration(fte.cfg.TerminalToolTimeout) * time.Second
+	}
+	if fte.cfg != nil && fte.cfg.TerminalToolHardLimit > 0 {
+		tc.HardLimitTimeout = time.Duration(fte.cfg.TerminalToolHardLimit) * time.Second
+	}
+	return tc
+}
+
+// terminalToolDefinition returns the tool definition for the terminal tool
+// with timeout values from the application config.
+func (fte *flowToolsExecutor) terminalToolDefinition() llms.FunctionDefinition {
+	hardLimitSec := 1200
+	defaultSec := 300
+	if fte.cfg != nil && fte.cfg.TerminalToolHardLimit > 0 {
+		hardLimitSec = fte.cfg.TerminalToolHardLimit
+	}
+	if fte.cfg != nil && fte.cfg.TerminalToolTimeout > 0 {
+		defaultSec = fte.cfg.TerminalToolTimeout
+	}
+	return TerminalToolDefinition(hardLimitSec, defaultSec)
 }
 
 type ContextToolsExecutor interface {
@@ -523,15 +551,17 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 	}
 
 	term := NewTerminalTool(
+
 		fte.flowID, nil, nil,
 		container.ID,
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		fte.terminalTimeoutConfig(),
 	)
 
 	definitions := []llms.FunctionDefinition{
-		registryDefinitions[TerminalToolName],
+		fte.terminalToolDefinition(),
 		registryDefinitions[FileToolName],
 	}
 	handlers := map[string]ExecutorHandler{
@@ -792,6 +822,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 	}
 
 	term := NewTerminalTool(
+
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
@@ -799,6 +830,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		fte.terminalTimeoutConfig(),
 	)
 
 	ce := &customExecutor{
@@ -814,7 +846,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 			registryDefinitions[AdviceToolName],
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
-			registryDefinitions[TerminalToolName],
+			fte.terminalToolDefinition(),
 			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
@@ -986,6 +1018,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 	}
 
 	term := NewTerminalTool(
+
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
@@ -993,6 +1026,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		fte.terminalTimeoutConfig(),
 	)
 
 	ce := &customExecutor{
@@ -1010,7 +1044,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 			registryDefinitions[MaintenanceToolName],
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
-			registryDefinitions[TerminalToolName],
+			fte.terminalToolDefinition(),
 			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
@@ -1249,6 +1283,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 	}
 
 	term := NewTerminalTool(
+
 		fte.flowID,
 		&cfg.TaskID,
 		nil,
@@ -1256,6 +1291,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		fte.terminalTimeoutConfig(),
 	)
 
 	ce := &customExecutor{
@@ -1269,7 +1305,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
 			registryDefinitions[SubtaskListToolName],
-			registryDefinitions[TerminalToolName],
+			fte.terminalToolDefinition(),
 			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
@@ -1314,6 +1350,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 	}
 
 	term := NewTerminalTool(
+
 		fte.flowID,
 		&cfg.TaskID,
 		nil,
@@ -1321,6 +1358,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		fte.terminalTimeoutConfig(),
 	)
 
 	ce := &customExecutor{
@@ -1334,7 +1372,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
 			registryDefinitions[SubtaskPatchToolName],
-			registryDefinitions[TerminalToolName],
+			fte.terminalToolDefinition(),
 			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
@@ -1375,6 +1413,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 	}
 
 	term := NewTerminalTool(
+
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
@@ -1382,6 +1421,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		fte.terminalTimeoutConfig(),
 	)
 
 	ce := &customExecutor{
@@ -1394,7 +1434,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		store:     fte.store,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MemoristResultToolName],
-			registryDefinitions[TerminalToolName],
+			fte.terminalToolDefinition(),
 			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
@@ -1443,6 +1483,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 	}
 
 	term := NewTerminalTool(
+
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
@@ -1450,6 +1491,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		fte.terminalTimeoutConfig(),
 	)
 
 	ce := &customExecutor{
@@ -1462,7 +1504,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		store:     fte.store,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[EnricherResultToolName],
-			registryDefinitions[TerminalToolName],
+			fte.terminalToolDefinition(),
 			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{

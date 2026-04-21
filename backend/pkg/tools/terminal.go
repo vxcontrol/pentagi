@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	defaultExecCommandTimeout = 5 * time.Minute
+	builtinDefaultTimeout     = 5 * time.Minute
+	builtinHardLimit          = 20 * time.Minute
 	defaultExtraExecTimeout   = 5 * time.Second
 	defaultQuickCheckTimeout  = 500 * time.Millisecond
 
@@ -39,13 +40,22 @@ type execResult struct {
 }
 
 type terminal struct {
-	flowID       int64
-	taskID       *int64
-	subtaskID    *int64
-	containerID  int64
-	containerLID string
-	dockerClient docker.DockerClient
-	tlp          TermLogProvider
+	flowID           int64
+	taskID           *int64
+	subtaskID        *int64
+	containerID      int64
+	containerLID     string
+	dockerClient     docker.DockerClient
+	tlp              TermLogProvider
+	defaultTimeout   time.Duration // configurable default timeout (TERMINAL_TOOL_TIMEOUT)
+	hardLimitTimeout time.Duration // configurable hard limit (TERMINAL_TOOL_HARD_LIMIT)
+}
+
+// TerminalTimeoutConfig holds configurable timeout values for the terminal tool.
+// Zero values fall back to built-in defaults.
+type TerminalTimeoutConfig struct {
+	DefaultTimeout   time.Duration // default timeout when LLM doesn't specify one
+	HardLimitTimeout time.Duration // absolute ceiling for any command
 }
 
 func NewTerminalTool(
@@ -54,15 +64,28 @@ func NewTerminalTool(
 	containerID int64, containerLID string,
 	dockerClient docker.DockerClient,
 	tlp TermLogProvider,
+	timeoutCfg ...TerminalTimeoutConfig,
 ) Tool {
+	defTimeout := builtinDefaultTimeout
+	hardLimit := builtinHardLimit
+	if len(timeoutCfg) > 0 {
+		if timeoutCfg[0].DefaultTimeout > 0 {
+			defTimeout = timeoutCfg[0].DefaultTimeout
+		}
+		if timeoutCfg[0].HardLimitTimeout > 0 {
+			hardLimit = timeoutCfg[0].HardLimitTimeout
+		}
+	}
 	return &terminal{
-		flowID:       flowID,
-		taskID:       taskID,
-		subtaskID:    subtaskID,
-		containerID:  containerID,
-		containerLID: containerLID,
-		dockerClient: dockerClient,
-		tlp:          tlp,
+		flowID:           flowID,
+		taskID:           taskID,
+		subtaskID:        subtaskID,
+		containerID:      containerID,
+		containerLID:     containerLID,
+		dockerClient:     dockerClient,
+		tlp:              tlp,
+		defaultTimeout:   defTimeout,
+		hardLimitTimeout: hardLimit,
 	}
 }
 
@@ -172,8 +195,16 @@ func (t *terminal) ExecCommand(
 		return "", fmt.Errorf("failed to put terminal log (stdin): %w", err)
 	}
 
-	if timeout <= 0 || timeout > 20*time.Minute {
-		timeout = defaultExecCommandTimeout
+	hardLimit := t.hardLimitTimeout
+	if hardLimit <= 0 {
+		hardLimit = builtinHardLimit
+	}
+	defTimeout := t.defaultTimeout
+	if defTimeout <= 0 {
+		defTimeout = builtinDefaultTimeout
+	}
+	if timeout <= 0 || timeout > hardLimit {
+		timeout = defTimeout
 	}
 
 	createResp, err := t.dockerClient.ContainerExecCreate(ctx, containerName, container.ExecOptions{

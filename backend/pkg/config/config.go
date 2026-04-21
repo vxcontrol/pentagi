@@ -220,6 +220,15 @@ type Config struct {
 	MaxGeneralAgentToolCalls int `env:"MAX_GENERAL_AGENT_TOOL_CALLS" envDefault:"100"`
 	MaxLimitedAgentToolCalls int `env:"MAX_LIMITED_AGENT_TOOL_CALLS" envDefault:"20"`
 
+	// === Terminal Tool Execution Timeouts ===
+	// Default timeout for terminal tool commands in seconds.
+	// This is the optimum timeout used when the LLM does not specify one.
+	TerminalToolTimeout int `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"300"`
+	// Hard limit for terminal tool commands in seconds.
+	// Commands cannot exceed this value regardless of what the LLM requests.
+	// A value of 0 means use the built-in default (1200s).
+	TerminalToolHardLimit int `env:"TERMINAL_TOOL_HARD_LIMIT" envDefault:"1200"`
+
 	// === Agent Planning Phase Configuration ===
 	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
 }

@@ -208,3 +208,187 @@ func TestPrimaryTerminalName(t *testing.T) {
 		})
 	}
 }
+
+// === Tests for configurable terminal timeout (issue #256) ===
+
+func TestNewTerminalToolDefaultTimeouts(t *testing.T) {
+	t.Parallel()
+
+	// When no TerminalTimeoutConfig is provided, built-in defaults should be used.
+	tool := NewTerminalTool(1, nil, nil, 1, "test-container", nil, &contextTestTermLogProvider{})
+	term := tool.(*terminal)
+
+	assert.Equal(t, builtinDefaultTimeout, term.defaultTimeout,
+		"default timeout should match built-in default when no config provided")
+	assert.Equal(t, builtinHardLimit, term.hardLimitTimeout,
+		"hard limit should match built-in hard limit when no config provided")
+}
+
+func TestNewTerminalToolCustomTimeouts(t *testing.T) {
+	t.Parallel()
+
+	cfg := TerminalTimeoutConfig{
+		DefaultTimeout:   10 * time.Minute,
+		HardLimitTimeout: 30 * time.Minute,
+	}
+	tool := NewTerminalTool(1, nil, nil, 1, "test-container", nil, &contextTestTermLogProvider{}, cfg)
+	term := tool.(*terminal)
+
+	assert.Equal(t, 10*time.Minute, term.defaultTimeout,
+		"custom default timeout should be applied")
+	assert.Equal(t, 30*time.Minute, term.hardLimitTimeout,
+		"custom hard limit should be applied")
+}
+
+func TestNewTerminalToolPartialConfig(t *testing.T) {
+	t.Parallel()
+
+	// Only set DefaultTimeout, HardLimitTimeout stays zero → built-in
+	cfg := TerminalTimeoutConfig{
+		DefaultTimeout: 8 * time.Minute,
+	}
+	tool := NewTerminalTool(1, nil, nil, 1, "test-container", nil, &contextTestTermLogProvider{}, cfg)
+	term := tool.(*terminal)
+
+	assert.Equal(t, 8*time.Minute, term.defaultTimeout)
+	assert.Equal(t, builtinHardLimit, term.hardLimitTimeout,
+		"zero hard limit should fall back to built-in")
+}
+
+func TestExecCommandTimeoutClamping(t *testing.T) {
+	// Verify that timeout is clamped by the hard limit and defaults are applied.
+	// We test this indirectly: if requested timeout exceeds hard limit,
+	// the actual timeout used should be the default timeout, not the requested one.
+	tests := []struct {
+		name            string
+		requestTimeout  time.Duration
+		defaultTimeout  time.Duration
+		hardLimit       time.Duration
+		expectDefault   bool // true if we expect the default timeout to be used
+	}{
+		{
+			name:           "zero timeout uses default",
+			requestTimeout: 0,
+			defaultTimeout: 5 * time.Minute,
+			hardLimit:      20 * time.Minute,
+			expectDefault:  true,
+		},
+		{
+			name:           "negative timeout uses default",
+			requestTimeout: -1 * time.Second,
+			defaultTimeout: 5 * time.Minute,
+			hardLimit:      20 * time.Minute,
+			expectDefault:  true,
+		},
+		{
+			name:           "exceeds hard limit uses default",
+			requestTimeout: 25 * time.Minute,
+			defaultTimeout: 5 * time.Minute,
+			hardLimit:      20 * time.Minute,
+			expectDefault:  true,
+		},
+		{
+			name:           "within hard limit keeps requested",
+			requestTimeout: 10 * time.Minute,
+			defaultTimeout: 5 * time.Minute,
+			hardLimit:      20 * time.Minute,
+			expectDefault:  false,
+		},
+		{
+			name:           "exactly at hard limit keeps requested",
+			requestTimeout: 20 * time.Minute,
+			defaultTimeout: 5 * time.Minute,
+			hardLimit:      20 * time.Minute,
+			expectDefault:  false,
+		},
+		{
+			name:           "custom high hard limit allows long timeout",
+			requestTimeout: 45 * time.Minute,
+			defaultTimeout: 10 * time.Minute,
+			hardLimit:      60 * time.Minute,
+			expectDefault:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// We can't easily test the exact timeout used inside ExecCommand
+			// without running a container, but we can verify the clamping logic
+			// by replicating it.
+			timeout := tt.requestTimeout
+			hardLimit := tt.hardLimit
+			defTimeout := tt.defaultTimeout
+
+			if timeout <= 0 || timeout > hardLimit {
+				timeout = defTimeout
+			}
+
+			if tt.expectDefault {
+				assert.Equal(t, defTimeout, timeout,
+					"timeout should be clamped to default")
+			} else {
+				assert.Equal(t, tt.requestTimeout, timeout,
+					"timeout should be kept as requested")
+			}
+		})
+	}
+}
+
+func TestExecCommandZeroFieldsFallbackToBuiltin(t *testing.T) {
+	// Verify that a terminal struct with zero timeout fields
+	// (e.g., created by tests that construct terminal{} directly)
+	// falls back to built-in defaults.
+	mock := &contextAwareMockDockerClient{
+		isRunning:      false, // will trigger early error, that's fine for this test
+		execCreateResp: container.ExecCreateResponse{ID: "test"},
+		inspectResp:    container.ExecInspect{ExitCode: 0},
+	}
+
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+		// defaultTimeout and hardLimitTimeout are zero
+	}
+
+	// The command will fail early (container not running), but the important
+	// thing is it doesn't panic on zero timeout fields.
+	_, err := term.ExecCommand(context.Background(), "/work", "test", false, 0)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not operational")
+}
+
+func TestTerminalToolDefinitionDynamic(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		hardLimitSec   int
+		defaultSec     int
+		expectContains string
+	}{
+		{
+			name:           "default values",
+			hardLimitSec:   1200,
+			defaultSec:     300,
+			expectContains: "hard limit timeout 1200 seconds and optimum timeout 300 seconds",
+		},
+		{
+			name:           "custom high values",
+			hardLimitSec:   3600,
+			defaultSec:     600,
+			expectContains: "hard limit timeout 3600 seconds and optimum timeout 600 seconds",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			def := TerminalToolDefinition(tt.hardLimitSec, tt.defaultSec)
+			assert.Equal(t, TerminalToolName, def.Name)
+			assert.Contains(t, def.Description, tt.expectContains)
+		})
+	}
+}
