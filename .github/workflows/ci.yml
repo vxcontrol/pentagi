@@ -39,6 +39,8 @@ jobs:
       # pnpm setup
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
 
       # Node.js setup and cache
       - name: Set up Node.js

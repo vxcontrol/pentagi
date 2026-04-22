@@ -2414,7 +2414,7 @@ fern generate --local
 and to install fern-cli
 
 ```bash
-npm install -g fern-api
+pnpm add -g fern-api
 ```
 
 #### Testing
