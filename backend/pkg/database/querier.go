@@ -172,6 +172,7 @@ type Querier interface {
 	GetUsageStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastMonthRow, error)
 	GetUsageStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastWeekRow, error)
 	GetUsageStatsByModel(ctx context.Context, userID int64) ([]GetUsageStatsByModelRow, error)
+	GetUsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByModelAgentsForFlowRow, error)
 	GetUsageStatsByProvider(ctx context.Context, userID int64) ([]GetUsageStatsByProviderRow, error)
 	GetUsageStatsByType(ctx context.Context, userID int64) ([]GetUsageStatsByTypeRow, error)
 	GetUsageStatsByTypeForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByTypeForFlowRow, error)

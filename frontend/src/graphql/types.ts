@@ -341,6 +341,13 @@ export enum MessageLogType {
     Thoughts = 'thoughts',
 }
 
+export type ModelAgentsUsageStats = {
+    agentTypes: Array<AgentType>;
+    model: Scalars['String']['output'];
+    provider: Scalars['String']['output'];
+    stats: UsageStats;
+};
+
 export type ModelConfig = {
     description?: Maybe<Scalars['String']['output']>;
     name: Scalars['String']['output'];
@@ -709,6 +716,7 @@ export type Query = {
     usageStatsByAgentTypeForFlow: Array<AgentTypeUsageStats>;
     usageStatsByFlow: UsageStats;
     usageStatsByModel: Array<ModelUsageStats>;
+    usageStatsByModelAgentsForFlow: Array<ModelAgentsUsageStats>;
     usageStatsByPeriod: Array<DailyUsageStats>;
     usageStatsByProvider: Array<ProviderUsageStats>;
     usageStatsTotal: UsageStats;
@@ -789,6 +797,10 @@ export type QueryUsageStatsByAgentTypeForFlowArgs = {
 };
 
 export type QueryUsageStatsByFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type QueryUsageStatsByModelAgentsForFlowArgs = {
     flowId: Scalars['ID']['input'];
 };
 
@@ -1403,6 +1415,13 @@ export type ModelUsageStatsFragmentFragment = { model: string; provider: string;
 
 export type AgentTypeUsageStatsFragmentFragment = { agentType: AgentType; stats: UsageStatsFragmentFragment };
 
+export type ModelAgentsUsageStatsFragmentFragment = {
+    model: string;
+    provider: string;
+    agentTypes: Array<AgentType>;
+    stats: UsageStatsFragmentFragment;
+};
+
 export type ToolcallsStatsFragmentFragment = { totalCount: number; totalDurationSeconds: number };
 
 export type DailyToolcallsStatsFragmentFragment = { date: any; stats: ToolcallsStatsFragmentFragment };
@@ -1625,6 +1644,14 @@ export type UsageStatsByAgentTypeForFlowQueryVariables = Exact<{
 
 export type UsageStatsByAgentTypeForFlowQuery = {
     usageStatsByAgentTypeForFlow: Array<AgentTypeUsageStatsFragmentFragment>;
+};
+
+export type UsageStatsByModelAgentsForFlowQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type UsageStatsByModelAgentsForFlowQuery = {
+    usageStatsByModelAgentsForFlow: Array<ModelAgentsUsageStatsFragmentFragment>;
 };
 
 export type ToolcallsStatsTotalQueryVariables = Exact<{ [key: string]: never }>;
@@ -2472,6 +2499,17 @@ export const ModelUsageStatsFragmentFragmentDoc = gql`
 export const AgentTypeUsageStatsFragmentFragmentDoc = gql`
     fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
         agentType
+        stats {
+            ...usageStatsFragment
+        }
+    }
+    ${UsageStatsFragmentFragmentDoc}
+`;
+export const ModelAgentsUsageStatsFragmentFragmentDoc = gql`
+    fragment modelAgentsUsageStatsFragment on ModelAgentsUsageStats {
+        model
+        provider
+        agentTypes
         stats {
             ...usageStatsFragment
         }
@@ -3865,6 +3903,99 @@ export type UsageStatsByAgentTypeForFlowSuspenseQueryHookResult = ReturnType<
 export type UsageStatsByAgentTypeForFlowQueryResult = Apollo.QueryResult<
     UsageStatsByAgentTypeForFlowQuery,
     UsageStatsByAgentTypeForFlowQueryVariables
+>;
+export const UsageStatsByModelAgentsForFlowDocument = gql`
+    query usageStatsByModelAgentsForFlow($flowId: ID!) {
+        usageStatsByModelAgentsForFlow(flowId: $flowId) {
+            ...modelAgentsUsageStatsFragment
+        }
+    }
+    ${ModelAgentsUsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsByModelAgentsForFlowQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsByModelAgentsForFlowQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsByModelAgentsForFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsByModelAgentsForFlowQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useUsageStatsByModelAgentsForFlowQuery(
+    baseOptions: Apollo.QueryHookOptions<
+        UsageStatsByModelAgentsForFlowQuery,
+        UsageStatsByModelAgentsForFlowQueryVariables
+    > &
+        ({ variables: UsageStatsByModelAgentsForFlowQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>(
+        UsageStatsByModelAgentsForFlowDocument,
+        options,
+    );
+}
+export function useUsageStatsByModelAgentsForFlowLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<
+        UsageStatsByModelAgentsForFlowQuery,
+        UsageStatsByModelAgentsForFlowQueryVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>(
+        UsageStatsByModelAgentsForFlowDocument,
+        options,
+    );
+}
+// @ts-ignore
+export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
+    baseOptions?: Apollo.SuspenseQueryHookOptions<
+        UsageStatsByModelAgentsForFlowQuery,
+        UsageStatsByModelAgentsForFlowQueryVariables
+    >,
+): Apollo.UseSuspenseQueryResult<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>;
+export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<
+              UsageStatsByModelAgentsForFlowQuery,
+              UsageStatsByModelAgentsForFlowQueryVariables
+          >,
+): Apollo.UseSuspenseQueryResult<
+    UsageStatsByModelAgentsForFlowQuery | undefined,
+    UsageStatsByModelAgentsForFlowQueryVariables
+>;
+export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<
+              UsageStatsByModelAgentsForFlowQuery,
+              UsageStatsByModelAgentsForFlowQueryVariables
+          >,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>(
+        UsageStatsByModelAgentsForFlowDocument,
+        options,
+    );
+}
+export type UsageStatsByModelAgentsForFlowQueryHookResult = ReturnType<typeof useUsageStatsByModelAgentsForFlowQuery>;
+export type UsageStatsByModelAgentsForFlowLazyQueryHookResult = ReturnType<
+    typeof useUsageStatsByModelAgentsForFlowLazyQuery
+>;
+export type UsageStatsByModelAgentsForFlowSuspenseQueryHookResult = ReturnType<
+    typeof useUsageStatsByModelAgentsForFlowSuspenseQuery
+>;
+export type UsageStatsByModelAgentsForFlowQueryResult = Apollo.QueryResult<
+    UsageStatsByModelAgentsForFlowQuery,
+    UsageStatsByModelAgentsForFlowQueryVariables
 >;
 export const ToolcallsStatsTotalDocument = gql`
     query toolcallsStatsTotal {

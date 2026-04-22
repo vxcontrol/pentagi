@@ -1520,6 +1520,26 @@ func (r *queryResolver) UsageStatsByAgentTypeForFlow(ctx context.Context, flowID
 	return converter.ConvertAgentTypeUsageStatsForFlow(stats), nil
 }
 
+// UsageStatsByModelAgentsForFlow is the resolver for the usageStatsByModelAgentsForFlow field.
+func (r *queryResolver) UsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]*model.ModelAgentsUsageStats, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "usage.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("get usage stats by model agents for flow")
+
+	stats, err := r.DB.GetUsageStatsByModelAgentsForFlow(ctx, flowID)
+	if err != nil {
+		return nil, err
+	}
+
+	return converter.ConvertModelAgentsUsageStatsForFlow(stats), nil
+}
+
 // ToolcallsStatsTotal is the resolver for the toolcallsStatsTotal field.
 func (r *queryResolver) ToolcallsStatsTotal(ctx context.Context) (*model.ToolcallsStats, error) {
 	uid, _, err := validatePermission(ctx, "usage.view")

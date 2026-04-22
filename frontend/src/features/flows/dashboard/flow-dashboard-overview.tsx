@@ -7,12 +7,15 @@ import { MetricCard } from '@/components/dashboard';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import FlowAgentIcon from '@/features/flows/agents/flow-agent-icon';
 import {
+    AgentType,
     useFlowStatsByFlowQuery,
     useToolcallsStatsByFlowQuery,
     useToolcallsStatsByFunctionForFlowQuery,
     useUsageStatsByAgentTypeForFlowQuery,
     useUsageStatsByFlowQuery,
+    useUsageStatsByModelAgentsForFlowQuery,
 } from '@/graphql/types';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
@@ -44,6 +47,11 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
     const { data: usageByAgentData, loading: usageByAgentLoading } = useUsageStatsByAgentTypeForFlowQuery({
         variables: { flowId },
     });
+    const { data: usageByModelAgentsData, loading: usageByModelAgentsLoading } = useUsageStatsByModelAgentsForFlowQuery(
+        {
+            variables: { flowId },
+        },
+    );
     const { data: toolcallsData, loading: toolcallsLoading } = useToolcallsStatsByFlowQuery({
         variables: { flowId },
     });
@@ -80,6 +88,22 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
                 stats: item.stats,
             }));
     }, [usageByAgentData]);
+
+    const modelAgentRows = useMemo(() => {
+        const seen = new Set<string>();
+
+        return (usageByModelAgentsData?.usageStatsByModelAgentsForFlow ?? []).filter((item) => {
+            const key = `${item.model}|${item.provider}`;
+
+            if (seen.has(key)) {
+                return false;
+            }
+
+            seen.add(key);
+
+            return true;
+        });
+    }, [usageByModelAgentsData]);
 
     const toolcallsByFunction = useMemo(() => {
         const seen = new Set<string>();
@@ -131,6 +155,80 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
                     value={formatCost(totalCost)}
                 />
             </div>
+
+            {!!modelAgentRows.length && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Usage by Model &amp; Provider</CardTitle>
+                        <CardDescription>
+                            LLM token usage and costs grouped by model and provider, with agent types used
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {usageByModelAgentsLoading ? (
+                            <LoadingTable />
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="whitespace-nowrap">Model</TableHead>
+                                        <TableHead className="whitespace-nowrap">Provider</TableHead>
+                                        <TableHead className="whitespace-nowrap">Agents</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Tokens In</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Tokens Out</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Cache In</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Cache Out</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Cost In</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Cost Out</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Total Cost</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {modelAgentRows.map((row) => (
+                                        <TableRow key={`${row.model}|${row.provider}`}>
+                                            <TableCell className="font-medium">{row.model}</TableCell>
+                                            <TableCell>{row.provider}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {row.agentTypes.map((agentType) => (
+                                                        <FlowAgentIcon
+                                                            className="size-3.5"
+                                                            key={agentType}
+                                                            tooltip={agentType}
+                                                            type={agentType as AgentType}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatTokenCount(row.stats.totalUsageIn)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatTokenCount(row.stats.totalUsageOut)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatTokenCount(row.stats.totalUsageCacheIn)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatTokenCount(row.stats.totalUsageCacheOut)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatCost(row.stats.totalUsageCostIn)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatCost(row.stats.totalUsageCostOut)}
+                                            </TableCell>
+                                            <TableCell className="text-right font-semibold">
+                                                {formatCost(row.stats.totalUsageCostIn + row.stats.totalUsageCostOut)}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {!!agentTypeRows.length && (
                 <Card>

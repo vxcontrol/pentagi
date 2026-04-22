@@ -253,6 +253,13 @@ type MessageLog struct {
 	CreatedAt    time.Time      `json:"createdAt"`
 }
 
+type ModelAgentsUsageStats struct {
+	Model      string      `json:"model"`
+	Provider   string      `json:"provider"`
+	AgentTypes []AgentType `json:"agentTypes"`
+	Stats      *UsageStats `json:"stats"`
+}
+
 type ModelConfig struct {
 	Name        string      `json:"name"`
 	Description *string     `json:"description,omitempty"`

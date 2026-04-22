@@ -397,6 +397,15 @@ fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
     }
 }
 
+fragment modelAgentsUsageStatsFragment on ModelAgentsUsageStats {
+    model
+    provider
+    agentTypes
+    stats {
+        ...usageStatsFragment
+    }
+}
+
 fragment toolcallsStatsFragment on ToolcallsStats {
     totalCount
     totalDurationSeconds
@@ -823,6 +832,12 @@ query usageStatsByFlow($flowId: ID!) {
 query usageStatsByAgentTypeForFlow($flowId: ID!) {
     usageStatsByAgentTypeForFlow(flowId: $flowId) {
         ...agentTypeUsageStatsFragment
+    }
+}
+
+query usageStatsByModelAgentsForFlow($flowId: ID!) {
+    usageStatsByModelAgentsForFlow(flowId: $flowId) {
+        ...modelAgentsUsageStatsFragment
     }
 }
 

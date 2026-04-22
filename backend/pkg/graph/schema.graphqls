@@ -559,6 +559,14 @@ type ModelUsageStats {
   stats: UsageStats!
 }
 
+# Model-agents usage statistics
+type ModelAgentsUsageStats {
+  model: String!
+  provider: String!
+  agentTypes: [AgentType!]!
+  stats: UsageStats!
+}
+
 # Agent type usage statistics
 type AgentTypeUsageStats {
   agentType: AgentType!
@@ -822,6 +830,7 @@ type Query {
   usageStatsByAgentType: [AgentTypeUsageStats!]!
   usageStatsByFlow(flowId: ID!): UsageStats!
   usageStatsByAgentTypeForFlow(flowId: ID!): [AgentTypeUsageStats!]!
+  usageStatsByModelAgentsForFlow(flowId: ID!): [ModelAgentsUsageStats!]!
 
   # Toolcalls statistics and analytics
   toolcallsStatsTotal: ToolcallsStats!

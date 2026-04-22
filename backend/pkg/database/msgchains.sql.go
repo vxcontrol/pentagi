@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const createMsgChain = `-- name: CreateMsgChain :one
@@ -1006,6 +1008,71 @@ func (q *Queries) GetUsageStatsByModel(ctx context.Context, userID int64) ([]Get
 		if err := rows.Scan(
 			&i.Model,
 			&i.ModelProvider,
+			&i.TotalUsageIn,
+			&i.TotalUsageOut,
+			&i.TotalUsageCacheIn,
+			&i.TotalUsageCacheOut,
+			&i.TotalUsageCostIn,
+			&i.TotalUsageCostOut,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsageStatsByModelAgentsForFlow = `-- name: GetUsageStatsByModelAgentsForFlow :many
+SELECT
+  mc.model,
+  mc.model_provider,
+  array_agg(DISTINCT mc.type::text)::text[] AS agent_types,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+GROUP BY mc.model, mc.model_provider
+ORDER BY mc.model, mc.model_provider
+`
+
+type GetUsageStatsByModelAgentsForFlowRow struct {
+	Model              string   `json:"model"`
+	ModelProvider      string   `json:"model_provider"`
+	AgentTypes         []string `json:"agent_types"`
+	TotalUsageIn       int64    `json:"total_usage_in"`
+	TotalUsageOut      int64    `json:"total_usage_out"`
+	TotalUsageCacheIn  int64    `json:"total_usage_cache_in"`
+	TotalUsageCacheOut int64    `json:"total_usage_cache_out"`
+	TotalUsageCostIn   float64  `json:"total_usage_cost_in"`
+	TotalUsageCostOut  float64  `json:"total_usage_cost_out"`
+}
+
+func (q *Queries) GetUsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByModelAgentsForFlowRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByModelAgentsForFlow, flowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsageStatsByModelAgentsForFlowRow
+	for rows.Next() {
+		var i GetUsageStatsByModelAgentsForFlowRow
+		if err := rows.Scan(
+			&i.Model,
+			&i.ModelProvider,
+			pq.Array(&i.AgentTypes),
 			&i.TotalUsageIn,
 			&i.TotalUsageOut,
 			&i.TotalUsageCacheIn,
