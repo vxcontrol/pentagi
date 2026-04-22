@@ -118,7 +118,7 @@ These web-console features do not replace the environment variables in this guid
 
 The environment variables documented below remain the source of truth for configuration that is not currently editable from the web console:
 
-- **LLM credentials and connection settings**: API keys, base URLs, auth modes, and config-path values for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends.
+- **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
 - **Search provider credentials and options**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng, Sploitus, and related search configuration.
 - **Third-party integrations**: Langfuse, Graphiti, and other external observability or knowledge services.
 - **MCP server management**: MCP settings are not currently exposed as a live web-console feature.

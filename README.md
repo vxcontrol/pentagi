@@ -638,7 +638,7 @@ The PentAGI web console already manages several settings areas after the server 
 
 The following configuration areas still need to be set on the server through environment variables, compose files, or mounted config files:
 
-- **LLM credentials and connection details**: API keys, endpoints, auth modes, and config-path settings such as `OPEN_AI_KEY`, `ANTHROPIC_API_KEY`, `BEDROCK_*`, `OLLAMA_SERVER_*`, and `LLM_SERVER_*`.
+- **LLM credentials and connection details**: API keys, endpoints, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
 - **Search provider credentials and options**: Settings such as `DUCKDUCKGO_*`, `GOOGLE_*`, `TAVILY_API_KEY`, `TRAVERSAAL_API_KEY`, `PERPLEXITY_*`, `SEARXNG_*`, and `SPLOITUS_ENABLED`.
 - **Third-party integrations**: Langfuse, Graphiti, and similar external services remain server-side configuration.
 - **MCP server management**: MCP settings pages are not currently exposed as a live web-console feature.
