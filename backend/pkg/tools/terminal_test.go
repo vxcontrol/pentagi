@@ -209,8 +209,75 @@ func TestPrimaryTerminalName(t *testing.T) {
 	}
 }
 
+func TestConfiguredExecTimeout(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		configured time.Duration
+		want       time.Duration
+	}{
+		{
+			name:       "typical value is returned as-is",
+			configured: 600 * time.Second,
+			want:       600 * time.Second,
+		},
+		{
+			name:       "new default (1200 s) is returned as-is",
+			configured: 1200 * time.Second,
+			want:       1200 * time.Second,
+		},
+		{
+			name:       "exactly at the 3-hour ceiling is returned as-is",
+			configured: maxExplicitExecCommandTimeout,
+			want:       maxExplicitExecCommandTimeout,
+		},
+		{
+			name:       "zero is capped to the 3-hour ceiling",
+			configured: 0,
+			want:       maxExplicitExecCommandTimeout,
+		},
+		{
+			name:       "negative one second is capped to the 3-hour ceiling",
+			configured: -1 * time.Second,
+			want:       maxExplicitExecCommandTimeout,
+		},
+		{
+			name:       "large negative is capped to the 3-hour ceiling",
+			configured: -9999 * time.Second,
+			want:       maxExplicitExecCommandTimeout,
+		},
+		{
+			name:       "one second above the ceiling is capped",
+			configured: maxExplicitExecCommandTimeout + time.Second,
+			want:       maxExplicitExecCommandTimeout,
+		},
+		{
+			name:       "very large value (> 3 h) is capped to the 3-hour ceiling",
+			configured: 100000 * time.Second,
+			want:       maxExplicitExecCommandTimeout,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			term := &terminal{defaultExecTimeout: tt.configured}
+			assert.Equal(t, tt.want, term.configuredExecTimeout())
+		})
+	}
+}
+
 func TestNormalizeExecTimeout(t *testing.T) {
 	t.Parallel()
+
+	// ceilFor computes the effective runtime ceiling for a given configured value:
+	// it equals configuredExecTimeout() + defaultExtraExecTimeout.
+	ceilFor := func(configured time.Duration) time.Duration {
+		term := &terminal{defaultExecTimeout: configured}
+		return term.configuredExecTimeout() + defaultExtraExecTimeout
+	}
 
 	tests := []struct {
 		name       string
@@ -218,35 +285,94 @@ func TestNormalizeExecTimeout(t *testing.T) {
 		requested  time.Duration
 		want       time.Duration
 	}{
+		// --- Explicit positive values: preserved when within the operator ceiling ---
 		{
-			name:       "explicit timeout is preserved",
+			name:       "typical explicit value is preserved",
 			configured: 10 * time.Minute,
 			requested:  45 * time.Second,
 			want:       45 * time.Second,
 		},
 		{
-			name:       "zero requested timeout uses configured default",
+			name:       "explicit value exactly at the ceiling is preserved",
+			configured: 10 * time.Minute,
+			requested:  ceilFor(10 * time.Minute), // 600s + 5s = 605s
+			want:       ceilFor(10 * time.Minute),
+		},
+		{
+			name:       "explicit value one second above the ceiling falls back to ceiling",
+			configured: 10 * time.Minute,
+			requested:  ceilFor(10*time.Minute) + time.Second,
+			want:       ceilFor(10 * time.Minute),
+		},
+		{
+			name:       "explicit value at the default configured (1200 s) is preserved",
+			configured: 1200 * time.Second,
+			requested:  1200 * time.Second,
+			want:       1200 * time.Second,
+		},
+		{
+			name:       "explicit value above the 1200-s ceiling falls back to that ceiling",
+			configured: 1200 * time.Second,
+			requested:  ceilFor(1200*time.Second) + time.Second, // 1205s + 1s → fallback
+			want:       ceilFor(1200 * time.Second),             // 1205s
+		},
+		{
+			name:       "explicit value at the 3-hour ceiling is preserved when configured=0",
+			configured: 0,
+			requested:  ceilFor(0), // 3h + 5s
+			want:       ceilFor(0),
+		},
+		{
+			name:       "explicit value above the 3-hour ceiling falls back to 3-hour ceiling",
+			configured: 0,
+			requested:  ceilFor(0) + time.Second,
+			want:       ceilFor(0),
+		},
+
+		// --- Zero requested: falls back to the operator ceiling ---
+		{
+			name:       "zero requested with typical configured falls back to ceiling",
 			configured: 10 * time.Minute,
 			requested:  0,
-			want:       10 * time.Minute,
+			want:       ceilFor(10 * time.Minute), // 605s
 		},
 		{
-			name:       "too large explicit timeout clamps to max runtime timeout",
-			configured: 10 * time.Minute,
-			requested:  maxRuntimeExecCommandTimeout + time.Second,
-			want:       maxRuntimeExecCommandTimeout,
+			name:       "zero requested with default configured (1200 s) falls back to ceiling",
+			configured: 1200 * time.Second,
+			requested:  0,
+			want:       ceilFor(1200 * time.Second), // 1205s
 		},
 		{
-			name:       "configured zero keeps timeout disabled",
+			name:       "zero requested with configured=0 falls back to 3-hour ceiling",
 			configured: 0,
 			requested:  0,
-			want:       0,
+			want:       ceilFor(0), // 3h + 5s
 		},
 		{
-			name:       "configured zero does not disable oversized explicit timeout limit",
+			name:       "zero requested with oversized configured (> 3 h) falls back to 3-hour ceiling",
+			configured: 100000 * time.Second,
+			requested:  0,
+			want:       ceilFor(0), // capped to 3h + 5s
+		},
+
+		// --- Negative requested: treated identically to zero ---
+		{
+			name:       "negative requested falls back to configured ceiling",
+			configured: 10 * time.Minute,
+			requested:  -5 * time.Second,
+			want:       ceilFor(10 * time.Minute),
+		},
+		{
+			name:       "negative requested with configured=0 falls back to 3-hour ceiling",
 			configured: 0,
-			requested:  maxRuntimeExecCommandTimeout + time.Second,
-			want:       maxRuntimeExecCommandTimeout,
+			requested:  -1 * time.Second,
+			want:       ceilFor(0),
+		},
+		{
+			name:       "negative requested with negative configured falls back to 3-hour ceiling",
+			configured: -5 * time.Second,
+			requested:  -1 * time.Second,
+			want:       ceilFor(0), // both negative → absolute 3-hour max
 		},
 	}
 

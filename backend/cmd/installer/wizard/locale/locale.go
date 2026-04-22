@@ -1202,7 +1202,7 @@ const (
 	ServerSettingsHTTPClientTimeout       = "HTTP Client Timeout"
 	ServerSettingsHTTPClientTimeoutDesc   = "Timeout in seconds for external API calls (LLM providers, search engines, etc.)"
 	ServerSettingsTerminalToolTimeout     = "Terminal Tool Timeout"
-	ServerSettingsTerminalToolTimeoutDesc = "Default timeout in seconds for terminal tool commands when timeout=0"
+	ServerSettingsTerminalToolTimeoutDesc = "Default timeout in seconds for terminal commands (0 or negative = use 3-hour maximum)"
 
 	ServerSettingsExternalSSLCAPath     = "Custom CA Certificate Path"
 	ServerSettingsExternalSSLCAPathDesc = "Path inside container to custom root CA cert (e.g., /opt/pentagi/ssl/ca-bundle.pem)"
@@ -1273,13 +1273,14 @@ Default: 600 seconds (10 minutes)
 Setting to 0 disables timeout (not recommended in production)
 Too low values may cause legitimate long-running requests to fail.`
 
-	ServerSettingsTerminalToolTimeoutHelp = `Default timeout in seconds for terminal tool commands when the tool call uses timeout=0.
+	ServerSettingsTerminalToolTimeoutHelp = `Default timeout in seconds applied when an agent requests timeout=0 or a negative timeout value.
 
 This affects commands executed through the isolated terminal container, including scanners and CLI-based utilities.
 
-Default: 600 seconds (10 minutes)
-Setting to 0 disables the server-side default timeout
-Explicit timeout values provided by the tool call still take precedence when they are within the normal range.`
+Default: 1200 seconds (20 minutes)
+Allowed range: 1–10800 seconds (up to 3 hours)
+Values <= 0 or above 10800 are clamped to the maximum (10800 s = 3 hours); agents are never allowed to run indefinitely.
+Explicit timeout values provided by the tool call override this default when they are within the 1–10800 s range.`
 
 	ServerSettingsExternalSSLCAPathHelp = `Path to custom CA certificate file (PEM format) inside the container.
 

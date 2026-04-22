@@ -369,7 +369,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 			builder.WriteString(fmt.Sprintf("# Subtask ID %d\n\n", searchMemoryArgs.SubtaskID.Int64()))
 		}
 		builder.WriteString("# Tool Name 'terminal'\n\n")
-		builder.WriteString("# Tool Description\n\nCalls a terminal command in blocking mode. Use timeout=0 to apply the server default from TERMINAL_TOOL_TIMEOUT (default 600 seconds), or provide an explicit timeout up to 1200 seconds\n\n")
+		builder.WriteString("# Tool Description\n\nCalls a terminal command in blocking mode. Use timeout=0 or a negative value to apply the configured server default timeout. Explicit positive values are accepted up to 10800 seconds (3 hours); values outside this range are replaced by the server default\n\n")
 		builder.WriteString("# Chunk\n\n")
 		builder.WriteString(fmt.Sprintf("This is a memory chunk related to your questions '%s'. It contains information about previous commands, outputs, and relevant context that was stored in the vector database.\n\n", questionsText))
 		builder.WriteString("---------------------------\n")

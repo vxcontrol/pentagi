@@ -22,9 +22,8 @@ import (
 )
 
 const (
-	maxExplicitExecCommandTimeout = 20 * time.Minute
+	maxExplicitExecCommandTimeout = 3 * time.Hour
 	defaultExtraExecTimeout       = 5 * time.Second
-	maxRuntimeExecCommandTimeout  = maxExplicitExecCommandTimeout + defaultExtraExecTimeout
 	defaultQuickCheckTimeout      = 500 * time.Millisecond
 
 	// ANSI terminal color codes (aligned with PentAGI UI palette)
@@ -71,21 +70,21 @@ func NewTerminalTool(
 }
 
 func (t *terminal) configuredExecTimeout() time.Duration {
-	if t.defaultExecTimeout < 0 {
-		return 0
+	if t.defaultExecTimeout <= 0 || t.defaultExecTimeout > maxExplicitExecCommandTimeout {
+		// Zero, negative, or above the operator ceiling: cap to the maximum allowed value.
+		// Agents must never execute commands without a time bound.
+		return maxExplicitExecCommandTimeout
 	}
 
 	return t.defaultExecTimeout
 }
 
 func (t *terminal) normalizeExecTimeout(timeout time.Duration) time.Duration {
-	switch {
-	case timeout > 0 && timeout <= maxRuntimeExecCommandTimeout:
+	switch defaultExecTimeout := t.configuredExecTimeout() + defaultExtraExecTimeout; {
+	case timeout > 0 && timeout <= defaultExecTimeout:
 		return timeout
-	case timeout > maxRuntimeExecCommandTimeout:
-		return maxRuntimeExecCommandTimeout
 	default:
-		return t.configuredExecTimeout()
+		return defaultExecTimeout
 	}
 }
 

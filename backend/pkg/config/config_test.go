@@ -555,7 +555,7 @@ func TestNewConfig_TerminalToolTimeout(t *testing.T) {
 	t.Run("default timeout", func(t *testing.T) {
 		config, err := NewConfig()
 		require.NoError(t, err)
-		assert.Equal(t, 600, config.TerminalToolTimeout)
+		assert.Equal(t, 1200, config.TerminalToolTimeout)
 	})
 
 	t.Run("custom timeout", func(t *testing.T) {

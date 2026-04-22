@@ -209,7 +209,7 @@ These settings control how PentAGI interacts with Docker, which is used for term
 | DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers |
 | DockerDefaultImage           | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for containers when specific images fail |
 | DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
-| TerminalToolTimeout          | `TERMINAL_TOOL_TIMEOUT`            | `600`                  | Default timeout in seconds for terminal tool commands when timeout is set to `0` (0 = no default timeout) |
+| TerminalToolTimeout          | `TERMINAL_TOOL_TIMEOUT`            | `1200`                 | Default execution timeout in seconds applied when an agent requests `timeout=0` or a negative value. Accepted range: `1`–`10800` (3 hours). Values `<= 0` or above `10800` are clamped to the 3-hour maximum. Negative values are treated identically to `0`. |
 
 
 ### Usage Details
@@ -228,7 +228,7 @@ The Docker settings are primarily used in `pkg/docker/client.go` which implement
   }
   ```
 
-- **TerminalToolTimeout**: Sets the default execution timeout for terminal tool commands when the tool call uses `timeout=0`:
+- **TerminalToolTimeout**: Sets the default execution timeout for terminal tool commands when the tool call uses `timeout=0` or a negative value:
   ```go
   term := NewTerminalTool(
       flowID,
@@ -242,7 +242,7 @@ The Docker settings are primarily used in `pkg/docker/client.go` which implement
   )
   ```
 
-  Use `0` to disable the server-side default timeout. Explicit timeout values provided by the tool call still take precedence when they are within the normal range.
+  The value is clamped inside the terminal tool: values `<= 0` or above `10800` s (3 hours) are silently raised/capped to the 3-hour maximum — agents always receive a finite timeout. Negative values are accepted at the environment level and treated identically to `0` (both resolve to the 3-hour ceiling). Explicit `timeout` values provided by the tool call override this default when they are within the `1`–`10800` s range.
 
 - **DockerNetwork**: Controls the network isolation mode for containers. Supports two modes:
   
