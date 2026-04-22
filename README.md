@@ -2405,7 +2405,7 @@ If your environment cannot reach Docker Hub (`docker.io`) directly, changing Pen
 For restricted networks:
 
 1. Confirm that the host can resolve and reach `docker.io`.
-2. If your environment requires an outbound proxy, configure it for both PentAGI's outbound HTTP requests and the Docker daemon / Docker Desktop.
+2. If your environment requires an outbound proxy for PentAGI or installer HTTP traffic, set the `PROXY_URL` environment variable. To route Docker image pulls through a proxy, configure the Docker daemon or Docker Desktop proxy separately — Docker does not use PentAGI's `PROXY_URL` for registry access.
 3. If Docker Hub is blocked or heavily rate-limited, configure an organization-approved registry mirror or registry proxy before running the installer or `docker compose up`.
 4. Restart Docker after changing the daemon configuration, then rerun the installer checks or Compose startup.
 
@@ -2417,7 +2417,7 @@ Example Docker daemon mirror configuration:
 }
 ```
 
-On Linux, this is typically configured in `/etc/docker/daemon.json`. On Docker Desktop, use the equivalent Docker Engine or proxy settings. A Docker Hub mirror can help with Docker Hub-hosted images such as `vxcontrol/*`, but optional stacks may still pull from other registries such as `quay.io` or `gcr.io`, so those registries still need direct access or an approved proxy path.
+On Linux, this is typically configured in `/etc/docker/daemon.json`. On Docker Desktop, use the equivalent Docker Engine or proxy settings. A Docker Hub mirror covers Docker Hub-hosted images such as `vxcontrol/*`, but the main Compose stack already includes `quay.io/prometheuscommunity/postgres-exporter`, and the optional observability stack includes `gcr.io/cadvisor/cadvisor`. Those registries still need direct access or individually approved proxy/mirror paths.
 
 See the official Docker documentation for [registry mirrors](https://docs.docker.com/docker-hub/image-library/mirror/) and [daemon proxy configuration](https://docs.docker.com/engine/daemon/proxy/).
 
