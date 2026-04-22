@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Loader2 } from 'lucide-react';
+import { BarChart2, Loader2 } from 'lucide-react';
 import { ResponsiveContainer } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ export const ChartCard = ({
     children,
     className,
     description,
+    empty,
     height = 300,
     loading,
     title,
@@ -16,6 +17,7 @@ export const ChartCard = ({
     children: ReactNode;
     className?: string;
     description?: ReactNode;
+    empty?: boolean;
     height?: number;
     loading?: boolean;
     title: ReactNode;
@@ -32,6 +34,14 @@ export const ChartCard = ({
                     style={{ height }}
                 >
                     <Loader2 className="text-muted-foreground size-6 animate-spin" />
+                </div>
+            ) : empty ? (
+                <div
+                    className="flex flex-col items-center justify-center gap-2"
+                    style={{ height }}
+                >
+                    <BarChart2 className="text-muted-foreground/30 size-10" />
+                    <p className="text-muted-foreground text-sm">No data for this period</p>
                 </div>
             ) : (
                 <ResponsiveContainer

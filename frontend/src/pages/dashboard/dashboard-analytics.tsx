@@ -91,6 +91,7 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
         <div className="flex flex-col gap-6">
             <ChartCard
                 description="Flows, tasks, and subtasks created per day"
+                empty={!flowsByPeriodLoading && flowsChartData.length === 0}
                 height={320}
                 loading={flowsByPeriodLoading}
                 title="Flows Activity Over Time"
@@ -138,6 +139,7 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
             <div className="grid gap-6 lg:grid-cols-2">
                 <ChartCard
                     description="Number of tool executions per day"
+                    empty={!toolcallsByPeriodLoading && toolcallsChartData.length === 0}
                     loading={toolcallsByPeriodLoading}
                     title="Tool Calls Over Time"
                 >
@@ -171,6 +173,7 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
 
                 <ChartCard
                     description="Input and output tokens processed daily"
+                    empty={!usageByPeriodLoading && usageChartData.length === 0}
                     loading={usageByPeriodLoading}
                     title="Token Usage Over Time"
                 >
@@ -220,6 +223,7 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
 
             <ChartCard
                 description="LLM spending per day. May stay near zero when using local engines — this is expected."
+                empty={!usageByPeriodLoading && usageChartData.length === 0}
                 height={240}
                 loading={usageByPeriodLoading}
                 title="Cost Over Time"
