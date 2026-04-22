@@ -1,7 +1,75 @@
-import { Document, Page, pdf, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { Document, Font, Page, pdf, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { marked } from 'marked';
 
 import { Log } from './log';
+
+// Register Noto Sans (covers Latin + Cyrillic + Greek + many other scripts)
+Font.register({
+    family: 'NotoSans',
+    fonts: [
+        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSans-Regular.ttf' },
+        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSans-Bold.ttf' },
+        { fontStyle: 'italic', fontWeight: 'normal', src: '/fonts/NotoSans-Italic.ttf' },
+        { fontStyle: 'italic', fontWeight: 'bold', src: '/fonts/NotoSans-BoldItalic.ttf' },
+    ],
+});
+
+// Register Noto Sans Mono (covers Latin + Cyrillic for code blocks)
+Font.register({
+    family: 'NotoSansMono',
+    fonts: [
+        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSansMono-Regular.ttf' },
+        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSansMono-Bold.ttf' },
+    ],
+});
+
+// Register Noto Sans SC (Simplified Chinese, covers CJK + Latin)
+Font.register({
+    family: 'NotoSansSC',
+    fonts: [
+        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSansSC-Regular.otf' },
+        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSansSC-Bold.otf' },
+    ],
+});
+
+// Disable word hyphenation (breaks CJK and Cyrillic incorrectly)
+Font.registerHyphenationCallback((word) => [word]);
+
+// Regex that matches any CJK unified ideographs or CJK punctuation/fullwidth chars
+const CJK_RE = /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF\u3000-\u303F\uFF01-\uFF60\uFFE0-\uFFE6]+/g;
+
+interface TextSegment {
+    isCJK: boolean;
+    text: string;
+}
+
+/**
+ * Splits a string into alternating non-CJK and CJK segments so each segment
+ * can be rendered with the appropriate font family.
+ */
+const splitByCJK = (text: string): TextSegment[] => {
+    const segments: TextSegment[] = [];
+    let lastIndex = 0;
+
+    CJK_RE.lastIndex = 0;
+
+    let match: null | RegExpExecArray;
+
+    while ((match = CJK_RE.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            segments.push({ isCJK: false, text: text.slice(lastIndex, match.index) });
+        }
+
+        segments.push({ isCJK: true, text: match[0] });
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        segments.push({ isCJK: false, text: text.slice(lastIndex) });
+    }
+
+    return segments.length > 0 ? segments : [{ isCJK: false, text }];
+};
 
 // PDF styles for @react-pdf/renderer - Enhanced beautiful styles
 const pdfStyles = StyleSheet.create({
@@ -10,7 +78,7 @@ const pdfStyles = StyleSheet.create({
     },
     code: {
         color: '#dc2626',
-        fontFamily: 'Courier',
+        fontFamily: 'NotoSansMono',
         fontSize: 9,
         fontWeight: 'bold',
     },
@@ -20,7 +88,7 @@ const pdfStyles = StyleSheet.create({
         borderRadius: 4,
         borderWidth: 1,
         color: '#e2e8f0',
-        fontFamily: 'Courier',
+        fontFamily: 'NotoSansMono',
         fontSize: 8.5,
         lineHeight: 1.4,
         marginBottom: 8,
@@ -112,7 +180,7 @@ const pdfStyles = StyleSheet.create({
     page: {
         backgroundColor: '#ffffff',
         color: '#334155',
-        fontFamily: 'Helvetica',
+        fontFamily: 'NotoSans',
         fontSize: 10,
         lineHeight: 1.5,
         padding: 40,
@@ -330,6 +398,46 @@ const parseMarkdownTokens = (markdown: string): ParsedContent[] => {
     return result;
 };
 
+// Render a raw text string, splitting CJK segments to switch font family
+const renderTextWithCJK = (
+    text: string,
+    baseFamily: string,
+    boldFamily: string,
+    keyPrefix: string,
+    bold = false,
+    italic = false,
+) => {
+    const segments = splitByCJK(text);
+
+    if (segments.length === 1 && !segments[0]?.isCJK) {
+        // Fast path: no CJK — return plain string so the parent Text handles it
+        return text;
+    }
+
+    return segments.map((seg, idx) => {
+        const family = seg.isCJK ? (bold ? 'NotoSansSC' : 'NotoSansSC') : bold ? boldFamily : baseFamily;
+        // CJK fonts have no true italic; skip italic for CJK segments
+        const style: Record<string, string> = { fontFamily: family };
+
+        if (bold && !seg.isCJK) {
+            style.fontWeight = 'bold';
+        }
+
+        if (italic && !seg.isCJK) {
+            style.fontStyle = 'italic';
+        }
+
+        return (
+            <Text
+                key={`${keyPrefix}-cjk-${idx}`}
+                style={style}
+            >
+                {seg.text}
+            </Text>
+        );
+    });
+};
+
 // Helper function to render inline tokens with formatting
 const renderInlineTokens = (tokens: InlineToken[], keyPrefix: string) => {
     return tokens.map((token, idx) => {
@@ -354,20 +462,40 @@ const renderInlineTokens = (tokens: InlineToken[], keyPrefix: string) => {
             appliedStyles.push(pdfStyles.link);
         }
 
-        // If we have any styles, wrap in Text component
+        // If we have any styles, wrap in Text component with CJK-aware rendering
         if (appliedStyles.length > 0) {
+            const isBold = !!token.bold;
+            const isItalic = !!token.italic;
+            const isCode = !!token.code;
+            const rendered = isCode
+                ? textContent
+                : renderTextWithCJK(
+                      textContent,
+                      'NotoSans',
+                      'NotoSans',
+                      `${keyPrefix}-inline-${idx}`,
+                      isBold,
+                      isItalic,
+                  );
+
             return (
                 <Text
                     key={`${keyPrefix}-inline-${idx}`}
                     style={appliedStyles}
                 >
-                    {textContent}
+                    {rendered}
                 </Text>
             );
         }
 
-        // Return plain text without wrapper
-        return textContent;
+        // Plain text: render with CJK-aware font split (returns string if no CJK)
+        const rendered = renderTextWithCJK(textContent, 'NotoSans', 'NotoSans', `${keyPrefix}-inline-${idx}`);
+
+        if (typeof rendered === 'string') {
+            return rendered;
+        }
+
+        return <Text key={`${keyPrefix}-inline-${idx}`}>{rendered}</Text>;
     });
 };
 
