@@ -379,7 +379,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
 #### Recommended Reference Material
 - Use public methodology resources such as [HackTricks](https://book.hacktricks.wiki/en/index.html) and [Pentest Book](https://pentestbook.six2dez.com/) as inspiration for attack-surface coverage and testing depth.
 - Translate those references into concise phases, priorities, and verification rules for the agent instead of copying long checklists into the system prompt verbatim.
-- Keep prompt examples aligned with live PentAGI assets such as `backend/pkg/templates/prompts/pentester.tmpl` and `../../examples/prompts/base_web_pentest.md`.
+- Keep prompt examples aligned with live PentAGI assets such as [`backend/pkg/templates/prompts/pentester.tmpl`](../pkg/templates/prompts/pentester.tmpl) and [`examples/prompts/base_web_pentest.md`](../../examples/prompts/base_web_pentest.md).
 
 ### Searcher Agent
 - **Focus**: Highly efficient information retrieval (internal memory & external sources), source evaluation and prioritization, synthesis of findings.
