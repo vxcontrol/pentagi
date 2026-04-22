@@ -159,7 +159,7 @@ Required: 20.0.0+`
 	TroubleshootComposeFix   = `To fix:
 1. Install or update Docker Desktop, or install the Docker Compose v2 plugin for Docker Engine
 2. Verify the plugin is available: docker compose version
-3. If only legacy docker-compose is installed, remove it or install the v2 plugin as well
+3. If only legacy docker-compose is installed, install the Docker Compose v2 plugin as well
 
 PentAGI executes "docker compose", so legacy "docker-compose" alone is not sufficient.
 Documentation: https://docs.docker.com/compose/install/`
@@ -173,7 +173,6 @@ Required: 1.25.0+
 To fix:
 1. Update Docker Desktop or the Docker Compose v2 plugin to a newer version
 2. Verify the result with: docker compose version
-3. If only legacy docker-compose is installed, install the v2 plugin as well
 
 Documentation: https://docs.docker.com/compose/install/`
 
