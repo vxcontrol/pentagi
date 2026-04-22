@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ChevronRight, Clock, Loader2, Wrench } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 
 import type { FlowFragmentFragment, UsageStatsPeriod } from '@/graphql/types';
@@ -37,6 +37,37 @@ const formatDateLabel = (dateString: string): string => {
 
 const axisTickStyle = { fill: 'var(--color-muted-foreground)', fontSize: 12 };
 
+// Disables tooltip animation on chart entry and re-enables it only after the
+// tooltip has rendered at the correct position for the first time in the session.
+// This prevents the tooltip from flying from (0,0) to the cursor on entry,
+// while keeping smooth follow animation for all subsequent movements.
+const useChartTooltipAnimation = () => {
+    const [isAnimationActive, setIsAnimationActive] = useState(false);
+    const [sessionKey, setSessionKey] = useState(0);
+    const rafRef = useRef<number | undefined>(undefined);
+
+    const onMouseEnter = () => {
+        cancelAnimationFrame(rafRef.current!);
+        setIsAnimationActive(false);
+        setSessionKey((k) => k + 1);
+    };
+
+    const onMouseLeave = () => {
+        cancelAnimationFrame(rafRef.current!);
+        setIsAnimationActive(false);
+    };
+
+    // Called by ChartTooltip the first time it becomes visible in this session.
+    // One rAF ensures the tooltip has painted at its initial position before
+    // animation is re-enabled for subsequent cursor movements.
+    const onFirstActive = () => {
+        cancelAnimationFrame(rafRef.current!);
+        rafRef.current = requestAnimationFrame(() => setIsAnimationActive(true));
+    };
+
+    return { isAnimationActive, onFirstActive, onMouseEnter, onMouseLeave, sessionKey };
+};
+
 export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => {
     const { data: usageByPeriodData, loading: usageByPeriodLoading } = useUsageStatsByPeriodQuery({
         variables: { period },
@@ -51,6 +82,11 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
         variables: { period },
     });
     const { data: flowsData } = useFlowsQuery();
+
+    const flowsTooltip = useChartTooltipAnimation();
+    const toolcallsTooltip = useChartTooltipAnimation();
+    const tokenUsageTooltip = useChartTooltipAnimation();
+    const costTooltip = useChartTooltipAnimation();
 
     const flowsById = useMemo(() => {
         const map = new Map<string, FlowFragmentFragment>();
@@ -96,7 +132,11 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
                 loading={flowsByPeriodLoading}
                 title="Flows Activity Over Time"
             >
-                <BarChart data={flowsChartData}>
+                <BarChart
+                    data={flowsChartData}
+                    onMouseEnter={flowsTooltip.onMouseEnter}
+                    onMouseLeave={flowsTooltip.onMouseLeave}
+                >
                     <CartesianGrid
                         className="stroke-border"
                         strokeDasharray="3 3"
@@ -112,8 +152,15 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
                         tickMargin={8}
                     />
                     <Tooltip
-                        content={<ChartTooltip labelFormatter={formatDateLabel} />}
+                        content={
+                            <ChartTooltip
+                                labelFormatter={formatDateLabel}
+                                onFirstActive={flowsTooltip.onFirstActive}
+                                sessionKey={flowsTooltip.sessionKey}
+                            />
+                        }
                         cursor={{ fill: 'var(--color-muted-foreground)', fillOpacity: 0.1 }}
+                        isAnimationActive={flowsTooltip.isAnimationActive}
                     />
                     <Bar
                         dataKey="flows"
@@ -143,7 +190,11 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
                     loading={toolcallsByPeriodLoading}
                     title="Tool Calls Over Time"
                 >
-                    <BarChart data={toolcallsChartData}>
+                    <BarChart
+                        data={toolcallsChartData}
+                        onMouseEnter={toolcallsTooltip.onMouseEnter}
+                        onMouseLeave={toolcallsTooltip.onMouseLeave}
+                    >
                         <CartesianGrid
                             className="stroke-border"
                             strokeDasharray="3 3"
@@ -159,8 +210,15 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
                             tickMargin={8}
                         />
                         <Tooltip
-                            content={<ChartTooltip labelFormatter={formatDateLabel} />}
+                            content={
+                                <ChartTooltip
+                                    labelFormatter={formatDateLabel}
+                                    onFirstActive={toolcallsTooltip.onFirstActive}
+                                    sessionKey={toolcallsTooltip.sessionKey}
+                                />
+                            }
                             cursor={{ fill: 'var(--color-muted-foreground)', fillOpacity: 0.1 }}
+                            isAnimationActive={toolcallsTooltip.isAnimationActive}
                         />
                         <Bar
                             dataKey="count"
@@ -177,7 +235,11 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
                     loading={usageByPeriodLoading}
                     title="Token Usage Over Time"
                 >
-                    <AreaChart data={usageChartData}>
+                    <AreaChart
+                        data={usageChartData}
+                        onMouseEnter={tokenUsageTooltip.onMouseEnter}
+                        onMouseLeave={tokenUsageTooltip.onMouseLeave}
+                    >
                         <CartesianGrid
                             className="stroke-border"
                             strokeDasharray="3 3"
@@ -198,8 +260,11 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
                                 <ChartTooltip
                                     formatter={(value) => formatTokenCount(value)}
                                     labelFormatter={formatDateLabel}
+                                    onFirstActive={tokenUsageTooltip.onFirstActive}
+                                    sessionKey={tokenUsageTooltip.sessionKey}
                                 />
                             }
+                            isAnimationActive={tokenUsageTooltip.isAnimationActive}
                         />
                         <Area
                             dataKey="tokensIn"
@@ -228,7 +293,11 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
                 loading={usageByPeriodLoading}
                 title="Cost Over Time"
             >
-                <AreaChart data={usageChartData}>
+                <AreaChart
+                    data={usageChartData}
+                    onMouseEnter={costTooltip.onMouseEnter}
+                    onMouseLeave={costTooltip.onMouseLeave}
+                >
                     <CartesianGrid
                         className="stroke-border"
                         strokeDasharray="3 3"
@@ -249,8 +318,11 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
                             <ChartTooltip
                                 formatter={(value) => formatCost(value)}
                                 labelFormatter={formatDateLabel}
+                                onFirstActive={costTooltip.onFirstActive}
+                                sessionKey={costTooltip.sessionKey}
                             />
                         }
+                        isAnimationActive={costTooltip.isAnimationActive}
                     />
                     <Area
                         dataKey="costIn"
