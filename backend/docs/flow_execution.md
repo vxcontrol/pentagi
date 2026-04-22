@@ -706,6 +706,12 @@ The system maintains multiple types of persistent knowledge with PostgreSQL + pg
 - **Answer Storage** (`doc_type: answer`) - Q&A pairs for common scenarios  
 - **Code Storage** (`doc_type: code`) - Programming language-specific code samples
 
+**Lifecycle Guidance**:
+- Treat `memory` as flow-scoped execution history. It is most useful for understanding what happened in a specific engagement and is commonly inspected with a `flow_id` filter.
+- Treat `guide`, `answer`, and `code` as reusable knowledge. These document types exist to preserve durable procedures, reusable target notes, Q&A material, and code snippets across future runs.
+- If you want a later flow to begin with known context, store the confirmed result intentionally through `store_guide`, `store_answer`, or `store_code` instead of assuming execution history alone will provide the right reusable context.
+- Current prompt templates already distinguish these roles: reusable guides, answers, and code live in vector documents, while Graphiti is intended for episodic memory about what actually happened during execution.
+
 **Technical Parameters**:
 - **Similarity Threshold**: 0.2 for all vector searches
 - **Result Limits**: 3 documents maximum per search
