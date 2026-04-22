@@ -66,6 +66,7 @@ export const ThemeProvider = ({
                 // Store only light or dark themes
                 localStorage.setItem(storageKey, theme);
             }
+
             setTheme(theme);
         },
         theme,

@@ -78,7 +78,6 @@ const SettingsPrompts = () => {
         type: 'all' | 'human' | 'system' | 'tool';
     }>(null);
 
-
     // Three-way sorting handler: null -> asc -> desc -> null
     const handleColumnSort = (column: {
         clearSorting: () => void;

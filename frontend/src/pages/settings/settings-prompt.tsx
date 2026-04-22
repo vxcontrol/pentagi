@@ -533,7 +533,6 @@ const SettingsPrompt = () => {
 
         // For creation, check if the template is identical to the default
         if (!isUpdate && formData.template === promptInfo.defaultSystemTemplate) {
-
             return;
         }
 
@@ -585,7 +584,6 @@ const SettingsPrompt = () => {
 
         // For creation, check if the template is identical to the default
         if (!isUpdate && formData.template === promptInfo.defaultHumanTemplate) {
-
             return;
         }
 

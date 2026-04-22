@@ -3,15 +3,15 @@
     "type": "module",
     "version": "0.2.0",
     "scripts": {
-        "build": "npx tsc && vite build",
+        "build": "tsc && vite build",
         "commit": "commit",
         "commitlint": "commitlint --edit",
         "dev": "vite",
         "graphql:generate": "graphql-codegen --config graphql-codegen.ts",
         "lint": "eslint \"src/**/*.{ts,tsx,js,jsx}\"",
         "lint:fix": "eslint \"src/**/*.{ts,tsx,js,jsx}\" --fix",
-        "prettier": "npx prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
-        "prettier:fix": "npx prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
+        "prettier": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
+        "prettier:fix": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
         "ssl:generate": "tsx --eval 'import { generateCertificates } from \"./scripts/generate-ssl.ts\"; generateCertificates();'",
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
@@ -54,10 +54,14 @@
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
         "date-fns": "^4.1.0",
+        "github-slugger": "^2.0.0",
         "graphql": "^16.11.0",
         "graphql-ws": "^6.0.5",
+        "highlight.js": "^11.11.1",
         "html2pdf.js": "^0.14.0",
         "js-cookie": "^3.0.5",
+        "lodash": "^4.18.1",
+        "lowlight": "^3.3.0",
         "lru-cache": "^11.1.0",
         "lucide-react": "^0.553.0",
         "marked": "^17.0.3",
@@ -86,6 +90,7 @@
         "@commitlint/cli": "^20.0.0",
         "@commitlint/config-conventional": "^20.0.0",
         "@eslint/eslintrc": "^3.3.1",
+        "@eslint/js": "^9.39.4",
         "@graphql-codegen/cli": "^5.0.3",
         "@graphql-codegen/client-preset": "^4.5.1",
         "@graphql-codegen/near-operation-file-preset": "^5.0.0",
@@ -122,6 +127,14 @@
         "vite-plugin-html": "^3.2.2",
         "vite-tsconfig-paths": "^5.0.1",
         "vitest": "^4.0.0"
+    },
+    "packageManager": "pnpm@10.32.1",
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "@swc/core",
+            "esbuild",
+            "simple-git-hooks"
+        ]
     },
     "eslintConfig": {
         "extends": [

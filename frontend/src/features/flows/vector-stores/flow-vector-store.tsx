@@ -1,5 +1,5 @@
 import { Copy } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import type { VectorStoreLogFragmentFragment } from '@/graphql/types';
 
@@ -85,21 +85,23 @@ const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
     }, [searchValue, query, result]);
 
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasResultMatch, setPrevHasResultMatch] = useState(searchChecks.hasResultMatch);
 
-    // Auto-expand details if they contain search matches
-    useEffect(() => {
+    if (searchValue !== prevSearchValue || searchChecks.hasResultMatch !== prevHasResultMatch) {
+        setPrevSearchValue(searchValue);
+        setPrevHasResultMatch(searchChecks.hasResultMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(false);
         }
-    }, [searchValue, searchChecks.hasResultMatch]);
+    }
 
     const description = getDescription(log);
 
