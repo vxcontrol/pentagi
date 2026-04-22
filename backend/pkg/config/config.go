@@ -22,6 +22,9 @@ type Config struct {
 	DataDir     string `env:"DATA_DIR" envDefault:"./data"`
 	AskUser     bool   `env:"ASK_USER" envDefault:"false"`
 
+	// === Evidence Receipt Prototype ===
+	EvidenceReceiptsEnabled bool `env:"EVIDENCE_RECEIPTS_ENABLED" envDefault:"false"`
+
 	// === PentAGI Cloud Service Integration ===
 	InstallationID string `env:"INSTALLATION_ID"`
 	LicenseKey     string `env:"LICENSE_KEY"`
