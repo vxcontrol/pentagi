@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testFlowInputTimeout = 20 * time.Millisecond
+
 type flowWorkerTestTaskController struct {
 	tasks []TaskWorker
 }
@@ -195,6 +197,7 @@ func newFlowWorkerForInputTest(buffer int) (*flowWorker, context.CancelFunc) {
 		flowCtx: &FlowContext{
 			FlowID: 42,
 		},
+		inputTO: testFlowInputTimeout,
 	}, cancel
 }
 
@@ -215,6 +218,7 @@ func newRunningFlowWorkerForInputTest(buffer int, tc TaskController) (*flowWorke
 		taskWG:  &sync.WaitGroup{},
 		inputWG: &sync.WaitGroup{},
 		input:   make(chan flowInput, buffer),
+		inputTO: testFlowInputTimeout,
 		flowCtx: &FlowContext{
 			FlowID: 42,
 		},
@@ -242,7 +246,7 @@ func TestFlowWorkerPutInputEnqueuesWithoutImmediateConsumer(t *testing.T) {
 	select {
 	case err := <-resultCh:
 		require.NoError(t, err)
-	case <-time.After(flowInputTimeout + 500*time.Millisecond):
+	case <-time.After(fw.flowInputTimeout() + 250*time.Millisecond):
 		t.Fatal("PutInput did not return after the queue handshake timeout")
 	}
 
@@ -288,6 +292,20 @@ func TestFlowWorkerPutInputReturnsStoppedErrorWhenFlowCanceled(t *testing.T) {
 
 	err := fw.PutInput(context.Background(), "queued input", nil)
 	require.ErrorContains(t, err, "stopped")
+	require.Len(t, fw.input, 0)
+}
+
+func TestFlowWorkerPutInputReturnsCanceledErrorWhenContextCanceled(t *testing.T) {
+	t.Parallel()
+
+	fw, cancelFlow := newFlowWorkerForInputTest(1)
+	defer cancelFlow()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := fw.PutInput(ctx, "queued input", nil)
+	require.ErrorContains(t, err, "input processing canceled")
 	require.Len(t, fw.input, 0)
 }
 
@@ -439,7 +457,7 @@ func TestFlowWorkerStopWaitsForDequeuedInputBeforeTaskRegistration(t *testing.T)
 	select {
 	case err := <-resultCh:
 		require.NoError(t, err)
-	case <-time.After(flowInputTimeout + time.Second):
+	case <-time.After(fw.flowInputTimeout() + time.Second):
 		t.Fatal("PutInput did not finish after the stop sequence completed")
 	}
 

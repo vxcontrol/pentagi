@@ -58,6 +58,7 @@ type flowWorker struct {
 	taskWG  *sync.WaitGroup
 	inputWG *sync.WaitGroup
 	input   chan flowInput
+	inputTO time.Duration
 	discard atomic.Bool
 	flowCtx *FlowContext
 	logger  *logrus.Entry
@@ -589,12 +590,12 @@ func (fw *flowWorker) PutInput(
 	}
 	if err := ctx.Err(); err != nil {
 		close(flin.done)
-		return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, err)
+		return fw.inputContextError(err)
 	}
 
 	select {
 	case fw.input <- flin:
-		timer := time.NewTimer(flowInputTimeout)
+		timer := time.NewTimer(fw.flowInputTimeout())
 		defer timer.Stop()
 
 		select {
@@ -605,7 +606,7 @@ func (fw *flowWorker) PutInput(
 		case <-fw.ctx.Done():
 			return fmt.Errorf("flow %d stopped: %w", fw.flowCtx.FlowID, fw.ctx.Err())
 		case <-ctx.Done():
-			return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, ctx.Err())
+			return fw.inputContextError(ctx.Err())
 		}
 	default:
 		if err := fw.ctx.Err(); err != nil {
@@ -614,7 +615,7 @@ func (fw *flowWorker) PutInput(
 		}
 		if err := ctx.Err(); err != nil {
 			close(flin.done)
-			return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, err)
+			return fw.inputContextError(err)
 		}
 		close(flin.done)
 		return fmt.Errorf("flow %d input queue is full", fw.flowCtx.FlowID)
@@ -775,6 +776,22 @@ func (fw *flowWorker) finish() error {
 
 func (fw *flowWorker) stoppedQueuedInputError() error {
 	return fmt.Errorf("flow %d stopped before queued input was processed", fw.flowCtx.FlowID)
+}
+
+func (fw *flowWorker) inputContextError(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, err)
+	}
+
+	return fmt.Errorf("flow %d input processing canceled: %w", fw.flowCtx.FlowID, err)
+}
+
+func (fw *flowWorker) flowInputTimeout() time.Duration {
+	if fw.inputTO > 0 {
+		return fw.inputTO
+	}
+
+	return flowInputTimeout
 }
 
 func (fw *flowWorker) drainPendingInput(err error) {
