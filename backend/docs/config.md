@@ -1135,6 +1135,8 @@ The assistant summarizer configuration is designed to provide more memory for co
 
 These settings control which tools are available to AI agents and allow adding custom external functions. The Functions API enables fine-grained control over agent capabilities by selectively disabling built-in tools or extending functionality with custom integrations.
 
+For provider-neutral OSINT enrichment ideas that could be exposed through external functions, see [OSINT Integration Scenarios for PentAGI Agents](../../examples/guides/osint-integration-scenarios.md).
+
 | Field     | Type                 | Description                                                     |
 | --------- | -------------------- | --------------------------------------------------------------- |
 | token     | string (optional)    | API token for authenticating external function calls            |
