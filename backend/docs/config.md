@@ -105,14 +105,15 @@ This function automatically loads environment variables from a `.env` file if pr
 
 These settings control basic application behavior and are foundational for the system's operation.
 
-| Option         | Environment Variable | Default Value                                                                | Description                                                              |
-| -------------- | -------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| DatabaseURL    | `DATABASE_URL`       | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
-| Debug          | `DEBUG`              | `false`                                                                      | Enables debug mode with additional logging                               |
-| DataDir        | `DATA_DIR`           | `./data`                                                                     | Directory for storing persistent data                                    |
-| AskUser        | `ASK_USER`           | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
-| InstallationID | `INSTALLATION_ID`    | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
-| LicenseKey     | `LICENSE_KEY`        | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
+| Option                   | Environment Variable          | Default Value                                                                | Description                                                              |
+| ------------------------ | ----------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| DatabaseURL              | `DATABASE_URL`                | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
+| Debug                    | `DEBUG`                       | `false`                                                                      | Enables debug mode with additional logging                               |
+| DataDir                  | `DATA_DIR`                    | `./data`                                                                     | Directory for storing persistent data                                    |
+| AskUser                  | `ASK_USER`                    | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
+| EvidenceReceiptsEnabled  | `EVIDENCE_RECEIPTS_ENABLED`   | `false`                                                                      | Enables export-only toolcall evidence receipts                           |
+| InstallationID           | `INSTALLATION_ID`             | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
+| LicenseKey               | `LICENSE_KEY`                 | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
 
 ### Usage Details
 
@@ -1748,6 +1749,10 @@ The supervision settings work together as a comprehensive system:
    AgentPlanningStepEnabled: false
    ```
    Disabled supervision for debugging to observe natural agent behavior.
+
+## Evidence Receipt Settings
+
+When `EVIDENCE_RECEIPTS_ENABLED=true`, PentAGI writes hash-chain-only JSONL receipts for finished and failed tool calls to `<DATA_DIR>/flow-<flow_id>/evidence/receipts.jsonl`. Receipts include toolcall provenance metadata plus hashes of arguments and results, not raw argument or result content. Ed25519 signing and report bundle export are deferred to a later evidence-chain milestone.
 
 ## Observability Settings
 

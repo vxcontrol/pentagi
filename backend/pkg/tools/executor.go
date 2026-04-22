@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -134,10 +135,11 @@ type customExecutor struct {
 	taskID    *int64
 	subtaskID *int64
 
-	db    database.Querier
-	mlp   MsgLogProvider
-	store *pgvector.Store
-	vslp  VectorStoreLogProvider
+	db       database.Querier
+	mlp      MsgLogProvider
+	store    *pgvector.Store
+	vslp     VectorStoreLogProvider
+	evidence evidenceReceiptRecorder
 
 	definitions []llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
@@ -307,12 +309,21 @@ func (ce *customExecutor) Execute(
 		result, err := handler(ctx, name, args)
 		if err != nil {
 			durationDelta := time.Since(startTime).Seconds()
-			_, _ = ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
-				Result:          fmt.Sprintf("failed to execute handler: %s", err.Error()),
+			failureResult := fmt.Sprintf("failed to execute handler: %s", err.Error())
+			updatedToolcall, updateErr := ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
+				Result:          failureResult,
 				DurationSeconds: durationDelta,
 				ID:              tc.ID,
 			})
-			return "", resultFormat, fmt.Errorf("failed to execute handler: %w", err)
+			if updateErr != nil {
+				return "", resultFormat, fmt.Errorf("failed to update failed toolcall result: %w", updateErr)
+			}
+
+			handlerErr := fmt.Errorf("failed to execute handler: %w", err)
+			if err := ce.recordEvidenceReceipt(ctx, updatedToolcall, evidenceReceiptStatusFailed, failureResult); err != nil {
+				return "", resultFormat, fmt.Errorf("failed to record evidence receipt: %w", errors.Join(handlerErr, err))
+			}
+			return "", resultFormat, handlerErr
 		}
 
 		result = database.SanitizeUTF8(result)
@@ -325,12 +336,21 @@ func (ce *customExecutor) Execute(
 			result, err = ce.summarizer(ctx, summarizePrompt)
 			if err != nil {
 				durationDelta := time.Since(startTime).Seconds()
-				_, _ = ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
-					Result:          fmt.Sprintf("failed to summarize result: %s", err.Error()),
+				failureResult := fmt.Sprintf("failed to summarize result: %s", err.Error())
+				updatedToolcall, updateErr := ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
+					Result:          failureResult,
 					DurationSeconds: durationDelta,
 					ID:              tc.ID,
 				})
-				return "", resultFormat, fmt.Errorf("failed to summarize result: %w", err)
+				if updateErr != nil {
+					return "", resultFormat, fmt.Errorf("failed to update failed toolcall result: %w", updateErr)
+				}
+
+				summarizeErr := fmt.Errorf("failed to summarize result: %w", err)
+				if err := ce.recordEvidenceReceipt(ctx, updatedToolcall, evidenceReceiptStatusFailed, failureResult); err != nil {
+					return "", resultFormat, fmt.Errorf("failed to record evidence receipt: %w", errors.Join(summarizeErr, err))
+				}
+				return "", resultFormat, summarizeErr
 			}
 			resultFormat = database.MsglogResultFormatMarkdown
 		} else if allowSummarize && len(result) > DefaultResultSizeLimit*2 {
@@ -344,13 +364,16 @@ func (ce *customExecutor) Execute(
 		}
 
 		durationDelta := time.Since(startTime).Seconds()
-		_, err = ce.db.UpdateToolcallFinishedResult(ctx, database.UpdateToolcallFinishedResultParams{
+		updatedToolcall, err := ce.db.UpdateToolcallFinishedResult(ctx, database.UpdateToolcallFinishedResultParams{
 			Result:          result,
 			DurationSeconds: durationDelta,
 			ID:              tc.ID,
 		})
 		if err != nil {
 			return "", resultFormat, fmt.Errorf("failed to update toolcall result: %w", err)
+		}
+		if err := ce.recordEvidenceReceipt(ctx, updatedToolcall, evidenceReceiptStatusFinished, result); err != nil {
+			return "", resultFormat, fmt.Errorf("failed to record evidence receipt: %w", err)
 		}
 
 		return result, resultFormat, nil
@@ -383,6 +406,49 @@ func (ce *customExecutor) Execute(
 	obsWrapper.end(result, nil, time.Since(startTime).Seconds())
 
 	return result, nil
+}
+
+func (ce *customExecutor) recordEvidenceReceipt(
+	ctx context.Context,
+	tc database.Toolcall,
+	status string,
+	result string,
+) error {
+	if ce.evidence == nil {
+		return nil
+	}
+
+	var taskID *int64
+	if tc.TaskID.Valid {
+		value := tc.TaskID.Int64
+		taskID = &value
+	}
+
+	var subtaskID *int64
+	if tc.SubtaskID.Valid {
+		value := tc.SubtaskID.Int64
+		subtaskID = &value
+	}
+
+	event := evidenceReceiptEvent{
+		FlowID:     tc.FlowID,
+		TaskID:     taskID,
+		SubtaskID:  subtaskID,
+		ToolcallID: tc.ID,
+		CallID:     tc.CallID,
+		ToolName:   tc.Name,
+		Args:       tc.Args,
+		Result:     result,
+	}
+
+	switch status {
+	case evidenceReceiptStatusFinished:
+		return ce.evidence.RecordFinished(ctx, event)
+	case evidenceReceiptStatusFailed:
+		return ce.evidence.RecordFailed(ctx, event)
+	default:
+		return fmt.Errorf("unknown evidence receipt status %q", status)
+	}
 }
 
 func (ce *customExecutor) IsBarrierFunction(name string) bool {
