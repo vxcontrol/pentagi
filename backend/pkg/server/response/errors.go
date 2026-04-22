@@ -113,7 +113,8 @@ var ErrFlowsInvalidData = NewHttpError(500, "Flows.InvalidData", "invalid flow d
 
 var ErrFlowFilesInvalidRequest = NewHttpError(400, "FlowFiles.InvalidRequest", "invalid flow file request data")
 var ErrFlowFilesNotFound = NewHttpError(404, "FlowFiles.NotFound", "flow file not found")
-var ErrFlowFilesInvalidData = NewHttpError(500, "FlowFiles.InvalidData", "invalid flow file data")
+var ErrFlowFilesInvalidData = NewHttpError(400, "FlowFiles.InvalidData", "invalid flow file data")
+var ErrFlowFilesAlreadyExists = NewHttpError(409, "FlowFiles.AlreadyExists", "flow file already exists")
 
 // tasks
 

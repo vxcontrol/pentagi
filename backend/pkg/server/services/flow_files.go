@@ -23,6 +23,8 @@ import (
 
 const flowUploadsDirName = "uploads"
 
+var errFlowFileNotRegular = errors.New("flow file is not a regular file")
+
 type flowFile struct {
 	Name       string    `json:"name"`
 	Path       string    `json:"path"`
@@ -124,6 +126,25 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 		}
 
 		dstPath := filepath.Join(uploadDir, fileName)
+		exists, err := flowFileExists(dstPath)
+		if err != nil {
+			logger.FromContext(c).WithError(err).WithFields(map[string]any{
+				"flow_id":   flowID,
+				"file_name": fileName,
+			}).Error("error checking existing uploaded file")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		if exists {
+			err = fmt.Errorf("flow file '%s' already exists", fileName)
+			logger.FromContext(c).WithError(err).WithFields(map[string]any{
+				"flow_id":   flowID,
+				"file_name": fileName,
+			}).Error("uploaded file already exists")
+			response.Error(c, response.ErrFlowFilesAlreadyExists, err)
+			return
+		}
+
 		if err := c.SaveUploadedFile(fileHeader, dstPath); err != nil {
 			logger.FromContext(c).WithError(err).WithFields(map[string]any{
 				"flow_id":   flowID,
@@ -133,7 +154,7 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 			return
 		}
 
-		info, err := os.Stat(dstPath)
+		info, err := regularFlowFileInfo(dstPath)
 		if err != nil {
 			logger.FromContext(c).WithError(err).WithFields(map[string]any{
 				"flow_id":   flowID,
@@ -174,26 +195,17 @@ func (s *FlowFileService) DownloadFlowFile(c *gin.Context) {
 	}
 
 	filePath := filepath.Join(s.flowUploadsDir(flowID), fileName)
-	info, err := os.Stat(filePath)
+	_, err = regularFlowFileInfo(filePath)
 	if err != nil {
 		logger.FromContext(c).WithError(err).WithFields(map[string]any{
 			"flow_id":   flowID,
 			"file_name": fileName,
 		}).Error("error reading flow file")
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, errFlowFileNotRegular) {
 			response.Error(c, response.ErrFlowFilesNotFound, err)
 		} else {
 			response.Error(c, response.ErrInternal, err)
 		}
-		return
-	}
-	if info.IsDir() {
-		err = fmt.Errorf("file '%s' is a directory", fileName)
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":   flowID,
-			"file_name": fileName,
-		}).Error("invalid flow file type")
-		response.Error(c, response.ErrFlowFilesNotFound, err)
 		return
 	}
 
@@ -231,13 +243,16 @@ func (s *FlowFileService) listFlowFiles(flowID uint64) ([]flowFile, error) {
 
 	files := make([]flowFile, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
 			continue
 		}
 
 		info, err := entry.Info()
 		if err != nil {
 			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			continue
 		}
 
 		files = append(files, newFlowFile(info))
@@ -311,6 +326,29 @@ func sanitizeFlowFileName(fileName string) (string, error) {
 	}
 
 	return cleanName, nil
+}
+
+func flowFileExists(filePath string) (bool, error) {
+	if _, err := os.Lstat(filePath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
+func regularFlowFileInfo(filePath string) (os.FileInfo, error) {
+	info, err := os.Lstat(filePath)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%w: %s", errFlowFileNotRegular, filePath)
+	}
+
+	return info, nil
 }
 
 func newFlowFile(info os.FileInfo) flowFile {

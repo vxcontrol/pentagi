@@ -64,9 +64,11 @@ func TestFlowFileService_ListFlowFiles(t *testing.T) {
 
 	oldPath := filepath.Join(uploadDir, "old.txt")
 	newPath := filepath.Join(uploadDir, "new.txt")
+	linkPath := filepath.Join(uploadDir, "link.txt")
 
 	require.NoError(t, os.WriteFile(oldPath, []byte("old"), 0644))
 	require.NoError(t, os.WriteFile(newPath, []byte("newer content"), 0644))
+	_ = os.Symlink(newPath, linkPath)
 
 	oldTime := time.Now().Add(-2 * time.Hour)
 	newTime := time.Now().Add(-1 * time.Hour)
@@ -84,6 +86,10 @@ func TestFlowFileService_ListFlowFiles(t *testing.T) {
 	assert.Equal(t, "old.txt", files[1].Name)
 	assert.Equal(t, "/work/uploads/old.txt", files[1].Path)
 	assert.Equal(t, int64(len("old")), files[1].Size)
+
+	for _, file := range files {
+		assert.NotEqual(t, "link.txt", file.Name)
+	}
 }
 
 func TestFlowFileService_ListFlowFiles_MissingDirectory(t *testing.T) {
@@ -92,4 +98,33 @@ func TestFlowFileService_ListFlowFiles_MissingDirectory(t *testing.T) {
 	files, err := service.listFlowFiles(999)
 	require.NoError(t, err)
 	assert.Empty(t, files)
+}
+
+func TestFlowFileExists(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "report.txt")
+
+	exists, err := flowFileExists(filePath)
+	require.NoError(t, err)
+	assert.False(t, exists)
+
+	require.NoError(t, os.WriteFile(filePath, []byte("report"), 0644))
+
+	exists, err = flowFileExists(filePath)
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+func TestRegularFlowFileInfoRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "report.txt")
+	linkPath := filepath.Join(dir, "link.txt")
+
+	require.NoError(t, os.WriteFile(filePath, []byte("report"), 0644))
+	if err := os.Symlink(filePath, linkPath); err != nil {
+		t.Skipf("symlink creation is not available: %v", err)
+	}
+
+	_, err := regularFlowFileInfo(linkPath)
+	require.ErrorIs(t, err, errFlowFileNotRegular)
 }

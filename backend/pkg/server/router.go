@@ -372,7 +372,9 @@ func setFlowsGroup(parent *gin.RouterGroup, svc *services.FlowService) {
 func setFlowFilesGroup(parent *gin.RouterGroup, svc *services.FlowFileService) {
 	flowFilesGroup := parent.Group("/flows/:flowID/files")
 	{
+		flowFilesGroup.GET("", svc.GetFlowFiles)
 		flowFilesGroup.GET("/", svc.GetFlowFiles)
+		flowFilesGroup.POST("", svc.UploadFlowFiles)
 		flowFilesGroup.POST("/", svc.UploadFlowFiles)
 		flowFilesGroup.GET("/:fileName", svc.DownloadFlowFile)
 	}

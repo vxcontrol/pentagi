@@ -13,6 +13,11 @@ import { formatDate } from '@/lib/utils/format';
 import { baseUrl } from '@/models/api';
 import { useFlow } from '@/providers/flow-provider';
 
+interface ApiResponse<T> {
+    data?: T;
+    status: string;
+}
+
 interface FlowFile {
     modifiedAt: string;
     name: string;
@@ -24,6 +29,14 @@ interface FlowFilesResponse {
     files: Array<FlowFile>;
     total: number;
 }
+
+const unwrapFlowFilesResponse = (response: ApiResponse<FlowFilesResponse>) => {
+    if (response.status !== 'success' || !response.data) {
+        throw new Error('Unexpected flow files response');
+    }
+
+    return response.data;
+};
 
 const formatFileSize = (size: number) => {
     if (size < 1024) {
@@ -60,7 +73,8 @@ const FlowFiles = () => {
         setIsLoading(true);
 
         try {
-            const data = await axios.get<FlowFilesResponse>(`/flows/${flowId}/files`);
+            const response = await axios.get<unknown, ApiResponse<FlowFilesResponse>>(`/flows/${flowId}/files`);
+            const data = unwrapFlowFilesResponse(response);
             setFiles(data.files ?? []);
         } catch (error) {
             const description = error instanceof Error ? error.message : 'An error occurred while loading flow files';
@@ -113,7 +127,16 @@ const FlowFiles = () => {
             setIsUploading(true);
 
             try {
-                const data = await axios.post<FlowFilesResponse>(`/flows/${flowId}/files`, formData);
+                const response = await axios.post<unknown, ApiResponse<FlowFilesResponse>>(
+                    `/flows/${flowId}/files`,
+                    formData,
+                    {
+                        headers: {
+                            'Content-Type': undefined,
+                        },
+                    },
+                );
+                const data = unwrapFlowFilesResponse(response);
                 const uploadedCount = data.files?.length ?? selectedFiles.length;
 
                 toast.success(uploadedCount === 1 ? 'File uploaded successfully' : 'Files uploaded successfully', {
