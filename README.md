@@ -948,7 +948,7 @@ Once the stack is running and you can sign in to the web UI, the fastest way to 
 2. Click **New Flow**.
 3. Choose the mode that fits your goal:
    - **Automation**: fully autonomous execution for a testing goal you want PentAGI to carry out end-to-end
-   - **Assistant**: interactive back-and-forth help when you want to steer the investigation step by step
+   - **Assistant**: interactive back-and-forth help when you want to steer the investigation step by step. In this mode you can also enable the **Use Agents** toggle to let PentAGI delegate subtasks to specialized sub-agents for more complex investigations.
 4. Select the LLM provider you want to use for this flow.
 5. Describe the target and the objective in natural language in the message box.
 
