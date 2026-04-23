@@ -633,6 +633,24 @@ The installer will:
 5. **Security Hardening**: Generate secure credentials and configure SSL certificates
 6. **Deployment**: Start PentAGI with docker-compose
 
+### Current Web Settings Coverage
+
+The PentAGI web console already manages several settings areas after the server is up and running:
+
+- **Settings -> Providers**: Create, edit, delete, and test user-defined provider profiles for supported provider types. These profiles control per-agent model selection, runtime parameters, reasoning options, and pricing metadata.
+- **Settings -> Prompts**: Manage system, human, and tool prompt templates.
+- **Settings -> API Tokens**: Create and manage PentAGI Bearer tokens for REST and GraphQL access.
+- **Other UI-managed preferences**: Favorite flows are stored as user preferences, and theme selection is handled from the main sidebar/profile controls rather than the Settings pages.
+
+### Still Server-Managed
+
+The following configuration areas still need to be set on the server through environment variables, compose files, or mounted config files:
+
+- **LLM credentials and connection details**: API keys, endpoints, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
+- **Search provider credentials and options**: Settings such as `DUCKDUCKGO_*`, `GOOGLE_*`, `TAVILY_API_KEY`, `TRAVERSAAL_API_KEY`, `PERPLEXITY_*`, `SEARXNG_*`, and `SPLOITUS_ENABLED`.
+- **Third-party integrations**: Langfuse, Graphiti, and similar external services remain server-side configuration.
+- **MCP server management**: MCP settings pages are not currently exposed as a live web-console feature.
+
 **For Production & Enhanced Security:**
 
 For production deployments or security-sensitive environments, we **strongly recommend** using a distributed two-node architecture where worker operations are isolated on a separate server. This prevents untrusted code execution and network access issues on your main system.

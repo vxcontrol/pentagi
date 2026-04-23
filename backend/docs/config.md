@@ -7,6 +7,8 @@ This document serves as a comprehensive guide to the configuration system in Pen
 - [PentAGI Configuration Guide](#pentagi-configuration-guide)
   - [Table of Contents](#table-of-contents)
   - [Configuration Basics](#configuration-basics)
+    - [Current Web Settings Coverage](#current-web-settings-coverage)
+    - [Still Server-Managed](#still-server-managed)
   - [General Settings](#general-settings)
     - [Usage Details](#usage-details)
   - [Docker Settings](#docker-settings)
@@ -100,6 +102,26 @@ func NewConfig() (*Config, error) {
 ```
 
 This function automatically loads environment variables from a `.env` file if present, then parses them into the `Config` struct using the `env` package from `github.com/caarlos0/env/v10`.
+
+### Current Web Settings Coverage
+
+The running PentAGI instance already exposes several settings areas in the web UI:
+
+- **Settings -> Providers**: Manage user-defined provider profiles, per-agent model and runtime options, and provider test actions for provider types supported by the running server.
+- **Settings -> Prompts**: Manage system, human, and tool prompt templates.
+- **Settings -> API Tokens**: Create, revoke, and delete PentAGI API tokens.
+- **Other UI-managed preferences**: Favorite flows are stored as user preferences, and theme selection is handled client-side from the main sidebar/profile controls.
+
+These web-console features do not replace the environment variables in this guide for provider credentials, endpoints, or external integrations.
+
+### Still Server-Managed
+
+The environment variables documented below remain the source of truth for configuration that is not currently editable from the web console:
+
+- **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
+- **Search provider credentials and options**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng, Sploitus, and related search configuration.
+- **Third-party integrations**: Langfuse, Graphiti, and other external observability or knowledge services.
+- **MCP server management**: MCP settings are not currently exposed as a live web-console feature.
 
 ## General Settings
 
