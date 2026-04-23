@@ -1,7 +1,29 @@
-import { Document, Page, pdf, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { Document, Font, Page, pdf, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { marked } from 'marked';
 
 import { Log } from './log';
+
+const fontBase = typeof window !== 'undefined' ? window.location.origin : '';
+
+Font.register({
+    family: 'Inter',
+    fonts: [
+        { fontStyle: 'normal', fontWeight: 400, src: `${fontBase}/fonts/Inter-Regular.ttf` },
+        { fontStyle: 'italic', fontWeight: 400, src: `${fontBase}/fonts/Inter-Italic.ttf` },
+        { fontStyle: 'normal', fontWeight: 700, src: `${fontBase}/fonts/Inter-Bold.ttf` },
+        { fontStyle: 'italic', fontWeight: 700, src: `${fontBase}/fonts/Inter-BoldItalic.ttf` },
+    ],
+});
+
+Font.register({
+    family: 'Roboto Mono',
+    fonts: [
+        { fontStyle: 'normal', fontWeight: 400, src: `${fontBase}/fonts/RobotoMono-Regular.ttf` },
+        { fontStyle: 'italic', fontWeight: 400, src: `${fontBase}/fonts/RobotoMono-Italic.ttf` },
+        { fontStyle: 'normal', fontWeight: 700, src: `${fontBase}/fonts/RobotoMono-Bold.ttf` },
+        { fontStyle: 'italic', fontWeight: 700, src: `${fontBase}/fonts/RobotoMono-BoldItalic.ttf` },
+    ],
+});
 
 // PDF styles for @react-pdf/renderer - Enhanced beautiful styles
 const pdfStyles = StyleSheet.create({
@@ -10,7 +32,7 @@ const pdfStyles = StyleSheet.create({
     },
     code: {
         color: '#dc2626',
-        fontFamily: 'Courier',
+        fontFamily: 'Roboto Mono',
         fontSize: 9,
         fontWeight: 'bold',
     },
@@ -20,7 +42,7 @@ const pdfStyles = StyleSheet.create({
         borderRadius: 4,
         borderWidth: 1,
         color: '#e2e8f0',
-        fontFamily: 'Courier',
+        fontFamily: 'Roboto Mono',
         fontSize: 8.5,
         lineHeight: 1.4,
         marginBottom: 8,
@@ -112,7 +134,7 @@ const pdfStyles = StyleSheet.create({
     page: {
         backgroundColor: '#ffffff',
         color: '#334155',
-        fontFamily: 'Helvetica',
+        fontFamily: 'Inter',
         fontSize: 10,
         lineHeight: 1.5,
         padding: 40,
