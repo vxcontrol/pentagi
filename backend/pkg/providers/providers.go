@@ -36,12 +36,18 @@ import (
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
+	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/sirupsen/logrus"
 )
 
 const deltaCallCounter = 10000
 
 const defaultTestParallelWorkersNumber = 16
+
+const (
+	summarizerCacheMaxSize = 1000
+	summarizerCacheTTL     = 4 * time.Hour
+)
 
 const pentestDockerImage = "vxcontrol/kali-linux"
 
@@ -460,6 +466,7 @@ func (pc *providerController) NewFlowProvider(
 		prompter:        prompter,
 		executor:        executor,
 		summarizer:      pc.summarizerAgent,
+		summarizerCache: lru.NewLRU[[32]byte, string](summarizerCacheMaxSize, nil, summarizerCacheTTL),
 		Provider:        prv,
 		maxGACallsLimit: pc.cfg.MaxGeneralAgentToolCalls,
 		maxLACallsLimit: pc.cfg.MaxLimitedAgentToolCalls,
@@ -510,6 +517,7 @@ func (pc *providerController) LoadFlowProvider(
 		prompter:        prompter,
 		executor:        executor,
 		summarizer:      pc.summarizerAgent,
+		summarizerCache: lru.NewLRU[[32]byte, string](summarizerCacheMaxSize, nil, summarizerCacheTTL),
 		Provider:        prv,
 		maxGACallsLimit: pc.cfg.MaxGeneralAgentToolCalls,
 		maxLACallsLimit: pc.cfg.MaxLimitedAgentToolCalls,
@@ -604,6 +612,7 @@ func (pc *providerController) NewAssistantProvider(
 			executor:        executor,
 			streamCb:        streamCb,
 			summarizer:      pc.summarizerAgent,
+			summarizerCache: lru.NewLRU[[32]byte, string](summarizerCacheMaxSize, nil, summarizerCacheTTL),
 			Provider:        prv,
 			maxGACallsLimit: pc.cfg.MaxGeneralAgentToolCalls,
 			maxLACallsLimit: pc.cfg.MaxLimitedAgentToolCalls,
@@ -657,6 +666,7 @@ func (pc *providerController) LoadAssistantProvider(
 			executor:        executor,
 			streamCb:        streamCb,
 			summarizer:      pc.summarizerAgent,
+			summarizerCache: lru.NewLRU[[32]byte, string](summarizerCacheMaxSize, nil, summarizerCacheTTL),
 			Provider:        prv,
 			maxGACallsLimit: pc.cfg.MaxGeneralAgentToolCalls,
 			maxLACallsLimit: pc.cfg.MaxLimitedAgentToolCalls,

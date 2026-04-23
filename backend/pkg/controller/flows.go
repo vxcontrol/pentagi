@@ -289,6 +289,7 @@ func (fc *flowController) CreateAssistant(
 		prvtype:       prvtype,
 		useAgents:     useAgents,
 		functions:     functions,
+		fw:            fw,
 		flowWorkerCtx: flowWorkerCtx,
 	})
 	if err != nil {

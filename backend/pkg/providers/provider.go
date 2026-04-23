@@ -20,6 +20,7 @@ import (
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
+	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/reasoning"
@@ -34,7 +35,7 @@ const (
 	msgGeneratorSizeLimit = 150 * 1024 // 150 KB
 	msgRefinerSizeLimit   = 100 * 1024 // 100 KB
 	msgReporterSizeLimit  = 100 * 1024 // 100 KB
-	msgSummarizerLimit    = 16 * 1024  // 16 KB
+	msgSummarizerLimit    = 32 * 1024  // 32 KB
 )
 
 const textTruncateMessage = "\n\n[...truncated]"
@@ -152,6 +153,8 @@ type flowProvider struct {
 	streamCb StreamMessageHandler
 
 	summarizer csum.Summarizer
+
+	summarizerCache *lru.LRU[[32]byte, string]
 
 	maxGACallsLimit int
 	maxLACallsLimit int

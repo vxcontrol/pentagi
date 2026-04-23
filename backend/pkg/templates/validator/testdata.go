@@ -62,6 +62,10 @@ func CreateDummyTemplateData() map[string]any {
 		"SubtaskPatchToolName":      tools.SubtaskPatchToolName,
 		"AskUserToolName":           tools.AskUserToolName,
 		"AskUserEnabled":            true,
+		"GetFlowStatusToolName":     tools.GetFlowStatusToolName,
+		"StopFlowToolName":          tools.StopFlowToolName,
+		"SubmitFlowInputToolName":   tools.SubmitFlowInputToolName,
+		"PatchFlowSubtasksToolName": tools.PatchFlowSubtasksToolName,
 
 		// Summarization related - using constants from proper packages
 		"SummarizationToolName":   cast.SummarizationToolName,
@@ -70,6 +74,7 @@ func CreateDummyTemplateData() map[string]any {
 		// Boolean flags
 		"UseAgents":            true,
 		"IsDefaultDockerImage": false,
+		"FlowManagerEnabled":   true,
 
 		// Docker and environment
 		"DockerImage": "vxcontrol/kali-linux:latest",

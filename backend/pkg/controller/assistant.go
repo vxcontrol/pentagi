@@ -63,6 +63,7 @@ type newAssistantWorkerCtx struct {
 	prvname   provider.ProviderName
 	prvtype   provider.ProviderType
 	functions *tools.Functions
+	fw        FlowWorker
 
 	flowWorkerCtx
 }
@@ -70,6 +71,7 @@ type newAssistantWorkerCtx struct {
 type assistantWorkerCtx struct {
 	userID int64
 	flowID int64
+	fw     FlowWorker
 
 	flowWorkerCtx
 }
@@ -200,6 +202,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 
 	assistantProvider.SetAgentLogProvider(workers.alw)
 	assistantProvider.SetMsgLogProvider(aslw)
+	assistantProvider.SetFlowWorker(awc.fw)
 
 	executor.SetImage(container.Image)
 	executor.SetEmbedder(assistantProvider.Embedder())
@@ -338,6 +341,7 @@ func LoadAssistantWorker(
 
 	assistantProvider.SetAgentLogProvider(workers.alw)
 	assistantProvider.SetMsgLogProvider(aslw)
+	assistantProvider.SetFlowWorker(awc.fw)
 
 	executor.SetImage(container.Image)
 	executor.SetEmbedder(assistantProvider.Embedder())

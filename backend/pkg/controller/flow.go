@@ -420,6 +420,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	awc := assistantWorkerCtx{
 		userID:        flow.UserID,
 		flowID:        flow.ID,
+		fw:            fw,
 		flowWorkerCtx: fwc,
 	}
 	for _, assistant := range assistants {

@@ -14,11 +14,11 @@ This document describes the internal architecture and execution workflow of Flow
 - **FlowWorker** - Manages the complete lifecycle of a Flow, coordinates Tasks
 - **TaskWorker** - Executes individual Tasks, manages Subtask generation and refinement
 - **SubtaskWorker** - Handles execution of specific Subtasks via AI agents
-- **AssistantWorker** - Manages interactive assistant mode within a Flow
+- **AssistantWorker** - Manages interactive assistant mode within a Flow; optionally controls the Flow's automation via injected `FlowWorker` reference
 
 ### Providers
 - **FlowProvider** - Core interface for Flow execution, agent coordination and orchestration
-- **AssistantProvider** - Specialized provider for assistant mode interactions
+- **AssistantProvider** - Specialized provider for assistant mode interactions; receives `FlowWorker` via `SetFlowWorker()` after chain preparation to enable flow management tool callbacks
 - **ProviderController** - Factory for creating and managing different LLM providers
 
 ### AI Agents
@@ -34,11 +34,11 @@ This document describes the internal architecture and execution workflow of Flow
 - **Enricher Agent** - Enhances information from multiple sources
 - **Adviser Agent** - Provides expert guidance and recommendations
 - **Reflector Agent** - Corrects agents that return unstructured text instead of tool calls
-- **Assistant Agent** - Provides interactive assistance, operates autonomously within Flow independently from Task/Subtask (UseAgents flag controls delegation)
+- **Assistant Agent** - Provides interactive assistance, operates autonomously within Flow independently from Task/Subtask (UseAgents flag controls delegation); when FlowWorker is available, exposes `get_flow_status`, `stop_flow`, `submit_flow_input`, and `patch_flow_subtasks` tools for automation control
 
 ### Tools and Capabilities by Category
 - **Environment Tools** - Terminal commands, file operations within Docker containers
-  - `terminal` - Command execution (default: 5min if not specified, hard limit: 20min)
+  - `terminal` - Command execution (configurable via `TERMINAL_TOOL_TIMEOUT`, default: 1200s; hard limit: 3h/10800s; 0 or negative values are clamped to the hard limit)
   - `file` - Read/write operations with absolute path requirements
   
 - **Search Network Tools** - External information sources
@@ -67,6 +67,12 @@ This document describes the internal architecture and execution workflow of Flow
   
 - **Barrier Tools** - Control flow termination  
   - `done` - Complete subtask, `ask` - Request user input (configurable via ASK_USER env)
+
+- **Flow Management Tools** - Assistant-only; available when FlowWorker is injected into AssistantProvider
+  - `get_flow_status` - Query flow state, tasks, subtasks, planned/running subtask with optional agent messages (verbose mode: 50 messages, execution context)
+  - `stop_flow` - Cancel the currently running task (15s timeout; reports actual post-stop state)
+  - `submit_flow_input` - Deliver text to a waiting flow: answers an `ask` checkpoint or creates a new task
+  - `patch_flow_subtasks` - Replace planned subtask list via delta operations (add/remove/modify/reorder); returns new IDs after recreation
 
 ### Execution Context
 - **Message Chain** - Conversation history maintained for each agent interaction
@@ -309,6 +315,13 @@ sequenceDiagram
         U->>AW: Follow-up input
         Note over AW: Message chain preserved in DB
         AW->>AP: Continue conversation context
+    end
+    
+    opt FlowWorker injected (flow management enabled)
+        Note over AP,AA: get_flow_status / stop_flow / submit_flow_input / patch_flow_subtasks available
+        AA->>AP: Call flow management tool
+        AP->>AP: buildFlowManagerHandlers() → stopAssistantFlow / sendAssistantFlowInput / patchAssistantFlowSubtasks
+        AP-->>AA: Tool result with actual flow state
     end
 ```
 
@@ -559,7 +572,7 @@ graph TB
     
     subgraph "Tool Execution Environment"
         WorkDir[Work Directory<br/>/work in container]
-        Terminal[Terminal Tool<br/>5min default, 20min max]
+        Terminal[Terminal Tool<br/>default 1200s, hard limit 3h]
         FileOps[File Operations<br/>Absolute paths required]
         WebAccess[Web Access<br/>Separate scraper container]
     end
@@ -853,12 +866,13 @@ Several mechanisms ensure efficient execution:
 - **Search Action Economy** - Searcher limited to 3-5 actions per query
 
 **Timeout Configuration**:
-- **Terminal Operations** - Default 5 minutes, hard limit 20 minutes
+- **Terminal Operations** - Configurable via `TERMINAL_TOOL_TIMEOUT` (default: 1200s); hard limit 3h/10800s; 0 or negative values clamped to hard limit
 - **LLM API Calls** - 3 retries with 5-second delays between attempts  
 - **Vector Search** - Threshold 0.2, max 3 results per query
 - **Tool Result Summarization** - Triggered at 16KB result size
 - **Flow Input Processing** - 1 second timeout for input queueing
 - **Assistant Input** - 2 second timeout for assistant input queueing
+- **Flow Management Operations** - 15 second timeout for `stop_flow` and `submit_flow_input` handlers
 
 **Container Resource Management**:
 - **Port Allocation** - 2 ports per Flow starting from base 28000
@@ -868,6 +882,7 @@ Several mechanisms ensure efficient execution:
 
 **Memory Optimization**:
 - **Message summarization** - Prevents context window overflow
+- **Summarizer result cache** - LRU cache per FlowProvider (1000 entries, 4h TTL); keyed by SHA-256 of input; skips LLM call for repeated identical content
 - **Tool argument limits** - 1KB limit for individual argument values  
 - **Connection pooling** - Database connections are reused
 - **Automatic cleanup** - Containers removed after Flow completion
@@ -1116,6 +1131,10 @@ graph TB
 - `performMentor` method in `performer.go` - Coordinates mentor invocation for execution monitoring
 - `performPlanner` method in `performers.go` - Generates execution plans via adviser
 - `formatEnhancedToolResponse` function in `helpers.go` - Formats mentor analysis
+- `flowStatusTool`, `stopFlowTool`, `submitFlowInputTool`, `patchFlowSubtasksTool` in `tools/flow_manager.go` - Flow management tool implementations
+- `buildFlowManagerHandlers()` in `providers/assistant.go` - Builds handler closures from injected `FlowWorker`
+- `patchAssistantFlowSubtasks()` in `providers/assistant.go` - Applies subtask delta operations and recreates DB entries
+- Summarizer LRU cache on `flowProvider` (`providers/provider.go`) - 1000 entries, 4h TTL, SHA-256 key
 - Template `question_execution_monitor.tmpl` - Question format for execution monitoring
 - Template `question_task_planner.tmpl` - Question format for task planning
 
@@ -1155,7 +1174,7 @@ The Flow execution system represents a sophisticated orchestration platform that
 
 ### Operational Flexibility
 - **Multi-provider LLM support** - Different models optimized for different agent types
-- **Assistant dual modes** - UseAgents flag enables delegation or direct tool access
+- **Assistant dual modes** - UseAgents flag enables delegation or direct tool access; FlowWorker injection enables 4 flow management tools for automation control
 - **Flow continuity** - System can resume operations after interruptions
 - **Real-time feedback** - Streaming responses provide immediate user visibility
 - **Vector knowledge system** - 4 storage types with semantic search and metadata filtering
@@ -1170,6 +1189,13 @@ The Flow execution system represents a sophisticated orchestration platform that
 - **Stream Workers**: Background goroutines with 30-second timeout per stream
 - **Buffer Management**: Separate buffers for thinking/content with controlled updates
 - **Real-time Distribution**: Immediate GraphQL subscription updates to frontend
+
+**Assistant Flow Management Architecture**:
+- **FlowWorker injection**: `SetFlowWorker(fw FlowWorker)` called after `getFlowProviderWorkers()` in `controller/assistant.go`
+- **Handler closures**: `buildFlowManagerHandlers()` produces `StopFlow`, `SendFlowInput`, `PatchSubtasks` callbacks
+- **Two-layer validation**: tool handlers (`tools/flow_manager.go`) perform primary checks; provider callbacks are safety nets
+- **Subtask patching**: delta operations applied via `applySubtaskOperations()`; all planned subtask IDs are recreated; new IDs returned in tool result
+- **State verification**: `stop_flow` re-queries `GetFlowTasks` after handler returns and reports actual state
 
 **Message Chain Consistency**:
 - **AST Processing**: Uses Chain Abstract Syntax Tree for structured message analysis

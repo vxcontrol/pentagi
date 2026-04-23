@@ -114,6 +114,11 @@ var PromptVariables = map[PromptType][]string{
 		"ExecutionContext",
 		"Lang",
 		"CurrentTime",
+		"FlowManagerEnabled",
+		"GetFlowStatusToolName",
+		"StopFlowToolName",
+		"SubmitFlowInputToolName",
+		"PatchFlowSubtasksToolName",
 	},
 	PromptTypePentester: {
 		"HackResultToolName",

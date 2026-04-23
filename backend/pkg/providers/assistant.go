@@ -34,6 +34,7 @@ type AssistantProvider interface {
 	SetMsgChainID(msgChainID int64)
 	SetAgentLogProvider(agentLog tools.AgentLogProvider)
 	SetMsgLogProvider(msgLog tools.MsgLogProvider)
+	SetFlowWorker(flowWorker FlowWorker)
 
 	PrepareAgentChain(ctx context.Context) (int64, error)
 	PerformAgentChain(ctx context.Context) error
@@ -41,10 +42,19 @@ type AssistantProvider interface {
 	EnsureChainConsistency(ctx context.Context) error
 }
 
+type FlowWorker interface {
+	GetTitle() string
+	GetStatus(ctx context.Context) (database.FlowStatus, error)
+	PutInput(ctx context.Context, input string, prv provider.Provider) error
+	Stop(ctx context.Context) error
+	Rename(ctx context.Context, title string) error
+}
+
 type assistantProvider struct {
 	id         int64
 	msgChainID int64
 	summarizer csum.Summarizer
+	flowWorker FlowWorker
 	fp         flowProvider
 }
 
@@ -82,6 +92,10 @@ func (ap *assistantProvider) SetAgentLogProvider(agentLog tools.AgentLogProvider
 
 func (ap *assistantProvider) SetMsgLogProvider(msgLog tools.MsgLogProvider) {
 	ap.fp.SetMsgLogProvider(msgLog)
+}
+
+func (ap *assistantProvider) SetFlowWorker(flowWorker FlowWorker) {
+	ap.flowWorker = flowWorker
 }
 
 func (ap *assistantProvider) PrepareAgentChain(ctx context.Context) (int64, error) {
@@ -194,14 +208,15 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 	ctx, _ = executorAgent.Observation(ctx)
 
 	cfg := tools.AssistantExecutorConfig{
-		UseAgents:  useAgents,
-		Adviser:    adviser,
-		Coder:      coder,
-		Installer:  installer,
-		Memorist:   memorist,
-		Pentester:  pentester,
-		Searcher:   searcher,
-		Summarizer: ap.fp.GetSummarizeResultHandler(nil, nil),
+		UseAgents:   useAgents,
+		Adviser:     adviser,
+		Coder:       coder,
+		Installer:   installer,
+		Memorist:    memorist,
+		Pentester:   pentester,
+		Searcher:    searcher,
+		Summarizer:  ap.fp.GetSummarizeResultHandler(nil, nil),
+		FlowManager: ap.buildFlowManagerHandlers(),
 	}
 
 	executor, err := ap.fp.Executor().GetAssistantExecutor(cfg)
@@ -311,33 +326,38 @@ func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (stri
 	}
 
 	systemAssistantTmpl, err := ap.fp.Prompter().RenderTemplate(templates.PromptTypeAssistant, map[string]any{
-		"SearchToolName":          tools.SearchToolName,
-		"PentesterToolName":       tools.PentesterToolName,
-		"CoderToolName":           tools.CoderToolName,
-		"AdviceToolName":          tools.AdviceToolName,
-		"MemoristToolName":        tools.MemoristToolName,
-		"MaintenanceToolName":     tools.MaintenanceToolName,
-		"TerminalToolName":        tools.TerminalToolName,
-		"FileToolName":            tools.FileToolName,
-		"GoogleToolName":          tools.GoogleToolName,
-		"DuckDuckGoToolName":      tools.DuckDuckGoToolName,
-		"TavilyToolName":          tools.TavilyToolName,
-		"TraversaalToolName":      tools.TraversaalToolName,
-		"PerplexityToolName":      tools.PerplexityToolName,
-		"BrowserToolName":         tools.BrowserToolName,
-		"SearchInMemoryToolName":  tools.SearchInMemoryToolName,
-		"SearchGuideToolName":     tools.SearchGuideToolName,
-		"SearchAnswerToolName":    tools.SearchAnswerToolName,
-		"SearchCodeToolName":      tools.SearchCodeToolName,
-		"SummarizationToolName":   cast.SummarizationToolName,
-		"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
-		"UseAgents":               useAgents,
-		"DockerImage":             ap.fp.Image(),
-		"Cwd":                     docker.WorkFolderPathInContainer,
-		"ContainerPorts":          ap.fp.getContainerPortsDescription(),
-		"ExecutionContext":        executionContext,
-		"Lang":                    ap.fp.Language(),
-		"CurrentTime":             getCurrentTime(),
+		"SearchToolName":            tools.SearchToolName,
+		"PentesterToolName":         tools.PentesterToolName,
+		"CoderToolName":             tools.CoderToolName,
+		"AdviceToolName":            tools.AdviceToolName,
+		"MemoristToolName":          tools.MemoristToolName,
+		"MaintenanceToolName":       tools.MaintenanceToolName,
+		"TerminalToolName":          tools.TerminalToolName,
+		"FileToolName":              tools.FileToolName,
+		"GoogleToolName":            tools.GoogleToolName,
+		"DuckDuckGoToolName":        tools.DuckDuckGoToolName,
+		"TavilyToolName":            tools.TavilyToolName,
+		"TraversaalToolName":        tools.TraversaalToolName,
+		"PerplexityToolName":        tools.PerplexityToolName,
+		"BrowserToolName":           tools.BrowserToolName,
+		"SearchInMemoryToolName":    tools.SearchInMemoryToolName,
+		"SearchGuideToolName":       tools.SearchGuideToolName,
+		"SearchAnswerToolName":      tools.SearchAnswerToolName,
+		"SearchCodeToolName":        tools.SearchCodeToolName,
+		"SummarizationToolName":     cast.SummarizationToolName,
+		"SummarizedContentPrefix":   strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+		"UseAgents":                 useAgents,
+		"DockerImage":               ap.fp.Image(),
+		"Cwd":                       docker.WorkFolderPathInContainer,
+		"ContainerPorts":            ap.fp.getContainerPortsDescription(),
+		"ExecutionContext":          executionContext,
+		"Lang":                      ap.fp.Language(),
+		"CurrentTime":               getCurrentTime(),
+		"FlowManagerEnabled":        ap.flowWorker != nil,
+		"GetFlowStatusToolName":     tools.GetFlowStatusToolName,
+		"StopFlowToolName":          tools.StopFlowToolName,
+		"SubmitFlowInputToolName":   tools.SubmitFlowInputToolName,
+		"PatchFlowSubtasksToolName": tools.PatchFlowSubtasksToolName,
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to get system prompt for assistant template")
@@ -392,4 +412,278 @@ func (ap *assistantProvider) getAssistantExecutionContext(ctx context.Context) (
 	}
 
 	return executionContext, nil
+}
+
+// buildFlowManagerHandlers constructs FlowManagerHandlers from the injected flowWorker.
+// Returns zero-value (no-op) handlers when flowWorker is nil, so the 4 flow-management
+// tools are simply not registered in the assistant executor.
+func (ap *assistantProvider) buildFlowManagerHandlers() tools.FlowManagerHandlers {
+	if ap.flowWorker == nil {
+		return tools.FlowManagerHandlers{}
+	}
+
+	return tools.FlowManagerHandlers{
+		StopFlow:      ap.stopAssistantFlow,
+		SendFlowInput: ap.sendAssistantFlowInput,
+		PatchSubtasks: ap.patchAssistantFlowSubtasks,
+	}
+}
+
+func (ap *assistantProvider) stopAssistantFlow(ctx context.Context, reason string) error {
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
+		"assistant_id": ap.id,
+		"flow_id":      ap.fp.ID(),
+		"msg_chain_id": ap.msgChainID,
+		"reason":       reason[:min(len(reason), 1000)],
+	})
+
+	logger.Debug("stopping assistant flow")
+
+	if ap.flowWorker == nil {
+		logger.Error("flow worker is not set")
+		return fmt.Errorf("flow worker is not set")
+	}
+
+	status, err := ap.flowWorker.GetStatus(ctx)
+	if err != nil {
+		logger.WithError(err).Error("failed to get flow status")
+		return fmt.Errorf("failed to get flow status: %w", err)
+	}
+
+	if status != database.FlowStatusRunning {
+		logger.Debug("flow is not running, skipping stop")
+		return nil
+	}
+
+	err = ap.flowWorker.Stop(ctx)
+
+	level := langfuse.ObservationLevelDefault
+	statusMsg := "success"
+	if err != nil {
+		level = langfuse.ObservationLevelError
+		statusMsg = err.Error()
+	}
+
+	_, observation := obs.Observer.NewObservation(ctx)
+	observation.Event(
+		langfuse.WithEventName("stopping flow by assistant"),
+		langfuse.WithEventInput(map[string]any{
+			"reason": reason,
+		}),
+		langfuse.WithEventMetadata(langfuse.Metadata{
+			"provider":     ap.fp.Type(),
+			"assistant_id": ap.id,
+			"flow_id":      ap.fp.ID(),
+			"msg_chain_id": ap.msgChainID,
+		}),
+		langfuse.WithEventLevel(level),
+		langfuse.WithEventStatus(statusMsg),
+	)
+
+	if err != nil {
+		logger.WithError(err).Error("failed to stop flow")
+		return fmt.Errorf("failed to stop flow: %w", err)
+	}
+
+	return nil
+}
+
+func (ap *assistantProvider) sendAssistantFlowInput(ctx context.Context, input string) error {
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
+		"assistant_id": ap.id,
+		"flow_id":      ap.fp.ID(),
+		"msg_chain_id": ap.msgChainID,
+		"input":        input[:min(len(input), 1000)],
+	})
+
+	logger.Debug("sending input to flow from assistant")
+
+	if ap.flowWorker == nil {
+		logger.Error("flow worker is not set")
+		return fmt.Errorf("flow worker is not set")
+	}
+
+	status, err := ap.flowWorker.GetStatus(ctx)
+	if err != nil {
+		logger.WithError(err).Error("failed to get flow status")
+		return fmt.Errorf("failed to get flow status: %w", err)
+	}
+
+	if status != database.FlowStatusWaiting {
+		logger.Error("flow is not waiting, cannot send input")
+		return fmt.Errorf("flow is not in 'waiting' state (current: %s); cannot submit input", status)
+	}
+
+	err = ap.flowWorker.PutInput(ctx, input, nil)
+
+	level := langfuse.ObservationLevelDefault
+	statusMsg := "success"
+	if err != nil {
+		level = langfuse.ObservationLevelError
+		statusMsg = err.Error()
+	}
+
+	_, observation := obs.Observer.NewObservation(ctx)
+	observation.Event(
+		langfuse.WithEventName("sending input to flow by assistant"),
+		langfuse.WithEventInput(map[string]any{
+			"input": input,
+		}),
+		langfuse.WithEventMetadata(langfuse.Metadata{
+			"provider":     ap.fp.Type(),
+			"assistant_id": ap.id,
+			"flow_id":      ap.fp.ID(),
+			"msg_chain_id": ap.msgChainID,
+		}),
+		langfuse.WithEventLevel(level),
+		langfuse.WithEventStatus(statusMsg),
+	)
+
+	if err != nil {
+		logger.WithError(err).Error("failed to put flow input")
+		return fmt.Errorf("failed to put flow input: %w", err)
+	}
+
+	return nil
+}
+
+func (ap *assistantProvider) patchAssistantFlowSubtasks(
+	ctx context.Context,
+	taskID int64,
+	patch tools.SubtaskPatch,
+) error {
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
+		"assistant_id": ap.id,
+		"flow_id":      ap.fp.ID(),
+		"msg_chain_id": ap.msgChainID,
+		"task_id":      taskID,
+		"ops_count":    len(patch.Operations),
+	})
+
+	logger.Debug("patching flow subtasks from assistant")
+
+	if ap.flowWorker == nil {
+		logger.Error("flow worker is not set")
+		return fmt.Errorf("flow worker is not set")
+	}
+
+	status, err := ap.flowWorker.GetStatus(ctx)
+	if err != nil {
+		logger.WithError(err).Error("failed to get flow status")
+		return fmt.Errorf("failed to get flow status: %w", err)
+	}
+
+	if status == database.FlowStatusRunning {
+		logger.Error("flow is running, cannot patch subtasks")
+		return fmt.Errorf("flow is in 'running' state; patching is not allowed while a task is executing")
+	}
+
+	db := ap.fp.DB()
+
+	tasksInfo, err := ap.fp.getTasksInfo(ctx, taskID)
+	if err != nil {
+		logger.WithError(err).Error("failed to get tasks info")
+		return fmt.Errorf("failed to get tasks info: %w", err)
+	}
+
+	if tasksInfo.Task.ID != taskID {
+		logger.Error("task is not found in the flow tasks")
+
+		if len(tasksInfo.Tasks) == 0 {
+			logger.Warn("no tasks found for the flow")
+			return fmt.Errorf("task ID %d not found: the flow has no tasks yet; submit input to create the first task", taskID)
+		}
+
+		return fmt.Errorf("task ID %d not found in this flow", taskID)
+	}
+
+	subtasksInfo := ap.fp.getSubtasksInfo(taskID, tasksInfo.Subtasks)
+
+	// The current active subtask is normally untouchable by a patch.
+	// We include it only when the agent explicitly references it by ID — meaning
+	// it consciously wants to remove or modify it, accepting the state reset to created.
+	patchableSubs := make([]database.Subtask, 0, len(subtasksInfo.Planned)+1)
+
+	if subtasksInfo.Subtask != nil && slices.ContainsFunc(patch.Operations, func(op tools.SubtaskOperation) bool {
+		return op.ID != nil && *op.ID == subtasksInfo.Subtask.ID
+	}) {
+		patchableSubs = append(patchableSubs, *subtasksInfo.Subtask)
+	}
+
+	patchableSubs = append(patchableSubs, subtasksInfo.Planned...)
+
+	logger.WithField("patchable_count", len(patchableSubs)).Debug("built patchable subtask list")
+
+	result, err := applySubtaskOperations(patchableSubs, patch, logger)
+	if err != nil {
+		return fmt.Errorf("failed to apply subtask operations for task %d: %w", taskID, err)
+	}
+
+	idsToDelete := make([]int64, 0, len(patchableSubs))
+	for _, st := range patchableSubs {
+		idsToDelete = append(idsToDelete, st.ID)
+	}
+
+	if len(idsToDelete) > 0 {
+		if err := db.DeleteSubtasks(ctx, idsToDelete); err != nil {
+			return fmt.Errorf("failed to delete subtasks for task %d: %w", taskID, err)
+		}
+	}
+
+	// result contains only entries that were in patchableSubs (minus removed ones)
+	// plus any new entries from add operations — all safe to create unconditionally.
+	for _, info := range result {
+		if _, err := db.CreateSubtask(ctx, database.CreateSubtaskParams{
+			Status:      database.SubtaskStatusCreated,
+			TaskID:      taskID,
+			Title:       info.Title,
+			Description: info.Description,
+		}); err != nil {
+			return fmt.Errorf("failed to create subtask %q for task %d: %w", info.Title, taskID, err)
+		}
+	}
+
+	subtasksResult := convertSubtaskInfoPatch(result)
+	_, _ = ap.fp.putAgentLog(
+		ctx,
+		database.MsgchainTypeAssistant,
+		database.MsgchainTypePrimaryAgent,
+		patch.Message,
+		ap.fp.subtasksToMarkdown(subtasksResult),
+		&taskID,
+		nil,
+	)
+
+	level := langfuse.ObservationLevelDefault
+	statusMsg := fmt.Sprintf(
+		"patched %d planned subtasks for task %d: %d ops applied",
+		len(result), taskID, len(patch.Operations),
+	)
+
+	_, observation := obs.Observer.NewObservation(ctx)
+	observation.Event(
+		langfuse.WithEventName("patching flow subtasks by assistant"),
+		langfuse.WithEventInput(map[string]any{
+			"task_id":    taskID,
+			"operations": patch.Operations,
+			"message":    patch.Message,
+			"subtasks":   patchableSubs,
+		}),
+		langfuse.WithEventOutput(map[string]any{
+			"subtasks": subtasksResult,
+		}),
+		langfuse.WithEventMetadata(langfuse.Metadata{
+			"provider":     ap.fp.Type(),
+			"assistant_id": ap.id,
+			"flow_id":      ap.fp.ID(),
+			"msg_chain_id": ap.msgChainID,
+		}),
+		langfuse.WithEventLevel(level),
+		langfuse.WithEventStatus(statusMsg),
+	)
+
+	return nil
 }

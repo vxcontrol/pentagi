@@ -177,14 +177,23 @@ type CustomExecutorConfig struct {
 }
 
 type AssistantExecutorConfig struct {
-	UseAgents  bool
-	Adviser    ExecutorHandler
-	Coder      ExecutorHandler
-	Installer  ExecutorHandler
-	Memorist   ExecutorHandler
-	Pentester  ExecutorHandler
-	Searcher   ExecutorHandler
-	Summarizer SummarizeHandler
+	UseAgents   bool
+	Adviser     ExecutorHandler
+	Coder       ExecutorHandler
+	Installer   ExecutorHandler
+	Memorist    ExecutorHandler
+	Pentester   ExecutorHandler
+	Searcher    ExecutorHandler
+	Summarizer  SummarizeHandler
+	FlowManager FlowManagerHandlers
+}
+
+// FlowManagerHandlers holds optional callbacks for automation flow control.
+// When StopFlow is non-nil all four flow-management tools are registered.
+type FlowManagerHandlers struct {
+	StopFlow      func(ctx context.Context, reason string) error
+	SendFlowInput func(ctx context.Context, input string) error
+	PatchSubtasks func(ctx context.Context, taskID int64, patch SubtaskPatch) error
 }
 
 type PrimaryExecutorConfig struct {
@@ -684,6 +693,28 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			definitions = append(definitions, registryDefinitions[SploitusToolName])
 			handlers[SploitusToolName] = sploitus.Handle
 		}
+	}
+
+	flowStatus := NewFlowStatusTool(fte.flowID, fte.db, cfg.Summarizer)
+	definitions = append(definitions, registryDefinitions[GetFlowStatusToolName])
+	handlers[GetFlowStatusToolName] = flowStatus.Handle
+
+	if cfg.FlowManager.StopFlow != nil {
+		stopFlow := NewStopFlowTool(fte.flowID, fte.db, cfg.FlowManager.StopFlow)
+		definitions = append(definitions, registryDefinitions[StopFlowToolName])
+		handlers[StopFlowToolName] = stopFlow.Handle
+	}
+
+	if cfg.FlowManager.SendFlowInput != nil {
+		submitInput := NewSubmitFlowInputTool(fte.flowID, fte.db, cfg.FlowManager.SendFlowInput)
+		definitions = append(definitions, registryDefinitions[SubmitFlowInputToolName])
+		handlers[SubmitFlowInputToolName] = submitInput.Handle
+	}
+
+	if cfg.FlowManager.PatchSubtasks != nil {
+		patchSubtasks := NewPatchFlowSubtasksTool(fte.flowID, fte.db, cfg.FlowManager.PatchSubtasks)
+		definitions = append(definitions, registryDefinitions[PatchFlowSubtasksToolName])
+		handlers[PatchFlowSubtasksToolName] = patchSubtasks.Handle
 	}
 
 	ce := &customExecutor{

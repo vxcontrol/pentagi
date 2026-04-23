@@ -159,6 +159,7 @@ COPY --from=api-builder /licenses/backend /opt/pentagi/licenses/backend
 COPY --from=frontend-compiler /licenses/frontend /opt/pentagi/licenses/frontend
 
 # Copy provider configuration files
+COPY examples/configs/azure-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/custom-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepinfra.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepseek.provider.yml /opt/pentagi/conf/
