@@ -639,7 +639,7 @@ The PentAGI web console already manages several settings areas after the server 
 
 - **Settings -> Providers**: Create, edit, delete, and test user-defined provider profiles for supported provider types. These profiles control per-agent model selection, runtime parameters, reasoning options, and pricing metadata.
 - **Settings -> Prompts**: Manage system, human, and tool prompt templates.
-- **Settings -> API Tokens**: Create and manage PentAGI Bearer tokens for REST and GraphQL access.
+- **Settings -> PentAGI API**: Create and manage PentAGI Bearer tokens for REST and GraphQL access.
 - **Other UI-managed preferences**: Favorite flows are stored as user preferences, and theme selection is handled from the main sidebar/profile controls rather than the Settings pages.
 
 ### Still Server-Managed

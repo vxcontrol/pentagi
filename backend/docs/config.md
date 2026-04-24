@@ -109,7 +109,7 @@ The running PentAGI instance already exposes several settings areas in the web U
 
 - **Settings -> Providers**: Manage user-defined provider profiles, per-agent model and runtime options, and provider test actions for provider types supported by the running server.
 - **Settings -> Prompts**: Manage system, human, and tool prompt templates.
-- **Settings -> API Tokens**: Create, revoke, and delete PentAGI API tokens.
+- **Settings -> PentAGI API**: Create, revoke, and delete PentAGI API tokens.
 - **Other UI-managed preferences**: Favorite flows are stored as user preferences, and theme selection is handled client-side from the main sidebar/profile controls.
 
 These web-console features do not replace the environment variables in this guide for provider credentials, endpoints, or external integrations.
