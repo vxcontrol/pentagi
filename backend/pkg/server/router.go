@@ -130,6 +130,7 @@ func NewRouter(
 	roleService := services.NewRoleService(orm)
 	providerService := services.NewProviderService(providers)
 	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
+	flowFileService := services.NewFlowFileService(orm, cfg.DataDir)
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
@@ -223,6 +224,7 @@ func NewRouter(
 
 		setProvidersGroup(privateGroup, providerService)
 		setFlowsGroup(privateGroup, flowService)
+		setFlowFilesGroup(privateGroup, flowFileService)
 		setTasksGroup(privateGroup, taskService)
 		setSubtasksGroup(privateGroup, subtaskService)
 		setContainersGroup(privateGroup, containerService)
@@ -364,6 +366,17 @@ func setFlowsGroup(parent *gin.RouterGroup, svc *services.FlowService) {
 		flowsViewGroup.GET("/", svc.GetFlows)
 		flowsViewGroup.GET("/:flowID", svc.GetFlow)
 		flowsViewGroup.GET("/:flowID/graph", svc.GetFlowGraph)
+	}
+}
+
+func setFlowFilesGroup(parent *gin.RouterGroup, svc *services.FlowFileService) {
+	flowFilesGroup := parent.Group("/flows/:flowID/files")
+	{
+		flowFilesGroup.GET("", svc.GetFlowFiles)
+		flowFilesGroup.GET("/", svc.GetFlowFiles)
+		flowFilesGroup.POST("", svc.UploadFlowFiles)
+		flowFilesGroup.POST("/", svc.UploadFlowFiles)
+		flowFilesGroup.GET("/:fileName", svc.DownloadFlowFile)
 	}
 }
 
