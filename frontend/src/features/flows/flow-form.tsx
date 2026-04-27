@@ -1,9 +1,22 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUp, Check, ChevronDown, FileSymlink, FileText, Square, X } from 'lucide-react';
+import {
+    ArrowUp,
+    Check,
+    ChevronDown,
+    FileSymlink,
+    FileText,
+    Loader2,
+    Paperclip,
+    Plus,
+    Square,
+    X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+
+import type { ResourceItem } from '@/features/resources/types';
 
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -26,8 +39,12 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ACCEPTED_FILE_TYPES } from '@/features/resources/constants';
+import { ResourcesUploadOptionsDialog } from '@/features/resources/resources-upload-options-dialog';
+import { useFileUpload } from '@/features/resources/use-file-upload';
 import { getProviderDisplayName } from '@/models/provider';
 import { useProviders } from '@/providers/providers-provider';
+import { useResources } from '@/providers/resources-provider';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const formSchema = z.object({
@@ -65,10 +82,56 @@ export const FlowForm = ({
 }: FlowFormProps) => {
     const { providers, setSelectedProvider } = useProviders();
     const { templates } = useTemplates();
+    const { resources } = useResources();
     const [isReplaceConfirmOpen, setIsReplaceConfirmOpen] = useState(false);
     const [pendingTemplate, setPendingTemplate] = useState<null | Template>(null);
     const [providerSearch, setProviderSearch] = useState('');
     const [templateSearch, setTemplateSearch] = useState('');
+    const [resourceSearch, setResourceSearch] = useState('');
+    const [attachedFileIds, setAttachedFileIds] = useState<string[]>([]);
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleResourceAttach = useCallback((resource: ResourceItem) => {
+        setAttachedFileIds((current) => (current.includes(resource.id) ? current : [...current, resource.id]));
+    }, []);
+
+    const { handleFileChange, handleUploadOptionsCancel, handleUploadOptionsConfirm, isUploadOptionsDialogOpen } =
+        useFileUpload({ onResourceAttach: handleResourceAttach });
+
+    const attachedFiles = useMemo<ResourceItem[]>(() => {
+        const byId = new Map(resources.map((item) => [item.id, item]));
+
+        return attachedFileIds
+            .map((id) => byId.get(id))
+            .filter((item): item is ResourceItem => Boolean(item));
+    }, [attachedFileIds, resources]);
+
+    const isAnyAttachmentUploading = attachedFiles.some((file) => !file.isUploaded);
+
+    const sortedResources = useMemo(
+        () =>
+            [...resources].sort(
+                (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+            ),
+        [resources],
+    );
+
+    const filteredResources = useMemo(() => {
+        const search = resourceSearch.trim().toLowerCase();
+
+        if (!search) {
+            return sortedResources;
+        }
+
+        return sortedResources.filter((resource) => {
+            const fullName = resource.format
+                ? `${resource.name}.${resource.format}`
+                : resource.name;
+
+            return fullName.toLowerCase().includes(search);
+        });
+    }, [sortedResources, resourceSearch]);
 
     const filteredTemplates = useMemo(() => {
         if (!templateSearch.trim()) {
@@ -158,6 +221,25 @@ export const FlowForm = ({
     const handleSubmit = async (values: FlowFormValues) => {
         await onSubmit(values);
         resetField('message');
+        setAttachedFileIds([]);
+    };
+
+    const handleAttachClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        await handleFileChange(event.target.files, fileInputRef);
+    };
+
+    const handleRemoveAttachment = (id: string) => {
+        setAttachedFileIds((current) => current.filter((fileId) => fileId !== id));
+    };
+
+    const handleToggleAttachment = (id: string) => {
+        setAttachedFileIds((current) =>
+            current.includes(id) ? current.filter((fileId) => fileId !== id) : [...current, id],
+        );
     };
 
     const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -203,6 +285,47 @@ export const FlowForm = ({
                     render={({ field }) => (
                         <FormControl>
                             <InputGroup className="block">
+                                {attachedFiles.length > 0 && (
+                                    <InputGroupAddon
+                                        align="block-start"
+                                        className="flex-wrap gap-1.5"
+                                    >
+                                        {attachedFiles.map((file) => {
+                                            const fullName = file.format ? `${file.name}.${file.format}` : file.name;
+
+                                            return (
+                                                <div
+                                                    className="bg-muted/50 flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+                                                    key={file.id}
+                                                    title={fullName}
+                                                >
+                                                    {file.isUploaded ? (
+                                                        <FileText className="text-muted-foreground size-3.5 shrink-0" />
+                                                    ) : (
+                                                        <Loader2 className="text-muted-foreground size-3.5 shrink-0 animate-spin" />
+                                                    )}
+                                                    <span className="text-foreground max-w-40 truncate">
+                                                        {fullName}
+                                                    </span>
+                                                    {!file.isUploaded && (
+                                                        <span className="text-muted-foreground tabular-nums">
+                                                            {file.progress}%
+                                                        </span>
+                                                    )}
+                                                    <button
+                                                        aria-label={`Remove ${fullName}`}
+                                                        className="text-muted-foreground hover:text-destructive ml-0.5 flex shrink-0 items-center justify-center"
+                                                        disabled={isFormDisabled}
+                                                        onClick={() => handleRemoveAttachment(file.id)}
+                                                        type="button"
+                                                    >
+                                                        <X className="size-3.5" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </InputGroupAddon>
+                                )}
                                 <InputGroupTextareaAutosize
                                     {...field}
                                     autoFocus
@@ -426,10 +549,130 @@ export const FlowForm = ({
                                         </DropdownMenuContent>
                                     </DropdownMenu>
 
+                                    <DropdownMenu
+                                        onOpenChange={(open) => {
+                                            if (!open) {
+                                                setResourceSearch('');
+                                            }
+                                        }}
+                                    >
+                                        <DropdownMenuTrigger asChild>
+                                            <InputGroupButton
+                                                disabled={isFormDisabled}
+                                                variant="ghost"
+                                            >
+                                                <Paperclip className="shrink-0" />
+                                                {attachedFiles.length > 0 && (
+                                                    <span className="bg-muted text-muted-foreground -mx-0.5 flex h-4 min-w-4 items-center justify-center rounded px-1 text-xs font-medium tabular-nums">
+                                                        {attachedFiles.length}
+                                                    </span>
+                                                )}
+                                                <ChevronDown />
+                                            </InputGroupButton>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            align="start"
+                                            side="top"
+                                        >
+                                            <DropdownMenuGroup className="-m-1 rounded-none p-0">
+                                                <InputGroup className="-mb-1 rounded-none border-0 shadow-none [&:has([data-slot=input-group-control]:focus-visible)]:border-0 [&:has([data-slot=input-group-control]:focus-visible)]:ring-0">
+                                                    <InputGroupInput
+                                                        onChange={(event) => setResourceSearch(event.target.value)}
+                                                        onClick={(event) => event.stopPropagation()}
+                                                        onKeyDown={(event) => event.stopPropagation()}
+                                                        placeholder="Search..."
+                                                        value={resourceSearch}
+                                                    />
+                                                    {resourceSearch && (
+                                                        <InputGroupAddon align="inline-end">
+                                                            <InputGroupButton
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    setResourceSearch('');
+                                                                }}
+                                                            >
+                                                                <X />
+                                                            </InputGroupButton>
+                                                        </InputGroupAddon>
+                                                    )}
+                                                </InputGroup>
+                                                <DropdownMenuSeparator />
+                                            </DropdownMenuGroup>
+                                            <DropdownMenuGroup className="max-h-64 overflow-y-auto">
+                                                {!filteredResources.length ? (
+                                                    <DropdownMenuItem
+                                                        className="min-h-16 justify-center"
+                                                        disabled
+                                                    >
+                                                        {resourceSearch
+                                                            ? 'No results found'
+                                                            : 'No available resources'}
+                                                    </DropdownMenuItem>
+                                                ) : (
+                                                    filteredResources.map((resource) => {
+                                                        const isSelected = attachedFileIds.includes(resource.id);
+                                                        const fullName = resource.format
+                                                            ? `${resource.name}.${resource.format}`
+                                                            : resource.name;
+
+                                                        return (
+                                                            <DropdownMenuItem
+                                                                key={resource.id}
+                                                                onSelect={(event) => {
+                                                                    event.preventDefault();
+
+                                                                    if (isFormDisabled) {
+                                                                        return;
+                                                                    }
+
+                                                                    handleToggleAttachment(resource.id);
+                                                                }}
+                                                            >
+                                                                <div className="flex w-full min-w-0 items-center gap-2">
+                                                                    {resource.isUploaded ? (
+                                                                        <FileText className="text-muted-foreground size-4 shrink-0" />
+                                                                    ) : (
+                                                                        <Loader2 className="text-muted-foreground size-4 shrink-0 animate-spin" />
+                                                                    )}
+                                                                    <span className="max-w-80 flex-1 truncate">
+                                                                        {fullName}
+                                                                    </span>
+                                                                    {!resource.isUploaded && (
+                                                                        <span className="text-muted-foreground tabular-nums text-xs">
+                                                                            {resource.progress}%
+                                                                        </span>
+                                                                    )}
+                                                                    {isSelected && (
+                                                                        <Check className="ml-auto size-4 shrink-0" />
+                                                                    )}
+                                                                </div>
+                                                            </DropdownMenuItem>
+                                                        );
+                                                    })
+                                                )}
+                                            </DropdownMenuGroup>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                onSelect={(event) => {
+                                                    event.preventDefault();
+
+                                                    if (isFormDisabled) {
+                                                        return;
+                                                    }
+
+                                                    handleAttachClick();
+                                                }}
+                                            >
+                                                <Plus />
+                                                Upload file
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+
                                     {!isLoading || isSubmitting ? (
                                         <InputGroupButton
                                             className="ml-auto"
-                                            disabled={isSubmitting || !isValid}
+                                            disabled={isSubmitting || !isValid || isAnyAttachmentUploading}
                                             size="icon-xs"
                                             type="submit"
                                             variant="default"
@@ -454,6 +697,14 @@ export const FlowForm = ({
                     )}
                 />
             </form>
+            <input
+                accept={ACCEPTED_FILE_TYPES}
+                className="hidden"
+                multiple
+                onChange={handleFileInputChange}
+                ref={fileInputRef}
+                type="file"
+            />
             <ConfirmationDialog
                 confirmIcon={<FileSymlink />}
                 confirmText="Replace"
@@ -469,6 +720,11 @@ export const FlowForm = ({
                 }}
                 isOpen={isReplaceConfirmOpen}
                 title="Replace content?"
+            />
+            <ResourcesUploadOptionsDialog
+                isOpen={isUploadOptionsDialogOpen}
+                onCancel={handleUploadOptionsCancel}
+                onConfirm={handleUploadOptionsConfirm}
             />
         </Form>
     );

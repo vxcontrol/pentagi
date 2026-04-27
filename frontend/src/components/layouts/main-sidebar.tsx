@@ -3,6 +3,7 @@ import {
     ChevronsUpDown,
     Clock,
     FileText,
+    Folder,
     GitFork,
     KeyRound,
     LayoutDashboard,
@@ -16,7 +17,7 @@ import {
     Sun,
     UserIcon,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { Link, useMatch, useParams } from 'react-router-dom';
 
 import type { Flow } from '@/providers/sidebar-flows-provider';
@@ -48,6 +49,9 @@ import {
 } from '@/components/ui/sidebar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PasswordChangeForm } from '@/features/authentication/password-change-form';
+import { ACCEPTED_FILE_TYPES } from '@/features/resources/constants';
+import { ResourcesUploadOptionsDialog } from '@/features/resources/resources-upload-options-dialog';
+import { useFileUpload } from '@/features/resources/use-file-upload';
 import { useTheme } from '@/hooks/use-theme';
 import { useFavorites } from '@/providers/favorites-provider';
 import { useSidebarFlows } from '@/providers/sidebar-flows-provider';
@@ -90,9 +94,11 @@ const FlowMenuItem = ({ activeFlowId, flow, isFavorite, onToggleFavorite }: Flow
 
 export const MainSidebar = () => {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const resourcesFileInputRef = useRef<HTMLInputElement>(null);
     const isDashboardActive = useMatch('/dashboard');
     const isFlowsActive = useMatch('/flows/*');
     const isTemplatesActive = useMatch('/templates/*');
+    const isResourcesActive = useMatch('/resources/*');
     const isSettingsActive = useMatch('/settings/*');
     const { flowId: flowIdParam } = useParams<{ flowId: string }>();
 
@@ -101,6 +107,21 @@ export const MainSidebar = () => {
     const { setTheme, theme } = useTheme();
     const { addFavoriteFlow, favoriteFlowIds, removeFavoriteFlow } = useFavorites();
     const { flows } = useSidebarFlows();
+
+    const {
+        handleFileChange: handleResourcesFileChange,
+        handleUploadOptionsCancel,
+        handleUploadOptionsConfirm,
+        isUploadOptionsDialogOpen,
+    } = useFileUpload();
+
+    const handleResourcesUploadClick = () => {
+        resourcesFileInputRef.current?.click();
+    };
+
+    const handleResourcesFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+        await handleResourcesFileChange(event.target.files, resourcesFileInputRef);
+    };
 
     const flowId = useMemo(() => (flowIdParam ? Number(flowIdParam) : null), [flowIdParam]);
 
@@ -196,6 +217,26 @@ export const MainSidebar = () => {
                                     <Link to="/templates/new">
                                         <Plus />
                                     </Link>
+                                </SidebarMenuAction>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={!!isResourcesActive}
+                                >
+                                    <Link to="/resources">
+                                        <Folder />
+                                        Resources
+                                    </Link>
+                                </SidebarMenuButton>
+                                <SidebarMenuAction
+                                    className="data-[state=open]:bg-accent rounded-sm"
+                                    onClick={handleResourcesUploadClick}
+                                    showOnHover
+                                    title="Upload file"
+                                    type="button"
+                                >
+                                    <Plus />
                                 </SidebarMenuAction>
                             </SidebarMenuItem>
                         </SidebarMenu>
@@ -354,6 +395,20 @@ export const MainSidebar = () => {
                 </SidebarMenu>
             </SidebarFooter>
             <SidebarRail />
+
+            <input
+                accept={ACCEPTED_FILE_TYPES}
+                className="hidden"
+                multiple
+                onChange={handleResourcesFileInputChange}
+                ref={resourcesFileInputRef}
+                type="file"
+            />
+            <ResourcesUploadOptionsDialog
+                isOpen={isUploadOptionsDialogOpen}
+                onCancel={handleUploadOptionsCancel}
+                onConfirm={handleUploadOptionsConfirm}
+            />
 
             <Dialog
                 onOpenChange={setIsPasswordModalOpen}
