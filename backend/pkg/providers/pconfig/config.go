@@ -185,9 +185,34 @@ type PriceInfo struct {
 	CacheWrite float64 `json:"cache_write,omitempty" yaml:"cache_write,omitempty"`
 }
 
+type ReasoningMode string
+
+const (
+	ReasoningModeDefault  ReasoningMode = ""
+	ReasoningModeAdaptive ReasoningMode = "adaptive"
+	ReasoningModeBudget   ReasoningMode = "budget"
+)
+
 type ReasoningConfig struct {
+	Mode      ReasoningMode        `json:"mode,omitempty" yaml:"mode,omitempty"`
 	Effort    llms.ReasoningEffort `json:"effort,omitempty" yaml:"effort,omitempty"`
 	MaxTokens int                  `json:"max_tokens,omitempty" yaml:"max_tokens,omitempty"`
+}
+
+func (rc ReasoningConfig) IsZero() bool {
+	return rc.Mode == ReasoningModeDefault &&
+		rc.Effort == llms.ReasoningNone &&
+		rc.MaxTokens == 0
+}
+
+func (rc ReasoningConfig) EffectiveMode() ReasoningMode {
+	if rc.Mode != ReasoningModeDefault {
+		return rc.Mode
+	}
+	if rc.MaxTokens != 0 && (rc.Effort == llms.ReasoningNone || rc.Effort == llms.ReasoningEffort("none")) {
+		return ReasoningModeBudget
+	}
+	return ReasoningModeDefault
 }
 
 // AgentConfig represents the configuration for a single agent
@@ -572,13 +597,24 @@ func (ac *AgentConfig) BuildOptions() []llms.CallOption {
 	if _, ok := ac.raw["response_mime_type"]; ok && ac.ResponseMIMEType != "" {
 		options = append(options, llms.WithResponseMIMEType(ac.ResponseMIMEType))
 	}
-	if _, ok := ac.raw["reasoning"]; ok && (ac.Reasoning.Effort != llms.ReasoningNone || ac.Reasoning.MaxTokens != 0) {
-		switch ac.Reasoning.Effort {
-		case llms.ReasoningLow, llms.ReasoningMedium, llms.ReasoningHigh:
-			options = append(options, llms.WithReasoning(ac.Reasoning.Effort, 0))
-		default:
+	if _, ok := ac.raw["reasoning"]; ok && !ac.Reasoning.IsZero() {
+		switch ac.Reasoning.EffectiveMode() {
+		case ReasoningModeAdaptive:
+			metadata := map[string]any{
+				"reasoning_mode": string(ReasoningModeAdaptive),
+			}
+			if ac.Reasoning.Effort != llms.ReasoningNone {
+				metadata["reasoning_effort"] = string(ac.Reasoning.Effort)
+			}
+			options = append(options, llms.WithMetadata(metadata))
+		case ReasoningModeBudget:
 			if ac.Reasoning.MaxTokens > 0 && ac.Reasoning.MaxTokens <= 32000 {
 				options = append(options, llms.WithReasoning(llms.ReasoningNone, ac.Reasoning.MaxTokens))
+			}
+		default:
+			switch ac.Reasoning.Effort {
+			case llms.ReasoningLow, llms.ReasoningMedium, llms.ReasoningHigh:
+				options = append(options, llms.WithReasoning(ac.Reasoning.Effort, 0))
 			}
 		}
 	}
@@ -643,7 +679,7 @@ func (ac *AgentConfig) marshalMap() map[string]any {
 	if ac.ResponseMIMEType != "" {
 		output["response_mime_type"] = ac.ResponseMIMEType
 	}
-	if ac.Reasoning.Effort != llms.ReasoningNone || ac.Reasoning.MaxTokens != 0 {
+	if !ac.Reasoning.IsZero() {
 		output["reasoning"] = ac.Reasoning
 	}
 	if ac.Price != nil {

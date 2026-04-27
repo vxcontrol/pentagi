@@ -83,7 +83,8 @@ adviser:
   n: 1
   max_tokens: 16384
   reasoning:
-    max_tokens: 4096
+    mode: adaptive
+    effort: high
   price:
     input: 5.0
     output: 25.0

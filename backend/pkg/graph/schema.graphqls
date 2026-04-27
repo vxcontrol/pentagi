@@ -23,11 +23,19 @@ enum ProviderType {
   qwen
 }
 
-# Reasoning effort levels for advanced AI models (OpenAI format)
+# Reasoning effort levels for advanced AI models
 enum ReasoningEffort {
+  xhigh
+  max
   high
   medium
   low
+}
+
+# Reasoning control mode for provider-specific thinking APIs
+enum ReasoningMode {
+  adaptive
+  budget
 }
 
 # Template types for AI agent prompts and system operations
@@ -699,6 +707,7 @@ type ProviderConfig {
 
 # AI model reasoning configuration
 type ReasoningConfig {
+  mode: ReasoningMode
   effort: ReasoningEffort
   maxTokens: Int
 }
@@ -748,6 +757,7 @@ type AgentsConfig {
 
 # Input type for ReasoningConfig
 input ReasoningConfigInput {
+  mode: ReasoningMode
   effort: ReasoningEffort
   maxTokens: Int
 }

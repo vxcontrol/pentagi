@@ -14,7 +14,7 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useController, useForm, useFormState, useWatch } from 'react-hook-form';
+import { type Control, useController, useForm, type UseFormSetValue, useFormState, useWatch } from 'react-hook-form';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -39,6 +39,7 @@ import { StatusCard } from '@/components/ui/status-card';
 import {
     AgentConfigType,
     ReasoningEffort,
+    ReasoningMode,
     useCreateProviderMutation,
     useDeleteProviderMutation,
     useSettingsProvidersQuery,
@@ -328,7 +329,9 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
     const displayValue = field.value ?? '';
 
     // Format price for display
-    const formatPrice = (price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number }): string => {
+    const formatPrice = (
+        price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number },
+    ): string => {
         if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
             return 'free';
         }
@@ -338,7 +341,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
         };
 
         const basePrice = `$${formatValue(price.input)}/$${formatValue(price.output)}`;
-        
+
         // Add cache prices if available
         const hasCachePrices = (price.cacheRead && price.cacheRead > 0) || (price.cacheWrite && price.cacheWrite > 0);
 
@@ -519,6 +522,10 @@ const agentConfigSchema = z
                     (value) => (value === '' || value === undefined ? null : value),
                     z.number().nullable().optional(),
                 ),
+                mode: z.preprocess(
+                    (value) => (value === '' || value === undefined ? null : value),
+                    z.string().nullable().optional(),
+                ),
             })
             .nullable()
             .optional(),
@@ -559,6 +566,15 @@ type FormData = z.infer<typeof formSchema>;
 // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
 const getName = (key: string): string => key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
+const isBedrockAdaptiveThinkingModel = (model: string | undefined): boolean =>
+    !!model && /anthropic\.claude-(opus|sonnet)-4-[67]/.test(model);
+
+const getBedrockAdaptiveDefaultEffort = (model: string | undefined): ReasoningEffort =>
+    model?.includes('claude-opus-4-7') ? ReasoningEffort.Xhigh : ReasoningEffort.High;
+
+const isAdaptiveOnlyReasoningEffort = (effort: null | string | undefined): boolean =>
+    effort === ReasoningEffort.Xhigh || effort === ReasoningEffort.Max;
+
 // Helper function to convert string to ReasoningEffort enum
 const getReasoningEffort = (effort: null | string | undefined): null | ReasoningEffort => {
     if (!effort) {
@@ -574,8 +590,37 @@ const getReasoningEffort = (effort: null | string | undefined): null | Reasoning
             return ReasoningEffort.Low;
         }
 
+        case 'max': {
+            return ReasoningEffort.Max;
+        }
+
         case 'medium': {
             return ReasoningEffort.Medium;
+        }
+
+        case 'xhigh': {
+            return ReasoningEffort.Xhigh;
+        }
+
+        default: {
+            return null;
+        }
+    }
+};
+
+// Helper function to convert string to ReasoningMode enum
+const getReasoningMode = (mode: null | string | undefined): null | ReasoningMode => {
+    if (!mode) {
+        return null;
+    }
+
+    switch (mode.toLowerCase()) {
+        case 'adaptive': {
+            return ReasoningMode.Adaptive;
+        }
+
+        case 'budget': {
+            return ReasoningMode.Budget;
         }
 
         default: {
@@ -619,6 +664,7 @@ const transformFormToGraphQL = (
                     ? {
                           effort: getReasoningEffort(data?.reasoning.effort),
                           maxTokens: data?.reasoning.maxTokens ?? null,
+                          mode: getReasoningMode(data?.reasoning.mode),
                       }
                     : null,
                 repetitionPenalty: data?.repetitionPenalty ?? null,
@@ -635,6 +681,120 @@ const transformFormToGraphQL = (
         name: formData.name,
         type: formData.type as ProviderType,
     };
+};
+
+interface ReasoningConfigurationFieldsProps {
+    agentKey: string;
+    control: Control<FormData>;
+    disabled?: boolean;
+    setValue: UseFormSetValue<FormData>;
+}
+
+const ReasoningConfigurationFields: React.FC<ReasoningConfigurationFieldsProps> = ({
+    agentKey,
+    control,
+    disabled,
+    setValue,
+}) => {
+    const reasoningMode = useWatch({ control, name: `agents.${agentKey}.reasoning.mode` as const });
+    const reasoningEffort = useWatch({ control, name: `agents.${agentKey}.reasoning.effort` as const });
+    const isAdaptiveReasoning = reasoningMode === ReasoningMode.Adaptive;
+
+    return (
+        <div className="col-span-full p-px">
+            <div className="mt-6 flex flex-col gap-4">
+                <h4 className="text-sm font-medium">Reasoning Configuration</h4>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {/* Reasoning Mode field */}
+                    <FormField
+                        control={control}
+                        name={`agents.${agentKey}.reasoning.mode` as const}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Reasoning Mode</FormLabel>
+                                <Select
+                                    disabled={disabled}
+                                    onValueChange={(value) => {
+                                        const nextMode = value !== 'auto' ? value : null;
+
+                                        field.onChange(nextMode);
+
+                                        if (nextMode === ReasoningMode.Adaptive) {
+                                            setValue(`agents.${agentKey}.reasoning.maxTokens` as const, null);
+                                        } else if (isAdaptiveOnlyReasoningEffort(reasoningEffort)) {
+                                            setValue(`agents.${agentKey}.reasoning.effort` as const, null);
+                                        }
+                                    }}
+                                    value={field.value ?? 'auto'}
+                                >
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select reasoning mode" />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="auto">Automatic</SelectItem>
+                                        <SelectItem value={ReasoningMode.Budget}>Token Budget</SelectItem>
+                                        <SelectItem value={ReasoningMode.Adaptive}>Adaptive</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <FormDescription>Use Adaptive for Claude Opus/Sonnet 4.6+ on Bedrock.</FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    {/* Reasoning Effort field */}
+                    <FormField
+                        control={control}
+                        name={`agents.${agentKey}.reasoning.effort` as const}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Reasoning Effort</FormLabel>
+                                <Select
+                                    disabled={disabled}
+                                    onValueChange={(value) => field.onChange(value !== 'none' ? value : null)}
+                                    value={field.value ?? 'none'}
+                                >
+                                    <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select effort level (optional)" />
+                                        </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="none">Not selected</SelectItem>
+                                        {isAdaptiveReasoning && (
+                                            <>
+                                                <SelectItem value={ReasoningEffort.Xhigh}>X-High</SelectItem>
+                                                <SelectItem value={ReasoningEffort.Max}>Max</SelectItem>
+                                            </>
+                                        )}
+                                        <SelectItem value={ReasoningEffort.Low}>Low</SelectItem>
+                                        <SelectItem value={ReasoningEffort.Medium}>Medium</SelectItem>
+                                        <SelectItem value={ReasoningEffort.High}>High</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    {/* Reasoning Max Tokens field */}
+                    {!isAdaptiveReasoning && (
+                        <FormInputNumberItem
+                            control={control}
+                            disabled={disabled}
+                            label="Reasoning Max Tokens"
+                            min="1"
+                            name={`agents.${agentKey}.reasoning.maxTokens`}
+                            placeholder="1000"
+                            valueType="integer"
+                        />
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // Helper function to recursively remove __typename from objects
@@ -1526,6 +1686,21 @@ const SettingsProvider = () => {
                                                             `agents.${agentKey}.price.cacheWrite` as const,
                                                             price?.cacheWrite ?? null,
                                                         );
+
+                                                        if (isBedrockAdaptiveThinkingModel(option?.name)) {
+                                                            setValue(
+                                                                `agents.${agentKey}.reasoning.mode` as const,
+                                                                ReasoningMode.Adaptive,
+                                                            );
+                                                            setValue(
+                                                                `agents.${agentKey}.reasoning.effort` as const,
+                                                                getBedrockAdaptiveDefaultEffort(option?.name),
+                                                            );
+                                                            setValue(
+                                                                `agents.${agentKey}.reasoning.maxTokens` as const,
+                                                                null,
+                                                            );
+                                                        }
                                                     }}
                                                     options={availableModels}
                                                     placeholder="Select or enter model name"
@@ -1637,64 +1812,12 @@ const SettingsProvider = () => {
                                             </div>
 
                                             {/* Reasoning Configuration */}
-                                            <div className="col-span-full p-px">
-                                                <div className="mt-6 flex flex-col gap-4">
-                                                    <h4 className="text-sm font-medium">Reasoning Configuration</h4>
-                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                                        {/* Reasoning Effort field */}
-                                                        <FormField
-                                                            control={control}
-                                                            name={`agents.${agentKey}.reasoning.effort`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>Reasoning Effort</FormLabel>
-                                                                    <Select
-                                                                        defaultValue={field.value ?? 'none'}
-                                                                        disabled={isLoading}
-                                                                        onValueChange={(value) =>
-                                                                            field.onChange(
-                                                                                value !== 'none' ? value : null,
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <FormControl>
-                                                                            <SelectTrigger>
-                                                                                <SelectValue placeholder="Select effort level (optional)" />
-                                                                            </SelectTrigger>
-                                                                        </FormControl>
-                                                                        <SelectContent>
-                                                                            <SelectItem value="none">
-                                                                                Not selected
-                                                                            </SelectItem>
-                                                                            <SelectItem value={ReasoningEffort.Low}>
-                                                                                Low
-                                                                            </SelectItem>
-                                                                            <SelectItem value={ReasoningEffort.Medium}>
-                                                                                Medium
-                                                                            </SelectItem>
-                                                                            <SelectItem value={ReasoningEffort.High}>
-                                                                                High
-                                                                            </SelectItem>
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-
-                                                        {/* Reasoning Max Tokens field */}
-                                                        <FormInputNumberItem
-                                                            control={control}
-                                                            disabled={isLoading}
-                                                            label="Reasoning Max Tokens"
-                                                            min="1"
-                                                            name={`agents.${agentKey}.reasoning.maxTokens`}
-                                                            placeholder="1000"
-                                                            valueType="integer"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <ReasoningConfigurationFields
+                                                agentKey={agentKey}
+                                                control={control}
+                                                disabled={isLoading}
+                                                setValue={setValue}
+                                            />
 
                                             {/* Price Configuration */}
                                             <div className="col-span-full p-px">

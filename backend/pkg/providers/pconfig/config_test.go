@@ -48,6 +48,14 @@ func TestReasoningConfig_UnmarshalJSON(t *testing.T) {
 			},
 		},
 		{
+			name: "with adaptive mode",
+			json: `{"mode": "adaptive", "effort": "xhigh"}`,
+			want: ReasoningConfig{
+				Mode:   ReasoningModeAdaptive,
+				Effort: llms.ReasoningEffort("xhigh"),
+			},
+		},
+		{
 			name:    "invalid json",
 			json:    "{invalid}",
 			wantErr: true,
@@ -65,6 +73,7 @@ func TestReasoningConfig_UnmarshalJSON(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			assert.Equal(t, tt.want.Mode, got.Mode)
 			assert.Equal(t, tt.want.Effort, got.Effort)
 			assert.Equal(t, tt.want.MaxTokens, got.MaxTokens)
 		})
@@ -109,6 +118,17 @@ max_tokens: 2000
 			},
 		},
 		{
+			name: "with adaptive mode",
+			yaml: `
+mode: adaptive
+effort: xhigh
+`,
+			want: ReasoningConfig{
+				Mode:   ReasoningModeAdaptive,
+				Effort: llms.ReasoningEffort("xhigh"),
+			},
+		},
+		{
 			name:    "invalid yaml",
 			yaml:    "invalid: [yaml",
 			wantErr: true,
@@ -126,6 +146,7 @@ max_tokens: 2000
 			}
 
 			require.NoError(t, err)
+			assert.Equal(t, tt.want.Mode, got.Mode)
 			assert.Equal(t, tt.want.Effort, got.Effort)
 			assert.Equal(t, tt.want.MaxTokens, got.MaxTokens)
 		})
@@ -922,6 +943,31 @@ func TestAgentConfig_BuildOptions(t *testing.T) {
 				}
 			}`,
 			wantLen: 3, // model, temperature, reasoning (max_tokens is set)
+		},
+		{
+			name:   "with adaptive reasoning mode",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"mode": "adaptive",
+					"effort": "xhigh"
+				}
+			}`,
+			wantLen: 3, // model, temperature, metadata for adaptive reasoning
+			checkOptions: func(t *testing.T, options []llms.CallOption) {
+				var opts llms.CallOptions
+				for _, option := range options {
+					option(&opts)
+				}
+
+				assert.Equal(t, map[string]interface{}{
+					"reasoning_effort": "xhigh",
+					"reasoning_mode":   "adaptive",
+				}, opts.Metadata)
+				assert.Nil(t, opts.Reasoning)
+			},
 		},
 		{
 			name:   "with invalid reasoning tokens over limit",

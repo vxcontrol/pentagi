@@ -803,17 +803,26 @@ export type QueryVectorStoreLogsArgs = {
 export type ReasoningConfig = {
     effort?: Maybe<ReasoningEffort>;
     maxTokens?: Maybe<Scalars['Int']['output']>;
+    mode?: Maybe<ReasoningMode>;
 };
 
 export type ReasoningConfigInput = {
     effort?: InputMaybe<ReasoningEffort>;
     maxTokens?: InputMaybe<Scalars['Int']['input']>;
+    mode?: InputMaybe<ReasoningMode>;
 };
 
 export enum ReasoningEffort {
     High = 'high',
     Low = 'low',
+    Max = 'max',
     Medium = 'medium',
+    Xhigh = 'xhigh',
+}
+
+export enum ReasoningMode {
+    Adaptive = 'adaptive',
+    Budget = 'budget',
 }
 
 export enum ResultFormat {
@@ -1330,7 +1339,7 @@ export type AgentConfigFragmentFragment = {
     repetitionPenalty?: number | null;
     frequencyPenalty?: number | null;
     presencePenalty?: number | null;
-    reasoning?: { effort?: ReasoningEffort | null; maxTokens?: number | null } | null;
+    reasoning?: { mode?: ReasoningMode | null; effort?: ReasoningEffort | null; maxTokens?: number | null } | null;
     price?: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
 };
 
@@ -2301,6 +2310,7 @@ export const AgentConfigFragmentFragmentDoc = gql`
         frequencyPenalty
         presencePenalty
         reasoning {
+            mode
             effort
             maxTokens
         }

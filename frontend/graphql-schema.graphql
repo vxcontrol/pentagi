@@ -292,6 +292,7 @@ fragment agentConfigFragment on AgentConfig {
     frequencyPenalty
     presencePenalty
     reasoning {
+        mode
         effort
         maxTokens
     }
