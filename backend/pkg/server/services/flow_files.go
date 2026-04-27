@@ -49,6 +49,21 @@ type flowFiles struct {
 	Total uint64     `json:"total"`
 }
 
+type containerFile struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Path       string    `json:"path"`
+	Size       int64     `json:"size"`
+	IsDir      bool      `json:"isDir"`
+	ModifiedAt time.Time `json:"modifiedAt"`
+}
+
+type containerFiles struct {
+	Path  string          `json:"path"`
+	Files []containerFile `json:"files"`
+	Total uint64          `json:"total"`
+}
+
 type pullFlowFilesRequest struct {
 	// Path is an arbitrary path inside the container, e.g. "/etc/nginx/conf" or "/work/uploads/report.txt".
 	Path string `json:"path"`
@@ -651,6 +666,98 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 	})
 }
 
+// GetFlowContainerFiles is a function to return non-recursive container directory files list
+// @Summary Retrieve flow container directory files list
+// @Tags FlowFiles
+// @Produce json
+// @Security BearerAuth
+// @Param flowID path int true "flow id" minimum(0)
+// @Param path query string false "absolute path inside the running container; defaults to /work"
+// @Success 200 {object} response.successResp{data=containerFiles} "container files list received successful"
+// @Failure 400 {object} response.errorResp "invalid flow files request data or container not running"
+// @Failure 403 {object} response.errorResp "getting flow container files not permitted"
+// @Failure 404 {object} response.errorResp "flow not found"
+// @Failure 500 {object} response.errorResp "internal error on getting flow container files"
+// @Router /flows/{flowID}/files/container [get]
+func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
+	flowID, err := parseFlowIDParam(c)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Error("error parsing flow id")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
+
+	if _, err := s.getFlow(c, flowID, false); err != nil {
+		s.handleFlowLookupError(c, flowID, err)
+		return
+	}
+
+	if s.dockerClient == nil {
+		err = errors.New("docker client not configured on this server")
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("docker client unavailable for container files list")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	containerPath := strings.TrimSpace(c.Query("path"))
+	if containerPath == "" {
+		containerPath = docker.WorkFolderPathInContainer
+	}
+
+	containerName := primaryContainerName(flowID)
+	running, err := s.dockerClient.IsContainerRunning(c.Request.Context(), containerName)
+	if err != nil {
+		logger.FromContext(c).WithError(err).WithFields(map[string]any{
+			"flow_id":        flowID,
+			"container_name": containerName,
+		}).Error("error checking container status for files list")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+	if !running {
+		err = fmt.Errorf("container '%s' is not running; start the flow before listing container files", containerName)
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("container not running for files list")
+		response.Error(c, response.ErrFlowFilesContainerNotRunning, err)
+		return
+	}
+
+	pathStat, err := s.dockerClient.ContainerStatPath(c.Request.Context(), containerName, containerPath)
+	if err != nil {
+		logger.FromContext(c).WithError(err).WithFields(map[string]any{
+			"flow_id":        flowID,
+			"container_path": containerPath,
+		}).Error("error stating container path")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+	if !pathStat.Mode.IsDir() {
+		file := convertContainerFile(path.Dir(containerPath), pathStat)
+		response.Success(c, http.StatusOK, containerFiles{
+			Path:  containerPath,
+			Files: []containerFile{file},
+			Total: 1,
+		})
+		return
+	}
+
+	stats, err := s.dockerClient.ListContainerDir(c.Request.Context(), containerName, containerPath)
+	if err != nil {
+		logger.FromContext(c).WithError(err).WithFields(map[string]any{
+			"flow_id":        flowID,
+			"container_path": containerPath,
+		}).Error("error listing container directory")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	files := convertContainerFiles(containerPath, stats)
+	response.Success(c, http.StatusOK, containerFiles{
+		Path:  containerPath,
+		Files: files,
+		Total: uint64(len(files)),
+	})
+}
+
 func (s *FlowFileService) getFlow(c *gin.Context, flowID uint64, writeAccess bool) (models.Flow, error) {
 	var flow models.Flow
 
@@ -909,11 +1016,38 @@ func convertFlowFile(file flowfiles.File) flowFile {
 
 func convertModelFlowFile(file flowFile) *model.FlowFile {
 	return &model.FlowFile{
+		ID:         file.ID,
 		Name:       file.Name,
 		Path:       file.Path,
 		Size:       int(file.Size),
 		IsDir:      file.IsDir,
 		ModifiedAt: file.ModifiedAt,
+	}
+}
+
+func convertContainerFiles(basePath string, stats []container.PathStat) []containerFile {
+	files := make([]containerFile, 0, len(stats))
+	for _, stat := range stats {
+		files = append(files, convertContainerFile(basePath, stat))
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Name < files[j].Name
+	})
+
+	return files
+}
+
+func convertContainerFile(basePath string, stat container.PathStat) containerFile {
+	filePath := path.Join(basePath, stat.Name)
+
+	return containerFile{
+		ID:         flowfiles.ID(filePath),
+		Name:       stat.Name,
+		Path:       filePath,
+		Size:       stat.Size,
+		IsDir:      stat.Mode.IsDir(),
+		ModifiedAt: stat.Mtime,
 	}
 }
 

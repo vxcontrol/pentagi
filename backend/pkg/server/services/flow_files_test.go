@@ -13,6 +13,7 @@ import (
 
 	"pentagi/pkg/flowfiles"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -224,6 +225,57 @@ func TestFlowFileService_ListFlowFiles_EmptyDirs(t *testing.T) {
 	files, err := svc.listFlowFiles(999)
 	require.NoError(t, err)
 	assert.Empty(t, files)
+}
+
+func TestConvertModelFlowFile_PreservesID(t *testing.T) {
+	file := flowFile{
+		ID:         "flow-file-id",
+		Name:       "report.md",
+		Path:       "uploads/report.md",
+		Size:       42,
+		IsDir:      false,
+		ModifiedAt: time.Now(),
+	}
+
+	modelFile := convertModelFlowFile(file)
+
+	require.NotNil(t, modelFile)
+	assert.Equal(t, file.ID, modelFile.ID)
+	assert.Equal(t, file.Name, modelFile.Name)
+	assert.Equal(t, file.Path, modelFile.Path)
+	assert.Equal(t, int(file.Size), modelFile.Size)
+	assert.Equal(t, file.IsDir, modelFile.IsDir)
+	assert.Equal(t, file.ModifiedAt, modelFile.ModifiedAt)
+}
+
+func TestConvertContainerFiles(t *testing.T) {
+	mtime := time.Now()
+	files := convertContainerFiles("/work", []container.PathStat{
+		{
+			Name:  "zeta.txt",
+			Size:  10,
+			Mode:  0644,
+			Mtime: mtime,
+		},
+		{
+			Name:  "alpha",
+			Mode:  os.ModeDir | 0755,
+			Mtime: mtime.Add(time.Second),
+		},
+	})
+
+	require.Len(t, files, 2)
+	assert.Equal(t, "alpha", files[0].Name)
+	assert.Equal(t, "/work/alpha", files[0].Path)
+	assert.Equal(t, flowfiles.ID("/work/alpha"), files[0].ID)
+	assert.True(t, files[0].IsDir)
+	assert.Equal(t, int64(0), files[0].Size)
+
+	assert.Equal(t, "zeta.txt", files[1].Name)
+	assert.Equal(t, "/work/zeta.txt", files[1].Path)
+	assert.Equal(t, flowfiles.ID("/work/zeta.txt"), files[1].ID)
+	assert.False(t, files[1].IsDir)
+	assert.Equal(t, int64(10), files[1].Size)
 }
 
 // ── localEntryExists ─────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ The Docker client package (`backend/pkg/docker`) provides a secure and isolated 
 - **AI Agent Integration**: Specifically designed to support AI agent workflows and terminal operations
 - **Container Lifecycle Management**: Comprehensive container creation, execution, and cleanup
 - **Port Management**: Automatic port allocation for flow-specific containers
-- **File Operations**: Safe file transfer between host and containers
+- **File Operations**: Safe file transfer, path metadata lookup, and non-recursive directory listing between host and containers
 - **Network Isolation**: Configurable network policies for security
 - **Resource Management**: Memory and CPU limits for controlled execution
 - **Volume Management**: Persistent and temporary storage solutions
@@ -58,6 +58,7 @@ const BaseContainerPortsNumber = 28000                // Starting port number fo
 const defaultImage = "debian:latest"                  // Fallback image if custom image fails
 const containerPortsNumber = 2                        // Number of ports allocated per container
 const limitContainerPortsNumber = 2000                // Maximum port range for allocation
+const containerListWorkers = 20                       // Parallel stat workers for directory listing
 ```
 
 ### Port Allocation Strategy
@@ -214,6 +215,8 @@ type DockerClient interface {
     ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
 
     // File operations
+    ContainerStatPath(ctx context.Context, containerID string, path string) (container.PathStat, error)
+    ListContainerDir(ctx context.Context, containerID string, dirPath string) ([]container.PathStat, error)
     CopyToContainer(ctx context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
     CopyFromContainer(ctx context.Context, containerID string, srcPath string) (io.ReadCloser, container.PathStat, error)
 
@@ -259,7 +262,7 @@ The `RunContainer` method handles the complete container creation workflow:
 3. **Container Configuration**:
    - Sets hostname based on container name hash
    - Configures working directory to `/work`
-   - Sets up restart policy (`unless-stopped`)
+   - Sets up restart policy (`on-failure`, maximum 5 retries)
    - Configures logging (JSON driver with rotation)
 
 4. **Storage Setup**:
@@ -294,7 +297,8 @@ containerConfig := &container.Config{
 hostConfig := &container.HostConfig{
     CapAdd: []string{"NET_RAW"},                 // Required capabilities for network tools
     RestartPolicy: container.RestartPolicy{
-        Name: "unless-stopped",                  // Auto-restart unless explicitly stopped
+        Name:              "on-failure",         // Restart failed containers only
+        MaximumRetryCount: 5,
     },
     Binds: []string{
         "/host/data/flow-123:/work",            // Work directory mount
@@ -408,6 +412,33 @@ The terminal tool uses the Docker client for:
 - **File Operations**: Reading and writing files safely
 - **Result Capture**: Collecting command output and artifacts
 
+### Flow File Integration
+
+Flow files are managed by the REST API in `pkg/server/services/flow_files.go` and use Docker client file APIs for synchronization with the running primary container.
+
+PentAGI keeps two different storage areas for flow files:
+
+- **Local cache**: `{DATA_DIR}/flow-{id}-data/uploads` and `{DATA_DIR}/flow-{id}-data/container`
+- **Container workspace**: `/work` inside the primary container
+
+This separation is intentional. It supports both single-node deployments and remote worker-node deployments where the backend host filesystem is not the same filesystem used by Docker workers.
+
+The current behavior is:
+
+- User uploads are saved to the local cache under `uploads/`.
+- If the primary container is running, uploaded files are pushed best-effort to `/work/uploads`.
+- When the primary container starts or is reused, cached uploads are synchronized into `/work/uploads`; the cache is the source of truth.
+- Files pulled from the container are stored under `container/` using their normalized full container path, for example:
+  - `/etc/nginx/nginx.conf` -> `container/etc/nginx/nginx.conf`
+  - `/work/test.md` -> `container/work/test.md`
+- Deleting cached upload files is allowed even when the container is not running. The next container start will resynchronize `/work/uploads` from cache.
+
+The flow files API also exposes a non-recursive live container directory listing endpoint. It uses `ContainerStatPath` to determine whether the requested path is a file or directory:
+
+- If the path is a file, it returns that file metadata directly.
+- If the path is a directory, it calls `ListContainerDir`.
+- If the path is omitted, it defaults to `/work`.
+
 ### Provider Integration
 
 The provider system uses Docker client for environment preparation:
@@ -516,7 +547,26 @@ defer reader.Close()
 
 // Extract content from tar
 content := extractFromTar(reader)
+
+// Stat a file or directory in the container
+stat, err := dockerClient.ContainerStatPath(ctx, containerID, "/work/results.txt")
+
+// List direct entries in a container directory
+entries, err := dockerClient.ListContainerDir(ctx, containerID, "/work")
 ```
+
+### Container Directory Listing
+
+`ListContainerDir` performs a non-recursive directory listing inside a running container:
+
+1. Uses `ContainerStatPath` to verify that `dirPath` exists and is a directory.
+2. Executes `ls -1 -- <dirPath>` inside the container to get direct entry names.
+3. Calls `ContainerStatPath` for every entry to return Docker `container.PathStat` metadata.
+4. Runs entry stat calls through `pkg/queue` with `containerListWorkers = 20` workers to reduce latency for large directories.
+
+The method returns `[]container.PathStat`. The caller is responsible for joining the returned entry name with the requested base path when it needs full paths.
+
+If `dirPath` is empty, it defaults to `WorkFolderPathInContainer` (`/work`).
 
 ### Cleanup and Resource Management
 

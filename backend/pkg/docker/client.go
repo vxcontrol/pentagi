@@ -6,6 +6,7 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	"pentagi/pkg/queue"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -37,7 +39,19 @@ const (
 	containerLocalCwdTemplate   = "flow-%d"
 	containerPortsNumber        = 2
 	limitContainerPortsNumber   = 2000
+	containerListWorkers        = 20
 )
+
+type containerPathStatRequest struct {
+	name string
+	path string
+}
+
+type containerPathStatResult struct {
+	name string
+	stat container.PathStat
+	err  error
+}
 
 type dockerClient struct {
 	db       database.Querier
@@ -61,6 +75,8 @@ type DockerClient interface {
 	ContainerExecCreate(ctx context.Context, container string, config container.ExecOptions) (container.ExecCreateResponse, error)
 	ContainerExecAttach(ctx context.Context, execID string, config container.ExecAttachOptions) (types.HijackedResponse, error)
 	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
+	ContainerStatPath(ctx context.Context, containerID string, path string) (container.PathStat, error)
+	ListContainerDir(ctx context.Context, containerID string, dirPath string) ([]container.PathStat, error)
 	CopyToContainer(ctx context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
 	CopyFromContainer(ctx context.Context, containerID string, srcPath string) (io.ReadCloser, container.PathStat, error)
 	Cleanup(ctx context.Context) error
@@ -555,6 +571,107 @@ func (dc *dockerClient) ContainerExecInspect(
 	execID string,
 ) (container.ExecInspect, error) {
 	return dc.client.ContainerExecInspect(ctx, execID)
+}
+
+func (dc *dockerClient) ContainerStatPath(
+	ctx context.Context,
+	containerID string,
+	path string,
+) (container.PathStat, error) {
+	return dc.client.ContainerStatPath(ctx, containerID, path)
+}
+
+func (dc *dockerClient) ListContainerDir(
+	ctx context.Context,
+	containerID string,
+	dirPath string,
+) ([]container.PathStat, error) {
+	if strings.TrimSpace(dirPath) == "" {
+		dirPath = WorkFolderPathInContainer
+	}
+
+	dirStat, err := dc.ContainerStatPath(ctx, containerID, dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat container path '%s': %w", dirPath, err)
+	}
+	if !dirStat.Mode.IsDir() {
+		return nil, fmt.Errorf("container path '%s' is not a directory", dirPath)
+	}
+
+	createResp, err := dc.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		Cmd:          []string{"ls", "-1", "--", dirPath},
+		AttachStdout: true,
+		AttachStderr: true,
+		Tty:          true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ls exec for '%s': %w", dirPath, err)
+	}
+
+	resp, err := dc.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{
+		Tty: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach ls exec for '%s': %w", dirPath, err)
+	}
+	output, readErr := io.ReadAll(resp.Reader)
+	resp.Close()
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read ls output for '%s': %w", dirPath, readErr)
+	}
+
+	inspect, err := dc.ContainerExecInspect(ctx, createResp.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect ls exec for '%s': %w", dirPath, err)
+	}
+	if inspect.ExitCode != 0 {
+		return nil, fmt.Errorf("ls command failed for '%s' with exit code %d: %s", dirPath, inspect.ExitCode, string(output))
+	}
+
+	names := make([]string, 0)
+	for _, line := range strings.Split(string(output), "\n") {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+
+	input := make(chan containerPathStatRequest, len(names))
+	outputStats := make(chan containerPathStatResult)
+	for _, name := range names {
+		input <- containerPathStatRequest{
+			name: name,
+			path: path.Join(dirPath, name),
+		}
+	}
+	close(input)
+
+	statQueue := queue.NewQueue(input, outputStats, containerListWorkers, func(req containerPathStatRequest) (containerPathStatResult, error) {
+		stat, err := dc.ContainerStatPath(ctx, containerID, req.path)
+
+		return containerPathStatResult{
+			name: req.name,
+			stat: stat,
+			err:  err,
+		}, nil
+	})
+	if err := statQueue.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start container stat queue: %w", err)
+	}
+
+	stats := make([]container.PathStat, 0, len(names))
+	for range names {
+		result := <-outputStats
+		if result.err != nil {
+			_ = statQueue.Stop()
+			return nil, fmt.Errorf("failed to stat container entry '%s': %w", result.name, result.err)
+		}
+		stats = append(stats, result.stat)
+	}
+	_ = statQueue.Stop()
+
+	return stats, nil
 }
 
 func (dc *dockerClient) CopyToContainer(

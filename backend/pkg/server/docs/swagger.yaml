@@ -1351,6 +1351,32 @@ definitions:
       total:
         type: integer
     type: object
+  services.containerFile:
+    properties:
+      id:
+        type: string
+      isDir:
+        type: boolean
+      modifiedAt:
+        type: string
+      name:
+        type: string
+      path:
+        type: string
+      size:
+        type: integer
+    type: object
+  services.containerFiles:
+    properties:
+      files:
+        items:
+          $ref: '#/definitions/services.containerFile'
+        type: array
+      path:
+        type: string
+      total:
+        type: integer
+    type: object
   services.containers:
     properties:
       containers:
@@ -2970,6 +2996,52 @@ paths:
       security:
       - BearerAuth: []
       summary: Upload files to flow workspace
+      tags:
+      - FlowFiles
+  /flows/{flowID}/files/container:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: absolute path inside the running container; defaults to /work
+        in: query
+        name: path
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: container files list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.containerFiles'
+              type: object
+        "400":
+          description: invalid flow files request data or container not running
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flow container files not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow container files
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve flow container directory files list
       tags:
       - FlowFiles
   /flows/{flowID}/files/download:
