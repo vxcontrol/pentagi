@@ -210,6 +210,15 @@ type FlowExecutionStats struct {
 	Tasks                []*TaskExecutionStats `json:"tasks"`
 }
 
+type FlowFile struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Path       string    `json:"path"`
+	Size       int       `json:"size"`
+	IsDir      bool      `json:"isDir"`
+	ModifiedAt time.Time `json:"modifiedAt"`
+}
+
 type FlowStats struct {
 	TotalTasksCount      int `json:"totalTasksCount"`
 	TotalSubtasksCount   int `json:"totalSubtasksCount"`

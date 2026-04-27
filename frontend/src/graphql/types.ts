@@ -284,6 +284,15 @@ export type FlowExecutionStats = {
     totalToolcallsCount: Scalars['Int']['output'];
 };
 
+export type FlowFile = {
+    id: Scalars['String']['output'];
+    isDir: Scalars['Boolean']['output'];
+    modifiedAt: Scalars['Time']['output'];
+    name: Scalars['String']['output'];
+    path: Scalars['String']['output'];
+    size: Scalars['Int']['output'];
+};
+
 export type FlowStats = {
     totalAssistantsCount: Scalars['Int']['output'];
     totalSubtasksCount: Scalars['Int']['output'];
@@ -690,6 +699,7 @@ export type Query = {
     assistantLogs?: Maybe<Array<AssistantLog>>;
     assistants?: Maybe<Array<Assistant>>;
     flow: Flow;
+    flowFiles: Array<FlowFile>;
     flowStatsByFlow: FlowStats;
     flowTemplate?: Maybe<FlowTemplate>;
     flowTemplates: Array<FlowTemplate>;
@@ -741,6 +751,10 @@ export type QueryAssistantsArgs = {
 };
 
 export type QueryFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type QueryFlowFilesArgs = {
     flowId: Scalars['ID']['input'];
 };
 
@@ -889,6 +903,9 @@ export type Subscription = {
     assistantUpdated: Assistant;
     flowCreated: Flow;
     flowDeleted: Flow;
+    flowFileAdded: FlowFile;
+    flowFileDeleted: FlowFile;
+    flowFileUpdated: FlowFile;
     flowTemplateCreated: FlowTemplate;
     flowTemplateDeleted: FlowTemplate;
     flowTemplateUpdated: FlowTemplate;
@@ -928,6 +945,18 @@ export type SubscriptionAssistantLogUpdatedArgs = {
 };
 
 export type SubscriptionAssistantUpdatedArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type SubscriptionFlowFileAddedArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type SubscriptionFlowFileDeletedArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type SubscriptionFlowFileUpdatedArgs = {
     flowId: Scalars['ID']['input'];
 };
 
@@ -1206,6 +1235,15 @@ export type ScreenshotFragmentFragment = {
     name: string;
     url: string;
     createdAt: any;
+};
+
+export type FlowFileFragmentFragment = {
+    id: string;
+    name: string;
+    path: string;
+    size: number;
+    isDir: boolean;
+    modifiedAt: any;
 };
 
 export type AgentLogFragmentFragment = {
@@ -1590,6 +1628,12 @@ export type TasksQueryVariables = Exact<{
 }>;
 
 export type TasksQuery = { tasks?: Array<TaskFragmentFragment> | null };
+
+export type FlowFilesQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowFilesQuery = { flowFiles: Array<FlowFileFragmentFragment> };
 
 export type AssistantsQueryVariables = Exact<{
     flowId: Scalars['ID']['input'];
@@ -1980,6 +2024,24 @@ export type AssistantDeletedSubscriptionVariables = Exact<{
 
 export type AssistantDeletedSubscription = { assistantDeleted: AssistantFragmentFragment };
 
+export type FlowFileAddedSubscriptionVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowFileAddedSubscription = { flowFileAdded: FlowFileFragmentFragment };
+
+export type FlowFileUpdatedSubscriptionVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowFileUpdatedSubscription = { flowFileUpdated: FlowFileFragmentFragment };
+
+export type FlowFileDeletedSubscriptionVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowFileDeletedSubscription = { flowFileDeleted: FlowFileFragmentFragment };
+
 export type AssistantLogAddedSubscriptionVariables = Exact<{
     flowId: Scalars['ID']['input'];
 }>;
@@ -2168,6 +2230,16 @@ export const ScreenshotFragmentFragmentDoc = gql`
         name
         url
         createdAt
+    }
+`;
+export const FlowFileFragmentFragmentDoc = gql`
+    fragment flowFileFragment on FlowFile {
+        id
+        name
+        path
+        size
+        isDir
+        modifiedAt
     }
 `;
 export const AgentLogFragmentFragmentDoc = gql`
@@ -3244,6 +3316,61 @@ export type TasksQueryHookResult = ReturnType<typeof useTasksQuery>;
 export type TasksLazyQueryHookResult = ReturnType<typeof useTasksLazyQuery>;
 export type TasksSuspenseQueryHookResult = ReturnType<typeof useTasksSuspenseQuery>;
 export type TasksQueryResult = Apollo.QueryResult<TasksQuery, TasksQueryVariables>;
+export const FlowFilesDocument = gql`
+    query flowFiles($flowId: ID!) {
+        flowFiles(flowId: $flowId) {
+            ...flowFileFragment
+        }
+    }
+    ${FlowFileFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowFilesQuery__
+ *
+ * To run a query within a React component, call `useFlowFilesQuery` and pass it any options that fit your needs.
+ * When your component renders, `useFlowFilesQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowFilesQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowFilesQuery(
+    baseOptions: Apollo.QueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables> &
+        ({ variables: FlowFilesQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
+}
+export function useFlowFilesLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
+}
+// @ts-ignore
+export function useFlowFilesSuspenseQuery(
+    baseOptions?: Apollo.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
+): Apollo.UseSuspenseQueryResult<FlowFilesQuery, FlowFilesQueryVariables>;
+export function useFlowFilesSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
+): Apollo.UseSuspenseQueryResult<FlowFilesQuery | undefined, FlowFilesQueryVariables>;
+export function useFlowFilesSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
+}
+export type FlowFilesQueryHookResult = ReturnType<typeof useFlowFilesQuery>;
+export type FlowFilesLazyQueryHookResult = ReturnType<typeof useFlowFilesLazyQuery>;
+export type FlowFilesSuspenseQueryHookResult = ReturnType<typeof useFlowFilesSuspenseQuery>;
+export type FlowFilesQueryResult = Apollo.QueryResult<FlowFilesQuery, FlowFilesQueryVariables>;
 export const AssistantsDocument = gql`
     query assistants($flowId: ID!) {
         assistants(flowId: $flowId) {
@@ -6356,6 +6483,117 @@ export function useAssistantDeletedSubscription(
 }
 export type AssistantDeletedSubscriptionHookResult = ReturnType<typeof useAssistantDeletedSubscription>;
 export type AssistantDeletedSubscriptionResult = Apollo.SubscriptionResult<AssistantDeletedSubscription>;
+export const FlowFileAddedDocument = gql`
+    subscription flowFileAdded($flowId: ID!) {
+        flowFileAdded(flowId: $flowId) {
+            ...flowFileFragment
+        }
+    }
+    ${FlowFileFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowFileAddedSubscription__
+ *
+ * To run a query within a React component, call `useFlowFileAddedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useFlowFileAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowFileAddedSubscription({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowFileAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<FlowFileAddedSubscription, FlowFileAddedSubscriptionVariables> &
+        ({ variables: FlowFileAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowFileAddedSubscription, FlowFileAddedSubscriptionVariables>(
+        FlowFileAddedDocument,
+        options,
+    );
+}
+export type FlowFileAddedSubscriptionHookResult = ReturnType<typeof useFlowFileAddedSubscription>;
+export type FlowFileAddedSubscriptionResult = Apollo.SubscriptionResult<FlowFileAddedSubscription>;
+export const FlowFileUpdatedDocument = gql`
+    subscription flowFileUpdated($flowId: ID!) {
+        flowFileUpdated(flowId: $flowId) {
+            ...flowFileFragment
+        }
+    }
+    ${FlowFileFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowFileUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useFlowFileUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useFlowFileUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowFileUpdatedSubscription({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowFileUpdatedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<FlowFileUpdatedSubscription, FlowFileUpdatedSubscriptionVariables> &
+        ({ variables: FlowFileUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowFileUpdatedSubscription, FlowFileUpdatedSubscriptionVariables>(
+        FlowFileUpdatedDocument,
+        options,
+    );
+}
+export type FlowFileUpdatedSubscriptionHookResult = ReturnType<typeof useFlowFileUpdatedSubscription>;
+export type FlowFileUpdatedSubscriptionResult = Apollo.SubscriptionResult<FlowFileUpdatedSubscription>;
+export const FlowFileDeletedDocument = gql`
+    subscription flowFileDeleted($flowId: ID!) {
+        flowFileDeleted(flowId: $flowId) {
+            ...flowFileFragment
+        }
+    }
+    ${FlowFileFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowFileDeletedSubscription__
+ *
+ * To run a query within a React component, call `useFlowFileDeletedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useFlowFileDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowFileDeletedSubscription({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowFileDeletedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<FlowFileDeletedSubscription, FlowFileDeletedSubscriptionVariables> &
+        ({ variables: FlowFileDeletedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowFileDeletedSubscription, FlowFileDeletedSubscriptionVariables>(
+        FlowFileDeletedDocument,
+        options,
+    );
+}
+export type FlowFileDeletedSubscriptionHookResult = ReturnType<typeof useFlowFileDeletedSubscription>;
+export type FlowFileDeletedSubscriptionResult = Apollo.SubscriptionResult<FlowFileDeletedSubscription>;
 export const AssistantLogAddedDocument = gql`
     subscription assistantLogAdded($flowId: ID!) {
         assistantLogAdded(flowId: $flowId) {

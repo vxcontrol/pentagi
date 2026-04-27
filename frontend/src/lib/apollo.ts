@@ -99,6 +99,9 @@ const subscriptionToCacheFieldMap: Record<string, string> = {
     assistantUpdated: 'assistants',
     flowCreated: 'flows',
     flowDeleted: 'flows',
+    flowFileAdded: 'flowFiles',
+    flowFileDeleted: 'flowFiles',
+    flowFileUpdated: 'flowFiles',
     flowTemplateCreated: 'flowTemplates',
     flowTemplateDeleted: 'flowTemplates',
     flowTemplateUpdated: 'flowTemplates',
@@ -497,6 +500,7 @@ const createApolloClient = () => {
                             return existing ?? toReference({ __typename: 'Flow', id: args.flowId });
                         },
                     },
+                    flowFiles: { keyArgs: ['flowId'], ...replaceWithIncoming },
                     flows: { ...replaceWithIncoming },
                     flowTemplates: { ...replaceWithIncoming },
                     messageLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },

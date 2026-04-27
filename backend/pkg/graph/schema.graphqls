@@ -338,6 +338,15 @@ type Screenshot {
   createdAt: Time!
 }
 
+type FlowFile {
+  id: String!
+  name: String!
+  path: String!
+  size: Int!
+  isDir: Boolean!
+  modifiedAt: Time!
+}
+
 # =================== API Tokens types ===================
 
 enum TokenStatus {
@@ -814,6 +823,7 @@ type Query {
 
   # Task and execution logs
   tasks(flowId: ID!): [Task!]
+  flowFiles(flowId: ID!): [FlowFile!]!
   screenshots(flowId: ID!): [Screenshot!]
   terminalLogs(flowId: ID!): [TerminalLog!]
   messageLogs(flowId: ID!): [MessageLog!]
@@ -917,6 +927,11 @@ type Subscription {
   assistantCreated(flowId: ID!): Assistant!
   assistantUpdated(flowId: ID!): Assistant!
   assistantDeleted(flowId: ID!): Assistant!
+
+  # Flow file events
+  flowFileAdded(flowId: ID!): FlowFile!
+  flowFileUpdated(flowId: ID!): FlowFile!
+  flowFileDeleted(flowId: ID!): FlowFile!
 
   # Log events
   screenshotAdded(flowId: ID!): Screenshot!

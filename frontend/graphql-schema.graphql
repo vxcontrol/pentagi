@@ -89,6 +89,15 @@ fragment screenshotFragment on Screenshot {
     createdAt
 }
 
+fragment flowFileFragment on FlowFile {
+    id
+    name
+    path
+    size
+    isDir
+    modifiedAt
+}
+
 fragment agentLogFragment on AgentLog {
     id
     flowId
@@ -772,6 +781,12 @@ query tasks($flowId: ID!) {
     }
 }
 
+query flowFiles($flowId: ID!) {
+    flowFiles(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
 query assistants($flowId: ID!) {
     assistants(flowId: $flowId) {
         ...assistantFragment
@@ -1138,6 +1153,24 @@ subscription assistantUpdated($flowId: ID!) {
 subscription assistantDeleted($flowId: ID!) {
     assistantDeleted(flowId: $flowId) {
         ...assistantFragment
+    }
+}
+
+subscription flowFileAdded($flowId: ID!) {
+    flowFileAdded(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
+subscription flowFileUpdated($flowId: ID!) {
+    flowFileUpdated(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
+subscription flowFileDeleted($flowId: ID!) {
+    flowFileDeleted(flowId: $flowId) {
+        ...flowFileFragment
     }
 }
 

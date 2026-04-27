@@ -13,6 +13,7 @@ import (
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/converter"
+	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
@@ -1224,6 +1225,26 @@ func (r *queryResolver) Tasks(ctx context.Context, flowID int64) ([]*model.Task,
 	return converter.ConvertTasks(tasks, subtasks), nil
 }
 
+// FlowFiles is the resolver for the flowFiles field.
+func (r *queryResolver) FlowFiles(ctx context.Context, flowID int64) ([]*model.FlowFile, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flows.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("get flow files")
+
+	files, err := flowfiles.List(r.Config.DataDir, uint64(flowID))
+	if err != nil {
+		return nil, err
+	}
+
+	return convertFlowFiles(files), nil
+}
+
 // Screenshots is the resolver for the screenshots field.
 func (r *queryResolver) Screenshots(ctx context.Context, flowID int64) ([]*model.Screenshot, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "screenshots.view", flowID, r.DB)
@@ -2270,6 +2291,36 @@ func (r *subscriptionResolver) AssistantDeleted(ctx context.Context, flowID int6
 	}
 
 	return r.Subscriptions.NewFlowSubscriber(uid, flowID).AssistantDeleted(ctx)
+}
+
+// FlowFileAdded is the resolver for the flowFileAdded field.
+func (r *subscriptionResolver) FlowFileAdded(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flows.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).FlowFileAdded(ctx)
+}
+
+// FlowFileUpdated is the resolver for the flowFileUpdated field.
+func (r *subscriptionResolver) FlowFileUpdated(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flows.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).FlowFileUpdated(ctx)
+}
+
+// FlowFileDeleted is the resolver for the flowFileDeleted field.
+func (r *subscriptionResolver) FlowFileDeleted(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flows.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).FlowFileDeleted(ctx)
 }
 
 // ScreenshotAdded is the resolver for the screenshotAdded field.

@@ -8,6 +8,8 @@ import (
 	"slices"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/flowfiles"
+	"pentagi/pkg/graph/model"
 )
 
 // This file will not be regenerated automatically.
@@ -119,4 +121,24 @@ func validatePermissionWithFlowID(
 	}
 
 	return uid, nil
+}
+
+func convertFlowFiles(files flowfiles.Files) []*model.FlowFile {
+	converted := make([]*model.FlowFile, 0, len(files.Files))
+	for _, file := range files.Files {
+		converted = append(converted, convertFlowFile(file))
+	}
+
+	return converted
+}
+
+func convertFlowFile(file flowfiles.File) *model.FlowFile {
+	return &model.FlowFile{
+		ID:         file.ID,
+		Name:       file.Name,
+		Path:       file.Path,
+		Size:       int(file.Size),
+		IsDir:      file.IsDir,
+		ModifiedAt: file.ModifiedAt,
+	}
 }

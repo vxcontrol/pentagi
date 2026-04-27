@@ -1,16 +1,21 @@
 package tools
 
 import (
+	"archive/tar"
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/flowfiles"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -193,9 +198,9 @@ func TestPrimaryTerminalName(t *testing.T) {
 		flowID int64
 		want   string
 	}{
-		{1, "pentagi-terminal-1"},
-		{0, "pentagi-terminal-0"},
-		{12345, "pentagi-terminal-12345"},
+		{1, PrimaryTerminalNamePrefix + "1"},
+		{0, PrimaryTerminalNamePrefix + "0"},
+		{12345, PrimaryTerminalNamePrefix + "12345"},
 	}
 
 	for _, tt := range tests {
@@ -207,6 +212,52 @@ func TestPrimaryTerminalName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWriteUploadsTar(t *testing.T) {
+	uploadDir := t.TempDir()
+	requireNoError := func(err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	requireNoError(os.WriteFile(filepath.Join(uploadDir, "a.txt"), []byte("alpha"), 0644))
+	requireNoError(os.Mkdir(filepath.Join(uploadDir, "sub"), 0755))
+	requireNoError(os.WriteFile(filepath.Join(uploadDir, "sub", "b.txt"), []byte("bravo"), 0644))
+	if err := os.Symlink(filepath.Join(uploadDir, "a.txt"), filepath.Join(uploadDir, "link.txt")); err != nil {
+		t.Skipf("symlink creation not available: %v", err)
+	}
+
+	pr, pw := io.Pipe()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- flowfiles.WriteUploadsTar(pw, uploadDir)
+	}()
+
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, pr)
+	assert.NoError(t, err)
+	assert.NoError(t, <-errCh)
+
+	tr := tar.NewReader(bytes.NewReader(buf.Bytes()))
+	contents := map[string]string{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		assert.NoError(t, err)
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		data, err := io.ReadAll(tr)
+		assert.NoError(t, err)
+		contents[hdr.Name] = string(data)
+	}
+
+	assert.Equal(t, "alpha", contents["uploads/a.txt"])
+	assert.Equal(t, "bravo", contents["uploads/sub/b.txt"])
+	assert.NotContains(t, contents, "uploads/link.txt")
 }
 
 func TestConfiguredExecTimeout(t *testing.T) {

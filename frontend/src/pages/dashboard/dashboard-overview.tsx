@@ -37,13 +37,13 @@ const UsageStatsTable = ({ rows }: { rows: Array<{ label: string; stats: UsageSt
         <TableHeader>
             <TableRow>
                 <TableHead className="whitespace-nowrap">Name</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Tokens In</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Tokens Out</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Cache In</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Cache Out</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Cost In</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Cost Out</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Total Cost</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Tokens In</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Tokens Out</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Cache In</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Cache Out</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Cost In</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Cost Out</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Total Cost</TableHead>
             </TableRow>
         </TableHeader>
         <TableBody>
@@ -174,9 +174,9 @@ export const DashboardOverview = () => {
                                 <TableRow>
                                     <TableHead className="whitespace-nowrap">Function</TableHead>
                                     <TableHead className="whitespace-nowrap">Type</TableHead>
-                                    <TableHead className="whitespace-nowrap text-right">Count</TableHead>
-                                    <TableHead className="whitespace-nowrap text-right">Total Duration</TableHead>
-                                    <TableHead className="whitespace-nowrap text-right">Avg Duration</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Count</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Total Duration</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Avg Duration</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

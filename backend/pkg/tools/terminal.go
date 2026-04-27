@@ -21,6 +21,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// PrimaryTerminalNamePrefix is the prefix used for all primary terminal container names.
+const PrimaryTerminalNamePrefix = "pentagi-terminal-"
+
 const (
 	maxExplicitExecCommandTimeout = 3 * time.Hour
 	defaultExtraExecTimeout       = 5 * time.Second
@@ -443,7 +446,7 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 }
 
 func PrimaryTerminalName(flowID int64) string {
-	return fmt.Sprintf("pentagi-terminal-%d", flowID)
+	return fmt.Sprintf("%s%d", PrimaryTerminalNamePrefix, flowID)
 }
 
 func (t *terminal) IsAvailable() bool {

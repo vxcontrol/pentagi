@@ -5,6 +5,7 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/converter"
+	"pentagi/pkg/graph/model"
 	"pentagi/pkg/providers/pconfig"
 )
 
@@ -66,6 +67,18 @@ func (p *flowPublisher) AssistantUpdated(ctx context.Context, assistant database
 
 func (p *flowPublisher) AssistantDeleted(ctx context.Context, assistant database.Assistant) {
 	p.ctrl.assistantDeleted.Publish(ctx, p.flowID, converter.ConvertAssistant(assistant))
+}
+
+func (p *flowPublisher) FlowFileAdded(ctx context.Context, file *model.FlowFile) {
+	p.ctrl.flowFileAdded.Publish(ctx, p.flowID, file)
+}
+
+func (p *flowPublisher) FlowFileUpdated(ctx context.Context, file *model.FlowFile) {
+	p.ctrl.flowFileUpdated.Publish(ctx, p.flowID, file)
+}
+
+func (p *flowPublisher) FlowFileDeleted(ctx context.Context, file *model.FlowFile) {
+	p.ctrl.flowFileDeleted.Publish(ctx, p.flowID, file)
 }
 
 func (p *flowPublisher) ScreenshotAdded(ctx context.Context, screenshot database.Screenshot) {

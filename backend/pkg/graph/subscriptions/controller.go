@@ -39,6 +39,9 @@ type FlowSubscriber interface {
 	AssistantCreated(ctx context.Context) (<-chan *model.Assistant, error)
 	AssistantUpdated(ctx context.Context) (<-chan *model.Assistant, error)
 	AssistantDeleted(ctx context.Context) (<-chan *model.Assistant, error)
+	FlowFileAdded(ctx context.Context) (<-chan *model.FlowFile, error)
+	FlowFileUpdated(ctx context.Context) (<-chan *model.FlowFile, error)
+	FlowFileDeleted(ctx context.Context) (<-chan *model.FlowFile, error)
 	ScreenshotAdded(ctx context.Context) (<-chan *model.Screenshot, error)
 	TerminalLogAdded(ctx context.Context) (<-chan *model.TerminalLog, error)
 	MessageLogAdded(ctx context.Context) (<-chan *model.MessageLog, error)
@@ -70,6 +73,9 @@ type FlowPublisher interface {
 	AssistantCreated(ctx context.Context, assistant database.Assistant)
 	AssistantUpdated(ctx context.Context, assistant database.Assistant)
 	AssistantDeleted(ctx context.Context, assistant database.Assistant)
+	FlowFileAdded(ctx context.Context, file *model.FlowFile)
+	FlowFileUpdated(ctx context.Context, file *model.FlowFile)
+	FlowFileDeleted(ctx context.Context, file *model.FlowFile)
 	ScreenshotAdded(ctx context.Context, screenshot database.Screenshot)
 	TerminalLogAdded(ctx context.Context, terminalLog database.Termlog)
 	MessageLogAdded(ctx context.Context, messageLog database.Msglog)
@@ -104,6 +110,9 @@ type controller struct {
 	assistantCreated    Channel[*model.Assistant]
 	assistantUpdated    Channel[*model.Assistant]
 	assistantDeleted    Channel[*model.Assistant]
+	flowFileAdded       Channel[*model.FlowFile]
+	flowFileUpdated     Channel[*model.FlowFile]
+	flowFileDeleted     Channel[*model.FlowFile]
 	screenshotAdded     Channel[*model.Screenshot]
 	terminalLogAdded    Channel[*model.TerminalLog]
 	messageLogAdded     Channel[*model.MessageLog]
@@ -138,6 +147,9 @@ func NewSubscriptionsController() SubscriptionsController {
 		assistantCreated:    NewChannel[*model.Assistant](),
 		assistantUpdated:    NewChannel[*model.Assistant](),
 		assistantDeleted:    NewChannel[*model.Assistant](),
+		flowFileAdded:       NewChannel[*model.FlowFile](),
+		flowFileUpdated:     NewChannel[*model.FlowFile](),
+		flowFileDeleted:     NewChannel[*model.FlowFile](),
 		screenshotAdded:     NewChannel[*model.Screenshot](),
 		terminalLogAdded:    NewChannel[*model.TerminalLog](),
 		messageLogAdded:     NewChannel[*model.MessageLog](),

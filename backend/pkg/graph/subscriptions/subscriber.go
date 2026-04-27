@@ -72,6 +72,18 @@ func (s *flowSubscriber) AssistantDeleted(ctx context.Context) (<-chan *model.As
 	return s.ctrl.assistantDeleted.Subscribe(ctx, s.flowID), nil
 }
 
+func (s *flowSubscriber) FlowFileAdded(ctx context.Context) (<-chan *model.FlowFile, error) {
+	return s.ctrl.flowFileAdded.Subscribe(ctx, s.flowID), nil
+}
+
+func (s *flowSubscriber) FlowFileUpdated(ctx context.Context) (<-chan *model.FlowFile, error) {
+	return s.ctrl.flowFileUpdated.Subscribe(ctx, s.flowID), nil
+}
+
+func (s *flowSubscriber) FlowFileDeleted(ctx context.Context) (<-chan *model.FlowFile, error) {
+	return s.ctrl.flowFileDeleted.Subscribe(ctx, s.flowID), nil
+}
+
 func (s *flowSubscriber) ScreenshotAdded(ctx context.Context) (<-chan *model.Screenshot, error) {
 	return s.ctrl.screenshotAdded.Subscribe(ctx, s.flowID), nil
 }

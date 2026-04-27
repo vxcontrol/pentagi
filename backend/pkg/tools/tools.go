@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
@@ -410,6 +414,9 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		case database.ContainerStatusRunning:
 			fte.primaryID = cnt.ID
 			fte.primaryLID = cnt.LocalID.String
+			if err := fte.syncCachedUploads(ctx); err != nil {
+				return fmt.Errorf("failed to sync cached uploads to container '%s': %w", PrimaryTerminalName(fte.flowID), err)
+			}
 			return nil
 		default:
 			fte.docker.RemoveContainer(ctx, cnt.LocalID.String, cnt.ID)
@@ -442,7 +449,90 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 	fte.primaryID = cnt.ID
 	fte.primaryLID = cnt.LocalID.String
 
+	if err := fte.syncCachedUploads(ctx); err != nil {
+		return fmt.Errorf("failed to sync cached uploads to container '%s': %w", containerName, err)
+	}
+
 	return nil
+}
+
+func (fte *flowToolsExecutor) syncCachedUploads(ctx context.Context) error {
+	uploadDir, err := fte.cachedUploadsDir()
+	if err != nil {
+		return err
+	}
+
+	containerName := PrimaryTerminalName(fte.flowID)
+	if err := fte.resetContainerUploads(ctx, containerName); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(uploadDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read uploads cache directory: %w", err)
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+
+	pr, pw := io.Pipe()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- flowfiles.WriteUploadsTar(pw, uploadDir)
+	}()
+
+	copyErr := fte.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
+		container.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
+	pr.Close()
+	writeErr := <-errCh
+	if copyErr != nil {
+		return copyErr
+	}
+
+	return writeErr
+}
+
+func (fte *flowToolsExecutor) resetContainerUploads(ctx context.Context, containerName string) error {
+	createResp, err := fte.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
+		Cmd:          []string{"sh", "-c", "rm -rf -- /work/uploads && mkdir -p -- /work/uploads"},
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create uploads reset exec: %w", err)
+	}
+
+	resp, err := fte.docker.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to attach uploads reset exec: %w", err)
+	}
+	output, copyErr := io.ReadAll(resp.Reader)
+	resp.Close()
+	if copyErr != nil {
+		return fmt.Errorf("failed to read uploads reset output: %w", copyErr)
+	}
+
+	inspect, err := fte.docker.ContainerExecInspect(ctx, createResp.ID)
+	if err != nil {
+		return fmt.Errorf("failed to inspect uploads reset exec: %w", err)
+	}
+	if inspect.ExitCode != 0 {
+		return fmt.Errorf("uploads reset command failed with exit code %d: %s", inspect.ExitCode, string(output))
+	}
+
+	return nil
+}
+
+func (fte *flowToolsExecutor) cachedUploadsDir() (string, error) {
+	dataDir, err := filepath.Abs(fte.cfg.DataDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve data directory: %w", err)
+	}
+
+	return flowfiles.FlowUploadsDir(dataDir, uint64(fte.flowID)), nil
 }
 
 func (fte *flowToolsExecutor) Release(ctx context.Context) error {

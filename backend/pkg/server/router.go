@@ -16,6 +16,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
+	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/server/auth"
@@ -79,6 +80,7 @@ func NewRouter(
 	providers providers.ProviderController,
 	controller controller.FlowController,
 	subscriptions subscriptions.SubscriptionsController,
+	dockerClient docker.DockerClient,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	if cfg.Debug {
@@ -130,7 +132,7 @@ func NewRouter(
 	roleService := services.NewRoleService(orm)
 	providerService := services.NewProviderService(providers)
 	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
-	flowFileService := services.NewFlowFileService(orm, cfg.DataDir)
+	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, dockerClient, subscriptions)
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
@@ -372,11 +374,11 @@ func setFlowsGroup(parent *gin.RouterGroup, svc *services.FlowService) {
 func setFlowFilesGroup(parent *gin.RouterGroup, svc *services.FlowFileService) {
 	flowFilesGroup := parent.Group("/flows/:flowID/files")
 	{
-		flowFilesGroup.GET("", svc.GetFlowFiles)
 		flowFilesGroup.GET("/", svc.GetFlowFiles)
-		flowFilesGroup.POST("", svc.UploadFlowFiles)
 		flowFilesGroup.POST("/", svc.UploadFlowFiles)
-		flowFilesGroup.GET("/:fileName", svc.DownloadFlowFile)
+		flowFilesGroup.DELETE("/", svc.DeleteFlowFile)
+		flowFilesGroup.GET("/download", svc.DownloadFlowFile)
+		flowFilesGroup.POST("/pull", svc.PullFlowFiles)
 	}
 }
 

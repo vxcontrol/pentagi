@@ -1360,6 +1360,31 @@ definitions:
       total:
         type: integer
     type: object
+  services.flowFile:
+    properties:
+      id:
+        type: string
+      isDir:
+        type: boolean
+      modifiedAt:
+        type: string
+      name:
+        type: string
+      path:
+        description: 'relative to flow data dir: "uploads/<x>" or "container/<x>"'
+        type: string
+      size:
+        type: integer
+    type: object
+  services.flowFiles:
+    properties:
+      files:
+        items:
+          $ref: '#/definitions/services.flowFile'
+        type: array
+      total:
+        type: integer
+    type: object
   services.flows:
     properties:
       flows:
@@ -1411,6 +1436,16 @@ definitions:
         type: array
       total:
         type: integer
+    type: object
+  services.pullFlowFilesRequest:
+    properties:
+      force:
+        description: Force overwrites the local cache entry if it already exists.
+        type: boolean
+      path:
+        description: Path is an arbitrary path inside the container, e.g. "/etc/nginx/conf"
+          or "/work/uploads/report.txt".
+        type: string
     type: object
   services.roles:
     properties:
@@ -2797,6 +2832,245 @@ paths:
       summary: Retrieve container info by id and flow id
       tags:
       - Containers
+  /flows/{flowID}/files/:
+    delete:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: 'relative path in cache: uploads/<name> or container/<name>'
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow file deleted successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.flowFiles'
+              type: object
+        "400":
+          description: invalid flow file request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: deleting flow file not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow file not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting flow file
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete flow file or directory by cached path
+      tags:
+      - FlowFiles
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow files list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.flowFiles'
+              type: object
+        "400":
+          description: invalid flow files request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flow files not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow files
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve flow files list
+      tags:
+      - FlowFiles
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: 'files to upload (multipart, field name: files or file)'
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow files uploaded successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.flowFiles'
+              type: object
+        "400":
+          description: invalid flow files request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: uploading flow files not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: flow file already exists
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on uploading flow files
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload files to flow workspace
+      tags:
+      - FlowFiles
+  /flows/{flowID}/files/download:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: 'relative path in cache: uploads/<name> or container/<name>'
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      - application/zip
+      - application/json
+      responses:
+        "200":
+          description: file content, or ZIP archive for directories
+          schema:
+            type: file
+        "400":
+          description: invalid flow file request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: downloading flow file not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow file not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on downloading flow file
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download flow file or directory by cached path
+      tags:
+      - FlowFiles
+  /flows/{flowID}/files/pull:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: pull request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.pullFlowFilesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: container path synced to local cache
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.flowFiles'
+              type: object
+        "400":
+          description: invalid pull request or container not running
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: pulling flow files not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: cache entry already exists; set force=true to overwrite
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on pulling flow files
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pull a file or directory from the running container into the local
+        cache
+      tags:
+      - FlowFiles
   /flows/{flowID}/graph:
     get:
       parameters:
