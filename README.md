@@ -1751,7 +1751,7 @@ PROXY_URL=http://your-proxy:8080
 
 #### Supported Models
 
-PentAGI supports 21 AWS Bedrock models with tool calling, streaming, and multimodal capabilities. Models marked with `*` are used in default configuration.
+PentAGI supports 22 AWS Bedrock models with tool calling, streaming, and multimodal capabilities. Models marked with `*` are used in default configuration.
 
 | Model ID                                         | Provider        | Thinking | Multimodal | Price (Input/Output) | Use Case                                |
 | ------------------------------------------------ | --------------- | -------- | ---------- | -------------------- | --------------------------------------- |
@@ -1760,6 +1760,7 @@ PentAGI supports 21 AWS Bedrock models with tool calling, streaming, and multimo
 | `us.amazon.nova-pro-v1:0`                        | Amazon Nova     | ❌        | ✅          | $0.80/$3.20          | Balanced accuracy, speed, cost          |
 | `us.amazon.nova-lite-v1:0`                       | Amazon Nova     | ❌        | ✅          | $0.06/$0.24          | Fast processing, high-volume operations |
 | `us.amazon.nova-micro-v1:0`                      | Amazon Nova     | ❌        | ❌          | $0.035/$0.14         | Ultra-low latency, real-time monitoring |
+| `us.anthropic.claude-opus-4-7`                   | Anthropic       | ✅        | ✅          | $5.00/$25.00         | Latest Opus with adaptive thinking      |
 | `us.anthropic.claude-opus-4-6-v1`*               | Anthropic       | ✅        | ✅          | $5.00/$25.00         | World-class coding, enterprise agents   |
 | `us.anthropic.claude-sonnet-4-6`                 | Anthropic       | ✅        | ✅          | $3.00/$15.00         | Frontier intelligence, enterprise scale |
 | `us.anthropic.claude-opus-4-5-20251101-v1:0`     | Anthropic       | ✅        | ✅          | $5.00/$25.00         | Multi-day software development          |
@@ -1779,6 +1780,8 @@ PentAGI supports 21 AWS Bedrock models with tool calling, streaming, and multimo
 | `moonshotai.kimi-k2.5`                           | Moonshot        | ❌        | ✅          | $0.60/$3.00          | Vision, language, code in one model     |
 
 **Prices**: Per 1M tokens. Models with thinking/reasoning support additional compute costs during reasoning phase.
+
+**Reasoning Modes**: Claude Opus 4.7 on Bedrock requires Adaptive mode, and Claude Opus/Sonnet 4.6+ support it. In provider settings, select `Reasoning Mode: Adaptive` and use `Reasoning Effort` to send Bedrock `output_config.effort` instead of a fixed thinking token budget.
 
 #### Tested but Incompatible Models
 

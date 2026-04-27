@@ -362,6 +362,7 @@ type Query struct {
 }
 
 type ReasoningConfig struct {
+	Mode      *ReasoningMode   `json:"mode,omitempty"`
 	Effort    *ReasoningEffort `json:"effort,omitempty"`
 	MaxTokens *int             `json:"maxTokens,omitempty"`
 }
@@ -946,12 +947,16 @@ func (e ProviderType) MarshalGQL(w io.Writer) {
 type ReasoningEffort string
 
 const (
+	ReasoningEffortXhigh  ReasoningEffort = "xhigh"
+	ReasoningEffortMax    ReasoningEffort = "max"
 	ReasoningEffortHigh   ReasoningEffort = "high"
 	ReasoningEffortMedium ReasoningEffort = "medium"
 	ReasoningEffortLow    ReasoningEffort = "low"
 )
 
 var AllReasoningEffort = []ReasoningEffort{
+	ReasoningEffortXhigh,
+	ReasoningEffortMax,
 	ReasoningEffortHigh,
 	ReasoningEffortMedium,
 	ReasoningEffortLow,
@@ -959,7 +964,7 @@ var AllReasoningEffort = []ReasoningEffort{
 
 func (e ReasoningEffort) IsValid() bool {
 	switch e {
-	case ReasoningEffortHigh, ReasoningEffortMedium, ReasoningEffortLow:
+	case ReasoningEffortXhigh, ReasoningEffortMax, ReasoningEffortHigh, ReasoningEffortMedium, ReasoningEffortLow:
 		return true
 	}
 	return false
@@ -983,6 +988,47 @@ func (e *ReasoningEffort) UnmarshalGQL(v interface{}) error {
 }
 
 func (e ReasoningEffort) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type ReasoningMode string
+
+const (
+	ReasoningModeAdaptive ReasoningMode = "adaptive"
+	ReasoningModeBudget   ReasoningMode = "budget"
+)
+
+var AllReasoningMode = []ReasoningMode{
+	ReasoningModeAdaptive,
+	ReasoningModeBudget,
+}
+
+func (e ReasoningMode) IsValid() bool {
+	switch e {
+	case ReasoningModeAdaptive, ReasoningModeBudget:
+		return true
+	}
+	return false
+}
+
+func (e ReasoningMode) String() string {
+	return string(e)
+}
+
+func (e *ReasoningMode) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ReasoningMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ReasoningMode", str)
+	}
+	return nil
+}
+
+func (e ReasoningMode) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

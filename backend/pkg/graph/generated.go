@@ -458,6 +458,7 @@ type ComplexityRoot struct {
 	ReasoningConfig struct {
 		Effort    func(childComplexity int) int
 		MaxTokens func(childComplexity int) int
+		Mode      func(childComplexity int) int
 	}
 
 	Screenshot struct {
@@ -3009,6 +3010,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ReasoningConfig.MaxTokens(childComplexity), true
+
+	case "ReasoningConfig.mode":
+		if e.complexity.ReasoningConfig.Mode == nil {
+			break
+		}
+
+		return e.complexity.ReasoningConfig.Mode(childComplexity), true
 
 	case "Screenshot.createdAt":
 		if e.complexity.Screenshot.CreatedAt == nil {
@@ -8202,6 +8210,8 @@ func (ec *executionContext) fieldContext_AgentConfig_reasoning(_ context.Context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
+			case "mode":
+				return ec.fieldContext_ReasoningConfig_mode(ctx, field)
 			case "effort":
 				return ec.fieldContext_ReasoningConfig_effort(ctx, field)
 			case "maxTokens":
@@ -21743,6 +21753,47 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _ReasoningConfig_mode(ctx context.Context, field graphql.CollectedField, obj *model.ReasoningConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ReasoningConfig_mode(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Mode, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.ReasoningMode)
+	fc.Result = res
+	return ec.marshalOReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningMode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ReasoningConfig_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReasoningConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ReasoningMode does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ReasoningConfig_effort(ctx context.Context, field graphql.CollectedField, obj *model.ReasoningConfig) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ReasoningConfig_effort(ctx, field)
 	if err != nil {
@@ -30891,13 +30942,20 @@ func (ec *executionContext) unmarshalInputReasoningConfigInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"effort", "maxTokens"}
+	fieldsInOrder := [...]string{"mode", "effort", "maxTokens"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
+		case "mode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mode"))
+			data, err := ec.unmarshalOReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningMode(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Mode = data
 		case "effort":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("effort"))
 			data, err := ec.unmarshalOReasoningEffort2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx, v)
@@ -34309,6 +34367,8 @@ func (ec *executionContext) _ReasoningConfig(ctx context.Context, sel ast.Select
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("ReasoningConfig")
+		case "mode":
+			out.Values[i] = ec._ReasoningConfig_mode(ctx, field, obj)
 		case "effort":
 			out.Values[i] = ec._ReasoningConfig_effort(ctx, field, obj)
 		case "maxTokens":
@@ -38125,6 +38185,22 @@ func (ec *executionContext) unmarshalOReasoningEffort2ᚖpentagiᚋpkgᚋgraph�
 }
 
 func (ec *executionContext) marshalOReasoningEffort2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx context.Context, sel ast.SelectionSet, v *model.ReasoningEffort) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningMode(ctx context.Context, v interface{}) (*model.ReasoningMode, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.ReasoningMode)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningMode(ctx context.Context, sel ast.SelectionSet, v *model.ReasoningMode) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}

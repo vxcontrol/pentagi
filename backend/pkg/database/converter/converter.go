@@ -613,9 +613,13 @@ func ConvertAgentConfigToGqlModel(ac *pconfig.AgentConfig) *model.AgentConfig {
 		result.PresencePenalty = &ac.PresencePenalty
 	}
 
-	if ac.Reasoning.Effort != llms.ReasoningNone || ac.Reasoning.MaxTokens != 0 {
+	if !ac.Reasoning.IsZero() {
 		reasoning := &model.ReasoningConfig{}
 
+		if ac.Reasoning.Mode != pconfig.ReasoningModeDefault {
+			mode := model.ReasoningMode(ac.Reasoning.Mode)
+			reasoning.Mode = &mode
+		}
 		if ac.Reasoning.Effort != llms.ReasoningNone {
 			effort := model.ReasoningEffort(ac.Reasoning.Effort)
 			reasoning.Effort = &effort
@@ -708,6 +712,9 @@ func ConvertAgentConfigFromGqlModel(ac *model.AgentConfig) *pconfig.AgentConfig 
 
 	if ac.Reasoning != nil {
 		reasoning := map[string]any{}
+		if ac.Reasoning.Mode != nil {
+			reasoning["mode"] = pconfig.ReasoningMode(*ac.Reasoning.Mode)
+		}
 		if ac.Reasoning.Effort != nil {
 			reasoning["effort"] = llms.ReasoningEffort(*ac.Reasoning.Effort)
 		}
