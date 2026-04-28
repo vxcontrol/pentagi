@@ -1,26 +1,22 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import debounce from 'lodash/debounce';
-import {
-    ArrowDownToLine,
-    Copy,
-    Download,
-    File,
-    Folder,
-    FolderUp,
-    HardDrive,
-    Info,
-    Loader2,
-    Search,
-    Trash2,
-    X,
-} from 'lucide-react';
+import { ArrowDownToLine, FolderUp, HardDrive, Info, Loader2, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import {
+    copyPathAction,
+    deleteAction,
+    downloadAction,
+    FileManager,
+    type FileManagerAction,
+    type FileManagerRootGroup,
+    type FileNode,
+} from '@/components/file-manager';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
@@ -37,32 +33,11 @@ import {
     useFlowFilesQuery,
     useFlowFileUpdatedSubscription,
 } from '@/graphql/types';
-import { axios } from '@/lib/axios';
+import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
 import { copyToClipboard } from '@/lib/report';
-import { cn } from '@/lib/utils';
-import { formatDate } from '@/lib/utils/format';
 import { baseUrl } from '@/models/api';
 import { useFlow } from '@/providers/flow-provider';
 
-// ── types ─────────────────────────────────────────────────────────────────────
-
-interface ApiErrorData {
-    code?: string;
-    msg?: string;
-}
-
-interface ApiResponse<T> {
-    data?: T;
-    status: string;
-}
-
-interface AxiosLikeError {
-    message?: string;
-    response?: { data?: ApiErrorData; status?: number };
-    statusCode?: number;
-}
-
-type FileSource = 'container' | 'unknown' | 'uploads';
 type FlowFile = FlowFileFragmentFragment;
 
 interface FlowFilesResponse {
@@ -70,207 +45,45 @@ interface FlowFilesResponse {
     total: number;
 }
 
-interface FlowFileTreeItem {
-    depth: number;
-    file: FlowFile;
-}
-
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const unwrapFlowFilesResponse = (response: ApiResponse<FlowFilesResponse>) => {
-    if (response.status !== 'success' || !response.data) {
-        throw new Error('Unexpected response from server');
-    }
-
-    return response.data;
-};
-
-const getErrorMessage = (error: unknown, fallback: string): string => {
-    const err = error as AxiosLikeError;
-
-    if (err.statusCode === 409 || err.response?.status === 409) {
-        return err.response?.data?.msg ?? 'Entry already exists — enable "Overwrite" to replace it';
-    }
-
-    if (err.statusCode === 400 || err.response?.status === 400) {
-        return err.response?.data?.msg ?? err.message ?? fallback;
-    }
-
-    return err.message ?? fallback;
-};
-
-const fileSource = (filePath: string): FileSource => {
-    if (filePath.startsWith('container/') || filePath === 'container') {
-        return 'container';
-    }
-
-    if (filePath.startsWith('uploads/') || filePath === 'uploads') {
-        return 'uploads';
-    }
-
-    return 'unknown';
-};
-
-const formatFileSize = (size: number): string => {
-    if (size < 1024) {
-        return `${size} B`;
-    }
-
-    const units = ['KB', 'MB', 'GB', 'TB'];
-    let unitIndex = -1;
-    let value = size;
-
-    while (value >= 1024 && unitIndex < units.length - 1) {
-        value /= 1024;
-        unitIndex += 1;
-    }
-
-    return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
-};
-
-const buildDownloadHref = (flowId: null | string, file: FlowFile) =>
+const buildDownloadHref = (flowId: null | string, file: FileNode) =>
     `${baseUrl}/flows/${flowId}/files/download?path=${encodeURIComponent(file.path)}`;
 
-const filePathParts = (filePath: string) => filePath.split('/').filter(Boolean);
+const toFileNode = (file: FlowFile): FileNode => ({
+    id: file.id,
+    isDir: file.isDir,
+    modifiedAt: file.modifiedAt,
+    name: file.name,
+    path: file.path,
+    size: file.size,
+});
 
-const flowFileDepth = (filePath: string): number => {
-    const parts = filePathParts(filePath);
-
-    return Math.max(parts.length - 2, 0);
-};
-
-const compareFlowFileTreePath = (a: FlowFile, b: FlowFile): number => {
-    const aParts = filePathParts(a.path).slice(1);
-    const bParts = filePathParts(b.path).slice(1);
-    const length = Math.min(aParts.length, bParts.length);
-
-    for (let i = 0; i < length; i += 1) {
-        const partCompare = (aParts[i] ?? '').localeCompare(bParts[i] ?? '');
-
-        if (partCompare !== 0) {
-            return partCompare;
-        }
-    }
-
-    return aParts.length - bParts.length;
-};
-
-const buildFlowFileTree = (files: FlowFile[]): FlowFileTreeItem[] =>
-    [...files].sort(compareFlowFileTreePath).map((file) => ({
-        depth: flowFileDepth(file.path),
-        file,
-    }));
-
-// ── section header ─────────────────────────────────────────────────────────────
-
-const SectionHeader = ({ children, icon }: { children: React.ReactNode; icon: React.ReactNode }) => (
-    <div className="flex items-center gap-2 py-1">
-        <div className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium">
-            {icon}
-            {children}
-        </div>
-        <div className="bg-border h-px flex-1" />
-    </div>
-);
-
-// ── file item ──────────────────────────────────────────────────────────────────
-
-interface FlowFileItemProps {
-    depth?: number;
-    file: FlowFile;
-    flowId: null | string;
-    onCopyPath: (path: string) => void;
-    onDelete: (file: FlowFile) => void;
-}
-
-const FlowFileItem = ({ depth = 0, file, flowId, onCopyPath, onDelete }: FlowFileItemProps) => (
-    <div
-        className="flex flex-col items-start"
-        style={{ paddingLeft: depth * 20 }}
-    >
-        <div className="bg-card text-card-foreground w-full rounded-xl border p-3 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                    {file.isDir ? (
-                        <Folder className="text-muted-foreground size-4 shrink-0" />
-                    ) : (
-                        <File className="text-muted-foreground size-4 shrink-0" />
-                    )}
-                    <span className="truncate text-sm font-semibold">{file.name}</span>
-                </div>
-
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <a
-                            className={cn(buttonVariants({ size: 'icon-xs', variant: 'ghost' }))}
-                            download={file.isDir ? `${file.name}.zip` : file.name}
-                            href={buildDownloadHref(flowId, file)}
-                        >
-                            <Download className="size-3.5" />
-                        </a>
-                    </TooltipTrigger>
-                    <TooltipContent>{file.isDir ? 'Download as ZIP' : 'Download'}</TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            onClick={() => onDelete(file)}
-                            size="icon-xs"
-                            type="button"
-                            variant="ghost"
-                        >
-                            <Trash2 className="size-3.5" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{file.isDir ? 'Delete directory' : 'Delete file'}</TooltipContent>
-                </Tooltip>
-            </div>
-        </div>
-
-        <div className="text-muted-foreground mt-1 flex items-center gap-1 px-1 text-xs">
-            {!file.isDir && (
-                <>
-                    <span className="text-muted-foreground/50">{formatFileSize(file.size)}</span>
-                    <span className="text-muted-foreground/30">·</span>
-                </>
-            )}
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <Copy
-                        className="hover:text-foreground size-3 shrink-0 cursor-pointer transition-colors"
-                        onClick={() => onCopyPath(file.path)}
-                    />
-                </TooltipTrigger>
-                <TooltipContent>Copy cache path</TooltipContent>
-            </Tooltip>
-            <span className="text-muted-foreground/30">·</span>
-            <span className="text-muted-foreground/50">{formatDate(new Date(file.modifiedAt))}</span>
-        </div>
-    </div>
-);
+const ROOT_GROUPS: FileManagerRootGroup[] = [
+    { defaultOpen: true, icon: FolderUp, id: 'uploads', label: 'Uploads', pathPrefix: 'uploads' },
+    { defaultOpen: true, icon: HardDrive, id: 'container', label: 'Container', pathPrefix: 'container' },
+];
 
 // ── pull dialog ────────────────────────────────────────────────────────────────
 
 interface PullDialogProps {
     flowId: null | string;
-    isPulling: boolean;
     onClose: () => void;
     onSuccess: () => void;
     open: boolean;
 }
 
-const PullDialog = ({ flowId, isPulling: externalIsPulling, onClose, onSuccess, open }: PullDialogProps) => {
+const PullDialog = ({ flowId, onClose, onSuccess, open }: PullDialogProps) => {
     const [containerPath, setContainerPath] = useState('');
-    const [force, setForce] = useState(false);
+    const [shouldOverwrite, setShouldOverwrite] = useState(false);
     const [isPulling, setIsPulling] = useState(false);
 
     useEffect(() => {
-        if (!open) {
+        if (open) {
             setContainerPath('');
-            setForce(false);
+            setShouldOverwrite(false);
         }
     }, [open]);
 
@@ -282,29 +95,36 @@ const PullDialog = ({ flowId, isPulling: externalIsPulling, onClose, onSuccess, 
         setIsPulling(true);
 
         try {
-            await axios.post<unknown, ApiResponse<FlowFilesResponse>>(`/flows/${flowId}/files/pull`, {
-                force,
-                path: containerPath.trim(),
-            });
+            await api.post<FlowFilesResponse>(
+                `/flows/${flowId}/files/pull`,
+                {
+                    force: shouldOverwrite,
+                    path: containerPath.trim(),
+                },
+                // Copying a directory out of the container can take longer than the default 30s
+                // (large logs, deep trees) — disable the per-call timeout entirely.
+                { timeout: 0 },
+            );
             toast.success('Pulled from container', {
                 description: `Saved to local cache under container/`,
             });
             onSuccess();
             onClose();
         } catch (error) {
-            const description = getErrorMessage(error, 'Failed to pull from container');
+            const description = getApiErrorMessage(error, 'Failed to pull from container', {
+                409: 'Entry already exists — enable "Overwrite" to replace it',
+            });
+
             toast.error('Pull failed', { description });
         } finally {
             setIsPulling(false);
         }
-    }, [flowId, containerPath, force, onSuccess, onClose]);
-
-    const isSubmitting = isPulling || externalIsPulling;
+    }, [flowId, containerPath, shouldOverwrite, onSuccess, onClose]);
 
     return (
         <Dialog
-            onOpenChange={(v) => {
-                if (!v && !isSubmitting) {
+            onOpenChange={(isOpen) => {
+                if (!isOpen && !isPulling) {
                     onClose();
                 }
             }}
@@ -328,11 +148,11 @@ const PullDialog = ({ flowId, isPulling: externalIsPulling, onClose, onSuccess, 
                         <Input
                             autoComplete="off"
                             autoFocus
-                            disabled={isSubmitting}
+                            disabled={isPulling}
                             id="container-path"
-                            onChange={(e) => setContainerPath(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && containerPath.trim() && !isSubmitting) {
+                            onChange={(event) => setContainerPath(event.target.value)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' && containerPath.trim() && !isPulling) {
                                     void handlePull();
                                 }
                             }}
@@ -343,10 +163,10 @@ const PullDialog = ({ flowId, isPulling: externalIsPulling, onClose, onSuccess, 
 
                     <div className="flex items-center gap-2">
                         <Switch
-                            checked={force}
-                            disabled={isSubmitting}
+                            checked={shouldOverwrite}
+                            disabled={isPulling}
                             id="force-pull"
-                            onCheckedChange={setForce}
+                            onCheckedChange={setShouldOverwrite}
                         />
                         <Label
                             className="cursor-pointer font-normal"
@@ -359,17 +179,17 @@ const PullDialog = ({ flowId, isPulling: externalIsPulling, onClose, onSuccess, 
 
                 <div className="flex justify-end gap-2">
                     <Button
-                        disabled={isSubmitting}
+                        disabled={isPulling}
                         onClick={onClose}
                         variant="outline"
                     >
                         Cancel
                     </Button>
                     <Button
-                        disabled={!containerPath.trim() || isSubmitting}
+                        disabled={!containerPath.trim() || isPulling}
                         onClick={() => void handlePull()}
                     >
-                        {isSubmitting ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}
+                        {isPulling ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}
                         Pull
                     </Button>
                 </div>
@@ -383,8 +203,10 @@ const PullDialog = ({ flowId, isPulling: externalIsPulling, onClose, onSuccess, 
 const FlowFiles = () => {
     const { flowId, flowStatus } = useFlow();
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const dragCounterRef = useRef(0);
     const [isUploading, setIsUploading] = useState(false);
-    const [fileToDelete, setFileToDelete] = useState<FlowFile | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [fileToDelete, setFileToDelete] = useState<FileNode | null>(null);
     const [showPullDialog, setShowPullDialog] = useState(false);
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const flowFilesVariables = useMemo(() => ({ flowId: flowId ?? '' }), [flowId]);
@@ -422,12 +244,6 @@ const FlowFiles = () => {
     }, [searchValue, debouncedUpdateSearch]);
 
     useEffect(() => {
-        return () => {
-            debouncedUpdateSearch.cancel();
-        };
-    }, [debouncedUpdateSearch]);
-
-    useEffect(() => {
         form.reset({ search: '' });
         setDebouncedSearch('');
         debouncedUpdateSearch.cancel();
@@ -435,68 +251,82 @@ const FlowFiles = () => {
 
     const isContainerRunning = flowStatus === StatusType.Running || flowStatus === StatusType.Waiting;
 
+    // Pause subscriptions until the initial query has loaded so that the
+    // `flowFiles` cache field exists before subscription-driven updates arrive.
+    const isSubscriptionPaused = !flowId || isLoading;
+
     useFlowFileAddedSubscription({
-        skip: !flowId,
+        skip: isSubscriptionPaused,
         variables: flowFilesVariables,
     });
     useFlowFileUpdatedSubscription({
-        skip: !flowId,
+        skip: isSubscriptionPaused,
         variables: flowFilesVariables,
     });
     useFlowFileDeletedSubscription({
-        skip: !flowId,
+        skip: isSubscriptionPaused,
         variables: flowFilesVariables,
     });
 
     useEffect(() => {
         if (flowFilesError) {
-            toast.error('Failed to load files', { description: flowFilesError.message });
+            toast.error('Failed to load files', {
+                description: flowFilesError.message,
+                id: 'flow-files-error',
+            });
         }
     }, [flowFilesError]);
 
     // ── upload ─────────────────────────────────────────────────────────────────
 
-    const handleCopyPath = useCallback(async (filePath: string) => {
-        const success = await copyToClipboard(filePath);
-
-        if (success) {
-            toast.success('Path copied to clipboard');
-        } else {
-            toast.error('Failed to copy path');
-        }
+    const handleCopyPath = useCallback((file: FileNode) => {
+        void copyToClipboard(file.path).then((wasCopied) => {
+            if (wasCopied) {
+                toast.success('Path copied to clipboard');
+            } else {
+                toast.error('Failed to copy path');
+            }
+        });
     }, []);
 
-    const handleFileSelection = useCallback(
-        async (event: React.ChangeEvent<HTMLInputElement>) => {
-            if (!flowId) {
-                return;
-            }
+    const getDownloadHrefForFile = useCallback(
+        (file: FileNode) => buildDownloadHref(flowId, file),
+        [flowId],
+    );
 
-            const selectedFiles = Array.from(event.target.files ?? []);
+    const fileManagerActions = useMemo<FileManagerAction[]>(
+        () => [
+            downloadAction(getDownloadHrefForFile),
+            copyPathAction(handleCopyPath),
+            deleteAction(setFileToDelete),
+        ],
+        [getDownloadHrefForFile, handleCopyPath],
+    );
 
-            if (selectedFiles.length === 0) {
+    const uploadFiles = useCallback(
+        async (selectedFiles: File[]) => {
+            if (!flowId || !selectedFiles.length) {
                 return;
             }
 
             const formData = new FormData();
 
-            for (const file of selectedFiles) {
-                formData.append('files', file);
-            }
+            selectedFiles.forEach((file) => formData.append('files', file));
 
             setIsUploading(true);
 
             try {
-                const response = await axios.post<unknown, ApiResponse<FlowFilesResponse>>(
+                const response = await api.post<FlowFilesResponse, FormData>(
                     `/flows/${flowId}/files/`,
                     formData,
                     {
-                        headers: {
-                            'Content-Type': undefined,
-                        },
+                        // Browser sets the multipart boundary automatically when Content-Type is unset.
+                        headers: { 'Content-Type': undefined },
+                        // Uploads can take longer than the default 30s — disable timeout for this call.
+                        timeout: 0,
                     },
                 );
-                const data = unwrapFlowFilesResponse(response);
+                const data = unwrapApiResponse(response);
                 const uploadedCount = data.files?.length ?? selectedFiles.length;
 
                 toast.success(uploadedCount === 1 ? 'File uploaded' : `${uploadedCount} files uploaded`, {
@@ -508,15 +338,99 @@ const FlowFiles = () => {
 
                 await refetchFiles();
             } catch (error) {
-                const description = getErrorMessage(error, 'Failed to upload files');
+                const description = getApiErrorMessage(error, 'Failed to upload files', {
+                    409: 'Entry already exists — enable "Overwrite" to replace it',
+                });
+
                 toast.error('Upload failed', { description });
             } finally {
                 setIsUploading(false);
-                event.target.value = '';
             }
         },
         [flowId, refetchFiles],
     );
+
+    const handleFileSelection = useCallback(
+        async (event: React.ChangeEvent<HTMLInputElement>) => {
+            const selectedFiles = Array.from(event.target.files ?? []);
+
+            try {
+                await uploadFiles(selectedFiles);
+            } finally {
+                event.target.value = '';
+            }
+        },
+        [uploadFiles],
+    );
+
+    // ── drag & drop ────────────────────────────────────────────────────────────
+
+    const canAcceptDrop = !!flowId && !isUploading;
+
+    const handleDragEnter = useCallback(
+        (event: React.DragEvent<HTMLDivElement>) => {
+            if (!canAcceptDrop || !event.dataTransfer.types?.includes('Files')) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            dragCounterRef.current += 1;
+            setIsDragging(true);
+        },
+        [canAcceptDrop],
+    );
+
+    const handleDragOver = useCallback(
+        (event: React.DragEvent<HTMLDivElement>) => {
+            if (!canAcceptDrop || !event.dataTransfer.types?.includes('Files')) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.dataTransfer.dropEffect = 'copy';
+        },
+        [canAcceptDrop],
+    );
+
+    const handleDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragCounterRef.current = Math.max(dragCounterRef.current - 1, 0);
+
+        if (dragCounterRef.current === 0) {
+            setIsDragging(false);
+        }
+    }, []);
+
+    const handleDrop = useCallback(
+        (event: React.DragEvent<HTMLDivElement>) => {
+            event.preventDefault();
+            event.stopPropagation();
+            dragCounterRef.current = 0;
+            setIsDragging(false);
+
+            if (!canAcceptDrop) {
+                return;
+            }
+
+            const droppedFiles = Array.from(event.dataTransfer.files ?? []);
+
+            if (droppedFiles.length === 0) {
+                return;
+            }
+
+            void uploadFiles(droppedFiles);
+        },
+        [canAcceptDrop, uploadFiles],
+    );
+
+    // Reset overlay state when flow changes mid-drag.
+    useEffect(() => {
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+    }, [flowId]);
 
     const handleDeleteFile = useCallback(async () => {
         if (!flowId || !fileToDelete) {
@@ -524,59 +438,94 @@ const FlowFiles = () => {
         }
 
         try {
-            await axios.delete<unknown, ApiResponse<FlowFilesResponse>>(`/flows/${flowId}/files/`, {
+            await api.delete<FlowFilesResponse>(`/flows/${flowId}/files/`, {
                 params: { path: fileToDelete.path },
             });
             toast.success(fileToDelete.isDir ? 'Directory deleted' : 'File deleted');
             await refetchFiles();
         } catch (error) {
-            const description = getErrorMessage(error, 'Failed to delete file');
+            const description = getApiErrorMessage(error, 'Failed to delete file');
+
             toast.error('Delete failed', { description });
         } finally {
             setFileToDelete(null);
         }
     }, [flowId, fileToDelete, refetchFiles]);
 
-    // ── filtering + grouping ───────────────────────────────────────────────────
+    const handleBulkDelete = useCallback(
+        async (filesToDelete: FileNode[]) => {
+            if (!flowId || filesToDelete.length === 0) {
+                return;
+            }
+
+            const results = await Promise.allSettled(
+                filesToDelete.map((file) =>
+                    api.delete<FlowFilesResponse>(`/flows/${flowId}/files/`, {
+                        params: { path: file.path },
+                    }),
+                ),
+            );
+            const succeeded = results.filter((result) => result.status === 'fulfilled').length;
+            const failed = results.length - succeeded;
+
+            if (failed === 0) {
+                toast.success(`${succeeded} ${succeeded === 1 ? 'item' : 'items'} deleted`);
+            } else if (succeeded === 0) {
+                toast.error('Bulk delete failed', {
+                    description: `Failed to delete ${failed} ${failed === 1 ? 'item' : 'items'}`,
+                });
+            } else {
+                toast.warning(`${succeeded} succeeded · ${failed} failed`);
+            }
+
+            await refetchFiles();
+        },
+        [flowId, refetchFiles],
+    );
 
     const files = useMemo(() => flowFilesData?.flowFiles ?? [], [flowFilesData?.flowFiles]);
+    const fileNodes = useMemo<FileNode[]>(() => files.map(toFileNode), [files]);
+    const isInitialLoading = isLoading && fileNodes.length === 0;
 
-    const filteredFiles = useMemo(() => {
-        const search = debouncedSearch.toLowerCase().trim();
+    const noFilesState = (
+        <Empty>
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <FolderUp />
+                </EmptyMedia>
+                <EmptyTitle>No files in cache</EmptyTitle>
+                <EmptyDescription>
+                    Upload files to make them available at <code>/work/uploads</code>, or use Pull to sync files from
+                    the running container. You can also drag &amp; drop files here.
+                </EmptyDescription>
+            </EmptyHeader>
+        </Empty>
+    );
 
-        if (!search) {
-            return files;
-        }
-
-        return files.filter((f) => f.name.toLowerCase().includes(search) || f.path.toLowerCase().includes(search));
-    }, [files, debouncedSearch]);
-
-    const groups = useMemo(() => {
-        const uploads: FlowFile[] = [];
-        const container: FlowFile[] = [];
-
-        for (const f of filteredFiles) {
-            const src = fileSource(f.path);
-
-            if (src === 'uploads') {
-                uploads.push(f);
-            } else if (src === 'container') {
-                container.push(f);
-            }
-        }
-
-        return {
-            container: buildFlowFileTree(container),
-            uploads: buildFlowFileTree(uploads),
-        };
-    }, [filteredFiles]);
-
-    const hasFiles = filteredFiles.length > 0;
+    const noMatchesState = (
+        <Empty>
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <Search />
+                </EmptyMedia>
+                <EmptyTitle>No matches</EmptyTitle>
+                <EmptyDescription>
+                    No files match <code>{debouncedSearch.trim()}</code>. Try a different query.
+                </EmptyDescription>
+            </EmptyHeader>
+        </Empty>
+    );
 
     // ── render ─────────────────────────────────────────────────────────────────
 
     return (
-        <div className="flex h-full flex-col">
+        <div
+            className="relative flex h-full flex-col"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
             <input
                 className="hidden"
                 multiple
@@ -585,7 +534,15 @@ const FlowFiles = () => {
                 type="file"
             />
 
-            {/* Toolbar — same sticky pattern as screenshots / vector-stores */}
+            {isDragging && (
+                <div className="bg-primary/10 border-primary pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-lg border-2 border-dashed">
+                    <div className="text-primary flex flex-col items-center gap-2">
+                        <FolderUp className="size-8" />
+                        <span className="text-sm font-medium">Drop files to upload</span>
+                    </div>
+                </div>
+            )}
+
             <div className="bg-background sticky top-0 z-10 pb-4">
                 <Form {...form}>
                     <div className="flex gap-2 p-px">
@@ -623,7 +580,6 @@ const FlowFiles = () => {
                             )}
                         />
 
-                        {/* Info hint */}
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
@@ -646,28 +602,28 @@ const FlowFiles = () => {
                             </TooltipContent>
                         </Tooltip>
 
-                        {/* Upload button */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    disabled={isUploading || isLoading}
-                                    onClick={() => inputRef.current?.click()}
-                                    size="icon-sm"
-                                    type="button"
-                                    variant="outline"
-                                >
-                                    {isUploading ? <Loader2 className="animate-spin" /> : <FolderUp />}
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Upload files</TooltipContent>
-                        </Tooltip>
-
-                        {/* Pull button — wraps in span so tooltip works when disabled */}
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
-                                        disabled={!isContainerRunning || isLoading}
+                                        disabled={isUploading || isLoading}
+                                        onClick={() => inputRef.current?.click()}
+                                        size="icon-sm"
+                                        type="button"
+                                        variant="outline"
+                                    >
+                                        {isUploading ? <Loader2 className="animate-spin" /> : <FolderUp />}
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent>Upload files</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span>
+                                    <Button
+                                        disabled={!isContainerRunning || isLoading || isUploading}
                                         onClick={() => setShowPullDialog(true)}
                                         size="icon-sm"
                                         type="button"
@@ -687,63 +643,20 @@ const FlowFiles = () => {
                 </Form>
             </div>
 
-            {/* File list grouped by source */}
-            {hasFiles ? (
-                <div className="flex flex-col gap-1 overflow-y-auto">
-                    {groups.uploads.length > 0 && (
-                        <>
-                            <SectionHeader icon={<FolderUp className="size-3" />}>Uploads</SectionHeader>
-                            <div className="flex flex-col gap-3 pb-3">
-                                {groups.uploads.map(({ depth, file }) => (
-                                    <FlowFileItem
-                                        depth={depth}
-                                        file={file}
-                                        flowId={flowId}
-                                        key={`${file.path}-${file.modifiedAt}`}
-                                        onCopyPath={(p) => void handleCopyPath(p)}
-                                        onDelete={setFileToDelete}
-                                    />
-                                ))}
-                            </div>
-                        </>
-                    )}
-
-                    {groups.container.length > 0 && (
-                        <>
-                            <SectionHeader icon={<HardDrive className="size-3" />}>Container</SectionHeader>
-                            <div className="flex flex-col gap-3 pb-3">
-                                {groups.container.map(({ depth, file }) => (
-                                    <FlowFileItem
-                                        depth={depth}
-                                        file={file}
-                                        flowId={flowId}
-                                        key={`${file.path}-${file.modifiedAt}`}
-                                        onCopyPath={(p) => void handleCopyPath(p)}
-                                        onDelete={setFileToDelete}
-                                    />
-                                ))}
-                            </div>
-                        </>
-                    )}
-                </div>
-            ) : (
-                <Empty>
-                    <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                            <FolderUp />
-                        </EmptyMedia>
-                        <EmptyTitle>No files in cache</EmptyTitle>
-                        <EmptyDescription>
-                            Upload files to make them available at <code>/work/uploads</code>, or use Pull to sync files
-                            from the running container.
-                        </EmptyDescription>
-                    </EmptyHeader>
-                </Empty>
-            )}
+            <FileManager
+                actions={fileManagerActions}
+                className="min-h-0 flex-1"
+                emptyState={noFilesState}
+                files={fileNodes}
+                isLoading={isInitialLoading}
+                onBulkDelete={handleBulkDelete}
+                rootGroups={ROOT_GROUPS}
+                searchEmptyState={noMatchesState}
+                searchQuery={debouncedSearch}
+            />
 
             <PullDialog
                 flowId={flowId}
-                isPulling={false}
                 onClose={() => setShowPullDialog(false)}
                 onSuccess={() => void refetchFiles()}
                 open={showPullDialog}
@@ -751,7 +664,7 @@ const FlowFiles = () => {
 
             <ConfirmationDialog
                 confirmText="Delete"
-                handleConfirm={() => void handleDeleteFile()}
+                handleConfirm={handleDeleteFile}
                 handleOpenChange={(isOpen) => {
                     if (!isOpen) {
                         setFileToDelete(null);
