@@ -12,13 +12,21 @@ Suggested input:
 
 ```json
 {
-  "provider": "ransomware_live|flare",
+  "provider": "ransomware_live",
   "indicator": "example.com",
-  "indicator_type": "domain|ip|url|organization|sector|country|ransomware_group",
-  "purpose": "triage|exposure_check|report_context|ioc_lookup",
-  "flow_id": 123
+  "indicator_type": "domain",
+  "purpose": "report_context",
+  "flow_id": 123,
+  "tenant_id": "tenant_abc123"
 }
 ```
+
+Allowed values:
+
+- `provider`: `ransomware_live`, `flare`
+- `indicator_type`: `domain`, `ip`, `url`, `organization`, `sector`, `country`, `ransomware_group`
+- `purpose`: `triage`, `exposure_check`, `report_context`, `ioc_lookup`
+- `tenant_id`: optional provider-specific tenant context for platforms such as Flare
 
 Suggested output:
 
@@ -27,7 +35,7 @@ Suggested output:
   "provider": "ransomware_live",
   "query": "example.com",
   "hits": [],
-  "confidence": "low|medium|high",
+  "confidence": "low",
   "summary": "No matching victim records were found.",
   "recommended_actions": [
     "Keep the finding as informational only.",
@@ -40,7 +48,7 @@ Suggested output:
 }
 ```
 
-## ransomware.live
+## ransomware.live (`ransomware_live`)
 
 As of April 22, 2026, the public ransomware.live API v2 documents these useful endpoint categories:
 
@@ -84,7 +92,7 @@ Expected output:
 - Remediation and monitoring suggestions.
 - No automatic exploit or campaign emulation.
 
-## Flare
+## Flare (`flare`)
 
 Flare is better suited to customer-owned exposure monitoring because it works with tenants, identifiers, credentials, events, searches, and intelligence feeds. A PentAGI integration should assume the user already has a Flare account, API key, tenant context, and authorization to query exposures for the target organization.
 
