@@ -284,7 +284,7 @@ func (s *ResourceService) UploadResources(c *gin.Context) {
 	var createdDirs []models.UserResource
 	var txErr error
 	if dirPath != "" {
-		createdDirs, txErr = ensureResourceDirs(tx, uid, dirPath)
+		createdDirs, _, _, txErr = ensureResourceDirs(tx, uid, dirPath, false)
 	}
 	for _, p := range pendingList {
 		if txErr != nil {
@@ -476,7 +476,7 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 		return
 	}
 
-	result, moveErr := s.moveResource(uid, src, srcPath, dstPath, req.Force)
+	result, moveErr := s.moveResource(uid, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
 	if moveErr != nil {
 		switch {
 		case errors.Is(moveErr, errResourceInvalid):
@@ -495,6 +495,7 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 
 	s.cleanupOrphanBlobs(c.Request.Context(), result.OrphanHashes)
 	s.publishResourcesDeleted(c.Request.Context(), uid, result.DeletedBefore)
+	s.publishResourcesAdded(c.Request.Context(), uid, result.Added)
 	s.publishResourcesUpdated(c.Request.Context(), uid, result.Updated)
 	s.publishResourcesDeleted(c.Request.Context(), uid, result.DeletedAfter)
 	response.Success(c, http.StatusOK, models.ResourceList{Items: result.Updated, Total: uint64(len(result.Updated))})
@@ -505,6 +506,7 @@ var errResourceNotFound = errors.New("resource not found")
 var errResourceInvalid = errors.New("invalid resource operation")
 
 type moveResourceResult struct {
+	Added         []models.ResourceEntry
 	Updated       []models.ResourceEntry
 	DeletedBefore []models.ResourceEntry
 	DeletedAfter  []models.ResourceEntry
@@ -516,6 +518,7 @@ func (s *ResourceService) moveResource(
 	src models.UserResource,
 	srcPath, dstPath string,
 	force bool,
+	dstIsDirHint bool,
 ) (moveResourceResult, error) {
 	tx := s.db.Begin()
 	if tx.Error != nil {
@@ -523,7 +526,7 @@ func (s *ResourceService) moveResource(
 	}
 
 	if !src.IsDir {
-		result, err := s.moveFileResource(tx, uid, src, dstPath, force)
+		result, err := s.moveFileResource(tx, uid, src, dstPath, force, dstIsDirHint)
 		if err != nil {
 			tx.Rollback()
 			return moveResourceResult{}, err
@@ -553,6 +556,7 @@ func (s *ResourceService) moveFileResource(
 	src models.UserResource,
 	dstPath string,
 	force bool,
+	dstIsDirHint bool,
 ) (moveResourceResult, error) {
 	result := moveResourceResult{}
 	targetPath := dstPath
@@ -567,6 +571,27 @@ func (s *ResourceService) moveFileResource(
 		if err != nil {
 			return result, err
 		}
+	} else if dstIsDirHint {
+		createdDirs, deletedDirs, orphanHashes, err := ensureResourceDirs(tx, uid, dstPath, force)
+		if err != nil {
+			return result, err
+		}
+		result.Added = append(result.Added, convertResources(createdDirs)...)
+		result.DeletedBefore = append(result.DeletedBefore, convertResources(deletedDirs)...)
+		result.OrphanHashes = append(result.OrphanHashes, orphanHashes...)
+		targetPath = resources.FilePath(dstPath, src.Name)
+		dest, exists, err = findResourceByPath(tx, uid, targetPath)
+		if err != nil {
+			return result, err
+		}
+	} else {
+		createdDirs, deletedDirs, orphanHashes, err := ensureResourceDirs(tx, uid, resources.ParentDir(targetPath), force)
+		if err != nil {
+			return result, err
+		}
+		result.Added = append(result.Added, convertResources(createdDirs)...)
+		result.DeletedBefore = append(result.DeletedBefore, convertResources(deletedDirs)...)
+		result.OrphanHashes = append(result.OrphanHashes, orphanHashes...)
 	}
 
 	if exists {
@@ -604,12 +629,30 @@ func (s *ResourceService) moveDirResource(
 		return result, fmt.Errorf("%w: cannot move directory into itself", errResourceInvalid)
 	}
 
+	createdParents, deletedParents, orphanHashes, err := ensureResourceDirs(tx, uid, resources.ParentDir(dstPath), force)
+	if err != nil {
+		return result, err
+	}
+	result.Added = append(result.Added, convertResources(createdParents)...)
+	result.DeletedBefore = append(result.DeletedBefore, convertResources(deletedParents)...)
+	result.OrphanHashes = append(result.OrphanHashes, orphanHashes...)
+
 	dest, destExists, err := findResourceByPath(tx, uid, dstPath)
 	if err != nil {
 		return result, err
 	}
 	if destExists && !dest.IsDir {
-		return result, errResourceConflict
+		if !force {
+			return result, errResourceConflict
+		}
+		if err := tx.Delete(&dest).Error; err != nil {
+			return result, fmt.Errorf("failed to delete destination for overwrite: %w", err)
+		}
+		result.DeletedBefore = append(result.DeletedBefore, convertResource(dest))
+		if dest.Hash != "" {
+			result.OrphanHashes = append(result.OrphanHashes, dest.Hash)
+		}
+		destExists = false
 	}
 	if destExists && !force {
 		return result, errResourceConflict
@@ -622,9 +665,27 @@ func (s *ResourceService) moveDirResource(
 
 	now := time.Now()
 	if !destExists {
-		return moveDirResourceToAbsentDestination(tx, uid, entries, srcPath, dstPath, force, now)
+		moved, err := moveDirResourceToAbsentDestination(tx, uid, entries, srcPath, dstPath, force, now)
+		if err != nil {
+			return result, err
+		}
+		result.Added = append(result.Added, moved.Added...)
+		result.Updated = append(result.Updated, moved.Updated...)
+		result.DeletedBefore = append(result.DeletedBefore, moved.DeletedBefore...)
+		result.DeletedAfter = append(result.DeletedAfter, moved.DeletedAfter...)
+		result.OrphanHashes = append(result.OrphanHashes, moved.OrphanHashes...)
+		return result, nil
 	}
-	return moveDirResourceMerge(tx, uid, entries, srcPath, dstPath, now)
+	moved, err := moveDirResourceMerge(tx, uid, entries, srcPath, dstPath, now)
+	if err != nil {
+		return result, err
+	}
+	result.Added = append(result.Added, moved.Added...)
+	result.Updated = append(result.Updated, moved.Updated...)
+	result.DeletedBefore = append(result.DeletedBefore, moved.DeletedBefore...)
+	result.DeletedAfter = append(result.DeletedAfter, moved.DeletedAfter...)
+	result.OrphanHashes = append(result.OrphanHashes, moved.OrphanHashes...)
+	return result, nil
 }
 
 func moveDirResourceToAbsentDestination(
@@ -867,7 +928,7 @@ func (s *ResourceService) CopyResource(c *gin.Context) {
 		return
 	}
 
-	result, copyErr := s.copyResource(uid, src, srcPath, dstPath, req.Force)
+	result, copyErr := s.copyResource(uid, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
 	if copyErr != nil {
 		switch {
 		case errors.Is(copyErr, errResourceInvalid):
@@ -905,6 +966,7 @@ func (s *ResourceService) copyResource(
 	src models.UserResource,
 	srcPath, dstPath string,
 	force bool,
+	dstIsDirHint bool,
 ) (copyResourceResult, error) {
 	tx := s.db.Begin()
 	if tx.Error != nil {
@@ -912,7 +974,7 @@ func (s *ResourceService) copyResource(
 	}
 
 	if !src.IsDir {
-		result, err := s.copyFileResource(tx, uid, src, dstPath, force)
+		result, err := s.copyFileResource(tx, uid, src, dstPath, force, dstIsDirHint)
 		if err != nil {
 			tx.Rollback()
 			return copyResourceResult{}, err
@@ -942,6 +1004,7 @@ func (s *ResourceService) copyFileResource(
 	src models.UserResource,
 	dstPath string,
 	force bool,
+	dstIsDirHint bool,
 ) (copyResourceResult, error) {
 	result := copyResourceResult{}
 	targetPath := dstPath
@@ -956,6 +1019,27 @@ func (s *ResourceService) copyFileResource(
 		if err != nil {
 			return result, err
 		}
+	} else if dstIsDirHint {
+		createdDirs, deletedDirs, orphanHashes, err := ensureResourceDirs(tx, uid, dstPath, force)
+		if err != nil {
+			return result, err
+		}
+		result.Added = append(result.Added, convertResources(createdDirs)...)
+		result.Deleted = append(result.Deleted, convertResources(deletedDirs)...)
+		result.OrphanHashes = append(result.OrphanHashes, orphanHashes...)
+		targetPath = resources.FilePath(dstPath, src.Name)
+		dest, exists, err = findResourceByPath(tx, uid, targetPath)
+		if err != nil {
+			return result, err
+		}
+	} else {
+		createdDirs, deletedDirs, orphanHashes, err := ensureResourceDirs(tx, uid, resources.ParentDir(targetPath), force)
+		if err != nil {
+			return result, err
+		}
+		result.Added = append(result.Added, convertResources(createdDirs)...)
+		result.Deleted = append(result.Deleted, convertResources(deletedDirs)...)
+		result.OrphanHashes = append(result.OrphanHashes, orphanHashes...)
 	}
 
 	if exists {
@@ -1006,6 +1090,14 @@ func (s *ResourceService) copyDirResource(
 		return result, fmt.Errorf("%w: cannot copy directory into itself", errResourceInvalid)
 	}
 
+	createdRoot, deletedRoot, orphanHashes, err := ensureResourceDirs(tx, uid, dstPath, force)
+	if err != nil {
+		return result, err
+	}
+	result.Added = append(result.Added, convertResources(createdRoot)...)
+	result.Deleted = append(result.Deleted, convertResources(deletedRoot)...)
+	result.OrphanHashes = append(result.OrphanHashes, orphanHashes...)
+
 	dest, destExists, err := findResourceByPath(tx, uid, dstPath)
 	if err != nil {
 		return result, err
@@ -1013,7 +1105,7 @@ func (s *ResourceService) copyDirResource(
 	if destExists && !dest.IsDir {
 		return result, errResourceConflict
 	}
-	if destExists && !force {
+	if destExists && !force && len(createdRoot) == 0 {
 		return result, errResourceConflict
 	}
 
@@ -1333,26 +1425,43 @@ func (s *ResourceService) resourceExists(uid uint64, vPath string) (bool, error)
 	return count > 0, err
 }
 
-func ensureResourceDirs(tx *gorm.DB, uid uint64, dirPath string) ([]models.UserResource, error) {
+func ensureResourceDirs(tx *gorm.DB, uid uint64, dirPath string, force bool) (
+	[]models.UserResource,
+	[]models.UserResource,
+	[]string,
+	error,
+) {
 	if dirPath == "" {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
 
 	parts := strings.Split(dirPath, "/")
 	created := make([]models.UserResource, 0, len(parts))
+	deleted := make([]models.UserResource, 0, len(parts))
+	orphanHashes := make([]string, 0, len(parts))
 	current := ""
 	for _, part := range parts {
 		current = resources.FilePath(current, part)
 
 		existing, exists, err := findResourceByPath(tx, uid, current)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		if exists {
 			if !existing.IsDir {
-				return nil, fmt.Errorf("%w: resource %q already exists and is not a directory", errResourceConflict, current)
+				if !force {
+					return nil, nil, nil, fmt.Errorf("%w: resource %q already exists and is not a directory", errResourceConflict, current)
+				}
+				if err := tx.Delete(&existing).Error; err != nil {
+					return nil, nil, nil, fmt.Errorf("failed to delete file blocking directory %q: %w", current, err)
+				}
+				deleted = append(deleted, existing)
+				if existing.Hash != "" {
+					orphanHashes = append(orphanHashes, existing.Hash)
+				}
+			} else {
+				continue
 			}
-			continue
 		}
 
 		rec := models.UserResource{
@@ -1367,18 +1476,18 @@ func ensureResourceDirs(tx *gorm.DB, uid uint64, dirPath string) ([]models.UserR
 			if isUniqueViolation(err) {
 				refetched, ok, refetchErr := findResourceByPath(tx, uid, current)
 				if refetchErr != nil {
-					return nil, refetchErr
+					return nil, nil, nil, refetchErr
 				}
 				if ok && refetched.IsDir {
 					continue
 				}
 			}
-			return nil, fmt.Errorf("failed to create resource directory %q: %w", current, err)
+			return nil, nil, nil, fmt.Errorf("failed to create resource directory %q: %w", current, err)
 		}
 		created = append(created, rec)
 	}
 
-	return created, nil
+	return created, deleted, orphanHashes, nil
 }
 
 // deleteOrphanBlob removes the .blob for hash if no DB row references it.
@@ -1424,6 +1533,11 @@ func cleanupResourceUploads(pending []pendingResourceUpload) {
 			os.Remove(p.tmpPath)
 		}
 	}
+}
+
+func pathHasTrailingSeparator(p string) bool {
+	trimmed := strings.TrimSpace(p)
+	return strings.HasSuffix(trimmed, "/") || strings.HasSuffix(trimmed, "\\")
 }
 
 // ---- conversion helpers ----------------------------------------------------
