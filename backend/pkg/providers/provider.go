@@ -11,6 +11,8 @@ import (
 	"pentagi/pkg/cast"
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
+	"pentagi/pkg/docker"
+	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
@@ -20,6 +22,7 @@ import (
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
+	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/reasoning"
@@ -34,7 +37,7 @@ const (
 	msgGeneratorSizeLimit = 150 * 1024 // 150 KB
 	msgRefinerSizeLimit   = 100 * 1024 // 100 KB
 	msgReporterSizeLimit  = 100 * 1024 // 100 KB
-	msgSummarizerLimit    = 16 * 1024  // 16 KB
+	msgSummarizerLimit    = 32 * 1024  // 32 KB
 )
 
 const textTruncateMessage = "\n\n[...truncated]"
@@ -132,6 +135,7 @@ type flowProvider struct {
 	graphitiClient *graphiti.Client
 
 	flowID        int64
+	dataDir       string
 	publicIP      string
 	dockerNetwork string
 
@@ -152,6 +156,8 @@ type flowProvider struct {
 	streamCb StreamMessageHandler
 
 	summarizer csum.Summarizer
+
+	summarizerCache *lru.LRU[[32]byte, string]
 
 	maxGACallsLimit int
 	maxLACallsLimit int
@@ -219,6 +225,15 @@ func (fp *flowProvider) Title() string {
 	defer fp.mx.RUnlock()
 
 	return fp.title
+}
+
+// userFilesListing returns the compact XML listing of user files in uploads/ and resources/
+// for injection into agent system prompts. Returns empty string if no files are present.
+func (fp *flowProvider) userFilesListing() string {
+	if fp.dataDir == "" {
+		return ""
+	}
+	return flowfiles.FileListingForPrompt(fp.dataDir, uint64(fp.flowID))
 }
 
 func (fp *flowProvider) SetTitle(title string) {
@@ -327,10 +342,12 @@ func (fp *flowProvider) GenerateSubtasks(ctx context.Context, taskID int64) ([]t
 			"SummarizationToolName":   cast.SummarizationToolName,
 			"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 			"DockerImage":             fp.image,
+			"Cwd":                     docker.WorkFolderPathInContainer,
 			"Lang":                    fp.language,
 			"CurrentTime":             getCurrentTime(),
 			"N":                       TasksNumberLimit,
 			"ToolPlaceholder":         ToolPlaceholder,
+			"UserFiles":               fp.userFilesListing(),
 		},
 	}
 
@@ -417,10 +434,12 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 			"SummarizationToolName":   cast.SummarizationToolName,
 			"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 			"DockerImage":             fp.image,
+			"Cwd":                     docker.WorkFolderPathInContainer,
 			"Lang":                    fp.language,
 			"CurrentTime":             getCurrentTime(),
 			"N":                       max(TasksNumberLimit-len(subtasksInfo.Completed), 0),
 			"ToolPlaceholder":         ToolPlaceholder,
+			"UserFiles":               fp.userFilesListing(),
 		},
 	}
 
@@ -510,9 +529,11 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 			"ReportResultToolName":    tools.ReportResultToolName,
 			"SummarizationToolName":   cast.SummarizationToolName,
 			"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+			"Cwd":                     docker.WorkFolderPathInContainer,
 			"Lang":                    fp.language,
 			"N":                       4000,
 			"ToolPlaceholder":         ToolPlaceholder,
+			"UserFiles":               fp.userFilesListing(),
 		},
 	}
 
@@ -626,10 +647,12 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 		"AskUserToolName":         tools.AskUserToolName,
 		"AskUserEnabled":          fp.askUser,
 		"ExecutionContext":        executionContext,
+		"Cwd":                     docker.WorkFolderPathInContainer,
 		"Lang":                    fp.language,
 		"DockerImage":             fp.image,
 		"CurrentTime":             getCurrentTime(),
 		"ToolPlaceholder":         ToolPlaceholder,
+		"UserFiles":               fp.userFilesListing(),
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to get system prompt for primary agent template")

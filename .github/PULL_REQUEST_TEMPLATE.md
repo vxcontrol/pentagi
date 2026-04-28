@@ -99,7 +99,7 @@ Include any new environment variables, configuration changes, or migration steps
 - [ ] I have added tests to cover my changes
 - [ ] All new and existing tests pass
 - [ ] I have run `go fmt` and `go vet` (for Go code)
-- [ ] I have run `npm run lint` (for TypeScript/JavaScript code)
+- [ ] I have run `pnpm run lint` (for TypeScript/JavaScript code)
 
 #### Security
 - [ ] I have considered security implications

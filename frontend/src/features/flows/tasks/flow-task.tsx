@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import type { TaskFragmentFragment } from '@/graphql/types';
 
@@ -41,20 +41,23 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
         };
     }, [searchValue, result]);
 
-    // Auto-expand details if they contain search matches
-    useEffect(() => {
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasResultMatch, setPrevHasResultMatch] = useState(searchChecks.hasResultMatch);
+
+    if (searchValue !== prevSearchValue || searchChecks.hasResultMatch !== prevHasResultMatch) {
+        setPrevSearchValue(searchValue);
+        setPrevHasResultMatch(searchChecks.hasResultMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(false);
         }
-    }, [searchValue, searchChecks.hasResultMatch]);
+    }
 
     const sortedSubtasks = [...(subtasks || [])].sort((a, b) => +a.id - +b.id);
     const hasSubtasks = subtasks && subtasks.length > 0;

@@ -121,7 +121,7 @@ function InputGroupText({ className, ...props }: React.ComponentProps<'span'>) {
     );
 }
 
-function InputGroupTextarea({ className, ...props }: React.ComponentProps<'textarea'>) {
+function InputGroupTextarea({ className, ...props }: React.ComponentProps<typeof Textarea>) {
     return (
         <Textarea
             className={cn(

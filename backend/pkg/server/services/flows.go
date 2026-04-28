@@ -357,7 +357,14 @@ func (s *FlowService) CreateFlow(c *gin.Context) {
 	}
 	prvtype := prv.Type()
 
-	fw, err := s.fc.CreateFlow(c, int64(uid), createFlow.Input, prvname, prvtype, createFlow.Functions)
+	dbResources, err := validateServiceResources(s.db, uid, privs, createFlow.ResourceIDs)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error validating resource ids")
+		response.Error(c, response.ErrFlowsInvalidRequest, err)
+		return
+	}
+
+	fw, err := s.fc.CreateFlow(c, int64(uid), createFlow.Input, prvname, prvtype, createFlow.Functions, dbResources)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error creating flow")
 		response.Error(c, response.ErrInternal, err)
@@ -478,7 +485,14 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 			}
 		}
 
-		if err := fw.PutInput(c, *patchFlow.Input, prv); err != nil {
+		dbResources, err := validateServiceResources(s.db, uid, privs, patchFlow.ResourceIDs)
+		if err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error validating resource ids")
+			response.Error(c, response.ErrFlowsInvalidRequest, err)
+			return
+		}
+
+		if err := fw.PutInput(c, *patchFlow.Input, prv, dbResources); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error sending input to flow")
 			response.Error(c, response.ErrInternal, err)
 			return

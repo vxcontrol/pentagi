@@ -5,6 +5,7 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/converter"
+	"pentagi/pkg/graph/model"
 	"pentagi/pkg/providers/pconfig"
 )
 
@@ -68,6 +69,18 @@ func (p *flowPublisher) AssistantDeleted(ctx context.Context, assistant database
 	p.ctrl.assistantDeleted.Publish(ctx, p.flowID, converter.ConvertAssistant(assistant))
 }
 
+func (p *flowPublisher) FlowFileAdded(ctx context.Context, file *model.FlowFile) {
+	p.ctrl.flowFileAdded.Publish(ctx, p.flowID, file)
+}
+
+func (p *flowPublisher) FlowFileUpdated(ctx context.Context, file *model.FlowFile) {
+	p.ctrl.flowFileUpdated.Publish(ctx, p.flowID, file)
+}
+
+func (p *flowPublisher) FlowFileDeleted(ctx context.Context, file *model.FlowFile) {
+	p.ctrl.flowFileDeleted.Publish(ctx, p.flowID, file)
+}
+
 func (p *flowPublisher) ScreenshotAdded(ctx context.Context, screenshot database.Screenshot) {
 	p.ctrl.screenshotAdded.Publish(ctx, p.flowID, converter.ConvertScreenshot(screenshot))
 }
@@ -104,42 +117,127 @@ func (p *flowPublisher) AssistantLogUpdated(ctx context.Context, assistantLog da
 	p.ctrl.assistantLogUpdated.Publish(ctx, p.flowID, converter.ConvertAssistantLog(assistantLog, appendPart))
 }
 
-func (p *flowPublisher) ProviderCreated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
+// providerPublisher publishes user-scoped provider events.
+type providerPublisher struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (p *providerPublisher) GetUserID() int64 {
+	return p.userID
+}
+
+func (p *providerPublisher) SetUserID(userID int64) {
+	p.userID = userID
+}
+
+func (p *providerPublisher) ProviderCreated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
 	p.ctrl.providerCreated.Publish(ctx, p.userID, converter.ConvertProvider(provider, cfg))
 }
 
-func (p *flowPublisher) ProviderUpdated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
+func (p *providerPublisher) ProviderUpdated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
 	p.ctrl.providerUpdated.Publish(ctx, p.userID, converter.ConvertProvider(provider, cfg))
 }
 
-func (p *flowPublisher) ProviderDeleted(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
+func (p *providerPublisher) ProviderDeleted(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig) {
 	p.ctrl.providerDeleted.Publish(ctx, p.userID, converter.ConvertProvider(provider, cfg))
 }
 
-func (p *flowPublisher) APITokenCreated(ctx context.Context, apiToken database.APITokenWithSecret) {
+// apiTokenPublisher publishes user-scoped API token events.
+type apiTokenPublisher struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (p *apiTokenPublisher) GetUserID() int64 {
+	return p.userID
+}
+
+func (p *apiTokenPublisher) SetUserID(userID int64) {
+	p.userID = userID
+}
+
+func (p *apiTokenPublisher) APITokenCreated(ctx context.Context, apiToken database.APITokenWithSecret) {
 	p.ctrl.apiTokenCreated.Publish(ctx, p.userID, converter.ConvertAPITokenRemoveSecret(apiToken))
 }
 
-func (p *flowPublisher) APITokenUpdated(ctx context.Context, apiToken database.ApiToken) {
+func (p *apiTokenPublisher) APITokenUpdated(ctx context.Context, apiToken database.ApiToken) {
 	p.ctrl.apiTokenUpdated.Publish(ctx, p.userID, converter.ConvertAPIToken(apiToken))
 }
 
-func (p *flowPublisher) APITokenDeleted(ctx context.Context, apiToken database.ApiToken) {
+func (p *apiTokenPublisher) APITokenDeleted(ctx context.Context, apiToken database.ApiToken) {
 	p.ctrl.apiTokenDeleted.Publish(ctx, p.userID, converter.ConvertAPIToken(apiToken))
 }
 
-func (p *flowPublisher) SettingsUserUpdated(ctx context.Context, userPreferences database.UserPreference) {
+// settingsPublisher publishes user-scoped settings events.
+type settingsPublisher struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (p *settingsPublisher) GetUserID() int64 {
+	return p.userID
+}
+
+func (p *settingsPublisher) SetUserID(userID int64) {
+	p.userID = userID
+}
+
+func (p *settingsPublisher) SettingsUserUpdated(ctx context.Context, userPreferences database.UserPreference) {
 	p.ctrl.settingsUserUpdated.Publish(ctx, p.userID, converter.ConvertUserPreferences(userPreferences))
 }
 
-func (p *flowPublisher) FlowTemplateCreated(ctx context.Context, template database.FlowTemplate) {
+// flowTemplatePublisher publishes user-scoped flow template events.
+type flowTemplatePublisher struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (p *flowTemplatePublisher) GetUserID() int64 {
+	return p.userID
+}
+
+func (p *flowTemplatePublisher) SetUserID(userID int64) {
+	p.userID = userID
+}
+
+func (p *flowTemplatePublisher) FlowTemplateCreated(ctx context.Context, template database.FlowTemplate) {
 	p.ctrl.flowTemplateCreated.Publish(ctx, p.userID, converter.ConvertFlowTemplate(template))
 }
 
-func (p *flowPublisher) FlowTemplateUpdated(ctx context.Context, template database.FlowTemplate) {
+func (p *flowTemplatePublisher) FlowTemplateUpdated(ctx context.Context, template database.FlowTemplate) {
 	p.ctrl.flowTemplateUpdated.Publish(ctx, p.userID, converter.ConvertFlowTemplate(template))
 }
 
-func (p *flowPublisher) FlowTemplateDeleted(ctx context.Context, template database.FlowTemplate) {
+func (p *flowTemplatePublisher) FlowTemplateDeleted(ctx context.Context, template database.FlowTemplate) {
 	p.ctrl.flowTemplateDeleted.Publish(ctx, p.userID, converter.ConvertFlowTemplate(template))
+}
+
+// resourcePublisher publishes user-scoped resource events.
+type resourcePublisher struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (p *resourcePublisher) GetUserID() int64 {
+	return p.userID
+}
+
+func (p *resourcePublisher) SetUserID(userID int64) {
+	p.userID = userID
+}
+
+func (p *resourcePublisher) ResourceAdded(ctx context.Context, resource *model.UserResource) {
+	p.ctrl.resourceAdded.Publish(ctx, p.userID, resource)
+	p.ctrl.resourceAddedAdmin.Broadcast(ctx, resource)
+}
+
+func (p *resourcePublisher) ResourceUpdated(ctx context.Context, resource *model.UserResource) {
+	p.ctrl.resourceUpdated.Publish(ctx, p.userID, resource)
+	p.ctrl.resourceUpdatedAdmin.Broadcast(ctx, resource)
+}
+
+func (p *resourcePublisher) ResourceDeleted(ctx context.Context, resource *model.UserResource) {
+	p.ctrl.resourceDeleted.Publish(ctx, p.userID, resource)
+	p.ctrl.resourceDeletedAdmin.Broadcast(ctx, resource)
 }

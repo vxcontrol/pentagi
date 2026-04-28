@@ -210,6 +210,15 @@ type FlowExecutionStats struct {
 	Tasks                []*TaskExecutionStats `json:"tasks"`
 }
 
+type FlowFile struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Path       string    `json:"path"`
+	Size       int       `json:"size"`
+	IsDir      bool      `json:"isDir"`
+	ModifiedAt time.Time `json:"modifiedAt"`
+}
+
 type FlowStats struct {
 	TotalTasksCount      int `json:"totalTasksCount"`
 	TotalSubtasksCount   int `json:"totalSubtasksCount"`
@@ -251,6 +260,13 @@ type MessageLog struct {
 	TaskID       *int64         `json:"taskId,omitempty"`
 	SubtaskID    *int64         `json:"subtaskId,omitempty"`
 	CreatedAt    time.Time      `json:"createdAt"`
+}
+
+type ModelAgentsUsageStats struct {
+	Model      string      `json:"model"`
+	Provider   string      `json:"provider"`
+	AgentTypes []AgentType `json:"agentTypes"`
+	Stats      *UsageStats `json:"stats"`
 }
 
 type ModelConfig struct {
@@ -517,6 +533,17 @@ type UserPrompt struct {
 	Template  string     `json:"template"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
+}
+
+type UserResource struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"userId"`
+	Name      string    `json:"name"`
+	Path      string    `json:"path"`
+	Size      int       `json:"size"`
+	IsDir     bool      `json:"isDir"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type VectorStoreLog struct {

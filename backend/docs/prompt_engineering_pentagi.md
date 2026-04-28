@@ -367,6 +367,20 @@ A comprehensive framework for designing high-performance prompts within the Pent
 - **Key Sections**: `KNOWLEDGE MANAGEMENT` (Memory Protocol), `OPERATIONAL ENVIRONMENT` (Container Constraints), `COMMAND EXECUTION RULES` (Terminal Protocol), `PENETRATION TESTING TOOLS` (list available), `TEAM COLLABORATION`, `DELEGATION PROTOCOL`, `SUMMARIZATION AWARENESS PROTOCOL`, `COMPLETION REQUIREMENTS` (using `{{.HackResultToolName}}`).
 - **Critical Instructions**: Check memory first, strictly adhere to terminal rules & container constraints, use only listed available tools, delegate appropriately (e.g., exploit development to Coder), provide detailed, evidence-backed exploitation reports using `{{.HackResultToolName}}`.
 
+#### Pentesting Methodology Checklist for Prompt Authors
+- Encode authorization boundaries explicitly. Prompts should remind the agent to test only approved targets, respect engagement scope, and avoid destructive actions unless the task requires them.
+- Start with coverage before exploitation. Instruct the agent to map routes, roles, inputs, file handling, integrations, and trust boundaries before choosing attack paths.
+- Organize testing by attack surface. Good prompts group checks around authentication, access control, injection, cross-site scripting, server-side request forgery, file processing, and business logic instead of presenting a random payload dump.
+- Prefer low-risk validation first. Reflection markers, controlled payloads, timing checks, and out-of-band verification should be used deliberately to confirm hypotheses before deeper exploitation.
+- Require evidence at every stage. Prompts should ask for captured requests, responses, tool output, prerequisites, and impact notes so confirmed findings can move directly into a report.
+- Use memory and iteration intentionally. The agent should record confirmed dead ends, revisit promising leads with new context, and avoid repeating the same failed checks.
+- End with actionable reporting. A strong pentesting prompt tells the agent to summarize what was confirmed, what remains unverified, how the issue can be reproduced, and which follow-up actions are justified.
+
+#### Recommended Reference Material
+- Use public methodology resources such as [HackTricks](https://book.hacktricks.wiki/en/index.html) and [Pentest Book](https://pentestbook.six2dez.com/) as inspiration for attack-surface coverage and testing depth.
+- Translate those references into concise phases, priorities, and verification rules for the agent instead of copying long checklists into the system prompt verbatim.
+- Keep prompt examples aligned with live PentAGI assets such as [`backend/pkg/templates/prompts/pentester.tmpl`](../pkg/templates/prompts/pentester.tmpl) and [`examples/prompts/base_web_pentest.md`](../../examples/prompts/base_web_pentest.md).
+
 ### Searcher Agent
 - **Focus**: Highly efficient information retrieval (internal memory & external sources), source evaluation and prioritization, synthesis of findings.
 - **Key Sections**: `CORE CAPABILITIES` (Action Economy, Search Optimization), `SEARCH TOOL DEPLOYMENT MATRIX`, `OPERATIONAL PROTOCOLS` (Search Efficiency, Query Engineering), `SUMMARIZATION AWARENESS PROTOCOL`, `SEARCH RESULT DELIVERY` (using `{{.SearchResultToolName}}`).

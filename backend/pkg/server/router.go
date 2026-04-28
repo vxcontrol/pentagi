@@ -16,6 +16,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
+	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/server/auth"
@@ -79,6 +80,7 @@ func NewRouter(
 	providers providers.ProviderController,
 	controller controller.FlowController,
 	subscriptions subscriptions.SubscriptionsController,
+	dockerClient docker.DockerClient,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	if cfg.Debug {
@@ -130,6 +132,8 @@ func NewRouter(
 	roleService := services.NewRoleService(orm)
 	providerService := services.NewProviderService(providers)
 	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
+	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, dockerClient, subscriptions)
+	resourceService := services.NewResourceService(orm, cfg.DataDir, subscriptions)
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
@@ -223,6 +227,8 @@ func NewRouter(
 
 		setProvidersGroup(privateGroup, providerService)
 		setFlowsGroup(privateGroup, flowService)
+		setFlowFilesGroup(privateGroup, flowFileService)
+		setResourcesGroup(privateGroup, resourceService)
 		setTasksGroup(privateGroup, taskService)
 		setSubtasksGroup(privateGroup, subtaskService)
 		setContainersGroup(privateGroup, containerService)
@@ -364,6 +370,33 @@ func setFlowsGroup(parent *gin.RouterGroup, svc *services.FlowService) {
 		flowsViewGroup.GET("/", svc.GetFlows)
 		flowsViewGroup.GET("/:flowID", svc.GetFlow)
 		flowsViewGroup.GET("/:flowID/graph", svc.GetFlowGraph)
+	}
+}
+
+func setFlowFilesGroup(parent *gin.RouterGroup, svc *services.FlowFileService) {
+	flowFilesGroup := parent.Group("/flows/:flowID/files")
+	{
+		flowFilesGroup.GET("/", svc.GetFlowFiles)
+		flowFilesGroup.GET("/container", svc.GetFlowContainerFiles)
+		flowFilesGroup.POST("/", svc.UploadFlowFiles)
+		flowFilesGroup.DELETE("/", svc.DeleteFlowFile)
+		flowFilesGroup.GET("/download", svc.DownloadFlowFile)
+		flowFilesGroup.POST("/pull", svc.PullFlowFiles)
+		flowFilesGroup.POST("/resources", svc.AddResourcesToFlow)
+		flowFilesGroup.POST("/to-resources", svc.AddResourceFromFlow)
+	}
+}
+
+func setResourcesGroup(parent *gin.RouterGroup, svc *services.ResourceService) {
+	rg := parent.Group("/resources")
+	{
+		rg.GET("/", svc.ListResources)
+		rg.POST("/", svc.UploadResources)
+		rg.POST("/mkdir", svc.MkdirResource)
+		rg.PUT("/move", svc.MoveResource)
+		rg.POST("/copy", svc.CopyResource)
+		rg.DELETE("/", svc.DeleteResource)
+		rg.GET("/download", svc.DownloadResource)
 	}
 }
 

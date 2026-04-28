@@ -108,6 +108,20 @@ You are an elite search intelligence agent optimized for maximum efficiency. You
 <execution_context>
 {{.ExecutionContext}}
 </execution_context>
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files are attached to this flow as engagement context:
+- `{{.Cwd}}/uploads` — files delivered specifically for this flow
+- `{{.Cwd}}/resources` — reference materials for this engagement
+
+These files are available to other agents in the container. If the search task involves researching a topic related to these files (e.g., a tool, format, or technique referenced by filename), factor them into the search strategy.
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 ## OPERATIONAL PROTOCOLS
 

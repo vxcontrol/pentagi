@@ -16,7 +16,7 @@ const useTextarea = ({
     textareaRef,
     triggerAutoSize,
 }: UseTextareaProps) => {
-    const [init, setInit] = React.useState(true);
+    const initRef = React.useRef(true);
 
     React.useEffect(() => {
         const offsetBorder = 0;
@@ -26,20 +26,20 @@ const useTextarea = ({
             return;
         }
 
-        if (init) {
+        if (initRef.current) {
             textareaElement.style.minHeight = `${minHeight + offsetBorder}px`;
 
             if (maxHeight > minHeight) {
                 textareaElement.style.maxHeight = `${maxHeight}px`;
             }
 
-            setInit(false);
+            initRef.current = false;
         }
 
         textareaElement.style.height = `${minHeight + offsetBorder}px`;
         const scrollHeight = textareaElement.scrollHeight;
         textareaElement.style.height = scrollHeight > maxHeight ? `${maxHeight}px` : `${scrollHeight + offsetBorder}px`;
-    }, [textareaRef.current, triggerAutoSize]);
+    }, [triggerAutoSize, maxHeight, minHeight, textareaRef]);
 };
 
 type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {

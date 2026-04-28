@@ -62,6 +62,10 @@ func CreateDummyTemplateData() map[string]any {
 		"SubtaskPatchToolName":      tools.SubtaskPatchToolName,
 		"AskUserToolName":           tools.AskUserToolName,
 		"AskUserEnabled":            true,
+		"GetFlowStatusToolName":     tools.GetFlowStatusToolName,
+		"StopFlowToolName":          tools.StopFlowToolName,
+		"SubmitFlowInputToolName":   tools.SubmitFlowInputToolName,
+		"PatchFlowSubtasksToolName": tools.PatchFlowSubtasksToolName,
 
 		// Summarization related - using constants from proper packages
 		"SummarizationToolName":   cast.SummarizationToolName,
@@ -70,6 +74,7 @@ func CreateDummyTemplateData() map[string]any {
 		// Boolean flags
 		"UseAgents":            true,
 		"IsDefaultDockerImage": false,
+		"FlowManagerEnabled":   true,
 
 		// Docker and environment
 		"DockerImage": "vxcontrol/kali-linux:latest",
@@ -94,6 +99,11 @@ func CreateDummyTemplateData() map[string]any {
 
 		// Numeric limits
 		"N": providers.TasksNumberLimit,
+
+		"UserFiles": "<user_files>\nUser-provided files for this flow. Use them as input data.\n" +
+			"<uploads>\n/work/uploads/test_file_1.txt\n</uploads>\n" +
+			"<resources>\n/work/resources/test_file_2.txt\n</resources>\n" +
+			"</user_files>",
 
 		// Input/Output data
 		"Input":    "Test input for the task",

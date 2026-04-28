@@ -94,7 +94,7 @@ type TerminalAction struct {
 	Input   string `json:"input" jsonschema:"required" jsonschema_description:"Command to be run in the docker container terminal according to rules to execute commands"`
 	Cwd     string `json:"cwd" jsonschema:"required" jsonschema_description:"Custom current working directory to execute commands in or default directory otherwise if it's not specified"`
 	Detach  Bool   `json:"detach" jsonschema:"required,type=boolean" jsonschema_description:"Set to true for INTERACTIVE or LONG-RUNNING commands: shells (msfconsole, bash, python), listeners (nc -lvnp, socat TCP-LISTEN), servers (python -m http.server, php -S), monitors (tcpdump, tail -f). These commands expect user input or run indefinitely. When true: command runs in background, you get immediate confirmation, no stdout/stderr captured. When false: command must complete within timeout and return output. For quick batch commands (nmap, curl, ls) use false"`
-	Timeout Int64  `json:"timeout" jsonschema:"required,type=integer" jsonschema_description:"Execution time limit in seconds (minimum 10; maximum 1200; default 60). For batch commands that may run long, use the 'timeout' shell utility INSIDE your command to ensure clean completion with full output: 'timeout 55 nmap -sV target' (set 5-10 seconds less than this parameter). For interactive/long-running commands, use detach=true instead of relying solely on timeout"`
+	Timeout Int64  `json:"timeout" jsonschema:"required,type=integer" jsonschema_description:"Execution time limit in seconds. Use 0 value to apply the configured server default timeout. Explicit positive values are accepted up to 10800 seconds (3 hours); any value outside the 1–10800 range or non-positive is replaced by the server default. For batch commands that may run long, use the 'timeout' shell utility INSIDE your command to ensure clean completion with full output: 'timeout 55 nmap -sV target' (set 5-10 seconds less than this parameter). For interactive/long-running commands, use detach=true instead of relying solely on timeout"`
 	Message string `json:"message" jsonschema:"required,title=Terminal command message" jsonschema_description:"Not so long message which explain what do you want to achieve and to execute in terminal to send to the user in user's language only"`
 }
 
@@ -238,6 +238,77 @@ type PentesterAction struct {
 type HackResult struct {
 	Result  string `json:"result" jsonschema:"required,title=Hack result description" jsonschema_description:"Fully detailed report or error message of the penetration test result what was achieved or not with detailed explanation and guide how to use this result in English"`
 	Message string `json:"message" jsonschema:"required,title=Hack result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in user's language only"`
+}
+
+// FlowStatusDetail controls the level of detail returned by get_flow_status.
+type FlowStatusDetail string
+
+const (
+	FlowStatusDetailSummary  FlowStatusDetail = "summary"
+	FlowStatusDetailTasks    FlowStatusDetail = "tasks"
+	FlowStatusDetailSubtasks FlowStatusDetail = "subtasks"
+	FlowStatusDetailRunning  FlowStatusDetail = "running"
+	FlowStatusDetailPlanned  FlowStatusDetail = "planned"
+)
+
+// GetFlowStatusAction defines arguments for the get_flow_status tool.
+type GetFlowStatusAction struct {
+	Detail  FlowStatusDetail `json:"detail" jsonschema:"required,enum=summary,enum=tasks,enum=subtasks,enum=running,enum=planned" jsonschema_description:"Level of detail: 'summary' - flow health snapshot with status and counts; 'tasks' - all tasks with ID/status/title; 'subtasks' - all subtasks optionally filtered by task_id; 'running' - full Task→Subtask execution chain including task input and recent agent messages; 'planned' - only subtasks with status 'created' (not yet started), optionally filtered by task_id"`
+	TaskID  *Int64           `json:"task_id,omitempty" jsonschema:"title=Task ID,type=integer" jsonschema_description:"Optional task ID filter. Applies to detail=subtasks and detail=planned to narrow results to a specific task."`
+	Verbose Bool             `json:"verbose,omitempty" jsonschema:"type=boolean" jsonschema_description:"Set to true for deeper investigation: includes descriptions, inputs, results, and execution context per entry; shows up to 50 recent agent messages instead of 10."`
+	Message string           `json:"message" jsonschema:"required,title=Status message" jsonschema_description:"Short description of what you are requesting, to show the user."`
+}
+
+// StopFlowAction defines arguments for the stop_flow tool.
+type StopFlowAction struct {
+	Reason  string `json:"reason" jsonschema:"required" jsonschema_description:"Brief explanation of why the automation is being stopped. Included in logs and shown to the user."`
+	Message string `json:"message" jsonschema:"required,title=Stop message" jsonschema_description:"Short message to show the user explaining that the automation is being stopped."`
+}
+
+// SubmitFlowInputAction defines arguments for the submit_flow_input tool.
+type SubmitFlowInputAction struct {
+	Input   string `json:"input" jsonschema:"required" jsonschema_description:"Text to deliver to the automation flow. If a subtask is waiting at an 'ask' checkpoint, this is delivered as the user's answer and execution resumes. If the flow is waiting with no active subtask, this becomes the goal for a new task — include complete context, targets, and constraints because the generator will decompose it into subtasks without further clarification."`
+	Message string `json:"message" jsonschema:"required,title=Input message" jsonschema_description:"Short message to show the user describing what is being submitted to the automation."`
+}
+
+// PatchFlowSubtasksAction defines arguments for the patch_flow_subtasks tool.
+type PatchFlowSubtasksAction struct {
+	TaskID     int64              `json:"task_id" jsonschema:"required,type=integer" jsonschema_description:"ID of the task whose subtask plan to modify. Obtain this from get_flow_status with detail='tasks'."`
+	Operations []SubtaskOperation `json:"operations" jsonschema:"required" jsonschema_description:"Delta operations to apply: add (insert new subtask at a position), remove (delete by ID), modify (update title/description), reorder (move to different position). Empty array returns the current plan unchanged."`
+	Message    string             `json:"message" jsonschema:"required,title=Patch summary" jsonschema_description:"Short message to show the user describing what changes are being made to the plan."`
+}
+
+// ValidateSubtaskPatch validates the operations in a SubtaskPatch
+func (sp SubtaskPatch) Validate() error {
+	for i, op := range sp.Operations {
+		switch op.Op {
+		case SubtaskOpAdd:
+			if op.Title == "" {
+				return fmt.Errorf("operation %d: add requires title", i)
+			}
+			if op.Description == "" {
+				return fmt.Errorf("operation %d: add requires description", i)
+			}
+		case SubtaskOpRemove:
+			if op.ID == nil {
+				return fmt.Errorf("operation %d: remove requires id", i)
+			}
+		case SubtaskOpModify:
+			if op.ID == nil {
+				return fmt.Errorf("operation %d: modify requires id", i)
+			}
+			if op.Title == "" && op.Description == "" {
+				return fmt.Errorf("operation %d: modify requires at least title or description", i)
+			}
+		case SubtaskOpReorder:
+			if op.ID == nil {
+				return fmt.Errorf("operation %d: reorder requires id", i)
+			}
+		default:
+			return fmt.Errorf("operation %d: unknown operation type %q", i, op.Op)
+		}
+	}
+	return nil
 }
 
 type Bool bool

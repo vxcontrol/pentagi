@@ -31,18 +31,18 @@ fi
 
 cd ..
 
-# Frontend (npm)
+# Frontend (pnpm)
 echo "→ Frontend..."
 cd frontend
 if [ -d "node_modules" ]; then
-    npm ls --production --json > "../$LICENSES_DIR/frontend-dependencies.json" 2>/dev/null || true
+    pnpm ls --prod --json > "../$LICENSES_DIR/frontend-dependencies.json" 2>/dev/null || true
     
     if command -v license-checker &> /dev/null; then
         license-checker --production --json > "../$LICENSES_DIR/frontend-licenses.json" 2>/dev/null || true
         license-checker --production --csv > "../$LICENSES_DIR/frontend-licenses.csv" 2>/dev/null || true
     fi
 else
-    echo "  Run 'npm ci' in frontend/ for detailed reports"
+    echo "  Run 'pnpm install' in frontend/ for detailed reports"
 fi
 cd ..
 

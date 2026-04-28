@@ -3,42 +3,21 @@ import { useMemo } from 'react';
 
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
+import { MetricCard } from '@/components/dashboard';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import FlowAgentIcon from '@/features/flows/agents/flow-agent-icon';
 import {
+    AgentType,
     useFlowStatsByFlowQuery,
     useToolcallsStatsByFlowQuery,
     useToolcallsStatsByFunctionForFlowQuery,
     useUsageStatsByAgentTypeForFlowQuery,
     useUsageStatsByFlowQuery,
+    useUsageStatsByModelAgentsForFlowQuery,
 } from '@/graphql/types';
-import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/pages/dashboard/format-utils';
-
-const StatCard = ({
-    description,
-    icon,
-    loading,
-    title,
-    value,
-}: {
-    description: string;
-    icon: React.ReactNode;
-    loading: boolean;
-    title: string;
-    value: string;
-}) => (
-    <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{title}</CardTitle>
-            {icon}
-        </CardHeader>
-        <CardContent>
-            {loading ? <Skeleton className="h-8 w-24" /> : <div className="text-2xl font-bold">{value}</div>}
-            <p className="text-muted-foreground text-xs">{description}</p>
-        </CardContent>
-    </Card>
-);
+import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 const UsageStatsRow = ({ label, stats }: { label: string; stats: UsageStatsFragmentFragment }) => (
     <TableRow>
@@ -68,6 +47,11 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
     const { data: usageByAgentData, loading: usageByAgentLoading } = useUsageStatsByAgentTypeForFlowQuery({
         variables: { flowId },
     });
+    const { data: usageByModelAgentsData, loading: usageByModelAgentsLoading } = useUsageStatsByModelAgentsForFlowQuery(
+        {
+            variables: { flowId },
+        },
+    );
     const { data: toolcallsData, loading: toolcallsLoading } = useToolcallsStatsByFlowQuery({
         variables: { flowId },
     });
@@ -105,6 +89,22 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
             }));
     }, [usageByAgentData]);
 
+    const modelAgentRows = useMemo(() => {
+        const seen = new Set<string>();
+
+        return (usageByModelAgentsData?.usageStatsByModelAgentsForFlow ?? []).filter((item) => {
+            const key = `${item.model}|${item.provider}`;
+
+            if (seen.has(key)) {
+                return false;
+            }
+
+            seen.add(key);
+
+            return true;
+        });
+    }, [usageByModelAgentsData]);
+
     const toolcallsByFunction = useMemo(() => {
         const seen = new Set<string>();
 
@@ -126,35 +126,109 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                <StatCard
-                    description="LLM spending for this flow"
-                    icon={<CircleDollarSign className="text-muted-foreground size-4" />}
-                    loading={anyLoading}
-                    title="Cost"
-                    value={formatCost(totalCost)}
-                />
-                <StatCard
-                    description="Input + Output tokens"
-                    icon={<Cpu className="text-muted-foreground size-4" />}
-                    loading={anyLoading}
-                    title="Tokens"
-                    value={formatTokenCount(totalTokens)}
-                />
-                <StatCard
-                    description={`Duration: ${toolcalls ? formatDuration(toolcalls.totalDurationSeconds) : '—'}`}
-                    icon={<Activity className="text-muted-foreground size-4" />}
-                    loading={anyLoading}
-                    title="Tool Calls"
-                    value={toolcalls ? formatNumber(toolcalls.totalCount) : '0'}
-                />
-                <StatCard
+                <MetricCard
                     description={`Subtasks: ${flowStats?.totalSubtasksCount ?? 0} · Assistants: ${flowStats?.totalAssistantsCount ?? 0}`}
                     icon={<GitFork className="text-muted-foreground size-4" />}
                     loading={anyLoading}
                     title="Tasks"
                     value={flowStats ? formatNumber(flowStats.totalTasksCount) : '0'}
                 />
+                <MetricCard
+                    description={`Duration: ${toolcalls ? formatDuration(toolcalls.totalDurationSeconds) : '—'}`}
+                    icon={<Activity className="text-muted-foreground size-4" />}
+                    loading={anyLoading}
+                    title="Tool Calls"
+                    value={toolcalls ? formatNumber(toolcalls.totalCount) : '0'}
+                />
+                <MetricCard
+                    description="Input + Output tokens"
+                    icon={<Cpu className="text-muted-foreground size-4" />}
+                    loading={anyLoading}
+                    title="Tokens"
+                    value={formatTokenCount(totalTokens)}
+                />
+                <MetricCard
+                    description="LLM spending for this flow"
+                    icon={<CircleDollarSign className="text-muted-foreground size-4" />}
+                    loading={anyLoading}
+                    title="Cost"
+                    value={formatCost(totalCost)}
+                />
             </div>
+
+            {!!modelAgentRows.length && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Usage by Model &amp; Provider</CardTitle>
+                        <CardDescription>
+                            LLM token usage and costs grouped by model and provider, with agent types used
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {usageByModelAgentsLoading ? (
+                            <LoadingTable />
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="whitespace-nowrap">Model</TableHead>
+                                        <TableHead className="whitespace-nowrap">Provider</TableHead>
+                                        <TableHead className="whitespace-nowrap">Agents</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Tokens In</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Tokens Out</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Cache In</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Cache Out</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Cost In</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Cost Out</TableHead>
+                                        <TableHead className="text-right whitespace-nowrap">Total Cost</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {modelAgentRows.map((row) => (
+                                        <TableRow key={`${row.model}|${row.provider}`}>
+                                            <TableCell className="font-medium">{row.model}</TableCell>
+                                            <TableCell>{row.provider}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {row.agentTypes.map((agentType) => (
+                                                        <FlowAgentIcon
+                                                            className="size-3.5"
+                                                            key={agentType}
+                                                            tooltip={agentType}
+                                                            type={agentType as AgentType}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatTokenCount(row.stats.totalUsageIn)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatTokenCount(row.stats.totalUsageOut)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatTokenCount(row.stats.totalUsageCacheIn)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatTokenCount(row.stats.totalUsageCacheOut)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatCost(row.stats.totalUsageCostIn)}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                {formatCost(row.stats.totalUsageCostOut)}
+                                            </TableCell>
+                                            <TableCell className="text-right font-semibold">
+                                                {formatCost(row.stats.totalUsageCostIn + row.stats.totalUsageCostOut)}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {!!agentTypeRows.length && (
                 <Card>
@@ -219,15 +293,9 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
                                         <TableRow key={item.functionName}>
                                             <TableCell className="font-medium">{item.functionName}</TableCell>
                                             <TableCell>
-                                                <span
-                                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                        item.isAgent
-                                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                                                    }`}
-                                                >
+                                                <Badge variant={item.isAgent ? 'secondary' : 'outline'}>
                                                     {item.isAgent ? 'Agent' : 'Tool'}
-                                                </span>
+                                                </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 {formatNumber(item.totalCount)}

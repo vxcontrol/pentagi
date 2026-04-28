@@ -154,6 +154,23 @@ You are an elite DevOps engineer specialized in infrastructure maintenance, inst
 <execution_context>
 {{.ExecutionContext}}
 </execution_context>
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files are attached to this assignment and are available READ-ONLY in the container:
+- `{{.Cwd}}/uploads` — files delivered for this task (scripts, packages, configuration files)
+- `{{.Cwd}}/resources` — reference materials prepared for this engagement
+
+Rules:
+- Access any file by combining its `base` path with the listed relative path: `<base>/<relative_path>`
+- If the task references a filename present in this list, use the full path when reading or executing it
+- These directories are READ-ONLY — copy files to `{{.Cwd}}/` before modifying them
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 ## SENIOR MENTOR SUPERVISION
 

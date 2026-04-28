@@ -241,6 +241,15 @@ type ComplexityRoot struct {
 		TotalToolcallsCount  func(childComplexity int) int
 	}
 
+	FlowFile struct {
+		ID         func(childComplexity int) int
+		IsDir      func(childComplexity int) int
+		ModifiedAt func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Path       func(childComplexity int) int
+		Size       func(childComplexity int) int
+	}
+
 	FlowStats struct {
 		TotalAssistantsCount func(childComplexity int) int
 		TotalSubtasksCount   func(childComplexity int) int
@@ -284,6 +293,13 @@ type ComplexityRoot struct {
 		Type         func(childComplexity int) int
 	}
 
+	ModelAgentsUsageStats struct {
+		AgentTypes func(childComplexity int) int
+		Model      func(childComplexity int) int
+		Provider   func(childComplexity int) int
+		Stats      func(childComplexity int) int
+	}
+
 	ModelConfig struct {
 		Description func(childComplexity int) int
 		Name        func(childComplexity int) int
@@ -307,10 +323,10 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AddFavoriteFlow    func(childComplexity int, flowID int64) int
-		CallAssistant      func(childComplexity int, flowID int64, assistantID int64, input string, useAgents bool) int
+		CallAssistant      func(childComplexity int, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) int
 		CreateAPIToken     func(childComplexity int, input model.CreateAPITokenInput) int
-		CreateAssistant    func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool) int
-		CreateFlow         func(childComplexity int, modelProvider string, input string) int
+		CreateAssistant    func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) int
+		CreateFlow         func(childComplexity int, modelProvider string, input string, resourceIds []int64) int
 		CreateFlowTemplate func(childComplexity int, input model.CreateFlowTemplateInput) int
 		CreatePrompt       func(childComplexity int, typeArg model.PromptType, template string) int
 		CreateProvider     func(childComplexity int, name string, typeArg model.ProviderType, agents model.AgentsConfig) int
@@ -322,7 +338,7 @@ type ComplexityRoot struct {
 		DeletePrompt       func(childComplexity int, promptID int64) int
 		DeleteProvider     func(childComplexity int, providerID int64) int
 		FinishFlow         func(childComplexity int, flowID int64) int
-		PutUserInput       func(childComplexity int, flowID int64, input string, modelProvider *string) int
+		PutUserInput       func(childComplexity int, flowID int64, input string, modelProvider *string, resourceIds []int64) int
 		RenameFlow         func(childComplexity int, flowID int64, title string) int
 		StopAssistant      func(childComplexity int, flowID int64, assistantID int64) int
 		StopFlow           func(childComplexity int, flowID int64) int
@@ -423,6 +439,7 @@ type ComplexityRoot struct {
 		AssistantLogs                   func(childComplexity int, flowID int64, assistantID int64) int
 		Assistants                      func(childComplexity int, flowID int64) int
 		Flow                            func(childComplexity int, flowID int64) int
+		FlowFiles                       func(childComplexity int, flowID int64) int
 		FlowStatsByFlow                 func(childComplexity int, flowID int64) int
 		FlowTemplate                    func(childComplexity int, templateID int64) int
 		FlowTemplates                   func(childComplexity int) int
@@ -432,6 +449,7 @@ type ComplexityRoot struct {
 		FlowsStatsTotal                 func(childComplexity int) int
 		MessageLogs                     func(childComplexity int, flowID int64) int
 		Providers                       func(childComplexity int) int
+		Resources                       func(childComplexity int, path *string, recursive *bool) int
 		Screenshots                     func(childComplexity int, flowID int64) int
 		SearchLogs                      func(childComplexity int, flowID int64) int
 		Settings                        func(childComplexity int) int
@@ -449,6 +467,7 @@ type ComplexityRoot struct {
 		UsageStatsByAgentTypeForFlow    func(childComplexity int, flowID int64) int
 		UsageStatsByFlow                func(childComplexity int, flowID int64) int
 		UsageStatsByModel               func(childComplexity int) int
+		UsageStatsByModelAgentsForFlow  func(childComplexity int, flowID int64) int
 		UsageStatsByPeriod              func(childComplexity int, period model.UsageStatsPeriod) int
 		UsageStatsByProvider            func(childComplexity int) int
 		UsageStatsTotal                 func(childComplexity int) int
@@ -502,6 +521,9 @@ type ComplexityRoot struct {
 		AssistantUpdated    func(childComplexity int, flowID int64) int
 		FlowCreated         func(childComplexity int) int
 		FlowDeleted         func(childComplexity int) int
+		FlowFileAdded       func(childComplexity int, flowID int64) int
+		FlowFileDeleted     func(childComplexity int, flowID int64) int
+		FlowFileUpdated     func(childComplexity int, flowID int64) int
 		FlowTemplateCreated func(childComplexity int) int
 		FlowTemplateDeleted func(childComplexity int) int
 		FlowTemplateUpdated func(childComplexity int) int
@@ -511,6 +533,9 @@ type ComplexityRoot struct {
 		ProviderCreated     func(childComplexity int) int
 		ProviderDeleted     func(childComplexity int) int
 		ProviderUpdated     func(childComplexity int) int
+		ResourceAdded       func(childComplexity int) int
+		ResourceDeleted     func(childComplexity int) int
+		ResourceUpdated     func(childComplexity int) int
 		ScreenshotAdded     func(childComplexity int, flowID int64) int
 		SearchLogAdded      func(childComplexity int, flowID int64) int
 		SettingsUserUpdated func(childComplexity int) int
@@ -630,6 +655,17 @@ type ComplexityRoot struct {
 		UpdatedAt func(childComplexity int) int
 	}
 
+	UserResource struct {
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		IsDir     func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Path      func(childComplexity int) int
+		Size      func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+		UserID    func(childComplexity int) int
+	}
+
 	VectorStoreLog struct {
 		Action    func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
@@ -646,14 +682,14 @@ type ComplexityRoot struct {
 }
 
 type MutationResolver interface {
-	CreateFlow(ctx context.Context, modelProvider string, input string) (*model.Flow, error)
-	PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string) (model.ResultType, error)
+	CreateFlow(ctx context.Context, modelProvider string, input string, resourceIds []int64) (*model.Flow, error)
+	PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string, resourceIds []int64) (model.ResultType, error)
 	StopFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	FinishFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	DeleteFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	RenameFlow(ctx context.Context, flowID int64, title string) (model.ResultType, error)
-	CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool) (*model.FlowAssistant, error)
-	CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool) (model.ResultType, error)
+	CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) (*model.FlowAssistant, error)
+	CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) (model.ResultType, error)
 	StopAssistant(ctx context.Context, flowID int64, assistantID int64) (*model.Assistant, error)
 	DeleteAssistant(ctx context.Context, flowID int64, assistantID int64) (model.ResultType, error)
 	TestAgent(ctx context.Context, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) (*model.AgentTestResult, error)
@@ -680,6 +716,7 @@ type QueryResolver interface {
 	Flows(ctx context.Context) ([]*model.Flow, error)
 	Flow(ctx context.Context, flowID int64) (*model.Flow, error)
 	Tasks(ctx context.Context, flowID int64) ([]*model.Task, error)
+	FlowFiles(ctx context.Context, flowID int64) ([]*model.FlowFile, error)
 	Screenshots(ctx context.Context, flowID int64) ([]*model.Screenshot, error)
 	TerminalLogs(ctx context.Context, flowID int64) ([]*model.TerminalLog, error)
 	MessageLogs(ctx context.Context, flowID int64) ([]*model.MessageLog, error)
@@ -694,6 +731,7 @@ type QueryResolver interface {
 	UsageStatsByAgentType(ctx context.Context) ([]*model.AgentTypeUsageStats, error)
 	UsageStatsByFlow(ctx context.Context, flowID int64) (*model.UsageStats, error)
 	UsageStatsByAgentTypeForFlow(ctx context.Context, flowID int64) ([]*model.AgentTypeUsageStats, error)
+	UsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]*model.ModelAgentsUsageStats, error)
 	ToolcallsStatsTotal(ctx context.Context) (*model.ToolcallsStats, error)
 	ToolcallsStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod) ([]*model.DailyToolcallsStats, error)
 	ToolcallsStatsByFunction(ctx context.Context) ([]*model.FunctionToolcallsStats, error)
@@ -711,6 +749,7 @@ type QueryResolver interface {
 	APITokens(ctx context.Context) ([]*model.APIToken, error)
 	FlowTemplate(ctx context.Context, templateID int64) (*model.FlowTemplate, error)
 	FlowTemplates(ctx context.Context) ([]*model.FlowTemplate, error)
+	Resources(ctx context.Context, path *string, recursive *bool) ([]*model.UserResource, error)
 }
 type SubscriptionResolver interface {
 	FlowCreated(ctx context.Context) (<-chan *model.Flow, error)
@@ -721,6 +760,9 @@ type SubscriptionResolver interface {
 	AssistantCreated(ctx context.Context, flowID int64) (<-chan *model.Assistant, error)
 	AssistantUpdated(ctx context.Context, flowID int64) (<-chan *model.Assistant, error)
 	AssistantDeleted(ctx context.Context, flowID int64) (<-chan *model.Assistant, error)
+	FlowFileAdded(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error)
+	FlowFileUpdated(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error)
+	FlowFileDeleted(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error)
 	ScreenshotAdded(ctx context.Context, flowID int64) (<-chan *model.Screenshot, error)
 	TerminalLogAdded(ctx context.Context, flowID int64) (<-chan *model.TerminalLog, error)
 	MessageLogAdded(ctx context.Context, flowID int64) (<-chan *model.MessageLog, error)
@@ -740,6 +782,9 @@ type SubscriptionResolver interface {
 	FlowTemplateCreated(ctx context.Context) (<-chan *model.FlowTemplate, error)
 	FlowTemplateUpdated(ctx context.Context) (<-chan *model.FlowTemplate, error)
 	FlowTemplateDeleted(ctx context.Context) (<-chan *model.FlowTemplate, error)
+	ResourceAdded(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceUpdated(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceDeleted(ctx context.Context) (<-chan *model.UserResource, error)
 }
 
 type executableSchema struct {
@@ -1657,6 +1702,48 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.FlowExecutionStats.TotalToolcallsCount(childComplexity), true
 
+	case "FlowFile.id":
+		if e.complexity.FlowFile.ID == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.ID(childComplexity), true
+
+	case "FlowFile.isDir":
+		if e.complexity.FlowFile.IsDir == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.IsDir(childComplexity), true
+
+	case "FlowFile.modifiedAt":
+		if e.complexity.FlowFile.ModifiedAt == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.ModifiedAt(childComplexity), true
+
+	case "FlowFile.name":
+		if e.complexity.FlowFile.Name == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.Name(childComplexity), true
+
+	case "FlowFile.path":
+		if e.complexity.FlowFile.Path == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.Path(childComplexity), true
+
+	case "FlowFile.size":
+		if e.complexity.FlowFile.Size == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.Size(childComplexity), true
+
 	case "FlowStats.totalAssistantsCount":
 		if e.complexity.FlowStats.TotalAssistantsCount == nil {
 			break
@@ -1853,6 +1940,34 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.MessageLog.Type(childComplexity), true
 
+	case "ModelAgentsUsageStats.agentTypes":
+		if e.complexity.ModelAgentsUsageStats.AgentTypes == nil {
+			break
+		}
+
+		return e.complexity.ModelAgentsUsageStats.AgentTypes(childComplexity), true
+
+	case "ModelAgentsUsageStats.model":
+		if e.complexity.ModelAgentsUsageStats.Model == nil {
+			break
+		}
+
+		return e.complexity.ModelAgentsUsageStats.Model(childComplexity), true
+
+	case "ModelAgentsUsageStats.provider":
+		if e.complexity.ModelAgentsUsageStats.Provider == nil {
+			break
+		}
+
+		return e.complexity.ModelAgentsUsageStats.Provider(childComplexity), true
+
+	case "ModelAgentsUsageStats.stats":
+		if e.complexity.ModelAgentsUsageStats.Stats == nil {
+			break
+		}
+
+		return e.complexity.ModelAgentsUsageStats.Stats(childComplexity), true
+
 	case "ModelConfig.description":
 		if e.complexity.ModelConfig.Description == nil {
 			break
@@ -1959,7 +2074,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CallAssistant(childComplexity, args["flowId"].(int64), args["assistantId"].(int64), args["input"].(string), args["useAgents"].(bool)), true
+		return e.complexity.Mutation.CallAssistant(childComplexity, args["flowId"].(int64), args["assistantId"].(int64), args["input"].(string), args["useAgents"].(bool), args["resourceIds"].([]int64)), true
 
 	case "Mutation.createAPIToken":
 		if e.complexity.Mutation.CreateAPIToken == nil {
@@ -1983,7 +2098,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateAssistant(childComplexity, args["flowId"].(int64), args["modelProvider"].(string), args["input"].(string), args["useAgents"].(bool)), true
+		return e.complexity.Mutation.CreateAssistant(childComplexity, args["flowId"].(int64), args["modelProvider"].(string), args["input"].(string), args["useAgents"].(bool), args["resourceIds"].([]int64)), true
 
 	case "Mutation.createFlow":
 		if e.complexity.Mutation.CreateFlow == nil {
@@ -1995,7 +2110,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateFlow(childComplexity, args["modelProvider"].(string), args["input"].(string)), true
+		return e.complexity.Mutation.CreateFlow(childComplexity, args["modelProvider"].(string), args["input"].(string), args["resourceIds"].([]int64)), true
 
 	case "Mutation.createFlowTemplate":
 		if e.complexity.Mutation.CreateFlowTemplate == nil {
@@ -2139,7 +2254,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.PutUserInput(childComplexity, args["flowId"].(int64), args["input"].(string), args["modelProvider"].(*string)), true
+		return e.complexity.Mutation.PutUserInput(childComplexity, args["flowId"].(int64), args["input"].(string), args["modelProvider"].(*string), args["resourceIds"].([]int64)), true
 
 	case "Mutation.renameFlow":
 		if e.complexity.Mutation.RenameFlow == nil {
@@ -2706,6 +2821,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Flow(childComplexity, args["flowId"].(int64)), true
 
+	case "Query.flowFiles":
+		if e.complexity.Query.FlowFiles == nil {
+			break
+		}
+
+		args, err := ec.field_Query_flowFiles_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.FlowFiles(childComplexity, args["flowId"].(int64)), true
+
 	case "Query.flowStatsByFlow":
 		if e.complexity.Query.FlowStatsByFlow == nil {
 			break
@@ -2793,6 +2920,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.Providers(childComplexity), true
+
+	case "Query.resources":
+		if e.complexity.Query.Resources == nil {
+			break
+		}
+
+		args, err := ec.field_Query_resources_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Resources(childComplexity, args["path"].(*string), args["recursive"].(*bool)), true
 
 	case "Query.screenshots":
 		if e.complexity.Query.Screenshots == nil {
@@ -2957,6 +3096,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.UsageStatsByModel(childComplexity), true
+
+	case "Query.usageStatsByModelAgentsForFlow":
+		if e.complexity.Query.UsageStatsByModelAgentsForFlow == nil {
+			break
+		}
+
+		args, err := ec.field_Query_usageStatsByModelAgentsForFlow_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.UsageStatsByModelAgentsForFlow(childComplexity, args["flowId"].(int64)), true
 
 	case "Query.usageStatsByPeriod":
 		if e.complexity.Query.UsageStatsByPeriod == nil {
@@ -3264,6 +3415,42 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Subscription.FlowDeleted(childComplexity), true
 
+	case "Subscription.flowFileAdded":
+		if e.complexity.Subscription.FlowFileAdded == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_flowFileAdded_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.FlowFileAdded(childComplexity, args["flowId"].(int64)), true
+
+	case "Subscription.flowFileDeleted":
+		if e.complexity.Subscription.FlowFileDeleted == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_flowFileDeleted_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.FlowFileDeleted(childComplexity, args["flowId"].(int64)), true
+
+	case "Subscription.flowFileUpdated":
+		if e.complexity.Subscription.FlowFileUpdated == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_flowFileUpdated_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.FlowFileUpdated(childComplexity, args["flowId"].(int64)), true
+
 	case "Subscription.flowTemplateCreated":
 		if e.complexity.Subscription.FlowTemplateCreated == nil {
 			break
@@ -3336,6 +3523,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Subscription.ProviderUpdated(childComplexity), true
+
+	case "Subscription.resourceAdded":
+		if e.complexity.Subscription.ResourceAdded == nil {
+			break
+		}
+
+		return e.complexity.Subscription.ResourceAdded(childComplexity), true
+
+	case "Subscription.resourceDeleted":
+		if e.complexity.Subscription.ResourceDeleted == nil {
+			break
+		}
+
+		return e.complexity.Subscription.ResourceDeleted(childComplexity), true
+
+	case "Subscription.resourceUpdated":
+		if e.complexity.Subscription.ResourceUpdated == nil {
+			break
+		}
+
+		return e.complexity.Subscription.ResourceUpdated(childComplexity), true
 
 	case "Subscription.screenshotAdded":
 		if e.complexity.Subscription.ScreenshotAdded == nil {
@@ -3934,6 +4142,62 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.UserPrompt.UpdatedAt(childComplexity), true
 
+	case "UserResource.createdAt":
+		if e.complexity.UserResource.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.UserResource.CreatedAt(childComplexity), true
+
+	case "UserResource.id":
+		if e.complexity.UserResource.ID == nil {
+			break
+		}
+
+		return e.complexity.UserResource.ID(childComplexity), true
+
+	case "UserResource.isDir":
+		if e.complexity.UserResource.IsDir == nil {
+			break
+		}
+
+		return e.complexity.UserResource.IsDir(childComplexity), true
+
+	case "UserResource.name":
+		if e.complexity.UserResource.Name == nil {
+			break
+		}
+
+		return e.complexity.UserResource.Name(childComplexity), true
+
+	case "UserResource.path":
+		if e.complexity.UserResource.Path == nil {
+			break
+		}
+
+		return e.complexity.UserResource.Path(childComplexity), true
+
+	case "UserResource.size":
+		if e.complexity.UserResource.Size == nil {
+			break
+		}
+
+		return e.complexity.UserResource.Size(childComplexity), true
+
+	case "UserResource.updatedAt":
+		if e.complexity.UserResource.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.UserResource.UpdatedAt(childComplexity), true
+
+	case "UserResource.userId":
+		if e.complexity.UserResource.UserID == nil {
+			break
+		}
+
+		return e.complexity.UserResource.UserID(childComplexity), true
+
 	case "VectorStoreLog.action":
 		if e.complexity.VectorStoreLog.Action == nil {
 			break
@@ -4215,6 +4479,11 @@ func (ec *executionContext) field_Mutation_callAssistant_args(ctx context.Contex
 		return nil, err
 	}
 	args["useAgents"] = arg3
+	arg4, err := ec.field_Mutation_callAssistant_argsResourceIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["resourceIds"] = arg4
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_callAssistant_argsFlowID(
@@ -4305,6 +4574,28 @@ func (ec *executionContext) field_Mutation_callAssistant_argsUseAgents(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_callAssistant_argsResourceIds(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) ([]int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["resourceIds"]
+	if !ok {
+		var zeroVal []int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceIds"))
+	if tmp, ok := rawArgs["resourceIds"]; ok {
+		return ec.unmarshalOID2ᚕint64ᚄ(ctx, tmp)
+	}
+
+	var zeroVal []int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_createAPIToken_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -4360,6 +4651,11 @@ func (ec *executionContext) field_Mutation_createAssistant_args(ctx context.Cont
 		return nil, err
 	}
 	args["useAgents"] = arg3
+	arg4, err := ec.field_Mutation_createAssistant_argsResourceIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["resourceIds"] = arg4
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_createAssistant_argsFlowID(
@@ -4450,6 +4746,28 @@ func (ec *executionContext) field_Mutation_createAssistant_argsUseAgents(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_createAssistant_argsResourceIds(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) ([]int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["resourceIds"]
+	if !ok {
+		var zeroVal []int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceIds"))
+	if tmp, ok := rawArgs["resourceIds"]; ok {
+		return ec.unmarshalOID2ᚕint64ᚄ(ctx, tmp)
+	}
+
+	var zeroVal []int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_createFlowTemplate_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -4495,6 +4813,11 @@ func (ec *executionContext) field_Mutation_createFlow_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg1
+	arg2, err := ec.field_Mutation_createFlow_argsResourceIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["resourceIds"] = arg2
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_createFlow_argsModelProvider(
@@ -4538,6 +4861,28 @@ func (ec *executionContext) field_Mutation_createFlow_argsInput(
 	}
 
 	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createFlow_argsResourceIds(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) ([]int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["resourceIds"]
+	if !ok {
+		var zeroVal []int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceIds"))
+	if tmp, ok := rawArgs["resourceIds"]; ok {
+		return ec.unmarshalOID2ᚕint64ᚄ(ctx, tmp)
+	}
+
+	var zeroVal []int64
 	return zeroVal, nil
 }
 
@@ -4987,6 +5332,11 @@ func (ec *executionContext) field_Mutation_putUserInput_args(ctx context.Context
 		return nil, err
 	}
 	args["modelProvider"] = arg2
+	arg3, err := ec.field_Mutation_putUserInput_argsResourceIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["resourceIds"] = arg3
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_putUserInput_argsFlowID(
@@ -5052,6 +5402,28 @@ func (ec *executionContext) field_Mutation_putUserInput_argsModelProvider(
 	}
 
 	var zeroVal *string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_putUserInput_argsResourceIds(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) ([]int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["resourceIds"]
+	if !ok {
+		var zeroVal []int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceIds"))
+	if tmp, ok := rawArgs["resourceIds"]; ok {
+		return ec.unmarshalOID2ᚕint64ᚄ(ctx, tmp)
+	}
+
+	var zeroVal []int64
 	return zeroVal, nil
 }
 
@@ -5859,6 +6231,38 @@ func (ec *executionContext) field_Query_assistants_argsFlowID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Query_flowFiles_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_flowFiles_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_flowFiles_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query_flowStatsByFlow_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -6048,6 +6452,65 @@ func (ec *executionContext) field_Query_messageLogs_argsFlowID(
 	}
 
 	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_resources_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_resources_argsPath(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["path"] = arg0
+	arg1, err := ec.field_Query_resources_argsRecursive(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["recursive"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Query_resources_argsPath(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["path"]
+	if !ok {
+		var zeroVal *string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("path"))
+	if tmp, ok := rawArgs["path"]; ok {
+		return ec.unmarshalOString2ᚖstring(ctx, tmp)
+	}
+
+	var zeroVal *string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_resources_argsRecursive(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*bool, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["recursive"]
+	if !ok {
+		var zeroVal *bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("recursive"))
+	if tmp, ok := rawArgs["recursive"]; ok {
+		return ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+	}
+
+	var zeroVal *bool
 	return zeroVal, nil
 }
 
@@ -6339,6 +6802,38 @@ func (ec *executionContext) field_Query_usageStatsByFlow_argsFlowID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Query_usageStatsByModelAgentsForFlow_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_usageStatsByModelAgentsForFlow_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_usageStatsByModelAgentsForFlow_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query_usageStatsByPeriod_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -6574,6 +7069,102 @@ func (ec *executionContext) field_Subscription_assistantUpdated_args(ctx context
 	return args, nil
 }
 func (ec *executionContext) field_Subscription_assistantUpdated_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Subscription_flowFileAdded_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Subscription_flowFileAdded_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Subscription_flowFileAdded_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Subscription_flowFileDeleted_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Subscription_flowFileDeleted_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Subscription_flowFileDeleted_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Subscription_flowFileUpdated_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Subscription_flowFileUpdated_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Subscription_flowFileUpdated_argsFlowID(
 	ctx context.Context,
 	rawArgs map[string]interface{},
 ) (int64, error) {
@@ -13272,6 +13863,270 @@ func (ec *executionContext) fieldContext_FlowExecutionStats_tasks(_ context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _FlowFile_id(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_name(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_path(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_path(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Path, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_size(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_size(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Size, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_isDir(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_isDir(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDir, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_isDir(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_modifiedAt(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ModifiedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_modifiedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _FlowStats_totalTasksCount(ctx context.Context, field graphql.CollectedField, obj *model.FlowStats) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_FlowStats_totalTasksCount(ctx, field)
 	if err != nil {
@@ -14495,6 +15350,196 @@ func (ec *executionContext) fieldContext_MessageLog_createdAt(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _ModelAgentsUsageStats_model(ctx context.Context, field graphql.CollectedField, obj *model.ModelAgentsUsageStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelAgentsUsageStats_model(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Model, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelAgentsUsageStats_model(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelAgentsUsageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelAgentsUsageStats_provider(ctx context.Context, field graphql.CollectedField, obj *model.ModelAgentsUsageStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelAgentsUsageStats_provider(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Provider, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelAgentsUsageStats_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelAgentsUsageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelAgentsUsageStats_agentTypes(ctx context.Context, field graphql.CollectedField, obj *model.ModelAgentsUsageStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelAgentsUsageStats_agentTypes(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AgentTypes, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]model.AgentType)
+	fc.Result = res
+	return ec.marshalNAgentType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐAgentTypeᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelAgentsUsageStats_agentTypes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelAgentsUsageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type AgentType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelAgentsUsageStats_stats(ctx context.Context, field graphql.CollectedField, obj *model.ModelAgentsUsageStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelAgentsUsageStats_stats(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Stats, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.UsageStats)
+	fc.Result = res
+	return ec.marshalNUsageStats2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUsageStats(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelAgentsUsageStats_stats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelAgentsUsageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "totalUsageIn":
+				return ec.fieldContext_UsageStats_totalUsageIn(ctx, field)
+			case "totalUsageOut":
+				return ec.fieldContext_UsageStats_totalUsageOut(ctx, field)
+			case "totalUsageCacheIn":
+				return ec.fieldContext_UsageStats_totalUsageCacheIn(ctx, field)
+			case "totalUsageCacheOut":
+				return ec.fieldContext_UsageStats_totalUsageCacheOut(ctx, field)
+			case "totalUsageCostIn":
+				return ec.fieldContext_UsageStats_totalUsageCostIn(ctx, field)
+			case "totalUsageCostOut":
+				return ec.fieldContext_UsageStats_totalUsageCostOut(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UsageStats", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModelConfig_name(ctx context.Context, field graphql.CollectedField, obj *model.ModelConfig) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ModelConfig_name(ctx, field)
 	if err != nil {
@@ -15049,7 +16094,7 @@ func (ec *executionContext) _Mutation_createFlow(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateFlow(rctx, fc.Args["modelProvider"].(string), fc.Args["input"].(string))
+		return ec.resolvers.Mutation().CreateFlow(rctx, fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["resourceIds"].([]int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -15120,7 +16165,7 @@ func (ec *executionContext) _Mutation_putUserInput(ctx context.Context, field gr
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().PutUserInput(rctx, fc.Args["flowId"].(int64), fc.Args["input"].(string), fc.Args["modelProvider"].(*string))
+		return ec.resolvers.Mutation().PutUserInput(rctx, fc.Args["flowId"].(int64), fc.Args["input"].(string), fc.Args["modelProvider"].(*string), fc.Args["resourceIds"].([]int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -15395,7 +16440,7 @@ func (ec *executionContext) _Mutation_createAssistant(ctx context.Context, field
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["useAgents"].(bool))
+		return ec.resolvers.Mutation().CreateAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["useAgents"].(bool), fc.Args["resourceIds"].([]int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -15456,7 +16501,7 @@ func (ec *executionContext) _Mutation_callAssistant(ctx context.Context, field g
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CallAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["assistantId"].(int64), fc.Args["input"].(string), fc.Args["useAgents"].(bool))
+		return ec.resolvers.Mutation().CallAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["assistantId"].(int64), fc.Args["input"].(string), fc.Args["useAgents"].(bool), fc.Args["resourceIds"].([]int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -19695,6 +20740,75 @@ func (ec *executionContext) fieldContext_Query_tasks(ctx context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_flowFiles(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_flowFiles(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().FlowFiles(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.FlowFile)
+	fc.Result = res
+	return ec.marshalNFlowFile2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFileᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_flowFiles(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FlowFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FlowFile_name(ctx, field)
+			case "path":
+				return ec.fieldContext_FlowFile_path(ctx, field)
+			case "size":
+				return ec.fieldContext_FlowFile_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_FlowFile_isDir(ctx, field)
+			case "modifiedAt":
+				return ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FlowFile", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_flowFiles_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_screenshots(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_screenshots(ctx, field)
 	if err != nil {
@@ -20598,6 +21712,71 @@ func (ec *executionContext) fieldContext_Query_usageStatsByAgentTypeForFlow(ctx 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_usageStatsByAgentTypeForFlow_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_usageStatsByModelAgentsForFlow(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_usageStatsByModelAgentsForFlow(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().UsageStatsByModelAgentsForFlow(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.ModelAgentsUsageStats)
+	fc.Result = res
+	return ec.marshalNModelAgentsUsageStats2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelAgentsUsageStatsᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_usageStatsByModelAgentsForFlow(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "model":
+				return ec.fieldContext_ModelAgentsUsageStats_model(ctx, field)
+			case "provider":
+				return ec.fieldContext_ModelAgentsUsageStats_provider(ctx, field)
+			case "agentTypes":
+				return ec.fieldContext_ModelAgentsUsageStats_agentTypes(ctx, field)
+			case "stats":
+				return ec.fieldContext_ModelAgentsUsageStats_stats(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelAgentsUsageStats", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_usageStatsByModelAgentsForFlow_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -21610,6 +22789,79 @@ func (ec *executionContext) fieldContext_Query_flowTemplates(_ context.Context, 
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FlowTemplate", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_resources(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_resources(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Resources(rctx, fc.Args["path"].(*string), fc.Args["recursive"].(*bool))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.UserResource)
+	fc.Result = res
+	return ec.marshalNUserResource2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResourceᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_resources(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserResource_id(ctx, field)
+			case "userId":
+				return ec.fieldContext_UserResource_userId(ctx, field)
+			case "name":
+				return ec.fieldContext_UserResource_name(ctx, field)
+			case "path":
+				return ec.fieldContext_UserResource_path(ctx, field)
+			case "size":
+				return ec.fieldContext_UserResource_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_UserResource_isDir(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserResource_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserResource_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserResource", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_resources_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -23398,6 +24650,255 @@ func (ec *executionContext) fieldContext_Subscription_assistantDeleted(ctx conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_flowFileAdded(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_flowFileAdded(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().FlowFileAdded(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.FlowFile):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_flowFileAdded(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FlowFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FlowFile_name(ctx, field)
+			case "path":
+				return ec.fieldContext_FlowFile_path(ctx, field)
+			case "size":
+				return ec.fieldContext_FlowFile_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_FlowFile_isDir(ctx, field)
+			case "modifiedAt":
+				return ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FlowFile", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_flowFileAdded_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_flowFileUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_flowFileUpdated(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().FlowFileUpdated(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.FlowFile):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_flowFileUpdated(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FlowFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FlowFile_name(ctx, field)
+			case "path":
+				return ec.fieldContext_FlowFile_path(ctx, field)
+			case "size":
+				return ec.fieldContext_FlowFile_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_FlowFile_isDir(ctx, field)
+			case "modifiedAt":
+				return ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FlowFile", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_flowFileUpdated_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_flowFileDeleted(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_flowFileDeleted(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().FlowFileDeleted(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.FlowFile):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_flowFileDeleted(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FlowFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FlowFile_name(ctx, field)
+			case "path":
+				return ec.fieldContext_FlowFile_path(ctx, field)
+			case "size":
+				return ec.fieldContext_FlowFile_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_FlowFile_isDir(ctx, field)
+			case "modifiedAt":
+				return ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FlowFile", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_flowFileDeleted_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Subscription_screenshotAdded(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
 	fc, err := ec.fieldContext_Subscription_screenshotAdded(ctx, field)
 	if err != nil {
@@ -24932,6 +26433,234 @@ func (ec *executionContext) fieldContext_Subscription_flowTemplateDeleted(_ cont
 				return ec.fieldContext_FlowTemplate_updatedAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FlowTemplate", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_resourceAdded(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_resourceAdded(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().ResourceAdded(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.UserResource):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_resourceAdded(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserResource_id(ctx, field)
+			case "userId":
+				return ec.fieldContext_UserResource_userId(ctx, field)
+			case "name":
+				return ec.fieldContext_UserResource_name(ctx, field)
+			case "path":
+				return ec.fieldContext_UserResource_path(ctx, field)
+			case "size":
+				return ec.fieldContext_UserResource_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_UserResource_isDir(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserResource_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserResource_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserResource", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_resourceUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_resourceUpdated(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().ResourceUpdated(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.UserResource):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_resourceUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserResource_id(ctx, field)
+			case "userId":
+				return ec.fieldContext_UserResource_userId(ctx, field)
+			case "name":
+				return ec.fieldContext_UserResource_name(ctx, field)
+			case "path":
+				return ec.fieldContext_UserResource_path(ctx, field)
+			case "size":
+				return ec.fieldContext_UserResource_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_UserResource_isDir(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserResource_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserResource_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserResource", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_resourceDeleted(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_resourceDeleted(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().ResourceDeleted(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.UserResource):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_resourceDeleted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserResource_id(ctx, field)
+			case "userId":
+				return ec.fieldContext_UserResource_userId(ctx, field)
+			case "name":
+				return ec.fieldContext_UserResource_name(ctx, field)
+			case "path":
+				return ec.fieldContext_UserResource_path(ctx, field)
+			case "size":
+				return ec.fieldContext_UserResource_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_UserResource_isDir(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserResource_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserResource_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserResource", field.Name)
 		},
 	}
 	return fc, nil
@@ -28292,6 +30021,358 @@ func (ec *executionContext) _UserPrompt_updatedAt(ctx context.Context, field gra
 func (ec *executionContext) fieldContext_UserPrompt_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "UserPrompt",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_id(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int64)
+	fc.Result = res
+	return ec.marshalNID2int64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_userId(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_userId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UserID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int64)
+	fc.Result = res
+	return ec.marshalNID2int64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_userId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_name(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_path(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_path(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Path, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_size(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_size(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Size, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_isDir(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_isDir(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDir, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_isDir(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_updatedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -32273,6 +34354,70 @@ func (ec *executionContext) _FlowExecutionStats(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var flowFileImplementors = []string{"FlowFile"}
+
+func (ec *executionContext) _FlowFile(ctx context.Context, sel ast.SelectionSet, obj *model.FlowFile) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, flowFileImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FlowFile")
+		case "id":
+			out.Values[i] = ec._FlowFile_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._FlowFile_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._FlowFile_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._FlowFile_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDir":
+			out.Values[i] = ec._FlowFile_isDir(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "modifiedAt":
+			out.Values[i] = ec._FlowFile_modifiedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var flowStatsImplementors = []string{"FlowStats"}
 
 func (ec *executionContext) _FlowStats(ctx context.Context, sel ast.SelectionSet, obj *model.FlowStats) graphql.Marshaler {
@@ -32548,6 +34693,60 @@ func (ec *executionContext) _MessageLog(ctx context.Context, sel ast.SelectionSe
 			out.Values[i] = ec._MessageLog_subtaskId(ctx, field, obj)
 		case "createdAt":
 			out.Values[i] = ec._MessageLog_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var modelAgentsUsageStatsImplementors = []string{"ModelAgentsUsageStats"}
+
+func (ec *executionContext) _ModelAgentsUsageStats(ctx context.Context, sel ast.SelectionSet, obj *model.ModelAgentsUsageStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelAgentsUsageStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModelAgentsUsageStats")
+		case "model":
+			out.Values[i] = ec._ModelAgentsUsageStats_model(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "provider":
+			out.Values[i] = ec._ModelAgentsUsageStats_provider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agentTypes":
+			out.Values[i] = ec._ModelAgentsUsageStats_agentTypes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stats":
+			out.Values[i] = ec._ModelAgentsUsageStats_stats(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -33612,6 +35811,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "flowFiles":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_flowFiles(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "screenshots":
 			field := field
 
@@ -33887,6 +36108,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_usageStatsByAgentTypeForFlow(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "usageStatsByModelAgentsForFlow":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_usageStatsByModelAgentsForFlow(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -34267,6 +36510,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "resources":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_resources(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -34560,6 +36825,12 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_assistantUpdated(ctx, fields[0])
 	case "assistantDeleted":
 		return ec._Subscription_assistantDeleted(ctx, fields[0])
+	case "flowFileAdded":
+		return ec._Subscription_flowFileAdded(ctx, fields[0])
+	case "flowFileUpdated":
+		return ec._Subscription_flowFileUpdated(ctx, fields[0])
+	case "flowFileDeleted":
+		return ec._Subscription_flowFileDeleted(ctx, fields[0])
 	case "screenshotAdded":
 		return ec._Subscription_screenshotAdded(ctx, fields[0])
 	case "terminalLogAdded":
@@ -34598,6 +36869,12 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_flowTemplateUpdated(ctx, fields[0])
 	case "flowTemplateDeleted":
 		return ec._Subscription_flowTemplateDeleted(ctx, fields[0])
+	case "resourceAdded":
+		return ec._Subscription_resourceAdded(ctx, fields[0])
+	case "resourceUpdated":
+		return ec._Subscription_resourceUpdated(ctx, fields[0])
+	case "resourceDeleted":
+		return ec._Subscription_resourceDeleted(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
@@ -35366,6 +37643,80 @@ func (ec *executionContext) _UserPrompt(ctx context.Context, sel ast.SelectionSe
 	return out
 }
 
+var userResourceImplementors = []string{"UserResource"}
+
+func (ec *executionContext) _UserResource(ctx context.Context, sel ast.SelectionSet, obj *model.UserResource) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, userResourceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UserResource")
+		case "id":
+			out.Values[i] = ec._UserResource_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userId":
+			out.Values[i] = ec._UserResource_userId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._UserResource_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._UserResource_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._UserResource_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDir":
+			out.Values[i] = ec._UserResource_isDir(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._UserResource_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._UserResource_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var vectorStoreLogImplementors = []string{"VectorStoreLog"}
 
 func (ec *executionContext) _VectorStoreLog(ctx context.Context, sel ast.SelectionSet, obj *model.VectorStoreLog) graphql.Marshaler {
@@ -35935,6 +38286,67 @@ func (ec *executionContext) marshalNAgentType2pentagiᚋpkgᚋgraphᚋmodelᚐAg
 	return v
 }
 
+func (ec *executionContext) unmarshalNAgentType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐAgentTypeᚄ(ctx context.Context, v interface{}) ([]model.AgentType, error) {
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]model.AgentType, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNAgentType2pentagiᚋpkgᚋgraphᚋmodelᚐAgentType(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNAgentType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐAgentTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []model.AgentType) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNAgentType2pentagiᚋpkgᚋgraphᚋmodelᚐAgentType(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) marshalNAgentTypeUsageStats2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐAgentTypeUsageStatsᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AgentTypeUsageStats) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -36356,6 +38768,64 @@ func (ec *executionContext) marshalNFlowExecutionStats2ᚖpentagiᚋpkgᚋgraph�
 	return ec._FlowExecutionStats(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNFlowFile2pentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx context.Context, sel ast.SelectionSet, v model.FlowFile) graphql.Marshaler {
+	return ec._FlowFile(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFlowFile2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFileᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.FlowFile) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx context.Context, sel ast.SelectionSet, v *model.FlowFile) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FlowFile(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNFlowStats2pentagiᚋpkgᚋgraphᚋmodelᚐFlowStats(ctx context.Context, sel ast.SelectionSet, v model.FlowStats) graphql.Marshaler {
 	return ec._FlowStats(ctx, sel, &v)
 }
@@ -36580,6 +39050,60 @@ func (ec *executionContext) unmarshalNMessageLogType2pentagiᚋpkgᚋgraphᚋmod
 
 func (ec *executionContext) marshalNMessageLogType2pentagiᚋpkgᚋgraphᚋmodelᚐMessageLogType(ctx context.Context, sel ast.SelectionSet, v model.MessageLogType) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNModelAgentsUsageStats2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelAgentsUsageStatsᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModelAgentsUsageStats) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNModelAgentsUsageStats2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelAgentsUsageStats(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModelAgentsUsageStats2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelAgentsUsageStats(ctx context.Context, sel ast.SelectionSet, v *model.ModelAgentsUsageStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModelAgentsUsageStats(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNModelConfig2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelConfigᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModelConfig) graphql.Marshaler {
@@ -37368,6 +39892,64 @@ func (ec *executionContext) marshalNUserPrompt2ᚖpentagiᚋpkgᚋgraphᚋmodel�
 	return ec._UserPrompt(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNUserResource2pentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx context.Context, sel ast.SelectionSet, v model.UserResource) graphql.Marshaler {
+	return ec._UserResource(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNUserResource2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResourceᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UserResource) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx context.Context, sel ast.SelectionSet, v *model.UserResource) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UserResource(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNVectorStoreAction2pentagiᚋpkgᚋgraphᚋmodelᚐVectorStoreAction(ctx context.Context, v interface{}) (model.VectorStoreAction, error) {
 	var res model.VectorStoreAction
 	err := res.UnmarshalGQL(v)
@@ -37887,6 +40469,44 @@ func (ec *executionContext) marshalOFlowTemplate2ᚖpentagiᚋpkgᚋgraphᚋmode
 		return graphql.Null
 	}
 	return ec._FlowTemplate(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOID2ᚕint64ᚄ(ctx context.Context, v interface{}) ([]int64, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]int64, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2int64(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOID2ᚕint64ᚄ(ctx context.Context, sel ast.SelectionSet, v []int64) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2int64(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOID2ᚖint64(ctx context.Context, v interface{}) (*int64, error) {

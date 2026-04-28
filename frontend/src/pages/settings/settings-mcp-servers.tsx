@@ -105,7 +105,6 @@ const formatFullDateTime = (dateString: string) => {
 const SettingsMcpServers = () => {
     const navigate = useNavigate();
 
-
     // Mocked data stored locally. This can be replaced by a real query later.
     const initialData: McpServerItem[] = useMemo(
         () => [

@@ -328,7 +328,9 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
     const displayValue = field.value ?? '';
 
     // Format price for display
-    const formatPrice = (price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number }): string => {
+    const formatPrice = (
+        price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number },
+    ): string => {
         if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
             return 'free';
         }
@@ -338,7 +340,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
         };
 
         const basePrice = `$${formatValue(price.input)}/$${formatValue(price.output)}`;
-        
+
         // Add cache prices if available
         const hasCachePrices = (price.cacheRead && price.cacheRead > 0) || (price.cacheWrite && price.cacheWrite > 0);
 

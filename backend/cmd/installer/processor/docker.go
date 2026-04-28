@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"pentagi/pkg/tools"
+
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -324,7 +326,7 @@ func (d *dockerOperationsImpl) removeWorkerVolumes(ctx context.Context, state *o
 		return err
 	}
 	for _, v := range vols.Volumes {
-		if strings.HasPrefix(v.Name, "pentagi-terminal-") && strings.HasSuffix(v.Name, "-data") {
+		if strings.HasPrefix(v.Name, tools.PrimaryTerminalNamePrefix) && strings.HasSuffix(v.Name, "-data") {
 			_ = cli.VolumeRemove(ctx, v.Name, true)
 		}
 	}

@@ -1,11 +1,12 @@
 import { LayoutDashboard } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UsageStatsPeriod } from '@/graphql/types';
+import { getPeriodStorageKey } from '@/lib/storage-keys';
 import { DashboardAnalytics } from '@/pages/dashboard/dashboard-analytics';
 import { DashboardOverview } from '@/pages/dashboard/dashboard-overview';
 
@@ -15,9 +16,40 @@ const periodOptions: { label: string; value: UsageStatsPeriod }[] = [
     { label: 'Quarter', value: UsageStatsPeriod.Quarter },
 ];
 
+const VALID_PERIODS = new Set<string>(Object.values(UsageStatsPeriod));
+
+const loadPeriod = (storageKey: string): UsageStatsPeriod => {
+    try {
+        const stored = localStorage.getItem(storageKey);
+
+        if (stored && VALID_PERIODS.has(stored)) {
+            return stored as UsageStatsPeriod;
+        }
+    } catch {
+        /* localStorage may be unavailable */
+    }
+
+    return UsageStatsPeriod.Week;
+};
+
+const savePeriod = (storageKey: string, value: UsageStatsPeriod): void => {
+    try {
+        localStorage.setItem(storageKey, value);
+    } catch {
+        /* localStorage may be unavailable */
+    }
+};
+
 const Dashboard = () => {
+    const periodStorageKey = useMemo(() => getPeriodStorageKey(), []);
     const [activeTab, setActiveTab] = useState('analytics');
-    const [period, setPeriod] = useState<UsageStatsPeriod>(UsageStatsPeriod.Week);
+    const [period, setPeriod] = useState<UsageStatsPeriod>(() => loadPeriod(periodStorageKey));
+
+    const handlePeriodChange = (value: string) => {
+        const next = value as UsageStatsPeriod;
+        setPeriod(next);
+        savePeriod(periodStorageKey, next);
+    };
 
     return (
         <>
@@ -53,7 +85,7 @@ const Dashboard = () => {
 
                         {activeTab === 'analytics' && (
                             <Tabs
-                                onValueChange={(value) => setPeriod(value as UsageStatsPeriod)}
+                                onValueChange={handlePeriodChange}
                                 value={period}
                             >
                                 <TabsList>

@@ -4,6 +4,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import FlowAgents from '@/features/flows/agents/flow-agents';
 import FlowDashboard from '@/features/flows/dashboard/flow-dashboard';
+import FlowFiles from '@/features/flows/files/flow-files';
 import FlowAssistantMessages from '@/features/flows/messages/flow-assistant-messages';
 import FlowAutomationMessages from '@/features/flows/messages/flow-automation-messages';
 import FlowScreenshots from '@/features/flows/screenshots/flow-screenshots';
@@ -49,6 +50,7 @@ const FlowTabs = ({ activeTab, onTabChange }: FlowTabsProps) => {
                         <TabsTrigger value="agents">Agents</TabsTrigger>
                         <TabsTrigger value="tools">Searches</TabsTrigger>
                         <TabsTrigger value="vectorStores">Vector Store</TabsTrigger>
+                        <TabsTrigger value="files">Files</TabsTrigger>
                         <TabsTrigger value="screenshots">Screenshots</TabsTrigger>
                     </TabsList>
                     <ScrollBar orientation="horizontal" />
@@ -115,6 +117,13 @@ const FlowTabs = ({ activeTab, onTabChange }: FlowTabsProps) => {
                 value="vectorStores"
             >
                 <FlowVectorStores />
+            </TabsContent>
+
+            <TabsContent
+                className="mt-1 flex-1 overflow-auto pr-4"
+                value="files"
+            >
+                <FlowFiles />
             </TabsContent>
 
             <TabsContent

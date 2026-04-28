@@ -338,6 +338,26 @@ type Screenshot {
   createdAt: Time!
 }
 
+type FlowFile {
+  id: String!
+  name: String!
+  path: String!
+  size: Int!
+  isDir: Boolean!
+  modifiedAt: Time!
+}
+
+type UserResource {
+  id: ID!
+  userId: ID!
+  name: String!
+  path: String!
+  size: Int!
+  isDir: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
 # =================== API Tokens types ===================
 
 enum TokenStatus {
@@ -556,6 +576,14 @@ type ProviderUsageStats {
 type ModelUsageStats {
   model: String!
   provider: String!
+  stats: UsageStats!
+}
+
+# Model-agents usage statistics
+type ModelAgentsUsageStats {
+  model: String!
+  provider: String!
+  agentTypes: [AgentType!]!
   stats: UsageStats!
 }
 
@@ -806,6 +834,7 @@ type Query {
 
   # Task and execution logs
   tasks(flowId: ID!): [Task!]
+  flowFiles(flowId: ID!): [FlowFile!]!
   screenshots(flowId: ID!): [Screenshot!]
   terminalLogs(flowId: ID!): [TerminalLog!]
   messageLogs(flowId: ID!): [MessageLog!]
@@ -822,6 +851,7 @@ type Query {
   usageStatsByAgentType: [AgentTypeUsageStats!]!
   usageStatsByFlow(flowId: ID!): UsageStats!
   usageStatsByAgentTypeForFlow(flowId: ID!): [AgentTypeUsageStats!]!
+  usageStatsByModelAgentsForFlow(flowId: ID!): [ModelAgentsUsageStats!]!
 
   # Toolcalls statistics and analytics
   toolcallsStatsTotal: ToolcallsStats!
@@ -851,20 +881,23 @@ type Query {
   # Flow Templates management
   flowTemplate(templateId: ID!): FlowTemplate
   flowTemplates: [FlowTemplate!]!
+
+  # User Resources management
+  resources(path: String, recursive: Boolean): [UserResource!]!
 }
 
 type Mutation {
   # Flow management
-  createFlow(modelProvider: String!, input: String!): Flow!
-  putUserInput(flowId: ID!, input: String!, modelProvider: String): ResultType!
+  createFlow(modelProvider: String!, input: String!, resourceIds: [ID!]): Flow!
+  putUserInput(flowId: ID!, input: String!, modelProvider: String, resourceIds: [ID!]): ResultType!
   stopFlow(flowId: ID!): ResultType!
   finishFlow(flowId: ID!): ResultType!
   deleteFlow(flowId: ID!): ResultType!
   renameFlow(flowId: ID!, title: String!): ResultType!
 
   # Assistant management
-  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!): FlowAssistant!
-  callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!): ResultType!
+  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!, resourceIds: [ID!]): FlowAssistant!
+  callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!, resourceIds: [ID!]): ResultType!
   stopAssistant(flowId: ID!, assistantId: ID!): Assistant!
   deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!
 
@@ -909,6 +942,11 @@ type Subscription {
   assistantUpdated(flowId: ID!): Assistant!
   assistantDeleted(flowId: ID!): Assistant!
 
+  # Flow file events
+  flowFileAdded(flowId: ID!): FlowFile!
+  flowFileUpdated(flowId: ID!): FlowFile!
+  flowFileDeleted(flowId: ID!): FlowFile!
+
   # Log events
   screenshotAdded(flowId: ID!): Screenshot!
   terminalLogAdded(flowId: ID!): TerminalLog!
@@ -937,4 +975,9 @@ type Subscription {
   flowTemplateCreated: FlowTemplate!
   flowTemplateUpdated: FlowTemplate!
   flowTemplateDeleted: FlowTemplate!
+
+  # User resource events
+  resourceAdded: UserResource!
+  resourceUpdated: UserResource!
+  resourceDeleted: UserResource!
 }

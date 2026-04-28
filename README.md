@@ -21,6 +21,7 @@
 - [Architecture](#architecture)
   - [Agent Supervision](#advanced-agent-supervision)
 - [Quick Start](#quick-start)
+- [How to Use PentAGI After Login](#how-to-use-pentagi-after-login)
 - [API Access](#api-access)
   - [LLM Provider Configuration](#custom-llm-provider-configuration)
     - [Ollama](#ollama-provider-configuration)
@@ -74,6 +75,13 @@ You can watch the video **PentAGI overview**:
 - Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), Custom) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/)). For production local deployments, see our [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
 - API Token Authentication. Secure Bearer token system for programmatic access to REST and GraphQL APIs.
 - Quick Deployment. Easy setup through [Docker Compose](https://docs.docker.com/compose/) with comprehensive environment configuration.
+
+### Current Capability Boundaries
+
+- PentAGI today is an autonomous and assistant-guided penetration testing platform, not a CALDERA-style Breach and Attack Simulation (BAS) or adversary emulation product with predefined campaigns or attack plans.
+- BAS-like agent-authored attack scripts should be treated as conceptual or future work, not as a feature that is implemented today.
+- The current flow report UI supports web view, copy to clipboard, Markdown download, and PDF download. JSON flow-report export is not documented as a supported output format today.
+- Provider flexibility is available today through built-in providers and custom/OpenAI-compatible endpoints. See [Custom LLM Provider Configuration](#custom-llm-provider-configuration) and the [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
 
 ## Architecture
 
@@ -625,6 +633,24 @@ The installer will:
 5. **Security Hardening**: Generate secure credentials and configure SSL certificates
 6. **Deployment**: Start PentAGI with docker-compose
 
+### Current Web Settings Coverage
+
+The PentAGI web console already manages several settings areas after the server is up and running:
+
+- **Settings -> Providers**: Create, edit, delete, and test user-defined provider profiles for supported provider types. These profiles control per-agent model selection, runtime parameters, reasoning options, and pricing metadata.
+- **Settings -> Prompts**: Manage system, human, and tool prompt templates.
+- **Settings -> PentAGI API**: Create and manage PentAGI Bearer tokens for REST and GraphQL access.
+- **Other UI-managed preferences**: Favorite flows are stored as user preferences, and theme selection is handled from the main sidebar/profile controls rather than the Settings pages.
+
+### Still Server-Managed
+
+The following configuration areas still need to be set on the server through environment variables, compose files, or mounted config files:
+
+- **LLM credentials and connection details**: API keys, endpoints, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
+- **Search provider credentials and options**: Settings such as `DUCKDUCKGO_*`, `GOOGLE_*`, `TAVILY_API_KEY`, `TRAVERSAAL_API_KEY`, `PERPLEXITY_*`, `SEARXNG_*`, and `SPLOITUS_ENABLED`.
+- **Third-party integrations**: Langfuse, Graphiti, and similar external services remain server-side configuration.
+- **MCP server management**: MCP settings pages are not currently exposed as a live web-console feature.
+
 **For Production & Enhanced Security:**
 
 For production deployments or security-sensitive environments, we **strongly recommend** using a distributed two-node architecture where worker operations are isolated on a separate server. This prevents untrusted code execution and network access issues on your main system.
@@ -936,6 +962,62 @@ The `ASSISTANT_USE_AGENTS` setting affects the initial state of the "Use Agents"
 - `true`: New assistants are created with agent delegation enabled by default
 
 Note that users can always override this setting by toggling the "Use Agents" button in the UI when creating or editing an assistant. This environment variable only controls the initial default state.
+
+## How to Use PentAGI After Login
+
+Once the stack is running and you can sign in to the web UI, the fastest way to start is through the Flows workflow.
+
+### 1. Create your first flow
+
+1. Open **Flows** in the sidebar.
+2. Click **New Flow**.
+3. Choose the mode that fits your goal:
+   - **Automation**: fully autonomous execution for a testing goal you want PentAGI to carry out end-to-end
+   - **Assistant**: interactive back-and-forth help when you want to steer the investigation step by step. In this mode you can also enable the **Use Agents** toggle to let PentAGI delegate subtasks to specialized sub-agents for more complex investigations.
+4. Select the LLM provider you want to use for this flow.
+5. Describe the target and the objective in natural language in the message box.
+
+Good first prompts usually include:
+
+- the target system or URL
+- the type of assessment you want
+- any scope limitations or rules of engagement
+- the result you expect, such as a vulnerability report or validation of a hypothesis
+
+Example:
+
+```text
+Assess https://target.example for common web application vulnerabilities. Focus on authentication, file handling, and injection issues. Stay within the provided target only and summarize confirmed findings with reproduction steps.
+```
+
+Only test systems you own or are explicitly authorized to assess. See [EULA.md](EULA.md) for the acceptable use requirements.
+
+### 2. Use templates for repeatable workflows
+
+The new flow form includes a template picker, which can prefill the message box with a saved flow template. This is useful when you run similar assessments repeatedly.
+
+- Use an existing template if you already have one saved in **Templates**
+- Start from the example prompt in [`examples/prompts/base_web_pentest.md`](examples/prompts/base_web_pentest.md) if you need a practical baseline for web testing
+- Adjust the target, scope, and constraints before starting the flow
+
+Templates are starting points. You do not need special syntax to use PentAGI: plain natural-language instructions work well as long as the target and goal are clear.
+
+### 3. Monitor execution and review output
+
+After submitting the flow, PentAGI opens the flow page automatically.
+
+- Use the main flow view to follow messages, agent activity, and task progress
+- Inspect tool activity and terminal output as the flow runs
+- Review generated tasks and subtasks to understand what PentAGI is doing
+
+Once the flow has enough results, use the **Report** menu on the flow page to:
+
+- open the report in a web view
+- copy the generated report to the clipboard
+- download the report as Markdown
+- download the report as PDF
+
+For early testing, start with a narrow target and a single clear objective. This makes the output easier to review and helps you refine your prompts before running larger assessments.
 
 ## API Access
 
@@ -2331,9 +2413,38 @@ OAuth integration with GitHub and Google allows users to authenticate using thei
 - Access to user profile information from GitHub/Google accounts
 - Seamless integration with existing development workflows
 
-For using GitHub OAuth you need to create a new OAuth application in your GitHub account and set the `OAUTH_GITHUB_CLIENT_ID` and `OAUTH_GITHUB_CLIENT_SECRET` in `.env` file.
+PentAGI uses `PUBLIC_URL` as the public origin/base URL for OAuth redirects. In the default deployment, both GitHub and Google callbacks are handled by:
 
-For using Google OAuth you need to create a new OAuth application in your Google account and set the `OAUTH_GOOGLE_CLIENT_ID` and `OAUTH_GOOGLE_CLIENT_SECRET` in `.env` file.
+```text
+${PUBLIC_URL}/api/v1/auth/login-callback
+```
+
+For GitHub OAuth:
+
+1. Create a new OAuth App in your GitHub account.
+2. Set **Homepage URL** to your `PUBLIC_URL`.
+3. Set **Authorization callback URL** to `${PUBLIC_URL}/api/v1/auth/login-callback`.
+4. Add the client credentials to your `.env` file:
+
+```bash
+PUBLIC_URL=https://pentagi.example.com
+OAUTH_GITHUB_CLIENT_ID=your_github_client_id
+OAUTH_GITHUB_CLIENT_SECRET=your_github_client_secret
+```
+
+For Google OAuth:
+
+1. Create OAuth credentials in your Google Cloud project.
+2. Use the same callback endpoint: `${PUBLIC_URL}/api/v1/auth/login-callback`.
+3. Add the client credentials to your `.env` file:
+
+```bash
+PUBLIC_URL=https://pentagi.example.com
+OAUTH_GOOGLE_CLIENT_ID=your_google_client_id
+OAUTH_GOOGLE_CLIENT_SECRET=your_google_client_secret
+```
+
+Make sure `PUBLIC_URL` matches the externally accessible HTTPS address of your PentAGI instance and does not include the callback path itself. If the URL configured in the OAuth provider does not exactly match the callback generated by PentAGI, the provider will reject the login attempt with a redirect URI mismatch error.
 
 ### Docker Image Configuration
 
@@ -2341,10 +2452,13 @@ PentAGI allows you to configure Docker image selection for executing various tas
 
 | Variable                           | Default                | Description                                                 |
 | ---------------------------------- | ---------------------- | ----------------------------------------------------------- |
+| `PENTAGI_IMAGE`                    | `vxcontrol/pentagi:latest` | Docker image used for the main PentAGI application service |
 | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for general tasks and ambiguous cases  |
 | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for security/penetration testing tasks |
 
-When these environment variables are set, AI agents will be limited to the image choices you specify. This is particularly useful for:
+`PENTAGI_IMAGE` changes the image used by the main `pentagi` service in `docker-compose.yml`. The `DOCKER_DEFAULT_IMAGE` and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` variables only affect automatic worker image selection for task execution inside PentAGI. They do not rewrite the rest of the Compose stack, so services such as `pgvector`, `scraper`, and the optional `graphiti` stack still use the image references defined in the compose files.
+
+When `DOCKER_DEFAULT_IMAGE` and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` are set, AI agents will be limited to the image choices you specify. This is particularly useful for:
 
 - **Security Enforcement**: Restricting usage to only verified and trusted images
 - **Environment Standardization**: Using corporate or customized images across all operations
@@ -2353,6 +2467,9 @@ When these environment variables are set, AI agents will be limited to the image
 Configuration examples:
 
 ```bash
+# Using a custom PentAGI application image
+PENTAGI_IMAGE=registry.example.com/security/pentagi:latest
+
 # Using a custom image for general tasks
 DOCKER_DEFAULT_IMAGE=mycompany/custom-debian:latest
 
@@ -2364,6 +2481,29 @@ DOCKER_DEFAULT_IMAGE_FOR_PENTEST=mycompany/pentest-tools:v2.0
 > If a user explicitly specifies a particular Docker image in their task, the system will try to use that exact image, ignoring these settings. These variables only affect the system's automatic image selection process.
 
 For an advanced OpenVAS/GVM experiment that uses a custom pentest image, see [OpenVAS via a Custom Pentest Image](examples/guides/openvas-custom-image.md).
+
+#### Restricted Networks, Docker Mirrors, and Proxies
+
+If your environment cannot reach Docker Hub (`docker.io`) directly, changing PentAGI environment variables is usually not enough to fix image download failures. PentAGI still relies on Docker's own registry access for Compose-managed services, and the installer network checks also validate Docker Hub reachability.
+
+For restricted networks:
+
+1. Confirm that the host can resolve and reach `docker.io`.
+2. If your environment requires an outbound proxy for PentAGI or installer HTTP traffic, set the `PROXY_URL` environment variable. To route Docker image pulls through a proxy, configure the Docker daemon or Docker Desktop proxy separately — Docker does not use PentAGI's `PROXY_URL` for registry access.
+3. If Docker Hub is blocked or heavily rate-limited, configure an organization-approved registry mirror or registry proxy before running the installer or `docker compose up`.
+4. Restart Docker after changing the daemon configuration, then rerun the installer checks or Compose startup.
+
+Example Docker daemon mirror configuration:
+
+```json
+{
+  "registry-mirrors": ["https://mirror.example.com"]
+}
+```
+
+On Linux, this is typically configured in `/etc/docker/daemon.json`. On Docker Desktop, use the equivalent Docker Engine or proxy settings. A Docker Hub mirror covers Docker Hub-hosted images such as `vxcontrol/*`, but the main Compose stack already includes `quay.io/prometheuscommunity/postgres-exporter`, and the optional observability stack includes `gcr.io/cadvisor/cadvisor`. Those registries still need direct access or individually approved proxy/mirror paths.
+
+See the official Docker documentation for [registry mirrors](https://docs.docker.com/docker-hub/image-library/mirror/) and [daemon proxy configuration](https://docs.docker.com/engine/daemon/proxy/).
 
 ## Development
 
@@ -2416,7 +2556,7 @@ fern generate --local
 and to install fern-cli
 
 ```bash
-npm install -g fern-api
+pnpm add -g fern-api
 ```
 
 #### Testing
@@ -2425,23 +2565,23 @@ For running tests `cd backend && go test -v ./...`
 
 #### Frontend Setup
 
-Run once `cd frontend && npm install` to install needed packages.
+Run once `cd frontend && pnpm install` to install needed packages.
 
-For generating graphql files have to run `npm run graphql:generate` which using `graphql-codegen.ts` file.
+For generating graphql files have to run `pnpm run graphql:generate` which using `graphql-codegen.ts` file.
 
 Be sure that you have `graphql-codegen` installed globally:
 
 ```bash
-npm install -g graphql-codegen
+pnpm add -g graphql-codegen
 ```
 
 After that you can run:
-* `npm run prettier` to check if your code is formatted correctly
-* `npm run prettier:fix` to fix it
-* `npm run lint` to check if your code is linted correctly
-* `npm run lint:fix` to fix it
+* `pnpm run prettier` to check if your code is formatted correctly
+* `pnpm run prettier:fix` to fix it
+* `pnpm run lint` to check if your code is linted correctly
+* `pnpm run lint:fix` to fix it
 
-For generating SSL certificates you need to run `npm run ssl:generate` which using `generate-ssl.ts` file or it will be generated automatically when you run `npm run dev`.
+For generating SSL certificates you need to run `pnpm run ssl:generate` which using `generate-ssl.ts` file or it will be generated automatically when you run `pnpm run dev`.
 
 #### Backend Configuration
 
@@ -2475,9 +2615,9 @@ Run the command(s) in `backend` folder:
 #### Frontend
 
 Run the command(s) in `frontend` folder:
-- Run `npm install` to install the dependencies
-- Run `npm run dev` to run the web app
-- Run `npm run build` to build the web app
+- Run `pnpm install` to install the dependencies
+- Run `pnpm run dev` to run the web app
+- Run `pnpm run build` to build the web app
 
 Open your browser and visit the web app URL.
 
@@ -2873,6 +3013,7 @@ EMBEDDING_STRIP_NEW_LINES=true  # Whether to remove new lines from text before e
 # Advanced settings
 PROXY_URL=                      # Optional proxy for all API calls
 HTTP_CLIENT_TIMEOUT=600         # Timeout in seconds for external API calls (default: 600, 0 = no timeout)
+TERMINAL_TOOL_TIMEOUT=1200      # Default timeout in seconds for terminal tool commands when timeout=0 or negative (range: 1–10800; values <= 0 or above 10800 are clamped to 10800 = 3 hours)
 
 # SSL/TLS Certificate Configuration (for external communication with LLM backends and tool servers)
 EXTERNAL_SSL_CA_PATH=           # Path to custom CA certificate file (PEM format) inside the container
@@ -3002,6 +3143,19 @@ Available search parameters:
 - `-guide_type STRING`: Filter by guide type (install, configure, use, pentest, development, other)
 - `-limit NUMBER`: Maximum number of results (default: 3)
 - `-threshold NUMBER`: Similarity threshold (0.0-1.0, default: 0.7)
+
+### Memory Lifecycle Across Flows
+
+PentAGI stores several kinds of vector documents, and they serve different purposes:
+
+- `memory` captures flow-specific execution history such as tool results and agent observations
+- `guide`, `answer`, and `code` are intended for reusable knowledge that can help future runs
+
+If you want to inspect what happened in one engagement, search the vector store with the related `flow_id`. If you want knowledge to survive beyond a single run, store the durable result explicitly as a `guide`, `answer`, or `code` document instead of relying on execution memory alone.
+
+For example, if a target has recurring setup notes, authentication quirks, or target-specific testing methodology, instruct the agent to save that information as a `guide` and search for it at the beginning of the next engagement. This is the safest current workflow when you want a new flow to start with reusable context.
+
+Flow deletion removes the flow from normal queries through PentAGI's soft-delete mechanism, so reusable knowledge should be treated as a separate concern from per-flow execution history. If you enable the optional Graphiti knowledge graph described earlier in this README, treat its current search context as scoped to the active flow or engagement unless you explicitly build a separate cross-flow reuse workflow.
 
 ### Common Troubleshooting Scenarios
 
@@ -3250,6 +3404,18 @@ The main utility accepts several options:
 - `-subtask <id>` - Subtask ID for agent context (optional)
 
 Function-specific arguments are passed after the function name using `-name value` format.
+
+### Pentesting Prompt Methodology
+
+When refining prompts for offensive security work, give the agent a clear methodology instead of a flat list of payloads:
+
+1. Start with explicit scope, authorization, and success criteria
+2. Map the application first: roles, routes, parameters, uploads, integrations, and trust boundaries
+3. Prioritize attack surfaces systematically instead of testing everything at once
+4. Validate findings with reproducible evidence before escalating to deeper exploitation
+5. Finish with report-ready notes that capture impact, prerequisites, and next steps
+
+For PentAGI-specific prompt guidance, see [`backend/docs/prompt_engineering_pentagi.md`](backend/docs/prompt_engineering_pentagi.md). For a practical starting point, reuse and adapt [`examples/prompts/base_web_pentest.md`](examples/prompts/base_web_pentest.md) to match the target application, technology stack, and engagement scope.
 
 ## Building
 

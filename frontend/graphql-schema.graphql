@@ -89,6 +89,26 @@ fragment screenshotFragment on Screenshot {
     createdAt
 }
 
+fragment flowFileFragment on FlowFile {
+    id
+    name
+    path
+    size
+    isDir
+    modifiedAt
+}
+
+fragment userResourceFragment on UserResource {
+    id
+    userId
+    name
+    path
+    size
+    isDir
+    createdAt
+    updatedAt
+}
+
 fragment agentLogFragment on AgentLog {
     id
     flowId
@@ -392,6 +412,15 @@ fragment modelUsageStatsFragment on ModelUsageStats {
 
 fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
     agentType
+    stats {
+        ...usageStatsFragment
+    }
+}
+
+fragment modelAgentsUsageStatsFragment on ModelAgentsUsageStats {
+    model
+    provider
+    agentTypes
     stats {
         ...usageStatsFragment
     }
@@ -763,6 +792,18 @@ query tasks($flowId: ID!) {
     }
 }
 
+query flowFiles($flowId: ID!) {
+    flowFiles(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
+query resources($path: String, $recursive: Boolean) {
+    resources(path: $path, recursive: $recursive) {
+        ...userResourceFragment
+    }
+}
+
 query assistants($flowId: ID!) {
     assistants(flowId: $flowId) {
         ...assistantFragment
@@ -823,6 +864,12 @@ query usageStatsByFlow($flowId: ID!) {
 query usageStatsByAgentTypeForFlow($flowId: ID!) {
     usageStatsByAgentTypeForFlow(flowId: $flowId) {
         ...agentTypeUsageStatsFragment
+    }
+}
+
+query usageStatsByModelAgentsForFlow($flowId: ID!) {
+    usageStatsByModelAgentsForFlow(flowId: $flowId) {
+        ...modelAgentsUsageStatsFragment
     }
 }
 
@@ -947,8 +994,8 @@ mutation deleteFlowTemplate($templateId: ID!) {
 
 # ==================== Flows ====================
 
-mutation createFlow($modelProvider: String!, $input: String!) {
-    createFlow(modelProvider: $modelProvider, input: $input) {
+mutation createFlow($modelProvider: String!, $input: String!, $resourceIds: [ID!]) {
+    createFlow(modelProvider: $modelProvider, input: $input, resourceIds: $resourceIds) {
         ...flowFragment
     }
 }
@@ -957,8 +1004,8 @@ mutation deleteFlow($flowId: ID!) {
     deleteFlow(flowId: $flowId)
 }
 
-mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String) {
-    putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider)
+mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String, $resourceIds: [ID!]) {
+    putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider, resourceIds: $resourceIds)
 }
 
 mutation finishFlow($flowId: ID!) {
@@ -973,8 +1020,8 @@ mutation renameFlow($flowId: ID!, $title: String!) {
     renameFlow(flowId: $flowId, title: $title)
 }
 
-mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!) {
-    createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents) {
+mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!, $resourceIds: [ID!]) {
+    createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents, resourceIds: $resourceIds) {
         flow {
             ...flowFragment
         }
@@ -984,8 +1031,8 @@ mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!,
     }
 }
 
-mutation callAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean!) {
-    callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents)
+mutation callAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean!, $resourceIds: [ID!]) {
+    callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents, resourceIds: $resourceIds)
 }
 
 mutation stopAssistant($flowId: ID!, $assistantId: ID!) {
@@ -1126,6 +1173,24 @@ subscription assistantDeleted($flowId: ID!) {
     }
 }
 
+subscription flowFileAdded($flowId: ID!) {
+    flowFileAdded(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
+subscription flowFileUpdated($flowId: ID!) {
+    flowFileUpdated(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
+subscription flowFileDeleted($flowId: ID!) {
+    flowFileDeleted(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
 subscription assistantLogAdded($flowId: ID!) {
     assistantLogAdded(flowId: $flowId) {
         ...assistantLogFragment
@@ -1231,5 +1296,23 @@ subscription flowTemplateUpdated {
 subscription flowTemplateDeleted {
     flowTemplateDeleted {
         ...flowTemplateFragment
+    }
+}
+
+subscription resourceAdded {
+    resourceAdded {
+        ...userResourceFragment
+    }
+}
+
+subscription resourceUpdated {
+    resourceUpdated {
+        ...userResourceFragment
+    }
+}
+
+subscription resourceDeleted {
+    resourceDeleted {
+        ...userResourceFragment
     }
 }

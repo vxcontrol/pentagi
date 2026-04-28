@@ -9,17 +9,20 @@ FROM node:23-slim AS frontend-compiler
 ENV NODE_ENV=production
 ENV VITE_BUILD_MEMORY_LIMIT=4096
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV PNPM_HOME="/usr/local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 
 WORKDIR /app/ui
 
-# Install build essentials
+# Install build essentials and enable pnpm via corepack
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     tzdata \
     gcc \
     g++ \
     make \
-    git
+    git \
+    && corepack enable && corepack prepare pnpm@latest --activate
 
 # GraphQL schema for code generation
 COPY ./backend/pkg/graph/schema.graphqls ../backend/pkg/graph/
@@ -27,18 +30,18 @@ COPY ./backend/pkg/graph/schema.graphqls ../backend/pkg/graph/
 # Application source code
 COPY frontend/ .
 
-# Install dependencies with package manager detection for SBOM
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --include=dev
+# Install dependencies
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Generate license report for frontend dependencies
-RUN npm install -g license-checker && \
+RUN pnpm add -g license-checker && \
     mkdir -p /licenses/frontend && \
     license-checker --production --json > /licenses/frontend/licenses.json && \
     license-checker --production --csv > /licenses/frontend/licenses.csv
 
 # Build frontend with optimizations and parallel processing
-RUN npm run build -- \
+RUN pnpm run build -- \
     --mode production \
     --minify esbuild \
     --outDir dist \
@@ -156,6 +159,7 @@ COPY --from=api-builder /licenses/backend /opt/pentagi/licenses/backend
 COPY --from=frontend-compiler /licenses/frontend /opt/pentagi/licenses/frontend
 
 # Copy provider configuration files
+COPY examples/configs/azure-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/custom-openai.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepinfra.provider.yml /opt/pentagi/conf/
 COPY examples/configs/deepseek.provider.yml /opt/pentagi/conf/

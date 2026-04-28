@@ -214,6 +214,20 @@ Example bad enrichments:
 <execution_context>
 {{.ExecutionContext}}
 </execution_context>
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files are attached to this flow and available READ-ONLY in the container:
+- `{{.Cwd}}/uploads` — files delivered specifically for this flow
+- `{{.Cwd}}/resources` — reference materials for this engagement
+
+If the question relates to these files, read their contents using `{{.FileToolName}}` with the full path `<base>/<relative_path>` and include relevant excerpts in the enrichment result. These directories are READ-ONLY.
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 ## COMPLETION REQUIREMENTS
 

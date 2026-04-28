@@ -2,8 +2,9 @@ import { Activity, CircleDollarSign, Cpu, GitFork, Loader2 } from 'lucide-react'
 
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
+import { MetricCard } from '@/components/dashboard';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     useFlowsStatsTotalQuery,
@@ -14,32 +15,7 @@ import {
     useUsageStatsByProviderQuery,
     useUsageStatsTotalQuery,
 } from '@/graphql/types';
-import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/pages/dashboard/format-utils';
-
-const StatCard = ({
-    description,
-    icon,
-    loading,
-    title,
-    value,
-}: {
-    description: string;
-    icon: React.ReactNode;
-    loading: boolean;
-    title: string;
-    value: string;
-}) => (
-    <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{title}</CardTitle>
-            {icon}
-        </CardHeader>
-        <CardContent>
-            {loading ? <Skeleton className="h-8 w-24" /> : <div className="text-2xl font-bold">{value}</div>}
-            <p className="text-muted-foreground text-xs">{description}</p>
-        </CardContent>
-    </Card>
-);
+import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 const UsageStatsRow = ({ label, stats }: { label: string; stats: UsageStatsFragmentFragment }) => (
     <TableRow>
@@ -61,13 +37,13 @@ const UsageStatsTable = ({ rows }: { rows: Array<{ label: string; stats: UsageSt
         <TableHeader>
             <TableRow>
                 <TableHead className="whitespace-nowrap">Name</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Tokens In</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Tokens Out</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Cache In</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Cache Out</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Cost In</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Cost Out</TableHead>
-                <TableHead className="whitespace-nowrap text-right">Total Cost</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Tokens In</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Tokens Out</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Cache In</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Cache Out</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Cost In</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Cost Out</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Total Cost</TableHead>
             </TableRow>
         </TableHeader>
         <TableBody>
@@ -124,33 +100,33 @@ export const DashboardOverview = () => {
     return (
         <div className="flex flex-col gap-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCard
-                    description="Total LLM spending across all providers"
-                    icon={<CircleDollarSign className="text-muted-foreground size-4" />}
-                    loading={usageTotalLoading}
-                    title="Total Cost"
-                    value={formatCost(totalCost)}
+                <MetricCard
+                    description={`Tasks: ${flowsTotal?.totalTasksCount ?? 0} · Subtasks: ${flowsTotal?.totalSubtasksCount ?? 0} · Assistants: ${flowsTotal?.totalAssistantsCount ?? 0}`}
+                    icon={<GitFork className="text-muted-foreground size-4" />}
+                    loading={flowsTotalLoading}
+                    title="Total Flows"
+                    value={flowsTotal ? formatNumber(flowsTotal.totalFlowsCount) : '0'}
                 />
-                <StatCard
-                    description="Input + Output tokens processed"
-                    icon={<Cpu className="text-muted-foreground size-4" />}
-                    loading={usageTotalLoading}
-                    title="Total Tokens"
-                    value={formatTokenCount(totalTokens)}
-                />
-                <StatCard
+                <MetricCard
                     description={`Total duration: ${toolcallsTotal ? formatDuration(toolcallsTotal.totalDurationSeconds) : '—'}`}
                     icon={<Activity className="text-muted-foreground size-4" />}
                     loading={toolcallsTotalLoading}
                     title="Tool Calls"
                     value={toolcallsTotal ? formatNumber(toolcallsTotal.totalCount) : '0'}
                 />
-                <StatCard
-                    description={`Tasks: ${flowsTotal?.totalTasksCount ?? 0} · Subtasks: ${flowsTotal?.totalSubtasksCount ?? 0} · Assistants: ${flowsTotal?.totalAssistantsCount ?? 0}`}
-                    icon={<GitFork className="text-muted-foreground size-4" />}
-                    loading={flowsTotalLoading}
-                    title="Total Flows"
-                    value={flowsTotal ? formatNumber(flowsTotal.totalFlowsCount) : '0'}
+                <MetricCard
+                    description="Input + Output tokens processed"
+                    icon={<Cpu className="text-muted-foreground size-4" />}
+                    loading={usageTotalLoading}
+                    title="Total Tokens"
+                    value={formatTokenCount(totalTokens)}
+                />
+                <MetricCard
+                    description="Total LLM spending across all providers"
+                    icon={<CircleDollarSign className="text-muted-foreground size-4" />}
+                    loading={usageTotalLoading}
+                    title="Total Cost"
+                    value={formatCost(totalCost)}
                 />
             </div>
 
@@ -198,9 +174,9 @@ export const DashboardOverview = () => {
                                 <TableRow>
                                     <TableHead className="whitespace-nowrap">Function</TableHead>
                                     <TableHead className="whitespace-nowrap">Type</TableHead>
-                                    <TableHead className="whitespace-nowrap text-right">Count</TableHead>
-                                    <TableHead className="whitespace-nowrap text-right">Total Duration</TableHead>
-                                    <TableHead className="whitespace-nowrap text-right">Avg Duration</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Count</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Total Duration</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Avg Duration</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -208,15 +184,9 @@ export const DashboardOverview = () => {
                                     <TableRow key={item.functionName}>
                                         <TableCell className="font-medium">{item.functionName}</TableCell>
                                         <TableCell>
-                                            <span
-                                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                                    item.isAgent
-                                                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                                                }`}
-                                            >
+                                            <Badge variant={item.isAgent ? 'secondary' : 'outline'}>
                                                 {item.isAgent ? 'Agent' : 'Tool'}
-                                            </span>
+                                            </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">{formatNumber(item.totalCount)}</TableCell>
                                         <TableCell className="text-right">

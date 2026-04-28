@@ -1,6 +1,6 @@
 const STORAGE_KEY_SEPARATOR = '_4_';
 
-export type LocalStorageKeyType = 'column' | 'page' | 'sorting';
+export type LocalStorageKeyType = 'column' | 'page' | 'period' | 'sorting';
 
 export function getColumnStorageKey(urlPath?: string): string {
     return getStorageKey('column', urlPath);
@@ -8,6 +8,10 @@ export function getColumnStorageKey(urlPath?: string): string {
 
 export function getPageStorageKey(urlPath?: string): string {
     return getStorageKey('page', urlPath);
+}
+
+export function getPeriodStorageKey(urlPath?: string): string {
+    return getStorageKey('period', urlPath);
 }
 
 export function getSortingStorageKey(urlPath?: string): string {

@@ -55,6 +55,9 @@ type Querier interface {
 	// Get toolcalls stats for all flows
 	GetAllFlowsToolcallsStats(ctx context.Context) ([]GetAllFlowsToolcallsStatsRow, error)
 	GetAllFlowsUsageStats(ctx context.Context) ([]GetAllFlowsUsageStatsRow, error)
+	GetAllResourcesInDir(ctx context.Context, arg GetAllResourcesInDirParams) ([]UserResource, error)
+	GetAllResourcesRecursive(ctx context.Context, arg GetAllResourcesRecursiveParams) ([]UserResource, error)
+	GetAllResourcesRoot(ctx context.Context) ([]UserResource, error)
 	GetAssistant(ctx context.Context, id int64) (Assistant, error)
 	GetAssistantUseAgents(ctx context.Context, id int64) (bool, error)
 	// Get total count of assistants for a specific flow
@@ -172,6 +175,7 @@ type Querier interface {
 	GetUsageStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastMonthRow, error)
 	GetUsageStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastWeekRow, error)
 	GetUsageStatsByModel(ctx context.Context, userID int64) ([]GetUsageStatsByModelRow, error)
+	GetUsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByModelAgentsForFlowRow, error)
 	GetUsageStatsByProvider(ctx context.Context, userID int64) ([]GetUsageStatsByProviderRow, error)
 	GetUsageStatsByType(ctx context.Context, userID int64) ([]GetUsageStatsByTypeRow, error)
 	GetUsageStatsByTypeForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByTypeForFlowRow, error)
@@ -205,6 +209,11 @@ type Querier interface {
 	GetUserProviderByName(ctx context.Context, arg GetUserProviderByNameParams) (Provider, error)
 	GetUserProviders(ctx context.Context, userID int64) ([]Provider, error)
 	GetUserProvidersByType(ctx context.Context, arg GetUserProvidersByTypeParams) ([]Provider, error)
+	GetUserResourceByID(ctx context.Context, id int64) (UserResource, error)
+	GetUserResourcesByIDs(ctx context.Context, ids []int64) ([]UserResource, error)
+	GetUserResourcesInDir(ctx context.Context, arg GetUserResourcesInDirParams) ([]UserResource, error)
+	GetUserResourcesRecursive(ctx context.Context, arg GetUserResourcesRecursiveParams) ([]UserResource, error)
+	GetUserResourcesRoot(ctx context.Context, userID int64) ([]UserResource, error)
 	// Get total count of flows, tasks, subtasks, and assistants for a user
 	GetUserTotalFlowsStats(ctx context.Context, userID int64) (GetUserTotalFlowsStatsRow, error)
 	// Get total toolcalls stats for a user

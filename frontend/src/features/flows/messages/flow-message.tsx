@@ -1,5 +1,5 @@
 import { Copy } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import type { AssistantLogFragmentFragment, MessageLogFragmentFragment } from '@/graphql/types';
 
@@ -48,26 +48,34 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
     const [isDetailsVisible, setIsDetailsVisible] = useState(isReportMessage);
     const [isThinkingVisible, setIsThinkingVisible] = useState(false);
 
-    // Auto-expand blocks if they contain search matches
-    useEffect(() => {
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasThinkingMatch, setPrevHasThinkingMatch] = useState(searchChecks.hasThinkingMatch);
+    const [prevHasResultMatch, setPrevHasResultMatch] = useState(searchChecks.hasResultMatch);
+
+    if (
+        searchValue !== prevSearchValue ||
+        searchChecks.hasThinkingMatch !== prevHasThinkingMatch ||
+        searchChecks.hasResultMatch !== prevHasResultMatch
+    ) {
+        setPrevSearchValue(searchValue);
+        setPrevHasThinkingMatch(searchChecks.hasThinkingMatch);
+        setPrevHasResultMatch(searchChecks.hasResultMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand thinking block only if it contains the search term
             if (searchChecks.hasThinkingMatch) {
                 setIsThinkingVisible(true);
             }
 
-            // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(isReportMessage);
             setIsThinkingVisible(false);
         }
-    }, [searchValue, searchChecks.hasThinkingMatch, searchChecks.hasResultMatch, isReportMessage]);
+    }
 
     // Use useCallback to memoize the toggle functions
     const toggleDetails = useCallback(() => {

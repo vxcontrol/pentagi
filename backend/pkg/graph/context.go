@@ -8,6 +8,8 @@ import (
 	"slices"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/flowfiles"
+	"pentagi/pkg/graph/model"
 )
 
 // This file will not be regenerated automatically.
@@ -119,4 +121,63 @@ func validatePermissionWithFlowID(
 	}
 
 	return uid, nil
+}
+
+// validateUserResources checks that all given IDs exist and belong to uid (or uid is admin).
+// Returns the fetched UserResource records for use in copy operations.
+// An empty ids slice is valid and returns nil, nil.
+func validateUserResources(
+	ctx context.Context,
+	db database.Querier,
+	uid int64,
+	isAdmin bool,
+	ids []int64,
+) ([]database.UserResource, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	dbResources, err := db.GetUserResourcesByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch resources: %w", err)
+	}
+
+	found := make(map[int64]database.UserResource, len(dbResources))
+	for _, r := range dbResources {
+		found[r.ID] = r
+	}
+
+	result := make([]database.UserResource, 0, len(ids))
+	for _, id := range ids {
+		r, ok := found[id]
+		if !ok {
+			return nil, fmt.Errorf("resource %d not found", id)
+		}
+		if !isAdmin && r.UserID != uid {
+			return nil, fmt.Errorf("resource %d not accessible", id)
+		}
+		result = append(result, r)
+	}
+
+	return result, nil
+}
+
+func convertFlowFiles(files flowfiles.Files) []*model.FlowFile {
+	converted := make([]*model.FlowFile, 0, len(files.Files))
+	for _, file := range files.Files {
+		converted = append(converted, convertFlowFile(file))
+	}
+
+	return converted
+}
+
+func convertFlowFile(file flowfiles.File) *model.FlowFile {
+	return &model.FlowFile{
+		ID:         file.ID,
+		Name:       file.Name,
+		Path:       file.Path,
+		Size:       int(file.Size),
+		IsDir:      file.IsDir,
+		ModifiedAt: file.ModifiedAt,
+	}
 }

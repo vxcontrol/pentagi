@@ -1,4 +1,5 @@
 import type { SortingState, VisibilityState } from '@tanstack/react-table';
+
 import { z } from 'zod';
 
 const sortingSchema = z.array(z.object({ desc: z.boolean(), id: z.string() }));
@@ -9,7 +10,7 @@ const pageStateSchema = z.object({ page: z.number(), pageSize: z.number() });
 
 export type StoredPageState = z.infer<typeof pageStateSchema>;
 
-function loadFromStorage<T>(key: string, schema: z.ZodType<T>): T | null {
+function loadFromStorage<T>(key: string, schema: z.ZodType<T>): null | T {
     try {
         const raw = localStorage.getItem(key);
 
@@ -33,19 +34,14 @@ function saveToStorage(key: string, value: unknown): void {
     }
 }
 
-export const loadSorting = (key: string): SortingState | null => loadFromStorage(key, sortingSchema);
+export const loadSorting = (key: string): null | SortingState => loadFromStorage(key, sortingSchema);
 
-export const loadColumnVisibility = (key: string): VisibilityState | null =>
-    loadFromStorage(key, visibilitySchema);
+export const loadColumnVisibility = (key: string): null | VisibilityState => loadFromStorage(key, visibilitySchema);
 
-export const loadPageState = (key: string): StoredPageState | null =>
-    loadFromStorage(key, pageStateSchema);
+export const loadPageState = (key: string): null | StoredPageState => loadFromStorage(key, pageStateSchema);
 
-export const saveSorting = (key: string, sorting: SortingState): void =>
-    saveToStorage(key, sorting);
+export const saveSorting = (key: string, sorting: SortingState): void => saveToStorage(key, sorting);
 
-export const saveColumnVisibility = (key: string, visibility: VisibilityState): void =>
-    saveToStorage(key, visibility);
+export const saveColumnVisibility = (key: string, visibility: VisibilityState): void => saveToStorage(key, visibility);
 
-export const savePageState = (key: string, state: StoredPageState): void =>
-    saveToStorage(key, state);
+export const savePageState = (key: string, state: StoredPageState): void => saveToStorage(key, state);

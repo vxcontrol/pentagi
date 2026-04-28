@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -155,6 +156,69 @@ func TestExtractVersionFromOutput(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCheckDockerComposeVersionWithRunner(t *testing.T) {
+	t.Run("uses docker compose v2 output", func(t *testing.T) {
+		calls := 0
+		result := checkDockerComposeVersionWithRunner(func(name string, args ...string) ([]byte, error) {
+			calls++
+			if name != "docker" {
+				t.Fatalf("unexpected command %q", name)
+			}
+			if len(args) != 2 || args[0] != "compose" || args[1] != "version" {
+				t.Fatalf("unexpected args: %v", args)
+			}
+
+			return []byte("Docker Compose version v2.12.2"), nil
+		})
+
+		if calls != 1 {
+			t.Fatalf("expected 1 command invocation, got %d", calls)
+		}
+		if result.Version != "2.12.2" {
+			t.Fatalf("expected version 2.12.2, got %q", result.Version)
+		}
+		if !result.Valid {
+			t.Fatal("expected docker compose version to be valid")
+		}
+	})
+
+	t.Run("parses version from stdout even when error is returned", func(t *testing.T) {
+		calls := 0
+		result := checkDockerComposeVersionWithRunner(func(name string, args ...string) ([]byte, error) {
+			calls++
+			return []byte("Docker Compose version v2.12.2"), errors.New("exit status 1")
+		})
+
+		if calls != 1 {
+			t.Fatalf("expected 1 command invocation, got %d", calls)
+		}
+		if result.Version != "2.12.2" {
+			t.Fatalf("expected version 2.12.2, got %q", result.Version)
+		}
+		if !result.Valid {
+			t.Fatal("expected docker compose version to remain valid when stdout is parseable")
+		}
+	})
+
+	t.Run("fails when docker compose is unavailable", func(t *testing.T) {
+		calls := 0
+		result := checkDockerComposeVersionWithRunner(func(name string, args ...string) ([]byte, error) {
+			calls++
+			return nil, errors.New("executable file not found")
+		})
+
+		if calls != 1 {
+			t.Fatalf("expected 1 command invocation, got %d", calls)
+		}
+		if result.Version != "" {
+			t.Fatalf("expected empty version, got %q", result.Version)
+		}
+		if result.Valid {
+			t.Fatal("expected docker compose check to be invalid")
+		}
+	})
 }
 
 func TestCheckVersionCompatibility(t *testing.T) {

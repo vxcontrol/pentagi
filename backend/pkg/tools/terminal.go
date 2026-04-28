@@ -21,10 +21,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// PrimaryTerminalNamePrefix is the prefix used for all primary terminal container names.
+const PrimaryTerminalNamePrefix = "pentagi-terminal-"
+
 const (
-	defaultExecCommandTimeout = 5 * time.Minute
-	defaultExtraExecTimeout   = 5 * time.Second
-	defaultQuickCheckTimeout  = 500 * time.Millisecond
+	maxExplicitExecCommandTimeout = 3 * time.Hour
+	defaultExtraExecTimeout       = 5 * time.Second
+	defaultQuickCheckTimeout      = 500 * time.Millisecond
 
 	// ANSI terminal color codes (aligned with PentAGI UI palette)
 	ansiColorInputCmd  = "\033[96m" // Bright Cyan - matches UI blue accents
@@ -39,13 +42,14 @@ type execResult struct {
 }
 
 type terminal struct {
-	flowID       int64
-	taskID       *int64
-	subtaskID    *int64
-	containerID  int64
-	containerLID string
-	dockerClient docker.DockerClient
-	tlp          TermLogProvider
+	flowID             int64
+	taskID             *int64
+	subtaskID          *int64
+	containerID        int64
+	containerLID       string
+	dockerClient       docker.DockerClient
+	tlp                TermLogProvider
+	defaultExecTimeout time.Duration
 }
 
 func NewTerminalTool(
@@ -54,15 +58,36 @@ func NewTerminalTool(
 	containerID int64, containerLID string,
 	dockerClient docker.DockerClient,
 	tlp TermLogProvider,
+	defaultExecTimeout time.Duration,
 ) Tool {
 	return &terminal{
-		flowID:       flowID,
-		taskID:       taskID,
-		subtaskID:    subtaskID,
-		containerID:  containerID,
-		containerLID: containerLID,
-		dockerClient: dockerClient,
-		tlp:          tlp,
+		flowID:             flowID,
+		taskID:             taskID,
+		subtaskID:          subtaskID,
+		containerID:        containerID,
+		containerLID:       containerLID,
+		dockerClient:       dockerClient,
+		tlp:                tlp,
+		defaultExecTimeout: defaultExecTimeout,
+	}
+}
+
+func (t *terminal) configuredExecTimeout() time.Duration {
+	if t.defaultExecTimeout <= 0 || t.defaultExecTimeout > maxExplicitExecCommandTimeout {
+		// Zero, negative, or above the operator ceiling: cap to the maximum allowed value.
+		// Agents must never execute commands without a time bound.
+		return maxExplicitExecCommandTimeout
+	}
+
+	return t.defaultExecTimeout
+}
+
+func (t *terminal) normalizeExecTimeout(timeout time.Duration) time.Duration {
+	switch defaultExecTimeout := t.configuredExecTimeout() + defaultExtraExecTimeout; {
+	case timeout > 0 && timeout <= defaultExecTimeout:
+		return timeout
+	default:
+		return defaultExecTimeout
 	}
 }
 
@@ -106,7 +131,10 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 			logger.WithError(err).Error("failed to unmarshal terminal action")
 			return "", fmt.Errorf("failed to unmarshal terminal action: %w", err)
 		}
-		timeout := time.Duration(action.Timeout)*time.Second + defaultExtraExecTimeout
+		timeout := t.normalizeExecTimeout(time.Duration(action.Timeout) * time.Second)
+		if timeout > 0 {
+			timeout += defaultExtraExecTimeout
+		}
 		result, err := t.ExecCommand(ctx, action.Cwd, action.Input, action.Detach.Bool(), timeout)
 		return t.wrapCommandResult(ctx, args, name, result, err)
 	case FileToolName:
@@ -172,9 +200,7 @@ func (t *terminal) ExecCommand(
 		return "", fmt.Errorf("failed to put terminal log (stdin): %w", err)
 	}
 
-	if timeout <= 0 || timeout > 20*time.Minute {
-		timeout = defaultExecCommandTimeout
-	}
+	timeout = t.normalizeExecTimeout(timeout)
 
 	createResp, err := t.dockerClient.ContainerExecCreate(ctx, containerName, container.ExecOptions{
 		Cmd:          cmd,
@@ -214,8 +240,11 @@ func (t *terminal) ExecCommand(
 }
 
 func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Duration) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 
 	// attach to the exec process
 	resp, err := t.dockerClient.ContainerExecAttach(ctx, id, container.ExecAttachOptions{
@@ -417,7 +446,7 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 }
 
 func PrimaryTerminalName(flowID int64) string {
-	return fmt.Sprintf("pentagi-terminal-%d", flowID)
+	return fmt.Sprintf("%s%d", PrimaryTerminalNamePrefix, flowID)
 }
 
 func (t *terminal) IsAvailable() bool {

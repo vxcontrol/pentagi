@@ -284,6 +284,15 @@ export type FlowExecutionStats = {
     totalToolcallsCount: Scalars['Int']['output'];
 };
 
+export type FlowFile = {
+    id: Scalars['String']['output'];
+    isDir: Scalars['Boolean']['output'];
+    modifiedAt: Scalars['Time']['output'];
+    name: Scalars['String']['output'];
+    path: Scalars['String']['output'];
+    size: Scalars['Int']['output'];
+};
+
 export type FlowStats = {
     totalAssistantsCount: Scalars['Int']['output'];
     totalSubtasksCount: Scalars['Int']['output'];
@@ -340,6 +349,13 @@ export enum MessageLogType {
     Terminal = 'terminal',
     Thoughts = 'thoughts',
 }
+
+export type ModelAgentsUsageStats = {
+    agentTypes: Array<AgentType>;
+    model: Scalars['String']['output'];
+    provider: Scalars['String']['output'];
+    stats: UsageStats;
+};
 
 export type ModelConfig = {
     description?: Maybe<Scalars['String']['output']>;
@@ -407,6 +423,7 @@ export type MutationCallAssistantArgs = {
     assistantId: Scalars['ID']['input'];
     flowId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
+    resourceIds?: InputMaybe<Array<Scalars['ID']['input']>>;
     useAgents: Scalars['Boolean']['input'];
 };
 
@@ -418,12 +435,14 @@ export type MutationCreateAssistantArgs = {
     flowId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
     modelProvider: Scalars['String']['input'];
+    resourceIds?: InputMaybe<Array<Scalars['ID']['input']>>;
     useAgents: Scalars['Boolean']['input'];
 };
 
 export type MutationCreateFlowArgs = {
     input: Scalars['String']['input'];
     modelProvider: Scalars['String']['input'];
+    resourceIds?: InputMaybe<Array<Scalars['ID']['input']>>;
 };
 
 export type MutationCreateFlowTemplateArgs = {
@@ -478,6 +497,7 @@ export type MutationPutUserInputArgs = {
     flowId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
     modelProvider?: InputMaybe<Scalars['String']['input']>;
+    resourceIds?: InputMaybe<Array<Scalars['ID']['input']>>;
 };
 
 export type MutationRenameFlowArgs = {
@@ -683,6 +703,7 @@ export type Query = {
     assistantLogs?: Maybe<Array<AssistantLog>>;
     assistants?: Maybe<Array<Assistant>>;
     flow: Flow;
+    flowFiles: Array<FlowFile>;
     flowStatsByFlow: FlowStats;
     flowTemplate?: Maybe<FlowTemplate>;
     flowTemplates: Array<FlowTemplate>;
@@ -692,6 +713,7 @@ export type Query = {
     flowsStatsTotal: FlowsStats;
     messageLogs?: Maybe<Array<MessageLog>>;
     providers: Array<Provider>;
+    resources: Array<UserResource>;
     screenshots?: Maybe<Array<Screenshot>>;
     searchLogs?: Maybe<Array<SearchLog>>;
     settings: Settings;
@@ -709,6 +731,7 @@ export type Query = {
     usageStatsByAgentTypeForFlow: Array<AgentTypeUsageStats>;
     usageStatsByFlow: UsageStats;
     usageStatsByModel: Array<ModelUsageStats>;
+    usageStatsByModelAgentsForFlow: Array<ModelAgentsUsageStats>;
     usageStatsByPeriod: Array<DailyUsageStats>;
     usageStatsByProvider: Array<ProviderUsageStats>;
     usageStatsTotal: UsageStats;
@@ -736,6 +759,10 @@ export type QueryFlowArgs = {
     flowId: Scalars['ID']['input'];
 };
 
+export type QueryFlowFilesArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
 export type QueryFlowStatsByFlowArgs = {
     flowId: Scalars['ID']['input'];
 };
@@ -754,6 +781,11 @@ export type QueryFlowsStatsByPeriodArgs = {
 
 export type QueryMessageLogsArgs = {
     flowId: Scalars['ID']['input'];
+};
+
+export type QueryResourcesArgs = {
+    path?: InputMaybe<Scalars['String']['input']>;
+    recursive?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 export type QueryScreenshotsArgs = {
@@ -789,6 +821,10 @@ export type QueryUsageStatsByAgentTypeForFlowArgs = {
 };
 
 export type QueryUsageStatsByFlowArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type QueryUsageStatsByModelAgentsForFlowArgs = {
     flowId: Scalars['ID']['input'];
 };
 
@@ -877,6 +913,9 @@ export type Subscription = {
     assistantUpdated: Assistant;
     flowCreated: Flow;
     flowDeleted: Flow;
+    flowFileAdded: FlowFile;
+    flowFileDeleted: FlowFile;
+    flowFileUpdated: FlowFile;
     flowTemplateCreated: FlowTemplate;
     flowTemplateDeleted: FlowTemplate;
     flowTemplateUpdated: FlowTemplate;
@@ -886,6 +925,9 @@ export type Subscription = {
     providerCreated: ProviderConfig;
     providerDeleted: ProviderConfig;
     providerUpdated: ProviderConfig;
+    resourceAdded: UserResource;
+    resourceDeleted: UserResource;
+    resourceUpdated: UserResource;
     screenshotAdded: Screenshot;
     searchLogAdded: SearchLog;
     settingsUserUpdated: UserPreferences;
@@ -916,6 +958,18 @@ export type SubscriptionAssistantLogUpdatedArgs = {
 };
 
 export type SubscriptionAssistantUpdatedArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type SubscriptionFlowFileAddedArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type SubscriptionFlowFileDeletedArgs = {
+    flowId: Scalars['ID']['input'];
+};
+
+export type SubscriptionFlowFileUpdatedArgs = {
     flowId: Scalars['ID']['input'];
 };
 
@@ -1094,6 +1148,17 @@ export type UserPrompt = {
     updatedAt: Scalars['Time']['output'];
 };
 
+export type UserResource = {
+    createdAt: Scalars['Time']['output'];
+    id: Scalars['ID']['output'];
+    isDir: Scalars['Boolean']['output'];
+    name: Scalars['String']['output'];
+    path: Scalars['String']['output'];
+    size: Scalars['Int']['output'];
+    updatedAt: Scalars['Time']['output'];
+    userId: Scalars['ID']['output'];
+};
+
 export enum VectorStoreAction {
     Retrieve = 'retrieve',
     Store = 'store',
@@ -1194,6 +1259,26 @@ export type ScreenshotFragmentFragment = {
     name: string;
     url: string;
     createdAt: any;
+};
+
+export type FlowFileFragmentFragment = {
+    id: string;
+    name: string;
+    path: string;
+    size: number;
+    isDir: boolean;
+    modifiedAt: any;
+};
+
+export type UserResourceFragmentFragment = {
+    id: string;
+    userId: string;
+    name: string;
+    path: string;
+    size: number;
+    isDir: boolean;
+    createdAt: any;
+    updatedAt: any;
 };
 
 export type AgentLogFragmentFragment = {
@@ -1403,6 +1488,13 @@ export type ModelUsageStatsFragmentFragment = { model: string; provider: string;
 
 export type AgentTypeUsageStatsFragmentFragment = { agentType: AgentType; stats: UsageStatsFragmentFragment };
 
+export type ModelAgentsUsageStatsFragmentFragment = {
+    model: string;
+    provider: string;
+    agentTypes: Array<AgentType>;
+    stats: UsageStatsFragmentFragment;
+};
+
 export type ToolcallsStatsFragmentFragment = { totalCount: number; totalDurationSeconds: number };
 
 export type DailyToolcallsStatsFragmentFragment = { date: any; stats: ToolcallsStatsFragmentFragment };
@@ -1572,6 +1664,19 @@ export type TasksQueryVariables = Exact<{
 
 export type TasksQuery = { tasks?: Array<TaskFragmentFragment> | null };
 
+export type FlowFilesQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowFilesQuery = { flowFiles: Array<FlowFileFragmentFragment> };
+
+export type ResourcesQueryVariables = Exact<{
+    path?: InputMaybe<Scalars['String']['input']>;
+    recursive?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
+
+export type ResourcesQuery = { resources: Array<UserResourceFragmentFragment> };
+
 export type AssistantsQueryVariables = Exact<{
     flowId: Scalars['ID']['input'];
 }>;
@@ -1625,6 +1730,14 @@ export type UsageStatsByAgentTypeForFlowQueryVariables = Exact<{
 
 export type UsageStatsByAgentTypeForFlowQuery = {
     usageStatsByAgentTypeForFlow: Array<AgentTypeUsageStatsFragmentFragment>;
+};
+
+export type UsageStatsByModelAgentsForFlowQueryVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type UsageStatsByModelAgentsForFlowQuery = {
+    usageStatsByModelAgentsForFlow: Array<ModelAgentsUsageStatsFragmentFragment>;
 };
 
 export type ToolcallsStatsTotalQueryVariables = Exact<{ [key: string]: never }>;
@@ -1739,6 +1852,7 @@ export type DeleteFlowTemplateMutation = { deleteFlowTemplate: ResultType };
 export type CreateFlowMutationVariables = Exact<{
     modelProvider: Scalars['String']['input'];
     input: Scalars['String']['input'];
+    resourceIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
 }>;
 
 export type CreateFlowMutation = { createFlow: FlowFragmentFragment };
@@ -1753,6 +1867,7 @@ export type PutUserInputMutationVariables = Exact<{
     flowId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
     modelProvider?: InputMaybe<Scalars['String']['input']>;
+    resourceIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
 }>;
 
 export type PutUserInputMutation = { putUserInput: ResultType };
@@ -1781,6 +1896,7 @@ export type CreateAssistantMutationVariables = Exact<{
     modelProvider: Scalars['String']['input'];
     input: Scalars['String']['input'];
     useAgents: Scalars['Boolean']['input'];
+    resourceIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
 }>;
 
 export type CreateAssistantMutation = {
@@ -1792,6 +1908,7 @@ export type CallAssistantMutationVariables = Exact<{
     assistantId: Scalars['ID']['input'];
     input: Scalars['String']['input'];
     useAgents: Scalars['Boolean']['input'];
+    resourceIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
 }>;
 
 export type CallAssistantMutation = { callAssistant: ResultType };
@@ -1953,6 +2070,24 @@ export type AssistantDeletedSubscriptionVariables = Exact<{
 
 export type AssistantDeletedSubscription = { assistantDeleted: AssistantFragmentFragment };
 
+export type FlowFileAddedSubscriptionVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowFileAddedSubscription = { flowFileAdded: FlowFileFragmentFragment };
+
+export type FlowFileUpdatedSubscriptionVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowFileUpdatedSubscription = { flowFileUpdated: FlowFileFragmentFragment };
+
+export type FlowFileDeletedSubscriptionVariables = Exact<{
+    flowId: Scalars['ID']['input'];
+}>;
+
+export type FlowFileDeletedSubscription = { flowFileDeleted: FlowFileFragmentFragment };
+
 export type AssistantLogAddedSubscriptionVariables = Exact<{
     flowId: Scalars['ID']['input'];
 }>;
@@ -2036,6 +2171,18 @@ export type FlowTemplateUpdatedSubscription = { flowTemplateUpdated: FlowTemplat
 export type FlowTemplateDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
 export type FlowTemplateDeletedSubscription = { flowTemplateDeleted: FlowTemplateFragmentFragment };
+
+export type ResourceAddedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type ResourceAddedSubscription = { resourceAdded: UserResourceFragmentFragment };
+
+export type ResourceUpdatedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type ResourceUpdatedSubscription = { resourceUpdated: UserResourceFragmentFragment };
+
+export type ResourceDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type ResourceDeletedSubscription = { resourceDeleted: UserResourceFragmentFragment };
 
 export const SettingsFragmentFragmentDoc = gql`
     fragment settingsFragment on Settings {
@@ -2141,6 +2288,28 @@ export const ScreenshotFragmentFragmentDoc = gql`
         name
         url
         createdAt
+    }
+`;
+export const FlowFileFragmentFragmentDoc = gql`
+    fragment flowFileFragment on FlowFile {
+        id
+        name
+        path
+        size
+        isDir
+        modifiedAt
+    }
+`;
+export const UserResourceFragmentFragmentDoc = gql`
+    fragment userResourceFragment on UserResource {
+        id
+        userId
+        name
+        path
+        size
+        isDir
+        createdAt
+        updatedAt
     }
 `;
 export const AgentLogFragmentFragmentDoc = gql`
@@ -2472,6 +2641,17 @@ export const ModelUsageStatsFragmentFragmentDoc = gql`
 export const AgentTypeUsageStatsFragmentFragmentDoc = gql`
     fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
         agentType
+        stats {
+            ...usageStatsFragment
+        }
+    }
+    ${UsageStatsFragmentFragmentDoc}
+`;
+export const ModelAgentsUsageStatsFragmentFragmentDoc = gql`
+    fragment modelAgentsUsageStatsFragment on ModelAgentsUsageStats {
+        model
+        provider
+        agentTypes
         stats {
             ...usageStatsFragment
         }
@@ -3206,6 +3386,114 @@ export type TasksQueryHookResult = ReturnType<typeof useTasksQuery>;
 export type TasksLazyQueryHookResult = ReturnType<typeof useTasksLazyQuery>;
 export type TasksSuspenseQueryHookResult = ReturnType<typeof useTasksSuspenseQuery>;
 export type TasksQueryResult = Apollo.QueryResult<TasksQuery, TasksQueryVariables>;
+export const FlowFilesDocument = gql`
+    query flowFiles($flowId: ID!) {
+        flowFiles(flowId: $flowId) {
+            ...flowFileFragment
+        }
+    }
+    ${FlowFileFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowFilesQuery__
+ *
+ * To run a query within a React component, call `useFlowFilesQuery` and pass it any options that fit your needs.
+ * When your component renders, `useFlowFilesQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowFilesQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowFilesQuery(
+    baseOptions: Apollo.QueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables> &
+        ({ variables: FlowFilesQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
+}
+export function useFlowFilesLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
+}
+// @ts-ignore
+export function useFlowFilesSuspenseQuery(
+    baseOptions?: Apollo.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
+): Apollo.UseSuspenseQueryResult<FlowFilesQuery, FlowFilesQueryVariables>;
+export function useFlowFilesSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
+): Apollo.UseSuspenseQueryResult<FlowFilesQuery | undefined, FlowFilesQueryVariables>;
+export function useFlowFilesSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
+}
+export type FlowFilesQueryHookResult = ReturnType<typeof useFlowFilesQuery>;
+export type FlowFilesLazyQueryHookResult = ReturnType<typeof useFlowFilesLazyQuery>;
+export type FlowFilesSuspenseQueryHookResult = ReturnType<typeof useFlowFilesSuspenseQuery>;
+export type FlowFilesQueryResult = Apollo.QueryResult<FlowFilesQuery, FlowFilesQueryVariables>;
+export const ResourcesDocument = gql`
+    query resources($path: String, $recursive: Boolean) {
+        resources(path: $path, recursive: $recursive) {
+            ...userResourceFragment
+        }
+    }
+    ${UserResourceFragmentFragmentDoc}
+`;
+
+/**
+ * __useResourcesQuery__
+ *
+ * To run a query within a React component, call `useResourcesQuery` and pass it any options that fit your needs.
+ * When your component renders, `useResourcesQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useResourcesQuery({
+ *   variables: {
+ *      path: // value for 'path'
+ *      recursive: // value for 'recursive'
+ *   },
+ * });
+ */
+export function useResourcesQuery(baseOptions?: Apollo.QueryHookOptions<ResourcesQuery, ResourcesQueryVariables>) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<ResourcesQuery, ResourcesQueryVariables>(ResourcesDocument, options);
+}
+export function useResourcesLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<ResourcesQuery, ResourcesQueryVariables>(ResourcesDocument, options);
+}
+// @ts-ignore
+export function useResourcesSuspenseQuery(
+    baseOptions?: Apollo.SuspenseQueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
+): Apollo.UseSuspenseQueryResult<ResourcesQuery, ResourcesQueryVariables>;
+export function useResourcesSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
+): Apollo.UseSuspenseQueryResult<ResourcesQuery | undefined, ResourcesQueryVariables>;
+export function useResourcesSuspenseQuery(
+    baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<ResourcesQuery, ResourcesQueryVariables>(ResourcesDocument, options);
+}
+export type ResourcesQueryHookResult = ReturnType<typeof useResourcesQuery>;
+export type ResourcesLazyQueryHookResult = ReturnType<typeof useResourcesLazyQuery>;
+export type ResourcesSuspenseQueryHookResult = ReturnType<typeof useResourcesSuspenseQuery>;
+export type ResourcesQueryResult = Apollo.QueryResult<ResourcesQuery, ResourcesQueryVariables>;
 export const AssistantsDocument = gql`
     query assistants($flowId: ID!) {
         assistants(flowId: $flowId) {
@@ -3865,6 +4153,99 @@ export type UsageStatsByAgentTypeForFlowSuspenseQueryHookResult = ReturnType<
 export type UsageStatsByAgentTypeForFlowQueryResult = Apollo.QueryResult<
     UsageStatsByAgentTypeForFlowQuery,
     UsageStatsByAgentTypeForFlowQueryVariables
+>;
+export const UsageStatsByModelAgentsForFlowDocument = gql`
+    query usageStatsByModelAgentsForFlow($flowId: ID!) {
+        usageStatsByModelAgentsForFlow(flowId: $flowId) {
+            ...modelAgentsUsageStatsFragment
+        }
+    }
+    ${ModelAgentsUsageStatsFragmentFragmentDoc}
+`;
+
+/**
+ * __useUsageStatsByModelAgentsForFlowQuery__
+ *
+ * To run a query within a React component, call `useUsageStatsByModelAgentsForFlowQuery` and pass it any options that fit your needs.
+ * When your component renders, `useUsageStatsByModelAgentsForFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useUsageStatsByModelAgentsForFlowQuery({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useUsageStatsByModelAgentsForFlowQuery(
+    baseOptions: Apollo.QueryHookOptions<
+        UsageStatsByModelAgentsForFlowQuery,
+        UsageStatsByModelAgentsForFlowQueryVariables
+    > &
+        ({ variables: UsageStatsByModelAgentsForFlowQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>(
+        UsageStatsByModelAgentsForFlowDocument,
+        options,
+    );
+}
+export function useUsageStatsByModelAgentsForFlowLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<
+        UsageStatsByModelAgentsForFlowQuery,
+        UsageStatsByModelAgentsForFlowQueryVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>(
+        UsageStatsByModelAgentsForFlowDocument,
+        options,
+    );
+}
+// @ts-ignore
+export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
+    baseOptions?: Apollo.SuspenseQueryHookOptions<
+        UsageStatsByModelAgentsForFlowQuery,
+        UsageStatsByModelAgentsForFlowQueryVariables
+    >,
+): Apollo.UseSuspenseQueryResult<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>;
+export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<
+              UsageStatsByModelAgentsForFlowQuery,
+              UsageStatsByModelAgentsForFlowQueryVariables
+          >,
+): Apollo.UseSuspenseQueryResult<
+    UsageStatsByModelAgentsForFlowQuery | undefined,
+    UsageStatsByModelAgentsForFlowQueryVariables
+>;
+export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<
+              UsageStatsByModelAgentsForFlowQuery,
+              UsageStatsByModelAgentsForFlowQueryVariables
+          >,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>(
+        UsageStatsByModelAgentsForFlowDocument,
+        options,
+    );
+}
+export type UsageStatsByModelAgentsForFlowQueryHookResult = ReturnType<typeof useUsageStatsByModelAgentsForFlowQuery>;
+export type UsageStatsByModelAgentsForFlowLazyQueryHookResult = ReturnType<
+    typeof useUsageStatsByModelAgentsForFlowLazyQuery
+>;
+export type UsageStatsByModelAgentsForFlowSuspenseQueryHookResult = ReturnType<
+    typeof useUsageStatsByModelAgentsForFlowSuspenseQuery
+>;
+export type UsageStatsByModelAgentsForFlowQueryResult = Apollo.QueryResult<
+    UsageStatsByModelAgentsForFlowQuery,
+    UsageStatsByModelAgentsForFlowQueryVariables
 >;
 export const ToolcallsStatsTotalDocument = gql`
     query toolcallsStatsTotal {
@@ -5002,8 +5383,8 @@ export type DeleteFlowTemplateMutationOptions = Apollo.BaseMutationOptions<
     DeleteFlowTemplateMutationVariables
 >;
 export const CreateFlowDocument = gql`
-    mutation createFlow($modelProvider: String!, $input: String!) {
-        createFlow(modelProvider: $modelProvider, input: $input) {
+    mutation createFlow($modelProvider: String!, $input: String!, $resourceIds: [ID!]) {
+        createFlow(modelProvider: $modelProvider, input: $input, resourceIds: $resourceIds) {
             ...flowFragment
         }
     }
@@ -5026,6 +5407,7 @@ export type CreateFlowMutationFn = Apollo.MutationFunction<CreateFlowMutation, C
  *   variables: {
  *      modelProvider: // value for 'modelProvider'
  *      input: // value for 'input'
+ *      resourceIds: // value for 'resourceIds'
  *   },
  * });
  */
@@ -5072,8 +5454,8 @@ export type DeleteFlowMutationHookResult = ReturnType<typeof useDeleteFlowMutati
 export type DeleteFlowMutationResult = Apollo.MutationResult<DeleteFlowMutation>;
 export type DeleteFlowMutationOptions = Apollo.BaseMutationOptions<DeleteFlowMutation, DeleteFlowMutationVariables>;
 export const PutUserInputDocument = gql`
-    mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String) {
-        putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider)
+    mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String, $resourceIds: [ID!]) {
+        putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider, resourceIds: $resourceIds)
     }
 `;
 export type PutUserInputMutationFn = Apollo.MutationFunction<PutUserInputMutation, PutUserInputMutationVariables>;
@@ -5094,6 +5476,7 @@ export type PutUserInputMutationFn = Apollo.MutationFunction<PutUserInputMutatio
  *      flowId: // value for 'flowId'
  *      input: // value for 'input'
  *      modelProvider: // value for 'modelProvider'
+ *      resourceIds: // value for 'resourceIds'
  *   },
  * });
  */
@@ -5210,8 +5593,20 @@ export type RenameFlowMutationHookResult = ReturnType<typeof useRenameFlowMutati
 export type RenameFlowMutationResult = Apollo.MutationResult<RenameFlowMutation>;
 export type RenameFlowMutationOptions = Apollo.BaseMutationOptions<RenameFlowMutation, RenameFlowMutationVariables>;
 export const CreateAssistantDocument = gql`
-    mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!) {
-        createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents) {
+    mutation createAssistant(
+        $flowId: ID!
+        $modelProvider: String!
+        $input: String!
+        $useAgents: Boolean!
+        $resourceIds: [ID!]
+    ) {
+        createAssistant(
+            flowId: $flowId
+            modelProvider: $modelProvider
+            input: $input
+            useAgents: $useAgents
+            resourceIds: $resourceIds
+        ) {
             flow {
                 ...flowFragment
             }
@@ -5245,6 +5640,7 @@ export type CreateAssistantMutationFn = Apollo.MutationFunction<
  *      modelProvider: // value for 'modelProvider'
  *      input: // value for 'input'
  *      useAgents: // value for 'useAgents'
+ *      resourceIds: // value for 'resourceIds'
  *   },
  * });
  */
@@ -5264,8 +5660,20 @@ export type CreateAssistantMutationOptions = Apollo.BaseMutationOptions<
     CreateAssistantMutationVariables
 >;
 export const CallAssistantDocument = gql`
-    mutation callAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean!) {
-        callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents)
+    mutation callAssistant(
+        $flowId: ID!
+        $assistantId: ID!
+        $input: String!
+        $useAgents: Boolean!
+        $resourceIds: [ID!]
+    ) {
+        callAssistant(
+            flowId: $flowId
+            assistantId: $assistantId
+            input: $input
+            useAgents: $useAgents
+            resourceIds: $resourceIds
+        )
     }
 `;
 export type CallAssistantMutationFn = Apollo.MutationFunction<CallAssistantMutation, CallAssistantMutationVariables>;
@@ -5287,6 +5695,7 @@ export type CallAssistantMutationFn = Apollo.MutationFunction<CallAssistantMutat
  *      assistantId: // value for 'assistantId'
  *      input: // value for 'input'
  *      useAgents: // value for 'useAgents'
+ *      resourceIds: // value for 'resourceIds'
  *   },
  * });
  */
@@ -6225,6 +6634,117 @@ export function useAssistantDeletedSubscription(
 }
 export type AssistantDeletedSubscriptionHookResult = ReturnType<typeof useAssistantDeletedSubscription>;
 export type AssistantDeletedSubscriptionResult = Apollo.SubscriptionResult<AssistantDeletedSubscription>;
+export const FlowFileAddedDocument = gql`
+    subscription flowFileAdded($flowId: ID!) {
+        flowFileAdded(flowId: $flowId) {
+            ...flowFileFragment
+        }
+    }
+    ${FlowFileFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowFileAddedSubscription__
+ *
+ * To run a query within a React component, call `useFlowFileAddedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useFlowFileAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowFileAddedSubscription({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowFileAddedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<FlowFileAddedSubscription, FlowFileAddedSubscriptionVariables> &
+        ({ variables: FlowFileAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowFileAddedSubscription, FlowFileAddedSubscriptionVariables>(
+        FlowFileAddedDocument,
+        options,
+    );
+}
+export type FlowFileAddedSubscriptionHookResult = ReturnType<typeof useFlowFileAddedSubscription>;
+export type FlowFileAddedSubscriptionResult = Apollo.SubscriptionResult<FlowFileAddedSubscription>;
+export const FlowFileUpdatedDocument = gql`
+    subscription flowFileUpdated($flowId: ID!) {
+        flowFileUpdated(flowId: $flowId) {
+            ...flowFileFragment
+        }
+    }
+    ${FlowFileFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowFileUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useFlowFileUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useFlowFileUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowFileUpdatedSubscription({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowFileUpdatedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<FlowFileUpdatedSubscription, FlowFileUpdatedSubscriptionVariables> &
+        ({ variables: FlowFileUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowFileUpdatedSubscription, FlowFileUpdatedSubscriptionVariables>(
+        FlowFileUpdatedDocument,
+        options,
+    );
+}
+export type FlowFileUpdatedSubscriptionHookResult = ReturnType<typeof useFlowFileUpdatedSubscription>;
+export type FlowFileUpdatedSubscriptionResult = Apollo.SubscriptionResult<FlowFileUpdatedSubscription>;
+export const FlowFileDeletedDocument = gql`
+    subscription flowFileDeleted($flowId: ID!) {
+        flowFileDeleted(flowId: $flowId) {
+            ...flowFileFragment
+        }
+    }
+    ${FlowFileFragmentFragmentDoc}
+`;
+
+/**
+ * __useFlowFileDeletedSubscription__
+ *
+ * To run a query within a React component, call `useFlowFileDeletedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useFlowFileDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useFlowFileDeletedSubscription({
+ *   variables: {
+ *      flowId: // value for 'flowId'
+ *   },
+ * });
+ */
+export function useFlowFileDeletedSubscription(
+    baseOptions: Apollo.SubscriptionHookOptions<FlowFileDeletedSubscription, FlowFileDeletedSubscriptionVariables> &
+        ({ variables: FlowFileDeletedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<FlowFileDeletedSubscription, FlowFileDeletedSubscriptionVariables>(
+        FlowFileDeletedDocument,
+        options,
+    );
+}
+export type FlowFileDeletedSubscriptionHookResult = ReturnType<typeof useFlowFileDeletedSubscription>;
+export type FlowFileDeletedSubscriptionResult = Apollo.SubscriptionResult<FlowFileDeletedSubscription>;
 export const AssistantLogAddedDocument = gql`
     subscription assistantLogAdded($flowId: ID!) {
         assistantLogAdded(flowId: $flowId) {
@@ -6849,3 +7369,108 @@ export function useFlowTemplateDeletedSubscription(
 }
 export type FlowTemplateDeletedSubscriptionHookResult = ReturnType<typeof useFlowTemplateDeletedSubscription>;
 export type FlowTemplateDeletedSubscriptionResult = Apollo.SubscriptionResult<FlowTemplateDeletedSubscription>;
+export const ResourceAddedDocument = gql`
+    subscription resourceAdded {
+        resourceAdded {
+            ...userResourceFragment
+        }
+    }
+    ${UserResourceFragmentFragmentDoc}
+`;
+
+/**
+ * __useResourceAddedSubscription__
+ *
+ * To run a query within a React component, call `useResourceAddedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useResourceAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useResourceAddedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useResourceAddedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ResourceAddedSubscription, ResourceAddedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ResourceAddedSubscription, ResourceAddedSubscriptionVariables>(
+        ResourceAddedDocument,
+        options,
+    );
+}
+export type ResourceAddedSubscriptionHookResult = ReturnType<typeof useResourceAddedSubscription>;
+export type ResourceAddedSubscriptionResult = Apollo.SubscriptionResult<ResourceAddedSubscription>;
+export const ResourceUpdatedDocument = gql`
+    subscription resourceUpdated {
+        resourceUpdated {
+            ...userResourceFragment
+        }
+    }
+    ${UserResourceFragmentFragmentDoc}
+`;
+
+/**
+ * __useResourceUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useResourceUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useResourceUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useResourceUpdatedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useResourceUpdatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ResourceUpdatedSubscription, ResourceUpdatedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ResourceUpdatedSubscription, ResourceUpdatedSubscriptionVariables>(
+        ResourceUpdatedDocument,
+        options,
+    );
+}
+export type ResourceUpdatedSubscriptionHookResult = ReturnType<typeof useResourceUpdatedSubscription>;
+export type ResourceUpdatedSubscriptionResult = Apollo.SubscriptionResult<ResourceUpdatedSubscription>;
+export const ResourceDeletedDocument = gql`
+    subscription resourceDeleted {
+        resourceDeleted {
+            ...userResourceFragment
+        }
+    }
+    ${UserResourceFragmentFragmentDoc}
+`;
+
+/**
+ * __useResourceDeletedSubscription__
+ *
+ * To run a query within a React component, call `useResourceDeletedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useResourceDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useResourceDeletedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useResourceDeletedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<ResourceDeletedSubscription, ResourceDeletedSubscriptionVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<ResourceDeletedSubscription, ResourceDeletedSubscriptionVariables>(
+        ResourceDeletedDocument,
+        options,
+    );
+}
+export type ResourceDeletedSubscriptionHookResult = ReturnType<typeof useResourceDeletedSubscription>;
+export type ResourceDeletedSubscriptionResult = Apollo.SubscriptionResult<ResourceDeletedSubscription>;

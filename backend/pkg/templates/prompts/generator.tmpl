@@ -179,5 +179,19 @@ You MUST complete your analysis by using the "{{.SubtaskListToolName}}" tool wit
 - A complete, ordered list of subtasks meeting the above requirements
 - Brief explanation of how the plan follows the optimal task distribution structure
 - Confirmation that all aspects of the user's request will be addressed
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files are attached to this flow and available READ-ONLY in the container at `{{.Cwd}}`:
+- `{{.Cwd}}/uploads` — files delivered specifically for this flow
+- `{{.Cwd}}/resources` — reference materials prepared for this engagement
+
+When generating subtasks: if the task description references a filename present in this list, include the full path (`<base>/<relative_path>`) explicitly in the relevant subtask descriptions so the executing agent can locate the file without ambiguity. These directories are READ-ONLY.
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 {{.ToolPlaceholder}}

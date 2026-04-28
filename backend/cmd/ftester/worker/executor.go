@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"pentagi/cmd/ftester/mocks"
 	"pentagi/pkg/config"
@@ -135,6 +136,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			containerLID,
 			te.dockerClient,
 			te.proxies.GetTermLogProvider(),
+			time.Duration(te.cfg.TerminalToolTimeout)*time.Second,
 		), nil
 
 	case tools.FileToolName:
@@ -147,6 +149,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			containerLID,
 			te.dockerClient,
 			te.proxies.GetTermLogProvider(),
+			time.Duration(te.cfg.TerminalToolTimeout)*time.Second,
 		), nil
 
 	case tools.BrowserToolName:

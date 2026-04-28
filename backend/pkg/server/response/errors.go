@@ -109,6 +109,14 @@ var ErrFlowsInvalidRequest = NewHttpError(400, "Flows.InvalidRequest", "invalid 
 var ErrFlowsNotFound = NewHttpError(404, "Flows.NotFound", "flow not found")
 var ErrFlowsInvalidData = NewHttpError(500, "Flows.InvalidData", "invalid flow data")
 
+// flow files
+
+var ErrFlowFilesInvalidRequest = NewHttpError(400, "FlowFiles.InvalidRequest", "invalid flow file request data")
+var ErrFlowFilesNotFound = NewHttpError(404, "FlowFiles.NotFound", "flow file not found")
+var ErrFlowFilesInvalidData = NewHttpError(400, "FlowFiles.InvalidData", "invalid flow file data")
+var ErrFlowFilesAlreadyExists = NewHttpError(409, "FlowFiles.AlreadyExists", "flow file already exists")
+var ErrFlowFilesContainerNotRunning = NewHttpError(400, "FlowFiles.ContainerNotRunning", "container is not running")
+
 // tasks
 
 var ErrTasksInvalidRequest = NewHttpError(400, "Tasks.InvalidRequest", "invalid task request data")
@@ -126,6 +134,14 @@ var ErrSubtasksInvalidData = NewHttpError(500, "Subtasks.InvalidData", "invalid 
 var ErrAssistantsInvalidRequest = NewHttpError(400, "Assistants.InvalidRequest", "invalid assistant request data")
 var ErrAssistantsNotFound = NewHttpError(404, "Assistants.NotFound", "assistant not found")
 var ErrAssistantsInvalidData = NewHttpError(500, "Assistants.InvalidData", "invalid assistant data")
+
+// resources
+
+var ErrResourcesInvalidRequest = NewHttpError(400, "Resources.InvalidRequest", "invalid resource request data")
+var ErrResourcesNotFound       = NewHttpError(404, "Resources.NotFound", "resource not found")
+var ErrResourcesAlreadyExists  = NewHttpError(409, "Resources.AlreadyExists", "resource already exists")
+var ErrResourcesInvalidData    = NewHttpError(400, "Resources.InvalidData", "invalid resource data")
+var ErrResourcesConflict       = NewHttpError(409, "Resources.Conflict", "resource conflict: use force=true to merge")
 
 // tokens
 

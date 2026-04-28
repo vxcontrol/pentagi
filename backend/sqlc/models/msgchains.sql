@@ -251,6 +251,25 @@ WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
 GROUP BY mc.type
 ORDER BY mc.type;
 
+-- name: GetUsageStatsByModelAgentsForFlow :many
+SELECT
+  mc.model,
+  mc.model_provider,
+  array_agg(DISTINCT mc.type::text)::text[] AS agent_types,
+  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
+  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
+  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
+  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
+  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
+FROM msgchains mc
+LEFT JOIN subtasks s ON mc.subtask_id = s.id
+LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
+INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+GROUP BY mc.model, mc.model_provider
+ORDER BY mc.model, mc.model_provider;
+
 -- name: GetUsageStatsByDayLastWeek :many
 SELECT
   DATE(mc.created_at) AS date,

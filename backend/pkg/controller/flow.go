@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"sync"
 	"time"
@@ -13,15 +15,19 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/flowfiles"
+	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graph/subscriptions"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/resources"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
+	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
 )
 
@@ -39,7 +45,8 @@ type FlowWorker interface {
 	DeleteAssistant(ctx context.Context, assistantID int64) error
 	ListAssistants(ctx context.Context) []AssistantWorker
 	ListTasks(ctx context.Context) []TaskWorker
-	PutInput(ctx context.Context, input string, prv provider.Provider) error
+	PutInput(ctx context.Context, input string, prv provider.Provider, resources []database.UserResource) error
+	PutResources(ctx context.Context, resources []database.UserResource) error
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
@@ -57,6 +64,8 @@ type flowWorker struct {
 	taskWG  *sync.WaitGroup
 	input   chan flowInput
 	flowCtx *FlowContext
+	dataDir string
+	docker  docker.DockerClient
 	logger  *logrus.Entry
 }
 
@@ -67,6 +76,7 @@ type newFlowWorkerCtx struct {
 	prvname   provider.ProviderName
 	prvtype   provider.ProviderType
 	functions *tools.Functions
+	resources []database.UserResource
 
 	flowWorkerCtx
 }
@@ -241,6 +251,8 @@ func NewFlowWorker(
 		taskWG:  &sync.WaitGroup{},
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
+		dataDir: fwc.cfg.DataDir,
+		docker:  fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
 			"user_id":   fwc.userID,
@@ -264,7 +276,7 @@ func NewFlowWorker(
 	go fw.worker()
 
 	if !fwc.dryRun {
-		if err := fw.PutInput(ctx, fwc.input, nil); err != nil {
+		if err := fw.PutInput(ctx, fwc.input, nil, fwc.resources); err != nil {
 			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to run flow worker", err)
 		}
 	}
@@ -391,6 +403,8 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		taskWG:  &sync.WaitGroup{},
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
+		dataDir: fwc.cfg.DataDir,
+		docker:  fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
 			"user_id":   flow.UserID,
@@ -420,6 +434,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	awc := assistantWorkerCtx{
 		userID:        flow.UserID,
 		flowID:        flow.ID,
+		fw:            fw,
 		flowWorkerCtx: fwc,
 	}
 	for _, assistant := range assistants {
@@ -571,12 +586,17 @@ func (fw *flowWorker) PutInput(
 	ctx context.Context,
 	input string,
 	prv provider.Provider,
+	resources []database.UserResource,
 ) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.PutInput")
 	defer span.End()
 
 	if err := fw.switchProvider(ctx, prv); err != nil {
 		return fmt.Errorf("failed to switch provider: %w", err)
+	}
+
+	if err := fw.PutResources(ctx, resources); err != nil {
+		fw.logger.WithError(err).Warn("failed to copy resources before user input")
 	}
 
 	flin := flowInput{input: input, done: make(chan error, 1)}
@@ -601,6 +621,110 @@ func (fw *flowWorker) PutInput(
 		case <-ctx.Done():
 			return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, ctx.Err())
 		}
+	}
+}
+
+func (fw *flowWorker) PutResources(ctx context.Context, dbResources []database.UserResource) error {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.PutResources")
+	defer span.End()
+
+	addedPaths, err := fw.copyResourcesToFS(dbResources)
+	if err != nil {
+		return err
+	}
+	if len(addedPaths) == 0 {
+		return nil
+	}
+
+	fw.pushResourcesToContainer(ctx, addedPaths)
+	fw.publishResourceFileEvents(ctx, addedPaths)
+	return nil
+}
+
+// copyResourcesToFS copies user resource blobs into the flow resources directory on disk.
+// Returns relative paths of newly written files (skips files already present).
+func (fw *flowWorker) copyResourcesToFS(dbResources []database.UserResource) ([]string, error) {
+	if len(dbResources) == 0 {
+		return nil, nil
+	}
+
+	refs := make([]flowfiles.ResourceRef, 0, len(dbResources))
+	for _, r := range dbResources {
+		refs = append(refs, flowfiles.ResourceRef{
+			Hash:        r.Hash,
+			VirtualPath: r.Path,
+			Name:        r.Name,
+			IsDir:       r.IsDir,
+		})
+	}
+
+	storeDir := resources.ResourcesDir(fw.dataDir)
+	return flowfiles.CopyResourcesToFlow(fw.dataDir, storeDir, uint64(fw.flowCtx.FlowID), refs, false)
+}
+
+// pushResourcesToContainer pushes newly added resource files into the running primary container.
+// Each file is sent individually so partial failures are non-fatal.
+func (fw *flowWorker) pushResourcesToContainer(ctx context.Context, addedPaths []string) {
+	if fw.docker == nil {
+		return
+	}
+	containerName := tools.PrimaryTerminalName(fw.flowCtx.FlowID)
+	running, _ := fw.docker.IsContainerRunning(ctx, containerName)
+	if !running {
+		return
+	}
+
+	resourcesDir := flowfiles.FlowResourcesDir(fw.dataDir, uint64(fw.flowCtx.FlowID))
+	for _, relPath := range addedPaths {
+		fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]
+		absPath := resourcesDir + "/" + fsRelPath
+
+		pr, pw := io.Pipe()
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- flowfiles.WriteSingleFileTar(pw, absPath, flowfiles.ResourcesDirName+"/"+fsRelPath)
+		}()
+
+		copyErr := fw.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
+			dockercontainer.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
+		pr.Close()
+		writeErr := <-errCh
+
+		if copyErr != nil || writeErr != nil {
+			fw.logger.WithFields(logrus.Fields{
+				"path":      relPath,
+				"copy_err":  copyErr,
+				"write_err": writeErr,
+			}).Warn("failed to push resource file to container; will be synced on restart")
+		}
+	}
+}
+
+// publishResourceFileEvents emits flowFileAdded subscription events for newly written resource files.
+func (fw *flowWorker) publishResourceFileEvents(ctx context.Context, addedPaths []string) {
+	if len(addedPaths) == 0 {
+		return
+	}
+
+	resourcesDir := flowfiles.FlowResourcesDir(fw.dataDir, uint64(fw.flowCtx.FlowID))
+	pub := fw.flowCtx.Publisher
+	for _, relPath := range addedPaths {
+		fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]
+		absPath := resourcesDir + "/" + fsRelPath
+
+		file := &model.FlowFile{
+			ID:         flowfiles.ID(relPath),
+			Name:       flowfiles.BaseName(relPath),
+			Path:       relPath,
+			IsDir:      false,
+			ModifiedAt: time.Now(),
+		}
+		if info, err := os.Lstat(absPath); err == nil {
+			file.Size = int(info.Size())
+			file.ModifiedAt = info.ModTime()
+		}
+
+		pub.FlowFileAdded(ctx, file)
 	}
 }
 

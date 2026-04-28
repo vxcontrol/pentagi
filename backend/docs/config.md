@@ -7,6 +7,8 @@ This document serves as a comprehensive guide to the configuration system in Pen
 - [PentAGI Configuration Guide](#pentagi-configuration-guide)
   - [Table of Contents](#table-of-contents)
   - [Configuration Basics](#configuration-basics)
+    - [Current Web Settings Coverage](#current-web-settings-coverage)
+    - [Still Server-Managed](#still-server-managed)
   - [General Settings](#general-settings)
     - [Usage Details](#usage-details)
   - [Docker Settings](#docker-settings)
@@ -100,6 +102,26 @@ func NewConfig() (*Config, error) {
 ```
 
 This function automatically loads environment variables from a `.env` file if present, then parses them into the `Config` struct using the `env` package from `github.com/caarlos0/env/v10`.
+
+### Current Web Settings Coverage
+
+The running PentAGI instance already exposes several settings areas in the web UI:
+
+- **Settings -> Providers**: Manage user-defined provider profiles, per-agent model and runtime options, and provider test actions for provider types supported by the running server.
+- **Settings -> Prompts**: Manage system, human, and tool prompt templates.
+- **Settings -> PentAGI API**: Create, revoke, and delete PentAGI API tokens.
+- **Other UI-managed preferences**: Favorite flows are stored as user preferences, and theme selection is handled client-side from the main sidebar/profile controls.
+
+These web-console features do not replace the environment variables in this guide for provider credentials, endpoints, or external integrations.
+
+### Still Server-Managed
+
+The environment variables documented below remain the source of truth for configuration that is not currently editable from the web console:
+
+- **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
+- **Search provider credentials and options**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng, Sploitus, and related search configuration.
+- **Third-party integrations**: Langfuse, Graphiti, and other external observability or knowledge services.
+- **MCP server management**: MCP settings are not currently exposed as a live web-console feature.
 
 ## General Settings
 
@@ -209,6 +231,7 @@ These settings control how PentAGI interacts with Docker, which is used for term
 | DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers |
 | DockerDefaultImage           | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for containers when specific images fail |
 | DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
+| TerminalToolTimeout          | `TERMINAL_TOOL_TIMEOUT`            | `1200`                 | Default execution timeout in seconds applied when an agent requests `timeout=0` or a negative value. Accepted range: `1`–`10800` (3 hours). Values `<= 0` or above `10800` are clamped to the 3-hour maximum. Negative values are treated identically to `0`. |
 
 
 ### Usage Details
@@ -226,6 +249,22 @@ The Docker settings are primarily used in `pkg/docker/client.go` which implement
       socket = cfg.DockerSocket
   }
   ```
+
+- **TerminalToolTimeout**: Sets the default execution timeout for terminal tool commands when the tool call uses `timeout=0` or a negative value:
+  ```go
+  term := NewTerminalTool(
+      flowID,
+      taskID,
+      subtaskID,
+      containerID,
+      containerLID,
+      dockerClient,
+      termLogProvider,
+      time.Duration(cfg.TerminalToolTimeout)*time.Second,
+  )
+  ```
+
+  The value is clamped inside the terminal tool: values `<= 0` or above `10800` s (3 hours) are silently raised/capped to the 3-hour maximum — agents always receive a finite timeout. Negative values are accepted at the environment level and treated identically to `0` (both resolve to the 3-hour ceiling). Explicit `timeout` values provided by the tool call override this default when they are within the `1`–`10800` s range.
 
 - **DockerNetwork**: Controls the network isolation mode for containers. Supports two modes:
   
@@ -382,7 +421,7 @@ These settings control authentication mechanisms, including cookie-based session
 | Option                  | Environment Variable         | Default Value | Description                                            |
 | ----------------------- | ---------------------------- | ------------- | ------------------------------------------------------ |
 | CookieSigningSalt       | `COOKIE_SIGNING_SALT`        | *(none)*      | Salt for signing and securing cookies used in sessions |
-| PublicURL               | `PUBLIC_URL`                 | *(none)*      | Public URL for auth callbacks from OAuth providers     |
+| PublicURL               | `PUBLIC_URL`                 | *(none)*      | Public origin/base URL used to build OAuth callback URLs such as `/api/v1/auth/login-callback` |
 | OAuthGoogleClientID     | `OAUTH_GOOGLE_CLIENT_ID`     | *(none)*      | Google OAuth client ID for authentication              |
 | OAuthGoogleClientSecret | `OAUTH_GOOGLE_CLIENT_SECRET` | *(none)*      | Google OAuth client secret                             |
 | OAuthGithubClientID     | `OAUTH_GITHUB_CLIENT_ID`     | *(none)*      | GitHub OAuth client ID for authentication              |
@@ -395,40 +434,65 @@ The authentication settings are used in `pkg/server/router.go` to set up authent
 - **CookieSigningSalt**: Used to secure cookies for session management:
   ```go
   // Used in auth middleware for authentication checks
-  authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.CookieSigningSalt)
+  authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.CookieSigningSalt, tokenCache, userCache)
 
   // Used for cookie store creation
   cookieStore := cookie.NewStore(auth.MakeCookieStoreKey(cfg.CookieSigningSalt)...)
   router.Use(sessions.Sessions("auth", cookieStore))
   ```
 
-- **PublicURL**: The base URL for OAuth callback endpoints, crucial for redirects after authentication:
+- **PublicURL**: The public origin/base URL for OAuth callback endpoints, crucial for redirects after authentication:
   ```go
   publicURL, err := url.Parse(cfg.PublicURL)
+  ```
+
+  The router builds the login callback path under the API base URL:
+  ```go
+  oauthLoginCallbackURL := "/auth/login-callback"
+
+  publicURL, err := url.Parse(cfg.PublicURL)
+  if err == nil {
+      publicURL.Path = path.Join(baseURL, oauthLoginCallbackURL)
+  }
+  ```
+
+  In the default deployment, configure your OAuth providers with:
+  - **Homepage URL**: `PUBLIC_URL`
+  - **Authorization callback URL / Redirect URI**: `${PUBLIC_URL}/api/v1/auth/login-callback`
+
+  Example:
+  ```bash
+  PUBLIC_URL=https://pentagi.example.com
+  OAUTH_GITHUB_CLIENT_ID=your_github_client_id
+  OAUTH_GITHUB_CLIENT_SECRET=your_github_client_secret
+  OAUTH_GOOGLE_CLIENT_ID=your_google_client_id
+  OAUTH_GOOGLE_CLIENT_SECRET=your_google_client_secret
   ```
 
 - **OAuth Provider Settings**: Used to configure authentication with Google and GitHub:
   ```go
   // Google OAuth setup
   if publicURL != nil && cfg.OAuthGoogleClientID != "" && cfg.OAuthGoogleClientSecret != "" {
-      googleOAuth := oauth.NewGoogleOAuthController(
+      googleClient := oauth.NewGoogleOAuthClient(
           cfg.OAuthGoogleClientID,
           cfg.OAuthGoogleClientSecret,
-          *publicURL,
+          publicURL.String(),
       )
       // ...
   }
 
   // GitHub OAuth setup
   if publicURL != nil && cfg.OAuthGithubClientID != "" && cfg.OAuthGithubClientSecret != "" {
-      githubOAuth := oauth.NewGithubOAuthController(
+      githubClient := oauth.NewGithubOAuthClient(
           cfg.OAuthGithubClientID,
           cfg.OAuthGithubClientSecret,
-          *publicURL,
+          publicURL.String(),
       )
       // ...
   }
   ```
+
+  Google and GitHub both use the same PentAGI login callback endpoint. `PUBLIC_URL` should be the externally reachable base URL only, without an extra path suffix. If the URL configured in the provider console does not exactly match the generated callback URL, authentication will fail with a redirect URI mismatch error.
 
 These settings are essential for:
 - Secure user authentication and session management
