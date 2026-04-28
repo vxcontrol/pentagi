@@ -8,21 +8,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { axios } from '@/lib/axios';
-
-interface AxiosErrorResponse {
-    message?: string;
-    response?: {
-        data?: ErrorResponse;
-    };
-}
-
-interface ErrorResponse {
-    code?: string;
-    error?: string;
-    msg?: string;
-    status?: string;
-}
+import { api, type ApiErrorResponse, type ApiHttpError } from '@/lib/axios';
 
 const passwordChangeSchema = z
     .object({
@@ -98,7 +84,7 @@ export function PasswordChangeForm({
         setError(null);
 
         try {
-            await axios.put('/user/password', {
+            await api.put('/user/password', {
                 confirm_password: values.confirmPassword,
                 current_password: values.currentPassword,
                 password: values.newPassword,
@@ -115,16 +101,14 @@ export function PasswordChangeForm({
                 onSuccess();
             }
         } catch (err: unknown) {
-            const error = err as AxiosErrorResponse;
-            const responseData = error.response?.data;
+            const error = err as ApiHttpError;
+            const responseData = error.response?.data as ApiErrorResponse | undefined;
 
             let errorMessage = 'Failed to change password';
 
-            // Always prefer the msg from the response if available
             if (responseData?.msg) {
                 errorMessage = responseData.msg;
             } else if (responseData?.code) {
-                // Fallback to code-based messages
                 switch (responseData.code) {
                     case 'AuthRequired':
                         errorMessage = 'Authentication required';

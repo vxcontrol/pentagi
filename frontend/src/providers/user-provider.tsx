@@ -4,9 +4,9 @@ import { createContext, use, useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import type { AuthInfo, AuthInfoResponse } from '@/models/info';
+import type { AuthInfo } from '@/models/info';
 
-import { axios } from '@/lib/axios';
+import { api } from '@/lib/axios';
 import { getReturnUrlParam } from '@/lib/utils/auth';
 import { baseUrl } from '@/models/api';
 
@@ -80,7 +80,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             // Load from API for guests or when localStorage is empty
             if (shouldFetchFromApi) {
                 try {
-                    const info: AuthInfoResponse = await axios.get('/info');
+                    const info = await api.get<AuthInfo>('/info');
 
                     if (info?.status === 'success' && info.data) {
                         // Set authInfo even for guest (contains providers list)
@@ -126,7 +126,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
     const refreshAuthInfo = useCallback(async () => {
         try {
-            const info: AuthInfoResponse = await axios.get('/info');
+            const info = await api.get<AuthInfo>('/info');
 
             if (info?.status === 'success' && info.data) {
                 setAuth(info.data);
@@ -151,7 +151,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             const finalReturnUrl = returnUrl || getReturnUrlParam(currentPath);
 
             try {
-                await axios.get('/auth/logout');
+                await api.get('/auth/logout');
                 toast.success('Successfully logged out');
             } catch {
                 toast.error('Logout failed, but clearing local session');
@@ -166,10 +166,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     const login = useCallback(
         async (credentials: LoginCredentials): Promise<LoginResult> => {
             try {
-                const loginResponse = await axios.post<unknown, { data?: unknown; error?: string; status: string }>(
-                    '/auth/login',
-                    credentials,
-                );
+                const loginResponse = await api.post<unknown>('/auth/login', credentials);
 
                 if (loginResponse?.status !== 'success') {
                     const errorMessage = 'Invalid login or password';
@@ -179,7 +176,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 // After login, backend set cookie, so we need to get fresh auth info
-                const infoResponse: AuthInfoResponse = await axios.get('/info');
+                const infoResponse = await api.get<AuthInfo>('/info');
 
                 if (infoResponse?.status !== 'success' || !infoResponse.data) {
                     const errorMessage = 'Failed to load user information';
@@ -295,7 +292,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
                     if (event.data.status === 'success') {
                         try {
-                            const info: AuthInfoResponse = await axios.get('/info');
+                            const info = await api.get<AuthInfo>('/info');
 
                             if (info?.status === 'success' && info.data?.type === 'user') {
                                 setAuth(info.data);
@@ -342,7 +339,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             }
 
             try {
-                const info: AuthInfoResponse = await axios.get('/info', {
+                const info = await api.get<AuthInfo>('/info', {
                     params: {
                         refresh_cookie: true,
                     },
