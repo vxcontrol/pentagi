@@ -94,6 +94,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
 
 **Security and Operational Boundaries**
 - Explicitly state the **scope** of permitted actions and **security constraints**. Reference `security-tools.mdc` for general tool security context.
+- For engagement-level boundaries, start from the reusable [scope-of-work pentest prompt template](../../examples/prompts/scope_of_work_pentest.md) and adapt the allowed targets, out-of-scope targets, stop conditions, and evidence expectations before the flow starts.
 - Define **Docker container limitations** within `<container_constraints>`, populated by template variables like `{{.DockerImage}}`, `{{.Cwd}}`, `{{.ContainerPorts}}`. Specify restrictions clearly (e.g., "No direct host access," "No GUI applications," "No UDP scanning").
 - Specify **forbidden actions** clearly. Use **ALL CAPS** for critical security warnings, permissions, or prohibitions (e.g., "DO NOT attempt to install new software packages," "ONLY execute commands related to the current SubTask").
 - Emphasize working **strictly within the scope of the current `SubTask`**. The agent must understand its current objective based on `{{.ExecutionContext}}` and not attempt actions related to other SubTasks or the overall Flow goal unless explicitly instructed within the current SubTask. Reference `data-models.mdc` and `controller.md` for task/subtask relationships.
