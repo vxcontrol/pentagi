@@ -8,6 +8,8 @@ This is not a built-in integration plan. It is a scenario guide for deciding whe
 
 A future OSINT tool should behave like an enrichment tool, not an authorization bypass or automatic scope expansion tool.
 
+Use provider identifiers in request payloads and keep them stable even when the human-facing provider name includes punctuation. For example, `ransomware_live` is the request identifier for the ransomware.live service, while `flare` is the identifier for Flare.
+
 Suggested input:
 
 ```json
@@ -147,7 +149,7 @@ Expected output:
 
 Start with a provider-neutral external function wrapper:
 
-- `query_osint_intel` accepts provider, indicator, indicator type, purpose, and optional tenant context.
+- `query_osint_intel` accepts provider, indicator, indicator type, purpose, and optional provider-specific tenant context such as `tenant_id` for Flare-backed requests.
 - Provider adapters normalize ransomware.live and Flare responses into the common output shape above.
 - Agents receive summaries and evidence references, not raw credential or cookie secrets.
 - Results are stored as report context and optional flow evidence, not as automatic new targets.
