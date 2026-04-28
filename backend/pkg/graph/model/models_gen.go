@@ -535,6 +535,17 @@ type UserPrompt struct {
 	UpdatedAt time.Time  `json:"updatedAt"`
 }
 
+type UserResource struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"userId"`
+	Name      string    `json:"name"`
+	Path      string    `json:"path"`
+	Size      int       `json:"size"`
+	IsDir     bool      `json:"isDir"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 type VectorStoreLog struct {
 	ID        int64             `json:"id"`
 	Initiator AgentType         `json:"initiator"`

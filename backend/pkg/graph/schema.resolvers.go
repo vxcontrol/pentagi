@@ -25,16 +25,18 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/providers/qwen"
+	"pentagi/pkg/resources"
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/templates/validator"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
 // CreateFlow is the resolver for the createFlow field.
-func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string, input string) (*model.Flow, error) {
+func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string, input string, resourceIds []int64) (*model.Flow, error) {
 	uid, _, err := validatePermission(ctx, "flows.create")
 	if err != nil {
 		return nil, err
@@ -54,6 +56,14 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 		return nil, fmt.Errorf("user input is required")
 	}
 
+	var dbResources []database.UserResource
+	if _, isAdmin, err := validatePermission(ctx, "resources.view"); err == nil {
+		dbResources, err = validateUserResources(ctx, r.DB, uid, isAdmin, resourceIds)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	prvname := provider.ProviderName(modelProvider)
 	prv, err := r.ProvidersCtrl.GetProvider(ctx, prvname, uid)
 	if err != nil {
@@ -61,7 +71,7 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 	}
 	prvtype := prv.Type()
 
-	fw, err := r.Controller.CreateFlow(ctx, uid, input, prvname, prvtype, nil)
+	fw, err := r.Controller.CreateFlow(ctx, uid, input, prvname, prvtype, nil, dbResources)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +93,7 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 }
 
 // PutUserInput is the resolver for the putUserInput field.
-func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string) (model.ResultType, error) {
+func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string, resourceIds []int64) (model.ResultType, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "flows.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -105,6 +115,14 @@ func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input
 
 	r.Logger.WithFields(fields).Debug("put user input")
 
+	var dbResources []database.UserResource
+	if _, isAdmin, err := validatePermission(ctx, "resources.view"); err == nil {
+		dbResources, err = validateUserResources(ctx, r.DB, uid, isAdmin, resourceIds)
+		if err != nil {
+			return model.ResultTypeError, err
+		}
+	}
+
 	fw, err := r.Controller.GetFlow(ctx, flowID)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -119,7 +137,7 @@ func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input
 		}
 	}
 
-	if err := fw.PutInput(ctx, input, prv); err != nil {
+	if err := fw.PutInput(ctx, input, prv, dbResources); err != nil {
 		return model.ResultTypeError, err
 	}
 
@@ -245,7 +263,7 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 }
 
 // CreateAssistant is the resolver for the createAssistant field.
-func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool) (*model.FlowAssistant, error) {
+func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) (*model.FlowAssistant, error) {
 	var (
 		err error
 		uid int64
@@ -282,6 +300,14 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 		return nil, fmt.Errorf("user input is required")
 	}
 
+	var dbResources []database.UserResource
+	if _, isAdmin, err := validatePermission(ctx, "resources.view"); err == nil {
+		dbResources, err = validateUserResources(ctx, r.DB, uid, isAdmin, resourceIds)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	prvname := provider.ProviderName(modelProvider)
 	prv, err := r.ProvidersCtrl.GetProvider(ctx, prvname, uid)
 	if err != nil {
@@ -289,7 +315,7 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 	}
 	prvtype := prv.Type()
 
-	aw, err := r.Controller.CreateAssistant(ctx, uid, flowID, input, useAgents, prvname, prvtype, nil)
+	aw, err := r.Controller.CreateAssistant(ctx, uid, flowID, input, useAgents, prvname, prvtype, nil, dbResources)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +339,7 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 }
 
 // CallAssistant is the resolver for the callAssistant field.
-func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool) (model.ResultType, error) {
+func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) (model.ResultType, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "assistants.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -325,6 +351,14 @@ func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assi
 		"assistant": assistantID,
 	}).Debug("call assistant")
 
+	var dbResources []database.UserResource
+	if _, isAdmin, err := validatePermission(ctx, "resources.view"); err == nil {
+		dbResources, err = validateUserResources(ctx, r.DB, uid, isAdmin, resourceIds)
+		if err != nil {
+			return model.ResultTypeError, err
+		}
+	}
+
 	fw, err := r.Controller.GetFlow(ctx, flowID)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -335,7 +369,7 @@ func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assi
 		return model.ResultTypeError, err
 	}
 
-	if err := aw.PutInput(ctx, input, useAgents); err != nil {
+	if err := aw.PutInput(ctx, input, useAgents, dbResources); err != nil {
 		return model.ResultTypeError, err
 	}
 
@@ -482,7 +516,7 @@ func (r *mutationResolver) CreateProvider(ctx context.Context, name string, type
 		return nil, err
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).ProviderCreated(ctx, prv, cfg)
+	r.Subscriptions.NewProviderPublisher(uid).ProviderCreated(ctx, prv, cfg)
 
 	return converter.ConvertProvider(prv, cfg), nil
 }
@@ -507,7 +541,7 @@ func (r *mutationResolver) UpdateProvider(ctx context.Context, providerID int64,
 		return nil, err
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).ProviderUpdated(ctx, prv, cfg)
+	r.Subscriptions.NewProviderPublisher(uid).ProviderUpdated(ctx, prv, cfg)
 
 	return converter.ConvertProvider(prv, cfg), nil
 }
@@ -534,7 +568,7 @@ func (r *mutationResolver) DeleteProvider(ctx context.Context, providerID int64)
 		return model.ResultTypeError, err
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).ProviderDeleted(ctx, prv, &cfg)
+	r.Subscriptions.NewProviderPublisher(uid).ProviderDeleted(ctx, prv, &cfg)
 
 	return model.ResultTypeSuccess, nil
 }
@@ -759,7 +793,7 @@ func (r *mutationResolver) CreateAPIToken(ctx context.Context, input model.Creat
 	r.TokenCache.Invalidate(tokenID)
 	r.TokenCache.InvalidateUser(uint64(uid))
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenCreated(ctx, tokenWithSecret)
+	r.Subscriptions.NewAPITokenPublisher(uid).APITokenCreated(ctx, tokenWithSecret)
 
 	return converter.ConvertAPITokenWithSecret(tokenWithSecret), nil
 }
@@ -829,7 +863,7 @@ func (r *mutationResolver) UpdateAPIToken(ctx context.Context, tokenID string, i
 		r.TokenCache.InvalidateUser(uint64(uid))
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenUpdated(ctx, updatedToken)
+	r.Subscriptions.NewAPITokenPublisher(uid).APITokenUpdated(ctx, updatedToken)
 
 	return converter.ConvertAPIToken(updatedToken), nil
 }
@@ -866,7 +900,7 @@ func (r *mutationResolver) DeleteAPIToken(ctx context.Context, tokenID string) (
 	r.TokenCache.Invalidate(tokenID)
 	r.TokenCache.InvalidateUser(uint64(uid))
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenDeleted(ctx, token)
+	r.Subscriptions.NewAPITokenPublisher(uid).APITokenDeleted(ctx, token)
 
 	return true, nil
 }
@@ -914,7 +948,7 @@ func (r *mutationResolver) AddFavoriteFlow(ctx context.Context, flowID int64) (m
 		return model.ResultTypeError, fmt.Errorf("failed to add favorite flow: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).SettingsUserUpdated(ctx, prefs)
+	r.Subscriptions.NewSettingsPublisher(uid).SettingsUserUpdated(ctx, prefs)
 
 	return model.ResultTypeSuccess, nil
 }
@@ -953,7 +987,7 @@ func (r *mutationResolver) DeleteFavoriteFlow(ctx context.Context, flowID int64)
 		return model.ResultTypeError, fmt.Errorf("failed to delete favorite flow: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).SettingsUserUpdated(ctx, prefs)
+	r.Subscriptions.NewSettingsPublisher(uid).SettingsUserUpdated(ctx, prefs)
 
 	return model.ResultTypeSuccess, nil
 }
@@ -988,7 +1022,7 @@ func (r *mutationResolver) CreateFlowTemplate(ctx context.Context, input model.C
 		return nil, fmt.Errorf("failed to create template: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateCreated(ctx, template)
+	r.Subscriptions.NewFlowTemplatePublisher(uid).FlowTemplateCreated(ctx, template)
 
 	return converter.ConvertFlowTemplate(template), nil
 }
@@ -1032,7 +1066,7 @@ func (r *mutationResolver) UpdateFlowTemplate(ctx context.Context, templateID in
 		return nil, fmt.Errorf("failed to update template: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateUpdated(ctx, template)
+	r.Subscriptions.NewFlowTemplatePublisher(uid).FlowTemplateUpdated(ctx, template)
 
 	return converter.ConvertFlowTemplate(template), nil
 }
@@ -1074,7 +1108,7 @@ func (r *mutationResolver) DeleteFlowTemplate(ctx context.Context, templateID in
 		return model.ResultTypeError, fmt.Errorf("failed to delete template: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateDeleted(ctx, template)
+	r.Subscriptions.NewFlowTemplatePublisher(uid).FlowTemplateDeleted(ctx, template)
 
 	return model.ResultTypeSuccess, nil
 }
@@ -1227,7 +1261,7 @@ func (r *queryResolver) Tasks(ctx context.Context, flowID int64) ([]*model.Task,
 
 // FlowFiles is the resolver for the flowFiles field.
 func (r *queryResolver) FlowFiles(ctx context.Context, flowID int64) ([]*model.FlowFile, error) {
-	uid, err := validatePermissionWithFlowID(ctx, "flows.view", flowID, r.DB)
+	uid, err := validatePermissionWithFlowID(ctx, "flow_files.view", flowID, r.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -2198,6 +2232,78 @@ func (r *queryResolver) FlowTemplates(ctx context.Context) ([]*model.FlowTemplat
 	return converter.ConvertFlowTemplates(templates), nil
 }
 
+// Resources is the resolver for the resources field.
+func (r *queryResolver) Resources(ctx context.Context, path *string, recursive *bool) ([]*model.UserResource, error) {
+	uid, admin, err := validatePermission(ctx, "resources.view")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":       uid,
+		"admin":     admin,
+		"path":      path,
+		"recursive": recursive,
+	}).Debug("list user resources")
+
+	reqPath := ""
+	if path != nil {
+		reqPath = strings.TrimSpace(*path)
+		if reqPath != "" {
+			reqPath, err = resources.SanitizeResourcePath(reqPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	isRecursive := recursive != nil && *recursive
+
+	var recs []database.UserResource
+
+	if !admin {
+		if reqPath == "" {
+			recs, err = r.DB.GetUserResourcesRoot(ctx, uid)
+		} else if isRecursive {
+			escaped := resources.EscapeLike(reqPath)
+			recs, err = r.DB.GetUserResourcesRecursive(ctx, database.GetUserResourcesRecursiveParams{
+				UserID:      uid,
+				DirPath:     reqPath,
+				ChildPrefix: escaped + "/%",
+			})
+		} else {
+			escaped := resources.EscapeLike(reqPath)
+			recs, err = r.DB.GetUserResourcesInDir(ctx, database.GetUserResourcesInDirParams{
+				UserID:      uid,
+				DirPath:     reqPath,
+				ChildPrefix: escaped + "/%",
+				DeepPrefix:  escaped + "/%/%",
+			})
+		}
+	} else {
+		if reqPath == "" {
+			recs, err = r.DB.GetAllResourcesRoot(ctx)
+		} else if isRecursive {
+			escaped := resources.EscapeLike(reqPath)
+			recs, err = r.DB.GetAllResourcesRecursive(ctx, database.GetAllResourcesRecursiveParams{
+				DirPath:     reqPath,
+				ChildPrefix: escaped + "/%",
+			})
+		} else {
+			escaped := resources.EscapeLike(reqPath)
+			recs, err = r.DB.GetAllResourcesInDir(ctx, database.GetAllResourcesInDirParams{
+				DirPath:     reqPath,
+				ChildPrefix: escaped + "/%",
+				DeepPrefix:  escaped + "/%/%",
+			})
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to list resources: %w", err)
+	}
+
+	return converter.ConvertUserResources(recs), nil
+}
+
 // FlowCreated is the resolver for the flowCreated field.
 func (r *subscriptionResolver) FlowCreated(ctx context.Context) (<-chan *model.Flow, error) {
 	uid, admin, err := validatePermission(ctx, "flows.subscribe")
@@ -2295,7 +2401,7 @@ func (r *subscriptionResolver) AssistantDeleted(ctx context.Context, flowID int6
 
 // FlowFileAdded is the resolver for the flowFileAdded field.
 func (r *subscriptionResolver) FlowFileAdded(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
-	uid, err := validatePermissionWithFlowID(ctx, "flows.subscribe", flowID, r.DB)
+	uid, err := validatePermissionWithFlowID(ctx, "flow_files.subscribe", flowID, r.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -2305,7 +2411,7 @@ func (r *subscriptionResolver) FlowFileAdded(ctx context.Context, flowID int64) 
 
 // FlowFileUpdated is the resolver for the flowFileUpdated field.
 func (r *subscriptionResolver) FlowFileUpdated(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
-	uid, err := validatePermissionWithFlowID(ctx, "flows.subscribe", flowID, r.DB)
+	uid, err := validatePermissionWithFlowID(ctx, "flow_files.subscribe", flowID, r.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -2315,7 +2421,7 @@ func (r *subscriptionResolver) FlowFileUpdated(ctx context.Context, flowID int64
 
 // FlowFileDeleted is the resolver for the flowFileDeleted field.
 func (r *subscriptionResolver) FlowFileDeleted(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
-	uid, err := validatePermissionWithFlowID(ctx, "flows.subscribe", flowID, r.DB)
+	uid, err := validatePermissionWithFlowID(ctx, "flow_files.subscribe", flowID, r.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -2420,7 +2526,7 @@ func (r *subscriptionResolver) ProviderCreated(ctx context.Context) (<-chan *mod
 		return nil, err
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).ProviderCreated(ctx)
+	return r.Subscriptions.NewProviderSubscriber(uid).ProviderCreated(ctx)
 }
 
 // ProviderUpdated is the resolver for the providerUpdated field.
@@ -2430,7 +2536,7 @@ func (r *subscriptionResolver) ProviderUpdated(ctx context.Context) (<-chan *mod
 		return nil, err
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).ProviderUpdated(ctx)
+	return r.Subscriptions.NewProviderSubscriber(uid).ProviderUpdated(ctx)
 }
 
 // ProviderDeleted is the resolver for the providerDeleted field.
@@ -2440,7 +2546,7 @@ func (r *subscriptionResolver) ProviderDeleted(ctx context.Context) (<-chan *mod
 		return nil, err
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).ProviderDeleted(ctx)
+	return r.Subscriptions.NewProviderSubscriber(uid).ProviderDeleted(ctx)
 }
 
 // APITokenCreated is the resolver for the apiTokenCreated field.
@@ -2459,7 +2565,7 @@ func (r *subscriptionResolver) APITokenCreated(ctx context.Context) (<-chan *mod
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenCreated(ctx)
+	return r.Subscriptions.NewAPITokenSubscriber(uid).APITokenCreated(ctx)
 }
 
 // APITokenUpdated is the resolver for the apiTokenUpdated field.
@@ -2478,7 +2584,7 @@ func (r *subscriptionResolver) APITokenUpdated(ctx context.Context) (<-chan *mod
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenUpdated(ctx)
+	return r.Subscriptions.NewAPITokenSubscriber(uid).APITokenUpdated(ctx)
 }
 
 // APITokenDeleted is the resolver for the apiTokenDeleted field.
@@ -2497,7 +2603,7 @@ func (r *subscriptionResolver) APITokenDeleted(ctx context.Context) (<-chan *mod
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenDeleted(ctx)
+	return r.Subscriptions.NewAPITokenSubscriber(uid).APITokenDeleted(ctx)
 }
 
 // SettingsUserUpdated is the resolver for the settingsUserUpdated field.
@@ -2516,7 +2622,7 @@ func (r *subscriptionResolver) SettingsUserUpdated(ctx context.Context) (<-chan 
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to user preferences")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).SettingsUserUpdated(ctx)
+	return r.Subscriptions.NewSettingsSubscriber(uid).SettingsUserUpdated(ctx)
 }
 
 // FlowTemplateCreated is the resolver for the flowTemplateCreated field.
@@ -2535,7 +2641,7 @@ func (r *subscriptionResolver) FlowTemplateCreated(ctx context.Context) (<-chan 
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateCreated(ctx)
+	return r.Subscriptions.NewFlowTemplateSubscriber(uid).FlowTemplateCreated(ctx)
 }
 
 // FlowTemplateUpdated is the resolver for the flowTemplateUpdated field.
@@ -2554,7 +2660,7 @@ func (r *subscriptionResolver) FlowTemplateUpdated(ctx context.Context) (<-chan 
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateUpdated(ctx)
+	return r.Subscriptions.NewFlowTemplateSubscriber(uid).FlowTemplateUpdated(ctx)
 }
 
 // FlowTemplateDeleted is the resolver for the flowTemplateDeleted field.
@@ -2573,7 +2679,49 @@ func (r *subscriptionResolver) FlowTemplateDeleted(ctx context.Context) (<-chan 
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateDeleted(ctx)
+	return r.Subscriptions.NewFlowTemplateSubscriber(uid).FlowTemplateDeleted(ctx)
+}
+
+// ResourceAdded is the resolver for the resourceAdded field.
+func (r *subscriptionResolver) ResourceAdded(ctx context.Context) (<-chan *model.UserResource, error) {
+	uid, admin, err := validatePermission(ctx, "resources.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewResourceSubscriber(uid)
+	if admin {
+		return sub.ResourceAddedAdmin(ctx)
+	}
+	return sub.ResourceAdded(ctx)
+}
+
+// ResourceUpdated is the resolver for the resourceUpdated field.
+func (r *subscriptionResolver) ResourceUpdated(ctx context.Context) (<-chan *model.UserResource, error) {
+	uid, admin, err := validatePermission(ctx, "resources.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewResourceSubscriber(uid)
+	if admin {
+		return sub.ResourceUpdatedAdmin(ctx)
+	}
+	return sub.ResourceUpdated(ctx)
+}
+
+// ResourceDeleted is the resolver for the resourceDeleted field.
+func (r *subscriptionResolver) ResourceDeleted(ctx context.Context) (<-chan *model.UserResource, error) {
+	uid, admin, err := validatePermission(ctx, "resources.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewResourceSubscriber(uid)
+	if admin {
+		return sub.ResourceDeletedAdmin(ctx)
+	}
+	return sub.ResourceDeleted(ctx)
 }
 
 // Mutation returns MutationResolver implementation.

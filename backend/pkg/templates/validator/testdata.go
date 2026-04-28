@@ -100,6 +100,11 @@ func CreateDummyTemplateData() map[string]any {
 		// Numeric limits
 		"N": providers.TasksNumberLimit,
 
+		"UserFiles": "<user_files>\nUser-provided files for this flow. Use them as input data.\n" +
+			"<uploads>\n/work/uploads/test_file_1.txt\n</uploads>\n" +
+			"<resources>\n/work/resources/test_file_2.txt\n</resources>\n" +
+			"</user_files>",
+
 		// Input/Output data
 		"Input":    "Test input for the task",
 		"Question": "Test question for processing",

@@ -120,42 +120,136 @@ func (s *flowSubscriber) AssistantLogUpdated(ctx context.Context) (<-chan *model
 	return s.ctrl.assistantLogUpdated.Subscribe(ctx, s.flowID), nil
 }
 
-func (s *flowSubscriber) ProviderCreated(ctx context.Context) (<-chan *model.ProviderConfig, error) {
+// providerSubscriber subscribes to user-scoped provider events.
+type providerSubscriber struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (s *providerSubscriber) GetUserID() int64 {
+	return s.userID
+}
+
+func (s *providerSubscriber) SetUserID(userID int64) {
+	s.userID = userID
+}
+
+func (s *providerSubscriber) ProviderCreated(ctx context.Context) (<-chan *model.ProviderConfig, error) {
 	return s.ctrl.providerCreated.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) ProviderUpdated(ctx context.Context) (<-chan *model.ProviderConfig, error) {
+func (s *providerSubscriber) ProviderUpdated(ctx context.Context) (<-chan *model.ProviderConfig, error) {
 	return s.ctrl.providerUpdated.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) ProviderDeleted(ctx context.Context) (<-chan *model.ProviderConfig, error) {
+func (s *providerSubscriber) ProviderDeleted(ctx context.Context) (<-chan *model.ProviderConfig, error) {
 	return s.ctrl.providerDeleted.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) APITokenCreated(ctx context.Context) (<-chan *model.APIToken, error) {
+// apiTokenSubscriber subscribes to user-scoped API token events.
+type apiTokenSubscriber struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (s *apiTokenSubscriber) GetUserID() int64 {
+	return s.userID
+}
+
+func (s *apiTokenSubscriber) SetUserID(userID int64) {
+	s.userID = userID
+}
+
+func (s *apiTokenSubscriber) APITokenCreated(ctx context.Context) (<-chan *model.APIToken, error) {
 	return s.ctrl.apiTokenCreated.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) APITokenUpdated(ctx context.Context) (<-chan *model.APIToken, error) {
+func (s *apiTokenSubscriber) APITokenUpdated(ctx context.Context) (<-chan *model.APIToken, error) {
 	return s.ctrl.apiTokenUpdated.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error) {
+func (s *apiTokenSubscriber) APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error) {
 	return s.ctrl.apiTokenDeleted.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) SettingsUserUpdated(ctx context.Context) (<-chan *model.UserPreferences, error) {
+// settingsSubscriber subscribes to user-scoped settings events.
+type settingsSubscriber struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (s *settingsSubscriber) GetUserID() int64 {
+	return s.userID
+}
+
+func (s *settingsSubscriber) SetUserID(userID int64) {
+	s.userID = userID
+}
+
+func (s *settingsSubscriber) SettingsUserUpdated(ctx context.Context) (<-chan *model.UserPreferences, error) {
 	return s.ctrl.settingsUserUpdated.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) FlowTemplateCreated(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+// flowTemplateSubscriber subscribes to user-scoped flow template events.
+type flowTemplateSubscriber struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (s *flowTemplateSubscriber) GetUserID() int64 {
+	return s.userID
+}
+
+func (s *flowTemplateSubscriber) SetUserID(userID int64) {
+	s.userID = userID
+}
+
+func (s *flowTemplateSubscriber) FlowTemplateCreated(ctx context.Context) (<-chan *model.FlowTemplate, error) {
 	return s.ctrl.flowTemplateCreated.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) FlowTemplateUpdated(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+func (s *flowTemplateSubscriber) FlowTemplateUpdated(ctx context.Context) (<-chan *model.FlowTemplate, error) {
 	return s.ctrl.flowTemplateUpdated.Subscribe(ctx, s.userID), nil
 }
 
-func (s *flowSubscriber) FlowTemplateDeleted(ctx context.Context) (<-chan *model.FlowTemplate, error) {
+func (s *flowTemplateSubscriber) FlowTemplateDeleted(ctx context.Context) (<-chan *model.FlowTemplate, error) {
 	return s.ctrl.flowTemplateDeleted.Subscribe(ctx, s.userID), nil
+}
+
+// resourceSubscriber subscribes to user-scoped resource events.
+type resourceSubscriber struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (s *resourceSubscriber) GetUserID() int64 {
+	return s.userID
+}
+
+func (s *resourceSubscriber) SetUserID(userID int64) {
+	s.userID = userID
+}
+
+func (s *resourceSubscriber) ResourceAdded(ctx context.Context) (<-chan *model.UserResource, error) {
+	return s.ctrl.resourceAdded.Subscribe(ctx, s.userID), nil
+}
+
+func (s *resourceSubscriber) ResourceUpdated(ctx context.Context) (<-chan *model.UserResource, error) {
+	return s.ctrl.resourceUpdated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *resourceSubscriber) ResourceDeleted(ctx context.Context) (<-chan *model.UserResource, error) {
+	return s.ctrl.resourceDeleted.Subscribe(ctx, s.userID), nil
+}
+
+func (s *resourceSubscriber) ResourceAddedAdmin(ctx context.Context) (<-chan *model.UserResource, error) {
+	return s.ctrl.resourceAddedAdmin.Subscribe(ctx, s.userID), nil
+}
+
+func (s *resourceSubscriber) ResourceUpdatedAdmin(ctx context.Context) (<-chan *model.UserResource, error) {
+	return s.ctrl.resourceUpdatedAdmin.Subscribe(ctx, s.userID), nil
+}
+
+func (s *resourceSubscriber) ResourceDeletedAdmin(ctx context.Context) (<-chan *model.UserResource, error) {
+	return s.ctrl.resourceDeletedAdmin.Subscribe(ctx, s.userID), nil
 }

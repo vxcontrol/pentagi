@@ -221,5 +221,19 @@ You MUST complete your refinement by using the "{{.SubtaskPatchToolName}}" tool 
 - A clear explanatory message summarizing progress and changes made
 - Justification for any significant modifications
 - Brief analysis of completed tasks' outcomes and how they inform the refined plan
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files are attached to this flow and available READ-ONLY in the container at `{{.Cwd}}`:
+- `{{.Cwd}}/uploads` — files delivered specifically for this flow
+- `{{.Cwd}}/resources` — reference materials prepared for this engagement
+
+When refining subtasks: if a remaining subtask references a filename present in this list, include the full path (`<base>/<relative_path>`) explicitly in its description so the executing agent can locate the file without ambiguity. These directories are READ-ONLY.
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 {{.ToolPlaceholder}}

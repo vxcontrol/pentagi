@@ -133,6 +133,7 @@ func NewRouter(
 	providerService := services.NewProviderService(providers)
 	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
 	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, dockerClient, subscriptions)
+	resourceService := services.NewResourceService(orm, cfg.DataDir, subscriptions)
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
@@ -227,6 +228,7 @@ func NewRouter(
 		setProvidersGroup(privateGroup, providerService)
 		setFlowsGroup(privateGroup, flowService)
 		setFlowFilesGroup(privateGroup, flowFileService)
+		setResourcesGroup(privateGroup, resourceService)
 		setTasksGroup(privateGroup, taskService)
 		setSubtasksGroup(privateGroup, subtaskService)
 		setContainersGroup(privateGroup, containerService)
@@ -380,6 +382,21 @@ func setFlowFilesGroup(parent *gin.RouterGroup, svc *services.FlowFileService) {
 		flowFilesGroup.DELETE("/", svc.DeleteFlowFile)
 		flowFilesGroup.GET("/download", svc.DownloadFlowFile)
 		flowFilesGroup.POST("/pull", svc.PullFlowFiles)
+		flowFilesGroup.POST("/resources", svc.AddResourcesToFlow)
+		flowFilesGroup.POST("/to-resources", svc.AddResourceFromFlow)
+	}
+}
+
+func setResourcesGroup(parent *gin.RouterGroup, svc *services.ResourceService) {
+	rg := parent.Group("/resources")
+	{
+		rg.GET("/", svc.ListResources)
+		rg.POST("/", svc.UploadResources)
+		rg.POST("/mkdir", svc.MkdirResource)
+		rg.PUT("/move", svc.MoveResource)
+		rg.POST("/copy", svc.CopyResource)
+		rg.DELETE("/", svc.DeleteResource)
+		rg.GET("/download", svc.DownloadResource)
 	}
 }
 

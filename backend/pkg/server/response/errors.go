@@ -135,6 +135,14 @@ var ErrAssistantsInvalidRequest = NewHttpError(400, "Assistants.InvalidRequest",
 var ErrAssistantsNotFound = NewHttpError(404, "Assistants.NotFound", "assistant not found")
 var ErrAssistantsInvalidData = NewHttpError(500, "Assistants.InvalidData", "invalid assistant data")
 
+// resources
+
+var ErrResourcesInvalidRequest = NewHttpError(400, "Resources.InvalidRequest", "invalid resource request data")
+var ErrResourcesNotFound       = NewHttpError(404, "Resources.NotFound", "resource not found")
+var ErrResourcesAlreadyExists  = NewHttpError(409, "Resources.AlreadyExists", "resource already exists")
+var ErrResourcesInvalidData    = NewHttpError(400, "Resources.InvalidData", "invalid resource data")
+var ErrResourcesConflict       = NewHttpError(409, "Resources.Conflict", "resource conflict: use force=true to merge")
+
 // tokens
 
 var ErrTokenCreationDisabled = NewHttpError(400, "Token.CreationDisabled", "token creation is disabled with default configuration")

@@ -203,6 +203,20 @@ Vector database provides the "library" of reusable solutions.
 <execution_context>
 {{.ExecutionContext}}
 </execution_context>
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files are attached to this flow and available READ-ONLY in the container:
+- `{{.Cwd}}/uploads` — files delivered specifically for this flow
+- `{{.Cwd}}/resources` — reference materials prepared for this engagement
+
+If memory retrieval requires verifying or cross-referencing file contents, access them using the full path (`<base>/<relative_path>`). These directories are READ-ONLY.
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 ## COMPLETION REQUIREMENTS
 

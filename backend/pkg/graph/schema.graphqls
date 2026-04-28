@@ -347,6 +347,17 @@ type FlowFile {
   modifiedAt: Time!
 }
 
+type UserResource {
+  id: ID!
+  userId: ID!
+  name: String!
+  path: String!
+  size: Int!
+  isDir: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
+}
+
 # =================== API Tokens types ===================
 
 enum TokenStatus {
@@ -870,20 +881,23 @@ type Query {
   # Flow Templates management
   flowTemplate(templateId: ID!): FlowTemplate
   flowTemplates: [FlowTemplate!]!
+
+  # User Resources management
+  resources(path: String, recursive: Boolean): [UserResource!]!
 }
 
 type Mutation {
   # Flow management
-  createFlow(modelProvider: String!, input: String!): Flow!
-  putUserInput(flowId: ID!, input: String!, modelProvider: String): ResultType!
+  createFlow(modelProvider: String!, input: String!, resourceIds: [ID!]): Flow!
+  putUserInput(flowId: ID!, input: String!, modelProvider: String, resourceIds: [ID!]): ResultType!
   stopFlow(flowId: ID!): ResultType!
   finishFlow(flowId: ID!): ResultType!
   deleteFlow(flowId: ID!): ResultType!
   renameFlow(flowId: ID!, title: String!): ResultType!
 
   # Assistant management
-  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!): FlowAssistant!
-  callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!): ResultType!
+  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!, resourceIds: [ID!]): FlowAssistant!
+  callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!, resourceIds: [ID!]): ResultType!
   stopAssistant(flowId: ID!, assistantId: ID!): Assistant!
   deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!
 
@@ -961,4 +975,9 @@ type Subscription {
   flowTemplateCreated: FlowTemplate!
   flowTemplateUpdated: FlowTemplate!
   flowTemplateDeleted: FlowTemplate!
+
+  # User resource events
+  resourceAdded: UserResource!
+  resourceUpdated: UserResource!
+  resourceDeleted: UserResource!
 }

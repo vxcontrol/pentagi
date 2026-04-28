@@ -53,6 +53,7 @@ func TestFlowDirs(t *testing.T) {
 	assert.Equal(t, "/data/flow-42-data", FlowDataDir("/data", 42))
 	assert.Equal(t, "/data/flow-42-data/uploads", FlowUploadsDir("/data", 42))
 	assert.Equal(t, "/data/flow-42-data/container", FlowContainerDir("/data", 42))
+	assert.Equal(t, "/data/flow-42-data/resources", FlowResourcesDir("/data", 42))
 }
 
 func TestSanitizeFileName(t *testing.T) {
@@ -129,6 +130,7 @@ func TestResolveCachedPath(t *testing.T) {
 	}{
 		{"uploads file", "uploads/report.txt", "/data/flow-1-data/uploads/report.txt", false},
 		{"container file", "container/etc/nginx/nginx.conf", "/data/flow-1-data/container/etc/nginx/nginx.conf", false},
+		{"resources file", "resources/creds/passwords.txt", "/data/flow-1-data/resources/creds/passwords.txt", false},
 		{"container windows separators", `container\etc\nginx.conf`, "/data/flow-1-data/container/etc/nginx.conf", false},
 		{"empty path", "", "", true},
 		{"wrong prefix", "tmp/evil.sh", "", true},
@@ -210,11 +212,14 @@ func TestListBothSources(t *testing.T) {
 	dataDir := t.TempDir()
 	uploadsDir := FlowUploadsDir(dataDir, 7)
 	containerDir := FlowContainerDir(dataDir, 7)
+	resourcesDir := FlowResourcesDir(dataDir, 7)
 	require.NoError(t, os.MkdirAll(uploadsDir, 0755))
 	require.NoError(t, os.MkdirAll(filepath.Join(containerDir, "etc", "nginx", "conf"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(resourcesDir, "creds"), 0755))
 
 	require.NoError(t, os.WriteFile(filepath.Join(uploadsDir, "wordlist.txt"), []byte("words"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(containerDir, "etc", "nginx", "nginx.conf"), []byte("nginx"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "creds", "passwords.txt"), []byte("secret"), 0644))
 
 	files, err := List(dataDir, 7)
 	require.NoError(t, err)
@@ -227,6 +232,8 @@ func TestListBothSources(t *testing.T) {
 	assert.Contains(t, paths, "uploads/wordlist.txt")
 	assert.Contains(t, paths, "container/etc/nginx/conf")
 	assert.Contains(t, paths, "container/etc/nginx/nginx.conf")
+	assert.Contains(t, paths, "resources/creds")
+	assert.Contains(t, paths, "resources/creds/passwords.txt")
 }
 
 func TestLocalEntryExistsAndRegularFileInfo(t *testing.T) {
@@ -338,6 +345,242 @@ func TestWriteUploadsTar(t *testing.T) {
 	assert.Equal(t, "alpha", contents["uploads/a.txt"])
 	assert.Equal(t, "bravo", contents["uploads/sub/b.txt"])
 	assert.NotContains(t, contents, "uploads/link.txt")
+}
+
+func TestCopyResourcesToFlow(t *testing.T) {
+	dataDir := t.TempDir()
+	storeDir := filepath.Join(dataDir, "resources")
+	require.NoError(t, os.MkdirAll(storeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(storeDir, "hash-a.blob"), []byte("alpha"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(storeDir, "hash-b.blob"), []byte("bravo"), 0644))
+
+	added, err := CopyResourcesToFlow(dataDir, storeDir, 3, []ResourceRef{
+		{VirtualPath: "creds", IsDir: true},
+		{Hash: "hash-a", VirtualPath: "creds/passwords.txt", Name: "passwords.txt"},
+		{Hash: "hash-b", VirtualPath: "notes.txt", Name: "notes.txt"},
+	}, false)
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{
+		"resources/creds/passwords.txt",
+		"resources/notes.txt",
+	}, added)
+
+	data, err := os.ReadFile(filepath.Join(FlowResourcesDir(dataDir, 3), "creds", "passwords.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "alpha", string(data))
+
+	added, err = CopyResourcesToFlow(dataDir, storeDir, 3, []ResourceRef{
+		{Hash: "hash-a", VirtualPath: "creds/passwords.txt", Name: "passwords.txt"},
+	}, false)
+	require.NoError(t, err)
+	assert.Empty(t, added)
+
+	require.NoError(t, os.WriteFile(filepath.Join(storeDir, "hash-a.blob"), []byte("updated"), 0644))
+	added, err = CopyResourcesToFlow(dataDir, storeDir, 3, []ResourceRef{
+		{Hash: "hash-a", VirtualPath: "creds/passwords.txt", Name: "passwords.txt"},
+	}, true)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"resources/creds/passwords.txt"}, added)
+
+	data, err = os.ReadFile(filepath.Join(FlowResourcesDir(dataDir, 3), "creds", "passwords.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "updated", string(data))
+}
+
+func TestCopyResourcesToFlowRejectsEscapingPath(t *testing.T) {
+	dataDir := t.TempDir()
+	storeDir := filepath.Join(dataDir, "resources")
+	require.NoError(t, os.MkdirAll(storeDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(storeDir, "hash.blob"), []byte("x"), 0644))
+
+	_, err := CopyResourcesToFlow(dataDir, storeDir, 3, []ResourceRef{
+		{Hash: "hash", VirtualPath: "../evil.txt", Name: "evil.txt"},
+	}, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "escapes resources directory")
+}
+
+func TestWriteResourcesTar(t *testing.T) {
+	resourcesDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(resourcesDir, "creds"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "creds", "passwords.txt"), []byte("secret"), 0644))
+	if err := os.Symlink(filepath.Join(resourcesDir, "creds", "passwords.txt"), filepath.Join(resourcesDir, "link.txt")); err != nil {
+		t.Skipf("symlink creation not available: %v", err)
+	}
+
+	pr, pw := io.Pipe()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- WriteResourcesTar(pw, resourcesDir)
+	}()
+
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, pr)
+	require.NoError(t, err)
+	require.NoError(t, <-errCh)
+
+	tr := tar.NewReader(bytes.NewReader(buf.Bytes()))
+	contents := map[string]string{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		data, err := io.ReadAll(tr)
+		require.NoError(t, err)
+		contents[hdr.Name] = string(data)
+	}
+
+	assert.Equal(t, "secret", contents["resources/creds/passwords.txt"])
+	assert.NotContains(t, contents, "resources/link.txt")
+}
+
+func TestFileListingForPrompt(t *testing.T) {
+	dataDir := t.TempDir()
+	uploadsDir := FlowUploadsDir(dataDir, 11)
+	resourcesDir := FlowResourcesDir(dataDir, 11)
+	require.NoError(t, os.MkdirAll(filepath.Join(uploadsDir, "targets"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(resourcesDir, "creds"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(uploadsDir, "targets", "ips.txt"), []byte("127.0.0.1"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "creds", "passwords.txt"), []byte("secret"), 0644))
+	if err := os.Symlink(filepath.Join(uploadsDir, "targets", "ips.txt"), filepath.Join(uploadsDir, "link.txt")); err != nil {
+		t.Skipf("symlink creation not available: %v", err)
+	}
+
+	listing := FileListingForPrompt(dataDir, 11)
+
+	assert.Contains(t, listing, "<task_files>")
+	assert.Contains(t, listing, `<uploads base="/work/uploads">`)
+	assert.Contains(t, listing, "targets/ips.txt\n")
+	assert.Contains(t, listing, `<resources base="/work/resources">`)
+	assert.Contains(t, listing, "creds/passwords.txt\n")
+	assert.NotContains(t, listing, "link.txt")
+}
+
+func TestFileListingForPromptEmpty(t *testing.T) {
+	assert.Empty(t, FileListingForPrompt(t.TempDir(), 11))
+}
+
+func TestBaseName(t *testing.T) {
+	assert.Equal(t, "passwords.txt", BaseName("resources/creds/passwords.txt"))
+	assert.Equal(t, "passwords.txt", BaseName(`resources\creds\passwords.txt`))
+	assert.Equal(t, "plain.txt", BaseName("plain.txt"))
+}
+
+func TestWriteSingleFileTar(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "passwords.txt")
+	require.NoError(t, os.WriteFile(filePath, []byte("secret"), 0644))
+
+	pr, pw := io.Pipe()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- WriteSingleFileTar(pw, filePath, "resources/creds/passwords.txt")
+	}()
+
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, pr)
+	require.NoError(t, err)
+	require.NoError(t, <-errCh)
+
+	tr := tar.NewReader(bytes.NewReader(buf.Bytes()))
+	seenDirs := map[string]bool{}
+	contents := map[string]string{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			seenDirs[hdr.Name] = true
+		case tar.TypeReg:
+			data, err := io.ReadAll(tr)
+			require.NoError(t, err)
+			contents[hdr.Name] = string(data)
+		}
+	}
+
+	assert.True(t, seenDirs["resources"])
+	assert.True(t, seenDirs["resources/creds"])
+	assert.Equal(t, "secret", contents["resources/creds/passwords.txt"])
+}
+
+func TestWriteFilesTar(t *testing.T) {
+	dir := t.TempDir()
+	firstPath := filepath.Join(dir, "passwords.txt")
+	secondPath := filepath.Join(dir, "ips.txt")
+	missingPath := filepath.Join(dir, "missing.txt")
+	require.NoError(t, os.WriteFile(firstPath, []byte("secret"), 0644))
+	require.NoError(t, os.WriteFile(secondPath, []byte("127.0.0.1"), 0644))
+	if err := os.Symlink(firstPath, filepath.Join(dir, "link.txt")); err != nil {
+		t.Skipf("symlink creation not available: %v", err)
+	}
+
+	pr, pw := io.Pipe()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- WriteFilesTar(pw, []TarEntry{
+			{LocalPath: firstPath, TarPath: "resources/creds/passwords.txt"},
+			{LocalPath: secondPath, TarPath: "uploads/targets/ips.txt"},
+			{LocalPath: filepath.Join(dir, "link.txt"), TarPath: "uploads/link.txt"},
+			{LocalPath: missingPath, TarPath: "uploads/missing.txt"},
+		})
+	}()
+
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, pr)
+	require.NoError(t, err)
+	require.NoError(t, <-errCh)
+
+	tr := tar.NewReader(bytes.NewReader(buf.Bytes()))
+	seenDirs := map[string]bool{}
+	contents := map[string]string{}
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			seenDirs[hdr.Name] = true
+		case tar.TypeReg:
+			data, err := io.ReadAll(tr)
+			require.NoError(t, err)
+			contents[hdr.Name] = string(data)
+		}
+	}
+
+	assert.True(t, seenDirs["resources"])
+	assert.True(t, seenDirs["resources/creds"])
+	assert.True(t, seenDirs["uploads"])
+	assert.True(t, seenDirs["uploads/targets"])
+	assert.Equal(t, "secret", contents["resources/creds/passwords.txt"])
+	assert.Equal(t, "127.0.0.1", contents["uploads/targets/ips.txt"])
+	assert.NotContains(t, contents, "uploads/link.txt")
+	assert.NotContains(t, contents, "uploads/missing.txt")
+}
+
+func TestWriteFilesTarRejectsInvalidTarPath(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "passwords.txt")
+	require.NoError(t, os.WriteFile(filePath, []byte("secret"), 0644))
+
+	pr, pw := io.Pipe()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- WriteFilesTar(pw, []TarEntry{{LocalPath: filePath, TarPath: "../evil.txt"}})
+	}()
+
+	_, err := io.Copy(io.Discard, pr)
+	require.Error(t, err)
+	require.Error(t, <-errCh)
 }
 
 func TestExtractTarRegularFiles(t *testing.T) {

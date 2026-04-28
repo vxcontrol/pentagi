@@ -93,6 +93,7 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 				"SummarizationToolName":   cast.SummarizationToolName,
 				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 				"ExecutionContext":        executionContext,
+				"Cwd":                     docker.WorkFolderPathInContainer,
 				"Lang":                    fp.language,
 				"CurrentTime":             getCurrentTime(),
 				"ToolPlaceholder":         ToolPlaceholder,
@@ -102,6 +103,7 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 				"FileToolName":            tools.FileToolName,
 				"TerminalToolName":        tools.TerminalToolName,
 				"BrowserToolName":         tools.BrowserToolName,
+				"UserFiles":               fp.userFilesListing(),
 			},
 		}
 
@@ -176,6 +178,7 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 				"DockerImage":               fp.image,
 				"Cwd":                       docker.WorkFolderPathInContainer,
 				"ContainerPorts":            fp.getContainerPortsDescription(),
+				"UserFiles":                 fp.userFilesListing(),
 			},
 		}
 
@@ -280,6 +283,7 @@ func (fp *flowProvider) GetCoderHandler(ctx context.Context, taskID, subtaskID *
 				"Lang":                    fp.language,
 				"CurrentTime":             getCurrentTime(),
 				"ToolPlaceholder":         ToolPlaceholder,
+				"UserFiles":               fp.userFilesListing(),
 			},
 		}
 
@@ -374,6 +378,7 @@ func (fp *flowProvider) GetInstallerHandler(ctx context.Context, taskID, subtask
 				"Lang":                      fp.language,
 				"CurrentTime":               getCurrentTime(),
 				"ToolPlaceholder":           ToolPlaceholder,
+				"UserFiles":                 fp.userFilesListing(),
 			},
 		}
 
@@ -508,6 +513,7 @@ func (fp *flowProvider) GetMemoristHandler(ctx context.Context, taskID, subtaskI
 				"Lang":                    fp.language,
 				"CurrentTime":             getCurrentTime(),
 				"ToolPlaceholder":         ToolPlaceholder,
+				"UserFiles":               fp.userFilesListing(),
 			},
 		}
 
@@ -610,6 +616,7 @@ func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtask
 				"Lang":                    fp.language,
 				"CurrentTime":             getCurrentTime(),
 				"ToolPlaceholder":         ToolPlaceholder,
+				"UserFiles":               fp.userFilesListing(),
 			},
 		}
 
@@ -697,9 +704,11 @@ func (fp *flowProvider) GetSubtaskSearcherHandler(ctx context.Context, taskID, s
 				"SummarizationToolName":   cast.SummarizationToolName,
 				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 				"ExecutionContext":        executionContext,
+				"Cwd":                     docker.WorkFolderPathInContainer,
 				"Lang":                    fp.language,
 				"CurrentTime":             getCurrentTime(),
 				"ToolPlaceholder":         ToolPlaceholder,
+				"UserFiles":               fp.userFilesListing(),
 			},
 		}
 
@@ -786,9 +795,11 @@ func (fp *flowProvider) GetTaskSearcherHandler(ctx context.Context, taskID int64
 				"SummarizationToolName":   cast.SummarizationToolName,
 				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
 				"ExecutionContext":        executionContext,
+				"Cwd":                     docker.WorkFolderPathInContainer,
 				"Lang":                    fp.language,
 				"CurrentTime":             getCurrentTime(),
 				"ToolPlaceholder":         ToolPlaceholder,
+				"UserFiles":               fp.userFilesListing(),
 			},
 		}
 

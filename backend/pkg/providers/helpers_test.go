@@ -199,6 +199,7 @@ func cloneChain(chain []llms.MessageContent) []llms.MessageContent {
 func newFlowProvider() *flowProvider {
 	return &flowProvider{
 		mx:              &sync.RWMutex{},
+		dataDir:         "testdata",
 		summarizerCache: lru.NewLRU[[32]byte, string](summarizerCacheMaxSize, nil, summarizerCacheTTL),
 		callCounter:     &atomic.Int64{},
 		maxGACallsLimit: maxGeneralAgentChainIterations,

@@ -1113,6 +1113,18 @@ type UserPreference struct {
 	UpdatedAt   sql.NullTime    `json:"updated_at"`
 }
 
+type UserResource struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	Hash      string       `json:"hash"`
+	Name      string       `json:"name"`
+	Path      string       `json:"path"`
+	Size      int64        `json:"size"`
+	IsDir     bool         `json:"is_dir"`
+	CreatedAt sql.NullTime `json:"created_at"`
+	UpdatedAt sql.NullTime `json:"updated_at"`
+}
+
 type Vecstorelog struct {
 	ID        int64              `json:"id"`
 	Initiator MsgchainType       `json:"initiator"`

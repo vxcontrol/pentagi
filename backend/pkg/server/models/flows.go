@@ -83,9 +83,10 @@ func (f Flow) Validate(db *gorm.DB) {
 // CreateFlow is model to contain flow creation paylaod
 // nolint:lll
 type CreateFlow struct {
-	Input     string           `form:"input" json:"input" validate:"required" example:"user input for first task in the flow"`
-	Provider  string           `form:"provider" json:"provider" validate:"required" example:"openai"`
-	Functions *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid"`
+	Input       string           `form:"input" json:"input" validate:"required" example:"user input for first task in the flow"`
+	Provider    string           `form:"provider" json:"provider" validate:"required" example:"openai"`
+	Functions   *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid"`
+	ResourceIDs []uint64         `form:"resource_ids,omitempty" json:"resource_ids,omitempty" validate:"omitempty" swaggertype:"array,integer"`
 }
 
 // Valid is function to control input/output data
@@ -96,10 +97,11 @@ func (cf CreateFlow) Valid() error {
 // PatchFlow is model to contain flow patching paylaod
 // nolint:lll
 type PatchFlow struct {
-	Action   string  `form:"action" json:"action" validate:"required,oneof=stop finish input rename" enums:"stop,finish,input,rename" default:"stop"`
-	Input    *string `form:"input,omitempty" json:"input,omitempty" validate:"required_if=Action input" example:"user input for waiting flow"`
-	Provider *string `form:"provider,omitempty" json:"provider,omitempty" validate:"omitempty"`
-	Name     *string `form:"name,omitempty" json:"name,omitempty" validate:"required_if=Action rename" example:"new flow name"`
+	Action      string   `form:"action" json:"action" validate:"required,oneof=stop finish input rename" enums:"stop,finish,input,rename" default:"stop"`
+	Input       *string  `form:"input,omitempty" json:"input,omitempty" validate:"required_if=Action input" example:"user input for waiting flow"`
+	Provider    *string  `form:"provider,omitempty" json:"provider,omitempty" validate:"omitempty"`
+	Name        *string  `form:"name,omitempty" json:"name,omitempty" validate:"required_if=Action rename" example:"new flow name"`
+	ResourceIDs []uint64 `form:"resource_ids,omitempty" json:"resource_ids,omitempty" validate:"omitempty" swaggertype:"array,integer"`
 }
 
 // Valid is function to control input/output data

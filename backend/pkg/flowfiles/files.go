@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"pentagi/pkg/docker"
 	"sort"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 const (
 	UploadsDirName   = "uploads"
 	ContainerDirName = "container"
+	ResourcesDirName = "resources"
 
 	MaxUploadFileSize    = 300 * 1024 * 1024      // 300 MB
 	MaxUploadFiles       = 1000                   // files
@@ -45,6 +47,12 @@ type Files struct {
 	Total uint64
 }
 
+// TarEntry describes a local regular file to include in a TAR archive.
+type TarEntry struct {
+	LocalPath string
+	TarPath   string
+}
+
 func List(dataDir string, flowID uint64) (Files, error) {
 	uploadsEntries, err := ListDirEntries(FlowUploadsDir(dataDir, flowID), UploadsDirName)
 	if err != nil {
@@ -56,7 +64,13 @@ func List(dataDir string, flowID uint64) (Files, error) {
 		return Files{}, fmt.Errorf("reading container cache: %w", err)
 	}
 
+	resourcesEntries, err := ListDirEntriesRecursive(FlowResourcesDir(dataDir, flowID), ResourcesDirName)
+	if err != nil {
+		return Files{}, fmt.Errorf("reading resources cache: %w", err)
+	}
+
 	files := append(uploadsEntries, containerEntries...)
+	files = append(files, resourcesEntries...)
 	Sort(files)
 	return Files{
 		Files: files,
@@ -76,6 +90,10 @@ func FlowContainerDir(dataDir string, flowID uint64) string {
 	return filepath.Join(FlowDataDir(dataDir, flowID), ContainerDirName)
 }
 
+func FlowResourcesDir(dataDir string, flowID uint64) string {
+	return filepath.Join(FlowDataDir(dataDir, flowID), ResourcesDirName)
+}
+
 func ResolveCachedPath(dataDir string, flowID uint64, reqPath string) (string, error) {
 	if strings.TrimSpace(reqPath) == "" {
 		return "", errors.New("path query parameter is required")
@@ -87,8 +105,8 @@ func ResolveCachedPath(dataDir string, flowID uint64, reqPath string) (string, e
 	}
 
 	parts := strings.SplitN(cleaned, string(filepath.Separator), 2)
-	if parts[0] != UploadsDirName && parts[0] != ContainerDirName {
-		return "", fmt.Errorf("path must start with '%s' or '%s'", UploadsDirName, ContainerDirName)
+	if parts[0] != UploadsDirName && parts[0] != ContainerDirName && parts[0] != ResourcesDirName {
+		return "", fmt.Errorf("path must start with '%s', '%s', or '%s'", UploadsDirName, ContainerDirName, ResourcesDirName)
 	}
 
 	flowDataDir := FlowDataDir(dataDir, flowID)
@@ -339,101 +357,7 @@ func ResolvePulledStagedTarget(stagingDir, cacheRelPath string) string {
 }
 
 func WriteUploadsTar(w *io.PipeWriter, uploadDir string) error {
-	tw := tar.NewWriter(w)
-	defer w.Close()
-	defer tw.Close()
-
-	if err := tw.WriteHeader(&tar.Header{
-		Typeflag: tar.TypeDir,
-		Name:     UploadsDirName,
-		Mode:     0755,
-		ModTime:  time.Now(),
-	}); err != nil {
-		w.CloseWithError(err)
-		return fmt.Errorf("failed to write uploads directory tar header: %w", err)
-	}
-
-	var filesCount int
-	var totalSize int64
-	return filepath.WalkDir(uploadDir, func(entryPath string, d os.DirEntry, err error) error {
-		if err != nil {
-			w.CloseWithError(err)
-			return err
-		}
-		if entryPath == uploadDir {
-			return nil
-		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-
-		info, err := d.Info()
-		if err != nil {
-			w.CloseWithError(err)
-			return err
-		}
-		if !info.Mode().IsRegular() && !info.IsDir() {
-			return nil
-		}
-
-		rel, err := filepath.Rel(uploadDir, entryPath)
-		if err != nil {
-			w.CloseWithError(err)
-			return fmt.Errorf("failed to get upload relative path: %w", err)
-		}
-		headerName := path.Join(UploadsDirName, filepath.ToSlash(rel))
-
-		if info.IsDir() {
-			if err := tw.WriteHeader(&tar.Header{
-				Typeflag: tar.TypeDir,
-				Name:     headerName,
-				Mode:     int64(info.Mode().Perm()),
-				ModTime:  info.ModTime(),
-			}); err != nil {
-				w.CloseWithError(err)
-				return fmt.Errorf("failed to write upload directory tar header: %w", err)
-			}
-			return nil
-		}
-
-		filesCount++
-		if filesCount > MaxUploadFiles {
-			err := fmt.Errorf("uploads cache exceeds maximum file count of %d", MaxUploadFiles)
-			w.CloseWithError(err)
-			return err
-		}
-		totalSize += info.Size()
-		if totalSize > MaxUploadTotalSize {
-			err := fmt.Errorf("uploads cache exceeds maximum total size of %d bytes", MaxUploadTotalSize)
-			w.CloseWithError(err)
-			return err
-		}
-
-		if err := tw.WriteHeader(&tar.Header{
-			Typeflag: tar.TypeReg,
-			Name:     headerName,
-			Mode:     int64(info.Mode().Perm()),
-			Size:     info.Size(),
-			ModTime:  info.ModTime(),
-		}); err != nil {
-			w.CloseWithError(err)
-			return fmt.Errorf("failed to write upload file tar header: %w", err)
-		}
-
-		f, err := os.Open(entryPath)
-		if err != nil {
-			w.CloseWithError(err)
-			return fmt.Errorf("failed to open upload file: %w", err)
-		}
-		defer f.Close()
-
-		if _, err := io.Copy(tw, f); err != nil {
-			w.CloseWithError(err)
-			return fmt.Errorf("failed to write upload file tar content: %w", err)
-		}
-
-		return nil
-	})
+	return writeDirectoryTar(w, uploadDir, UploadsDirName, "upload", "uploads")
 }
 
 func ExtractTar(r io.Reader, destDir string) error {
@@ -540,4 +464,361 @@ func ZipDirectory(w io.Writer, dirPath string) error {
 		_, err = io.Copy(zf, f)
 		return err
 	})
+}
+
+// ResourceRef is a lightweight reference to a user resource for copying into a flow.
+type ResourceRef struct {
+	Hash        string // MD5 hex — name of the .blob file in the resources store
+	VirtualPath string // virtual path (relative) used to restore directory hierarchy
+	Name        string // display name
+	IsDir       bool
+}
+
+// CopyResourcesToFlow copies user resource blobs into flow-{id}-data/resources/,
+// restoring the virtual directory hierarchy from VirtualPath.
+// Already-present files are skipped (idempotent); when force is true, existing files are replaced.
+// Returns relative paths ("resources/<virtualPath>") of newly added or replaced files.
+func CopyResourcesToFlow(dataDir, resourcesStoreDir string, flowID uint64, refs []ResourceRef, force bool) ([]string, error) {
+	resourcesDir := FlowResourcesDir(dataDir, flowID)
+	var added []string
+
+	for _, ref := range refs {
+		if ref.IsDir {
+			dst := filepath.Join(resourcesDir, filepath.FromSlash(ref.VirtualPath))
+			if !IsWithinDir(dst, resourcesDir) {
+				return added, fmt.Errorf("resource path '%s' escapes resources directory", ref.VirtualPath)
+			}
+			if err := os.MkdirAll(dst, 0755); err != nil {
+				return added, fmt.Errorf("failed to create resource directory '%s': %w", ref.VirtualPath, err)
+			}
+			continue
+		}
+
+		dst := filepath.Join(resourcesDir, filepath.FromSlash(ref.VirtualPath))
+		if !IsWithinDir(dst, resourcesDir) {
+			return added, fmt.Errorf("resource path '%s' escapes resources directory", ref.VirtualPath)
+		}
+
+		if _, err := os.Lstat(dst); err == nil {
+			if !force {
+				continue // already present, skip
+			}
+			if err := os.Remove(dst); err != nil {
+				return added, fmt.Errorf("failed to remove existing resource '%s': %w", ref.VirtualPath, err)
+			}
+		}
+
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return added, fmt.Errorf("failed to create parent directory for resource '%s': %w", ref.VirtualPath, err)
+		}
+
+		src := filepath.Join(resourcesStoreDir, ref.Hash+".blob")
+		if err := copyFile(src, dst); err != nil {
+			return added, fmt.Errorf("failed to copy resource '%s': %w", ref.VirtualPath, err)
+		}
+
+		added = append(added, path.Join(ResourcesDirName, filepath.ToSlash(ref.VirtualPath)))
+	}
+
+	return added, nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("failed to copy file content: %w", err)
+	}
+	return nil
+}
+
+// WriteResourcesTar writes flow-{id}-data/resources/ as a tar stream
+// with entries prefixed as "resources/<path>", mirroring WriteUploadsTar.
+func WriteResourcesTar(w *io.PipeWriter, resourcesDir string) error {
+	return writeDirectoryTar(w, resourcesDir, ResourcesDirName, "resource", "resources")
+}
+
+func writeDirectoryTar(w *io.PipeWriter, rootDir, tarRootName, entryLabel, cacheLabel string) error {
+	tw := tar.NewWriter(w)
+	defer w.Close()
+	defer tw.Close()
+
+	if err := tw.WriteHeader(&tar.Header{
+		Typeflag: tar.TypeDir,
+		Name:     tarRootName,
+		Mode:     0755,
+		ModTime:  time.Now(),
+	}); err != nil {
+		w.CloseWithError(err)
+		return fmt.Errorf("failed to write %s directory tar header: %w", cacheLabel, err)
+	}
+
+	var filesCount int
+	var totalSize int64
+	return filepath.WalkDir(rootDir, func(entryPath string, d os.DirEntry, err error) error {
+		if err != nil {
+			w.CloseWithError(err)
+			return err
+		}
+		if entryPath == rootDir {
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			w.CloseWithError(err)
+			return err
+		}
+		if !info.Mode().IsRegular() && !info.IsDir() {
+			return nil
+		}
+
+		rel, err := filepath.Rel(rootDir, entryPath)
+		if err != nil {
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to get %s relative path: %w", entryLabel, err)
+		}
+		headerName := path.Join(tarRootName, filepath.ToSlash(rel))
+
+		if info.IsDir() {
+			if err := tw.WriteHeader(&tar.Header{
+				Typeflag: tar.TypeDir,
+				Name:     headerName,
+				Mode:     int64(info.Mode().Perm()),
+				ModTime:  info.ModTime(),
+			}); err != nil {
+				w.CloseWithError(err)
+				return fmt.Errorf("failed to write %s directory tar header: %w", entryLabel, err)
+			}
+			return nil
+		}
+
+		filesCount++
+		if filesCount > MaxUploadFiles {
+			err := fmt.Errorf("%s cache exceeds maximum file count of %d", cacheLabel, MaxUploadFiles)
+			w.CloseWithError(err)
+			return err
+		}
+		totalSize += info.Size()
+		if totalSize > MaxUploadTotalSize {
+			err := fmt.Errorf("%s cache exceeds maximum total size of %d bytes", cacheLabel, MaxUploadTotalSize)
+			w.CloseWithError(err)
+			return err
+		}
+
+		if err := tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeReg,
+			Name:     headerName,
+			Mode:     int64(info.Mode().Perm()),
+			Size:     info.Size(),
+			ModTime:  info.ModTime(),
+		}); err != nil {
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to write %s file tar header: %w", entryLabel, err)
+		}
+
+		f, err := os.Open(entryPath)
+		if err != nil {
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to open %s file: %w", entryLabel, err)
+		}
+		defer f.Close()
+
+		if _, err := io.Copy(tw, f); err != nil {
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to write %s file tar content: %w", entryLabel, err)
+		}
+
+		return nil
+	})
+}
+
+// FileListingForPrompt returns a compact XML block listing user-accessible files in
+// uploads/ and resources/ for injection into agent system prompts.
+// Each tag carries a base attribute with the container-side root path; individual
+// entries are slash-separated relative paths (no repeated prefix per file).
+// Returns empty string when both directories are empty or absent.
+func FileListingForPrompt(dataDir string, flowID uint64) string {
+	uploadsBase := filepath.Join(docker.WorkFolderPathInContainer, UploadsDirName)
+	uploadFiles := collectRelativeFilePaths(FlowUploadsDir(dataDir, flowID))
+	resourcesBase := filepath.Join(docker.WorkFolderPathInContainer, ResourcesDirName)
+	resourceFiles := collectRelativeFilePaths(FlowResourcesDir(dataDir, flowID))
+
+	if len(uploadFiles) == 0 && len(resourceFiles) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("<task_files>\n")
+
+	if len(uploadFiles) > 0 {
+		b.WriteString("<uploads base=\"")
+		b.WriteString(uploadsBase)
+		b.WriteString("\">\n")
+		for _, p := range uploadFiles {
+			b.WriteString(p)
+			b.WriteByte('\n')
+		}
+		b.WriteString("</uploads>\n")
+	}
+
+	if len(resourceFiles) > 0 {
+		b.WriteString("<resources base=\"")
+		b.WriteString(resourcesBase)
+		b.WriteString("\">\n")
+		for _, p := range resourceFiles {
+			b.WriteString(p)
+			b.WriteByte('\n')
+		}
+		b.WriteString("</resources>\n")
+	}
+
+	b.WriteString("</task_files>")
+	return b.String()
+}
+
+// collectRelativeFilePaths walks dir and returns slash-separated paths relative to dir.
+// Symlinks and directories are skipped; only regular files are included.
+func collectRelativeFilePaths(dir string) []string {
+	if _, err := os.Lstat(dir); err != nil {
+		return nil
+	}
+
+	var paths []string
+	_ = filepath.WalkDir(dir, func(entryPath string, d fs.DirEntry, err error) error {
+		if err != nil || entryPath == dir {
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 || d.IsDir() {
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, entryPath)
+		if err != nil {
+			return nil
+		}
+		paths = append(paths, filepath.ToSlash(rel))
+		return nil
+	})
+	return paths
+}
+
+// BaseName returns the last path component of a slash-separated path.
+func BaseName(p string) string {
+	for i := len(p) - 1; i >= 0; i-- {
+		if p[i] == '/' || p[i] == '\\' {
+			return p[i+1:]
+		}
+	}
+	return p
+}
+
+// WriteSingleFileTar writes a single regular file as a tar stream.
+// tarName is the path inside the tar archive (e.g. "resources/creds/pass.txt").
+func WriteSingleFileTar(w *io.PipeWriter, absPath, tarName string) error {
+	return WriteFilesTar(w, []TarEntry{{LocalPath: absPath, TarPath: tarName}})
+}
+
+// WriteFilesTar writes regular files into a tar stream and emits parent
+// directory headers once per archive. Missing files are skipped to tolerate
+// concurrent cache changes between listing and copying.
+func WriteFilesTar(w *io.PipeWriter, entries []TarEntry) error {
+	tw := tar.NewWriter(w)
+	defer w.Close()
+	defer tw.Close()
+
+	createdDirs := make(map[string]bool)
+	for _, entry := range entries {
+		tarName := path.Clean(strings.ReplaceAll(entry.TarPath, "\\", "/"))
+		if tarName == "." || strings.HasPrefix(tarName, "../") || strings.HasPrefix(tarName, "/") {
+			err := fmt.Errorf("invalid tar entry path '%s'", entry.TarPath)
+			w.CloseWithError(err)
+			return err
+		}
+
+		info, err := os.Lstat(entry.LocalPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to stat file '%s': %w", entry.LocalPath, err)
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+
+		if err := writeTarParentDirs(tw, path.Dir(tarName), createdDirs); err != nil {
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to write directory tar headers for '%s': %w", tarName, err)
+		}
+
+		if err := tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeReg,
+			Name:     tarName,
+			Mode:     int64(info.Mode().Perm()),
+			Size:     info.Size(),
+			ModTime:  info.ModTime(),
+		}); err != nil {
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to write file tar header for '%s': %w", tarName, err)
+		}
+
+		f, err := os.Open(entry.LocalPath)
+		if err != nil {
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to open file '%s': %w", entry.LocalPath, err)
+		}
+		if _, err := io.Copy(tw, f); err != nil {
+			f.Close()
+			w.CloseWithError(err)
+			return fmt.Errorf("failed to write file '%s' into tar: %w", entry.LocalPath, err)
+		}
+		f.Close()
+	}
+
+	return nil
+}
+
+func writeTarParentDirs(tw *tar.Writer, dirPath string, created map[string]bool) error {
+	parts := strings.Split(dirPath, "/")
+	built := ""
+	for _, part := range parts {
+		if part == "" || part == "." {
+			continue
+		}
+		if built == "" {
+			built = part
+		} else {
+			built = built + "/" + part
+		}
+		if created[built] {
+			continue
+		}
+		if err := tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeDir,
+			Name:     built,
+			Mode:     0755,
+			ModTime:  time.Now(),
+		}); err != nil {
+			return err
+		}
+		created[built] = true
+	}
+	return nil
 }

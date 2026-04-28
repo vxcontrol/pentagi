@@ -40,6 +40,7 @@ This document describes the internal architecture and execution workflow of Flow
 - **Environment Tools** - Terminal commands, file operations within Docker containers
   - `terminal` - Command execution (configurable via `TERMINAL_TOOL_TIMEOUT`, default: 1200s; hard limit: 3h/10800s; 0 or negative values are clamped to the hard limit)
   - `file` - Read/write operations with absolute path requirements
+  - User-provided flow files are available under `/work/uploads` and `/work/resources`
   
 - **Search Network Tools** - External information sources
   - `browser` - Web scraping with screenshot capture  
@@ -79,6 +80,7 @@ This document describes the internal architecture and execution workflow of Flow
 - **Execution Context** - Comprehensive state including completed/planned Subtasks
 - **Docker Environment** - Isolated container for secure tool execution
 - **Vector Store** - Long-term semantic memory for knowledge retention
+- **Task Materials** - Optional user uploads and resources exposed to prompts via `{{.UserFiles}}`
 
 ### Performance Results
 - **PerformResultDone** - Subtask completed successfully via `done` tool
@@ -572,6 +574,8 @@ graph TB
     
     subgraph "Tool Execution Environment"
         WorkDir[Work Directory<br/>/work in container]
+        Uploads[User Uploads<br/>/work/uploads]
+        Resources[User Resources<br/>/work/resources]
         Terminal[Terminal Tool<br/>default 1200s, hard limit 3h]
         FileOps[File Operations<br/>Absolute paths required]
         WebAccess[Web Access<br/>Separate scraper container]
@@ -583,6 +587,8 @@ graph TB
     Primary --> Volumes  
     Primary --> Network
     Primary --> WorkDir
+    WorkDir --> Uploads
+    WorkDir --> Resources
     WorkDir --> Terminal
     WorkDir --> FileOps
     Primary --> WebAccess
@@ -852,6 +858,7 @@ The system uses 25+ dedicated prompt types for specific functions:
 - **XML Semantic Delimiters** - Structured sections like `<memory_protocol>`, `<terminal_protocol>`
 - **Summarization Awareness** - Universal protocol for handling historical summaries  
 - **Tool Placeholder System** - `{{.ToolPlaceholder}}` injection at prompt end
+- **Task Materials Section** - `{{.UserFiles}}` lists user uploads/resources when present
 - **Template Variable System** - 50+ variables for dynamic content injection
 
 ### Performance Optimizations and Limits
@@ -877,6 +884,7 @@ Several mechanisms ensure efficient execution:
 **Container Resource Management**:
 - **Port Allocation** - 2 ports per Flow starting from base 28000
 - **Volume Management** - Per-flow data directories with cleanup
+- **File Sync** - Incremental sync of `uploads/` and `resources/` into `/work/uploads` and `/work/resources`
 - **Network Isolation** - Optional custom Docker networks
 - **Image Fallback** - Automatic fallback to default Debian image
 
@@ -1178,7 +1186,7 @@ The Flow execution system represents a sophisticated orchestration platform that
 - **Flow continuity** - System can resume operations after interruptions
 - **Real-time feedback** - Streaming responses provide immediate user visibility
 - **Vector knowledge system** - 4 storage types with semantic search and metadata filtering
-- **Comprehensive tool ecosystem** - 44+ tools across 6 categories with automatic memory storage
+- **Comprehensive tool ecosystem** - 44+ tools across 7 categories with automatic memory storage
 - **GraphQL subscriptions** - Real-time Flow/Task/Log updates via WebSocket connections
 - **Logging architecture** - 7-layer logging system with Controller/Worker pattern
 
@@ -1196,6 +1204,7 @@ The Flow execution system represents a sophisticated orchestration platform that
 - **Two-layer validation**: tool handlers (`tools/flow_manager.go`) perform primary checks; provider callbacks are safety nets
 - **Subtask patching**: delta operations applied via `applySubtaskOperations()`; all planned subtask IDs are recreated; new IDs returned in tool result
 - **State verification**: `stop_flow` re-queries `GetFlowTasks` after handler returns and reports actual state
+- **Resource handoff**: assistant inputs with resource IDs delegate file copying to `FlowWorker.PutResources()`
 
 **Message Chain Consistency**:
 - **AST Processing**: Uses Chain Abstract Syntax Tree for structured message analysis
@@ -1211,10 +1220,16 @@ The Flow execution system represents a sophisticated orchestration platform that
 
 ### Implementation Architecture Summary
 
+**User Files and Resources**:
+- **User Resources** - Per-user blob storage with metadata in `user_resources`
+- **Flow Files** - Per-flow filesystem cache under `flow-{id}-data/{uploads,container,resources}`
+- **Container Availability** - `FlowToolsExecutor.Prepare()` incrementally syncs missing `uploads/` and `resources/` files into `/work`
+- **Prompt Visibility** - Agents receive a compact `<task_files>` listing only when user files are present
+
 **Core Flow Processing**:
 - **3-layer hierarchy**: FlowWorker → TaskWorker → SubtaskWorker with proper lifecycle management
 - **Agent orchestration**: 13 specialized agent types with role-specific tool access
-- **Tool ecosystem**: 44+ tools across 6 categories (Environment, SearchNetwork, SearchVectorDb, Agent, StoreAgentResult, Barrier)
+- **Tool ecosystem**: 44+ tools across 7 categories (Environment, SearchNetwork, SearchVectorDb, Agent, StoreAgentResult, Barrier, FlowManagement)
 - **Message chain types**: 14 distinct chain types for agent communication tracking
 
 **Error Resilience & Recovery**:

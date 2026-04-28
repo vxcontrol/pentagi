@@ -197,6 +197,23 @@ You are the primary task orchestrator for a specialized engineering and penetrat
 <execution_context>
 {{.ExecutionContext}}
 </execution_context>
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files are attached to this flow as part of the task assignment and are available READ-ONLY inside the container:
+- `{{.Cwd}}/uploads` — files delivered specifically for this flow
+- `{{.Cwd}}/resources` — reference materials prepared for this engagement
+
+Rules:
+- Access any file by combining its `base` path with the listed relative path: `<base>/<relative_path>`
+- When delegating to specialists, pass the full absolute path
+- These directories are READ-ONLY — write all outputs elsewhere (e.g., `{{.Cwd}}/`)
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 ## SENIOR MENTOR SUPERVISION
 

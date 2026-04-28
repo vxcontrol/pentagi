@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"pentagi/pkg/flowfiles"
+	"pentagi/pkg/server/models"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/stretchr/testify/assert"
@@ -90,6 +91,7 @@ func TestFlowFileService_Dirs(t *testing.T) {
 	assert.Equal(t, "/data/flow-42-data", svc.flowDataDir(42))
 	assert.Equal(t, "/data/flow-42-data/uploads", svc.flowUploadsDir(42))
 	assert.Equal(t, "/data/flow-42-data/container", svc.flowContainerDir(42))
+	assert.Equal(t, "/data/flow-42-data/resources", flowfiles.FlowResourcesDir("/data", 42))
 }
 
 func TestMaxUploadFileSize(t *testing.T) {
@@ -111,6 +113,7 @@ func TestResolveCachedPath(t *testing.T) {
 		{"uploads file", "uploads/report.txt", "/data/flow-1-data/uploads/report.txt", false},
 		{"container file", "container/conf/nginx.conf", "/data/flow-1-data/container/conf/nginx.conf", false},
 		{"container top-level", "container/conf", "/data/flow-1-data/container/conf", false},
+		{"resources file", "resources/creds/passwords.txt", "/data/flow-1-data/resources/creds/passwords.txt", false},
 		{"empty path", "", "", true},
 		{"wrong prefix", "tmp/evil.sh", "", true},
 		{"absolute path", "/etc/passwd", "", true},
@@ -201,12 +204,15 @@ func TestFlowFileService_ListFlowFiles_BothSources(t *testing.T) {
 
 	uploadsDir := filepath.Join(dataDir, "flow-7-data", "uploads")
 	containerDir := filepath.Join(dataDir, "flow-7-data", "container")
+	resourcesDir := filepath.Join(dataDir, "flow-7-data", "resources")
 	require.NoError(t, os.MkdirAll(uploadsDir, 0755))
 	require.NoError(t, os.MkdirAll(containerDir, 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(resourcesDir, "creds"), 0755))
 
 	require.NoError(t, os.WriteFile(filepath.Join(uploadsDir, "wordlist.txt"), []byte("words"), 0644))
 	require.NoError(t, os.MkdirAll(filepath.Join(containerDir, "etc", "nginx", "conf"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(containerDir, "etc", "nginx", "nginx.conf"), []byte("nginx"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "creds", "passwords.txt"), []byte("secret"), 0644))
 
 	files, err := svc.listFlowFiles(7)
 	require.NoError(t, err)
@@ -218,6 +224,8 @@ func TestFlowFileService_ListFlowFiles_BothSources(t *testing.T) {
 	assert.Contains(t, paths, "uploads/wordlist.txt")
 	assert.Contains(t, paths, "container/etc/nginx/conf")
 	assert.Contains(t, paths, "container/etc/nginx/nginx.conf")
+	assert.Contains(t, paths, "resources/creds")
+	assert.Contains(t, paths, "resources/creds/passwords.txt")
 }
 
 func TestFlowFileService_ListFlowFiles_EmptyDirs(t *testing.T) {
@@ -228,7 +236,7 @@ func TestFlowFileService_ListFlowFiles_EmptyDirs(t *testing.T) {
 }
 
 func TestConvertModelFlowFile_PreservesID(t *testing.T) {
-	file := flowFile{
+	file := models.FlowFile{
 		ID:         "flow-file-id",
 		Name:       "report.md",
 		Path:       "uploads/report.md",
@@ -473,7 +481,7 @@ func TestPrimaryContainerName(t *testing.T) {
 
 func TestSortFlowFiles(t *testing.T) {
 	now := time.Now()
-	files := []flowFile{
+	files := []models.FlowFile{
 		{Name: "b.txt", ModifiedAt: now.Add(-2 * time.Hour)},
 		{Name: "a.txt", ModifiedAt: now.Add(-1 * time.Hour)},
 		{Name: "c.txt", ModifiedAt: now.Add(-1 * time.Hour)},

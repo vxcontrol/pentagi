@@ -98,5 +98,19 @@ You MUST complete your evaluation by using the "{{.ReportResultToolName}}" tool 
 - A clear success/failure assessment in the "success" field (true/false)
 - A detailed report in the "result" field explaining your assessment with evidence
 - A concise message in the "message" field summarizing the key outcome for the user
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files were attached to this engagement and available READ-ONLY in the container during execution:
+- `{{.Cwd}}/uploads` — files delivered for this flow
+- `{{.Cwd}}/resources` — reference materials for this engagement
+
+When evaluating whether file-related subtasks were completed correctly, account for these materials. If the original task referenced specific filenames present in this list, verify that the corresponding work addressed those files.
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 {{.ToolPlaceholder}}

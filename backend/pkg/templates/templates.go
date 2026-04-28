@@ -81,10 +81,12 @@ var PromptVariables = map[PromptType][]string{
 		"AskUserToolName",
 		"AskUserEnabled",
 		"ExecutionContext",
+		"Cwd",
 		"Lang",
 		"DockerImage",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeAssistant: {
 		"SearchToolName",
@@ -119,6 +121,7 @@ var PromptVariables = map[PromptType][]string{
 		"StopFlowToolName",
 		"SubmitFlowInputToolName",
 		"PatchFlowSubtasksToolName",
+		"UserFiles",
 	},
 	PromptTypePentester: {
 		"HackResultToolName",
@@ -141,6 +144,7 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionPentester: {
 		"Question",
@@ -164,6 +168,7 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionCoder: {
 		"Question",
@@ -184,6 +189,7 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionInstaller: {
 		"Question",
@@ -195,9 +201,11 @@ var PromptVariables = map[PromptType][]string{
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"ExecutionContext",
+		"Cwd",
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionSearcher: {
 		"Question",
@@ -219,6 +227,7 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionMemorist: {
 		"Question",
@@ -243,6 +252,7 @@ var PromptVariables = map[PromptType][]string{
 		"DockerImage",
 		"Cwd",
 		"ContainerPorts",
+		"UserFiles",
 	},
 	PromptTypeQuestionAdviser: {
 		"InitiatorAgent",
@@ -260,10 +270,12 @@ var PromptVariables = map[PromptType][]string{
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"DockerImage",
+		"Cwd",
 		"Lang",
 		"CurrentTime",
 		"N",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeSubtasksGenerator: {
 		"Task",
@@ -279,10 +291,12 @@ var PromptVariables = map[PromptType][]string{
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"DockerImage",
+		"Cwd",
 		"Lang",
 		"CurrentTime",
 		"N",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeSubtasksRefiner: {
 		"Task",
@@ -296,9 +310,11 @@ var PromptVariables = map[PromptType][]string{
 		"ReportResultToolName",
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
+		"Cwd",
 		"Lang",
 		"N",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeTaskReporter: {
 		"Task",
@@ -323,6 +339,7 @@ var PromptVariables = map[PromptType][]string{
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"ExecutionContext",
+		"Cwd",
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
@@ -332,6 +349,7 @@ var PromptVariables = map[PromptType][]string{
 		"FileToolName",
 		"TerminalToolName",
 		"BrowserToolName",
+		"UserFiles",
 	},
 	PromptTypeQuestionEnricher: {
 		"Question",

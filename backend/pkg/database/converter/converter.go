@@ -1201,4 +1201,25 @@ func ConvertDailyFlowsStatsQuarter(stats []database.GetFlowsStatsByDayLast3Month
 	return result
 }
 
-// ==================== Flows/Tasks/Subtasks Execution Time Converters ====================
+// ConvertUserResources converts database user resources to GraphQL model
+func ConvertUserResources(resources []database.UserResource) []*model.UserResource {
+	result := make([]*model.UserResource, 0, len(resources))
+	for _, r := range resources {
+		result = append(result, ConvertUserResource(r))
+	}
+	return result
+}
+
+// ConvertUserResource converts database single user resource to GraphQL model
+func ConvertUserResource(r database.UserResource) *model.UserResource {
+	return &model.UserResource{
+		ID:        r.ID,
+		UserID:    r.UserID,
+		Name:      r.Name,
+		Path:      r.Path,
+		Size:      int(r.Size),
+		IsDir:     r.IsDir,
+		CreatedAt: r.CreatedAt.Time,
+		UpdatedAt: r.UpdatedAt.Time,
+	}
+}

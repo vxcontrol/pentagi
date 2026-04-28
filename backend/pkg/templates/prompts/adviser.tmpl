@@ -269,6 +269,20 @@ When YOU lack confident understanding of optimal solution:
 <execution_context>
 {{.ExecutionContext}}
 </execution_context>
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+These files are part of the engagement being advised on and are available READ-ONLY in the container:
+- `{{.Cwd}}/uploads` — files delivered specifically for this flow
+- `{{.Cwd}}/resources` — reference materials prepared for this engagement
+
+When advising on tasks that reference specific filenames, account for these files being available at the full path `<base>/<relative_path>`. These directories are READ-ONLY.
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 ## DATA INTERPRETATION
 

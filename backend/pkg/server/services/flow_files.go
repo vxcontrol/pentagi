@@ -1,7 +1,6 @@
 package services
 
 import (
-	"archive/tar"
 	"context"
 	"errors"
 	"fmt"
@@ -21,6 +20,7 @@ import (
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graph/subscriptions"
+	"pentagi/pkg/resources"
 	"pentagi/pkg/server/logger"
 	"pentagi/pkg/server/models"
 	"pentagi/pkg/server/response"
@@ -34,42 +34,8 @@ import (
 // Local storage layout under {dataDir}/flow-{id}-data/:
 //
 //	uploads/    ← user-uploaded files; also pushed to container /work/uploads/
+//	resources/  ← user resources copied from user_resources table; also pushed to container /work/resources/
 //	container/  ← files synced from the container via pull; never sent back to container
-type flowFile struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Path       string    `json:"path"` // relative to flow data dir: "uploads/<x>" or "container/<x>"
-	Size       int64     `json:"size"`
-	IsDir      bool      `json:"isDir"`
-	ModifiedAt time.Time `json:"modifiedAt"`
-}
-
-type flowFiles struct {
-	Files []flowFile `json:"files"`
-	Total uint64     `json:"total"`
-}
-
-type containerFile struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Path       string    `json:"path"`
-	Size       int64     `json:"size"`
-	IsDir      bool      `json:"isDir"`
-	ModifiedAt time.Time `json:"modifiedAt"`
-}
-
-type containerFiles struct {
-	Path  string          `json:"path"`
-	Files []containerFile `json:"files"`
-	Total uint64          `json:"total"`
-}
-
-type pullFlowFilesRequest struct {
-	// Path is an arbitrary path inside the container, e.g. "/etc/nginx/conf" or "/work/uploads/report.txt".
-	Path string `json:"path"`
-	// Force overwrites the local cache entry if it already exists.
-	Force bool `json:"force"`
-}
 
 type pendingUpload struct {
 	fileName string
@@ -79,6 +45,7 @@ type pendingUpload struct {
 
 // FlowFileService manages flow-scoped files with two distinct sources:
 //   - user uploads   → {dataDir}/flow-{id}-data/uploads/  (also pushed to container /work/uploads/)
+//   - user resources → {dataDir}/flow-{id}-data/resources/ (copied from user_resources table)
 //   - container sync → {dataDir}/flow-{id}-data/container/ (pulled from container, never sent back)
 type FlowFileService struct {
 	dataDir      string
@@ -107,7 +74,7 @@ func NewFlowFileService(
 // @Produce json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Success 200 {object} response.successResp{data=flowFiles} "flow files list received successful"
+// @Success 200 {object} response.successResp{data=models.FlowFiles} "flow files list received successful"
 // @Failure 400 {object} response.errorResp "invalid flow files request data"
 // @Failure 403 {object} response.errorResp "getting flow files not permitted"
 // @Failure 404 {object} response.errorResp "flow not found"
@@ -133,7 +100,7 @@ func (s *FlowFileService) GetFlowFiles(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, http.StatusOK, flowFiles{
+	response.Success(c, http.StatusOK, models.FlowFiles{
 		Files: files,
 		Total: uint64(len(files)),
 	})
@@ -147,7 +114,7 @@ func (s *FlowFileService) GetFlowFiles(c *gin.Context) {
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param files formData file true "files to upload (multipart, field name: files or file)"
-// @Success 200 {object} response.successResp{data=flowFiles} "flow files uploaded successful"
+// @Success 200 {object} response.successResp{data=models.FlowFiles} "flow files uploaded successful"
 // @Failure 400 {object} response.errorResp "invalid flow files request data"
 // @Failure 403 {object} response.errorResp "uploading flow files not permitted"
 // @Failure 404 {object} response.errorResp "flow not found"
@@ -285,7 +252,7 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 	}
 
 	// Temporary files are complete — move them into place, then push to container.
-	savedFiles := make([]flowFile, 0, len(fileHeaders))
+	savedFiles := make([]models.FlowFile, 0, len(fileHeaders))
 	for i := range pending {
 		p := &pending[i]
 		if err := os.Rename(p.tmpPath, p.dstPath); err != nil {
@@ -323,7 +290,7 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 
 	sortFlowFiles(savedFiles)
 	s.publishFlowFilesAdded(c.Request.Context(), flow, savedFiles)
-	response.Success(c, http.StatusOK, flowFiles{
+	response.Success(c, http.StatusOK, models.FlowFiles{
 		Files: savedFiles,
 		Total: uint64(len(savedFiles)),
 	})
@@ -336,7 +303,7 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param path query string true "relative path in cache: uploads/<name> or container/<name>"
-// @Success 200 {object} response.successResp{data=flowFiles} "flow file deleted successful"
+// @Success 200 {object} response.successResp{data=models.FlowFiles} "flow file deleted successful"
 // @Failure 400 {object} response.errorResp "invalid flow file request data"
 // @Failure 403 {object} response.errorResp "deleting flow file not permitted"
 // @Failure 404 {object} response.errorResp "flow file not found"
@@ -388,7 +355,7 @@ func (s *FlowFileService) DeleteFlowFile(c *gin.Context) {
 	}
 
 	s.publishFlowFileDeleted(c.Request.Context(), flow, deletedFile)
-	response.Success(c, http.StatusOK, flowFiles{
+	response.Success(c, http.StatusOK, models.FlowFiles{
 		Files: nil,
 		Total: 0,
 	})
@@ -401,7 +368,7 @@ func (s *FlowFileService) DeleteFlowFile(c *gin.Context) {
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param path query string true "relative path in cache: uploads/<name> or container/<name>"
-// @Success 200 {file} file "file content, or ZIP archive for directories"
+// @Success 200 {file} binary "file content, or ZIP archive for directories"
 // @Failure 400 {object} response.errorResp "invalid flow file request data"
 // @Failure 403 {object} response.errorResp "downloading flow file not permitted"
 // @Failure 404 {object} response.errorResp "flow file not found"
@@ -471,8 +438,8 @@ func (s *FlowFileService) DownloadFlowFile(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Param request body pullFlowFilesRequest true "pull request"
-// @Success 200 {object} response.successResp{data=flowFiles} "container path synced to local cache"
+// @Param request body models.PullFlowFilesRequest true "pull request"
+// @Success 200 {object} response.successResp{data=models.FlowFiles} "container path synced to local cache"
 // @Failure 400 {object} response.errorResp "invalid pull request or container not running"
 // @Failure 403 {object} response.errorResp "pulling flow files not permitted"
 // @Failure 404 {object} response.errorResp "flow not found"
@@ -493,7 +460,14 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 		return
 	}
 
-	var req pullFlowFilesRequest
+	// Container interaction additionally requires containers.view (or containers.admin).
+	privs := c.GetStringSlice("prm")
+	if !slices.Contains(privs, "containers.admin") && !slices.Contains(privs, "containers.view") {
+		response.Error(c, response.ErrNotPermitted, fmt.Errorf("containers.view privilege is required to pull from container"))
+		return
+	}
+
+	var req models.PullFlowFilesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error parsing pull request")
 		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
@@ -658,10 +632,10 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 	if targetExists {
 		s.publishFlowFileUpdated(c.Request.Context(), flow, synced)
 	} else {
-		s.publishFlowFilesAdded(c.Request.Context(), flow, []flowFile{synced})
+		s.publishFlowFilesAdded(c.Request.Context(), flow, []models.FlowFile{synced})
 	}
-	response.Success(c, http.StatusOK, flowFiles{
-		Files: []flowFile{synced},
+	response.Success(c, http.StatusOK, models.FlowFiles{
+		Files: []models.FlowFile{synced},
 		Total: 1,
 	})
 }
@@ -673,7 +647,7 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param path query string false "absolute path inside the running container; defaults to /work"
-// @Success 200 {object} response.successResp{data=containerFiles} "container files list received successful"
+// @Success 200 {object} response.successResp{data=models.ContainerFiles} "container files list received successful"
 // @Failure 400 {object} response.errorResp "invalid flow files request data or container not running"
 // @Failure 403 {object} response.errorResp "getting flow container files not permitted"
 // @Failure 404 {object} response.errorResp "flow not found"
@@ -689,6 +663,13 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 
 	if _, err := s.getFlow(c, flowID, false); err != nil {
 		s.handleFlowLookupError(c, flowID, err)
+		return
+	}
+
+	// Container interaction additionally requires containers.view (or containers.admin).
+	privs := c.GetStringSlice("prm")
+	if !slices.Contains(privs, "containers.admin") && !slices.Contains(privs, "containers.view") {
+		response.Error(c, response.ErrNotPermitted, fmt.Errorf("containers.view privilege is required to list container files"))
 		return
 	}
 
@@ -732,9 +713,9 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 	}
 	if !pathStat.Mode.IsDir() {
 		file := convertContainerFile(path.Dir(containerPath), pathStat)
-		response.Success(c, http.StatusOK, containerFiles{
+		response.Success(c, http.StatusOK, models.ContainerFiles{
 			Path:  containerPath,
-			Files: []containerFile{file},
+			Files: []models.ContainerFile{file},
 			Total: 1,
 		})
 		return
@@ -751,7 +732,7 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 	}
 
 	files := convertContainerFiles(containerPath, stats)
-	response.Success(c, http.StatusOK, containerFiles{
+	response.Success(c, http.StatusOK, models.ContainerFiles{
 		Path:  containerPath,
 		Files: files,
 		Total: uint64(len(files)),
@@ -780,7 +761,7 @@ func (s *FlowFileService) getFlow(c *gin.Context, flowID uint64, writeAccess boo
 
 // listFlowFiles lists top-level uploads and recursive container cache entries.
 // Container entries preserve pulled paths, e.g. container/etc/nginx/nginx.conf.
-func (s *FlowFileService) listFlowFiles(flowID uint64) ([]flowFile, error) {
+func (s *FlowFileService) listFlowFiles(flowID uint64) ([]models.FlowFile, error) {
 	files, err := flowfiles.List(s.dataDir, flowID)
 	if err != nil {
 		return nil, err
@@ -840,15 +821,11 @@ func (s *FlowFileService) copyFileToContainer(ctx context.Context, flowID uint64
 		return nil // container absent or not running — skip silently
 	}
 
-	info, err := flowfiles.RegularFileInfo(localFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to stat local file: %w", err)
-	}
-
 	pr, pw := io.Pipe()
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- writeSingleUploadTar(pw, localFilePath, info)
+		tarName := path.Join(flowfiles.UploadsDirName, filepath.Base(localFilePath))
+		errCh <- flowfiles.WriteSingleFileTar(pw, localFilePath, tarName)
 	}()
 
 	copyErr := s.dockerClient.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
@@ -859,46 +836,6 @@ func (s *FlowFileService) copyFileToContainer(ctx context.Context, flowID uint64
 		return copyErr
 	}
 	return writeErr
-}
-
-func writeSingleUploadTar(w *io.PipeWriter, localFilePath string, info os.FileInfo) error {
-	tw := tar.NewWriter(w)
-	defer w.Close()
-	defer tw.Close()
-
-	if err := tw.WriteHeader(&tar.Header{
-		Typeflag: tar.TypeDir,
-		Name:     flowfiles.UploadsDirName,
-		Mode:     0755,
-		ModTime:  time.Now(),
-	}); err != nil {
-		w.CloseWithError(err)
-		return fmt.Errorf("failed to write uploads directory tar header: %w", err)
-	}
-
-	f, err := os.Open(localFilePath)
-	if err != nil {
-		w.CloseWithError(err)
-		return fmt.Errorf("failed to open local file: %w", err)
-	}
-	defer f.Close()
-
-	if err := tw.WriteHeader(&tar.Header{
-		Typeflag: tar.TypeReg,
-		Name:     path.Join(flowfiles.UploadsDirName, filepath.Base(localFilePath)),
-		Mode:     0644,
-		Size:     info.Size(),
-		ModTime:  info.ModTime(),
-	}); err != nil {
-		w.CloseWithError(err)
-		return fmt.Errorf("failed to write tar header: %w", err)
-	}
-	if _, err := io.Copy(tw, f); err != nil {
-		w.CloseWithError(err)
-		return fmt.Errorf("failed to write tar content: %w", err)
-	}
-
-	return nil
 }
 
 func (s *FlowFileService) deleteUploadFromContainer(ctx context.Context, flowID uint64, reqPath string) error {
@@ -962,19 +899,19 @@ func flowScopeForFiles(
 	flowID uint64,
 	writeAccess bool,
 ) func(db *gorm.DB) *gorm.DB {
-	if slices.Contains(privs, "flows.admin") {
+	if slices.Contains(privs, "flow_files.admin") {
 		return func(db *gorm.DB) *gorm.DB {
 			return db.Where("id = ?", flowID)
 		}
 	}
 
-	if writeAccess && slices.Contains(privs, "flows.edit") {
+	if writeAccess && slices.Contains(privs, "flow_files.upload") {
 		return func(db *gorm.DB) *gorm.DB {
 			return db.Where("id = ? AND user_id = ?", flowID, uid)
 		}
 	}
 
-	if !writeAccess && slices.Contains(privs, "flows.view") {
+	if !writeAccess && slices.Contains(privs, "flow_files.view") {
 		return func(db *gorm.DB) *gorm.DB {
 			return db.Where("id = ? AND user_id = ?", flowID, uid)
 		}
@@ -995,16 +932,16 @@ func cleanupPendingUploads(pending []pendingUpload) {
 	}
 }
 
-func convertFlowFiles(files []flowfiles.File) []flowFile {
-	converted := make([]flowFile, 0, len(files))
+func convertFlowFiles(files []flowfiles.File) []models.FlowFile {
+	converted := make([]models.FlowFile, 0, len(files))
 	for _, file := range files {
 		converted = append(converted, convertFlowFile(file))
 	}
 	return converted
 }
 
-func convertFlowFile(file flowfiles.File) flowFile {
-	return flowFile{
+func convertFlowFile(file flowfiles.File) models.FlowFile {
+	return models.FlowFile{
 		ID:         file.ID,
 		Name:       file.Name,
 		Path:       file.Path,
@@ -1014,7 +951,7 @@ func convertFlowFile(file flowfiles.File) flowFile {
 	}
 }
 
-func convertModelFlowFile(file flowFile) *model.FlowFile {
+func convertModelFlowFile(file models.FlowFile) *model.FlowFile {
 	return &model.FlowFile{
 		ID:         file.ID,
 		Name:       file.Name,
@@ -1025,8 +962,8 @@ func convertModelFlowFile(file flowFile) *model.FlowFile {
 	}
 }
 
-func convertContainerFiles(basePath string, stats []container.PathStat) []containerFile {
-	files := make([]containerFile, 0, len(stats))
+func convertContainerFiles(basePath string, stats []container.PathStat) []models.ContainerFile {
+	files := make([]models.ContainerFile, 0, len(stats))
 	for _, stat := range stats {
 		files = append(files, convertContainerFile(basePath, stat))
 	}
@@ -1038,10 +975,10 @@ func convertContainerFiles(basePath string, stats []container.PathStat) []contai
 	return files
 }
 
-func convertContainerFile(basePath string, stat container.PathStat) containerFile {
+func convertContainerFile(basePath string, stat container.PathStat) models.ContainerFile {
 	filePath := path.Join(basePath, stat.Name)
 
-	return containerFile{
+	return models.ContainerFile{
 		ID:         flowfiles.ID(filePath),
 		Name:       stat.Name,
 		Path:       filePath,
@@ -1051,7 +988,7 @@ func convertContainerFile(basePath string, stat container.PathStat) containerFil
 	}
 }
 
-func (s *FlowFileService) publishFlowFilesAdded(ctx context.Context, flow models.Flow, files []flowFile) {
+func (s *FlowFileService) publishFlowFilesAdded(ctx context.Context, flow models.Flow, files []models.FlowFile) {
 	if s.ss == nil {
 		return
 	}
@@ -1062,7 +999,7 @@ func (s *FlowFileService) publishFlowFilesAdded(ctx context.Context, flow models
 	}
 }
 
-func (s *FlowFileService) publishFlowFileUpdated(ctx context.Context, flow models.Flow, file flowFile) {
+func (s *FlowFileService) publishFlowFileUpdated(ctx context.Context, flow models.Flow, file models.FlowFile) {
 	if s.ss == nil {
 		return
 	}
@@ -1071,7 +1008,7 @@ func (s *FlowFileService) publishFlowFileUpdated(ctx context.Context, flow model
 	publisher.FlowFileUpdated(ctx, convertModelFlowFile(file))
 }
 
-func (s *FlowFileService) publishFlowFileDeleted(ctx context.Context, flow models.Flow, file flowFile) {
+func (s *FlowFileService) publishFlowFileDeleted(ctx context.Context, flow models.Flow, file models.FlowFile) {
 	if s.ss == nil {
 		return
 	}
@@ -1080,7 +1017,7 @@ func (s *FlowFileService) publishFlowFileDeleted(ctx context.Context, flow model
 	publisher.FlowFileDeleted(ctx, convertModelFlowFile(file))
 }
 
-func sortFlowFiles(files []flowFile) {
+func sortFlowFiles(files []models.FlowFile) {
 	sort.Slice(files, func(i, j int) bool {
 		if files[i].ModifiedAt.Equal(files[j].ModifiedAt) {
 			return files[i].Name < files[j].Name
@@ -1092,4 +1029,318 @@ func sortFlowFiles(files []flowFile) {
 // primaryContainerName returns the Docker container name for a flow's primary terminal.
 func primaryContainerName(flowID uint64) string {
 	return fmt.Sprintf("%s%d", tools.PrimaryTerminalNamePrefix, flowID)
+}
+
+// AddResourcesToFlow copies user-owned resources into the flow resources directory.
+// @Summary Copy user resources into a flow
+// @Description Copies one or more user resources (identified by ID) into flow-{id}-data/resources/.
+// @Description Files already present in the flow are skipped unless force=true, in which case they are replaced.
+// @Tags FlowFiles
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param flowID path int true "flow id" minimum(0)
+// @Param body body models.AddResourcesRequest true "resource IDs and force flag"
+// @Success 200 {object} response.successResp{data=models.FlowFiles} "resources copied successfully"
+// @Failure 400 {object} response.errorResp "invalid request"
+// @Failure 403 {object} response.errorResp "not permitted"
+// @Failure 404 {object} response.errorResp "flow not found"
+// @Failure 409 {object} response.errorResp "file already exists and force=false"
+// @Failure 500 {object} response.errorResp "internal error"
+// @Router /flows/{flowID}/files/resources [post]
+func (s *FlowFileService) AddResourcesToFlow(c *gin.Context) {
+	flowID, err := parseFlowIDParam(c)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Error("error parsing flow id")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
+
+	flow, err := s.getFlow(c, flowID, true)
+	if err != nil {
+		s.handleFlowLookupError(c, flowID, err)
+		return
+	}
+
+	var req models.AddResourcesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("invalid add resources request")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
+
+	uid := c.GetUint64("uid")
+	privs := c.GetStringSlice("prm")
+	isAdmin := slices.Contains(privs, "resources.admin") || slices.Contains(privs, "flow_files.admin")
+
+	// Check privilege: need both flow_files.upload and resources.view.
+	if !isAdmin {
+		if !slices.Contains(privs, "flow_files.upload") {
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+		if !slices.Contains(privs, "resources.view") && !slices.Contains(privs, "resources.admin") {
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+	}
+
+	// Fetch resources and validate ownership.
+	var recs []models.UserResource
+	if err := s.db.Model(&models.UserResource{}).Where("id IN (?)", req.IDs).Find(&recs).Error; err != nil {
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error fetching resources by IDs")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	found := make(map[string]models.UserResource, len(recs))
+	for _, r := range recs {
+		found[fmt.Sprintf("%d", r.ID)] = r
+	}
+
+	refs := make([]flowfiles.ResourceRef, 0, len(req.IDs))
+	for _, idStr := range req.IDs {
+		r, ok := found[idStr]
+		if !ok {
+			err := fmt.Errorf("resource %s not found", idStr)
+			response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+			return
+		}
+		if !isAdmin && r.UserID != uid {
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+		refs = append(refs, flowfiles.ResourceRef{
+			Hash:        r.Hash,
+			VirtualPath: r.Path,
+			Name:        r.Name,
+			IsDir:       r.IsDir,
+		})
+	}
+
+	storeDir := filepath.Join(s.dataDir, "resources")
+	addedPaths, err := flowfiles.CopyResourcesToFlow(s.dataDir, storeDir, flowID, refs, req.Force)
+	if err != nil {
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error copying resources to flow")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	// Publish subscription events for newly added/updated files.
+	if len(addedPaths) > 0 {
+		addedFiles := make([]models.FlowFile, 0, len(addedPaths))
+		resourcesDir := flowfiles.FlowResourcesDir(s.dataDir, flowID)
+		for _, relPath := range addedPaths {
+			fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]
+			absPath := filepath.Join(resourcesDir, filepath.FromSlash(fsRelPath))
+			var size int64
+			var modTime time.Time
+			if info, err := os.Lstat(absPath); err == nil {
+				size = info.Size()
+				modTime = info.ModTime()
+			} else {
+				modTime = time.Now()
+			}
+			addedFiles = append(addedFiles, models.FlowFile{
+				ID:         flowfiles.ID(relPath),
+				Name:       path.Base(relPath),
+				Path:       relPath,
+				Size:       size,
+				IsDir:      false,
+				ModifiedAt: modTime,
+			})
+		}
+
+		if req.Force {
+			for _, f := range addedFiles {
+				s.publishFlowFileUpdated(c.Request.Context(), flow, f)
+			}
+		} else {
+			s.publishFlowFilesAdded(c.Request.Context(), flow, addedFiles)
+		}
+	}
+
+	files, err := s.listFlowFiles(flowID)
+	if err != nil {
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error listing flow files after resource add")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, models.FlowFiles{
+		Files: files,
+		Total: uint64(len(files)),
+	})
+}
+
+// AddResourceFromFlow promotes a file from the flow cache into the user's global resource store.
+// @Summary Promote a flow file to user resources
+// @Description Reads a file from flow-{id}-data/{sourcePath}, computes MD5, stores the blob, inserts a user_resources row.
+// @Tags FlowFiles
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param flowID path int true "flow id" minimum(0)
+// @Param body body models.AddResourceFromFlowRequest true "source path, destination and force flag"
+// @Success 200 {object} response.successResp{data=models.ResourceEntry} "resource created or updated"
+// @Failure 400 {object} response.errorResp "invalid request"
+// @Failure 403 {object} response.errorResp "not permitted"
+// @Failure 404 {object} response.errorResp "source file or flow not found"
+// @Failure 409 {object} response.errorResp "destination already exists and force=false"
+// @Failure 500 {object} response.errorResp "internal error"
+// @Router /flows/{flowID}/files/to-resources [post]
+func (s *FlowFileService) AddResourceFromFlow(c *gin.Context) {
+	flowID, err := parseFlowIDParam(c)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Error("error parsing flow id")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
+
+	uid := c.GetUint64("uid")
+	privs := c.GetStringSlice("prm")
+	isAdmin := slices.Contains(privs, "resources.admin")
+
+	if !isAdmin {
+		if !slices.Contains(privs, "resources.upload") {
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+		if !slices.Contains(privs, "flow_files.view") && !slices.Contains(privs, "flow_files.admin") {
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+	}
+
+	if _, err := s.getFlow(c, flowID, false); err != nil {
+		s.handleFlowLookupError(c, flowID, err)
+		return
+	}
+
+	var req models.AddResourceFromFlowRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.FromContext(c).WithError(err).Error("invalid add resource from flow request")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
+
+	absPath, err := flowfiles.ResolveCachedPath(s.dataDir, flowID, req.SourcePath)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Error("invalid source path for add resource from flow")
+		response.Error(c, response.ErrFlowFilesInvalidData, err)
+		return
+	}
+
+	if _, statErr := os.Lstat(absPath); statErr != nil {
+		if os.IsNotExist(statErr) {
+			response.Error(c, response.ErrFlowFilesNotFound, statErr)
+			return
+		}
+		logger.FromContext(c).WithError(statErr).Error("error stating flow file")
+		response.Error(c, response.ErrInternal, statErr)
+		return
+	}
+
+	destPath, err := resources.SanitizeResourcePath(req.Destination)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Error("invalid destination path for add resource from flow")
+		response.Error(c, response.ErrFlowFilesInvalidData, err)
+		return
+	}
+
+	var existingRec models.UserResource
+	existErr := s.db.Where("user_id = ? AND path = ?", uid, destPath).First(&existingRec).Error
+	exists := existErr == nil
+	if existErr != nil && !gorm.IsRecordNotFoundError(existErr) {
+		logger.FromContext(c).WithError(existErr).Error("error checking resource existence")
+		response.Error(c, response.ErrInternal, existErr)
+		return
+	}
+	if exists && !req.Force {
+		response.Error(c, response.ErrFlowFilesAlreadyExists, fmt.Errorf("resource already exists at %q; use force=true to overwrite", destPath))
+		return
+	}
+
+	f, err := os.Open(absPath)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Error("error opening flow file")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+	tmpPath, hash, size, err := resources.SaveToTemp(f, resources.ResourcesDir(s.dataDir))
+	f.Close()
+	if err != nil {
+		logger.FromContext(c).WithError(err).Error("error saving flow file to temp")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	if err := resources.CommitBlob(s.dataDir, hash, tmpPath); err != nil {
+		logger.FromContext(c).WithError(err).Error("error committing blob for flow file")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	name := filepath.Base(destPath)
+
+	if exists {
+		oldHash := existingRec.Hash
+		if err := s.db.Model(&existingRec).Updates(models.UserResource{
+			Hash:      hash,
+			Name:      name,
+			Size:      size,
+			UpdatedAt: time.Now(),
+		}).Error; err != nil {
+			logger.FromContext(c).WithError(err).Error("error updating resource record")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		if s.db.Model(&models.UserResource{}).Where("hash = ?", oldHash).RecordNotFound() {
+			os.Remove(resources.BlobPath(s.dataDir, oldHash))
+		}
+		entry := models.ResourceEntry{
+			ID:        int64(existingRec.ID),
+			UserID:    existingRec.UserID,
+			Name:      existingRec.Name,
+			Path:      existingRec.Path,
+			Size:      size,
+			IsDir:     false,
+			CreatedAt: existingRec.CreatedAt,
+			UpdatedAt: existingRec.UpdatedAt,
+		}
+		if s.ss != nil {
+			s.ss.NewResourcePublisher(int64(uid)).ResourceUpdated(c.Request.Context(), convertResourceToModel(entry))
+		}
+		response.Success(c, http.StatusOK, entry)
+		return
+	}
+
+	rec := models.UserResource{
+		UserID: uid,
+		Hash:   hash,
+		Name:   name,
+		Path:   destPath,
+		Size:   size,
+		IsDir:  false,
+	}
+	if err := s.db.Create(&rec).Error; err != nil {
+		logger.FromContext(c).WithError(err).Error("error inserting resource from flow")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	entry := models.ResourceEntry{
+		ID:        int64(rec.ID),
+		UserID:    rec.UserID,
+		Name:      rec.Name,
+		Path:      rec.Path,
+		Size:      rec.Size,
+		IsDir:     false,
+		CreatedAt: rec.CreatedAt,
+		UpdatedAt: rec.UpdatedAt,
+	}
+	if s.ss != nil {
+		s.ss.NewResourcePublisher(int64(uid)).ResourceAdded(c.Request.Context(), convertResourceToModel(entry))
+	}
+	response.Success(c, http.StatusOK, entry)
 }

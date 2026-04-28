@@ -266,6 +266,93 @@ func TestWriteUploadsTar(t *testing.T) {
 	assert.NotContains(t, contents, "uploads/link.txt")
 }
 
+func TestCollectFileSyncEntries(t *testing.T) {
+	localDir := t.TempDir()
+	requireNoError := func(err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	requireNoError(os.MkdirAll(filepath.Join(localDir, "targets"), 0755))
+	requireNoError(os.WriteFile(filepath.Join(localDir, "targets", "ips.txt"), []byte("127.0.0.1"), 0644))
+	requireNoError(os.WriteFile(filepath.Join(localDir, "top.txt"), []byte("top"), 0644))
+	if err := os.Symlink(filepath.Join(localDir, "top.txt"), filepath.Join(localDir, "link.txt")); err != nil {
+		t.Skipf("symlink creation not available: %v", err)
+	}
+
+	entries, err := collectFileSyncEntries(localDir, flowfiles.UploadsDirName)
+	assert.NoError(t, err)
+
+	byTarPath := map[string]fileSyncEntry{}
+	for _, entry := range entries {
+		byTarPath[entry.tarPath] = entry
+	}
+
+	assert.Contains(t, byTarPath, "uploads/top.txt")
+	assert.Contains(t, byTarPath, "uploads/targets/ips.txt")
+	assert.NotContains(t, byTarPath, "uploads/link.txt")
+	assert.Equal(t, docker.WorkFolderPathInContainer+"/uploads/top.txt", byTarPath["uploads/top.txt"].containerPath)
+	assert.Equal(t, filepath.Join(localDir, "top.txt"), byTarPath["uploads/top.txt"].localPath)
+}
+
+func TestCollectFileSyncEntriesMissingDir(t *testing.T) {
+	entries, err := collectFileSyncEntries(filepath.Join(t.TempDir(), "missing"), flowfiles.ResourcesDirName)
+	assert.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestConvertSyncEntriesToTarEntries(t *testing.T) {
+	entries := []fileSyncEntry{
+		{localPath: "/tmp/a.txt", tarPath: "uploads/a.txt"},
+		{localPath: "/tmp/b.txt", tarPath: "resources/b.txt"},
+	}
+
+	tarEntries := convertSyncEntriesToTarEntries(entries)
+
+	assert.Equal(t, []flowfiles.TarEntry{
+		{LocalPath: "/tmp/a.txt", TarPath: "uploads/a.txt"},
+		{LocalPath: "/tmp/b.txt", TarPath: "resources/b.txt"},
+	}, tarEntries)
+}
+
+func TestFindMissingInContainer(t *testing.T) {
+	mock := &contextAwareMockDockerClient{
+		execCreateResp: container.ExecCreateResponse{ID: "exec-file-check"},
+		attachOutput: []byte(
+			docker.WorkFolderPathInContainer + "/uploads/a.txt\n" +
+				docker.WorkFolderPathInContainer + "/resources/b.txt\n" +
+				docker.WorkFolderPathInContainer + "/unknown.txt\n",
+		),
+		inspectResp: container.ExecInspect{ExitCode: 0},
+	}
+	fte := &flowToolsExecutor{flowID: 7, docker: mock}
+	entries := []fileSyncEntry{
+		{localPath: "/tmp/a.txt", containerPath: docker.WorkFolderPathInContainer + "/uploads/a.txt", tarPath: "uploads/a.txt"},
+		{localPath: "/tmp/b.txt", containerPath: docker.WorkFolderPathInContainer + "/resources/b.txt", tarPath: "resources/b.txt"},
+	}
+
+	missing, err := fte.findMissingInContainer(t.Context(), entries)
+
+	assert.NoError(t, err)
+	assert.Equal(t, entries, missing)
+}
+
+func TestFindMissingInContainerChecksExitCode(t *testing.T) {
+	mock := &contextAwareMockDockerClient{
+		execCreateResp: container.ExecCreateResponse{ID: "exec-file-check"},
+		attachOutput:   []byte("shell failed"),
+		inspectResp:    container.ExecInspect{ExitCode: 2},
+	}
+	fte := &flowToolsExecutor{flowID: 7, docker: mock}
+
+	_, err := fte.findMissingInContainer(t.Context(), []fileSyncEntry{
+		{containerPath: docker.WorkFolderPathInContainer + "/uploads/a.txt"},
+	})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "exit code 2")
+}
+
 func TestConfiguredExecTimeout(t *testing.T) {
 	t.Parallel()
 

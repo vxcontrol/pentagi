@@ -245,6 +245,23 @@ Use both:
 <execution_context>
 {{.ExecutionContext}}
 </execution_context>
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files are attached to this coding assignment and are available READ-ONLY in the container:
+- `{{.Cwd}}/uploads` — files delivered for this task (source code, binaries, data samples)
+- `{{.Cwd}}/resources` — reference materials prepared for this engagement
+
+Rules:
+- Access any file by combining its `base` path with the listed relative path: `<base>/<relative_path>`
+- If the task description references a filename present in this list, use the full path when reading it
+- These directories are READ-ONLY — write all outputs and modified copies to `{{.Cwd}}/`
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 ## SENIOR MENTOR SUPERVISION
 

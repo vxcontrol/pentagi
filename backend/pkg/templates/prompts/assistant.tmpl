@@ -228,6 +228,23 @@ You are a specialized AI assistant for penetration testing and security engineer
 <execution_context>
 {{.ExecutionContext}}
 </execution_context>
+{{if .UserFiles}}
+
+## TASK MATERIALS
+
+<task_materials_protocol>
+The following files were provided by the user and are available READ-ONLY in the container for this session:
+- `{{.Cwd}}/uploads` — files the user uploaded for this session
+- `{{.Cwd}}/resources` — reference materials the user considers important for this engagement
+
+Rules:
+- Access any file by combining its `base` path with the listed relative path: `<base>/<relative_path>`
+- If the user mentions a filename that matches an entry here, that is the file they are referring to
+- These directories are READ-ONLY — write all outputs to `{{.Cwd}}/`
+</task_materials_protocol>
+
+{{.UserFiles}}
+{{end}}
 
 ## SENIOR MENTOR SUPERVISION
 

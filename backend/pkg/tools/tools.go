@@ -3,10 +3,14 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"pentagi/pkg/config"
@@ -414,8 +418,8 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		case database.ContainerStatusRunning:
 			fte.primaryID = cnt.ID
 			fte.primaryLID = cnt.LocalID.String
-			if err := fte.syncCachedUploads(ctx); err != nil {
-				return fmt.Errorf("failed to sync cached uploads to container '%s': %w", PrimaryTerminalName(fte.flowID), err)
+			if err := fte.syncMissingFiles(ctx); err != nil {
+				return fmt.Errorf("failed to sync missing files to container '%s': %w", PrimaryTerminalName(fte.flowID), err)
 			}
 			return nil
 		default:
@@ -449,45 +453,177 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 	fte.primaryID = cnt.ID
 	fte.primaryLID = cnt.LocalID.String
 
-	if err := fte.syncCachedUploads(ctx); err != nil {
-		return fmt.Errorf("failed to sync cached uploads to container '%s': %w", containerName, err)
+	if err := fte.syncMissingFiles(ctx); err != nil {
+		return fmt.Errorf("failed to sync files to container '%s': %w", containerName, err)
 	}
 
 	return nil
 }
 
-func (fte *flowToolsExecutor) syncCachedUploads(ctx context.Context) error {
-	uploadDir, err := fte.cachedUploadsDir()
+// fileSyncEntry maps a local host file to its expected path inside the container.
+type fileSyncEntry struct {
+	localPath     string // absolute path on host
+	containerPath string // absolute path in container, e.g. /work/uploads/file.txt
+	tarPath       string // relative tar path (relative to /work/), e.g. uploads/file.txt
+}
+
+// syncMissingFiles is the single method responsible for keeping uploads/ and resources/
+// in sync with the container. It collects all local files, checks which are absent in the
+// container with ONE exec call, then copies only the missing ones in a single tar stream.
+func (fte *flowToolsExecutor) syncMissingFiles(ctx context.Context) error {
+	entries, err := fte.collectSyncEntries()
 	if err != nil {
 		return err
-	}
-
-	containerName := PrimaryTerminalName(fte.flowID)
-	if err := fte.resetContainerUploads(ctx, containerName); err != nil {
-		return err
-	}
-
-	entries, err := os.ReadDir(uploadDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to read uploads cache directory: %w", err)
 	}
 	if len(entries) == 0 {
 		return nil
 	}
 
+	missing, err := fte.findMissingInContainer(ctx, entries)
+	if err != nil {
+		return err
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	return fte.copyEntriesToContainer(ctx, missing)
+}
+
+// collectSyncEntries walks uploads/ and resources/ on disk and returns sync entries.
+func (fte *flowToolsExecutor) collectSyncEntries() ([]fileSyncEntry, error) {
+	var entries []fileSyncEntry
+
+	uploadsDir, err := fte.cachedUploadsDir()
+	if err != nil {
+		return nil, err
+	}
+	if uploadsEntries, err := collectFileSyncEntries(uploadsDir, flowfiles.UploadsDirName); err != nil {
+		return nil, fmt.Errorf("failed to collect uploads: %w", err)
+	} else {
+		entries = append(entries, uploadsEntries...)
+	}
+
+	resourcesDir, err := fte.cachedResourcesDir()
+	if err != nil {
+		return nil, err
+	}
+	if resourcesEntries, err := collectFileSyncEntries(resourcesDir, flowfiles.ResourcesDirName); err != nil {
+		return nil, fmt.Errorf("failed to collect resources: %w", err)
+	} else {
+		entries = append(entries, resourcesEntries...)
+	}
+
+	return entries, nil
+}
+
+// collectFileSyncEntries walks localDir and builds sync entries using dirName as the
+// top-level name inside /work/ (e.g. "uploads" or "resources").
+func collectFileSyncEntries(localDir, dirName string) ([]fileSyncEntry, error) {
+	var entries []fileSyncEntry
+	err := filepath.WalkDir(localDir, func(entryPath string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if entryPath == localDir || d.IsDir() {
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 || !d.Type().IsRegular() {
+			return nil
+		}
+
+		rel, err := filepath.Rel(localDir, entryPath)
+		if err != nil {
+			return err
+		}
+		tarPath := path.Join(dirName, filepath.ToSlash(rel))
+		entries = append(entries, fileSyncEntry{
+			localPath:     entryPath,
+			containerPath: docker.WorkFolderPathInContainer + "/" + tarPath,
+			tarPath:       tarPath,
+		})
+		return nil
+	})
+
+	return entries, err
+}
+
+// findMissingInContainer executes a single shell command inside the container that tests
+// the existence of every expected file and outputs the container path of each missing one.
+// This is the only exec call needed in the happy-path (all files already present → returns empty).
+func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entries []fileSyncEntry) ([]fileSyncEntry, error) {
+	// sh -c 'for f in "$@"; do [ -f "$f" ] || printf "%s\n" "$f"; done' -- /path1 /path2 …
+	cmd := make([]string, 0, len(entries)+4)
+	cmd = append(cmd, "sh", "-c",
+		`for f in "$@"; do [ -f "$f" ] || printf '%s\n' "$f"; done`, "--")
+	for _, e := range entries {
+		cmd = append(cmd, e.containerPath)
+	}
+
+	containerName := PrimaryTerminalName(fte.flowID)
+	createResp, err := fte.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
+		Cmd:          cmd,
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file-check exec: %w", err)
+	}
+
+	resp, err := fte.docker.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach file-check exec: %w", err)
+	}
+	output, readErr := io.ReadAll(resp.Reader)
+	resp.Close()
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read file-check output: %w", readErr)
+	}
+	inspect, err := fte.docker.ContainerExecInspect(ctx, createResp.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect file-check exec: %w", err)
+	}
+	if inspect.ExitCode != 0 {
+		return nil, fmt.Errorf("file-check exec failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
+	}
+
+	// Build a lookup map for O(1) access.
+	byContainerPath := make(map[string]fileSyncEntry, len(entries))
+	for _, e := range entries {
+		byContainerPath[e.containerPath] = e
+	}
+
+	var missing []fileSyncEntry
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if e, ok := byContainerPath[line]; ok {
+			missing = append(missing, e)
+		}
+	}
+
+	return missing, nil
+}
+
+// copyEntriesToContainer writes all missing files as a single tar stream into the container.
+func (fte *flowToolsExecutor) copyEntriesToContainer(ctx context.Context, entries []fileSyncEntry) error {
 	pr, pw := io.Pipe()
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- flowfiles.WriteUploadsTar(pw, uploadDir)
+		errCh <- flowfiles.WriteFilesTar(pw, convertSyncEntriesToTarEntries(entries))
 	}()
 
+	containerName := PrimaryTerminalName(fte.flowID)
 	copyErr := fte.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
 		container.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
 	pr.Close()
 	writeErr := <-errCh
+
 	if copyErr != nil {
 		return copyErr
 	}
@@ -495,35 +631,15 @@ func (fte *flowToolsExecutor) syncCachedUploads(ctx context.Context) error {
 	return writeErr
 }
 
-func (fte *flowToolsExecutor) resetContainerUploads(ctx context.Context, containerName string) error {
-	createResp, err := fte.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
-		Cmd:          []string{"sh", "-c", "rm -rf -- /work/uploads && mkdir -p -- /work/uploads"},
-		AttachStdout: true,
-		AttachStderr: true,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create uploads reset exec: %w", err)
+func convertSyncEntriesToTarEntries(entries []fileSyncEntry) []flowfiles.TarEntry {
+	tarEntries := make([]flowfiles.TarEntry, 0, len(entries))
+	for _, entry := range entries {
+		tarEntries = append(tarEntries, flowfiles.TarEntry{
+			LocalPath: entry.localPath,
+			TarPath:   entry.tarPath,
+		})
 	}
-
-	resp, err := fte.docker.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to attach uploads reset exec: %w", err)
-	}
-	output, copyErr := io.ReadAll(resp.Reader)
-	resp.Close()
-	if copyErr != nil {
-		return fmt.Errorf("failed to read uploads reset output: %w", copyErr)
-	}
-
-	inspect, err := fte.docker.ContainerExecInspect(ctx, createResp.ID)
-	if err != nil {
-		return fmt.Errorf("failed to inspect uploads reset exec: %w", err)
-	}
-	if inspect.ExitCode != 0 {
-		return fmt.Errorf("uploads reset command failed with exit code %d: %s", inspect.ExitCode, string(output))
-	}
-
-	return nil
+	return tarEntries
 }
 
 func (fte *flowToolsExecutor) cachedUploadsDir() (string, error) {
@@ -533,6 +649,15 @@ func (fte *flowToolsExecutor) cachedUploadsDir() (string, error) {
 	}
 
 	return flowfiles.FlowUploadsDir(dataDir, uint64(fte.flowID)), nil
+}
+
+func (fte *flowToolsExecutor) cachedResourcesDir() (string, error) {
+	dataDir, err := filepath.Abs(fte.cfg.DataDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve data directory: %w", err)
+	}
+
+	return flowfiles.FlowResourcesDir(dataDir, uint64(fte.flowID)), nil
 }
 
 func (fte *flowToolsExecutor) Release(ctx context.Context) error {

@@ -45,7 +45,8 @@ type AssistantProvider interface {
 type FlowWorker interface {
 	GetTitle() string
 	GetStatus(ctx context.Context) (database.FlowStatus, error)
-	PutInput(ctx context.Context, input string, prv provider.Provider) error
+	PutInput(ctx context.Context, input string, prv provider.Provider, resources []database.UserResource) error
+	PutResources(ctx context.Context, resources []database.UserResource) error
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
 }
@@ -358,6 +359,7 @@ func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (stri
 		"StopFlowToolName":          tools.StopFlowToolName,
 		"SubmitFlowInputToolName":   tools.SubmitFlowInputToolName,
 		"PatchFlowSubtasksToolName": tools.PatchFlowSubtasksToolName,
+		"UserFiles":                 ap.fp.userFilesListing(),
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to get system prompt for assistant template")
@@ -516,7 +518,7 @@ func (ap *assistantProvider) sendAssistantFlowInput(ctx context.Context, input s
 		return fmt.Errorf("flow is not in 'waiting' state (current: %s); cannot submit input", status)
 	}
 
-	err = ap.flowWorker.PutInput(ctx, input, nil)
+	err = ap.flowWorker.PutInput(ctx, input, nil, nil)
 
 	level := langfuse.ObservationLevelDefault
 	statusMsg := "success"
