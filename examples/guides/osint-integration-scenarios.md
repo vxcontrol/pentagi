@@ -14,7 +14,7 @@ Suggested input:
 
 ```json
 {
-  "provider": "ransomware_live",
+  "provider_id": "ransomware_live",
   "indicator": "example.com",
   "indicator_type": "domain",
   "purpose": "report_context",
@@ -25,7 +25,7 @@ Suggested input:
 
 Allowed values:
 
-- `provider`: `ransomware_live`, `flare`
+- `provider_id`: `ransomware_live`, `flare`
 - `indicator_type`: `domain`, `ip`, `url`, `organization`, `sector`, `country`, `ransomware_group`
 - `purpose`: `triage`, `exposure_check`, `report_context`, `ioc_lookup`
 - `tenant_id`: optional provider-specific tenant context for platforms such as Flare
@@ -34,7 +34,8 @@ Suggested output:
 
 ```json
 {
-  "provider": "ransomware_live",
+  "provider_id": "ransomware_live",
+  "provider_name": "ransomware.live",
   "query": "example.com",
   "hits": [],
   "confidence": "low",
@@ -149,7 +150,7 @@ Expected output:
 
 Start with a provider-neutral external function wrapper:
 
-- `query_osint_intel` accepts provider, indicator, indicator type, purpose, and optional provider-specific tenant context such as `tenant_id` for Flare-backed requests.
+- `query_osint_intel` accepts `provider_id`, indicator, indicator type, purpose, and optional provider-specific tenant context such as `tenant_id` for Flare-backed requests.
 - Provider adapters normalize ransomware.live and Flare responses into the common output shape above.
 - Agents receive summaries and evidence references, not raw credential or cookie secrets.
 - Results are stored as report context and optional flow evidence, not as automatic new targets.
