@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 
-import { Trash2 } from 'lucide-react';
-import { cloneElement, isValidElement } from 'react';
+import { Loader2, Trash2 } from 'lucide-react';
+import { cloneElement, isValidElement, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -24,7 +24,8 @@ interface ConfirmationDialogProps {
     confirmText?: string;
     confirmVariant?: 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
     description?: string;
-    handleConfirm: () => void;
+    /** May be sync or async. If async, the dialog keeps itself open and shows a spinner until the promise settles. */
+    handleConfirm: () => Promise<void> | void;
     handleOpenChange: (isOpen: boolean) => void;
     isOpen: boolean;
     itemName?: string;
@@ -47,6 +48,8 @@ const ConfirmationDialog = ({
     itemType = 'item',
     title = 'Confirm Action',
 }: ConfirmationDialogProps) => {
+    const [isProcessing, setIsProcessing] = useState(false);
+
     const defaultDescription = description || (
         <>
             Are you sure you want to perform this action on{' '}
@@ -54,7 +57,6 @@ const ConfirmationDialog = ({
         </>
     );
 
-    // Common method to process icons with h-4 w-4 classes
     const processIcon = (icon?: ConfirmationDialogIconProps): ConfirmationDialogIconProps | null => {
         if (!icon) {
             return null;
@@ -72,9 +74,30 @@ const ConfirmationDialog = ({
         return icon;
     };
 
+    const handleConfirmClick = async () => {
+        if (isProcessing) {
+            return;
+        }
+
+        setIsProcessing(true);
+
+        try {
+            await handleConfirm();
+            handleOpenChange(false);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     return (
         <Dialog
-            onOpenChange={handleOpenChange}
+            onOpenChange={(nextOpen) => {
+                if (isProcessing) {
+                    return;
+                }
+
+                handleOpenChange(nextOpen);
+            }}
             open={isOpen}
         >
             <DialogContent className="sm:max-w-md">
@@ -85,6 +108,7 @@ const ConfirmationDialog = ({
 
                 <DialogFooter>
                     <Button
+                        disabled={isProcessing}
                         onClick={() => handleOpenChange(false)}
                         variant={cancelVariant}
                     >
@@ -92,13 +116,13 @@ const ConfirmationDialog = ({
                         {cancelText}
                     </Button>
                     <Button
+                        disabled={isProcessing}
                         onClick={() => {
-                            handleConfirm();
-                            handleOpenChange(false);
+                            void handleConfirmClick();
                         }}
                         variant={confirmVariant}
                     >
-                        {processIcon(confirmIcon)}
+                        {isProcessing ? <Loader2 className="size-4 animate-spin" /> : processIcon(confirmIcon)}
                         {confirmText}
                     </Button>
                 </DialogFooter>
