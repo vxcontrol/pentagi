@@ -65,7 +65,8 @@ This document describes the internal architecture and execution workflow of Flow
   - `maintenance_result`, `code_result`, `hack_result`, `memorist_result`
   - `search_result`, `enricher_result`, `report_result`
   - `subtask_list` (Generator), `subtask_patch` (Refiner)
-  
+  - Future signed evidence receipt design is outlined in [evidence_chain_rfc.md](evidence_chain_rfc.md)
+
 - **Barrier Tools** - Control flow termination  
   - `done` - Complete subtask, `ask` - Request user input (configurable via ASK_USER env)
 
