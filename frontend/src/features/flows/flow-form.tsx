@@ -1,16 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-    ArrowUp,
-    Check,
-    ChevronDown,
-    FileSymlink,
-    FileText,
-    Loader2,
-    Paperclip,
-    Plus,
-    Square,
-    X,
-} from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, FileSymlink, FileText, Loader2, Paperclip, Plus, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -102,18 +91,13 @@ export const FlowForm = ({
     const attachedFiles = useMemo<ResourceItem[]>(() => {
         const byId = new Map(resources.map((item) => [item.id, item]));
 
-        return attachedFileIds
-            .map((id) => byId.get(id))
-            .filter((item): item is ResourceItem => Boolean(item));
+        return attachedFileIds.map((id) => byId.get(id)).filter((item): item is ResourceItem => Boolean(item));
     }, [attachedFileIds, resources]);
 
     const isAnyAttachmentUploading = attachedFiles.some((file) => !file.isUploaded);
 
     const sortedResources = useMemo(
-        () =>
-            [...resources].sort(
-                (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
-            ),
+        () => [...resources].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()),
         [resources],
     );
 
@@ -125,9 +109,7 @@ export const FlowForm = ({
         }
 
         return sortedResources.filter((resource) => {
-            const fullName = resource.format
-                ? `${resource.name}.${resource.format}`
-                : resource.name;
+            const fullName = resource.format ? `${resource.name}.${resource.format}` : resource.name;
 
             return fullName.toLowerCase().includes(search);
         });
@@ -604,9 +586,7 @@ export const FlowForm = ({
                                                         className="min-h-16 justify-center"
                                                         disabled
                                                     >
-                                                        {resourceSearch
-                                                            ? 'No results found'
-                                                            : 'No available resources'}
+                                                        {resourceSearch ? 'No results found' : 'No available resources'}
                                                     </DropdownMenuItem>
                                                 ) : (
                                                     filteredResources.map((resource) => {
@@ -638,7 +618,7 @@ export const FlowForm = ({
                                                                         {fullName}
                                                                     </span>
                                                                     {!resource.isUploaded && (
-                                                                        <span className="text-muted-foreground tabular-nums text-xs">
+                                                                        <span className="text-muted-foreground text-xs tabular-nums">
                                                                             {resource.progress}%
                                                                         </span>
                                                                     )}
