@@ -289,17 +289,10 @@ const FlowFiles = () => {
         });
     }, []);
 
-    const getDownloadHrefForFile = useCallback(
-        (file: FileNode) => buildDownloadHref(flowId, file),
-        [flowId],
-    );
+    const getDownloadHrefForFile = useCallback((file: FileNode) => buildDownloadHref(flowId, file), [flowId]);
 
     const fileManagerActions = useMemo<FileManagerAction[]>(
-        () => [
-            downloadAction(getDownloadHrefForFile),
-            copyPathAction(handleCopyPath),
-            deleteAction(setFileToDelete),
-        ],
+        () => [downloadAction(getDownloadHrefForFile), copyPathAction(handleCopyPath), deleteAction(setFileToDelete)],
         [getDownloadHrefForFile, handleCopyPath],
     );
 
@@ -316,16 +309,12 @@ const FlowFiles = () => {
             setIsUploading(true);
 
             try {
-                const response = await api.post<FlowFilesResponse, FormData>(
-                    `/flows/${flowId}/files/`,
-                    formData,
-                    {
-                        // Browser sets the multipart boundary automatically when Content-Type is unset.
-                        headers: { 'Content-Type': undefined },
-                        // Uploads can take longer than the default 30s — disable timeout for this call.
-                        timeout: 0,
-                    },
-                );
+                const response = await api.post<FlowFilesResponse, FormData>(`/flows/${flowId}/files/`, formData, {
+                    // Browser sets the multipart boundary automatically when Content-Type is unset.
+                    headers: { 'Content-Type': undefined },
+                    // Uploads can take longer than the default 30s — disable timeout for this call.
+                    timeout: 0,
+                });
                 const data = unwrapApiResponse(response);
                 const uploadedCount = data.files?.length ?? selectedFiles.length;
 
@@ -651,8 +640,7 @@ const FlowFiles = () => {
                 isLoading={isInitialLoading}
                 onBulkDelete={handleBulkDelete}
                 rootGroups={ROOT_GROUPS}
-                searchEmptyState={noMatchesState}
-                searchQuery={debouncedSearch}
+                search={{ emptyState: noMatchesState, query: debouncedSearch }}
             />
 
             <PullDialog

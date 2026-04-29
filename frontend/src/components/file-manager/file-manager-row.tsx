@@ -23,54 +23,67 @@ import type { FileManagerAction, FileManagerInternalNode } from './file-manager-
 
 import { FileManagerHighlightedName } from './file-manager-highlighted-name';
 import { getFileTypeIcon } from './file-manager-icons';
-import { formatFileSize, formatModified } from './file-manager-utils';
+import { formatModified as defaultFormatModified, formatFileSize } from './file-manager-utils';
 
-/** Marker on every interactive child of the row that should NOT bubble into a row click. */
+/**
+ * Marker on every interactive child of the row that should NOT bubble into a row click.
+ * Detected via `closest()` in the row's click handler — descendants don't need to call
+ * `event.stopPropagation()` themselves.
+ */
 const SKIP_ROW_CLICK_ATTR = 'data-fm-skip-row-click';
+const skipRowClickProps = { [SKIP_ROW_CLICK_ATTR]: '' };
 
 interface FileManagerRowProps {
-    actions: FileManagerAction[];
+    actions: readonly FileManagerAction[];
     activeRowPath: null | string;
-    depth: number;
     file: FileManagerInternalNode;
+    formatModified?: (modifiedAt: Date | string | undefined) => string;
     gridTemplate: string;
     hasActions: boolean;
+    isCheckboxVisible: boolean;
     isExpanded: boolean;
+    isModifiedVisible: boolean;
     isSelected: boolean;
+    isSizeVisible: boolean;
     onClick: (event: ReactMouseEvent, path: string) => void;
     onFocusRow: (path: string) => void;
     onToggleCheckbox: (path: string) => void;
     onToggleExpand: (path: string, wasExpanded: boolean) => void;
+    /** 1-based position of the row inside its parent's child list (for `aria-posinset`). */
+    posInSet: number;
     searchQuery?: string;
-    showCheckbox: boolean;
-    showModified: boolean;
-    showSize: boolean;
+    /** Total number of siblings the row is part of (for `aria-setsize`). */
+    setSize: number;
 }
 
 /** Returns `true` when the click originated from an element opted-out of row activation. */
 const isClickInsideSkipZone = (target: EventTarget | null): boolean =>
     target instanceof HTMLElement && !!target.closest(`[${SKIP_ROW_CLICK_ATTR}]`);
 
-const buildVisibleActions = (actions: FileManagerAction[], file: FileManagerInternalNode): FileManagerAction[] =>
-    actions.filter((action) => action.appliesToDirs || !file.isDir);
+const buildVisibleActions = (
+    actions: readonly FileManagerAction[],
+    file: FileManagerInternalNode,
+): FileManagerAction[] => actions.filter((action) => action.appliesToDirs || !file.isDir);
 
 const FileManagerRowImpl = ({
     actions,
     activeRowPath,
-    depth,
     file,
+    formatModified = defaultFormatModified,
     gridTemplate,
     hasActions,
+    isCheckboxVisible,
     isExpanded,
+    isModifiedVisible,
     isSelected,
+    isSizeVisible,
     onClick,
     onFocusRow,
     onToggleCheckbox,
     onToggleExpand,
+    posInSet,
     searchQuery,
-    showCheckbox,
-    showModified,
-    showSize,
+    setSize,
 }: FileManagerRowProps) => {
     const { icon: Icon, tone } = useMemo(
         () =>
@@ -100,8 +113,7 @@ const FileManagerRowImpl = ({
     ) => {
         const ActionIcon = action.icon;
         const itemClassName = cn(
-            action.variant === 'destructive' &&
-                'text-destructive focus:bg-destructive/10 focus:text-destructive',
+            action.variant === 'destructive' && 'text-destructive focus:bg-destructive/10 focus:text-destructive',
         );
 
         if (action.getHref) {
@@ -134,17 +146,17 @@ const FileManagerRowImpl = ({
         );
     };
 
-    const renderActionItems = (kind: 'context' | 'dropdown'): ReactNode[] => {
-        const Item = kind === 'context' ? ContextMenuItem : DropdownMenuItem;
-        const Sep = kind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator;
+    const renderActionItems = (menuKind: 'context' | 'dropdown'): ReactNode[] => {
+        const MenuItem = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem;
+        const MenuSeparator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator;
         const items: ReactNode[] = [];
 
         for (const action of visibleActions) {
             if (action.separatorBefore && items.length > 0) {
-                items.push(<Sep key={`sep-${action.id}`} />);
+                items.push(<MenuSeparator key={`separator-${action.id}`} />);
             }
 
-            items.push(renderActionItem(Item, action));
+            items.push(renderActionItem(MenuItem, action));
         }
 
         return items;
@@ -155,17 +167,20 @@ const FileManagerRowImpl = ({
     const isActiveRow = activeRowPath === file.path;
 
     const rowStyle = {
-        '--fm-depth': depth,
+        '--fm-depth': file.depth,
         gridTemplateColumns: gridTemplate,
     } as CSSProperties & Record<'--fm-depth', number>;
 
     const row = (
         <div
             aria-expanded={file.isDir ? isExpanded : undefined}
+            aria-level={file.depth + 1}
+            aria-posinset={posInSet}
             aria-selected={isSelected}
+            aria-setsize={setSize}
             className={cn(
                 'group hover:bg-muted/50 grid cursor-pointer items-center gap-3 px-3 py-1.5 transition-colors outline-none',
-                'focus-visible:bg-muted/70 focus-visible:ring-1 focus-visible:ring-ring',
+                'focus-visible:bg-muted/70 focus-visible:ring-ring focus-visible:ring-1',
                 isSelected && 'bg-muted',
             )}
             data-path={file.path}
@@ -175,16 +190,15 @@ const FileManagerRowImpl = ({
             style={rowStyle}
             tabIndex={isActiveRow ? 0 : -1}
         >
-            {showCheckbox ? (
+            {isCheckboxVisible ? (
                 <span
                     className="flex items-center"
-                    {...{ [SKIP_ROW_CLICK_ATTR]: '' }}
+                    {...skipRowClickProps}
                 >
                     <Checkbox
                         aria-label={`Select ${file.name}`}
                         checked={isSelected}
                         onCheckedChange={() => onToggleCheckbox(file.path)}
-                        onClick={(event) => event.stopPropagation()}
                     />
                 </span>
             ) : (
@@ -194,18 +208,13 @@ const FileManagerRowImpl = ({
                 />
             )}
 
-            <div
-                className="flex min-w-0 items-center gap-1.5 pl-[calc(var(--fm-depth)*16px)]"
-            >
+            <div className="flex min-w-0 items-center gap-1.5 pl-[calc(var(--fm-depth)*16px)]">
                 {file.isDir ? (
                     <span
                         aria-hidden="true"
                         className="text-muted-foreground hover:bg-muted -mx-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded transition-colors"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onToggleExpand(file.path, isExpanded);
-                        }}
-                        {...{ [SKIP_ROW_CLICK_ATTR]: '' }}
+                        onClick={() => onToggleExpand(file.path, isExpanded)}
+                        {...skipRowClickProps}
                     >
                         <ChevronRight className={cn('size-3.5 transition-transform', isExpanded && 'rotate-90')} />
                     </span>
@@ -223,27 +232,26 @@ const FileManagerRowImpl = ({
                 />
             </div>
 
-            {showSize && (
+            {isSizeVisible && (
                 <span className="text-muted-foreground/80 shrink-0 text-xs tabular-nums">
                     {!file.isDir ? formatFileSize(file.size) : ''}
                 </span>
             )}
 
-            {showModified && (
+            {isModifiedVisible && (
                 <span className="text-muted-foreground/80 shrink-0 text-xs tabular-nums">
                     {formatModified(file.modifiedAt)}
                 </span>
             )}
 
             {hasActions && (
-                <span {...{ [SKIP_ROW_CLICK_ATTR]: '' }}>
+                <span {...skipRowClickProps}>
                     {dropdownItems.length > 0 ? (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     aria-label="Row actions"
                                     className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
-                                    onClick={(event) => event.stopPropagation()}
                                     size="icon-xs"
                                     variant="ghost"
                                 >

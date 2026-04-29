@@ -67,14 +67,16 @@ export const useFileManagerSelection = ({
         (event: ReactMouseEvent, path: string) => {
             const modifier = resolveSelectionModifier(event);
 
-            setRawSelectedPaths((prev) => {
-                if (modifier === 'single') {
-                    lastClickedRef.current = path;
+            if (modifier === 'single') {
+                lastClickedRef.current = path;
+                setRawSelectedPaths(new Set([path]));
 
-                    return new Set([path]);
-                }
+                return;
+            }
 
-                if (modifier === 'toggle') {
+            if (modifier === 'toggle') {
+                lastClickedRef.current = path;
+                setRawSelectedPaths((prev) => {
                     const next = new Set(prev);
 
                     if (next.has(path)) {
@@ -83,33 +85,39 @@ export const useFileManagerSelection = ({
                         next.add(path);
                     }
 
-                    lastClickedRef.current = path;
-
                     return next;
-                }
+                });
 
-                if (!lastClickedRef.current) {
-                    lastClickedRef.current = path;
+                return;
+            }
 
-                    return new Set([path]);
-                }
+            const anchor = lastClickedRef.current;
 
-                const fromIdx = flatVisible.indexOf(lastClickedRef.current);
-                const toIdx = flatVisible.indexOf(path);
+            if (!anchor) {
+                lastClickedRef.current = path;
+                setRawSelectedPaths(new Set([path]));
 
-                if (fromIdx < 0 || toIdx < 0) {
-                    return new Set([path]);
-                }
+                return;
+            }
 
-                const [a, b] = fromIdx <= toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+            const fromIndex = flatVisible.indexOf(anchor);
+            const toIndex = flatVisible.indexOf(path);
 
-                return new Set(flatVisible.slice(a, b + 1));
-            });
+            if (fromIndex < 0 || toIndex < 0) {
+                setRawSelectedPaths(new Set([path]));
+
+                return;
+            }
+
+            const [startIndex, endIndex] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
+
+            setRawSelectedPaths(new Set(flatVisible.slice(startIndex, endIndex + 1)));
         },
         [flatVisible],
     );
 
     const onToggleCheckbox = useCallback((path: string) => {
+        lastClickedRef.current = path;
         setRawSelectedPaths((prev) => {
             const next = new Set(prev);
 
@@ -118,8 +126,6 @@ export const useFileManagerSelection = ({
             } else {
                 next.add(path);
             }
-
-            lastClickedRef.current = path;
 
             return next;
         });

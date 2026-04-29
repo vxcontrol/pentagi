@@ -22,10 +22,10 @@ export const FileManagerSkeleton = () => (
                 <Skeleton className="size-4 shrink-0" />
                 <Skeleton className="h-4 w-20" />
             </div>
-            {NESTED_NAME_WIDTHS.map((width, i) => (
+            {NESTED_NAME_WIDTHS.map((width, index) => (
                 <div
                     className="flex items-center gap-3 px-3 py-1.5 pl-9"
-                    key={`n-${i}`}
+                    key={`nested-${index}`}
                 >
                     <Skeleton className="size-4 shrink-0 rounded-sm" />
                     <Skeleton className="size-4 shrink-0" />
@@ -34,10 +34,10 @@ export const FileManagerSkeleton = () => (
                     <Skeleton className="h-3 w-16" />
                 </div>
             ))}
-            {ROOT_NAME_WIDTHS.map((width, i) => (
+            {ROOT_NAME_WIDTHS.map((width, index) => (
                 <div
                     className="flex items-center gap-3 px-3 py-1.5"
-                    key={`r-${i}`}
+                    key={`root-${index}`}
                 >
                     <Skeleton className="size-4 shrink-0 rounded-sm" />
                     <Skeleton className="size-3.5 shrink-0" />

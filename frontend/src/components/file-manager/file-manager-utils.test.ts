@@ -5,7 +5,9 @@ import type { FileManagerInternalNode, FileManagerRootGroup, FileNode } from './
 import {
     buildFileManagerGridTemplate,
     buildFileManagerTree,
+    clamp,
     collectAllFilePaths,
+    collectAllNodePaths,
     collectDirectoryPaths,
     collectVisibleFlat,
     dedupeOverlappingPaths,
@@ -13,8 +15,11 @@ import {
     findNodeByPath,
     formatFileSize,
     formatModified,
+    getCheckboxState,
     normalizeRootGroups,
+    pluralizeItemsEnglish,
     resolveSelectionModifier,
+    walkTree,
 } from './file-manager-utils';
 
 const file = (path: string, overrides: Partial<FileNode> = {}): FileNode => ({
@@ -25,8 +30,7 @@ const file = (path: string, overrides: Partial<FileNode> = {}): FileNode => ({
     ...overrides,
 });
 
-const dir = (path: string, overrides: Partial<FileNode> = {}): FileNode =>
-    file(path, { isDir: true, ...overrides });
+const dir = (path: string, overrides: Partial<FileNode> = {}): FileNode => file(path, { isDir: true, ...overrides });
 
 describe('formatFileSize', () => {
     it('returns empty string when size is missing', () => {
@@ -95,9 +99,7 @@ describe('formatModified', () => {
 
 describe('normalizeRootGroups', () => {
     it('returns input reference when nothing needs trimming', () => {
-        const groups: FileManagerRootGroup[] = [
-            { id: 'a', label: 'A', pathPrefix: 'uploads' },
-        ];
+        const groups: FileManagerRootGroup[] = [{ id: 'a', label: 'A', pathPrefix: 'uploads' }];
 
         expect(normalizeRootGroups(groups)).toBe(groups);
     });
@@ -110,7 +112,7 @@ describe('normalizeRootGroups', () => {
         const normalized = normalizeRootGroups(groups);
 
         expect(normalized).not.toBe(groups);
-        expect(normalized?.map((g) => g.pathPrefix)).toEqual(['uploads', 'container']);
+        expect(normalized?.map((group) => group.pathPrefix)).toEqual(['uploads', 'container']);
     });
 
     it('passes through empty/undefined', () => {
@@ -123,8 +125,8 @@ describe('buildFileManagerTree', () => {
     it('builds a flat tree without groups', () => {
         const tree = buildFileManagerTree([file('a.txt'), file('b.txt')]);
 
-        expect(tree.map((n) => n.path)).toEqual(['a.txt', 'b.txt']);
-        expect(tree.every((n) => !n.isGroupRoot)).toBe(true);
+        expect(tree.map((node) => node.path)).toEqual(['a.txt', 'b.txt']);
+        expect(tree.every((node) => !node.isGroupRoot)).toBe(true);
     });
 
     it('creates intermediate folders for nested files', () => {
@@ -149,7 +151,7 @@ describe('buildFileManagerTree', () => {
 
         expect(tree).toHaveLength(2);
         expect(tree[0]!.isGroupRoot).toBe(true);
-        expect(tree[0]!.children.map((c) => c.path)).toEqual(['uploads/a.txt']);
+        expect(tree[0]!.children.map((child) => child.path)).toEqual(['uploads/a.txt']);
         expect(tree[1]!.children[0]!.path).toBe('container/sub');
         expect(tree[1]!.children[0]!.children[0]!.path).toBe('container/sub/b.txt');
     });
@@ -177,10 +179,7 @@ describe('buildFileManagerTree', () => {
     });
 
     it('skips files outside any defined group', () => {
-        const tree = buildFileManagerTree(
-            [file('orphan.txt')],
-            [{ id: 'u', label: 'Uploads', pathPrefix: 'uploads' }],
-        );
+        const tree = buildFileManagerTree([file('orphan.txt')], [{ id: 'u', label: 'Uploads', pathPrefix: 'uploads' }]);
 
         expect(tree[0]!.children).toEqual([]);
     });
@@ -233,13 +232,13 @@ describe('filterFileManagerTree', () => {
 
         expect(filtered).toHaveLength(1);
         expect(filtered[0]!.path).toBe('foo');
-        expect(filtered[0]!.children.map((c) => c.path)).toEqual(['foo/bar.txt']);
+        expect(filtered[0]!.children.map((child) => child.path)).toEqual(['foo/bar.txt']);
     });
 
     it('keeps all descendants of a matched directory', () => {
         const filtered = filterFileManagerTree(tree, 'foo');
 
-        expect(filtered[0]!.children.map((c) => c.path).sort()).toEqual(['foo/bar.txt', 'foo/baz.md']);
+        expect(filtered[0]!.children.map((child) => child.path).sort()).toEqual(['foo/bar.txt', 'foo/baz.md']);
     });
 
     it('matches case-insensitively against name and path', () => {
@@ -318,5 +317,79 @@ describe('dedupeOverlappingPaths', () => {
 
     it('does not match by prefix-only (foobar is not a child of foo)', () => {
         expect(dedupeOverlappingPaths(['foo', 'foobar']).sort()).toEqual(['foo', 'foobar']);
+    });
+});
+
+describe('walkTree', () => {
+    const tree = buildFileManagerTree([file('a/b/c.txt'), file('a/d.txt'), file('e.txt')]);
+
+    it('walks every node by default', () => {
+        expect(walkTree(tree).sort()).toEqual(['a', 'a/b', 'a/b/c.txt', 'a/d.txt', 'e.txt'].sort());
+    });
+
+    it('stops descending when `descend` returns false', () => {
+        expect(walkTree(tree, { descend: (node) => !(node.path === 'a/b') }).sort()).toEqual(
+            ['a', 'a/b', 'a/d.txt', 'e.txt'].sort(),
+        );
+    });
+
+    it('skips nodes when `include` returns false', () => {
+        expect(walkTree(tree, { include: (node) => !node.isDir }).sort()).toEqual(
+            ['a/b/c.txt', 'a/d.txt', 'e.txt'].sort(),
+        );
+    });
+
+    it('powers all collect* helpers consistently', () => {
+        expect(collectAllFilePaths(tree).sort()).toEqual(['a/b/c.txt', 'a/d.txt', 'e.txt']);
+        expect(collectAllNodePaths(tree).sort()).toEqual(['a', 'a/b', 'a/b/c.txt', 'a/d.txt', 'e.txt'].sort());
+        expect(collectDirectoryPaths(tree).sort()).toEqual(['a', 'a/b']);
+    });
+});
+
+describe('clamp', () => {
+    it('returns value when in range', () => {
+        expect(clamp(0, 5, 10)).toBe(5);
+    });
+
+    it('clamps to min', () => {
+        expect(clamp(0, -3, 10)).toBe(0);
+    });
+
+    it('clamps to max', () => {
+        expect(clamp(0, 99, 10)).toBe(10);
+    });
+
+    it('returns min when min > max (degenerate input)', () => {
+        // `Math.min(value, max)` runs first, then `Math.max(min, ...)` wins.
+        expect(clamp(10, 5, 0)).toBe(10);
+    });
+});
+
+describe('getCheckboxState', () => {
+    it('returns true when all selected', () => {
+        expect(getCheckboxState(true, false)).toBe(true);
+    });
+
+    it('returns indeterminate when some but not all selected', () => {
+        expect(getCheckboxState(false, true)).toBe('indeterminate');
+    });
+
+    it('returns false when nothing selected', () => {
+        expect(getCheckboxState(false, false)).toBe(false);
+    });
+
+    it('prefers all-selected over some-selected if both somehow set', () => {
+        expect(getCheckboxState(true, true)).toBe(true);
+    });
+});
+
+describe('pluralizeItemsEnglish', () => {
+    it('uses singular for 1', () => {
+        expect(pluralizeItemsEnglish(1)).toBe('1 item');
+    });
+
+    it('uses plural for 0 and >1', () => {
+        expect(pluralizeItemsEnglish(0)).toBe('0 items');
+        expect(pluralizeItemsEnglish(5)).toBe('5 items');
     });
 });

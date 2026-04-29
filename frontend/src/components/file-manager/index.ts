@@ -4,6 +4,7 @@ export { getFileTypeIcon } from './file-manager-icons';
 export type { FileTypeIcon } from './file-manager-icons';
 export type {
     FileManagerAction,
+    FileManagerLabels,
     FileManagerProps,
     FileManagerRootGroup,
     FileNode,

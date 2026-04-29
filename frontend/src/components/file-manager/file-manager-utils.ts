@@ -158,14 +158,14 @@ export const buildFileManagerTree = (
             baseDepth = 0;
         }
 
-        for (let i = startIndex; i < segments.length - 1; i += 1) {
-            const folderName = segments[i] ?? '';
-            const folderPath = segments.slice(0, i + 1).join('/');
+        for (let index = startIndex; index < segments.length - 1; index += 1) {
+            const folderName = segments[index] ?? '';
+            const folderPath = segments.slice(0, index + 1).join('/');
 
             let folder = folderByPath.get(folderPath);
 
             if (!folder) {
-                folder = buildSyntheticFolder(folderPath, folderName, baseDepth + (i - startIndex));
+                folder = buildSyntheticFolder(folderPath, folderName, baseDepth + (index - startIndex));
                 folderByPath.set(folderPath, folder);
                 siblings.push(folder);
             }
@@ -177,8 +177,9 @@ export const buildFileManagerTree = (
         const existingFolder = folderByPath.get(file.path);
 
         if (existingFolder) {
-            // Promote a synthetic folder placeholder into the real `FileNode` while
-            // keeping any children that were attached to it earlier in the loop.
+            // Promote a synthetic folder placeholder into a real `FileNode`, keeping any
+            // children attached earlier in the loop. `file` is `FileNode` (no `children`
+            // field per the type), so the spread can't clobber the descendants.
             Object.assign(existingFolder, file, { children: existingFolder.children, depth: lastDepth });
         } else {
             const node: FileManagerInternalNode = { ...file, children: [], depth: lastDepth };
@@ -194,54 +195,56 @@ export const buildFileManagerTree = (
     return roots;
 };
 
+interface WalkTreeOptions {
+    /** Predicate deciding whether to descend into the node's children. Default: always. */
+    descend?: (node: FileManagerInternalNode) => boolean;
+    /** Predicate deciding whether to include the node in the result. Default: always. */
+    include?: (node: FileManagerInternalNode) => boolean;
+}
+
+const ALWAYS = (): true => true;
+
+/**
+ * Single DFS walker that powers all `collect*` helpers. Pure: returns a freshly
+ * allocated array. Internally uses a private accumulator to avoid `concat`
+ * allocations on deep trees, but the buffer is never exposed to callers.
+ */
+export const walkTree = (
+    nodes: FileManagerInternalNode[],
+    { descend = ALWAYS, include = ALWAYS }: WalkTreeOptions = {},
+): string[] => {
+    const result: string[] = [];
+
+    const visit = (current: FileManagerInternalNode[]): void => {
+        for (const node of current) {
+            if (include(node)) {
+                result.push(node.path);
+            }
+
+            if (node.children.length > 0 && descend(node)) {
+                visit(node.children);
+            }
+        }
+    };
+
+    visit(nodes);
+
+    return result;
+};
+
 /**
  * Collect paths of *file* nodes only (no synthetic group roots, no directories).
  * Used as the universe for "select all".
  */
-export const collectAllFilePaths = (nodes: FileManagerInternalNode[], result: string[] = []): string[] => {
-    for (const node of nodes) {
-        if (!node.isGroupRoot && !node.isDir) {
-            result.push(node.path);
-        }
-
-        if (node.children.length > 0) {
-            collectAllFilePaths(node.children, result);
-        }
-    }
-
-    return result;
-};
+export const collectAllFilePaths = (nodes: FileManagerInternalNode[]): string[] =>
+    walkTree(nodes, { include: (node) => !node.isGroupRoot && !node.isDir });
 
 /** Collect paths of every selectable node (files + real directories), used for bulk-delete validation. */
-export const collectAllNodePaths = (nodes: FileManagerInternalNode[], result: string[] = []): string[] => {
-    for (const node of nodes) {
-        if (!node.isGroupRoot) {
-            result.push(node.path);
-        }
+export const collectAllNodePaths = (nodes: FileManagerInternalNode[]): string[] =>
+    walkTree(nodes, { include: (node) => !node.isGroupRoot });
 
-        if (node.children.length > 0) {
-            collectAllNodePaths(node.children, result);
-        }
-    }
-
-    return result;
-};
-
-export const collectVisibleFlat = (
-    nodes: FileManagerInternalNode[],
-    expandedPaths: Set<string>,
-    result: string[] = [],
-): string[] => {
-    for (const node of nodes) {
-        result.push(node.path);
-
-        if (node.isDir && expandedPaths.has(node.path) && node.children.length > 0) {
-            collectVisibleFlat(node.children, expandedPaths, result);
-        }
-    }
-
-    return result;
-};
+export const collectVisibleFlat = (nodes: FileManagerInternalNode[], expandedPaths: Set<string>): string[] =>
+    walkTree(nodes, { descend: (node) => node.isDir && expandedPaths.has(node.path) });
 
 /**
  * Filter the tree so it only contains:
@@ -250,10 +253,7 @@ export const collectVisibleFlat = (
  *   - all ancestors of any match (so the path is preserved).
  * Synthetic group roots are never matched by name/path; they're kept only if any descendant matches.
  */
-export const filterFileManagerTree = (
-    nodes: FileManagerInternalNode[],
-    query: string,
-): FileManagerInternalNode[] => {
+export const filterFileManagerTree = (nodes: FileManagerInternalNode[], query: string): FileManagerInternalNode[] => {
     const trimmed = query.trim();
 
     if (!trimmed) {
@@ -262,10 +262,7 @@ export const filterFileManagerTree = (
 
     const lower = trimmed.toLowerCase();
 
-    const filterNode = (
-        node: FileManagerInternalNode,
-        ancestorMatched: boolean,
-    ): FileManagerInternalNode | null => {
+    const filterNode = (node: FileManagerInternalNode, ancestorMatched: boolean): FileManagerInternalNode | null => {
         if (node.isGroupRoot) {
             const keptChildren = node.children
                 .map((child) => filterNode(child, false))
@@ -275,9 +272,7 @@ export const filterFileManagerTree = (
         }
 
         const selfMatched =
-            ancestorMatched ||
-            node.name.toLowerCase().includes(lower) ||
-            node.path.toLowerCase().includes(lower);
+            ancestorMatched || node.name.toLowerCase().includes(lower) || node.path.toLowerCase().includes(lower);
 
         if (!node.isDir) {
             return selfMatched ? node : null;
@@ -300,19 +295,11 @@ export const filterFileManagerTree = (
 };
 
 /** Collects paths of all directory nodes (including synthetic group roots) for auto-expansion. */
-export const collectDirectoryPaths = (nodes: FileManagerInternalNode[], result: string[] = []): string[] => {
-    for (const node of nodes) {
-        if (node.isDir) {
-            result.push(node.path);
-
-            if (node.children.length > 0) {
-                collectDirectoryPaths(node.children, result);
-            }
-        }
-    }
-
-    return result;
-};
+export const collectDirectoryPaths = (nodes: FileManagerInternalNode[]): string[] =>
+    walkTree(nodes, {
+        descend: (node) => node.isDir,
+        include: (node) => node.isDir,
+    });
 
 export const resolveSelectionModifier = (
     event: KeyboardEvent | MouseEvent | ReactMouseEvent,
@@ -347,10 +334,7 @@ export const buildFileManagerGridTemplate = (showSize: boolean, showModified: bo
 };
 
 /** Recursively locate a node by its absolute path. Returns `undefined` when missing. */
-export const findNodeByPath = (
-    nodes: FileManagerInternalNode[],
-    path: string,
-): FileManagerInternalNode | undefined => {
+export const findNodeByPath = (nodes: FileManagerInternalNode[], path: string): FileManagerInternalNode | undefined => {
     for (const node of nodes) {
         if (node.path === path) {
             return node;
@@ -388,3 +372,22 @@ export const dedupeOverlappingPaths = (paths: Iterable<string>): string[] => {
 
     return result;
 };
+
+/** Clamp `value` into the inclusive `[min, max]` range. */
+export const clamp = (min: number, value: number, max: number): number => Math.max(min, Math.min(value, max));
+
+/** Translate `(isAllSelected, isSomeSelected)` into the tri-state value the Checkbox understands. */
+export const getCheckboxState = (isAllSelected: boolean, isSomeSelected: boolean): 'indeterminate' | boolean => {
+    if (isAllSelected) {
+        return true;
+    }
+
+    if (isSomeSelected) {
+        return 'indeterminate';
+    }
+
+    return false;
+};
+
+/** Default English pluralization for "N item" / "N items". Override via `labels.pluralizeItems`. */
+export const pluralizeItemsEnglish = (count: number): string => `${count} ${count === 1 ? 'item' : 'items'}`;

@@ -4,12 +4,15 @@ import type { FileManagerInternalNode, FileManagerRootGroup } from './file-manag
 
 import { collectDirectoryPaths } from './file-manager-utils';
 
-type ExpansionOverride = 'force-collapsed' | 'force-expanded';
-
 interface UseFileManagerExpansion {
     /** Effective set of expanded directory paths (auto-expansion + user overrides). */
     expandedPaths: Set<string>;
-    /** Toggle expansion of a directory; persists as a user override. */
+    /**
+     * Toggle expansion of a directory based on the state the caller is currently
+     * displaying. Passing `wasExpanded` is intentional — it captures the user's
+     * intent ("invert what I see") and lets the callback stay stable across renders,
+     * which keeps memoized rows from invalidating on every expansion change.
+     */
     toggleExpand: (path: string, wasExpanded: boolean) => void;
 }
 
@@ -22,7 +25,8 @@ interface UseFileManagerExpansionArgs {
 
 /**
  * Expansion state without `useEffect`: we never store the full set in state.
- * Instead we keep a small map of *user-driven* overrides on top of two automatic sources:
+ * Instead we keep a small map of *user-driven* overrides (path -> isExpanded) on top
+ * of two automatic sources:
  *   1) `rootGroups[].defaultOpen` — initial group expansion,
  *   2) on-search auto-expansion of every directory inside the filtered tree.
  */
@@ -31,7 +35,7 @@ export const useFileManagerExpansion = ({
     normalizedRootGroups,
     visibleTree,
 }: UseFileManagerExpansionArgs): UseFileManagerExpansion => {
-    const [overrides, setOverrides] = useState<Map<string, ExpansionOverride>>(() => new Map());
+    const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
 
     const expandedPaths = useMemo(() => {
         const result = new Set<string>();
@@ -50,8 +54,8 @@ export const useFileManagerExpansion = ({
             }
         }
 
-        for (const [path, override] of overrides) {
-            if (override === 'force-expanded') {
+        for (const [path, isExpanded] of overrides) {
+            if (isExpanded) {
                 result.add(path);
             } else {
                 result.delete(path);
@@ -65,7 +69,7 @@ export const useFileManagerExpansion = ({
         setOverrides((prev) => {
             const next = new Map(prev);
 
-            next.set(path, wasExpanded ? 'force-collapsed' : 'force-expanded');
+            next.set(path, !wasExpanded);
 
             return next;
         });
