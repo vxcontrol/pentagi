@@ -29,40 +29,45 @@ After extensive research of `tea.ExecProcess` and alternative approaches, **pseu
 
 ### Key Components
 
-**`ProcessorTerminalModel`** interface (defined in [`processor.go`](../cmd/installer/processor/processor.go)):
+**`Processor`** interface (defined in [`processor.go`](../../cmd/installer/processor/processor.go)):
 ```go
-type ProcessorTerminalModel interface {
-    tea.Model
-    StartOperation(operation string, stack ProductStack) tea.Cmd
-    SendInput(input string) tea.Cmd
-    IsOperationRunning() bool
-    GetCurrentOperation() (string, ProductStack)
-    SetSize(width, height int)  // Dynamic resizing support
+type Processor interface {
+    ApplyChanges(ctx context.Context, opts ...OperationOption) error
+    CheckFiles(ctx context.Context, stack ProductStack, opts ...OperationOption) (FilesCheckResult, error)
+    FactoryReset(ctx context.Context, opts ...OperationOption) error
+    Install(ctx context.Context, opts ...OperationOption) error
+    Update(ctx context.Context, stack ProductStack, opts ...OperationOption) error
+    Download(ctx context.Context, stack ProductStack, opts ...OperationOption) error
+    Remove(ctx context.Context, stack ProductStack, opts ...OperationOption) error
+    Purge(ctx context.Context, stack ProductStack, opts ...OperationOption) error
+    Start(ctx context.Context, stack ProductStack, opts ...OperationOption) error
+    Stop(ctx context.Context, stack ProductStack, opts ...OperationOption) error
+    Restart(ctx context.Context, stack ProductStack, opts ...OperationOption) error
+    ResetPassword(ctx context.Context, stack ProductStack, opts ...OperationOption) error
 }
 ```
 
-**Implementation** in [`terminal_model.go`](../cmd/installer/processor/terminal_model.go):
-- Uses `github.com/creack/pty` for pseudoterminal creation
-- Real-time output streaming via buffered channel (`outputChan chan string`)
-- Direct key-to-terminal-sequence mapping for native terminal behavior
-- Maximized viewport space - no headers, input lines, or inner borders
-- Clean blue border with full content area utilization
+**Bubble Tea integration** in [`model.go`](../../cmd/installer/processor/model.go), [`state.go`](../../cmd/installer/processor/state.go), and [`logic.go`](../../cmd/installer/processor/logic.go):
+- Wraps processor operations as `tea.Cmd` values through `ProcessorModel`
+- Streams operation updates through `ProcessorStartedMsg`, `ProcessorOutputMsg`, `ProcessorFilesCheckMsg`, and `ProcessorCompletionMsg`
+- Executes commands through the shared `terminal.Terminal` abstraction when available
+- Falls back to non-ANSI compose output on small terminals and Windows by setting `COMPOSE_ANSI=never`
 
 ### Integration Pattern
 
-**Wizard Screen Integration** (see [`apply_changes.go`](../cmd/installer/wizard/models/apply_changes.go)):
+**Wizard Screen Integration** (see [`apply_changes.go`](../../cmd/installer/wizard/models/apply_changes.go)):
 ```go
 type ApplyChangesFormModel struct {
-    processor     processor.Processor
-    terminalModel processor.ProcessorTerminalModel
-    useEmbeddedTerminal bool  // toggle between terminal/fallback modes
+    processor processor.ProcessorModel
+    running   bool
+    terminal  terminal.Terminal
 }
 
-// Create terminal model
-m.terminalModel = m.processor.CreateTerminalModel(width, height)
+// Create terminal model for the screen
+m.terminal = terminal.NewTerminal(width, height, terminal.WithAutoScroll(), terminal.WithAutoPoll())
 
-// Start operation
-return m.terminalModel.StartOperation("ApplyChanges", processor.ProductStackAll)
+// Start operation through the processor model
+return m.processor.ApplyChanges(context.Background(), processor.WithTerminal(m.terminal))
 ```
 
 ## Message Flow Architecture
@@ -71,14 +76,14 @@ The integration uses a **buffered channel-based approach** for real-time termina
 
 ```mermaid
 graph TD
-    A[User Action - Enter] --> B[StartOperation Call]
-    B --> C[ProcessorTerminalModel]
-    C --> D[Create Pseudoterminal]
+    A[User Action - Enter] --> B[ProcessorModel Command]
+    B --> C[Operation State]
+    C --> D[Terminal Abstraction]
     D --> E[Execute Command - docker compose]
-    E --> F[readPtyOutput Goroutine]
-    F --> G[outputChan Channel]
-    G --> H[waitForOutput Tea Command]
-    H --> I[terminalOutputMsg]
+    E --> F[Terminal Update Loop]
+    F --> G[Processor Messages]
+    G --> H[HandleMsg Polling]
+    H --> I[ProcessorOutputMsg]
     I --> J[appendOutput + Viewport Update]
     J --> K[UI Refresh - Real-time Display]
 
@@ -144,22 +149,24 @@ Add terminal integration to any wizard screen following this pattern:
 ```go
 type YourFormModel struct {
     *BaseScreen
-    processor     processor.Processor
-    terminalModel processor.ProcessorTerminalModel
-    useEmbeddedTerminal bool
+    processor processor.ProcessorModel
+    terminal  terminal.Terminal
 }
 
 func (m *YourFormModel) BuildForm() tea.Cmd {
     contentWidth, contentHeight := m.getViewportFormSize()
 
-    if m.useEmbeddedTerminal {
-        // Create maximized terminal model - only 2px margin for blue border
-        m.terminalModel = m.processor.CreateTerminalModel(contentWidth-2, contentHeight-2)
-    } else {
-        // Fallback to viewport for message-based output
-        m.outputViewport = viewport.New(contentWidth-4, contentHeight-6)
+    if m.terminal == nil {
+        m.terminal = terminal.NewTerminal(
+            contentWidth-2,
+            contentHeight-1,
+            terminal.WithAutoScroll(),
+            terminal.WithAutoPoll(),
+            terminal.WithCurrentEnv(),
+        )
     }
-    return nil
+
+    return m.terminal.Init()
 }
 ```
 
@@ -172,10 +179,10 @@ func (m *YourFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     var cmds []tea.Cmd
 
     // Update terminal model first (handles real-time output)
-    if m.useEmbeddedTerminal && m.terminalModel != nil {
-        updatedModel, terminalCmd := m.terminalModel.Update(msg)
-        if terminalModel, ok := updatedModel.(processor.ProcessorTerminalModel); ok {
-            m.terminalModel = terminalModel
+    if m.terminal != nil {
+        updatedModel, terminalCmd := m.terminal.Update(msg)
+        if terminalModel := terminal.RestoreModel(updatedModel); terminalModel != nil {
+            m.terminal = terminalModel
         }
         if terminalCmd != nil {
             cmds = append(cmds, terminalCmd)
@@ -185,14 +192,14 @@ func (m *YourFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {
     case tea.WindowSizeMsg:
         // Update terminal size dynamically
-        if m.useEmbeddedTerminal && m.terminalModel != nil {
+        if m.terminal != nil {
             contentWidth, contentHeight := m.getViewportFormSize()
-            m.terminalModel.SetSize(contentWidth-2, contentHeight-2)
+            m.terminal.SetSize(contentWidth-2, contentHeight-1)
         }
 
     case tea.KeyMsg:
         // Terminal takes priority when operation is running
-        if m.useEmbeddedTerminal && m.terminalModel != nil && m.terminalModel.IsOperationRunning() {
+        if m.terminal != nil && m.terminal.IsRunning() {
             return m, tea.Batch(cmds...)  // Terminal already processed input
         }
         // Your screen-specific hotkeys here...
@@ -209,11 +216,10 @@ Start processor operations through terminal model:
 ```go
 // In your action handler
 func (m *YourFormModel) startProcess() tea.Cmd {
-    if m.useEmbeddedTerminal {
-        return m.terminalModel.StartOperation("install", processor.ProductStackPentagi)
-    }
-    // Fallback to message-based approach
-    return processor.CreateStackOperationCommand(m.processor, "install", processor.ProductStackPentagi)
+    return m.processor.Install(
+        context.Background(),
+        processor.WithTerminal(m.terminal),
+    )
 }
 ```
 
@@ -223,16 +229,12 @@ Render terminal within your screen layout - simplified approach:
 
 ```go
 func (m *YourFormModel) renderMainPanel() string {
-    if m.useEmbeddedTerminal && m.terminalModel != nil {
+    if m.terminal != nil {
         // Terminal model returns complete styled content with blue border
-        return m.terminalModel.View()
+        return m.terminal.View()
     }
 
-    // Fallback: render status + output viewport for message-based mode
-    var sections []string
-    sections = append(sections, m.renderStatusHeader())
-    sections = append(sections, m.outputViewport.View())
-    return strings.Join(sections, "\n")
+    return m.GetStyles().Error.Render(locale.ApplyChangesTerminalIsNotInitialized)
 }
 ```
 
@@ -265,20 +267,20 @@ func (m *YourFormModel) renderMainPanel() string {
 
 ## Command Configuration
 
-Processor operations support flexible configuration via [`processor.go:56-61`](../cmd/installer/processor/processor.go):
+Processor operations support flexible configuration via [`processor.go`](../../cmd/installer/processor/processor.go):
 
 ```go
 // Available options
 processor.WithForce()                   // Skip validation checks
-processor.WithTea(messageChan)          // Message-based integration
-processor.WithTerminalModel(terminal)   // Embedded terminal integration
+processor.WithTerminal(terminal)        // Terminal-backed integration
+processor.WithPasswordValue(password)   // Reset password operation input
 ```
 
 Choose integration method based on screen requirements:
 - **Embedded terminal**: Interactive operations, real-time output, full PTY support
-- **Message-based**: Simple operations, basic progress tracking (see [`tea_integration.go`](../cmd/installer/processor/tea_integration.go))
+- **Processor model**: Bubble Tea command wrappers and message polling for wizard screens (see [`model.go`](../../cmd/installer/processor/model.go))
 
-**Alternative Integration:** For simpler use cases or Windows compatibility, [`tea_integration.go`](../cmd/installer/processor/tea_integration.go) provides message-based command execution via `CreateProcessorTeaCommand()` with streaming output through `ProcessorOutputMsg` events.
+**Alternative Integration:** For simpler use cases or Windows compatibility, the current processor model uses `ProcessorOutputMsg` events from [`state.go`](../../cmd/installer/processor/state.go) and disables Docker Compose ANSI output when needed in [`logic.go`](../../cmd/installer/processor/logic.go).
 
 ## Limitations & Considerations
 
@@ -290,7 +292,7 @@ Choose integration method based on screen requirements:
 
 ### Platform Compatibility
 - **Unix/Linux/macOS**: Full pseudoterminal support via `github.com/creack/pty v1.1.21`
-- **Windows**: Limited support (ConPty), fallback to `tea_integration.go` recommended
+- **Windows**: Compose ANSI output is disabled in the command runner when the terminal is small or the host is Windows
 
 ### UI Constraints
 - **Minimum size**: `width-2, height-2` for border space
@@ -299,8 +301,8 @@ Choose integration method based on screen requirements:
 
 ## Testing & Debugging
 
-### Terminal Model Testing
-Terminal model can be tested independently of wizard integration (see [`processor_test.go`](../cmd/installer/processor/processor_test.go) for mock patterns).
+### Processor Model Testing
+Processor model behavior can be tested independently of wizard integration (see [`logic_test.go`](../../cmd/installer/processor/logic_test.go) and [`mock_test.go`](../../cmd/installer/processor/mock_test.go) for current mock patterns).
 
 ### Debug Features
 - **Ctrl+T toggle**: Switch to message-based mode for debugging
