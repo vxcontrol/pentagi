@@ -1017,6 +1017,15 @@ Once the flow has enough results, use the **Report** menu on the flow page to:
 - download the report as Markdown
 - download the report as PDF
 
+### 4. Use the Assistant view to steer an active flow
+
+Each flow also includes an **Assistant** view for interactive guidance. This is useful when the autonomous run uncovers something that needs human direction instead of a hard restart.
+
+- Open the **Assistant** view for the same flow when you want to inspect the current state before changing anything.
+- Use the assistant to check flow status, stop the current task, submit follow-up instructions, or patch the remaining planned subtasks before the next step runs.
+- Treat this as an explicit control path for the current flow, not as an invisible background queue. If you want to change direction, say so clearly and keep the new instruction tied to the current engagement scope.
+- This works best for clarifying scope, redirecting priorities after intermediate findings, or answering an automation checkpoint without losing the rest of the flow context.
+
 For early testing, start with a narrow target and a single clear objective. This makes the output easier to review and helps you refine your prompts before running larger assessments.
 
 ## API Access
