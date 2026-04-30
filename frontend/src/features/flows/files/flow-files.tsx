@@ -1,10 +1,6 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import debounce from 'lodash/debounce';
-import { ArrowDownToLine, FolderUp, HardDrive, Info, Loader2, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { ArrowDownToLine, FolderUp, Info, Loader2, Search, X } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { z } from 'zod';
 
 import {
     copyPathAction,
@@ -12,469 +8,90 @@ import {
     downloadAction,
     FileManager,
     type FileManagerAction,
-    type FileManagerRootGroup,
     type FileNode,
 } from '@/components/file-manager';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Form, FormControl, FormField } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-    type FlowFileFragmentFragment,
-    StatusType,
-    useFlowFileAddedSubscription,
-    useFlowFileDeletedSubscription,
-    useFlowFilesQuery,
-    useFlowFileUpdatedSubscription,
-} from '@/graphql/types';
-import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
+import { StatusType } from '@/graphql/types';
 import { copyToClipboard } from '@/lib/report';
-import { baseUrl } from '@/models/api';
 import { useFlow } from '@/providers/flow-provider';
 
-type FlowFile = FlowFileFragmentFragment;
+import { ROOT_GROUPS } from './flow-files-constants';
+import { FlowFilesPullDialog } from './flow-files-pull-dialog';
+import { buildDownloadHref } from './flow-files-utils';
+import { useFilesDragAndDrop } from './use-files-drag-and-drop';
+import { useFlowFilesData } from './use-flow-files-data';
+import { useFlowFilesDelete } from './use-flow-files-delete';
+import { useFlowFilesRealtime } from './use-flow-files-realtime';
+import { useFlowFilesSearch } from './use-flow-files-search';
+import { useFlowFilesUpload } from './use-flow-files-upload';
 
-interface FlowFilesResponse {
-    files: Array<FlowFile>;
-    total: number;
-}
-
-const searchFormSchema = z.object({
-    search: z.string(),
-});
-
-const buildDownloadHref = (flowId: null | string, file: FileNode) =>
-    `${baseUrl}/flows/${flowId}/files/download?path=${encodeURIComponent(file.path)}`;
-
-const toFileNode = (file: FlowFile): FileNode => ({
-    id: file.id,
-    isDir: file.isDir,
-    modifiedAt: file.modifiedAt,
-    name: file.name,
-    path: file.path,
-    size: file.size,
-});
-
-const ROOT_GROUPS: FileManagerRootGroup[] = [
-    { defaultOpen: true, icon: FolderUp, id: 'uploads', label: 'Uploads', pathPrefix: 'uploads' },
-    { defaultOpen: true, icon: HardDrive, id: 'container', label: 'Container', pathPrefix: 'container' },
-];
-
-// ── pull dialog ────────────────────────────────────────────────────────────────
-
-interface PullDialogProps {
+interface FlowFilesContentProps {
     flowId: null | string;
-    onClose: () => void;
-    onSuccess: () => void;
-    open: boolean;
+    flowStatus: StatusType | undefined;
 }
 
-const PullDialog = ({ flowId, onClose, onSuccess, open }: PullDialogProps) => {
-    const [containerPath, setContainerPath] = useState('');
-    const [shouldOverwrite, setShouldOverwrite] = useState(false);
-    const [isPulling, setIsPulling] = useState(false);
+/**
+ * Holds every piece of local state for a single flow. The outer `<FlowFiles />`
+ * remounts this component via `key={flowId}` so switching flows is a fresh mount
+ * with no leftover form values, drag overlays or pending toasts.
+ */
+const FlowFilesContent = ({ flowId, flowStatus }: FlowFilesContentProps) => {
+    const [isPullDialogOpen, setIsPullDialogOpen] = useState(false);
 
-    useEffect(() => {
-        if (open) {
-            setContainerPath('');
-            setShouldOverwrite(false);
-        }
-    }, [open]);
+    const { fileNodes, isInitialLoading, isLoading, refetchFiles } = useFlowFilesData({ flowId });
 
-    const handlePull = useCallback(async () => {
-        if (!flowId || !containerPath.trim()) {
-            return;
-        }
+    useFlowFilesRealtime({ flowId, isPaused: isLoading });
 
-        setIsPulling(true);
+    const search = useFlowFilesSearch();
+    const upload = useFlowFilesUpload({ flowId, refetchFiles });
+    const deletion = useFlowFilesDelete({ flowId, refetchFiles });
 
-        try {
-            await api.post<FlowFilesResponse>(
-                `/flows/${flowId}/files/pull`,
-                {
-                    force: shouldOverwrite,
-                    path: containerPath.trim(),
-                },
-                // Copying a directory out of the container can take longer than the default 30s
-                // (large logs, deep trees) — disable the per-call timeout entirely.
-                { timeout: 0 },
-            );
-            toast.success('Pulled from container', {
-                description: `Saved to local cache under container/`,
-            });
-            onSuccess();
-            onClose();
-        } catch (error) {
-            const description = getApiErrorMessage(error, 'Failed to pull from container', {
-                409: 'Entry already exists — enable "Overwrite" to replace it',
-            });
-
-            toast.error('Pull failed', { description });
-        } finally {
-            setIsPulling(false);
-        }
-    }, [flowId, containerPath, shouldOverwrite, onSuccess, onClose]);
-
-    return (
-        <Dialog
-            onOpenChange={(isOpen) => {
-                if (!isOpen && !isPulling) {
-                    onClose();
-                }
-            }}
-            open={open}
-        >
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <ArrowDownToLine className="size-4" />
-                        Pull from container
-                    </DialogTitle>
-                    <DialogDescription>
-                        Enter a path inside the running container. The file or directory will be synced to the local
-                        cache under <code>container/</code>.
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="container-path">Container path</Label>
-                        <Input
-                            autoComplete="off"
-                            autoFocus
-                            disabled={isPulling}
-                            id="container-path"
-                            onChange={(event) => setContainerPath(event.target.value)}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Enter' && containerPath.trim() && !isPulling) {
-                                    void handlePull();
-                                }
-                            }}
-                            placeholder="/etc/nginx/conf"
-                            value={containerPath}
-                        />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Switch
-                            checked={shouldOverwrite}
-                            disabled={isPulling}
-                            id="force-pull"
-                            onCheckedChange={setShouldOverwrite}
-                        />
-                        <Label
-                            className="cursor-pointer font-normal"
-                            htmlFor="force-pull"
-                        >
-                            Overwrite if already cached
-                        </Label>
-                    </div>
-                </div>
-
-                <div className="flex justify-end gap-2">
-                    <Button
-                        disabled={isPulling}
-                        onClick={onClose}
-                        variant="outline"
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        disabled={!containerPath.trim() || isPulling}
-                        onClick={() => void handlePull()}
-                    >
-                        {isPulling ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}
-                        Pull
-                    </Button>
-                </div>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-// ── main component ─────────────────────────────────────────────────────────────
-
-const FlowFiles = () => {
-    const { flowId, flowStatus } = useFlow();
-    const inputRef = useRef<HTMLInputElement | null>(null);
-    const dragCounterRef = useRef(0);
-    const [isUploading, setIsUploading] = useState(false);
-    const [isDragging, setIsDragging] = useState(false);
-    const [fileToDelete, setFileToDelete] = useState<FileNode | null>(null);
-    const [showPullDialog, setShowPullDialog] = useState(false);
-    const [debouncedSearch, setDebouncedSearch] = useState('');
-    const flowFilesVariables = useMemo(() => ({ flowId: flowId ?? '' }), [flowId]);
-    const {
-        data: flowFilesData,
-        error: flowFilesError,
-        loading: isLoading,
-        refetch: refetchFiles,
-    } = useFlowFilesQuery({
-        skip: !flowId,
-        variables: flowFilesVariables,
+    const canAcceptDrop = !!flowId && !upload.isUploading;
+    const { dragHandlers, isDragging } = useFilesDragAndDrop({
+        canAcceptDrop,
+        onDrop: upload.uploadFiles,
     });
-
-    const form = useForm<z.infer<typeof searchFormSchema>>({
-        defaultValues: { search: '' },
-        resolver: zodResolver(searchFormSchema),
-    });
-
-    const searchValue = form.watch('search');
-
-    const debouncedUpdateSearch = useMemo(
-        () =>
-            debounce((value: string) => {
-                setDebouncedSearch(value);
-            }, 300),
-        [],
-    );
-
-    useEffect(() => {
-        debouncedUpdateSearch(searchValue);
-
-        return () => {
-            debouncedUpdateSearch.cancel();
-        };
-    }, [searchValue, debouncedUpdateSearch]);
-
-    useEffect(() => {
-        form.reset({ search: '' });
-        setDebouncedSearch('');
-        debouncedUpdateSearch.cancel();
-    }, [flowId, form, debouncedUpdateSearch]);
 
     const isContainerRunning = flowStatus === StatusType.Running || flowStatus === StatusType.Waiting;
+    const isPullDisabled = !isContainerRunning || isLoading || upload.isUploading;
 
-    // Pause subscriptions until the initial query has loaded so that the
-    // `flowFiles` cache field exists before subscription-driven updates arrive.
-    const isSubscriptionPaused = !flowId || isLoading;
+    const handleCopyPath = useCallback(async (file: FileNode) => {
+        const wasCopied = await copyToClipboard(file.path);
 
-    useFlowFileAddedSubscription({
-        skip: isSubscriptionPaused,
-        variables: flowFilesVariables,
-    });
-    useFlowFileUpdatedSubscription({
-        skip: isSubscriptionPaused,
-        variables: flowFilesVariables,
-    });
-    useFlowFileDeletedSubscription({
-        skip: isSubscriptionPaused,
-        variables: flowFilesVariables,
-    });
+        if (wasCopied) {
+            toast.success('Path copied to clipboard');
 
-    useEffect(() => {
-        if (flowFilesError) {
-            toast.error('Failed to load files', {
-                description: flowFilesError.message,
-                id: 'flow-files-error',
-            });
-        }
-    }, [flowFilesError]);
-
-    // ── upload ─────────────────────────────────────────────────────────────────
-
-    const handleCopyPath = useCallback((file: FileNode) => {
-        void copyToClipboard(file.path).then((wasCopied) => {
-            if (wasCopied) {
-                toast.success('Path copied to clipboard');
-            } else {
-                toast.error('Failed to copy path');
-            }
-        });
-    }, []);
-
-    const getDownloadHrefForFile = useCallback((file: FileNode) => buildDownloadHref(flowId, file), [flowId]);
-
-    const fileManagerActions = useMemo<FileManagerAction[]>(
-        () => [downloadAction(getDownloadHrefForFile), copyPathAction(handleCopyPath), deleteAction(setFileToDelete)],
-        [getDownloadHrefForFile, handleCopyPath],
-    );
-
-    const uploadFiles = useCallback(
-        async (selectedFiles: File[]) => {
-            if (!flowId || !selectedFiles.length) {
-                return;
-            }
-
-            const formData = new FormData();
-
-            selectedFiles.forEach((file) => formData.append('files', file));
-
-            setIsUploading(true);
-
-            try {
-                const response = await api.post<FlowFilesResponse, FormData>(`/flows/${flowId}/files/`, formData, {
-                    // Browser sets the multipart boundary automatically when Content-Type is unset.
-                    headers: { 'Content-Type': undefined },
-                    // Uploads can take longer than the default 30s — disable timeout for this call.
-                    timeout: 0,
-                });
-                const data = unwrapApiResponse(response);
-                const uploadedCount = data.files?.length ?? selectedFiles.length;
-
-                toast.success(uploadedCount === 1 ? 'File uploaded' : `${uploadedCount} files uploaded`, {
-                    description:
-                        uploadedCount === 1
-                            ? `Available at /work/uploads/${data.files?.[0]?.name ?? ''}`
-                            : `${uploadedCount} files are now available under /work/uploads`,
-                });
-
-                await refetchFiles();
-            } catch (error) {
-                const description = getApiErrorMessage(error, 'Failed to upload files', {
-                    409: 'Entry already exists — enable "Overwrite" to replace it',
-                });
-
-                toast.error('Upload failed', { description });
-            } finally {
-                setIsUploading(false);
-            }
-        },
-        [flowId, refetchFiles],
-    );
-
-    const handleFileSelection = useCallback(
-        async (event: React.ChangeEvent<HTMLInputElement>) => {
-            const selectedFiles = Array.from(event.target.files ?? []);
-
-            try {
-                await uploadFiles(selectedFiles);
-            } finally {
-                event.target.value = '';
-            }
-        },
-        [uploadFiles],
-    );
-
-    // ── drag & drop ────────────────────────────────────────────────────────────
-
-    const canAcceptDrop = !!flowId && !isUploading;
-
-    const handleDragEnter = useCallback(
-        (event: React.DragEvent<HTMLDivElement>) => {
-            if (!canAcceptDrop || !event.dataTransfer.types?.includes('Files')) {
-                return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-            dragCounterRef.current += 1;
-            setIsDragging(true);
-        },
-        [canAcceptDrop],
-    );
-
-    const handleDragOver = useCallback(
-        (event: React.DragEvent<HTMLDivElement>) => {
-            if (!canAcceptDrop || !event.dataTransfer.types?.includes('Files')) {
-                return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-            event.dataTransfer.dropEffect = 'copy';
-        },
-        [canAcceptDrop],
-    );
-
-    const handleDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-        event.preventDefault();
-        event.stopPropagation();
-        dragCounterRef.current = Math.max(dragCounterRef.current - 1, 0);
-
-        if (dragCounterRef.current === 0) {
-            setIsDragging(false);
-        }
-    }, []);
-
-    const handleDrop = useCallback(
-        (event: React.DragEvent<HTMLDivElement>) => {
-            event.preventDefault();
-            event.stopPropagation();
-            dragCounterRef.current = 0;
-            setIsDragging(false);
-
-            if (!canAcceptDrop) {
-                return;
-            }
-
-            const droppedFiles = Array.from(event.dataTransfer.files ?? []);
-
-            if (droppedFiles.length === 0) {
-                return;
-            }
-
-            void uploadFiles(droppedFiles);
-        },
-        [canAcceptDrop, uploadFiles],
-    );
-
-    // Reset overlay state when flow changes mid-drag.
-    useEffect(() => {
-        dragCounterRef.current = 0;
-        setIsDragging(false);
-    }, [flowId]);
-
-    const handleDeleteFile = useCallback(async () => {
-        if (!flowId || !fileToDelete) {
             return;
         }
 
-        try {
-            await api.delete<FlowFilesResponse>(`/flows/${flowId}/files/`, {
-                params: { path: fileToDelete.path },
-            });
-            toast.success(fileToDelete.isDir ? 'Directory deleted' : 'File deleted');
-            await refetchFiles();
-        } catch (error) {
-            const description = getApiErrorMessage(error, 'Failed to delete file');
+        toast.error('Failed to copy path');
+    }, []);
 
-            toast.error('Delete failed', { description });
-        } finally {
-            setFileToDelete(null);
-        }
-    }, [flowId, fileToDelete, refetchFiles]);
-
-    const handleBulkDelete = useCallback(
-        async (filesToDelete: FileNode[]) => {
-            if (!flowId || filesToDelete.length === 0) {
-                return;
-            }
-
-            const results = await Promise.allSettled(
-                filesToDelete.map((file) =>
-                    api.delete<FlowFilesResponse>(`/flows/${flowId}/files/`, {
-                        params: { path: file.path },
-                    }),
-                ),
-            );
-            const succeeded = results.filter((result) => result.status === 'fulfilled').length;
-            const failed = results.length - succeeded;
-
-            if (failed === 0) {
-                toast.success(`${succeeded} ${succeeded === 1 ? 'item' : 'items'} deleted`);
-            } else if (succeeded === 0) {
-                toast.error('Bulk delete failed', {
-                    description: `Failed to delete ${failed} ${failed === 1 ? 'item' : 'items'}`,
-                });
-            } else {
-                toast.warning(`${succeeded} succeeded · ${failed} failed`);
-            }
-
-            await refetchFiles();
-        },
-        [flowId, refetchFiles],
+    const getDownloadHref = useCallback(
+        (file: FileNode): string => buildDownloadHref(flowId, file) ?? '',
+        [flowId],
     );
 
-    const files = useMemo(() => flowFilesData?.flowFiles ?? [], [flowFilesData?.flowFiles]);
-    const fileNodes = useMemo<FileNode[]>(() => files.map(toFileNode), [files]);
-    const isInitialLoading = isLoading && fileNodes.length === 0;
+    const fileManagerActions = useMemo<FileManagerAction[]>(
+        () => [downloadAction(getDownloadHref), copyPathAction(handleCopyPath), deleteAction(deletion.requestDelete)],
+        [getDownloadHref, handleCopyPath, deletion.requestDelete],
+    );
+
+    const handleOpenPullDialog = useCallback(() => setIsPullDialogOpen(true), []);
+    const handleClosePullDialog = useCallback(() => setIsPullDialogOpen(false), []);
+    const handleDeleteDialogOpenChange = useCallback(
+        (nextOpen: boolean) => {
+            if (!nextOpen) {
+                deletion.clearFileToDelete();
+            }
+        },
+        [deletion],
+    );
 
     const noFilesState = (
         <Empty>
@@ -499,28 +116,23 @@ const FlowFiles = () => {
                 </EmptyMedia>
                 <EmptyTitle>No matches</EmptyTitle>
                 <EmptyDescription>
-                    No files match <code>{debouncedSearch.trim()}</code>. Try a different query.
+                    No files match <code>{search.debouncedQuery.trim()}</code>. Try a different query.
                 </EmptyDescription>
             </EmptyHeader>
         </Empty>
     );
 
-    // ── render ─────────────────────────────────────────────────────────────────
-
     return (
         <div
             className="relative flex h-full flex-col"
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
+            {...dragHandlers}
         >
             <input
                 className="hidden"
+                key={upload.fileInputKey}
                 multiple
-                onChange={handleFileSelection}
-                ref={inputRef}
                 type="file"
+                {...upload.fileInputProps}
             />
 
             {isDragging && (
@@ -533,39 +145,37 @@ const FlowFiles = () => {
             )}
 
             <div className="bg-background sticky top-0 z-10 pb-4">
-                <Form {...form}>
+                <Form {...search.form}>
                     <div className="flex gap-2 p-px">
                         <FormField
-                            control={form.control}
+                            control={search.form.control}
                             name="search"
                             render={({ field }) => (
-                                <FormControl>
-                                    <InputGroup className="flex-1">
-                                        <InputGroupAddon>
-                                            <Search />
-                                        </InputGroupAddon>
-                                        <InputGroupInput
-                                            {...field}
-                                            autoComplete="off"
-                                            placeholder="Search files..."
-                                            type="text"
-                                        />
-                                        {field.value && (
-                                            <InputGroupAddon align="inline-end">
-                                                <InputGroupButton
-                                                    onClick={() => {
-                                                        form.reset({ search: '' });
-                                                        setDebouncedSearch('');
-                                                        debouncedUpdateSearch.cancel();
-                                                    }}
-                                                    type="button"
-                                                >
-                                                    <X />
-                                                </InputGroupButton>
+                                <FormItem className="flex-1">
+                                    <FormControl>
+                                        <InputGroup>
+                                            <InputGroupAddon>
+                                                <Search />
                                             </InputGroupAddon>
-                                        )}
-                                    </InputGroup>
-                                </FormControl>
+                                            <InputGroupInput
+                                                {...field}
+                                                autoComplete="off"
+                                                placeholder="Search files..."
+                                                type="text"
+                                            />
+                                            {field.value && (
+                                                <InputGroupAddon align="inline-end">
+                                                    <InputGroupButton
+                                                        onClick={search.resetSearch}
+                                                        type="button"
+                                                    >
+                                                        <X />
+                                                    </InputGroupButton>
+                                                </InputGroupAddon>
+                                            )}
+                                        </InputGroup>
+                                    </FormControl>
+                                </FormItem>
                             )}
                         />
 
@@ -595,13 +205,13 @@ const FlowFiles = () => {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
-                                        disabled={isUploading || isLoading}
-                                        onClick={() => inputRef.current?.click()}
+                                        disabled={upload.isUploading || isLoading}
+                                        onClick={upload.openFilePicker}
                                         size="icon-sm"
                                         type="button"
                                         variant="outline"
                                     >
-                                        {isUploading ? <Loader2 className="animate-spin" /> : <FolderUp />}
+                                        {upload.isUploading ? <Loader2 className="animate-spin" /> : <FolderUp />}
                                     </Button>
                                 </span>
                             </TooltipTrigger>
@@ -612,8 +222,8 @@ const FlowFiles = () => {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
-                                        disabled={!isContainerRunning || isLoading || isUploading}
-                                        onClick={() => setShowPullDialog(true)}
+                                        disabled={isPullDisabled}
+                                        onClick={handleOpenPullDialog}
                                         size="icon-sm"
                                         type="button"
                                         variant="outline"
@@ -638,32 +248,40 @@ const FlowFiles = () => {
                 emptyState={noFilesState}
                 files={fileNodes}
                 isLoading={isInitialLoading}
-                onBulkDelete={handleBulkDelete}
+                onBulkDelete={deletion.deleteBulk}
                 rootGroups={ROOT_GROUPS}
-                search={{ emptyState: noMatchesState, query: debouncedSearch }}
+                search={{ emptyState: noMatchesState, query: search.debouncedQuery }}
             />
 
-            <PullDialog
+            <FlowFilesPullDialog
                 flowId={flowId}
-                onClose={() => setShowPullDialog(false)}
-                onSuccess={() => void refetchFiles()}
-                open={showPullDialog}
+                isOpen={isPullDialogOpen}
+                onClose={handleClosePullDialog}
+                onSuccess={refetchFiles}
             />
 
             <ConfirmationDialog
                 confirmText="Delete"
-                handleConfirm={handleDeleteFile}
-                handleOpenChange={(isOpen) => {
-                    if (!isOpen) {
-                        setFileToDelete(null);
-                    }
-                }}
-                isOpen={!!fileToDelete}
-                itemName={fileToDelete?.name}
-                itemType={fileToDelete?.isDir ? 'directory' : 'file'}
-                title={fileToDelete?.isDir ? 'Delete Directory' : 'Delete File'}
+                handleConfirm={deletion.confirmDelete}
+                handleOpenChange={handleDeleteDialogOpenChange}
+                isOpen={!!deletion.fileToDelete}
+                itemName={deletion.fileToDelete?.name}
+                itemType={deletion.fileToDelete?.isDir ? 'directory' : 'file'}
+                title={deletion.fileToDelete?.isDir ? 'Delete Directory' : 'Delete File'}
             />
         </div>
+    );
+};
+
+const FlowFiles = () => {
+    const { flowId, flowStatus } = useFlow();
+
+    return (
+        <FlowFilesContent
+            flowId={flowId}
+            flowStatus={flowStatus}
+            key={flowId ?? 'no-flow'}
+        />
     );
 };
 
