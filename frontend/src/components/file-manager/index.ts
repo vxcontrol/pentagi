@@ -9,3 +9,4 @@ export type {
     FileManagerRootGroup,
     FileNode,
 } from './file-manager-types';
+export { dedupeOverlappingPaths } from './file-manager-utils';

@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 
 import type { FileManagerAction, FileManagerInternalNode } from './file-manager-types';
+import type { FileManagerNodeDndHandlers } from './use-file-manager-dnd';
 
 import { FileManagerHighlightedName } from './file-manager-highlighted-name';
 import { getFileTypeIcon } from './file-manager-icons';
@@ -36,6 +37,8 @@ const skipRowClickProps = { [SKIP_ROW_CLICK_ATTR]: '' };
 interface FileManagerRowProps {
     actions: readonly FileManagerAction[];
     activeRowPath: null | string;
+    /** Drag/drop handlers for this row. `null` when intra-tree DnD is disabled. */
+    dnd: FileManagerNodeDndHandlers | null;
     file: FileManagerInternalNode;
     formatModified?: (modifiedAt: Date | string | undefined) => string;
     gridTemplate: string;
@@ -68,6 +71,7 @@ const buildVisibleActions = (
 const FileManagerRowImpl = ({
     actions,
     activeRowPath,
+    dnd,
     file,
     formatModified = defaultFormatModified,
     gridTemplate,
@@ -171,6 +175,10 @@ const FileManagerRowImpl = ({
         gridTemplateColumns: gridTemplate,
     } as CSSProperties & Record<'--fm-depth', number>;
 
+    const isDraggable = !!dnd && !file.isGroupRoot;
+    const isDropTarget = dnd?.isDropTarget ?? false;
+    const isBeingDragged = dnd?.isBeingDragged ?? false;
+
     const row = (
         <div
             aria-expanded={file.isDir ? isExpanded : undefined}
@@ -179,12 +187,30 @@ const FileManagerRowImpl = ({
             aria-selected={isSelected}
             aria-setsize={setSize}
             className={cn(
-                'group hover:bg-muted/50 grid cursor-pointer items-center gap-3 px-3 py-1.5 transition-colors outline-none',
+                'group hover:bg-accent grid cursor-pointer items-center gap-3 px-3 py-1.5 transition-colors outline-none',
                 'focus-visible:bg-muted/70 focus-visible:ring-ring focus-visible:ring-1',
                 isSelected && 'bg-muted',
+                isDropTarget && 'bg-primary/10 ring-primary/40 ring-1 ring-inset',
+                // Ghost every row that's part of the in-flight drag (the grabbed row
+                // plus any other selected rows being moved together) so the user sees
+                // the entire batch on the move, not just the row whose drag image the
+                // browser is rendering. Combine reduced opacity + dashed outline so
+                // the effect is unmistakable even when the row is already selected
+                // (`bg-muted` would otherwise mute the opacity contrast).
+                isBeingDragged && 'border-muted-foreground/40 border border-dashed opacity-40',
+                // Counter-act the 1px border above to keep the row from shifting layout
+                // when the dashed border kicks in.
+                !isBeingDragged && 'border border-transparent',
             )}
             data-path={file.path}
+            draggable={isDraggable}
             onClick={handleRowClick}
+            onDragEnd={dnd?.onDragEnd}
+            onDragEnter={dnd?.onDragEnter}
+            onDragLeave={dnd?.onDragLeave}
+            onDragOver={dnd?.onDragOver}
+            onDragStart={dnd?.onDragStart}
+            onDrop={dnd?.onDrop}
             onFocus={() => onFocusRow(file.path)}
             role="treeitem"
             style={rowStyle}
@@ -208,7 +234,15 @@ const FileManagerRowImpl = ({
                 />
             )}
 
-            <div className="flex min-w-0 items-center gap-1.5 pl-[calc(var(--fm-depth)*16px)]">
+            <div className="relative flex min-w-0 items-center gap-1.5 self-stretch pl-[calc(var(--fm-depth)*16px)]">
+                {Array.from({ length: file.depth }, (_, i) => (
+                    <span
+                        aria-hidden="true"
+                        className="bg-border pointer-events-none absolute -inset-y-1.5 w-px"
+                        key={i}
+                        style={{ left: `${i * 16 + 6}px` }}
+                    />
+                ))}
                 {file.isDir ? (
                     <span
                         aria-hidden="true"
@@ -221,7 +255,7 @@ const FileManagerRowImpl = ({
                 ) : (
                     <span
                         aria-hidden="true"
-                        className="size-4 shrink-0"
+                        className="-mx-0.5 size-4 shrink-0"
                     />
                 )}
                 <Icon className={cn('size-4 shrink-0', tone)} />

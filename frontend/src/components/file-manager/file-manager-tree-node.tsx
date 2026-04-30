@@ -1,12 +1,15 @@
 import { Fragment, type MouseEvent as ReactMouseEvent } from 'react';
 
 import type { FileManagerAction, FileManagerInternalNode } from './file-manager-types';
+import type { FileManagerNodeDndHandlers } from './use-file-manager-dnd';
 
 import { FileManagerRow } from './file-manager-row';
 
 interface FileManagerTreeNodeProps {
     actions: readonly FileManagerAction[];
     activeRowPath: null | string;
+    /** Returns drag/drop handlers for a node, or `null` when DnD is disabled. */
+    bindNodeDnd: (node: FileManagerInternalNode) => FileManagerNodeDndHandlers | null;
     expandedPaths: Set<string>;
     formatModified?: (modifiedAt: Date | string | undefined) => string;
     gridTemplate: string;
@@ -36,6 +39,7 @@ interface FileManagerTreeNodeProps {
 export const FileManagerTreeNode = ({
     actions,
     activeRowPath,
+    bindNodeDnd,
     expandedPaths,
     formatModified,
     gridTemplate,
@@ -56,12 +60,14 @@ export const FileManagerTreeNode = ({
     const isExpanded = expandedPaths.has(node.path);
     const isSelected = selectedPaths.has(node.path);
     const renderChildren = node.isDir && isExpanded && node.children.length > 0;
+    const dnd = bindNodeDnd(node);
 
     return (
         <Fragment>
             <FileManagerRow
                 actions={actions}
                 activeRowPath={activeRowPath}
+                dnd={dnd}
                 file={node}
                 formatModified={formatModified}
                 gridTemplate={gridTemplate}
@@ -84,6 +90,7 @@ export const FileManagerTreeNode = ({
                     <FileManagerTreeNode
                         actions={actions}
                         activeRowPath={activeRowPath}
+                        bindNodeDnd={bindNodeDnd}
                         expandedPaths={expandedPaths}
                         formatModified={formatModified}
                         gridTemplate={gridTemplate}

@@ -1,4 +1,4 @@
-import { type MouseEvent as ReactMouseEvent, useCallback, useMemo, useRef, useState } from 'react';
+import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
@@ -11,12 +11,14 @@ import { FileManagerTreeNode } from './file-manager-tree-node';
 import {
     buildFileManagerGridTemplate,
     buildFileManagerTree,
-    collectAllFilePaths,
+    collectAllNodePaths,
     collectVisibleFlat,
     filterFileManagerTree,
+    findNodeByPath,
     getCheckboxState,
     normalizeRootGroups,
 } from './file-manager-utils';
+import { useFileManagerDnd } from './use-file-manager-dnd';
 import { useFileManagerExpansion } from './use-file-manager-expansion';
 import { useFileManagerKeyboardNavigation } from './use-file-manager-keyboard';
 import { useFileManagerSelection } from './use-file-manager-selection';
@@ -28,10 +30,13 @@ export const FileManager = ({
     className,
     columns,
     emptyState,
+    enableSelection,
     files,
     isLoading,
     labels,
     onBulkDelete,
+    onMoveItems,
+    onSelectionChange,
     rootGroups,
     search,
 }: FileManagerProps) => {
@@ -50,7 +55,7 @@ export const FileManager = ({
         [fullTree, isFiltering, trimmedSearch],
     );
 
-    const allFilePaths = useMemo(() => collectAllFilePaths(visibleTree), [visibleTree]);
+    const allSelectablePaths = useMemo(() => collectAllNodePaths(visibleTree), [visibleTree]);
 
     const { expandedPaths, toggleExpand } = useFileManagerExpansion({
         isFiltering,
@@ -69,10 +74,23 @@ export const FileManager = ({
         selectedPaths,
         setSelection,
         toggleSelectAll,
-    } = useFileManagerSelection({ allFilePaths, flatVisible });
+    } = useFileManagerSelection({ allSelectablePaths, flatVisible });
 
-    const isCheckboxVisible = !!onBulkDelete;
+    const isCheckboxVisible = enableSelection ?? !!onBulkDelete;
     const hasActions = !!actions?.length;
+
+    // Report selection changes upstream without forcing parents to memoize the
+    // callback — stash it in a ref so the effect only re-fires when the actual
+    // selection changes (not when a fresh function instance is passed in).
+    const onSelectionChangeRef = useRef(onSelectionChange);
+
+    useEffect(() => {
+        onSelectionChangeRef.current = onSelectionChange;
+    }, [onSelectionChange]);
+
+    useEffect(() => {
+        onSelectionChangeRef.current?.(selectedPaths);
+    }, [selectedPaths]);
     const gridTemplate = useMemo(
         () => buildFileManagerGridTemplate(isSizeVisible, isModifiedVisible, hasActions),
         [hasActions, isModifiedVisible, isSizeVisible],
@@ -120,6 +138,13 @@ export const FileManager = ({
         visibleTree,
     });
 
+    const dnd = useFileManagerDnd({
+        findNode: useCallback((path: string) => findNodeByPath(fullTree, path), [fullTree]),
+        onClearSelection: clearSelection,
+        onMoveItems,
+        selectedPaths,
+    });
+
     const handleContainerClick = useCallback(
         (event: ReactMouseEvent<HTMLDivElement>) => {
             if (event.target === event.currentTarget) {
@@ -132,7 +157,11 @@ export const FileManager = ({
     if (isLoading) {
         return (
             <div className={className}>
-                <FileManagerSkeleton />
+                <FileManagerSkeleton
+                    columns={columns}
+                    hasActions={hasActions}
+                    isCheckboxVisible={isCheckboxVisible}
+                />
             </div>
         );
     }
@@ -186,13 +215,27 @@ export const FileManager = ({
             <div
                 aria-label="File tree"
                 aria-multiselectable={isCheckboxVisible || undefined}
-                className="flex flex-1 flex-col overflow-y-auto py-1"
+                className={cn(
+                    'flex flex-1 flex-col overflow-y-auto py-1 transition-colors',
+                    // Highlight the whole tree only when the cursor is actually hovering
+                    // the empty area outside any row — that's the only place a "drop to
+                    // root" will be accepted. `border-radius: inherit` makes the inset
+                    // ring follow the outer container's rounded corners (top corners are
+                    // hidden behind the header, so only the bottom is visually affected).
+                    dnd.container.isRootDropTarget &&
+                        'bg-primary/10 ring-primary ring-1 ring-inset [border-radius:inherit]',
+                )}
+                onDragEnter={dnd.isEnabled ? dnd.container.onDragEnter : undefined}
+                onDragLeave={dnd.isEnabled ? dnd.container.onDragLeave : undefined}
+                onDragOver={dnd.isEnabled ? dnd.container.onDragOver : undefined}
+                onDrop={dnd.isEnabled ? dnd.container.onDrop : undefined}
                 role="tree"
             >
                 {visibleTree.map((node, index) => (
                     <FileManagerTreeNode
                         actions={effectiveActions}
                         activeRowPath={resolvedActiveRow}
+                        bindNodeDnd={dnd.bindNodeDnd}
                         expandedPaths={expandedPaths}
                         formatModified={formatModified}
                         gridTemplate={gridTemplate}
@@ -214,14 +257,16 @@ export const FileManager = ({
                 ))}
             </div>
 
-            <FileManagerBulkActionsBar
-                files={files}
-                labels={effectiveLabels}
-                onBulkDelete={onBulkDelete}
-                onClearSelection={clearSelection}
-                onSelectionChange={setSelection}
-                selectedPaths={selectedPaths}
-            />
+            {onBulkDelete && (
+                <FileManagerBulkActionsBar
+                    files={files}
+                    labels={effectiveLabels}
+                    onBulkDelete={onBulkDelete}
+                    onClearSelection={clearSelection}
+                    onSelectionChange={setSelection}
+                    selectedPaths={selectedPaths}
+                />
+            )}
         </div>
     );
 };

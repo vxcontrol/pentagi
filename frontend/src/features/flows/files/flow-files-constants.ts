@@ -16,6 +16,10 @@ export const ROOT_GROUPS: FileManagerRootGroup[] = [
 
 export const FLOW_FILES_API_PATH = (flowId: string) => `/flows/${flowId}/files/`;
 export const FLOW_FILES_PULL_API_PATH = (flowId: string) => `/flows/${flowId}/files/pull`;
+export const FLOW_FILES_ATTACH_RESOURCES_API_PATH = (flowId: string) => `/flows/${flowId}/files/resources`;
+export const FLOW_FILES_PROMOTE_API_PATH = (flowId: string) => `/flows/${flowId}/files/to-resources`;
+export const RESOURCES_LIST_API_PATH = '/resources/';
 
 export const UPLOADS_TARGET_DIRECTORY = '/work/uploads';
 export const CONTAINER_TARGET_DIRECTORY = 'container/';
+export const RESOURCES_TARGET_DIRECTORY = '/work/resources';

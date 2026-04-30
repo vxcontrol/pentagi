@@ -1,11 +1,23 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUp, Check, ChevronDown, FileSymlink, FileText, Loader2, Paperclip, Plus, Square, X } from 'lucide-react';
+import {
+    ArrowUp,
+    Check,
+    ChevronDown,
+    FileSymlink,
+    FileText,
+    Folder,
+    Loader2,
+    Paperclip,
+    Plus,
+    Square,
+    X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
-import type { ResourceItem } from '@/features/resources/types';
+import type { UserResourceFragmentFragment } from '@/graphql/types';
 
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -28,9 +40,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ACCEPTED_FILE_TYPES } from '@/features/resources/constants';
-import { ResourcesUploadOptionsDialog } from '@/features/resources/resources-upload-options-dialog';
-import { useFileUpload } from '@/features/resources/use-file-upload';
+import { useResourcesUpload } from '@/features/resources/use-resources-upload';
 import { getProviderDisplayName } from '@/models/provider';
 import { useProviders } from '@/providers/providers-provider';
 import { useResources } from '@/providers/resources-provider';
@@ -39,6 +49,7 @@ import { type Template, useTemplates } from '@/providers/templates-provider';
 const formSchema = z.object({
     message: z.string().trim().min(1, { message: 'Message cannot be empty' }),
     providerName: z.string().trim().min(1, { message: 'Provider must be selected' }),
+    resourceIds: z.array(z.string()),
     useAgents: z.boolean(),
 });
 
@@ -77,42 +88,25 @@ export const FlowForm = ({
     const [providerSearch, setProviderSearch] = useState('');
     const [templateSearch, setTemplateSearch] = useState('');
     const [resourceSearch, setResourceSearch] = useState('');
-    const [attachedFileIds, setAttachedFileIds] = useState<string[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleResourceAttach = useCallback((resource: ResourceItem) => {
-        setAttachedFileIds((current) => (current.includes(resource.id) ? current : [...current, resource.id]));
-    }, []);
-
-    const { handleFileChange, handleUploadOptionsCancel, handleUploadOptionsConfirm, isUploadOptionsDialogOpen } =
-        useFileUpload({ onResourceAttach: handleResourceAttach });
-
-    const attachedFiles = useMemo<ResourceItem[]>(() => {
-        const byId = new Map(resources.map((item) => [item.id, item]));
-
-        return attachedFileIds.map((id) => byId.get(id)).filter((item): item is ResourceItem => Boolean(item));
-    }, [attachedFileIds, resources]);
-
-    const isAnyAttachmentUploading = attachedFiles.some((file) => !file.isUploaded);
-
     const sortedResources = useMemo(
-        () => [...resources].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()),
+        () => [...resources].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
         [resources],
     );
 
     const filteredResources = useMemo(() => {
-        const search = resourceSearch.trim().toLowerCase();
+        const queryValue = resourceSearch.trim().toLowerCase();
 
-        if (!search) {
+        if (!queryValue) {
             return sortedResources;
         }
 
-        return sortedResources.filter((resource) => {
-            const fullName = resource.format ? `${resource.name}.${resource.format}` : resource.name;
-
-            return fullName.toLowerCase().includes(search);
-        });
+        return sortedResources.filter(
+            (resource) =>
+                resource.name.toLowerCase().includes(queryValue) || resource.path.toLowerCase().includes(queryValue),
+        );
     }, [sortedResources, resourceSearch]);
 
     const filteredTemplates = useMemo(() => {
@@ -146,6 +140,7 @@ export const FlowForm = ({
         defaultValues: {
             message: defaultValues?.message ?? '',
             providerName: defaultValues?.providerName ?? '',
+            resourceIds: defaultValues?.resourceIds ?? [],
             useAgents: defaultValues?.useAgents ?? false,
         },
         mode: 'onChange',
@@ -161,6 +156,47 @@ export const FlowForm = ({
         setValue,
     } = form;
 
+    const resourceIds = useWatch({ control, name: 'resourceIds' });
+
+    const updateResourceIds = useCallback(
+        (updater: ((current: string[]) => string[]) | string[]) => {
+            const current = getValues('resourceIds') ?? [];
+            const raw = typeof updater === 'function' ? updater(current) : updater;
+            // TODO(backend): drop the `String(id)` coercion once the REST `/resources/`
+            // endpoints return `id` as a string (matching the GraphQL `ID` scalar). Until
+            // then this is a safety net for stray numeric ids that would fail zod's
+            // `z.array(z.string())` and silently block submission.
+            const next = raw.map((id) => String(id));
+            setValue('resourceIds', next, { shouldDirty: true, shouldValidate: true });
+        },
+        [getValues, setValue],
+    );
+
+    const flowResources = useMemo<UserResourceFragmentFragment[]>(() => {
+        const byId = new Map(resources.map((item) => [item.id, item]));
+
+        return resourceIds
+            .map((id) => byId.get(id))
+            .filter((item): item is UserResourceFragmentFragment => Boolean(item));
+    }, [resourceIds, resources]);
+
+    const upload = useResourcesUpload({
+        onSuccess: (uploaded) => {
+            const ids = uploaded.items.map((item) => item.id);
+
+            if (ids.length === 0) {
+                return;
+            }
+
+            updateResourceIds((current) => {
+                const merged = new Set(current);
+                ids.forEach((id) => merged.add(id));
+
+                return Array.from(merged);
+            });
+        },
+    });
+
     // Update form values from defaultValues if user hasn't manually changed them
     useEffect(() => {
         if (!defaultValues) {
@@ -169,16 +205,27 @@ export const FlowForm = ({
 
         const currentValues = getValues();
 
-        // Update only fields that user hasn't manually changed and that differ from current values
+        // Update only fields that user hasn't manually changed and that differ from current values.
+        // Arrays are compared shallowly so a new-but-identical `resourceIds` reference doesn't
+        // trigger an unnecessary setValue (and the re-render it causes).
         Object.entries(defaultValues)
             .filter(([fieldName, defaultValue]) => {
                 const typedFieldName = fieldName as keyof FlowFormValues;
 
-                return (
-                    defaultValue !== undefined &&
-                    !dirtyFields[typedFieldName] &&
-                    currentValues[typedFieldName] !== defaultValue
-                );
+                if (defaultValue === undefined || dirtyFields[typedFieldName]) {
+                    return false;
+                }
+
+                const currentValue = currentValues[typedFieldName];
+
+                if (Array.isArray(defaultValue) && Array.isArray(currentValue)) {
+                    return (
+                        currentValue.length !== defaultValue.length ||
+                        currentValue.some((item, index) => item !== defaultValue[index])
+                    );
+                }
+
+                return currentValue !== defaultValue;
             })
             .forEach(([fieldName, defaultValue]) => {
                 const typedFieldName = fieldName as keyof FlowFormValues;
@@ -192,10 +239,10 @@ export const FlowForm = ({
     const previousFormDisabledRef = useRef(isFormDisabled);
 
     useEffect(() => {
-        const isDisabled = previousFormDisabledRef.current;
+        const wasDisabled = previousFormDisabledRef.current;
         previousFormDisabledRef.current = isFormDisabled;
 
-        if (isDisabled && !isFormDisabled) {
+        if (wasDisabled && !isFormDisabled) {
             textareaRef.current?.focus();
         }
     }, [isFormDisabled]);
@@ -203,23 +250,35 @@ export const FlowForm = ({
     const handleSubmit = async (values: FlowFormValues) => {
         await onSubmit(values);
         resetField('message');
-        setAttachedFileIds([]);
+        resetField('resourceIds');
     };
 
     const handleAttachClick = () => {
         fileInputRef.current?.click();
     };
 
-    const handleFileInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        await handleFileChange(event.target.files, fileInputRef);
-    };
+    const handleFileInputChange = useCallback(
+        async (event: React.ChangeEvent<HTMLInputElement>) => {
+            const selectedFiles = Array.from(event.target.files ?? []);
+
+            // Reset native input so re-uploading the same file fires `change` again.
+            event.target.value = '';
+
+            if (selectedFiles.length === 0) {
+                return;
+            }
+
+            await upload.uploadFiles(selectedFiles);
+        },
+        [upload],
+    );
 
     const handleRemoveAttachment = (id: string) => {
-        setAttachedFileIds((current) => current.filter((fileId) => fileId !== id));
+        updateResourceIds((current) => current.filter((fileId) => fileId !== id));
     };
 
     const handleToggleAttachment = (id: string) => {
-        setAttachedFileIds((current) =>
+        updateResourceIds((current) =>
             current.includes(id) ? current.filter((fileId) => fileId !== id) : [...current, id],
         );
     };
@@ -267,38 +326,29 @@ export const FlowForm = ({
                     render={({ field }) => (
                         <FormControl>
                             <InputGroup className="block">
-                                {attachedFiles.length > 0 && (
+                                {flowResources.length > 0 && (
                                     <InputGroupAddon
                                         align="block-start"
                                         className="flex-wrap gap-1.5"
                                     >
-                                        {attachedFiles.map((file) => {
-                                            const fullName = file.format ? `${file.name}.${file.format}` : file.name;
+                                        {flowResources.map((resource) => {
+                                            const Icon = resource.isDir ? Folder : FileText;
 
                                             return (
                                                 <div
                                                     className="bg-muted/50 flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
-                                                    key={file.id}
-                                                    title={fullName}
+                                                    key={resource.id}
+                                                    title={resource.path}
                                                 >
-                                                    {file.isUploaded ? (
-                                                        <FileText className="text-muted-foreground size-3.5 shrink-0" />
-                                                    ) : (
-                                                        <Loader2 className="text-muted-foreground size-3.5 shrink-0 animate-spin" />
-                                                    )}
+                                                    <Icon className="text-muted-foreground size-3.5 shrink-0" />
                                                     <span className="text-foreground max-w-40 truncate">
-                                                        {fullName}
+                                                        {resource.name}
                                                     </span>
-                                                    {!file.isUploaded && (
-                                                        <span className="text-muted-foreground tabular-nums">
-                                                            {file.progress}%
-                                                        </span>
-                                                    )}
                                                     <button
-                                                        aria-label={`Remove ${fullName}`}
+                                                        aria-label={`Remove ${resource.name}`}
                                                         className="text-muted-foreground hover:text-destructive ml-0.5 flex shrink-0 items-center justify-center"
                                                         disabled={isFormDisabled}
-                                                        onClick={() => handleRemoveAttachment(file.id)}
+                                                        onClick={() => handleRemoveAttachment(resource.id)}
                                                         type="button"
                                                     >
                                                         <X className="size-3.5" />
@@ -544,9 +594,9 @@ export const FlowForm = ({
                                                 variant="ghost"
                                             >
                                                 <Paperclip className="shrink-0" />
-                                                {attachedFiles.length > 0 && (
+                                                {flowResources.length > 0 && (
                                                     <span className="bg-muted text-muted-foreground -mx-0.5 flex h-4 min-w-4 items-center justify-center rounded px-1 text-xs font-medium tabular-nums">
-                                                        {attachedFiles.length}
+                                                        {flowResources.length}
                                                     </span>
                                                 )}
                                                 <ChevronDown />
@@ -590,10 +640,8 @@ export const FlowForm = ({
                                                     </DropdownMenuItem>
                                                 ) : (
                                                     filteredResources.map((resource) => {
-                                                        const isSelected = attachedFileIds.includes(resource.id);
-                                                        const fullName = resource.format
-                                                            ? `${resource.name}.${resource.format}`
-                                                            : resource.name;
+                                                        const isSelected = resourceIds.includes(resource.id);
+                                                        const Icon = resource.isDir ? Folder : FileText;
 
                                                         return (
                                                             <DropdownMenuItem
@@ -609,19 +657,17 @@ export const FlowForm = ({
                                                                 }}
                                                             >
                                                                 <div className="flex w-full min-w-0 items-center gap-2">
-                                                                    {resource.isUploaded ? (
-                                                                        <FileText className="text-muted-foreground size-4 shrink-0" />
-                                                                    ) : (
-                                                                        <Loader2 className="text-muted-foreground size-4 shrink-0 animate-spin" />
-                                                                    )}
-                                                                    <span className="max-w-80 flex-1 truncate">
-                                                                        {fullName}
-                                                                    </span>
-                                                                    {!resource.isUploaded && (
-                                                                        <span className="text-muted-foreground text-xs tabular-nums">
-                                                                            {resource.progress}%
+                                                                    <Icon className="text-muted-foreground size-4 shrink-0" />
+                                                                    <div className="flex min-w-0 flex-1 flex-col">
+                                                                        <span className="truncate">
+                                                                            {resource.name}
                                                                         </span>
-                                                                    )}
+                                                                        {resource.path !== resource.name && (
+                                                                            <span className="text-muted-foreground truncate text-xs">
+                                                                                {resource.path}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                     {isSelected && (
                                                                         <Check className="ml-auto size-4 shrink-0" />
                                                                     )}
@@ -633,6 +679,7 @@ export const FlowForm = ({
                                             </DropdownMenuGroup>
                                             <DropdownMenuSeparator />
                                             <DropdownMenuItem
+                                                disabled={upload.isUploading}
                                                 onSelect={(event) => {
                                                     event.preventDefault();
 
@@ -643,8 +690,8 @@ export const FlowForm = ({
                                                     handleAttachClick();
                                                 }}
                                             >
-                                                <Plus />
-                                                Upload file
+                                                {upload.isUploading ? <Loader2 className="animate-spin" /> : <Plus />}
+                                                {upload.isUploading ? 'Uploading…' : 'Upload file'}
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -652,7 +699,7 @@ export const FlowForm = ({
                                     {!isLoading || isSubmitting ? (
                                         <InputGroupButton
                                             className="ml-auto"
-                                            disabled={isSubmitting || !isValid || isAnyAttachmentUploading}
+                                            disabled={isSubmitting || !isValid || upload.isUploading}
                                             size="icon-xs"
                                             type="submit"
                                             variant="default"
@@ -678,7 +725,6 @@ export const FlowForm = ({
                 />
             </form>
             <input
-                accept={ACCEPTED_FILE_TYPES}
                 className="hidden"
                 multiple
                 onChange={handleFileInputChange}
@@ -700,11 +746,6 @@ export const FlowForm = ({
                 }}
                 isOpen={isReplaceConfirmOpen}
                 title="Replace content?"
-            />
-            <ResourcesUploadOptionsDialog
-                isOpen={isUploadOptionsDialogOpen}
-                onCancel={handleUploadOptionsCancel}
-                onConfirm={handleUploadOptionsConfirm}
             />
         </Form>
     );

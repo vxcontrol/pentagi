@@ -72,7 +72,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
 
     const createFlow = useCallback(
         async (values: FlowFormValues) => {
-            const { message, providerName } = values;
+            const { message, providerName, resourceIds } = values;
 
             const input = message.trim();
             const modelProvider = providerName.trim();
@@ -86,6 +86,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
                     variables: {
                         input,
                         modelProvider,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                     },
                 });
 
@@ -109,7 +110,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
 
     const createFlowWithAssistant = useCallback(
         async (values: FlowFormValues) => {
-            const { message, providerName, useAgents } = values;
+            const { message, providerName, resourceIds, useAgents } = values;
 
             const input = message.trim();
             const modelProvider = providerName.trim();
@@ -124,6 +125,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
                         flowId: '0',
                         input,
                         modelProvider,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                         useAgents,
                     },
                 });

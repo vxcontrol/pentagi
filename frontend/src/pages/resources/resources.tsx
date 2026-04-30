@@ -1,253 +1,122 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import { Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, Search, X } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
-import { format, formatDistanceToNow } from 'date-fns';
-import { ArrowDown, ArrowUp, Folder, Loader2, MoreHorizontal, Plus, Trash } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
-
-import type { ResourceItem } from '@/features/resources/types';
-
+import {
+    copyPathAction,
+    deleteAction,
+    downloadAction,
+    FileManager,
+    type FileManagerAction,
+    type FileNode,
+} from '@/components/file-manager';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
-import { ContextMenuItem } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { FileDropZone } from '@/components/ui/file-drop-zone';
+import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { StatusCard } from '@/components/ui/status-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ACCEPTED_FILE_TYPES } from '@/features/resources/constants';
-import { ResourcesUploadOptionsDialog } from '@/features/resources/resources-upload-options-dialog';
-import { useFileUpload } from '@/features/resources/use-file-upload';
+import { ResourcesConflictDialog } from '@/features/resources/resources-conflict-dialog';
+import { ResourcesCopyDialog } from '@/features/resources/resources-copy-dialog';
+import { ResourcesMkdirDialog } from '@/features/resources/resources-mkdir-dialog';
+import { ResourcesMoveDialog } from '@/features/resources/resources-move-dialog';
+import { buildResourceDownloadHref, toFileNode } from '@/features/resources/resources-utils';
+import { useResourcesDelete } from '@/features/resources/use-resources-delete';
+import { useResourcesMove } from '@/features/resources/use-resources-move';
+import { useResourcesSearch } from '@/features/resources/use-resources-search';
+import { useResourcesUpload } from '@/features/resources/use-resources-upload';
+import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
+import { copyToClipboard } from '@/lib/report';
 import { useResources } from '@/providers/resources-provider';
 
 const Resources = () => {
-    const { deleteResource, resources } = useResources();
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { isInitialLoading, resources } = useResources();
+    const search = useResourcesSearch();
 
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [deletingResource, setDeletingResource] = useState<null | ResourceItem>(null);
-    const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+    const [isMkdirOpen, setIsMkdirOpen] = useState(false);
+    const [fileToRename, setFileToRename] = useState<FileNode | null>(null);
+    const [fileToCopy, setFileToCopy] = useState<FileNode | null>(null);
 
-    const { handleFileChange, handleUploadOptionsCancel, handleUploadOptionsConfirm, isUploadOptionsDialogOpen } =
-        useFileUpload();
+    const upload = useResourcesUpload();
+    const deletion = useResourcesDelete();
+    const moveAction = useResourcesMove();
 
-    const handleUploadFile = () => {
-        fileInputRef.current?.click();
-    };
+    const canAcceptDrop = !upload.isUploading;
+    const { dragHandlers, isDragging } = useFilesDragAndDrop({
+        canAcceptDrop,
+        onDrop: upload.uploadFiles,
+    });
 
-    const handleFileInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        await handleFileChange(event.target.files, fileInputRef);
-    };
+    const fileNodes = useMemo<FileNode[]>(() => resources.map(toFileNode), [resources]);
 
-    const handleDeleteDialogOpen = (resource: ResourceItem) => {
-        setDeletingResource(resource);
-        setIsDeleteDialogOpen(true);
-    };
+    /**
+     * Drag-and-drop entry point: move every dragged item into `destinationDir` by issuing
+     * one `PUT /resources/move` per source. We don't pre-check or batch — each request
+     * goes out independently so a partial failure still moves the rest.
+     */
+    const handleMoveItems = useCallback(
+        async (sources: FileNode[], destinationDir: string) => {
+            await Promise.allSettled(
+                sources.map((source) => {
+                    const destination = destinationDir ? `${destinationDir}/${source.name}` : source.name;
 
-    const handleDelete = async () => {
-        if (!deletingResource) {
+                    return moveAction.move(source.path, { destination, shouldOverwrite: false });
+                }),
+            );
+        },
+        [moveAction],
+    );
+
+    const handleCopyPath = useCallback(async (file: FileNode) => {
+        const wasCopied = await copyToClipboard(file.path);
+
+        if (wasCopied) {
+            toast.success('Path copied to clipboard');
+
             return;
         }
 
-        setDeletingIds((prev) => new Set(prev).add(deletingResource.id));
+        toast.error('Failed to copy path');
+    }, []);
 
-        try {
-            await deleteResource(deletingResource.id);
-            setDeletingResource(null);
-        } catch {
-            // Error already handled in provider with toast
-        } finally {
-            setDeletingIds((prev) => {
-                const next = new Set(prev);
-                next.delete(deletingResource.id);
-
-                return next;
-            });
-        }
-    };
-
-    const columns: ColumnDef<ResourceItem>[] = useMemo(
+    const fileManagerActions = useMemo<FileManagerAction[]>(
         () => [
+            downloadAction(buildResourceDownloadHref),
+            copyPathAction(handleCopyPath),
             {
-                accessorKey: 'name',
-                cell: ({ row }) => {
-                    const resource = row.original;
-
-                    return (
-                        <div className="flex min-w-0 flex-col gap-0.5">
-                            <span className="truncate font-medium">{resource.name}</span>
-                            {!resource.isUploaded && (
-                                <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                                    <Loader2 className="size-3 animate-spin" />
-                                    Uploading… {resource.progress}%
-                                </span>
-                            )}
-                        </div>
-                    );
-                },
-                enableHiding: false,
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                            variant="link"
-                        >
-                            Name
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                appliesToDirs: true,
+                icon: FileSymlink,
+                id: 'resources-rename',
+                label: 'Rename or move',
+                onSelect: (file) => setFileToRename(file),
             },
             {
-                accessorKey: 'format',
-                cell: ({ row }) => {
-                    const value = (row.getValue('format') as string) ?? '';
-
-                    return <span className="text-muted-foreground uppercase">{value || '—'}</span>;
-                },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                            variant="link"
-                        >
-                            Format
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
-                size: 120,
+                appliesToDirs: true,
+                icon: Copy,
+                id: 'resources-copy',
+                label: 'Copy to…',
+                onSelect: (file) => setFileToCopy(file),
             },
-            {
-                accessorKey: 'uploadedAt',
-                cell: ({ row }) => {
-                    const value = row.getValue('uploadedAt') as string;
-                    const date = new Date(value);
-                    const relative = formatDistanceToNow(date, { addSuffix: true });
-                    const absolute = format(date, 'd MMM yyyy, HH:mm');
-
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span className="text-muted-foreground cursor-default text-sm">{relative}</span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <span className="text-xs">{absolute}</span>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
-                },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-                            variant="link"
-                        >
-                            Date
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
-                size: 160,
-                sortingFn: (rowA, rowB) =>
-                    new Date(rowA.original.uploadedAt).getTime() - new Date(rowB.original.uploadedAt).getTime(),
-            },
-            {
-                cell: ({ row }) => {
-                    const resource = row.original;
-                    const isDeleting = deletingIds.has(resource.id);
-                    const disabled = isDeleting || !resource.isUploaded;
-
-                    return (
-                        <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        className="size-8 p-0"
-                                        variant="ghost"
-                                    >
-                                        <MoreHorizontal />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                    align="end"
-                                    className="min-w-24"
-                                >
-                                    <DropdownMenuItem
-                                        disabled={disabled}
-                                        onClick={() => handleDeleteDialogOpen(resource)}
-                                    >
-                                        {isDeleting ? (
-                                            <>
-                                                <Loader2 className="size-4 animate-spin" />
-                                                Deleting...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Trash className="size-4" />
-                                                Delete
-                                            </>
-                                        )}
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    );
-                },
-                enableHiding: false,
-                header: () => null,
-                id: 'actions',
-                meta: { preventRowClick: true },
-                size: 48,
-            },
+            deleteAction(deletion.requestDelete),
         ],
-        [deletingIds],
+        [deletion.requestDelete, handleCopyPath],
     );
 
-    const renderRowContextMenu = (resource: ResourceItem) => {
-        const isDeleting = deletingIds.has(resource.id);
-        const disabled = isDeleting || !resource.isUploaded;
-
-        return (
-            <ContextMenuItem
-                disabled={disabled}
-                onClick={() => handleDeleteDialogOpen(resource)}
-            >
-                <Trash />
-                {isDeleting ? 'Deleting...' : 'Delete'}
-            </ContextMenuItem>
-        );
-    };
+    const handleDeleteDialogOpenChange = useCallback(
+        (nextOpen: boolean) => {
+            if (!nextOpen) {
+                deletion.clearFileToDelete();
+            }
+        },
+        [deletion],
+    );
 
     const pageHeader = (
-        <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+        <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
             <div className="flex items-center gap-2 px-4">
                 <SidebarTrigger className="-ml-1" />
                 <Separator
@@ -263,87 +132,171 @@ const Resources = () => {
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <div className="ml-auto flex items-center gap-2 px-4">
-                <Button
-                    onClick={handleUploadFile}
-                    size="sm"
-                    variant="secondary"
-                >
-                    <Plus />
-                    Add file
-                </Button>
-            </div>
         </header>
     );
 
-    const fileInput = (
-        <input
-            accept={ACCEPTED_FILE_TYPES}
-            className="hidden"
-            multiple
-            onChange={handleFileInputChange}
-            ref={fileInputRef}
-            type="file"
+    const hasResources = resources.length > 0;
+
+    const noResourcesState = (
+        <FileDropZone
+            actionLabel="Upload files"
+            description="Upload documents so PentAGI agents can reference them during your flows. You can also drag & drop files anywhere in this panel."
+            hint="Up to 300 MB per file · 2 GB per upload"
+            isDragging={isDragging}
+            isUploading={upload.isUploading}
+            onBrowse={upload.openFilePicker}
+            title="No resources yet"
         />
     );
 
-    if (!resources.length) {
-        return (
-            <>
-                {pageHeader}
-                {fileInput}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
-                            <Button
-                                onClick={handleUploadFile}
-                                variant="secondary"
-                            >
-                                <Plus className="size-4" />
-                                Upload file
-                            </Button>
-                        }
-                        description="Upload documents so PentAGI agents can reference them during your flows"
-                        icon={<Folder className="text-muted-foreground size-8" />}
-                        title="No resources yet"
-                    />
-                </div>
-                <ResourcesUploadOptionsDialog
-                    isOpen={isUploadOptionsDialogOpen}
-                    onCancel={handleUploadOptionsCancel}
-                    onConfirm={handleUploadOptionsConfirm}
-                />
-            </>
-        );
-    }
+    const noMatchesState = (
+        <Empty>
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <Search />
+                </EmptyMedia>
+                <EmptyTitle>No matches</EmptyTitle>
+                <EmptyDescription>
+                    No resources match <code>{search.debouncedQuery.trim()}</code>. Try a different query.
+                </EmptyDescription>
+            </EmptyHeader>
+        </Empty>
+    );
 
     return (
         <>
             {pageHeader}
-            {fileInput}
-            <div className="flex flex-col gap-4 p-4 pt-0">
-                <DataTable
-                    columns={columns}
-                    data={resources}
-                    filterColumn="name"
-                    filterPlaceholder="Filter resources..."
-                    renderRowContextMenu={renderRowContextMenu}
+            <div
+                className="relative flex flex-1 flex-col gap-4 p-4"
+                {...dragHandlers}
+            >
+                <input
+                    className="hidden"
+                    key={upload.fileInputKey}
+                    multiple
+                    type="file"
+                    {...upload.fileInputProps}
+                />
+
+                {isDragging && hasResources && (
+                    <div className="bg-primary/10 border-primary pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg border-2 border-dashed">
+                        <div className="text-primary flex flex-col items-center gap-2">
+                            <FolderUp className="size-8" />
+                            <span className="text-sm font-medium">Drop files to upload</span>
+                        </div>
+                    </div>
+                )}
+
+                <Form {...search.form}>
+                    <div className="flex gap-2 p-px">
+                        <FormField
+                            control={search.form.control}
+                            name="search"
+                            render={({ field }) => (
+                                <FormItem className="flex-1">
+                                    <FormControl>
+                                        <InputGroup>
+                                            <InputGroupAddon>
+                                                <Search />
+                                            </InputGroupAddon>
+                                            <InputGroupInput
+                                                {...field}
+                                                autoComplete="off"
+                                                placeholder="Search resources..."
+                                                type="text"
+                                            />
+                                            {field.value && (
+                                                <InputGroupAddon align="inline-end">
+                                                    <InputGroupButton
+                                                        onClick={search.resetSearch}
+                                                        type="button"
+                                                    >
+                                                        <X />
+                                                    </InputGroupButton>
+                                                </InputGroupAddon>
+                                            )}
+                                        </InputGroup>
+                                    </FormControl>
+                                </FormItem>
+                            )}
+                        />
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span>
+                                    <Button
+                                        disabled={upload.isUploading}
+                                        onClick={() => setIsMkdirOpen(true)}
+                                        size="icon-sm"
+                                        type="button"
+                                        variant="outline"
+                                    >
+                                        <FolderPlus />
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent>Create directory</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span>
+                                    <Button
+                                        disabled={upload.isUploading}
+                                        onClick={upload.openFilePicker}
+                                        size="icon-sm"
+                                        type="button"
+                                        variant="outline"
+                                    >
+                                        {upload.isUploading ? <Loader2 className="animate-spin" /> : <FolderUp />}
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent>Upload files</TooltipContent>
+                        </Tooltip>
+                    </div>
+                </Form>
+
+                <FileManager
+                    actions={fileManagerActions}
+                    className="min-h-0 flex-1"
+                    emptyState={noResourcesState}
+                    files={fileNodes}
+                    isLoading={isInitialLoading}
+                    onBulkDelete={deletion.deleteBulk}
+                    onMoveItems={handleMoveItems}
+                    search={{ emptyState: noMatchesState, query: search.debouncedQuery }}
+                />
+
+                <ResourcesMkdirDialog
+                    isOpen={isMkdirOpen}
+                    onClose={() => setIsMkdirOpen(false)}
+                />
+
+                <ResourcesMoveDialog
+                    file={fileToRename}
+                    onClose={() => setFileToRename(null)}
+                />
+
+                <ResourcesCopyDialog
+                    file={fileToCopy}
+                    onClose={() => setFileToCopy(null)}
+                />
+
+                <ResourcesConflictDialog
+                    conflicts={moveAction.pendingConflicts}
+                    onCancel={moveAction.cancelConflicts}
+                    onReplaceAll={moveAction.resolveConflicts}
                 />
 
                 <ConfirmationDialog
-                    cancelText="Cancel"
                     confirmText="Delete"
-                    handleConfirm={handleDelete}
-                    handleOpenChange={setIsDeleteDialogOpen}
-                    isOpen={isDeleteDialogOpen}
-                    itemName={deletingResource?.name}
-                    itemType="resource"
-                />
-
-                <ResourcesUploadOptionsDialog
-                    isOpen={isUploadOptionsDialogOpen}
-                    onCancel={handleUploadOptionsCancel}
-                    onConfirm={handleUploadOptionsConfirm}
+                    handleConfirm={deletion.confirmDelete}
+                    handleOpenChange={handleDeleteDialogOpenChange}
+                    isOpen={!!deletion.fileToDelete}
+                    itemName={deletion.fileToDelete?.name}
+                    itemType={deletion.fileToDelete?.isDir ? 'directory' : 'resource'}
+                    title={deletion.fileToDelete?.isDir ? 'Delete Directory' : 'Delete Resource'}
                 />
             </div>
         </>

@@ -1,197 +1,174 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useApolloClient } from '@apollo/client';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-import type { ResourceItem, ResourcePreviewModel } from '@/features/resources/types';
+import type { UserResourceFragmentFragment } from '@/graphql/types';
 
-import {
-    deleteResource as deleteResourceApi,
-    getResources,
-    getUploadUrl,
-    uploadResource as uploadResourceApi,
-} from '@/features/resources/api';
-import { UPLOAD_COMPLETE_ANIMATION_DELAY } from '@/features/resources/constants';
-import { Log } from '@/lib/log';
+import { RESOURCES_API_PATH } from '@/features/resources/resources-constants';
+import { useResourcesRealtime } from '@/features/resources/use-resources-realtime';
+import { ResourcesDocument, useResourcesQuery } from '@/graphql/types';
+import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
 import { useUser } from '@/providers/user-provider';
 
 interface ResourcesContextValue {
-    deleteResource: (id: string) => Promise<void>;
-    getResource: (id: string) => ResourceItem | undefined;
+    /** Recursive list of every entry in the user's library (files + directories). */
+    error: Error | null | undefined;
+    /** Lookup helper: returns `undefined` when the resource is unknown. */
+    getResource: (id: string) => undefined | UserResourceFragmentFragment;
+    isInitialLoading: boolean;
     isLoading: boolean;
-    resources: ResourceItem[];
-    uploadResource: (file: File, options?: UploadResourceOptions) => Promise<ResourceItem>;
+    /** Force a network re-read of the resources list. */
+    refetch: () => Promise<unknown>;
+    resources: UserResourceFragmentFragment[];
+}
+
+/**
+ * Shape of the REST `GET /resources/` response wrapper.
+ * The element type is intentionally aliased to the GraphQL fragment — the backend's
+ * `models.ResourceEntry` is meant to be structurally identical, and we treat them as
+ * the same type so REST-loaded entries can sit in the same Apollo cache as GraphQL ones.
+ */
+interface ResourcesListResponse {
+    items?: null | UserResourceFragmentFragment[];
+    total?: number;
 }
 
 interface ResourcesProviderProps {
     children: ReactNode;
 }
 
-interface UploadResourceOptions {
-    fileName?: string;
-    knowledgeId?: string;
-    onStart?: (resource: ResourceItem) => void;
-}
-
 const ResourcesContext = createContext<ResourcesContextValue | undefined>(undefined);
 
-const toResourceItem = (item: ResourcePreviewModel): ResourceItem => ({
-    ...item,
-    isUploaded: true,
-    progress: 100,
-});
+const RESOURCES_ERROR_TOAST_ID = 'resources-error';
 
+/**
+ * Loads the user's full resource library and keeps it in sync via three GraphQL
+ * subscriptions (added / updated / deleted).
+ *
+ * **Temporary detail**: the initial library is fetched via REST
+ * `GET /resources/?recursive=true` rather than the GraphQL `resources` query.
+ * The GraphQL resolver currently has a bug for `path == "" && recursive == true`
+ * that returns only top-level entries — we side-step it by hydrating the same
+ * Apollo cache slot from REST and reading it back through `useResourcesQuery`
+ * with a `cache-only` fetch policy. Subscriptions continue to update the cache
+ * as before, so consumers see no behavioural change.
+ *
+ * Once the backend resolver is fixed this hook should switch back to a plain
+ * `useResourcesQuery({ variables: { recursive: true } })`.
+ */
 export const ResourcesProvider = ({ children }: ResourcesProviderProps) => {
     const { authInfo, isAuthenticated } = useUser();
 
     const shouldFetchResources = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    const [resources, setResources] = useState<ResourceItem[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasLoaded, setHasLoaded] = useState(false);
+    const apolloClient = useApolloClient();
 
+    const [restLoading, setRestLoading] = useState(false);
+    const [restError, setRestError] = useState<Error | null>(null);
+    const [refreshTick, setRefreshTick] = useState(0);
+
+    // Hydrate the Apollo cache from REST. We write to the same `resources(recursive: true)`
+    // cache slot that `useResourcesQuery` reads, so subscription delta updates plumbed
+    // through `lib/apollo.ts` keep working without any extra wiring.
     useEffect(() => {
-        if (!shouldFetchResources || hasLoaded) {
+        if (!shouldFetchResources) {
             return;
         }
 
         let isCancelled = false;
-        setIsLoading(true);
 
-        getResources()
-            .then((items) => {
-                if (isCancelled) {
-                    return;
-                }
+        setRestLoading(true);
+        setRestError(null);
 
-                setResources(items.map(toResourceItem));
-                setHasLoaded(true);
-            })
-            .catch((error: unknown) => {
-                if (isCancelled) {
-                    return;
-                }
-
-                const description = error instanceof Error ? error.message : 'Failed to load resources';
-                toast.error('Failed to load resources', {
-                    description,
+        (async () => {
+            try {
+                const response = await api.get<ResourcesListResponse>(RESOURCES_API_PATH, {
+                    params: { recursive: true },
                 });
-                Log.error('Error loading resources:', error);
-            })
-            .finally(() => {
-                if (!isCancelled) {
-                    setIsLoading(false);
+                const data = unwrapApiResponse(response);
+
+                if (isCancelled) {
+                    return;
                 }
-            });
+
+                // `__typename` is required so Apollo normalizes each entry under
+                // `UserResource:<id>` in the cache. Without it the read-back through
+                // `useResourcesQuery` returns objects whose scalar fields are `undefined`
+                // (the cache treats every entry as an unidentifiable structural blob).
+                //
+                // TODO(backend): remove `String(item.id)` / `String(item.userId)` coercion
+                // once the REST `/resources/` endpoint returns `id`/`userId` as strings.
+                // Currently it returns them as numbers, which breaks consumers that rely
+                // on the GraphQL `ID` scalar (typed as `string` everywhere) — e.g. zod
+                // validation `z.array(z.string())` in `FlowForm.resourceIds`.
+                apolloClient.writeQuery({
+                    data: {
+                        resources: (data.items ?? []).map((item) => ({
+                            ...item,
+                            __typename: 'UserResource' as const,
+                            id: String(item.id),
+                            userId: String(item.userId),
+                        })),
+                    },
+                    query: ResourcesDocument,
+                    variables: { recursive: true },
+                });
+            } catch (caught) {
+                if (isCancelled) {
+                    return;
+                }
+
+                const message = getApiErrorMessage(caught, 'Failed to load resources');
+
+                setRestError(new Error(message));
+            } finally {
+                if (!isCancelled) {
+                    setRestLoading(false);
+                }
+            }
+        })();
 
         return () => {
             isCancelled = true;
         };
-    }, [shouldFetchResources, hasLoaded]);
+    }, [apolloClient, refreshTick, shouldFetchResources]);
 
-    const getResource = useCallback(
-        (id: string): ResourceItem | undefined => resources.find((item) => item.id === id),
-        [resources],
-    );
+    const { data, error: graphqlError } = useResourcesQuery({
+        fetchPolicy: 'cache-only',
+        skip: !shouldFetchResources,
+        variables: { recursive: true },
+    });
 
-    const upsertResource = useCallback((next: ResourceItem) => {
-        setResources((current) => {
-            const exists = current.some((item) => item.id === next.id);
+    const error = restError ?? graphqlError ?? null;
+    const isInitialLoading = restLoading && data === undefined;
 
-            if (exists) {
-                return current.map((item) => (item.id === next.id ? next : item));
-            }
+    useResourcesRealtime({ isPaused: !shouldFetchResources || isInitialLoading });
 
-            return [next, ...current];
-        });
-    }, []);
+    useEffect(() => {
+        if (error) {
+            toast.error('Failed to load resources', {
+                description: error.message,
+                id: RESOURCES_ERROR_TOAST_ID,
+            });
+        }
+    }, [error]);
 
-    const updateResource = useCallback((id: string, patch: Partial<ResourceItem>) => {
-        setResources((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-    }, []);
-
-    const removeResourceFromState = useCallback((id: string) => {
-        setResources((current) => current.filter((item) => item.id !== id));
-    }, []);
-
-    const uploadResource = useCallback(
-        async (file: File, options?: UploadResourceOptions): Promise<ResourceItem> => {
-            try {
-                const fileName = options?.fileName ?? file.name;
-                const { id, item, uploadUrl } = await getUploadUrl({
-                    fileName,
-                    knowledgeId: options?.knowledgeId,
-                });
-
-                const optimisticItem: ResourceItem = {
-                    ...item,
-                    isUploaded: false,
-                    progress: 0,
-                };
-                upsertResource(optimisticItem);
-                options?.onStart?.(optimisticItem);
-
-                try {
-                    await uploadResourceApi({
-                        file,
-                        onProgress: (progress) => {
-                            updateResource(id, { progress });
-                        },
-                        uploadUrl,
-                    });
-                } catch (uploadError) {
-                    removeResourceFromState(id);
-                    throw uploadError;
-                }
-
-                const finalItem: ResourceItem = {
-                    ...item,
-                    isUploaded: false,
-                    progress: 100,
-                };
-                updateResource(id, finalItem);
-
-                setTimeout(() => {
-                    updateResource(id, { isUploaded: true, progress: 100 });
-                }, UPLOAD_COMPLETE_ANIMATION_DELAY);
-
-                return { ...finalItem, isUploaded: true };
-            } catch (error) {
-                const description = error instanceof Error ? error.message : 'Failed to upload file';
-                toast.error('Failed to upload file', {
-                    description,
-                });
-                Log.error('Error uploading resource:', error);
-                throw error;
-            }
-        },
-        [removeResourceFromState, updateResource, upsertResource],
-    );
-
-    const deleteResource = useCallback(
-        async (id: string) => {
-            try {
-                await deleteResourceApi(id);
-                removeResourceFromState(id);
-            } catch (error) {
-                const description = error instanceof Error ? error.message : 'Failed to delete resource';
-                toast.error('Failed to delete resource', {
-                    description,
-                });
-                Log.error('Error deleting resource:', error);
-                throw error;
-            }
-        },
-        [removeResourceFromState],
-    );
+    const resources = useMemo<UserResourceFragmentFragment[]>(() => data?.resources ?? [], [data?.resources]);
 
     const value = useMemo<ResourcesContextValue>(
         () => ({
-            deleteResource,
-            getResource,
-            isLoading,
+            error,
+            getResource: (id: string) => resources.find((item) => item.id === id),
+            isInitialLoading,
+            isLoading: restLoading,
+            refetch: () => {
+                setRefreshTick((tick) => tick + 1);
+
+                return Promise.resolve();
+            },
             resources,
-            uploadResource,
         }),
-        [deleteResource, getResource, isLoading, resources, uploadResource],
+        [error, isInitialLoading, resources, restLoading],
     );
 
     return <ResourcesContext.Provider value={value}>{children}</ResourcesContext.Provider>;

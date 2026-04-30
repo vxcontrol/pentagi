@@ -232,14 +232,14 @@ export const walkTree = (
     return result;
 };
 
-/**
- * Collect paths of *file* nodes only (no synthetic group roots, no directories).
- * Used as the universe for "select all".
- */
+/** Collect paths of *file* nodes only (no synthetic group roots, no directories). */
 export const collectAllFilePaths = (nodes: FileManagerInternalNode[]): string[] =>
     walkTree(nodes, { include: (node) => !node.isGroupRoot && !node.isDir });
 
-/** Collect paths of every selectable node (files + real directories), used for bulk-delete validation. */
+/**
+ * Collect paths of every selectable node (files + real directories), excluding
+ * synthetic group roots. Used as the universe for "select all" / bulk operations.
+ */
 export const collectAllNodePaths = (nodes: FileManagerInternalNode[]): string[] =>
     walkTree(nodes, { include: (node) => !node.isGroupRoot });
 

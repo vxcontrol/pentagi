@@ -5,15 +5,14 @@ import type { FileNode } from '@/components/file-manager';
 
 import { api, getApiErrorMessage } from '@/lib/axios';
 
-import { FLOW_FILES_API_PATH } from './flow-files-constants';
-import { type FlowFilesResponse, pluralizeItems } from './flow-files-utils';
+import { RESOURCES_API_PATH } from './resources-constants';
+import { pluralizeItems } from './resources-utils';
 
-interface UseFlowFilesDeleteParams {
-    flowId: null | string;
-    refetchFiles: () => Promise<unknown>;
+interface UseResourcesDeleteParams {
+    onAfterDelete?: () => void;
 }
 
-interface UseFlowFilesDeleteResult {
+interface UseResourcesDeleteResult {
     clearFileToDelete: () => void;
     confirmDelete: () => Promise<void>;
     deleteBulk: (filesToDelete: FileNode[]) => Promise<void>;
@@ -21,8 +20,7 @@ interface UseFlowFilesDeleteResult {
     requestDelete: (file: FileNode) => void;
 }
 
-const deleteFileRequest = (flowId: string, path: string) =>
-    api.delete<FlowFilesResponse>(FLOW_FILES_API_PATH(flowId), { params: { path } });
+const deleteResourceRequest = (path: string) => api.delete<void>(RESOURCES_API_PATH, { params: { path } });
 
 const reportBulkDeleteOutcome = (succeededCount: number, failedCount: number): void => {
     if (failedCount === 0) {
@@ -43,12 +41,14 @@ const reportBulkDeleteOutcome = (succeededCount: number, failedCount: number): v
 };
 
 /**
- * Owns both the single-file and bulk-delete flows. The component drives the
+ * Owns both the single-resource and bulk-delete flows. Component drives the
  * confirmation dialog state through the returned `fileToDelete`/`requestDelete`/
- * `clearFileToDelete` triple, while the hook hides every API call, toast and
- * post-delete refetch.
+ * `clearFileToDelete` triple, while the hook hides every API call and toast.
+ *
+ * No imperative refetch is performed: the GraphQL `resourceDeleted` subscription
+ * is wired into the Apollo cache and removes the deleted entries automatically.
  */
-export const useFlowFilesDelete = ({ flowId, refetchFiles }: UseFlowFilesDeleteParams): UseFlowFilesDeleteResult => {
+export const useResourcesDelete = ({ onAfterDelete }: UseResourcesDeleteParams = {}): UseResourcesDeleteResult => {
     const [fileToDelete, setFileToDelete] = useState<FileNode | null>(null);
 
     const requestDelete = useCallback((file: FileNode) => {
@@ -60,38 +60,37 @@ export const useFlowFilesDelete = ({ flowId, refetchFiles }: UseFlowFilesDeleteP
     }, []);
 
     const confirmDelete = useCallback(async () => {
-        if (!flowId || !fileToDelete) {
+        if (!fileToDelete) {
             return;
         }
 
         try {
-            await deleteFileRequest(flowId, fileToDelete.path);
-            toast.success(fileToDelete.isDir ? 'Directory deleted' : 'File deleted');
-            await refetchFiles();
+            await deleteResourceRequest(fileToDelete.path);
+            toast.success(fileToDelete.isDir ? 'Directory deleted' : 'Resource deleted');
+            onAfterDelete?.();
         } catch (error) {
-            const description = getApiErrorMessage(error, 'Failed to delete file');
+            const description = getApiErrorMessage(error, 'Failed to delete resource');
 
             toast.error('Delete failed', { description });
         } finally {
             setFileToDelete(null);
         }
-    }, [flowId, fileToDelete, refetchFiles]);
+    }, [fileToDelete, onAfterDelete]);
 
     const deleteBulk = useCallback(
         async (filesToDelete: FileNode[]) => {
-            if (!flowId || filesToDelete.length === 0) {
+            if (filesToDelete.length === 0) {
                 return;
             }
 
-            const results = await Promise.allSettled(filesToDelete.map((file) => deleteFileRequest(flowId, file.path)));
+            const results = await Promise.allSettled(filesToDelete.map((file) => deleteResourceRequest(file.path)));
             const succeededCount = results.filter((result) => result.status === 'fulfilled').length;
             const failedCount = results.length - succeededCount;
 
             reportBulkDeleteOutcome(succeededCount, failedCount);
-
-            await refetchFiles();
+            onAfterDelete?.();
         },
-        [flowId, refetchFiles],
+        [onAfterDelete],
     );
 
     return {

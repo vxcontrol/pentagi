@@ -1,4 +1,4 @@
-import { ArrowDownToLine, FolderUp, Info, Loader2, Search, X } from 'lucide-react';
+import { ArrowDownToLine, FolderInput, FolderOutput, FolderUp, Info, Loader2, Search, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -17,31 +17,26 @@ import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusType } from '@/graphql/types';
+import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
 import { copyToClipboard } from '@/lib/report';
 import { useFlow } from '@/providers/flow-provider';
 
+import { FlowFilesAttachResourcesDialog } from './flow-files-attach-resources-dialog';
 import { ROOT_GROUPS } from './flow-files-constants';
+import { FlowFilesPromoteDialog } from './flow-files-promote-dialog';
 import { FlowFilesPullDialog } from './flow-files-pull-dialog';
 import { buildDownloadHref } from './flow-files-utils';
-import { useFilesDragAndDrop } from './use-files-drag-and-drop';
 import { useFlowFilesData } from './use-flow-files-data';
 import { useFlowFilesDelete } from './use-flow-files-delete';
 import { useFlowFilesRealtime } from './use-flow-files-realtime';
 import { useFlowFilesSearch } from './use-flow-files-search';
 import { useFlowFilesUpload } from './use-flow-files-upload';
 
-interface FlowFilesContentProps {
-    flowId: null | string;
-    flowStatus: StatusType | undefined;
-}
-
-/**
- * Holds every piece of local state for a single flow. The outer `<FlowFiles />`
- * remounts this component via `key={flowId}` so switching flows is a fresh mount
- * with no leftover form values, drag overlays or pending toasts.
- */
-const FlowFilesContent = ({ flowId, flowStatus }: FlowFilesContentProps) => {
+const FlowFiles = () => {
+    const { flowId, flowStatus } = useFlow();
     const [isPullDialogOpen, setIsPullDialogOpen] = useState(false);
+    const [isAttachResourcesDialogOpen, setIsAttachResourcesDialogOpen] = useState(false);
+    const [fileToPromote, setFileToPromote] = useState<FileNode | null>(null);
 
     const { fileNodes, isInitialLoading, isLoading, refetchFiles } = useFlowFilesData({ flowId });
 
@@ -72,18 +67,39 @@ const FlowFilesContent = ({ flowId, flowStatus }: FlowFilesContentProps) => {
         toast.error('Failed to copy path');
     }, []);
 
-    const getDownloadHref = useCallback(
-        (file: FileNode): string => buildDownloadHref(flowId, file) ?? '',
-        [flowId],
+    const getDownloadHref = useCallback((file: FileNode): string => buildDownloadHref(flowId, file) ?? '', [flowId]);
+
+    const handleRequestPromote = useCallback((file: FileNode) => {
+        setFileToPromote(file);
+    }, []);
+
+    const handleClosePromoteDialog = useCallback(() => setFileToPromote(null), []);
+
+    const promoteAction = useMemo<FileManagerAction>(
+        () => ({
+            appliesToDirs: true,
+            icon: FolderOutput,
+            id: 'flow-files-save-as-resource',
+            label: 'Save as resource',
+            onSelect: handleRequestPromote,
+        }),
+        [handleRequestPromote],
     );
 
     const fileManagerActions = useMemo<FileManagerAction[]>(
-        () => [downloadAction(getDownloadHref), copyPathAction(handleCopyPath), deleteAction(deletion.requestDelete)],
-        [getDownloadHref, handleCopyPath, deletion.requestDelete],
+        () => [
+            downloadAction(getDownloadHref),
+            copyPathAction(handleCopyPath),
+            promoteAction,
+            deleteAction(deletion.requestDelete),
+        ],
+        [getDownloadHref, handleCopyPath, promoteAction, deletion.requestDelete],
     );
 
     const handleOpenPullDialog = useCallback(() => setIsPullDialogOpen(true), []);
     const handleClosePullDialog = useCallback(() => setIsPullDialogOpen(false), []);
+    const handleOpenAttachResourcesDialog = useCallback(() => setIsAttachResourcesDialogOpen(true), []);
+    const handleCloseAttachResourcesDialog = useCallback(() => setIsAttachResourcesDialogOpen(false), []);
     const handleDeleteDialogOpenChange = useCallback(
         (nextOpen: boolean) => {
             if (!nextOpen) {
@@ -92,6 +108,8 @@ const FlowFilesContent = ({ flowId, flowStatus }: FlowFilesContentProps) => {
         },
         [deletion],
     );
+
+    const isAttachResourcesDisabled = !flowId || isLoading || upload.isUploading;
 
     const noFilesState = (
         <Empty>
@@ -222,6 +240,23 @@ const FlowFilesContent = ({ flowId, flowStatus }: FlowFilesContentProps) => {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
+                                        disabled={isAttachResourcesDisabled}
+                                        onClick={handleOpenAttachResourcesDialog}
+                                        size="icon-sm"
+                                        type="button"
+                                        variant="outline"
+                                    >
+                                        <FolderInput />
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent>Attach resources from library</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span>
+                                    <Button
                                         disabled={isPullDisabled}
                                         onClick={handleOpenPullDialog}
                                         size="icon-sm"
@@ -260,6 +295,19 @@ const FlowFilesContent = ({ flowId, flowStatus }: FlowFilesContentProps) => {
                 onSuccess={refetchFiles}
             />
 
+            <FlowFilesAttachResourcesDialog
+                flowId={flowId}
+                isOpen={isAttachResourcesDialogOpen}
+                onClose={handleCloseAttachResourcesDialog}
+                onSuccess={refetchFiles}
+            />
+
+            <FlowFilesPromoteDialog
+                file={fileToPromote}
+                flowId={flowId}
+                onClose={handleClosePromoteDialog}
+            />
+
             <ConfirmationDialog
                 confirmText="Delete"
                 handleConfirm={deletion.confirmDelete}
@@ -270,18 +318,6 @@ const FlowFilesContent = ({ flowId, flowStatus }: FlowFilesContentProps) => {
                 title={deletion.fileToDelete?.isDir ? 'Delete Directory' : 'Delete File'}
             />
         </div>
-    );
-};
-
-const FlowFiles = () => {
-    const { flowId, flowStatus } = useFlow();
-
-    return (
-        <FlowFilesContent
-            flowId={flowId}
-            flowStatus={flowStatus}
-            key={flowId ?? 'no-flow'}
-        />
     );
 };
 

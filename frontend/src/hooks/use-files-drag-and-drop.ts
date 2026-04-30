@@ -27,8 +27,8 @@ const isFileDragEvent = (event: React.DragEvent<HTMLDivElement>): boolean =>
  * sees only an immutable `isDragging` flag and four event handlers.
  *
  * The hook does not auto-reset on external identity changes: the consumer is expected
- * to remount the subtree (via `key={flowId}` or similar) which discards both the
- * counter and the `isDragging` state.
+ * to remount the subtree (via `key={...}` on the surrounding component) which discards
+ * both the counter and the `isDragging` state.
  */
 export const useFilesDragAndDrop = ({
     canAcceptDrop,

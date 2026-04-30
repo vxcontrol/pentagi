@@ -194,7 +194,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 return;
             }
 
-            const { message: input, providerName } = values;
+            const { message: input, providerName, resourceIds } = values;
 
             try {
                 await putUserInput({
@@ -202,6 +202,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         flowId,
                         input,
                         modelProvider: providerName || undefined,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                     },
                 });
             } catch (error) {
@@ -238,7 +239,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
 
     const createAssistant = useCallback(
         async (values: FlowFormValues) => {
-            const { message, providerName, useAgents } = values;
+            const { message, providerName, resourceIds, useAgents } = values;
 
             const input = message.trim();
             const modelProvider = providerName.trim();
@@ -253,6 +254,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         flowId,
                         input,
                         modelProvider,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                         useAgents,
                     },
                 });
@@ -278,7 +280,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
 
     const submitAssistantMessage = useCallback(
         async (assistantId: string, values: FlowFormValues) => {
-            const { message, useAgents } = values;
+            const { message, resourceIds, useAgents } = values;
 
             const input = message.trim();
 
@@ -292,6 +294,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         assistantId,
                         flowId,
                         input,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                         useAgents,
                     },
                 });

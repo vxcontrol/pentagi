@@ -23,8 +23,8 @@ interface UseFileManagerSelection {
 }
 
 interface UseFileManagerSelectionArgs {
-    /** Universe of selectable file paths in the *visible* tree. */
-    allFilePaths: string[];
+    /** Universe of selectable paths (files + real directories) in the *visible* tree. */
+    allSelectablePaths: string[];
     /** Visible nodes in DFS order — used for shift-range selection. */
     flatVisible: string[];
 }
@@ -36,13 +36,13 @@ interface UseFileManagerSelectionArgs {
  * downstream don't re-render needlessly.
  */
 export const useFileManagerSelection = ({
-    allFilePaths,
+    allSelectablePaths,
     flatVisible,
 }: UseFileManagerSelectionArgs): UseFileManagerSelection => {
     const [rawSelectedPaths, setRawSelectedPaths] = useState<Set<string>>(() => new Set());
     const lastClickedRef = useRef<null | string>(null);
 
-    const allFilePathsSet = useMemo(() => new Set(allFilePaths), [allFilePaths]);
+    const allSelectablePathsSet = useMemo(() => new Set(allSelectablePaths), [allSelectablePaths]);
 
     const selectedPaths = useMemo(() => {
         if (rawSelectedPaths.size === 0) {
@@ -53,7 +53,7 @@ export const useFileManagerSelection = ({
         const valid = new Set<string>();
 
         for (const path of rawSelectedPaths) {
-            if (allFilePathsSet.has(path)) {
+            if (allSelectablePathsSet.has(path)) {
                 valid.add(path);
             } else {
                 allValid = false;
@@ -61,7 +61,7 @@ export const useFileManagerSelection = ({
         }
 
         return allValid ? rawSelectedPaths : valid;
-    }, [allFilePathsSet, rawSelectedPaths]);
+    }, [allSelectablePathsSet, rawSelectedPaths]);
 
     const onRowClick = useCallback(
         (event: ReactMouseEvent, path: string) => {
@@ -131,12 +131,12 @@ export const useFileManagerSelection = ({
         });
     }, []);
 
-    const isAllSelected = allFilePaths.length > 0 && selectedPaths.size === allFilePaths.length;
+    const isAllSelected = allSelectablePaths.length > 0 && selectedPaths.size === allSelectablePaths.length;
     const isSomeSelected = selectedPaths.size > 0 && !isAllSelected;
 
     const toggleSelectAll = useCallback(() => {
-        setRawSelectedPaths(() => (isAllSelected ? new Set() : new Set(allFilePaths)));
-    }, [allFilePaths, isAllSelected]);
+        setRawSelectedPaths(() => (isAllSelected ? new Set() : new Set(allSelectablePaths)));
+    }, [allSelectablePaths, isAllSelected]);
 
     const clearSelection = useCallback(() => {
         setRawSelectedPaths((prev) => (prev.size === 0 ? prev : new Set()));

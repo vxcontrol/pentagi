@@ -76,6 +76,13 @@ export interface FileManagerProps {
     columns?: FileManagerColumnsConfig;
     /** Empty state node (rendered when files.length === 0 and not loading). */
     emptyState?: ReactNode;
+    /**
+     * Forces row checkboxes to be visible / hidden, independently of `onBulkDelete`.
+     * - `true` → checkboxes shown even without a bulk-delete handler (e.g. picker dialogs).
+     * - `false` → checkboxes hidden even when `onBulkDelete` is provided.
+     * - `undefined` (default) → checkboxes shown whenever `onBulkDelete` is set.
+     */
+    enableSelection?: boolean;
     files: FileNode[];
     isLoading?: boolean;
     /** Localizable user-facing strings. */
@@ -85,6 +92,23 @@ export interface FileManagerProps {
      * if both a directory and one of its descendants were selected, only the directory is included.
      */
     onBulkDelete?: (files: FileNode[]) => Promise<void> | void;
+    /**
+     * Enables internal drag-and-drop: rows become draggable and directories accept drops.
+     * Invoked with the dragged item(s) and the destination directory path (`''` for root).
+     *
+     * `FileManager` does **not** mutate its own list — the caller is expected to refresh
+     * the data (or rely on subscriptions) so the new positions become visible.
+     */
+    onMoveItems?: (sources: FileNode[], destinationDir: string) => Promise<void> | void;
+    /**
+     * Fires whenever the multi-selection changes. Use it from selection-only
+     * flows (e.g. resource pickers) where the parent owns its own confirm button
+     * and needs to know which items are currently checked.
+     *
+     * The supplied callback is read through a ref, so it does not need to be
+     * memoized — only meaningful selection changes will trigger it.
+     */
+    onSelectionChange?: (selectedPaths: Set<string>) => void;
     /** Synthetic top-level groups (e.g. Uploads / Container). When omitted, root is flat. */
     rootGroups?: FileManagerRootGroup[];
     /** Search query and matching empty state. Provide `query` to enable filtering. */
