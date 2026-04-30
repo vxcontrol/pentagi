@@ -153,7 +153,7 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 		case ReadFile:
 			result, err := t.ReadFile(ctx, t.flowID, action.Path)
 			return t.wrapCommandResult(ctx, args, name, result, err)
-		case UpdateFile:
+		case WriteFile:
 			result, err := t.WriteFile(ctx, t.flowID, action.Content, action.Path)
 			return t.wrapCommandResult(ctx, args, name, result, err)
 		default:

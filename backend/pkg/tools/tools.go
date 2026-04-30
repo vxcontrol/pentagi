@@ -1133,6 +1133,22 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		return nil, fmt.Errorf("searcher handler is required")
 	}
 
+	container, err := fte.db.GetFlowPrimaryContainer(context.Background(), fte.flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container %d: %w", fte.flowID, err)
+	}
+
+	term := NewTerminalTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		container.ID,
+		container.LocalID.String,
+		fte.docker,
+		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
+	)
+
 	ce := &customExecutor{
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
@@ -1147,6 +1163,8 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 			registryDefinitions[MaintenanceToolName],
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
+			registryDefinitions[TerminalToolName],
+			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
 			CodeResultToolName:  cfg.CodeResult,
@@ -1154,6 +1172,8 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 			MaintenanceToolName: cfg.Installer,
 			MemoristToolName:    cfg.Memorist,
 			SearchToolName:      cfg.Searcher,
+			TerminalToolName:    term.Handle,
+			FileToolName:        term.Handle,
 		},
 		barriers: map[string]struct{}{
 			CodeResultToolName: {},
