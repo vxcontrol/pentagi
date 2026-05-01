@@ -11,6 +11,45 @@ import (
 	"github.com/lib/pq"
 )
 
+const getAllResourcesAll = `-- name: GetAllResourcesAll :many
+SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
+FROM user_resources
+ORDER BY updated_at DESC, name ASC
+`
+
+func (q *Queries) GetAllResourcesAll(ctx context.Context) ([]UserResource, error) {
+	rows, err := q.db.QueryContext(ctx, getAllResourcesAll)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UserResource
+	for rows.Next() {
+		var i UserResource
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Hash,
+			&i.Name,
+			&i.Path,
+			&i.Size,
+			&i.IsDir,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAllResourcesInDir = `-- name: GetAllResourcesInDir :many
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
@@ -164,6 +203,46 @@ func (q *Queries) GetUserResourceByID(ctx context.Context, id int64) (UserResour
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUserResourcesAll = `-- name: GetUserResourcesAll :many
+SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
+FROM user_resources
+WHERE user_id = $1
+ORDER BY updated_at DESC, name ASC
+`
+
+func (q *Queries) GetUserResourcesAll(ctx context.Context, userID int64) ([]UserResource, error) {
+	rows, err := q.db.QueryContext(ctx, getUserResourcesAll, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UserResource
+	for rows.Next() {
+		var i UserResource
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Hash,
+			&i.Name,
+			&i.Path,
+			&i.Size,
+			&i.IsDir,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserResourcesByIDs = `-- name: GetUserResourcesByIDs :many

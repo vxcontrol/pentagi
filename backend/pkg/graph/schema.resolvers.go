@@ -2261,16 +2261,19 @@ func (r *queryResolver) Resources(ctx context.Context, path *string, recursive *
 	var recs []database.UserResource
 
 	if !admin {
-		if reqPath == "" {
+		switch {
+		case reqPath == "" && isRecursive:
+			recs, err = r.DB.GetUserResourcesAll(ctx, uid)
+		case reqPath == "":
 			recs, err = r.DB.GetUserResourcesRoot(ctx, uid)
-		} else if isRecursive {
+		case isRecursive:
 			escaped := resources.EscapeLike(reqPath)
 			recs, err = r.DB.GetUserResourcesRecursive(ctx, database.GetUserResourcesRecursiveParams{
 				UserID:      uid,
 				DirPath:     reqPath,
 				ChildPrefix: escaped + "/%",
 			})
-		} else {
+		default:
 			escaped := resources.EscapeLike(reqPath)
 			recs, err = r.DB.GetUserResourcesInDir(ctx, database.GetUserResourcesInDirParams{
 				UserID:      uid,
@@ -2280,15 +2283,18 @@ func (r *queryResolver) Resources(ctx context.Context, path *string, recursive *
 			})
 		}
 	} else {
-		if reqPath == "" {
+		switch {
+		case reqPath == "" && isRecursive:
+			recs, err = r.DB.GetAllResourcesAll(ctx)
+		case reqPath == "":
 			recs, err = r.DB.GetAllResourcesRoot(ctx)
-		} else if isRecursive {
+		case isRecursive:
 			escaped := resources.EscapeLike(reqPath)
 			recs, err = r.DB.GetAllResourcesRecursive(ctx, database.GetAllResourcesRecursiveParams{
 				DirPath:     reqPath,
 				ChildPrefix: escaped + "/%",
 			})
-		} else {
+		default:
 			escaped := resources.EscapeLike(reqPath)
 			recs, err = r.DB.GetAllResourcesInDir(ctx, database.GetAllResourcesInDirParams{
 				DirPath:     reqPath,

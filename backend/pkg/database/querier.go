@@ -55,6 +55,7 @@ type Querier interface {
 	// Get toolcalls stats for all flows
 	GetAllFlowsToolcallsStats(ctx context.Context) ([]GetAllFlowsToolcallsStatsRow, error)
 	GetAllFlowsUsageStats(ctx context.Context) ([]GetAllFlowsUsageStatsRow, error)
+	GetAllResourcesAll(ctx context.Context) ([]UserResource, error)
 	GetAllResourcesInDir(ctx context.Context, arg GetAllResourcesInDirParams) ([]UserResource, error)
 	GetAllResourcesRecursive(ctx context.Context, arg GetAllResourcesRecursiveParams) ([]UserResource, error)
 	GetAllResourcesRoot(ctx context.Context) ([]UserResource, error)
@@ -210,6 +211,7 @@ type Querier interface {
 	GetUserProviders(ctx context.Context, userID int64) ([]Provider, error)
 	GetUserProvidersByType(ctx context.Context, arg GetUserProvidersByTypeParams) ([]Provider, error)
 	GetUserResourceByID(ctx context.Context, id int64) (UserResource, error)
+	GetUserResourcesAll(ctx context.Context, userID int64) ([]UserResource, error)
 	GetUserResourcesByIDs(ctx context.Context, ids []int64) ([]UserResource, error)
 	GetUserResourcesInDir(ctx context.Context, arg GetUserResourcesInDirParams) ([]UserResource, error)
 	GetUserResourcesRecursive(ctx context.Context, arg GetUserResourcesRecursiveParams) ([]UserResource, error)

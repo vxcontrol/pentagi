@@ -19,6 +19,12 @@ WHERE user_id = sqlc.arg(user_id)
   AND (path = sqlc.arg(dir_path) OR path LIKE sqlc.arg(child_prefix))
 ORDER BY updated_at DESC, name ASC;
 
+-- name: GetUserResourcesAll :many
+SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
+FROM user_resources
+WHERE user_id = sqlc.arg(user_id)
+ORDER BY updated_at DESC, name ASC;
+
 -- name: GetAllResourcesRoot :many
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
@@ -36,6 +42,11 @@ ORDER BY updated_at DESC, name ASC;
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
 WHERE path = sqlc.arg(dir_path) OR path LIKE sqlc.arg(child_prefix)
+ORDER BY updated_at DESC, name ASC;
+
+-- name: GetAllResourcesAll :many
+SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
+FROM user_resources
 ORDER BY updated_at DESC, name ASC;
 
 -- name: GetUserResourceByID :one
