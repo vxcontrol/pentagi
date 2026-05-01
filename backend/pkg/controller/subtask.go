@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers"
+
+	"github.com/sirupsen/logrus"
 )
 
 type TaskUpdater interface {
@@ -281,6 +284,7 @@ func (stw *subtaskWorker) Run(ctx context.Context) error {
 	}
 
 	if err := stw.SetStatus(ctx, database.SubtaskStatusRunning); err != nil {
+		stw.handleInterrupting(err)
 		return err
 	}
 
@@ -291,6 +295,7 @@ func (stw *subtaskWorker) Run(ctx context.Context) error {
 	)
 
 	if err := stw.subtaskCtx.Provider.EnsureChainConsistency(ctx, msgChainID); err != nil {
+		stw.handleInterrupting(err)
 		return fmt.Errorf("failed to ensure chain consistency for subtask %d: %w", subtaskID, err)
 	}
 
@@ -310,14 +315,17 @@ func (stw *subtaskWorker) Run(ctx context.Context) error {
 	switch performResult {
 	case providers.PerformResultWaiting:
 		if err := stw.SetStatus(ctx, database.SubtaskStatusWaiting); err != nil {
+			stw.handleInterrupting(err)
 			return err
 		}
 	case providers.PerformResultDone:
 		if err := stw.SetStatus(ctx, database.SubtaskStatusFinished); err != nil {
+			stw.handleInterrupting(err)
 			return fmt.Errorf("failed to set subtask %d status to finished: %w", subtaskID, err)
 		}
 	case providers.PerformResultError:
 		if err := stw.SetStatus(ctx, database.SubtaskStatusFailed); err != nil {
+			stw.handleInterrupting(err)
 			return fmt.Errorf("failed to set subtask %d status to failed: %w", subtaskID, err)
 		}
 	default:
@@ -325,6 +333,29 @@ func (stw *subtaskWorker) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// handleInterrupting sets this subtask (and task/flow via SetStatus back-propagation)
+// to Waiting when err is context.Canceled or context.DeadlineExceeded. Use after the subtask
+// was advanced past Waiting (e.g. Running) but the run aborts before PerformAgentChain's
+// normal error handler, or when a late SetStatus fails with a context interruption.
+func (stw *subtaskWorker) handleInterrupting(err error) {
+	if err == nil {
+		return
+	}
+	if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		return
+	}
+	if stw.IsCompleted() {
+		return
+	}
+
+	resetCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if errSt := stw.SetStatus(resetCtx, database.SubtaskStatusWaiting); errSt != nil {
+		logrus.WithError(errSt).Warn("failed to set subtask waiting after run interrupt")
+	}
 }
 
 func (stw *subtaskWorker) Finish(ctx context.Context) error {
