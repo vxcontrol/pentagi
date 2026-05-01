@@ -211,7 +211,12 @@ const updateCacheForSubscription = (
                         return existingArray;
                     }
 
-                    const itemExists = existingArray.some((ref) => readField('id', ref) === newItem.id);
+                    // ID equality must be type-tolerant: REST hydration writes some
+                    // entries with `id` as a string (GraphQL `ID!` convention)
+                    const targetId = String(newItem.id);
+                    const idMatches = (ref: Reference) => String(readField('id', ref)) === targetId;
+
+                    const itemExists = existingArray.some(idMatches);
 
                     let newRef = toReference(newItem as StoreObject, true);
 
@@ -226,7 +231,7 @@ const updateCacheForSubscription = (
                     const action = resolveSubscriptionAction(subscriptionName);
 
                     return cacheActionStrategies[action](existingArray, newRef, itemExists, () =>
-                        existingArray.filter((ref) => readField('id', ref) !== newItem.id),
+                        existingArray.filter((ref) => !idMatches(ref)),
                     );
                 },
             },

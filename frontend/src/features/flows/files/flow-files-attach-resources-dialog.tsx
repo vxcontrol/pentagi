@@ -1,7 +1,7 @@
 import { FolderInput, Loader2, Search, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
-import { dedupeOverlappingPaths, FileManager, type FileNode } from '@/components/file-manager';
+import { FileManager, type FileNode } from '@/components/file-manager';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -44,11 +44,14 @@ const FlowFilesAttachResourcesDialogBody = ({
 
     // Map selected paths back to resource ids on submit. Built lazily — the lookup
     // is only walked once per attach, so a per-render `Map` allocation is wasteful.
+    // `resource.id` is canonically numeric in the cache (see `resources-rest.ts`)
+    // even though codegen types it as `string`; coerce here so downstream callers
+    // that rely on the `string` contract (`useFlowFilesAttachResources`) stay safe.
     const pathToIdRef = useMemo(() => {
         const map = new Map<string, string>();
 
         for (const resource of resources) {
-            map.set(resource.path, resource.id);
+            map.set(resource.path, String(resource.id));
         }
 
         return map;
@@ -63,11 +66,16 @@ const FlowFilesAttachResourcesDialogBody = ({
             return;
         }
 
-        // Drop descendants of any picked directory so the backend doesn't
-        // re-process them — a recursive copy of the parent already covers them.
+        // Forward every explicitly selected path's ID to the backend. Earlier
+        // versions deduped descendants of any picked directory on the assumption
+        // that the backend would copy directory trees recursively — it does not
+        // (`flowfiles.CopyResourcesToFlow` only `MkdirAll`s a directory ref and
+        // file refs are copied individually). Until that becomes recursive on
+        // the backend, the user must multi-select a folder together with its
+        // children to attach the contents.
         const ids: string[] = [];
 
-        for (const path of dedupeOverlappingPaths(selectedPaths)) {
+        for (const path of selectedPaths) {
             const id = pathToIdRef.get(path);
 
             if (id) {

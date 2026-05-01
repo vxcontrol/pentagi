@@ -7,21 +7,24 @@ import { CONTAINER_PATH_PREFIX, RESOURCES_PATH_PREFIX, UPLOADS_PATH_PREFIX } fro
 
 export type FlowFile = FlowFileFragmentFragment;
 
+/**
+ * Wire shape of `models.FlowFile` (REST JSON, snake_case). The internal
+ * `FlowFile` alias mirrors the GraphQL camelCase fragment for use in the
+ * FileManager UI. Current consumers of `FlowFilesResponse` only read
+ * `files.length` and `files[0].name`, so no conversion helper is needed yet.
+ */
 export interface FlowFilesResponse {
-    files: Array<FlowFile>;
+    files: RestFlowFile[];
     total: number;
 }
 
-/** Mirrors `models.ResourceEntry` from the backend (REST shape, not GraphQL). */
-export interface ResourceEntry {
-    createdAt: string;
-    id: number;
-    isDir: boolean;
+export interface RestFlowFile {
+    id: string;
+    is_dir: boolean;
+    modified_at: string;
     name: string;
     path: string;
     size: number;
-    updatedAt: string;
-    userId: number;
 }
 
 const ROOT_PREFIXES = [`${UPLOADS_PATH_PREFIX}/`, `${CONTAINER_PATH_PREFIX}/`, `${RESOURCES_PATH_PREFIX}/`];

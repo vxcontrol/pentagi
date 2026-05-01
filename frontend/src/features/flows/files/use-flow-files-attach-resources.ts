@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
+import { resourceIdsToWire } from '@/features/resources/resources-rest';
 import { api, getApiErrorMessage } from '@/lib/axios';
 
 import type { FlowFilesResponse } from './flow-files-utils';
@@ -8,13 +9,19 @@ import type { FlowFilesResponse } from './flow-files-utils';
 import { FLOW_FILES_ATTACH_RESOURCES_API_PATH, RESOURCES_TARGET_DIRECTORY } from './flow-files-constants';
 
 interface AttachOptions {
+    /** GraphQL `UserResource.id` values (strings). Converted at the REST boundary. */
     ids: string[];
     shouldOverwrite: boolean;
 }
 
+/**
+ * Wire shape of `models.AddResourcesRequest`. Backend expects `ids` as
+ * uint64 (JSON numbers); see {@link resourceIdsToWire} for the bridge from
+ * the GraphQL `string` ID convention used internally.
+ */
 interface AttachResourcesRequestBody {
     force: boolean;
-    ids: string[];
+    ids: number[];
 }
 
 interface UseFlowFilesAttachResourcesParams {
@@ -46,6 +53,20 @@ export const useFlowFilesAttachResources = ({
                 return false;
             }
 
+            let numericIds: number[];
+
+            try {
+                numericIds = resourceIdsToWire(ids);
+            } catch (error) {
+                // Non-numeric IDs indicate an upstream cache contract bug, not a user
+                // mistake. Surface a developer-friendly toast and bail out loudly.
+                const description = error instanceof Error ? error.message : 'Invalid resource IDs.';
+
+                toast.error('Attach failed', { description });
+
+                return false;
+            }
+
             setIsAttaching(true);
 
             try {
@@ -53,13 +74,13 @@ export const useFlowFilesAttachResources = ({
                     FLOW_FILES_ATTACH_RESOURCES_API_PATH(flowId),
                     {
                         force: shouldOverwrite,
-                        ids,
+                        ids: numericIds,
                     },
                     { timeout: 0 },
                 );
 
                 toast.success('Resources attached', {
-                    description: `Copied ${ids.length} ${ids.length === 1 ? 'item' : 'items'} to ${RESOURCES_TARGET_DIRECTORY}`,
+                    description: `Copied ${numericIds.length} ${numericIds.length === 1 ? 'item' : 'items'} to ${RESOURCES_TARGET_DIRECTORY}`,
                 });
                 onSuccess?.();
 

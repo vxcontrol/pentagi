@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import type { UserResourceFragmentFragment } from '@/graphql/types';
 
 import { RESOURCES_API_PATH } from '@/features/resources/resources-constants';
+import { restResourceEntryToFragment, type RestResourceList } from '@/features/resources/resources-rest';
 import { useResourcesRealtime } from '@/features/resources/use-resources-realtime';
 import { ResourcesDocument, useResourcesQuery } from '@/graphql/types';
 import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
@@ -22,17 +23,6 @@ interface ResourcesContextValue {
     resources: UserResourceFragmentFragment[];
 }
 
-/**
- * Shape of the REST `GET /resources/` response wrapper.
- * The element type is intentionally aliased to the GraphQL fragment — the backend's
- * `models.ResourceEntry` is meant to be structurally identical, and we treat them as
- * the same type so REST-loaded entries can sit in the same Apollo cache as GraphQL ones.
- */
-interface ResourcesListResponse {
-    items?: null | UserResourceFragmentFragment[];
-    total?: number;
-}
-
 interface ResourcesProviderProps {
     children: ReactNode;
 }
@@ -45,16 +35,16 @@ const RESOURCES_ERROR_TOAST_ID = 'resources-error';
  * Loads the user's full resource library and keeps it in sync via three GraphQL
  * subscriptions (added / updated / deleted).
  *
- * **Temporary detail**: the initial library is fetched via REST
- * `GET /resources/?recursive=true` rather than the GraphQL `resources` query.
- * The GraphQL resolver currently has a bug for `path == "" && recursive == true`
- * that returns only top-level entries — we side-step it by hydrating the same
- * Apollo cache slot from REST and reading it back through `useResourcesQuery`
- * with a `cache-only` fetch policy. Subscriptions continue to update the cache
- * as before, so consumers see no behavioural change.
+ * The initial library is fetched via REST `GET /resources/?recursive=true` and
+ * the result is written into the same Apollo cache slot that `useResourcesQuery`
+ * reads (via `cache-only` fetch policy). Subscriptions continue to update the
+ * cache through `lib/apollo.ts`, so consumers see one unified store.
  *
- * Once the backend resolver is fixed this hook should switch back to a plain
- * `useResourcesQuery({ variables: { recursive: true } })`.
+ * NOTE: the equivalent GraphQL `resources(recursive: true)` query now works
+ * correctly for the root path. Switching this provider to a plain
+ * `useResourcesQuery({ variables: { recursive: true } })` is a viable follow-up
+ * once we no longer need the snake_case → camelCase conversion that REST
+ * requires (see `restResourceEntryToFragment`).
  */
 export const ResourcesProvider = ({ children }: ResourcesProviderProps) => {
     const { authInfo, isAuthenticated } = useUser();
@@ -82,7 +72,7 @@ export const ResourcesProvider = ({ children }: ResourcesProviderProps) => {
 
         (async () => {
             try {
-                const response = await api.get<ResourcesListResponse>(RESOURCES_API_PATH, {
+                const response = await api.get<RestResourceList>(RESOURCES_API_PATH, {
                     params: { recursive: true },
                 });
                 const data = unwrapApiResponse(response);
@@ -91,23 +81,17 @@ export const ResourcesProvider = ({ children }: ResourcesProviderProps) => {
                     return;
                 }
 
-                // `__typename` is required so Apollo normalizes each entry under
-                // `UserResource:<id>` in the cache. Without it the read-back through
-                // `useResourcesQuery` returns objects whose scalar fields are `undefined`
-                // (the cache treats every entry as an unidentifiable structural blob).
-                //
-                // TODO(backend): remove `String(item.id)` / `String(item.userId)` coercion
-                // once the REST `/resources/` endpoint returns `id`/`userId` as strings.
-                // Currently it returns them as numbers, which breaks consumers that rely
-                // on the GraphQL `ID` scalar (typed as `string` everywhere) — e.g. zod
-                // validation `z.array(z.string())` in `FlowForm.resourceIds`.
+                // The REST endpoint returns `models.ResourceEntry` with snake_case
+                // JSON tags and numeric `id`/`user_id`. We convert each entry into the
+                // camelCase GraphQL fragment shape so it can sit in the same Apollo
+                // cache slot that subscriptions and the GraphQL `resources` query write
+                // to. `__typename` is added explicitly because Apollo refuses to
+                // normalise an object as `UserResource:<id>` without it.
                 apolloClient.writeQuery({
                     data: {
                         resources: (data.items ?? []).map((item) => ({
-                            ...item,
+                            ...restResourceEntryToFragment(item),
                             __typename: 'UserResource' as const,
-                            id: String(item.id),
-                            userId: String(item.userId),
                         })),
                     },
                     query: ResourcesDocument,
@@ -158,7 +142,9 @@ export const ResourcesProvider = ({ children }: ResourcesProviderProps) => {
     const value = useMemo<ResourcesContextValue>(
         () => ({
             error,
-            getResource: (id: string) => resources.find((item) => item.id === id),
+            // `item.id` is canonically numeric (see `resources-rest.ts`) but typed
+            // as `string` by codegen — coerce both sides for the lookup.
+            getResource: (id: string) => resources.find((item) => String(item.id) === id),
             isInitialLoading,
             isLoading: restLoading,
             refetch: () => {

@@ -11,6 +11,7 @@ import {
     MAX_UPLOAD_TOTAL_SIZE_MB,
     RESOURCES_API_PATH,
 } from './resources-constants';
+import { restResourceEntryToFragment, type RestResourceList } from './resources-rest';
 import { pluralizeItems } from './resources-utils';
 
 interface UploadOptions {
@@ -121,24 +122,20 @@ export const useResourcesUpload = ({ onSuccess }: UseResourcesUploadParams = {})
             setIsUploading(true);
 
             try {
-                const response = await api.post<UploadResponse, FormData>(RESOURCES_API_PATH, formData, {
+                const response = await api.post<RestResourceList, FormData>(RESOURCES_API_PATH, formData, {
                     headers: { 'Content-Type': undefined },
                     params: options?.dir ? { dir: options.dir } : undefined,
                     timeout: 0,
                 });
+                // Backend sends `models.ResourceList` (snake_case, numeric IDs).
+                // Convert each entry through the canonical bridge so the upload
+                // result mirrors what `resources-provider` writes into Apollo on
+                // initial hydration and what the `resourceAdded` subscription
+                // emits — keeping the cache shape internally consistent.
                 const raw = unwrapApiResponse(response);
-                // TODO(backend): drop the `String(item.id)` / `String(item.userId)`
-                // coercion once `POST /resources/` returns `id`/`userId` as strings.
-                // The GraphQL `ID` scalar is typed as `string` everywhere; REST sends
-                // numbers, so we normalize here to keep downstream consumers (forms,
-                // Apollo cache, etc.) type-consistent.
                 const data: UploadResponse = {
-                    ...raw,
-                    items: (raw.items ?? []).map((item) => ({
-                        ...item,
-                        id: String(item.id),
-                        userId: String(item.userId),
-                    })),
+                    items: (raw.items ?? []).map(restResourceEntryToFragment),
+                    total: raw.total ?? 0,
                 };
                 const uploadedCount = data.items.length;
                 const message = buildUploadSuccessMessage(uploadedCount, options?.dir);

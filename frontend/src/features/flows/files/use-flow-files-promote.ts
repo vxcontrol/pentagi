@@ -2,9 +2,9 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-import { api, getApiErrorMessage } from '@/lib/axios';
+import type { RestResourceList } from '@/features/resources/resources-rest';
 
-import type { ResourceEntry } from './flow-files-utils';
+import { api, getApiErrorMessage } from '@/lib/axios';
 
 import { FLOW_FILES_PROMOTE_API_PATH } from './flow-files-constants';
 
@@ -23,31 +23,35 @@ export type FlowFilesPromoteFormValues = z.infer<typeof flowFilesPromoteFormSche
 interface PromoteRequestBody {
     destination: string;
     force: boolean;
-    sourcePath: string;
+    source: string;
 }
 
 interface UseFlowFilesPromoteParams {
     flowId: null | string;
-    onSuccess?: (entry: ResourceEntry) => void;
 }
 
 interface UseFlowFilesPromoteResult {
     isPromoting: boolean;
-    promote: (sourcePath: string, values: FlowFilesPromoteFormValues) => Promise<boolean>;
+    promote: (source: string, values: FlowFilesPromoteFormValues) => Promise<boolean>;
 }
 
 const PROMOTE_OVERWRITE_HINT = 'Resource already exists — enable "Overwrite" to replace it';
 
 /**
  * Wraps the "promote flow file → user resource" REST call (`POST /files/to-resources`)
- * with toast notifications and a loading flag. Returns a `promote(sourcePath, values)`
+ * with toast notifications and a loading flag. Returns a `promote(source, values)`
  * callback that resolves to `true` on success so the dialog can decide whether to close.
+ *
+ * The endpoint accepts both single files and directories — the backend always returns
+ * a `ResourceList` covering every entry it created or updated. The response payload
+ * itself is discarded: the resource library Apollo cache is kept in sync via the
+ * `resourceAdded` / `resourceUpdated` GraphQL subscriptions.
  */
-export const useFlowFilesPromote = ({ flowId, onSuccess }: UseFlowFilesPromoteParams): UseFlowFilesPromoteResult => {
+export const useFlowFilesPromote = ({ flowId }: UseFlowFilesPromoteParams): UseFlowFilesPromoteResult => {
     const [isPromoting, setIsPromoting] = useState(false);
 
     const promote = useCallback(
-        async (sourcePath: string, { destination, shouldOverwrite }: FlowFilesPromoteFormValues): Promise<boolean> => {
+        async (source: string, { destination, shouldOverwrite }: FlowFilesPromoteFormValues): Promise<boolean> => {
             if (!flowId) {
                 return false;
             }
@@ -55,12 +59,12 @@ export const useFlowFilesPromote = ({ flowId, onSuccess }: UseFlowFilesPromotePa
             setIsPromoting(true);
 
             try {
-                const response = await api.post<ResourceEntry, PromoteRequestBody>(
+                await api.post<RestResourceList, PromoteRequestBody>(
                     FLOW_FILES_PROMOTE_API_PATH(flowId),
                     {
                         destination: destination.trim(),
                         force: shouldOverwrite,
-                        sourcePath,
+                        source,
                     },
                     { timeout: 0 },
                 );
@@ -68,10 +72,6 @@ export const useFlowFilesPromote = ({ flowId, onSuccess }: UseFlowFilesPromotePa
                 toast.success('Saved to resources', {
                     description: `Stored at ${destination.trim()} in your resource library`,
                 });
-
-                if (response.status === 'success' && response.data) {
-                    onSuccess?.(response.data);
-                }
 
                 return true;
             } catch (error) {
@@ -86,7 +86,7 @@ export const useFlowFilesPromote = ({ flowId, onSuccess }: UseFlowFilesPromotePa
                 setIsPromoting(false);
             }
         },
-        [flowId, onSuccess],
+        [flowId],
     );
 
     return {

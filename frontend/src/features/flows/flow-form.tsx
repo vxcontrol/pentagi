@@ -91,8 +91,13 @@ export const FlowForm = ({
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Resources are rendered as a hierarchy: alphabetical sort by full path
+    // produces the right ordering for siblings at every depth (parents before
+    // their descendants, peers in alphabetical order). Each row's nesting level
+    // is then derived from the slash count and rendered as a left indent so the
+    // user can visually trace files into their parent directories.
     const sortedResources = useMemo(
-        () => [...resources].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+        () => [...resources].sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' })),
         [resources],
     );
 
@@ -108,6 +113,8 @@ export const FlowForm = ({
                 resource.name.toLowerCase().includes(queryValue) || resource.path.toLowerCase().includes(queryValue),
         );
     }, [sortedResources, resourceSearch]);
+
+    const isResourceSearchActive = resourceSearch.trim().length > 0;
 
     const filteredTemplates = useMemo(() => {
         if (!templateSearch.trim()) {
@@ -159,13 +166,12 @@ export const FlowForm = ({
     const resourceIds = useWatch({ control, name: 'resourceIds' });
 
     const updateResourceIds = useCallback(
-        (updater: ((current: string[]) => string[]) | string[]) => {
+        (updater: ((current: string[]) => string[]) | Array<number | string>) => {
             const current = getValues('resourceIds') ?? [];
             const raw = typeof updater === 'function' ? updater(current) : updater;
-            // TODO(backend): drop the `String(id)` coercion once the REST `/resources/`
-            // endpoints return `id` as a string (matching the GraphQL `ID` scalar). Until
-            // then this is a safety net for stray numeric ids that would fail zod's
-            // `z.array(z.string())` and silently block submission.
+            // Canonical cache shape carries `id` as a number (see `resources-rest.ts`),
+            // while zod enforces `z.array(z.string())` on the form state. String-coerce
+            // every incoming value so the form always holds a consistent string array.
             const next = raw.map((id) => String(id));
             setValue('resourceIds', next, { shouldDirty: true, shouldValidate: true });
         },
@@ -173,7 +179,7 @@ export const FlowForm = ({
     );
 
     const flowResources = useMemo<UserResourceFragmentFragment[]>(() => {
-        const byId = new Map(resources.map((item) => [item.id, item]));
+        const byId = new Map(resources.map((item) => [String(item.id), item]));
 
         return resourceIds
             .map((id) => byId.get(id))
@@ -182,7 +188,7 @@ export const FlowForm = ({
 
     const upload = useResourcesUpload({
         onSuccess: (uploaded) => {
-            const ids = uploaded.items.map((item) => item.id);
+            const ids = uploaded.items.map((item) => String(item.id));
 
             if (ids.length === 0) {
                 return;
@@ -333,11 +339,12 @@ export const FlowForm = ({
                                     >
                                         {flowResources.map((resource) => {
                                             const Icon = resource.isDir ? Folder : FileText;
+                                            const resourceId = String(resource.id);
 
                                             return (
                                                 <div
                                                     className="bg-muted/50 flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
-                                                    key={resource.id}
+                                                    key={resourceId}
                                                     title={resource.path}
                                                 >
                                                     <Icon className="text-muted-foreground size-3.5 shrink-0" />
@@ -348,7 +355,7 @@ export const FlowForm = ({
                                                         aria-label={`Remove ${resource.name}`}
                                                         className="text-muted-foreground hover:text-destructive ml-0.5 flex shrink-0 items-center justify-center"
                                                         disabled={isFormDisabled}
-                                                        onClick={() => handleRemoveAttachment(resource.id)}
+                                                        onClick={() => handleRemoveAttachment(resourceId)}
                                                         type="button"
                                                     >
                                                         <X className="size-3.5" />
@@ -640,12 +647,19 @@ export const FlowForm = ({
                                                     </DropdownMenuItem>
                                                 ) : (
                                                     filteredResources.map((resource) => {
-                                                        const isSelected = resourceIds.includes(resource.id);
+                                                        const resourceId = String(resource.id);
+                                                        const isSelected = resourceIds.includes(resourceId);
                                                         const Icon = resource.isDir ? Folder : FileText;
+                                                        // Depth derived from the path's slash count; ignored while a
+                                                        // search query is active so matches don't appear orphaned
+                                                        // beneath hidden ancestors.
+                                                        const depth = isResourceSearchActive
+                                                            ? 0
+                                                            : resource.path.split('/').length - 1;
 
                                                         return (
                                                             <DropdownMenuItem
-                                                                key={resource.id}
+                                                                key={resourceId}
                                                                 onSelect={(event) => {
                                                                     event.preventDefault();
 
@@ -653,8 +667,9 @@ export const FlowForm = ({
                                                                         return;
                                                                     }
 
-                                                                    handleToggleAttachment(resource.id);
+                                                                    handleToggleAttachment(resourceId);
                                                                 }}
+                                                                style={{ paddingLeft: `${0.5 + depth * 0.875}rem` }}
                                                             >
                                                                 <div className="flex w-full min-w-0 items-center gap-2">
                                                                     <Icon className="text-muted-foreground size-4 shrink-0" />
@@ -662,11 +677,12 @@ export const FlowForm = ({
                                                                         <span className="truncate">
                                                                             {resource.name}
                                                                         </span>
-                                                                        {resource.path !== resource.name && (
-                                                                            <span className="text-muted-foreground truncate text-xs">
-                                                                                {resource.path}
-                                                                            </span>
-                                                                        )}
+                                                                        {isResourceSearchActive &&
+                                                                            resource.path !== resource.name && (
+                                                                                <span className="text-muted-foreground truncate text-xs">
+                                                                                    {resource.path}
+                                                                                </span>
+                                                                            )}
                                                                     </div>
                                                                     {isSelected && (
                                                                         <Check className="ml-auto size-4 shrink-0" />
