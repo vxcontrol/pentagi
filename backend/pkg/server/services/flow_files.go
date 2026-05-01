@@ -253,6 +253,7 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 
 	// Temporary files are complete — move them into place, then push to container.
 	savedFiles := make([]models.FlowFile, 0, len(fileHeaders))
+	pushEntries := make([]flowfiles.TarEntry, 0, len(pending))
 	for i := range pending {
 		p := &pending[i]
 		if err := os.Rename(p.tmpPath, p.dstPath); err != nil {
@@ -276,16 +277,19 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 			return
 		}
 
-		// Best-effort push to the running primary container so the file is
-		// immediately visible at /work/uploads/<name> without a container restart.
-		if pushErr := s.copyFileToContainer(c.Request.Context(), flowID, p.dstPath); pushErr != nil {
-			logger.FromContext(c).WithError(pushErr).WithFields(map[string]any{
-				"flow_id":   flowID,
-				"file_name": p.fileName,
-			}).Warn("uploaded file saved locally but could not be pushed to container")
-		}
-
+		pushEntries = append(pushEntries, flowfiles.TarEntry{
+			LocalPath: p.dstPath,
+			TarPath:   path.Join(flowfiles.UploadsDirName, p.fileName),
+		})
 		savedFiles = append(savedFiles, convertFlowFile(flowfiles.NewFile(info, flowfiles.UploadsDirName)))
+	}
+
+	// Best-effort: one tar stream + one CopyToContainer for all new uploads.
+	if pushErr := s.copyLocalFilesToPrimaryWork(c.Request.Context(), flowID, pushEntries); pushErr != nil {
+		logger.FromContext(c).WithError(pushErr).WithFields(map[string]any{
+			"flow_id": flowID,
+			"count":   len(pushEntries),
+		}).Warn("uploaded files saved locally but could not be pushed to container")
 	}
 
 	sortFlowFiles(savedFiles)
@@ -302,7 +306,7 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Param path query string true "relative path in cache: uploads/<name> or container/<name>"
+// @Param path query string true "relative path in cache: uploads/, resources/, or container/"
 // @Success 200 {object} response.successResp{data=models.FlowFiles} "flow file deleted successful"
 // @Failure 400 {object} response.errorResp "invalid flow file request data"
 // @Failure 403 {object} response.errorResp "deleting flow file not permitted"
@@ -343,7 +347,7 @@ func (s *FlowFileService) DeleteFlowFile(c *gin.Context) {
 	deletedFile := convertFlowFile(flowfiles.NewFileWithPath(info, filepath.ToSlash(c.Query("path"))))
 
 	if err := s.deleteUploadFromContainer(c.Request.Context(), flowID, c.Query("path")); err != nil {
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error deleting uploaded file from container")
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error deleting file from primary container")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
@@ -367,7 +371,7 @@ func (s *FlowFileService) DeleteFlowFile(c *gin.Context) {
 // @Produce octet-stream,application/zip,json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Param path query string true "relative path in cache: uploads/<name> or container/<name>"
+// @Param path query string true "relative path in cache: uploads/, resources/, or container/"
 // @Success 200 {file} binary "file content, or ZIP archive for directories"
 // @Failure 400 {object} response.errorResp "invalid flow file request data"
 // @Failure 403 {object} response.errorResp "downloading flow file not permitted"
@@ -807,25 +811,25 @@ func (s *FlowFileService) resolveCachedPath(flowID uint64, reqPath string) (stri
 	return flowfiles.ResolveCachedPath(s.dataDir, flowID, reqPath)
 }
 
-// copyFileToContainer packages a single local file as a TAR archive and uploads it
-// to the running primary container at /work/uploads/<filename>. Best-effort: errors are
-// returned but callers should only log them as warnings.
-func (s *FlowFileService) copyFileToContainer(ctx context.Context, flowID uint64, localFilePath string) error {
-	if s.dockerClient == nil {
+// copyLocalFilesToPrimaryWork streams local regular files into the running primary
+// container under /work using TarPath for each entry (e.g. "uploads/a.txt",
+// "resources/dir/b.yml"). One tar archive and one CopyToContainer call per invocation.
+// Returns nil when Docker is unavailable, the container is not running, or entries is empty.
+func (s *FlowFileService) copyLocalFilesToPrimaryWork(ctx context.Context, flowID uint64, entries []flowfiles.TarEntry) error {
+	if s.dockerClient == nil || len(entries) == 0 {
 		return nil
 	}
 
 	containerName := primaryContainerName(flowID)
 	running, err := s.dockerClient.IsContainerRunning(ctx, containerName)
 	if err != nil || !running {
-		return nil // container absent or not running — skip silently
+		return nil
 	}
 
 	pr, pw := io.Pipe()
 	errCh := make(chan error, 1)
 	go func() {
-		tarName := path.Join(flowfiles.UploadsDirName, filepath.Base(localFilePath))
-		errCh <- flowfiles.WriteSingleFileTar(pw, localFilePath, tarName)
+		errCh <- flowfiles.WriteFilesTar(pw, entries)
 	}()
 
 	copyErr := s.dockerClient.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
@@ -838,6 +842,42 @@ func (s *FlowFileService) copyFileToContainer(ctx context.Context, flowID uint64
 	return writeErr
 }
 
+// pushResourcePathsToContainer copies flow resource files into the running primary
+// container at /work/resources/... in a single tar stream. Best-effort: skips when
+// Docker is unavailable or the container is not running.
+func (s *FlowFileService) pushResourcePathsToContainer(c *gin.Context, flowID uint64, relPaths []string) {
+	if len(relPaths) == 0 {
+		return
+	}
+
+	resourcesDir := flowfiles.FlowResourcesDir(s.dataDir, flowID)
+	prefixLen := len(flowfiles.ResourcesDirName) + 1
+	entries := make([]flowfiles.TarEntry, 0, len(relPaths))
+	for _, relPath := range relPaths {
+		if len(relPath) <= prefixLen {
+			continue
+		}
+		fsRelPath := relPath[prefixLen:]
+		entries = append(entries, flowfiles.TarEntry{
+			LocalPath: filepath.Join(resourcesDir, filepath.FromSlash(fsRelPath)),
+			TarPath:   path.Join(flowfiles.ResourcesDirName, filepath.ToSlash(fsRelPath)),
+		})
+	}
+
+	if len(entries) == 0 {
+		return
+	}
+	if pushErr := s.copyLocalFilesToPrimaryWork(c.Request.Context(), flowID, entries); pushErr != nil {
+		logger.FromContext(c).WithError(pushErr).WithFields(map[string]any{
+			"flow_id": flowID,
+			"count":   len(entries),
+		}).Warn("resource files saved locally but could not be pushed to container")
+	}
+}
+
+// deleteUploadFromContainer removes cache paths that mirror the primary container's
+// /work tree: uploads/... and resources/... Container mirror paths (container/...) stay
+// host-only and are not removed inside the running container.
 func (s *FlowFileService) deleteUploadFromContainer(ctx context.Context, flowID uint64, reqPath string) error {
 	if s.dockerClient == nil {
 		return nil
@@ -845,7 +885,7 @@ func (s *FlowFileService) deleteUploadFromContainer(ctx context.Context, flowID 
 
 	cleaned := filepath.Clean(filepath.FromSlash(strings.ReplaceAll(reqPath, "\\", "/")))
 	parts := strings.SplitN(cleaned, string(filepath.Separator), 2)
-	if len(parts) == 0 || parts[0] != flowfiles.UploadsDirName {
+	if len(parts) == 0 || (parts[0] != flowfiles.UploadsDirName && parts[0] != flowfiles.ResourcesDirName) {
 		return nil
 	}
 
@@ -1035,6 +1075,7 @@ func primaryContainerName(flowID uint64) string {
 // @Summary Copy user resources into a flow
 // @Description Copies one or more user resources (identified by ID) into flow-{id}-data/resources/.
 // @Description Files already present in the flow are skipped unless force=true, in which case they are replaced.
+// @Description When the primary container for this flow is running, new or replaced files are pushed to /work/resources/ (best-effort), same as uploads.
 // @Tags FlowFiles
 // @Accept json
 // @Produce json
@@ -1093,16 +1134,16 @@ func (s *FlowFileService) AddResourcesToFlow(c *gin.Context) {
 		return
 	}
 
-	found := make(map[string]models.UserResource, len(recs))
+	found := make(map[uint64]models.UserResource, len(recs))
 	for _, r := range recs {
-		found[fmt.Sprintf("%d", r.ID)] = r
+		found[r.ID] = r
 	}
 
 	refs := make([]flowfiles.ResourceRef, 0, len(req.IDs))
-	for _, idStr := range req.IDs {
-		r, ok := found[idStr]
+	for _, id := range req.IDs {
+		r, ok := found[id]
 		if !ok {
-			err := fmt.Errorf("resource %s not found", idStr)
+			err := fmt.Errorf("resource %d not found", id)
 			response.Error(c, response.ErrFlowFilesInvalidRequest, err)
 			return
 		}
@@ -1124,6 +1165,10 @@ func (s *FlowFileService) AddResourcesToFlow(c *gin.Context) {
 		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error copying resources to flow")
 		response.Error(c, response.ErrInternal, err)
 		return
+	}
+
+	if len(addedPaths) > 0 {
+		s.pushResourcePathsToContainer(c, flowID, addedPaths)
 	}
 
 	// Publish subscription events for newly added/updated files.
@@ -1173,19 +1218,21 @@ func (s *FlowFileService) AddResourcesToFlow(c *gin.Context) {
 	})
 }
 
-// AddResourceFromFlow promotes a file from the flow cache into the user's global resource store.
-// @Summary Promote a flow file to user resources
-// @Description Reads a file from flow-{id}-data/{sourcePath}, computes MD5, stores the blob, inserts a user_resources row.
+// AddResourceFromFlow promotes a flow cache file or directory tree into the
+// user's global resource store. The response always lists every created or
+// updated entry, including any virtual parent directories that were ensured
+// during the promotion.
+// @Summary Promote a flow file or directory to user resources
 // @Tags FlowFiles
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
 // @Param body body models.AddResourceFromFlowRequest true "source path, destination and force flag"
-// @Success 200 {object} response.successResp{data=models.ResourceEntry} "resource created or updated"
+// @Success 200 {object} response.successResp{data=models.ResourceList} "resources created or updated"
 // @Failure 400 {object} response.errorResp "invalid request"
 // @Failure 403 {object} response.errorResp "not permitted"
-// @Failure 404 {object} response.errorResp "source file or flow not found"
+// @Failure 404 {object} response.errorResp "source or flow not found"
 // @Failure 409 {object} response.errorResp "destination already exists and force=false"
 // @Failure 500 {object} response.errorResp "internal error"
 // @Router /flows/{flowID}/files/to-resources [post]
@@ -1199,9 +1246,7 @@ func (s *FlowFileService) AddResourceFromFlow(c *gin.Context) {
 
 	uid := c.GetUint64("uid")
 	privs := c.GetStringSlice("prm")
-	isAdmin := slices.Contains(privs, "resources.admin")
-
-	if !isAdmin {
+	if !slices.Contains(privs, "resources.admin") {
 		if !slices.Contains(privs, "resources.upload") {
 			response.Error(c, response.ErrNotPermitted, nil)
 			return
@@ -1224,20 +1269,28 @@ func (s *FlowFileService) AddResourceFromFlow(c *gin.Context) {
 		return
 	}
 
-	absPath, err := flowfiles.ResolveCachedPath(s.dataDir, flowID, req.SourcePath)
+	absPath, err := flowfiles.ResolveCachedPath(s.dataDir, flowID, req.Source)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Error("invalid source path for add resource from flow")
 		response.Error(c, response.ErrFlowFilesInvalidData, err)
 		return
 	}
 
-	if _, statErr := os.Lstat(absPath); statErr != nil {
+	info, statErr := os.Lstat(absPath)
+	if statErr != nil {
 		if os.IsNotExist(statErr) {
 			response.Error(c, response.ErrFlowFilesNotFound, statErr)
 			return
 		}
-		logger.FromContext(c).WithError(statErr).Error("error stating flow file")
+		logger.FromContext(c).WithError(statErr).Error("error stating flow source")
 		response.Error(c, response.ErrInternal, statErr)
+		return
+	}
+	if !info.IsDir() && !info.Mode().IsRegular() {
+		// Reject symlinks and other special files: os.Open would follow
+		// symlinks at the OS level, bypassing the cache-root constraint.
+		response.Error(c, response.ErrFlowFilesInvalidData,
+			fmt.Errorf("source must be a regular file or a directory"))
 		return
 	}
 
@@ -1248,99 +1301,308 @@ func (s *FlowFileService) AddResourceFromFlow(c *gin.Context) {
 		return
 	}
 
-	var existingRec models.UserResource
-	existErr := s.db.Where("user_id = ? AND path = ?", uid, destPath).First(&existingRec).Error
-	exists := existErr == nil
-	if existErr != nil && !gorm.IsRecordNotFoundError(existErr) {
-		logger.FromContext(c).WithError(existErr).Error("error checking resource existence")
-		response.Error(c, response.ErrInternal, existErr)
+	saved, ok := s.promoteToResources(c, uid, absPath, destPath, info.IsDir(), req.Force)
+	if !ok {
 		return
 	}
-	if exists && !req.Force {
-		response.Error(c, response.ErrFlowFilesAlreadyExists, fmt.Errorf("resource already exists at %q; use force=true to overwrite", destPath))
-		return
-	}
+	response.Success(c, http.StatusOK,
+		models.ResourceList{Items: saved, Total: uint64(len(saved))})
+}
 
-	f, err := os.Open(absPath)
-	if err != nil {
-		logger.FromContext(c).WithError(err).Error("error opening flow file")
+// promoteToResources promotes a single regular file or a directory tree from
+// the flow cache into the user's resource store. Mirrors the three-phase
+// pattern used by UploadResources:
+//  1. walk and stream every regular file to a temporary blob (MD5-keyed)
+//  2. atomically commit blobs into the content-addressed store
+//  3. persist all directory and file rows inside one DB transaction
+//
+// Returns the slice of resulting entries (newly-created dirs, added files,
+// updated files in that order) on success, or false after writing an error
+// response on failure.
+func (s *FlowFileService) promoteToResources(
+	c *gin.Context, uid uint64,
+	absSourceRoot, destPath string,
+	sourceIsDir, force bool,
+) ([]models.ResourceEntry, bool) {
+	log := logger.FromContext(c)
+	ctx := c.Request.Context()
+
+	if err := resources.EnsureResourcesDir(s.dataDir); err != nil {
+		log.WithError(err).Error("failed to ensure resources directory")
 		response.Error(c, response.ErrInternal, err)
-		return
+		return nil, false
 	}
-	tmpPath, hash, size, err := resources.SaveToTemp(f, resources.ResourcesDir(s.dataDir))
-	f.Close()
-	if err != nil {
-		logger.FromContext(c).WithError(err).Error("error saving flow file to temp")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
+	blobsDir := resources.ResourcesDir(s.dataDir)
 
-	if err := resources.CommitBlob(s.dataDir, hash, tmpPath); err != nil {
-		logger.FromContext(c).WithError(err).Error("error committing blob for flow file")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-
-	name := filepath.Base(destPath)
-
-	if exists {
-		oldHash := existingRec.Hash
-		if err := s.db.Model(&existingRec).Updates(models.UserResource{
-			Hash:      hash,
-			Name:      name,
-			Size:      size,
-			UpdatedAt: time.Now(),
-		}).Error; err != nil {
-			logger.FromContext(c).WithError(err).Error("error updating resource record")
-			response.Error(c, response.ErrInternal, err)
-			return
+	// ── Phase 1: stream every regular file to a temporary blob ────────────────
+	var pending []pendingResourceUpload
+	walkErr := filepath.Walk(absSourceRoot, func(filePath string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
 		}
-		if s.db.Model(&models.UserResource{}).Where("hash = ?", oldHash).RecordNotFound() {
-			os.Remove(resources.BlobPath(s.dataDir, oldHash))
+		// filepath.Walk uses Lstat → symlinks and special files are NOT regular
+		// and are skipped here (defense-in-depth against symlinked-target reads).
+		if !fi.Mode().IsRegular() {
+			return nil
 		}
-		entry := models.ResourceEntry{
-			ID:        int64(existingRec.ID),
-			UserID:    existingRec.UserID,
-			Name:      existingRec.Name,
-			Path:      existingRec.Path,
-			Size:      size,
-			IsDir:     false,
-			CreatedAt: existingRec.CreatedAt,
-			UpdatedAt: existingRec.UpdatedAt,
+
+		var virtPath string
+		if sourceIsDir {
+			rel, relErr := filepath.Rel(absSourceRoot, filePath)
+			if relErr != nil {
+				return fmt.Errorf("relative path: %w", relErr)
+			}
+			sanitized, sanitizeErr := resources.SanitizeResourcePath(destPath + "/" + filepath.ToSlash(rel))
+			if sanitizeErr != nil {
+				log.WithError(sanitizeErr).Warnf("skipping unsafe file name %q", rel)
+				return nil
+			}
+			virtPath = sanitized
+		} else {
+			virtPath = destPath
 		}
-		if s.ss != nil {
-			s.ss.NewResourcePublisher(int64(uid)).ResourceUpdated(c.Request.Context(), convertResourceToModel(entry))
+
+		// Phase 1 conflict pre-check: avoid IO when the destination obviously
+		// conflicts. Phase 3 re-checks inside the TX as the source of truth.
+		if !force {
+			_, exists, dbErr := findResourceByPath(s.db, uid, virtPath)
+			if dbErr != nil {
+				return fmt.Errorf("checking %s: %w", virtPath, dbErr)
+			}
+			if exists {
+				return fmt.Errorf("%w: resource already exists at %q", errResourceConflict, virtPath)
+			}
 		}
-		response.Success(c, http.StatusOK, entry)
-		return
+
+		f, openErr := os.Open(filePath)
+		if openErr != nil {
+			return fmt.Errorf("open %s: %w", filePath, openErr)
+		}
+		tmpPath, hash, size, saveErr := resources.SaveToTemp(f, blobsDir)
+		f.Close()
+		if saveErr != nil {
+			return fmt.Errorf("save temp for %s: %w", filePath, saveErr)
+		}
+		pending = append(pending, pendingResourceUpload{
+			name:    path.Base(virtPath),
+			vPath:   virtPath,
+			tmpPath: tmpPath,
+			hash:    hash,
+			size:    size,
+		})
+		return nil
+	})
+	if walkErr != nil {
+		cleanupResourceUploads(pending)
+		if errors.Is(walkErr, errResourceConflict) {
+			response.Error(c, response.ErrFlowFilesAlreadyExists, walkErr)
+		} else {
+			log.WithError(walkErr).Error("error reading source files for promotion")
+			response.Error(c, response.ErrInternal, walkErr)
+		}
+		return nil, false
 	}
 
-	rec := models.UserResource{
-		UserID: uid,
-		Hash:   hash,
-		Name:   name,
-		Path:   destPath,
-		Size:   size,
-		IsDir:  false,
-	}
-	if err := s.db.Create(&rec).Error; err != nil {
-		logger.FromContext(c).WithError(err).Error("error inserting resource from flow")
-		response.Error(c, response.ErrInternal, err)
-		return
+	// ── Phase 2: commit blobs (atomic rename; idempotent on duplicate hashes) ─
+	for i := range pending {
+		p := &pending[i]
+		existed, blobErr := resources.BlobExists(s.dataDir, p.hash)
+		if blobErr != nil {
+			cleanupResourceUploads(pending[i:])
+			s.deleteOrphanBlobsIfUnreferenced(pending[:i])
+			log.WithError(blobErr).Error("error checking blob existence")
+			response.Error(c, response.ErrInternal, blobErr)
+			return nil, false
+		}
+		if commitErr := resources.CommitBlob(s.dataDir, p.hash, p.tmpPath); commitErr != nil {
+			cleanupResourceUploads(pending[i:])
+			s.deleteOrphanBlobsIfUnreferenced(pending[:i])
+			log.WithError(commitErr).Error("error committing blob")
+			response.Error(c, response.ErrInternal, commitErr)
+			return nil, false
+		}
+		p.tmpPath = ""
+		p.newBlob = !existed
 	}
 
-	entry := models.ResourceEntry{
-		ID:        int64(rec.ID),
-		UserID:    rec.UserID,
-		Name:      rec.Name,
-		Path:      rec.Path,
-		Size:      rec.Size,
-		IsDir:     false,
-		CreatedAt: rec.CreatedAt,
-		UpdatedAt: rec.UpdatedAt,
+	// Determine the directory chain to ensure: the destination itself for a
+	// directory promotion, or the parent of the file otherwise. May be empty
+	// when promoting a single file at the resource root.
+	parentDir := destPath
+	if !sourceIsDir {
+		if d := path.Dir(destPath); d != "." && d != "/" {
+			parentDir = d
+		} else {
+			parentDir = ""
+		}
 	}
+
+	// ── Phase 3: persist all rows in a single DB transaction ──────────────────
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		s.deleteOrphanBlobsIfUnreferenced(pending)
+		log.WithError(tx.Error).Error("failed to begin transaction")
+		response.Error(c, response.ErrInternal, tx.Error)
+		return nil, false
+	}
+
+	var allDirs, added, updated []models.UserResource
+	var orphanHashes []string
+	var txErr error
+
+	if parentDir != "" {
+		rootDirs, _, rootOrphans, dirErr := ensureResourceDirs(tx, uid, parentDir, force)
+		if dirErr != nil {
+			txErr = dirErr
+		} else {
+			allDirs = append(allDirs, rootDirs...)
+			orphanHashes = append(orphanHashes, rootOrphans...)
+		}
+	}
+
+	// Ensure each unique parent directory chain only once across all files.
+	ensuredDirs := make(map[string]bool, len(pending))
+	if parentDir != "" {
+		ensuredDirs[parentDir] = true
+	}
+	for _, p := range pending {
+		if txErr != nil {
+			break
+		}
+
+		if subParent := path.Dir(p.vPath); subParent != "." && subParent != "/" && !ensuredDirs[subParent] {
+			ensuredDirs[subParent] = true
+			subDirs, _, subOrphans, dirErr := ensureResourceDirs(tx, uid, subParent, force)
+			if dirErr != nil {
+				txErr = dirErr
+				break
+			}
+			allDirs = append(allDirs, subDirs...)
+			orphanHashes = append(orphanHashes, subOrphans...)
+		}
+
+		existing, exists, lookErr := findResourceByPath(tx, uid, p.vPath)
+		if lookErr != nil {
+			txErr = lookErr
+			break
+		}
+		if exists {
+			if !force {
+				txErr = fmt.Errorf("%w: resource already exists at %q", errResourceConflict, p.vPath)
+				break
+			}
+			if existing.IsDir {
+				txErr = fmt.Errorf("%w: a directory already exists at %q", errResourceConflict, p.vPath)
+				break
+			}
+			if existing.Hash != "" && existing.Hash != p.hash {
+				orphanHashes = append(orphanHashes, existing.Hash)
+			}
+			now := time.Now()
+			if updErr := tx.Model(&existing).Updates(models.UserResource{
+				Hash: p.hash, Name: p.name, Size: p.size, UpdatedAt: now,
+			}).Error; updErr != nil {
+				txErr = updErr
+				break
+			}
+			existing.Hash, existing.Name, existing.Size, existing.UpdatedAt = p.hash, p.name, p.size, now
+			updated = append(updated, existing)
+			continue
+		}
+
+		rec := models.UserResource{
+			UserID: uid, Hash: p.hash, Name: p.name, Path: p.vPath, Size: p.size,
+		}
+		if createErr := tx.Create(&rec).Error; createErr != nil {
+			txErr = createErr
+			break
+		}
+		added = append(added, rec)
+	}
+
+	if txErr != nil {
+		tx.Rollback()
+		s.deleteOrphanBlobsIfUnreferenced(pending)
+		if isUniqueViolation(txErr) || errors.Is(txErr, errResourceConflict) {
+			response.Error(c, response.ErrFlowFilesAlreadyExists, txErr)
+		} else {
+			log.WithError(txErr).Error("failed to persist promoted resources")
+			response.Error(c, response.ErrInternal, txErr)
+		}
+		return nil, false
+	}
+	if commitErr := tx.Commit().Error; commitErr != nil {
+		tx.Rollback()
+		s.deleteOrphanBlobsIfUnreferenced(pending)
+		log.WithError(commitErr).Error("failed to commit promotion transaction")
+		response.Error(c, response.ErrInternal, commitErr)
+		return nil, false
+	}
+
+	s.cleanupOrphanHashes(orphanHashes)
+
 	if s.ss != nil {
-		s.ss.NewResourcePublisher(int64(uid)).ResourceAdded(c.Request.Context(), convertResourceToModel(entry))
+		pub := s.ss.NewResourcePublisher(int64(uid))
+		for _, r := range allDirs {
+			pub.ResourceAdded(ctx, convertResourceToModel(convertResource(r)))
+		}
+		for _, r := range added {
+			pub.ResourceAdded(ctx, convertResourceToModel(convertResource(r)))
+		}
+		for _, r := range updated {
+			pub.ResourceUpdated(ctx, convertResourceToModel(convertResource(r)))
+		}
 	}
-	response.Success(c, http.StatusOK, entry)
+
+	out := convertResources(allDirs)
+	out = append(out, convertResources(added)...)
+	out = append(out, convertResources(updated)...)
+	return out, true
+}
+
+// deleteOrphanBlobsIfUnreferenced removes freshly-committed blobs from this
+// promotion ONLY if no DB row references them. Mirrors
+// ResourceService.deleteOrphanBlob — used after a rolled-back transaction or
+// a partial Phase 2 to avoid deleting blobs that other concurrent uploads of
+// identical content may now reference.
+func (s *FlowFileService) deleteOrphanBlobsIfUnreferenced(pending []pendingResourceUpload) {
+	for _, p := range pending {
+		if !p.newBlob || p.hash == "" {
+			continue
+		}
+		var count int64
+		if err := s.db.Model(&models.UserResource{}).
+			Where("hash = ?", p.hash).
+			Count(&count).Error; err != nil || count > 0 {
+			continue
+		}
+		_ = resources.DeleteBlob(s.dataDir, p.hash)
+	}
+}
+
+// cleanupOrphanHashes mirrors ResourceService.cleanupOrphanBlobs: it removes
+// .blob files whose hashes are no longer referenced by any user_resources row,
+// after a successful TX that may have orphaned blobs (overwrites).
+func (s *FlowFileService) cleanupOrphanHashes(hashes []string) {
+	if len(hashes) == 0 {
+		return
+	}
+	var stillReferenced []string
+	if err := s.db.Model(&models.UserResource{}).
+		Where("hash IN (?)", hashes).
+		Pluck("DISTINCT hash", &stillReferenced).Error; err != nil {
+		return
+	}
+	refSet := make(map[string]bool, len(stillReferenced))
+	for _, h := range stillReferenced {
+		refSet[h] = true
+	}
+	seen := make(map[string]bool, len(hashes))
+	for _, h := range hashes {
+		if h == "" || refSet[h] || seen[h] {
+			continue
+		}
+		seen[h] = true
+		_ = resources.DeleteBlob(s.dataDir, h)
+	}
 }

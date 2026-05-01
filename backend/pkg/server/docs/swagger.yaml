@@ -170,13 +170,13 @@ definitions:
         description: Force overwrites an existing resource at Destination if one already
           exists.
         type: boolean
-      sourcePath:
-        description: SourcePath is a relative path within the flow cache, e.g. "container/work/result.md"
-          or "uploads/task.md".
+      source:
+        description: Source is a relative path within the flow cache, e.g. "container/work/result.md"
+          or "uploads/task.md" or "uploads/work/".
         type: string
     required:
     - destination
-    - sourcePath
+    - source
     type: object
   models.AddResourcesRequest:
     properties:
@@ -188,7 +188,7 @@ definitions:
         description: IDs is the list of user resource IDs to copy into the flow resources
           directory.
         items:
-          type: string
+          type: integer
         minItems: 1
         type: array
     required:
@@ -424,9 +424,9 @@ definitions:
     properties:
       id:
         type: string
-      isDir:
+      is_dir:
         type: boolean
-      modifiedAt:
+      modified_at:
         type: string
       name:
         type: string
@@ -615,9 +615,9 @@ definitions:
     properties:
       id:
         type: string
-      isDir:
+      is_dir:
         type: boolean
-      modifiedAt:
+      modified_at:
         type: string
       name:
         type: string
@@ -994,11 +994,11 @@ definitions:
     type: object
   models.ResourceEntry:
     properties:
-      createdAt:
+      created_at:
         type: string
       id:
         type: integer
-      isDir:
+      is_dir:
         type: boolean
       name:
         type: string
@@ -1006,9 +1006,9 @@ definitions:
         type: string
       size:
         type: integer
-      updatedAt:
+      updated_at:
         type: string
-      userId:
+      user_id:
         type: integer
     type: object
   models.ResourceList:
@@ -2976,7 +2976,7 @@ paths:
         name: flowID
         required: true
         type: integer
-      - description: 'relative path in cache: uploads/<name> or container/<name>'
+      - description: 'relative path in cache: uploads/, resources/, or container/'
         in: query
         name: path
         required: true
@@ -3162,7 +3162,7 @@ paths:
         name: flowID
         required: true
         type: integer
-      - description: 'relative path in cache: uploads/<name> or container/<name>'
+      - description: 'relative path in cache: uploads/, resources/, or container/'
         in: query
         name: path
         required: true
@@ -3259,6 +3259,7 @@ paths:
       description: |-
         Copies one or more user resources (identified by ID) into flow-{id}-data/resources/.
         Files already present in the flow are skipped unless force=true, in which case they are replaced.
+        When the primary container for this flow is running, new or replaced files are pushed to /work/resources/ (best-effort), same as uploads.
       parameters:
       - description: flow id
         in: path
@@ -3313,8 +3314,6 @@ paths:
     post:
       consumes:
       - application/json
-      description: Reads a file from flow-{id}-data/{sourcePath}, computes MD5, stores
-        the blob, inserts a user_resources row.
       parameters:
       - description: flow id
         in: path
@@ -3332,13 +3331,13 @@ paths:
       - application/json
       responses:
         "200":
-          description: resource created or updated
+          description: resources created or updated
           schema:
             allOf:
             - $ref: '#/definitions/SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.ResourceEntry'
+                  $ref: '#/definitions/models.ResourceList'
               type: object
         "400":
           description: invalid request
@@ -3349,7 +3348,7 @@ paths:
           schema:
             $ref: '#/definitions/ErrorResponse'
         "404":
-          description: source file or flow not found
+          description: source or flow not found
           schema:
             $ref: '#/definitions/ErrorResponse'
         "409":
@@ -3362,7 +3361,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Promote a flow file to user resources
+      summary: Promote a flow file or directory to user resources
       tags:
       - FlowFiles
   /flows/{flowID}/graph:

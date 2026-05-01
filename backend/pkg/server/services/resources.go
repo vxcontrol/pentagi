@@ -1544,7 +1544,7 @@ func pathHasTrailingSeparator(p string) bool {
 
 func convertResource(r models.UserResource) models.ResourceEntry {
 	return models.ResourceEntry{
-		ID:        int64(r.ID),
+		ID:        r.ID,
 		UserID:    r.UserID,
 		Name:      r.Name,
 		Path:      r.Path,
@@ -1565,7 +1565,7 @@ func convertResources(recs []models.UserResource) []models.ResourceEntry {
 
 func convertResourceToModel(e models.ResourceEntry) *model.UserResource {
 	return &model.UserResource{
-		ID:        e.ID,
+		ID:        int64(e.ID),
 		UserID:    int64(e.UserID),
 		Name:      e.Name,
 		Path:      e.Path,

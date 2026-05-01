@@ -769,18 +769,6 @@ func decodeContainerFilesResponse(t *testing.T, w *httptest.ResponseRecorder) mo
 	return resp.Data
 }
 
-func decodeResourceEntryResponse(t *testing.T, w *httptest.ResponseRecorder) models.ResourceEntry {
-	t.Helper()
-
-	var resp struct {
-		Status string               `json:"status"`
-		Data   models.ResourceEntry `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, "success", resp.Status)
-	return resp.Data
-}
-
 // flowFileMultipartBody builds a multipart body for upload tests.
 type flowFileUploadFile struct {
 	name    string
@@ -2376,7 +2364,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			privs:         []string{"flow_files.upload", "resources.view"},
 			seedResources: []seedRes{{path: "creds/p.txt", content: "secret"}},
 			body: map[string]any{
-				"ids": []string{"1"},
+				"ids": []uint64{1},
 			},
 			wantStatus:       http.StatusOK,
 			wantFileExists:   "creds/p.txt",
@@ -2390,7 +2378,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			seedResources: []seedRes{{path: "creds/p.txt", content: "secret"}},
 			seedExisting:  map[string]string{"creds/p.txt": "old"},
 			body: map[string]any{
-				"ids": []string{"1"},
+				"ids": []uint64{1},
 			},
 			wantStatus:     http.StatusOK,
 			wantFileExists: "creds/p.txt",
@@ -2403,7 +2391,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			seedResources: []seedRes{{path: "creds/p.txt", content: "new"}},
 			seedExisting:  map[string]string{"creds/p.txt": "old"},
 			body: map[string]any{
-				"ids":   []string{"1"},
+				"ids":   []uint64{1},
 				"force": true,
 			},
 			wantStatus:       http.StatusOK,
@@ -2417,7 +2405,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			privs:         []string{"flow_files.admin", "resources.admin"},
 			seedResources: []seedRes{{userID: 2, path: "creds/p.txt", content: "secret"}},
 			body: map[string]any{
-				"ids": []string{"1"},
+				"ids": []uint64{1},
 			},
 			wantStatus:       http.StatusOK,
 			wantFileExists:   "creds/p.txt",
@@ -2430,7 +2418,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			privs:         []string{"flow_files.upload", "resources.view"},
 			seedResources: []seedRes{{userID: 2, path: "creds/p.txt", content: "secret"}},
 			body: map[string]any{
-				"ids": []string{"1"},
+				"ids": []uint64{1},
 			},
 			wantStatus: http.StatusForbidden,
 		},
@@ -2439,7 +2427,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"resources.view"},
 			body: map[string]any{
-				"ids": []string{"1"},
+				"ids": []uint64{1},
 			},
 			wantStatus: http.StatusForbidden,
 		},
@@ -2448,7 +2436,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload"},
 			body: map[string]any{
-				"ids": []string{"1"},
+				"ids": []uint64{1},
 			},
 			wantStatus: http.StatusForbidden,
 		},
@@ -2464,7 +2452,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "resources.view"},
 			body: map[string]any{
-				"ids": []string{},
+				"ids": []uint64{},
 			},
 			wantStatus: http.StatusBadRequest,
 		},
@@ -2473,7 +2461,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "resources.view"},
 			body: map[string]any{
-				"ids": []string{"999"},
+				"ids": []uint64{999},
 			},
 			wantStatus: http.StatusBadRequest,
 		},
@@ -2482,7 +2470,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			uid:        1,
 			flowID:     99,
 			privs:      []string{"flow_files.upload", "resources.view"},
-			body:       map[string]any{"ids": []string{"1"}},
+			body:       map[string]any{"ids": []uint64{1}},
 			wantStatus: http.StatusNotFound,
 		},
 	}
@@ -2572,18 +2560,19 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 	}
 
 	tests := []struct {
-		name             string
-		flowOwner        uint64
-		uid              uint64
-		flowID           uint64
-		privs            []string
-		sourceFiles      []sourceFile
-		existingResource *models.UserResource
-		body             any
-		rawBody          string
-		wantStatus       int
-		wantResourcePath string
-		wantEventChannel string // "added" | "updated"
+		name              string
+		flowOwner         uint64
+		uid               uint64
+		flowID            uint64
+		privs             []string
+		sourceFiles       []sourceFile
+		sourceDirs        []string // extra directories to create (without files)
+		existingResource  *models.UserResource
+		body              any
+		rawBody           string
+		wantStatus        int
+		wantResourcePaths []string // every path expected to be present in the ResourceList response and DB
+		wantEventChannel  string   // "added" | "updated"
 	}{
 		{
 			name:      "promote uploaded file to new resource",
@@ -2591,12 +2580,12 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			privs:       []string{"resources.upload", "flow_files.view"},
 			sourceFiles: []sourceFile{{relPath: "uploads/report.txt", content: "payload"}},
 			body: map[string]any{
-				"sourcePath":  "uploads/report.txt",
+				"source":      "uploads/report.txt",
 				"destination": "promoted/report.txt",
 			},
-			wantStatus:       http.StatusOK,
-			wantResourcePath: "promoted/report.txt",
-			wantEventChannel: "added",
+			wantStatus:        http.StatusOK,
+			wantResourcePaths: []string{"promoted/report.txt"},
+			wantEventChannel:  "added",
 		},
 		{
 			name:      "promote container file to user resources",
@@ -2604,12 +2593,12 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			privs:       []string{"resources.upload", "flow_files.view"},
 			sourceFiles: []sourceFile{{relPath: "container/etc/nginx.conf", content: "nginx"}},
 			body: map[string]any{
-				"sourcePath":  "container/etc/nginx.conf",
+				"source":      "container/etc/nginx.conf",
 				"destination": "configs/nginx.conf",
 			},
-			wantStatus:       http.StatusOK,
-			wantResourcePath: "configs/nginx.conf",
-			wantEventChannel: "added",
+			wantStatus:        http.StatusOK,
+			wantResourcePaths: []string{"configs/nginx.conf"},
+			wantEventChannel:  "added",
 		},
 		{
 			name:      "force overwrite existing resource",
@@ -2620,13 +2609,13 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				Hash: md5HexForFlowFiles("old"), Name: "report.txt", Path: "promoted/report.txt", Size: 3,
 			},
 			body: map[string]any{
-				"sourcePath":  "uploads/report.txt",
+				"source":      "uploads/report.txt",
 				"destination": "promoted/report.txt",
 				"force":       true,
 			},
-			wantStatus:       http.StatusOK,
-			wantResourcePath: "promoted/report.txt",
-			wantEventChannel: "updated",
+			wantStatus:        http.StatusOK,
+			wantResourcePaths: []string{"promoted/report.txt"},
+			wantEventChannel:  "updated",
 		},
 		{
 			name:      "existing resource without force returns conflict",
@@ -2637,7 +2626,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				Hash: md5HexForFlowFiles("old"), Name: "report.txt", Path: "promoted/report.txt", Size: 3,
 			},
 			body: map[string]any{
-				"sourcePath":  "uploads/report.txt",
+				"source":      "uploads/report.txt",
 				"destination": "promoted/report.txt",
 			},
 			wantStatus: http.StatusConflict,
@@ -2648,7 +2637,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			privs:       []string{"resources.admin"},
 			sourceFiles: []sourceFile{{relPath: "uploads/report.txt", content: "payload"}},
 			body: map[string]any{
-				"sourcePath":  "uploads/report.txt",
+				"source":      "uploads/report.txt",
 				"destination": "promoted/report.txt",
 			},
 			wantStatus: http.StatusForbidden,
@@ -2659,19 +2648,19 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			privs:       []string{"resources.admin", "flow_files.admin"},
 			sourceFiles: []sourceFile{{relPath: "uploads/report.txt", content: "payload"}},
 			body: map[string]any{
-				"sourcePath":  "uploads/report.txt",
+				"source":      "uploads/report.txt",
 				"destination": "promoted/report.txt",
 			},
-			wantStatus:       http.StatusOK,
-			wantResourcePath: "promoted/report.txt",
-			wantEventChannel: "added",
+			wantStatus:        http.StatusOK,
+			wantResourcePaths: []string{"promoted/report.txt"},
+			wantEventChannel:  "added",
 		},
 		{
 			name:      "missing resources.upload returns forbidden",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.view"},
 			body: map[string]any{
-				"sourcePath": "uploads/report.txt", "destination": "promoted/report.txt",
+				"source": "uploads/report.txt", "destination": "promoted/report.txt",
 			},
 			wantStatus: http.StatusForbidden,
 		},
@@ -2680,7 +2669,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"resources.upload"},
 			body: map[string]any{
-				"sourcePath": "uploads/report.txt", "destination": "promoted/report.txt",
+				"source": "uploads/report.txt", "destination": "promoted/report.txt",
 			},
 			wantStatus: http.StatusForbidden,
 		},
@@ -2689,7 +2678,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			uid:  1, flowID: 99,
 			privs: []string{"resources.upload", "flow_files.view"},
 			body: map[string]any{
-				"sourcePath": "uploads/report.txt", "destination": "promoted/report.txt",
+				"source": "uploads/report.txt", "destination": "promoted/report.txt",
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -2712,7 +2701,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"resources.upload", "flow_files.view"},
 			body: map[string]any{
-				"sourcePath": "tmp/evil.txt", "destination": "promoted/report.txt",
+				"source": "tmp/evil.txt", "destination": "promoted/report.txt",
 			},
 			wantStatus: http.StatusBadRequest,
 		},
@@ -2721,7 +2710,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"resources.upload", "flow_files.view"},
 			body: map[string]any{
-				"sourcePath": "uploads/missing.txt", "destination": "promoted/report.txt",
+				"source": "uploads/missing.txt", "destination": "promoted/report.txt",
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -2731,9 +2720,124 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			privs:       []string{"resources.upload", "flow_files.view"},
 			sourceFiles: []sourceFile{{relPath: "uploads/report.txt", content: "x"}},
 			body: map[string]any{
-				"sourcePath": "uploads/report.txt", "destination": "../escape.txt",
+				"source": "uploads/report.txt", "destination": "../escape.txt",
 			},
 			wantStatus: http.StatusBadRequest,
+		},
+		// ── directory promotion ───────────────────────────────────────────────
+		{
+			name:      "promote container directory with nested files to resources",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "container/scan/hosts.txt", content: "10.0.0.1"},
+				{relPath: "container/scan/sub/ports.txt", content: "80,443"},
+			},
+			body: map[string]any{
+				"source":      "container/scan",
+				"destination": "promoted/scan",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"promoted/scan",
+				"promoted/scan/hosts.txt",
+				"promoted/scan/sub",
+				"promoted/scan/sub/ports.txt",
+			},
+			wantEventChannel: "added",
+		},
+		{
+			name:      "promote uploads directory to resources",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/payloads/shell.sh", content: "#!/bin/sh"},
+				{relPath: "uploads/payloads/enum.sh", content: "#!/bin/sh\nls"},
+			},
+			body: map[string]any{
+				"source":      "uploads/payloads",
+				"destination": "scripts/payloads",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"scripts/payloads",
+				"scripts/payloads/shell.sh",
+				"scripts/payloads/enum.sh",
+			},
+			wantEventChannel: "added",
+		},
+		{
+			name:      "directory promotion without force returns conflict when file exists",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/data/report.txt", content: "new content"},
+			},
+			existingResource: &models.UserResource{
+				Hash: md5HexForFlowFiles("old content"), Name: "report.txt",
+				Path: "promoted/data/report.txt", Size: 11,
+			},
+			body: map[string]any{
+				"source":      "uploads/data",
+				"destination": "promoted/data",
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name:      "directory promotion with force overwrites existing file",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "container/results/output.txt", content: "updated"},
+			},
+			existingResource: &models.UserResource{
+				Hash: md5HexForFlowFiles("original"), Name: "output.txt",
+				Path: "archive/results/output.txt", Size: 8,
+			},
+			body: map[string]any{
+				"source":      "container/results",
+				"destination": "archive/results",
+				"force":       true,
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"archive/results",
+				"archive/results/output.txt",
+			},
+			wantEventChannel: "updated",
+		},
+		{
+			name:      "single file at deep path creates parent directory records",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:       []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{{relPath: "uploads/note.txt", content: "deep"}},
+			body: map[string]any{
+				"source":      "uploads/note.txt",
+				"destination": "deep/nested/folder/note.txt",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"deep",
+				"deep/nested",
+				"deep/nested/folder",
+				"deep/nested/folder/note.txt",
+			},
+			wantEventChannel: "added",
+		},
+		{
+			name:      "empty source directory creates only the destination dir entry",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:      []string{"resources.upload", "flow_files.view"},
+			sourceDirs: []string{"uploads/empty"},
+			body: map[string]any{
+				"source":      "uploads/empty",
+				"destination": "promoted/empty",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"promoted/empty",
+			},
+			wantEventChannel: "added",
 		},
 	}
 
@@ -2752,6 +2856,10 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(sf.relPath))
 				require.NoError(t, os.MkdirAll(filepath.Dir(abs), 0755))
 				require.NoError(t, os.WriteFile(abs, []byte(sf.content), 0644))
+			}
+			for _, sd := range tt.sourceDirs {
+				abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(sd))
+				require.NoError(t, os.MkdirAll(abs, 0755))
 			}
 			if tt.existingResource != nil {
 				existing := *tt.existingResource
@@ -2781,13 +2889,23 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			if tt.wantStatus != http.StatusOK {
 				return
 			}
-			entry := decodeResourceEntryResponse(t, w)
-			assert.Equal(t, tt.wantResourcePath, entry.Path)
-			assert.False(t, entry.IsDir)
 
-			var rec models.UserResource
-			require.NoError(t, db.Where("user_id = ? AND path = ?", tt.uid, tt.wantResourcePath).First(&rec).Error)
-			assert.NotEmpty(t, rec.Hash)
+			list := decodeResourceListResponse(t, w)
+			// Response always carries at least every expected path; ancestor
+			// directory entries pushed by ensureResourceDirs may add extras.
+			assert.GreaterOrEqual(t, list.Total, uint64(len(tt.wantResourcePaths)))
+			itemsByPath := make(map[string]models.ResourceEntry, len(list.Items))
+			for _, item := range list.Items {
+				itemsByPath[item.Path] = item
+			}
+			for _, wantPath := range tt.wantResourcePaths {
+				_, inResponse := itemsByPath[wantPath]
+				assert.True(t, inResponse, "expected resource at path %q in response", wantPath)
+
+				var rec models.UserResource
+				require.NoError(t, db.Where("user_id = ? AND path = ?", tt.uid, wantPath).First(&rec).Error,
+					"resource record missing for path %q", wantPath)
+			}
 
 			if tt.wantEventChannel != "" {
 				events := ss.snapshot()

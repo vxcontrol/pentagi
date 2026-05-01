@@ -2038,7 +2038,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "relative path in cache: uploads/\u003cname\u003e or container/\u003cname\u003e",
+                        "description": "relative path in cache: uploads/, resources/, or container/",
                         "name": "path",
                         "in": "query",
                         "required": true
@@ -2193,7 +2193,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "relative path in cache: uploads/\u003cname\u003e or container/\u003cname\u003e",
+                        "description": "relative path in cache: uploads/, resources/, or container/",
                         "name": "path",
                         "in": "query",
                         "required": true
@@ -2328,7 +2328,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Copies one or more user resources (identified by ID) into flow-{id}-data/resources/.\nFiles already present in the flow are skipped unless force=true, in which case they are replaced.",
+                "description": "Copies one or more user resources (identified by ID) into flow-{id}-data/resources/.\nFiles already present in the flow are skipped unless force=true, in which case they are replaced.\nWhen the primary container for this flow is running, new or replaced files are pushed to /work/resources/ (best-effort), same as uploads.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2417,7 +2417,6 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Reads a file from flow-{id}-data/{sourcePath}, computes MD5, stores the blob, inserts a user_resources row.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2427,7 +2426,7 @@ const docTemplate = `{
                 "tags": [
                     "FlowFiles"
                 ],
-                "summary": "Promote a flow file to user resources",
+                "summary": "Promote a flow file or directory to user resources",
                 "parameters": [
                     {
                         "minimum": 0,
@@ -2449,7 +2448,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "resource created or updated",
+                        "description": "resources created or updated",
                         "schema": {
                             "allOf": [
                                 {
@@ -2459,7 +2458,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.ResourceEntry"
+                                            "$ref": "#/definitions/models.ResourceList"
                                         }
                                     }
                                 }
@@ -2479,7 +2478,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "source file or flow not found",
+                        "description": "source or flow not found",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -6894,7 +6893,7 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "destination",
-                "sourcePath"
+                "source"
             ],
             "properties": {
                 "destination": {
@@ -6905,8 +6904,8 @@ const docTemplate = `{
                     "description": "Force overwrites an existing resource at Destination if one already exists.",
                     "type": "boolean"
                 },
-                "sourcePath": {
-                    "description": "SourcePath is a relative path within the flow cache, e.g. \"container/work/result.md\" or \"uploads/task.md\".",
+                "source": {
+                    "description": "Source is a relative path within the flow cache, e.g. \"container/work/result.md\" or \"uploads/task.md\" or \"uploads/work/\".",
                     "type": "string"
                 }
             }
@@ -6926,7 +6925,7 @@ const docTemplate = `{
                     "type": "array",
                     "minItems": 1,
                     "items": {
-                        "type": "string"
+                        "type": "integer"
                     }
                 }
             }
@@ -7251,10 +7250,10 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "isDir": {
+                "is_dir": {
                     "type": "boolean"
                 },
-                "modifiedAt": {
+                "modified_at": {
                     "type": "string"
                 },
                 "name": {
@@ -7526,10 +7525,10 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "isDir": {
+                "is_dir": {
                     "type": "boolean"
                 },
-                "modifiedAt": {
+                "modified_at": {
                     "type": "string"
                 },
                 "name": {
@@ -8069,13 +8068,13 @@ const docTemplate = `{
         "models.ResourceEntry": {
             "type": "object",
             "properties": {
-                "createdAt": {
+                "created_at": {
                     "type": "string"
                 },
                 "id": {
                     "type": "integer"
                 },
-                "isDir": {
+                "is_dir": {
                     "type": "boolean"
                 },
                 "name": {
@@ -8087,10 +8086,10 @@ const docTemplate = `{
                 "size": {
                     "type": "integer"
                 },
-                "updatedAt": {
+                "updated_at": {
                     "type": "string"
                 },
-                "userId": {
+                "user_id": {
                     "type": "integer"
                 }
             }

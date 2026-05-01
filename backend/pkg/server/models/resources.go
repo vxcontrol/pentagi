@@ -21,14 +21,14 @@ type UserResource struct {
 
 // ResourceEntry is the REST response representation of a single resource.
 type ResourceEntry struct {
-	ID        int64     `json:"id"`
-	UserID    uint64    `json:"userId"`
+	ID        uint64    `json:"id"`
+	UserID    uint64    `json:"user_id"`
 	Name      string    `json:"name"`
 	Path      string    `json:"path"`
 	Size      int64     `json:"size"`
-	IsDir     bool      `json:"isDir"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	IsDir     bool      `json:"is_dir"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ResourceList is the REST list response for resource operations.

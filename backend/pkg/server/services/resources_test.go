@@ -2168,7 +2168,7 @@ func TestResourceService_ConvertResourceToModel(t *testing.T) {
 	modelResource := convertResourceToModel(entry)
 
 	require.NotNil(t, modelResource)
-	assert.Equal(t, entry.ID, modelResource.ID)
+	assert.Equal(t, int64(entry.ID), modelResource.ID)
 	assert.Equal(t, int64(entry.UserID), modelResource.UserID)
 	assert.Equal(t, entry.Name, modelResource.Name)
 	assert.Equal(t, entry.Path, modelResource.Path)

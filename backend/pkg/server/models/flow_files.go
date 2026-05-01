@@ -8,8 +8,8 @@ type FlowFile struct {
 	Name       string    `json:"name"`
 	Path       string    `json:"path"` // relative: "uploads/<x>" or resources/<x> or container/<x>"
 	Size       int64     `json:"size"`
-	IsDir      bool      `json:"isDir"`
-	ModifiedAt time.Time `json:"modifiedAt"`
+	IsDir      bool      `json:"is_dir"`
+	ModifiedAt time.Time `json:"modified_at"`
 }
 
 // FlowFiles is the list response for flow file operations.
@@ -24,8 +24,8 @@ type ContainerFile struct {
 	Name       string    `json:"name"`
 	Path       string    `json:"path"`
 	Size       int64     `json:"size"`
-	IsDir      bool      `json:"isDir"`
-	ModifiedAt time.Time `json:"modifiedAt"`
+	IsDir      bool      `json:"is_dir"`
+	ModifiedAt time.Time `json:"modified_at"`
 }
 
 // ContainerFiles is the list response for container directory listing.
@@ -46,15 +46,15 @@ type PullFlowFilesRequest struct {
 // AddResourcesRequest is the request body for copying user resources into a flow.
 type AddResourcesRequest struct {
 	// IDs is the list of user resource IDs to copy into the flow resources directory.
-	IDs []string `json:"ids" binding:"required,min=1"`
+	IDs []uint64 `json:"ids" binding:"required,min=1"`
 	// Force overwrites files that already exist in the flow resources directory.
 	Force bool `json:"force"`
 }
 
 // AddResourceFromFlowRequest is the request body for promoting a flow file to user resources.
 type AddResourceFromFlowRequest struct {
-	// SourcePath is a relative path within the flow cache, e.g. "container/work/result.md" or "uploads/task.md".
-	SourcePath string `json:"sourcePath" binding:"required"`
+	// Source is a relative path within the flow cache, e.g. "container/work/result.md" or "uploads/task.md" or "uploads/work/".
+	Source string `json:"source" binding:"required"`
 	// Destination is the virtual path the resource will have in the user's resource tree.
 	Destination string `json:"destination" binding:"required"`
 	// Force overwrites an existing resource at Destination if one already exists.
