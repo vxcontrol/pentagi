@@ -373,7 +373,14 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 	for {
 		select {
 		case <-timer.C:
-			aslw.mx.Lock()
+			// TryLock avoids a deadlock: while this branch holds up reading from ch,
+			// StreamFlowAssistantMsg may be blocked on a full ch <- chunk while
+			// holding aslw.mx. If the mutex is taken, the stream is still active —
+			// reset the timer and keep draining instead of blocking.
+			if !aslw.mx.TryLock() {
+				timer.Reset(updateMsgTimeout)
+				continue
+			}
 			defer aslw.mx.Unlock()
 
 			for i := 0; i < len(ch); i++ {
