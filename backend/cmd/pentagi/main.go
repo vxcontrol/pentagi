@@ -119,14 +119,14 @@ func main() {
 		log.Fatalf("Active flows restoration failed: %v", err)
 	}
 
-	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions)
+	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions, client)
 
 	// Launch HTTP/HTTPS server in background goroutine
 	serverErrChan := make(chan error, 1)
 	go func() {
 		listen := net.JoinHostPort(cfg.ServerHost, strconv.Itoa(cfg.ServerPort))
 		logrus.Infof("API server listening on %s", listen)
-		
+
 		var startErr error
 		if cfg.ServerUseSSL && cfg.ServerSSLCrt != "" && cfg.ServerSSLKey != "" {
 			logrus.Info("Starting server with TLS enabled")
@@ -135,7 +135,7 @@ func main() {
 			logrus.Info("Starting server without TLS (HTTP only)")
 			startErr = r.Run(listen)
 		}
-		
+
 		if startErr != nil {
 			serverErrChan <- fmt.Errorf("API server startup failed: %w", startErr)
 		}
