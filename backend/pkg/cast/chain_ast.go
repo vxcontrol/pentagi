@@ -1,6 +1,7 @@
 package cast
 
 import (
+	"encoding/json"
 	"fmt"
 	"pentagi/pkg/templates"
 	"sort"
@@ -1054,6 +1055,104 @@ func ContainsToolCallReasoning(messages []llms.MessageContent) bool {
 	}
 
 	return false
+}
+
+// SanitizeJSONControlChars escapes any literal control characters (0x00–0x1F, 0x7F) that
+// appear inside JSON string values. Such characters are disallowed by the JSON spec and
+// must be encoded as \n, \r, \t, or \uXXXX escape sequences.
+//
+// The scanner is context-aware: it tracks whether it is currently inside a JSON string and
+// skips over already-escaped sequences so they are never double-escaped.
+func SanitizeJSONControlChars(s string) string {
+	if json.Valid([]byte(s)) {
+		return s
+	}
+
+	var buf strings.Builder
+	buf.Grow(len(s) + 32)
+
+	inString := false
+	escaped := false
+
+	for i := 0; i < len(s); {
+		b := s[i]
+
+		if escaped {
+			buf.WriteByte(b)
+			i++
+			escaped = false
+			continue
+		}
+
+		if inString && b == '\\' {
+			buf.WriteByte(b)
+			i++
+			escaped = true
+			continue
+		}
+
+		if b == '"' {
+			buf.WriteByte(b)
+			i++
+			inString = !inString
+			continue
+		}
+
+		if inString && b < 0x20 {
+			switch b {
+			case '\n':
+				buf.WriteString(`\n`)
+			case '\r':
+				buf.WriteString(`\r`)
+			case '\t':
+				buf.WriteString(`\t`)
+			case '\b':
+				buf.WriteString(`\b`)
+			case '\f':
+				buf.WriteString(`\f`)
+			default:
+				fmt.Fprintf(&buf, `\u%04x`, b)
+			}
+			i++
+			continue
+		}
+
+		buf.WriteByte(b)
+		i++
+	}
+
+	return buf.String()
+}
+
+// SanitizeToolCallArguments scans every tool call in the chain and ensures its Arguments
+// field is valid JSON. Literal control characters that some LLM providers occasionally
+// emit inside string values are escaped so that downstream consumers (e.g. vLLM's
+// _postprocess_messages) can parse the arguments without errors.
+func (ast *ChainAST) SanitizeToolCallArguments() {
+	for _, section := range ast.Sections {
+		for _, bodyPair := range section.Body {
+			if bodyPair.Type != RequestResponse && bodyPair.Type != Summarization {
+				continue
+			}
+
+			if bodyPair.AIMessage == nil {
+				continue
+			}
+
+			for pdx, part := range bodyPair.AIMessage.Parts {
+				toolCall, ok := part.(llms.ToolCall)
+				if !ok || toolCall.FunctionCall == nil {
+					continue
+				}
+
+				sanitized := SanitizeJSONControlChars(toolCall.FunctionCall.Arguments)
+				if sanitized != toolCall.FunctionCall.Arguments {
+					toolCall.FunctionCall.Arguments = sanitized
+					bodyPair.AIMessage.Parts[pdx] = toolCall
+				}
+			}
+		}
+	}
 }
 
 // ExtractReasoningMessage extracts the first AI message that contains reasoning content

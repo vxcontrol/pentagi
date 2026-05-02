@@ -523,6 +523,8 @@ func (fp *flowProvider) restoreChain(
 				return wrapErrorWithEvent("failed to normalize tool call IDs", err)
 			}
 
+			ast.SanitizeToolCallArguments()
+
 			if err := ast.ClearReasoning(); err != nil {
 				return wrapErrorWithEvent("failed to clear reasoning", err)
 			}
@@ -630,6 +632,8 @@ func (fp *flowProvider) processChain(
 			if err := ast.NormalizeToolCallIDs(fp.tcIDTemplate); err != nil {
 				logger.WithError(err).Warn("failed to normalize tool call IDs")
 			}
+
+			ast.SanitizeToolCallArguments()
 
 			// Clear provider-specific reasoning signatures
 			if err := ast.ClearReasoning(); err != nil {

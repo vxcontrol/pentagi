@@ -3015,3 +3015,178 @@ func TestClearReasoning_IntegrationWithNormalize(t *testing.T) {
 
 	t.Log("Successfully normalized IDs and cleared reasoning for provider switch")
 }
+
+func TestSanitizeJSONControlChars(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "already valid JSON - no changes",
+			input: `{"input": "hello world"}`,
+			want:  `{"input": "hello world"}`,
+		},
+		{
+			name:  "already valid JSON with escaped newline - no changes",
+			input: `{"input": "line1\nline2"}`,
+			want:  `{"input": "line1\nline2"}`,
+		},
+		{
+			name:  "literal newline inside string value",
+			input: "{\"input\": \"line1\nline2\"}",
+			want:  `{"input": "line1\nline2"}`,
+		},
+		{
+			name:  "literal carriage return inside string value",
+			input: "{\"cmd\": \"echo\rtest\"}",
+			want:  `{"cmd": "echo\rtest"}`,
+		},
+		{
+			name:  "literal tab inside string value",
+			input: "{\"v\": \"a\tb\"}",
+			want:  `{"v": "a\tb"}`,
+		},
+		{
+			name:  "literal backspace and form feed inside string value",
+			input: "{\"v\": \"a\x08\x0Cb\"}",
+			want:  `{"v": "a\b\fb"}`,
+		},
+		{
+			name:  `other control character (SOH) gets \uXXXX encoding`,
+			input: "{\"v\": \"a\x01b\"}",
+			want:  `{"v": "a\u0001b"}`,
+		},
+		{
+			name:  "control character outside string - not touched",
+			input: "{\n\"k\": \"v\"}",
+			want:  "{\n\"k\": \"v\"}",
+		},
+		{
+			name:  "multiple string fields, only affected one fixed",
+			input: "{\"a\": \"ok\", \"b\": \"bad\nval\"}",
+			want:  `{"a": "ok", "b": "bad\nval"}`,
+		},
+		{
+			name:  "escaped backslash before quote not confused with string end",
+			input: "{\"v\": \"path\\\\dir\"}",
+			want:  `{"v": "path\\dir"}`,
+		},
+		{
+			name:  "real-world vLLM crash case: index.html newline in arguments",
+			input: "{\"input\": \"index.html] =\ncurl -s http://example.com\", \"cwd\": \"/work\"}",
+			want:  `{"input": "index.html] =\ncurl -s http://example.com", "cwd": "/work"}`,
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "plain invalid JSON without control chars - returned as-is",
+			input: `{broken`,
+			want:  `{broken`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SanitizeJSONControlChars(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSanitizeToolCallArguments(t *testing.T) {
+	makeChain := func(args string) []llms.MessageContent {
+		return []llms.MessageContent{
+			{
+				Role:  llms.ChatMessageTypeSystem,
+				Parts: []llms.ContentPart{llms.TextContent{Text: "system"}},
+			},
+			{
+				Role:  llms.ChatMessageTypeHuman,
+				Parts: []llms.ContentPart{llms.TextContent{Text: "do it"}},
+			},
+			{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.ToolCall{
+						ID:   "call_abc",
+						Type: "function",
+						FunctionCall: &llms.FunctionCall{
+							Name:      "terminal",
+							Arguments: args,
+						},
+					},
+				},
+			},
+			{
+				Role: llms.ChatMessageTypeTool,
+				Parts: []llms.ContentPart{
+					llms.ToolCallResponse{ToolCallID: "call_abc", Name: "terminal", Content: "ok"},
+				},
+			},
+		}
+	}
+
+	getArgs := func(ast *ChainAST) string {
+		for _, section := range ast.Sections {
+			for _, pair := range section.Body {
+				if pair.AIMessage == nil {
+					continue
+				}
+				for _, part := range pair.AIMessage.Parts {
+					if tc, ok := part.(llms.ToolCall); ok && tc.FunctionCall != nil {
+						return tc.FunctionCall.Arguments
+					}
+				}
+			}
+		}
+		return ""
+	}
+
+	tests := []struct {
+		name     string
+		args     string
+		wantArgs string
+	}{
+		{
+			name:     "valid JSON - unchanged",
+			args:     `{"input": "ls -la", "cwd": "/work"}`,
+			wantArgs: `{"input": "ls -la", "cwd": "/work"}`,
+		},
+		{
+			name:     "literal newline in argument value - gets escaped",
+			args:     "{\"input\": \"curl -s http://example.com\ncurl -s http://other.com\", \"cwd\": \"/work\"}",
+			wantArgs: `{"input": "curl -s http://example.com\ncurl -s http://other.com", "cwd": "/work"}`,
+		},
+		{
+			name:     "multiple control chars - all escaped",
+			args:     "{\"input\": \"a\nb\rc\", \"cwd\": \"/work\"}",
+			wantArgs: `{"input": "a\nb\rc", "cwd": "/work"}`,
+		},
+		{
+			name:     "already escaped newline in value - unchanged",
+			args:     `{"input": "line1\nline2", "cwd": "/work"}`,
+			wantArgs: `{"input": "line1\nline2", "cwd": "/work"}`,
+		},
+		{
+			name:     "nil FunctionCall tool call does not panic",
+			args:     `{}`,
+			wantArgs: `{}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chain := makeChain(tt.args)
+			ast, err := NewChainAST(chain, false)
+			assert.NoError(t, err)
+
+			ast.SanitizeToolCallArguments()
+
+			assert.Equal(t, tt.wantArgs, getArgs(ast))
+		})
+	}
+}

@@ -444,6 +444,7 @@ func (fp *flowProvider) callWithRetries(
 				if toolCall.FunctionCall == nil {
 					continue
 				}
+				toolCall.FunctionCall.Arguments = cast.SanitizeJSONControlChars(toolCall.FunctionCall.Arguments)
 				result.funcCalls = append(result.funcCalls, toolCall)
 			}
 		}
