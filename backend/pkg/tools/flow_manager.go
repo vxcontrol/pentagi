@@ -606,11 +606,12 @@ func (t *submitFlowInputTool) Handle(ctx context.Context, name string, args json
 
 	for _, task := range tasks {
 		if task.Status == database.TaskStatusRunning {
-			return "", fmt.Errorf(
-				"task %q (ID: %d) is currently running; "+
-					"cannot submit input while a task is executing. "+
-					"Call %s first to cancel it, then retry %s",
-				task.Title, task.ID, StopFlowToolName, SubmitFlowInputToolName)
+			return fmt.Sprintf(
+				"Cannot submit input: task %q (ID: %d) is currently running. "+
+					"Call %s first to stop the current execution, then retry %s. "+
+					"Use %s to confirm the flow reaches 'waiting' state before retrying",
+				task.Title, task.ID, StopFlowToolName, SubmitFlowInputToolName, GetFlowStatusToolName,
+			), nil
 		}
 	}
 
@@ -635,6 +636,18 @@ func (t *submitFlowInputTool) Handle(ctx context.Context, name string, args json
 				"submit timed out after %s — the flow may not have received the input. "+
 					"Call %s to check the current state before retrying",
 				flowOperationTimeout, GetFlowStatusToolName)
+		}
+		// Flow is running (returned by sendAssistantFlowInput when status != waiting).
+		// This is a transient condition — return a soft result so the LLM knows to call
+		// stop_flow first instead of retrying indefinitely and crashing the chain.
+		if strings.Contains(err.Error(), "not in 'waiting' state") ||
+			strings.Contains(err.Error(), "cannot submit input") {
+			return fmt.Sprintf(
+				"Cannot submit input: the flow automation is currently active (not in 'waiting' state). "+
+					"Call %s first to stop the current execution, wait for confirmation, "+
+					"then retry %s. Use %s to confirm the flow is 'waiting' before retrying",
+				StopFlowToolName, SubmitFlowInputToolName, GetFlowStatusToolName,
+			), nil
 		}
 		// A missing message chain means the waiting subtask's execution context was lost
 		// (most likely after a system restart or database cleanup while the subtask was at an ask checkpoint).

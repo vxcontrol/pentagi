@@ -1055,10 +1055,10 @@ func TestSubmitFlowInputToolHandle(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "running task blocks submission",
-			args:    `{"input":"hello","message":"x"}`,
-			tasks:   makeTasks(database.TaskStatusRunning),
-			wantErr: true,
+			name:       "running task blocks submission — returns soft guidance, not error",
+			args:       `{"input":"hello","message":"x"}`,
+			tasks:      makeTasks(database.TaskStatusRunning),
+			wantSubstr: StopFlowToolName,
 		},
 		{
 			name:       "waiting subtask — delivered as ask answer",
