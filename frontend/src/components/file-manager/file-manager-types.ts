@@ -101,14 +101,25 @@ export interface FileManagerProps {
      */
     onMoveItems?: (sources: FileNode[], destinationDir: string) => Promise<void> | void;
     /**
+     * Fired when the user "opens" a *file* row via double-click or `Enter`. Directories
+     * are not passed through this callback; they always toggle expand/collapse on
+     * activation, mirroring Finder/Explorer semantics.
+     *
+     * Use it to wire downloads, in-app previews, or open-in-tab behavior.
+     */
+    onOpen?: (file: FileNode) => void;
+    /**
      * Fires whenever the multi-selection changes. Use it from selection-only
      * flows (e.g. resource pickers) where the parent owns its own confirm button
      * and needs to know which items are currently checked.
      *
      * The supplied callback is read through a ref, so it does not need to be
      * memoized — only meaningful selection changes will trigger it.
+     *
+     * The Set is owned by the manager and must be treated as read-only —
+     * mutating it will desync the manager's internal state.
      */
-    onSelectionChange?: (selectedPaths: Set<string>) => void;
+    onSelectionChange?: (selectedPaths: ReadonlySet<string>) => void;
     /** Synthetic top-level groups (e.g. Uploads / Container). When omitted, root is flat. */
     rootGroups?: FileManagerRootGroup[];
     /** Search query and matching empty state. Provide `query` to enable filtering. */

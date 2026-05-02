@@ -1,8 +1,8 @@
 import { type KeyboardEvent as ReactKeyboardEvent, useCallback } from 'react';
 
-import type { FileManagerInternalNode } from './file-manager-types';
+import type { FileManagerInternalNode, FileNode } from './file-manager-types';
 
-import { clamp, findNodeByPath } from './file-manager-utils';
+import { clamp, collectSubtreePaths, findNodeByPath } from './file-manager-utils';
 
 interface UseFileManagerKeyboardNavigationArgs {
     expandedPaths: Set<string>;
@@ -11,10 +11,13 @@ interface UseFileManagerKeyboardNavigationArgs {
     focusRow: (path: null | string) => void;
     isCheckboxVisible: boolean;
     onClearSelection: () => void;
+    /** Open handler for file rows (Enter). Directories always toggle expand. */
+    onOpen?: (file: FileNode) => void;
     onSelectAll: () => void;
     onSetActiveRow: (path: null | string) => void;
-    onToggleCheckbox: (path: string) => void;
     onToggleExpand: (path: string, wasExpanded: boolean) => void;
+    /** Polymorphic selection toggle — same shape as the row checkbox handler. */
+    onToggleSelection: (path: string, subtreePaths?: readonly string[]) => void;
     /** Currently focused row, or `null` if nothing is focused. */
     resolvedActiveRow: null | string;
     visibleTree: FileManagerInternalNode[];
@@ -23,7 +26,8 @@ interface UseFileManagerKeyboardNavigationArgs {
 /**
  * Keyboard handler implementing the WAI-ARIA Tree pattern:
  * Arrow Up/Down → move focus, Home/End → jump to ends, Arrow Left/Right → collapse/expand
- * directories, Space → toggle the row's checkbox (only when checkboxes are shown),
+ * directories, Enter → expand/collapse a directory or fire `onOpen` for a file,
+ * Space → toggle the row's checkbox (only when checkboxes are shown),
  * Ctrl/Cmd+A → select all, Escape → clear selection.
  */
 export const useFileManagerKeyboardNavigation = ({
@@ -32,10 +36,11 @@ export const useFileManagerKeyboardNavigation = ({
     focusRow,
     isCheckboxVisible,
     onClearSelection,
+    onOpen,
     onSelectAll,
     onSetActiveRow,
-    onToggleCheckbox,
     onToggleExpand,
+    onToggleSelection,
     resolvedActiveRow,
     visibleTree,
 }: UseFileManagerKeyboardNavigationArgs) =>
@@ -62,14 +67,25 @@ export const useFileManagerKeyboardNavigation = ({
 
             switch (event.key) {
                 case ' ':
-                case 'Spacebar':
+                case 'Spacebar': {
                     event.preventDefault();
 
-                    if (isCheckboxVisible) {
-                        onToggleCheckbox(resolvedActiveRow);
+                    if (!isCheckboxVisible) {
+                        return;
                     }
 
+                    // Mirror the click semantics of the row checkbox: pressing
+                    // Space on a directory flips its whole subtree (the dir +
+                    // every descendant), on a file it toggles just that path.
+                    const node = findNodeByPath(visibleTree, resolvedActiveRow);
+                    const subtreePaths =
+                        node && (node.isDir || node.isGroupRoot) ? collectSubtreePaths(node) : undefined;
+
+                    onToggleSelection(resolvedActiveRow, subtreePaths);
+
                     return;
+                }
+
                 case 'A':
                 case 'a':
                     if (event.ctrlKey || event.metaKey) {
@@ -112,6 +128,29 @@ export const useFileManagerKeyboardNavigation = ({
                     moveTo(flatVisible.length - 1);
 
                     return;
+                case 'Enter': {
+                    const node = findNodeByPath(visibleTree, resolvedActiveRow);
+
+                    if (!node) {
+                        return;
+                    }
+
+                    // Always swallow Enter on a focused row so an enclosing form
+                    // doesn't accidentally submit when the user just wanted to
+                    // open a file or toggle a folder.
+                    event.preventDefault();
+
+                    if (node.isDir) {
+                        onToggleExpand(node.path, expandedPaths.has(node.path));
+
+                        return;
+                    }
+
+                    onOpen?.(node);
+
+                    return;
+                }
+
                 case 'Home':
                     event.preventDefault();
                     moveTo(0);
@@ -127,10 +166,11 @@ export const useFileManagerKeyboardNavigation = ({
             focusRow,
             isCheckboxVisible,
             onClearSelection,
+            onOpen,
             onSelectAll,
             onSetActiveRow,
-            onToggleCheckbox,
             onToggleExpand,
+            onToggleSelection,
             resolvedActiveRow,
             visibleTree,
         ],

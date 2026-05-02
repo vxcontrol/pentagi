@@ -389,5 +389,299 @@ export const getCheckboxState = (isAllSelected: boolean, isSomeSelected: boolean
     return false;
 };
 
+/**
+ * Collect the absolute paths of every selectable node in the subtree rooted at `node`,
+ * including `node` itself. Synthetic group roots are skipped (they aren't real files
+ * and have no usable path of their own — only their descendants count).
+ *
+ * Used by directory checkboxes to flip every nested item in one gesture and to
+ * derive the parent's tri-state value from the descendants' selection.
+ */
+export const collectSubtreePaths = (node: FileManagerInternalNode): string[] => {
+    const result: string[] = [];
+
+    const visit = (current: FileManagerInternalNode): void => {
+        if (!current.isGroupRoot) {
+            result.push(current.path);
+        }
+
+        for (const child of current.children) {
+            visit(child);
+        }
+    };
+
+    visit(node);
+
+    return result;
+};
+
 /** Default English pluralization for "N item" / "N items". Override via `labels.pluralizeItems`. */
 export const pluralizeItemsEnglish = (count: number): string => `${count} ${count === 1 ? 'item' : 'items'}`;
+
+/**
+ * Mutates `set` in place by adding every path from `paths`. Designed for "build a
+ * fresh `next` from `prev`, then add a batch" patterns inside `setState` updaters
+ * — never call on a state-owned Set directly.
+ */
+export const addAllToSet = (set: Set<string>, paths: Iterable<string>): void => {
+    for (const path of paths) {
+        set.add(path);
+    }
+};
+
+/**
+ * Mutates `set` in place by removing every path from `paths`. Same locality
+ * contract as `addAllToSet`: only meaningful on a freshly cloned Set.
+ */
+export const removeAllFromSet = (set: Set<string>, paths: Iterable<string>): void => {
+    for (const path of paths) {
+        set.delete(path);
+    }
+};
+
+/**
+ * Returns `true` when every path in `paths` is present in `selected`. Empty
+ * `paths` short-circuits to `true` (vacuous truth) — callers that want
+ * "non-empty AND all selected" must guard explicitly.
+ */
+export const isEverySelected = (paths: Iterable<string>, selected: ReadonlySet<string>): boolean => {
+    for (const path of paths) {
+        if (!selected.has(path)) {
+            return false;
+        }
+    }
+
+    return true;
+};
+
+/**
+ * Flip the membership of every path in `paths` against `prev` in lock-step:
+ * if every path is already selected, the whole batch is removed; otherwise
+ * the missing ones are added. Mirrors the directory-checkbox semantics.
+ *
+ * Always returns a freshly cloned Set so React's reference-equality bail-out
+ * still works for downstream memoized consumers.
+ */
+export const toggleSubtreeOnSet = (prev: ReadonlySet<string>, paths: readonly string[]): Set<string> => {
+    const next = new Set(prev);
+
+    if (isEverySelected(paths, next)) {
+        removeAllFromSet(next, paths);
+    } else {
+        addAllToSet(next, paths);
+    }
+
+    return next;
+};
+
+interface ComputeRowClickSelectionArgs {
+    /** Last-clicked path used as the range anchor. `null` when nothing has been clicked yet. */
+    anchor: null | string;
+    /** Visible nodes in DFS order; range modifier resolves anchor/target indices against this list. */
+    flatVisible: readonly string[];
+    modifier: 'range' | 'single' | 'toggle';
+    /** Path of the row that was clicked. */
+    path: string;
+    /** Current selection. Pure reducer — never mutated. */
+    prev: ReadonlySet<string>;
+    /**
+     * For directory rows: the directory's own path plus every descendant. Single
+     * and toggle modifiers operate on the whole branch; range modifier still
+     * defers to the visible-order anchor and uses `subtreePaths` only as the
+     * fallback payload when the range cannot be resolved.
+     */
+    subtreePaths?: readonly string[];
+}
+
+interface ComputeRowClickSelectionResult {
+    /** New selection Set (always freshly allocated). */
+    next: Set<string>;
+    /**
+     * Anchor to store for the next interaction. Returns the same `anchor` on
+     * a successful range click (so chained Shift+clicks keep extending from the
+     * same origin) and on a fallback range click (so the user's intent isn't
+     * accidentally overwritten when the original anchor scrolled off-screen).
+     */
+    nextAnchor: null | string;
+}
+
+/**
+ * Pure reducer that computes the new selection + anchor for a row-click
+ * gesture. Encapsulates the full single / toggle / range matrix so the React
+ * hook can stay a thin wrapper that just stores state. Tested directly without
+ * a React renderer.
+ *
+ * Behaviour summary:
+ *   - **single**: replaces selection with `subtreePaths` (folders) or `[path]`
+ *     (files). Anchor moves to `path`.
+ *   - **toggle**: all-or-nothing flip of `subtreePaths` (folders) or single
+ *     `path` (files). Anchor moves to `path`.
+ *   - **range**: replaces selection with the slice of `flatVisible` between
+ *     `anchor` and `path` (inclusive, direction-agnostic). Anchor is preserved.
+ *     If `anchor` is `null` → behaves like `single` and moves the anchor.
+ *     If either anchor or target is missing from `flatVisible` → falls back to
+ *     a `single`-style replacement but preserves the anchor (the original
+ *     reference point may still be valid once it scrolls back into view).
+ */
+export const computeRowClickSelection = ({
+    anchor,
+    flatVisible,
+    modifier,
+    path,
+    prev,
+    subtreePaths,
+}: ComputeRowClickSelectionArgs): ComputeRowClickSelectionResult => {
+    const hasSubtree = !!subtreePaths && subtreePaths.length > 0;
+    const buildReplacement = (): Set<string> =>
+        hasSubtree && subtreePaths ? new Set(subtreePaths) : new Set([path]);
+
+    if (modifier === 'single') {
+        return { next: buildReplacement(), nextAnchor: path };
+    }
+
+    if (modifier === 'toggle') {
+        if (hasSubtree && subtreePaths) {
+            return { next: toggleSubtreeOnSet(prev, subtreePaths), nextAnchor: path };
+        }
+
+        const next = new Set(prev);
+
+        if (next.has(path)) {
+            next.delete(path);
+        } else {
+            next.add(path);
+        }
+
+        return { next, nextAnchor: path };
+    }
+
+    if (!anchor) {
+        return { next: buildReplacement(), nextAnchor: path };
+    }
+
+    const fromIndex = flatVisible.indexOf(anchor);
+    const toIndex = flatVisible.indexOf(path);
+
+    if (fromIndex < 0 || toIndex < 0) {
+        return { next: buildReplacement(), nextAnchor: anchor };
+    }
+
+    const [startIndex, endIndex] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
+
+    return { next: new Set(flatVisible.slice(startIndex, endIndex + 1)), nextAnchor: anchor };
+};
+
+interface ComputeToggleSelectionArgs {
+    path: string;
+    prev: ReadonlySet<string>;
+    subtreePaths?: readonly string[];
+}
+
+/**
+ * Pure reducer behind `onToggleSelection` (row checkbox + Space key):
+ *   - When `subtreePaths` is provided and non-empty → all-or-nothing flip of
+ *     the whole branch (matches the directory checkbox semantics).
+ *   - Otherwise → flip just `path`.
+ *
+ * The hook layer is responsible for updating the anchor — it always moves to
+ * `path` after a toggle, regardless of whether anything was added or removed.
+ */
+export const computeToggleSelection = ({ path, prev, subtreePaths }: ComputeToggleSelectionArgs): Set<string> => {
+    if (subtreePaths && subtreePaths.length > 0) {
+        return toggleSubtreeOnSet(prev, subtreePaths);
+    }
+
+    const next = new Set(prev);
+
+    if (next.has(path)) {
+        next.delete(path);
+    } else {
+        next.add(path);
+    }
+
+    return next;
+};
+
+interface ComputeToggleSelectAllArgs {
+    /** Universe of every selectable path in the current visible tree. */
+    allSelectablePaths: readonly string[];
+    prev: ReadonlySet<string>;
+}
+
+/**
+ * Pure reducer behind the header "select all" checkbox and Ctrl/Cmd+A:
+ * clears the selection when everything is currently selected, otherwise
+ * replaces it with the full universe. Empty universe yields an empty Set.
+ */
+export const computeToggleSelectAll = ({ allSelectablePaths, prev }: ComputeToggleSelectAllArgs): Set<string> => {
+    const isCurrentlyAllSelected = allSelectablePaths.length > 0 && prev.size === allSelectablePaths.length;
+
+    return isCurrentlyAllSelected ? new Set() : new Set(allSelectablePaths);
+};
+
+interface ComputeDirSelectionStateArgs {
+    /**
+     * Path of the directory itself. Excluded from the tri-state count — the
+     * checkbox should reflect *content* selection, not whether the directory
+     * itself happens to be in `selectedPaths` (which can legitimately be the
+     * case after the user toggled descendants off one by one).
+     */
+    path: string;
+    /**
+     * Pre-computed list of every selectable path in the directory's subtree —
+     * the directory's own path PLUS all descendants. Same array that powers
+     * the "toggle whole subtree" gesture; reusing it avoids re-walking the tree.
+     */
+    paths: readonly string[];
+    selectedPaths: ReadonlySet<string>;
+}
+
+/**
+ * Pure reducer for the directory checkbox tri-state. Treats the *content* as
+ * the source of truth:
+ *
+ *   - **false** → no descendant is selected (regardless of whether the
+ *     directory's own path is in `selectedPaths` — the row's hover/selected
+ *     background still reflects that via `isSelected` on the row).
+ *   - **'indeterminate'** → some, but not all, descendants are selected.
+ *   - **true** → every descendant is selected.
+ *
+ * For an empty directory (no real descendants — e.g. an empty folder or a
+ * synthetic group root with no children), the tri-state mirrors the folder's
+ * own selection as a binary value, so an empty folder still shows checked
+ * when explicitly picked.
+ */
+export const computeDirSelectionState = ({
+    path,
+    paths,
+    selectedPaths,
+}: ComputeDirSelectionStateArgs): 'indeterminate' | boolean => {
+    let descendantsTotal = 0;
+    let descendantsSelected = 0;
+
+    for (const p of paths) {
+        if (p === path) {
+            continue;
+        }
+
+        descendantsTotal += 1;
+
+        if (selectedPaths.has(p)) {
+            descendantsSelected += 1;
+        }
+    }
+
+    if (descendantsTotal === 0) {
+        return selectedPaths.has(path);
+    }
+
+    if (descendantsSelected === 0) {
+        return false;
+    }
+
+    if (descendantsSelected === descendantsTotal) {
+        return true;
+    }
+
+    return 'indeterminate';
+};

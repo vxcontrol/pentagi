@@ -57,7 +57,7 @@ const FlowFilesAttachResourcesDialogBody = ({
         return map;
     }, [resources]);
 
-    const handleSelectionChange = useCallback((next: Set<string>) => {
+    const handleSelectionChange = useCallback((next: ReadonlySet<string>) => {
         setSelectedPaths(next);
     }, []);
 

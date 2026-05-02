@@ -83,6 +83,24 @@ const Resources = () => {
         toast.error('Failed to copy path');
     }, []);
 
+    /**
+     * "Open" gesture — fires on double-click or Enter for a file row.
+     * Triggers the same download the dropdown's Download action would, by clicking
+     * a transient `<a download>` element. We can't just `window.open()` here because
+     * we want the browser's `download` attribute hint (preserves the original
+     * filename even when the server sends `Content-Disposition: inline`).
+     */
+    const handleOpenFile = useCallback((file: FileNode) => {
+        const anchor = document.createElement('a');
+
+        anchor.href = buildResourceDownloadHref(file);
+        anchor.download = file.name;
+        anchor.rel = 'noopener';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    }, []);
+
     const fileManagerActions = useMemo<FileManagerAction[]>(
         () => [
             downloadAction(buildResourceDownloadHref),
@@ -265,6 +283,7 @@ const Resources = () => {
                     isLoading={isInitialLoading}
                     onBulkDelete={deletion.deleteBulk}
                     onMoveItems={handleMoveItems}
+                    onOpen={handleOpenFile}
                     search={{ emptyState: noMatchesState, query: search.debouncedQuery }}
                 />
 

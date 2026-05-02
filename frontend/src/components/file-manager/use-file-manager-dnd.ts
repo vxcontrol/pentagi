@@ -117,6 +117,49 @@ const isRootPassthrough = (node: FileManagerInternalNode): boolean =>
     !node.isDir && !node.isGroupRoot && getParentDir(node.path) === '';
 
 /**
+ * Resolves the *effective* destination directory a drop on this row should land in:
+ *
+ *   - real directory          → the directory itself
+ *   - file inside a real dir  → the file's parent directory (so the entire folder
+ *                               feels like one drop zone, matching Finder/Explorer:
+ *                               anywhere you release inside a folder, the items
+ *                               land in that folder regardless of the row under
+ *                               the cursor)
+ *
+ * Returns `null` for synthetic group roots and for files whose parent isn't a
+ * real, non-group directory (e.g. files sitting directly under a group header) —
+ * those rows stay inert. Top-level loose files are excluded earlier via
+ * `isRootPassthrough`, so this function never returns `''`; an empty parent
+ * just means "no findable real parent" and resolves to `null`.
+ */
+const resolveDropTargetDir = (
+    node: FileManagerInternalNode,
+    findNode: (path: string) => FileManagerInternalNode | undefined,
+): null | string => {
+    if (node.isGroupRoot) {
+        return null;
+    }
+
+    if (node.isDir) {
+        return node.path;
+    }
+
+    const parentDir = getParentDir(node.path);
+
+    if (parentDir === '') {
+        return null;
+    }
+
+    const parent = findNode(parentDir);
+
+    if (!parent || !parent.isDir || parent.isGroupRoot) {
+        return null;
+    }
+
+    return parentDir;
+};
+
+/**
  * Encapsulates the drag-counter pattern + path-set tracking used by `FileManager` for
  * intra-tree move-via-drag. Scoped to a single `FileManager` instance — all intra-instance
  * drags share one set of refs, but two separate instances do not interfere.
@@ -124,6 +167,12 @@ const isRootPassthrough = (node: FileManagerInternalNode): boolean =>
  * Row handlers stop event propagation so the container only sees drags over the empty
  * (root) area. Counters live on `enter`/`leave` (per the W3C drag-counter pattern); drop
  * targets are resolved on `over` only via `preventDefault`.
+ *
+ * File rows inside a folder transparently forward to the parent dir via
+ * `resolveDropTargetDir`, so dropping anywhere inside a folder (on its rows OR on
+ * the folder header) feels identical — matching Finder/Explorer. The parent's
+ * `dragenter` / a child file's `dragenter` write to the same counter, so moving
+ * the cursor between them keeps the highlight stable.
  */
 export const useFileManagerDnd = ({
     findNode,
@@ -263,10 +312,15 @@ export const useFileManagerDnd = ({
             // as a drop into the empty (root) area and call the move API on release.
             event.stopPropagation();
 
-            const isValidDirTarget =
-                node.isDir && !node.isGroupRoot && isValidMove(dragSourcesRef.current, node.path);
+            // Files inside a folder forward their drop logic to the parent dir
+            // (returned here by `resolveDropTargetDir`), so the user can release
+            // anywhere inside the folder and the items land in that folder —
+            // matching Finder/Explorer. The parent's row picks up the highlight
+            // automatically because every row compares `dropTargetPath` to its own
+            // `node.path`, and we set the parent's path here.
+            const targetDir = resolveDropTargetDir(node, findNode);
 
-            if (!isValidDirTarget) {
+            if (targetDir === null || !isValidMove(dragSourcesRef.current, targetDir)) {
                 // Cursor is now over a non-droppable row — make sure the previously
                 // shown root highlight (if any) gets cleared. Container `dragleave`
                 // gates clearing on `relatedTarget` to avoid flicker, so the row
@@ -276,15 +330,18 @@ export const useFileManagerDnd = ({
                 return;
             }
 
+            // Counter is keyed by `targetDir` so a folder row and any of its child
+            // file rows feed the SAME counter: moving the cursor between them keeps
+            // the highlight stable (W3C drag-counter pattern across siblings).
             const counters = nodeCounterRef.current;
-            const next = (counters.get(node.path) ?? 0) + 1;
-            counters.set(node.path, next);
+            const next = (counters.get(targetDir) ?? 0) + 1;
+            counters.set(targetDir, next);
 
             if (next === 1) {
-                setDropTargetPath(node.path);
+                setDropTargetPath(targetDir);
             }
         },
-        [isEnabled],
+        [findNode, isEnabled],
     );
 
     const handleNodeDragLeave = useCallback(
@@ -301,17 +358,31 @@ export const useFileManagerDnd = ({
 
             event.stopPropagation();
 
+            // Decrement the same counter `dragenter` incremented — the resolved
+            // parent dir for file rows, the dir's own path for folder rows.
+            const targetDir = resolveDropTargetDir(node, findNode);
+
+            if (targetDir === null) {
+                return;
+            }
+
             const counters = nodeCounterRef.current;
-            const current = counters.get(node.path) ?? 0;
+            const current = counters.get(targetDir) ?? 0;
+
+            // Enter may have skipped incrementing (invalid move, pre-cleared root
+            // highlight branch) — nothing to undo in that case.
+            if (current === 0) {
+                return;
+            }
 
             if (current <= 1) {
-                counters.delete(node.path);
-                setDropTargetPath((value) => (value === node.path ? null : value));
+                counters.delete(targetDir);
+                setDropTargetPath((value) => (value === targetDir ? null : value));
             } else {
-                counters.set(node.path, current - 1);
+                counters.set(targetDir, current - 1);
             }
         },
-        [isEnabled],
+        [findNode, isEnabled],
     );
 
     const handleNodeDragOver = useCallback(
@@ -330,18 +401,16 @@ export const useFileManagerDnd = ({
             // `preventDefault` on top of us and accept any row position as a root drop.
             event.stopPropagation();
 
-            if (!node.isDir || node.isGroupRoot) {
-                return;
-            }
+            const targetDir = resolveDropTargetDir(node, findNode);
 
-            if (!isValidMove(dragSourcesRef.current, node.path)) {
+            if (targetDir === null || !isValidMove(dragSourcesRef.current, targetDir)) {
                 return;
             }
 
             event.preventDefault();
             event.dataTransfer.dropEffect = 'move';
         },
-        [isEnabled],
+        [findNode, isEnabled],
     );
 
     const handleNodeDrop = useCallback(
@@ -360,15 +429,10 @@ export const useFileManagerDnd = ({
             // bug behind "drag a file, return it back" → unintended API call).
             event.stopPropagation();
 
-            if (!node.isDir || node.isGroupRoot) {
-                resetDragState();
-
-                return;
-            }
-
             const sources = dragSourcesRef.current;
+            const targetDir = resolveDropTargetDir(node, findNode);
 
-            if (!isValidMove(sources, node.path)) {
+            if (targetDir === null || !isValidMove(sources, targetDir)) {
                 resetDragState();
 
                 return;
@@ -380,9 +444,9 @@ export const useFileManagerDnd = ({
             // about to invalidate. Clear them so the bulk-actions bar / "select-all"
             // checkbox don't show stale state.
             onClearSelection?.();
-            void onMoveItems?.(sources, node.path);
+            void onMoveItems?.(sources, targetDir);
         },
-        [isEnabled, onClearSelection, onMoveItems, resetDragState],
+        [findNode, isEnabled, onClearSelection, onMoveItems, resetDragState],
     );
 
     const bindNodeDnd = useCallback(

@@ -1,5 +1,6 @@
-import { Fragment, type MouseEvent as ReactMouseEvent } from 'react';
+import { Fragment } from 'react';
 
+import type { FileManagerRowDisplay, FileManagerRowHandlers } from './file-manager-row';
 import type { FileManagerAction, FileManagerInternalNode } from './file-manager-types';
 import type { FileManagerNodeDndHandlers } from './use-file-manager-dnd';
 
@@ -10,22 +11,19 @@ interface FileManagerTreeNodeProps {
     activeRowPath: null | string;
     /** Returns drag/drop handlers for a node, or `null` when DnD is disabled. */
     bindNodeDnd: (node: FileManagerInternalNode) => FileManagerNodeDndHandlers | null;
+    /** Pre-computed tri-state value per directory path; missing entries default to `false`. */
+    dirSelectionStates: ReadonlyMap<string, 'indeterminate' | boolean>;
+    /** Pre-computed subtree paths per directory path (the dir itself + descendants). */
+    dirSubtreePaths: ReadonlyMap<string, readonly string[]>;
+    /** Per-tree shared layout / i18n bundle. Forwarded as-is to every row. */
+    display: FileManagerRowDisplay;
     expandedPaths: Set<string>;
-    formatModified?: (modifiedAt: Date | string | undefined) => string;
-    gridTemplate: string;
-    hasActions: boolean;
-    isCheckboxVisible: boolean;
-    isModifiedVisible: boolean;
-    isSizeVisible: boolean;
+    /** Per-tree shared callback bundle. Forwarded as-is to every row. */
+    handlers: FileManagerRowHandlers;
     node: FileManagerInternalNode;
-    onClick: (event: ReactMouseEvent, path: string) => void;
-    onFocusRow: (path: string) => void;
-    onToggleCheckbox: (path: string) => void;
-    onToggleExpand: (path: string, wasExpanded: boolean) => void;
     /** 1-based position of the node inside its parent's child list (for `aria-posinset`). */
     posInSet: number;
-    searchQuery?: string;
-    selectedPaths: Set<string>;
+    selectedPaths: ReadonlySet<string>;
     /** Total number of siblings the node is part of (for `aria-setsize`). */
     setSize: number;
 }
@@ -40,20 +38,13 @@ export const FileManagerTreeNode = ({
     actions,
     activeRowPath,
     bindNodeDnd,
+    dirSelectionStates,
+    dirSubtreePaths,
+    display,
     expandedPaths,
-    formatModified,
-    gridTemplate,
-    hasActions,
-    isCheckboxVisible,
-    isModifiedVisible,
-    isSizeVisible,
+    handlers,
     node,
-    onClick,
-    onFocusRow,
-    onToggleCheckbox,
-    onToggleExpand,
     posInSet,
-    searchQuery,
     selectedPaths,
     setSize,
 }: FileManagerTreeNodeProps) => {
@@ -62,27 +53,28 @@ export const FileManagerTreeNode = ({
     const renderChildren = node.isDir && isExpanded && node.children.length > 0;
     const dnd = bindNodeDnd(node);
 
+    // Pre-resolve tri-state + subtree paths per row: keeping the lookup outside
+    // the memoized `FileManagerRow` lets each row receive primitive/stable props
+    // (`'indeterminate' | true | false | undefined` plus a `Map`-stored array
+    // reference) so a selection change only re-renders the rows whose computed
+    // state actually flipped.
+    const dirCheckboxState = node.isDir ? (dirSelectionStates.get(node.path) ?? false) : undefined;
+    const subtreePaths = node.isDir ? dirSubtreePaths.get(node.path) : undefined;
+
     return (
         <Fragment>
             <FileManagerRow
                 actions={actions}
                 activeRowPath={activeRowPath}
+                dirCheckboxState={dirCheckboxState}
+                dirSubtreePaths={subtreePaths}
+                display={display}
                 dnd={dnd}
                 file={node}
-                formatModified={formatModified}
-                gridTemplate={gridTemplate}
-                hasActions={hasActions}
-                isCheckboxVisible={isCheckboxVisible && !node.isGroupRoot}
+                handlers={handlers}
                 isExpanded={isExpanded}
-                isModifiedVisible={isModifiedVisible}
                 isSelected={isSelected}
-                isSizeVisible={isSizeVisible}
-                onClick={onClick}
-                onFocusRow={onFocusRow}
-                onToggleCheckbox={onToggleCheckbox}
-                onToggleExpand={onToggleExpand}
                 posInSet={posInSet}
-                searchQuery={searchQuery}
                 setSize={setSize}
             />
             {renderChildren &&
@@ -91,21 +83,14 @@ export const FileManagerTreeNode = ({
                         actions={actions}
                         activeRowPath={activeRowPath}
                         bindNodeDnd={bindNodeDnd}
+                        dirSelectionStates={dirSelectionStates}
+                        dirSubtreePaths={dirSubtreePaths}
+                        display={display}
                         expandedPaths={expandedPaths}
-                        formatModified={formatModified}
-                        gridTemplate={gridTemplate}
-                        hasActions={hasActions}
-                        isCheckboxVisible={isCheckboxVisible}
-                        isModifiedVisible={isModifiedVisible}
-                        isSizeVisible={isSizeVisible}
+                        handlers={handlers}
                         key={child.id}
                         node={child}
-                        onClick={onClick}
-                        onFocusRow={onFocusRow}
-                        onToggleCheckbox={onToggleCheckbox}
-                        onToggleExpand={onToggleExpand}
                         posInSet={index + 1}
-                        searchQuery={searchQuery}
                         selectedPaths={selectedPaths}
                         setSize={node.children.length}
                     />
