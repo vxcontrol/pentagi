@@ -278,8 +278,14 @@ func ListDirEntriesRecursive(dir, sourceDir string) ([]File, error) {
 
 func Sort(files []File) {
 	sort.Slice(files, func(i, j int) bool {
-		if files[i].ModifiedAt.Equal(files[j].ModifiedAt) {
-			return files[i].Name < files[j].Name
+		if files[i].Path < files[j].Path {
+			return true
+		} else if files[i].Path > files[j].Path {
+			return false
+		} else if files[i].Name < files[j].Name {
+			return true
+		} else if files[i].Name > files[j].Name {
+			return false
 		}
 		return files[i].ModifiedAt.After(files[j].ModifiedAt)
 	})
@@ -443,27 +449,94 @@ func ZipDirectory(w io.Writer, dirPath string) error {
 			return fmt.Errorf("failed to get file info: %w", err)
 		}
 
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return fmt.Errorf("failed to create zip header: %w", err)
-		}
-		header.Name = filepath.ToSlash(rel)
-		header.Method = zip.Deflate
-
-		zf, err := zw.CreateHeader(header)
-		if err != nil {
-			return fmt.Errorf("failed to create zip entry: %w", err)
-		}
-
-		f, err := os.Open(entryPath)
-		if err != nil {
-			return fmt.Errorf("failed to open file for zip: %w", err)
-		}
-		defer f.Close()
-
-		_, err = io.Copy(zf, f)
-		return err
+		return zipWriteFile(zw, entryPath, filepath.ToSlash(rel), info)
 	})
+}
+
+// ZipRelativePaths writes a set of cache-relative paths into a single ZIP
+// stream. Each relPath is resolved against baseDir:
+//   - Regular files are stored under their relPath (e.g. "uploads/file.txt").
+//   - Directories are walked recursively; each nested regular file is stored
+//     under relPath + "/" + path-relative-to-dir (e.g. "container/etc/nginx.conf").
+//   - Symlinks and other special entries are silently skipped.
+//   - Missing entries are silently skipped to tolerate concurrent cache changes.
+//
+// The caller is responsible for deduplicating relPaths before calling this
+// function; no internal deduplication of ZIP entry names is performed.
+func ZipRelativePaths(w io.Writer, baseDir string, relPaths []string) error {
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	for _, relPath := range relPaths {
+		localPath := filepath.Join(baseDir, filepath.FromSlash(relPath))
+
+		info, err := os.Lstat(localPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return fmt.Errorf("stat %q: %w", relPath, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+
+		if info.Mode().IsRegular() {
+			if err := zipWriteFile(zw, localPath, relPath, info); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if !info.IsDir() {
+			continue
+		}
+
+		if err := filepath.WalkDir(localPath, func(entryPath string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.Type()&os.ModeSymlink != 0 || d.IsDir() || !d.Type().IsRegular() {
+				return nil
+			}
+			rel, err := filepath.Rel(localPath, entryPath)
+			if err != nil {
+				return fmt.Errorf("relative path: %w", err)
+			}
+			fi, err := d.Info()
+			if err != nil {
+				return err
+			}
+			return zipWriteFile(zw, entryPath, path.Join(relPath, filepath.ToSlash(rel)), fi)
+		}); err != nil {
+			return fmt.Errorf("walking %q: %w", relPath, err)
+		}
+	}
+
+	return nil
+}
+
+// zipWriteFile adds a single regular file to an open zip.Writer.
+func zipWriteFile(zw *zip.Writer, localPath, zipName string, info os.FileInfo) error {
+	header, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return fmt.Errorf("failed to create zip header for %q: %w", zipName, err)
+	}
+	header.Name = zipName
+	header.Method = zip.Deflate
+
+	zf, err := zw.CreateHeader(header)
+	if err != nil {
+		return fmt.Errorf("failed to create zip entry %q: %w", zipName, err)
+	}
+
+	f, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to open %q for zip: %w", localPath, err)
+	}
+	_, copyErr := io.Copy(zf, f)
+	f.Close()
+	return copyErr
 }
 
 // ResourceRef is a lightweight reference to a user resource for copying into a flow.
@@ -716,6 +789,85 @@ func collectRelativeFilePaths(dir string) []string {
 		return nil
 	})
 	return paths
+}
+
+// DeduplicatePaths returns a deduplicated, coverage-minimised slice of the
+// original input paths, preserving first-occurrence order. The rules applied:
+//
+//  1. Whitespace-only entries are dropped.
+//  2. Entries whose path.Clean form is an absolute path or starts with "../"
+//     are silently dropped (path-traversal safety).
+//  3. Paths whose path.Clean forms are equal are deduplicated; the first
+//     occurrence (original value) wins.
+//  4. A path that is a descendant of another surviving path is dropped because
+//     the ancestor already covers it. For example, when both "uploads/dir" and
+//     "uploads/dir/file.txt" are present, only "uploads/dir" is kept.
+//
+// The "/" suffix trick is used for the ancestor check to ensure that
+// "uploads/my_dir" does not erroneously cover "uploads/my_dir_extra".
+//
+// Original (un-normalised) values of surviving paths are returned.
+func DeduplicatePaths(paths []string) []string {
+	type entry struct {
+		original string
+		clean    string // path.Clean result used only for comparison
+	}
+
+	entries := make([]entry, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+
+	for _, p := range paths {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
+			continue
+		}
+
+		// Normalise for comparison (backslashes → forward slashes, then Clean).
+		normalized := path.Clean(strings.ReplaceAll(trimmed, "\\", "/"))
+
+		// Safety: reject absolute paths and anything that escapes via "..".
+		if path.IsAbs(normalized) || normalized == ".." || strings.HasPrefix(normalized, "../") {
+			continue
+		}
+
+		// Exact-path deduplication (after normalisation).
+		if _, dup := seen[normalized]; dup {
+			continue
+		}
+		seen[normalized] = struct{}{}
+
+		entries = append(entries, entry{original: trimmed, clean: normalized})
+	}
+
+	if len(entries) == 0 {
+		return nil
+	}
+
+	// Coverage deduplication: drop entry B if any other entry A is an ancestor
+	// of B. A is an ancestor when B's clean path with "/" appended starts with
+	// A's clean path with "/" appended:
+	//   strings.HasPrefix(cleanB+"/", cleanA+"/")
+	// The "/" suffix on both sides prevents "uploads/dir_x" from matching
+	// "uploads/dir" as a parent.
+	result := make([]string, 0, len(entries))
+	for i, b := range entries {
+		bPrefix := b.clean + "/"
+		covered := false
+		for j, a := range entries {
+			if i == j {
+				continue
+			}
+			if strings.HasPrefix(bPrefix, a.clean+"/") {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			result = append(result, b.original)
+		}
+	}
+
+	return result
 }
 
 // BaseName returns the last path component of a slash-separated path.

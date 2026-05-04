@@ -37,9 +37,12 @@ type ContainerFiles struct {
 
 // PullFlowFilesRequest is the request body for pulling files from a container.
 type PullFlowFilesRequest struct {
-	// Path is an arbitrary path inside the container, e.g. "/etc/nginx/conf" or "/work/uploads/report.txt".
+	// Path is a single container path (maintained for backward compatibility).
+	// Combined with Paths if both are provided.
 	Path string `json:"path"`
-	// Force overwrites the local cache entry if it already exists.
+	// Paths is a list of container paths to pull. Combined with Path if provided.
+	Paths []string `json:"paths"`
+	// Force overwrites local cache entries that already exist.
 	Force bool `json:"force"`
 }
 

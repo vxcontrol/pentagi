@@ -985,12 +985,19 @@ definitions:
   models.PullFlowFilesRequest:
     properties:
       force:
-        description: Force overwrites the local cache entry if it already exists.
+        description: Force overwrites local cache entries that already exist.
         type: boolean
       path:
-        description: Path is an arbitrary path inside the container, e.g. "/etc/nginx/conf"
-          or "/work/uploads/report.txt".
+        description: |-
+          Path is a single container path (maintained for backward compatibility).
+          Combined with Paths if both are provided.
         type: string
+      paths:
+        description: Paths is a list of container paths to pull. Combined with Path
+          if provided.
+        items:
+          type: string
+        type: array
     type: object
   models.ResourceEntry:
     properties:
@@ -2976,16 +2983,24 @@ paths:
         name: flowID
         required: true
         type: integer
-      - description: 'relative path in cache: uploads/, resources/, or container/'
+      - description: 'relative path in cache: uploads/, resources/, or container/
+          (may be combined with paths[])'
         in: query
         name: path
-        required: true
         type: string
+      - collectionFormat: multi
+        description: 'relative paths in cache (repeatable): uploads/, resources/,
+          or container/'
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
       produces:
       - application/json
       responses:
         "200":
-          description: flow file deleted successful
+          description: flow files deleted successfully
           schema:
             allOf:
             - $ref: '#/definitions/SuccessResponse'
@@ -3011,7 +3026,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Delete flow file or directory by cached path
+      summary: Delete flow files or directories by cached paths
       tags:
       - FlowFiles
     get:
@@ -3117,9 +3132,17 @@ paths:
         required: true
         type: integer
       - description: absolute path inside the running container; defaults to /work
+          (may be combined with paths[])
         in: query
         name: path
         type: string
+      - collectionFormat: multi
+        description: absolute paths inside the running container (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
       produces:
       - application/json
       responses:
@@ -3155,6 +3178,9 @@ paths:
       - FlowFiles
   /flows/{flowID}/files/download:
     get:
+      description: |-
+        Single regular file: served as a direct attachment.
+        Single directory or multiple paths (any mix): packaged as a ZIP archive.
       parameters:
       - description: flow id
         in: path
@@ -3162,18 +3188,25 @@ paths:
         name: flowID
         required: true
         type: integer
-      - description: 'relative path in cache: uploads/, resources/, or container/'
+      - description: 'relative path in cache: uploads/, resources/, or container/
+          (may be combined with paths[])'
         in: query
         name: path
-        required: true
         type: string
+      - collectionFormat: multi
+        description: relative paths in cache (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
       produces:
       - application/octet-stream
       - application/zip
       - application/json
       responses:
         "200":
-          description: file content, or ZIP archive for directories
+          description: file content, or ZIP archive for directories / multiple paths
           schema:
             type: file
         "400":
@@ -3194,7 +3227,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Download flow file or directory by cached path
+      summary: Download flow file(s) or directory by cached path(s)
       tags:
       - FlowFiles
   /flows/{flowID}/files/pull:
@@ -3208,7 +3241,7 @@ paths:
         name: flowID
         required: true
         type: integer
-      - description: pull request
+      - description: 'pull request: path or paths are required'
         in: body
         name: request
         required: true
@@ -3218,7 +3251,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: container path synced to local cache
+          description: container paths synced to local cache, sorted by cache path
           schema:
             allOf:
             - $ref: '#/definitions/SuccessResponse'
@@ -3248,7 +3281,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Pull a file or directory from the running container into the local
+      summary: Pull files or directories from the running container into the local
         cache
       tags:
       - FlowFiles
@@ -4840,11 +4873,17 @@ paths:
   /resources/:
     delete:
       parameters:
-      - description: virtual path to delete
+      - description: virtual path to delete (may be combined with paths[])
         in: query
         name: path
-        required: true
         type: string
+      - collectionFormat: multi
+        description: additional virtual paths to delete (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
       produces:
       - application/json
       responses:
@@ -4880,10 +4919,18 @@ paths:
       - Resources
     get:
       parameters:
-      - description: virtual directory path; empty for root
+      - description: virtual directory path; empty for root (may be combined with
+          paths[])
         in: query
         name: path
         type: string
+      - collectionFormat: multi
+        description: additional virtual directory paths (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
       - description: list recursively (default false)
         in: query
         name: recursive
@@ -5014,16 +5061,24 @@ paths:
   /resources/download:
     get:
       parameters:
-      - description: virtual path to download
+      - description: virtual path to download (may be combined with paths[])
         in: query
         name: path
-        required: true
         type: string
+      - collectionFormat: multi
+        description: additional virtual paths to download (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
       produces:
       - application/octet-stream
+      - application/zip
+      - application/json
       responses:
         "200":
-          description: file content, or ZIP archive for directories
+          description: file content, or ZIP archive for directories / multiple paths
           schema:
             type: file
         "400":
@@ -5044,7 +5099,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Download a resource
+      summary: Download a resource or resources
       tags:
       - Resources
   /resources/mkdir:

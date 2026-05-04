@@ -240,6 +240,8 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 		name              string
 		seeds             []seed
 		path              string
+		paths             []string // additional paths for paths[] param
+		rawQuery          string   // overrides path/paths/recursive URL building when set
 		recursive         bool
 		privs             []string
 		uid               uint64
@@ -358,6 +360,151 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantStatus:        http.StatusOK,
 			wantResponsePaths: []string{},
 		},
+
+		// ── paths[] parameter ────────────────────────────────────────────────
+		{
+			// Two sibling directories listed via paths[]; results are merged and sorted.
+			name: "two directories via paths[] returns combined deduplicated results",
+			seeds: []seed{
+				{path: "docs", isDir: true},
+				{path: "docs/a.txt", content: "a"},
+				{path: "other", isDir: true},
+				{path: "other/b.txt", content: "b"},
+			},
+			paths:             []string{"docs", "other"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"docs", "docs/a.txt", "other", "other/b.txt"},
+		},
+		{
+			// path= and paths[]= are combined; both directories are listed.
+			name: "path= and paths[] combined return merged results",
+			seeds: []seed{
+				{path: "docs", isDir: true},
+				{path: "docs/a.txt", content: "a"},
+				{path: "extra", isDir: true},
+				{path: "extra/c.txt", content: "c"},
+			},
+			path:              "docs",
+			paths:             []string{"extra"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"docs", "docs/a.txt", "extra", "extra/c.txt"},
+		},
+		{
+			// Same path sent twice in paths[]; items appear only once in the response.
+			name: "duplicate paths in paths[] deduplicated",
+			seeds: []seed{
+				{path: "docs", isDir: true},
+				{path: "docs/a.txt", content: "a"},
+			},
+			paths:             []string{"docs", "docs"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"docs", "docs/a.txt"},
+		},
+		{
+			// path and paths[] query the same path; results deduplicated.
+			name: "path= and paths[] with same value deduplicated",
+			seeds: []seed{
+				{path: "docs", isDir: true},
+				{path: "docs/a.txt", content: "a"},
+			},
+			path:              "docs",
+			paths:             []string{"docs"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"docs", "docs/a.txt"},
+		},
+		{
+			// Whitespace-only paths[] entries are ignored; falls back to root listing.
+			name: "whitespace-only paths[] falls back to root listing",
+			seeds: []seed{
+				{path: "root.txt", content: "r"},
+			},
+			rawQuery:          "paths[]=%20%20&paths[]=%09",
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"root.txt"},
+		},
+		{
+			// An invalid path in paths[] returns 400.
+			name:       "invalid path in paths[] returns bad request",
+			rawQuery:   "paths[]=docs&paths[]=../escape",
+			privs:      []string{"resources.view"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// Results from multiple paths are returned sorted by virtual path.
+			name: "output sorted by path across multiple queried paths",
+			seeds: []seed{
+				{path: "z", isDir: true},
+				{path: "z/c.txt", content: "c"},
+				{path: "a", isDir: true},
+				{path: "a/b.txt", content: "b"},
+			},
+			paths:      []string{"z", "a"},
+			privs:      []string{"resources.view"},
+			wantStatus: http.StatusOK,
+			// a < a/b.txt < z < z/c.txt
+			wantResponsePaths: []string{"a", "a/b.txt", "z", "z/c.txt"},
+		},
+		{
+			// Querying a nested path must also return its parent directory so that
+			// a client can construct a complete tree without dangling nodes.
+			name: "listing nested path includes parent directory as ancestor",
+			seeds: []seed{
+				{path: "base", isDir: true},
+				{path: "base/sub", isDir: true},
+				{path: "base/sub/file.txt", content: "x"},
+			},
+			paths:             []string{"base/sub"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"base", "base/sub", "base/sub/file.txt"},
+		},
+		{
+			// A deeply nested path must include every ancestor directory.
+			name: "listing deeply nested path includes all ancestor directories",
+			seeds: []seed{
+				{path: "a", isDir: true},
+				{path: "a/b", isDir: true},
+				{path: "a/b/c", isDir: true},
+				{path: "a/b/c/file.txt", content: "y"},
+			},
+			paths:             []string{"a/b/c"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"a", "a/b", "a/b/c", "a/b/c/file.txt"},
+		},
+		{
+			// If an ancestor directory does not exist in the DB it is simply omitted.
+			name: "missing ancestor directory not added to response",
+			seeds: []seed{
+				// "base" parent is intentionally not seeded
+				{path: "base/sub", isDir: true},
+				{path: "base/sub/file.txt", content: "x"},
+			},
+			paths:             []string{"base/sub"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"base/sub", "base/sub/file.txt"},
+		},
+		{
+			// Ancestors are scoped to the requesting user; another user's ancestor
+			// directory must not appear in the response.
+			name: "ancestor directory belonging to another user is not included",
+			seeds: []seed{
+				{userID: 2, path: "shared", isDir: true},
+				{userID: 1, path: "shared/sub", isDir: true},
+				{userID: 1, path: "shared/sub/file.txt", content: "x"},
+			},
+			paths:             []string{"shared/sub"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
+			// "shared" belongs to user 2 → not returned for user 1
+			wantResponsePaths: []string{"shared/sub", "shared/sub/file.txt"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -382,16 +529,24 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 				seedResource(t, db, seeded)
 			}
 
-			target := "/resources/"
-			query := []string{}
-			if tt.path != "" {
-				query = append(query, "path="+tt.path)
-			}
-			if tt.recursive {
-				query = append(query, "recursive=true")
-			}
-			if len(query) > 0 {
-				target += "?" + strings.Join(query, "&")
+			var target string
+			if tt.rawQuery != "" {
+				target = "/resources/?" + tt.rawQuery
+			} else {
+				target = "/resources/"
+				query := []string{}
+				if tt.path != "" {
+					query = append(query, "path="+tt.path)
+				}
+				for _, p := range tt.paths {
+					query = append(query, "paths[]="+p)
+				}
+				if tt.recursive {
+					query = append(query, "recursive=true")
+				}
+				if len(query) > 0 {
+					target += "?" + strings.Join(query, "&")
+				}
 			}
 
 			uid := tt.uid
@@ -573,7 +728,7 @@ func TestResourceService_MkdirResourceScenarios(t *testing.T) {
 			assert.Equal(t, tt.wantEvents, ss.events)
 			if tt.wantStatus == http.StatusOK {
 				var resp struct {
-					Status string                `json:"status"`
+					Status string               `json:"status"`
 					Data   models.ResourceEntry `json:"data"`
 				}
 				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
@@ -888,7 +1043,9 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 	tests := []struct {
 		name             string
 		seeds            []seed
-		path             string
+		path             string   // builds ?path=<value>
+		paths            []string // builds ?paths[]=<value> for each
+		rawQuery         string   // when set, used verbatim (overrides path/paths)
 		privs            []string
 		uid              uint64
 		wantStatus       int
@@ -897,6 +1054,7 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 		wantDispContains string
 		wantZipEntries   map[string]string
 	}{
+		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
 			name:             "download single file with download privilege",
 			seeds:            []seed{{path: "report.txt", content: "payload"}},
@@ -935,6 +1093,7 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			wantStatus:       http.StatusOK,
 			wantContentType:  "application/zip",
 			wantDispContains: "docs.zip",
+			// Single dir → paths relative to dir root.
 			wantZipEntries: map[string]string{
 				"a.txt":     "a-data",
 				"sub/b.txt": "b-data",
@@ -963,6 +1122,8 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			wantDispContains: "docs.zip",
 			wantZipEntries:   map[string]string{},
 		},
+
+		// ── access control ────────────────────────────────────────────────────
 		{
 			name:       "missing privilege returns forbidden",
 			seeds:      []seed{{path: "report.txt", content: "payload"}},
@@ -970,10 +1131,11 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			privs:      []string{"resources.view"},
 			wantStatus: http.StatusForbidden,
 		},
+
+		// ── single-path: invalid input ────────────────────────────────────────
 		{
 			name:       "empty path returns bad request",
 			seeds:      []seed{{path: "report.txt", content: "payload"}},
-			path:       "",
 			privs:      []string{"resources.download"},
 			wantStatus: http.StatusBadRequest,
 		},
@@ -994,6 +1156,128 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			name:       "blob missing on disk returns not found",
 			seeds:      []seed{{path: "ghost.txt", content: "body", skipBlobWrite: true}},
 			path:       "ghost.txt",
+			privs:      []string{"resources.download"},
+			wantStatus: http.StatusNotFound,
+		},
+
+		// ── paths[] parameter ─────────────────────────────────────────────────
+
+		{
+			// Single file via paths[] behaves identically to path=.
+			name:             "single file via paths[] downloaded directly",
+			seeds:            []seed{{path: "report.txt", content: "payload"}},
+			paths:            []string{"report.txt"},
+			privs:            []string{"resources.download"},
+			wantStatus:       http.StatusOK,
+			wantBody:         "payload",
+			wantDispContains: "report.txt",
+		},
+		{
+			// Single directory via paths[] uses dir-relative ZIP paths (backward-compat).
+			name: "single directory via paths[] uses dir-relative zip paths",
+			seeds: []seed{
+				{path: "docs", isDir: true},
+				{path: "docs/a.txt", content: "a-data"},
+				{path: "docs/sub", isDir: true},
+				{path: "docs/sub/b.txt", content: "b-data"},
+			},
+			paths:            []string{"docs"},
+			privs:            []string{"resources.download"},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "docs.zip",
+			wantZipEntries: map[string]string{
+				"a.txt":     "a-data",
+				"sub/b.txt": "b-data",
+			},
+		},
+		{
+			// Two files → ZIP where each entry uses its full virtual path.
+			name: "two files via paths[] packaged into zip with full virtual paths",
+			seeds: []seed{
+				{path: "docs/a.txt", content: "a-data"},
+				{path: "other/b.txt", content: "b-data"},
+			},
+			paths:            []string{"docs/a.txt", "other/b.txt"},
+			privs:            []string{"resources.download"},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"docs/a.txt":  "a-data",
+				"other/b.txt": "b-data",
+			},
+		},
+		{
+			// path= and paths[]= are combined; result is a multi-entry ZIP.
+			name: "path= and paths[] combined produce multi-entry zip",
+			seeds: []seed{
+				{path: "a.txt", content: "a-data"},
+				{path: "b.txt", content: "b-data"},
+			},
+			path:             "a.txt",
+			paths:            []string{"b.txt"},
+			privs:            []string{"resources.download"},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"a.txt": "a-data",
+				"b.txt": "b-data",
+			},
+		},
+		{
+			// File and directory combined: directory contents use full virtual paths.
+			name: "file and directory via paths[] combined in zip with full virtual paths",
+			seeds: []seed{
+				{path: "report.txt", content: "report-data"},
+				{path: "docs", isDir: true},
+				{path: "docs/a.txt", content: "a-data"},
+				{path: "docs/sub", isDir: true},
+				{path: "docs/sub/b.txt", content: "b-data"},
+			},
+			paths:            []string{"report.txt", "docs"},
+			privs:            []string{"resources.download"},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"report.txt":    "report-data",
+				"docs/a.txt":    "a-data",
+				"docs/sub/b.txt": "b-data",
+			},
+		},
+		{
+			// Same path sent twice: downloaded exactly once.
+			name:             "duplicate paths in paths[] deduplicated",
+			seeds:            []seed{{path: "a.txt", content: "alpha"}},
+			paths:            []string{"a.txt", "a.txt"},
+			privs:            []string{"resources.download"},
+			wantStatus:       http.StatusOK,
+			wantBody:         "alpha",
+			wantDispContains: "a.txt",
+		},
+		{
+			// Whitespace-only paths → 400.
+			name:       "whitespace-only paths[] returns bad request",
+			rawQuery:   "paths[]=%20%20&paths[]=%09",
+			privs:      []string{"resources.download"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// Invalid path → 400.
+			name:       "invalid path in paths[] returns bad request",
+			rawQuery:   "paths[]=docs&paths[]=../escape",
+			privs:      []string{"resources.download"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// First resource valid, second missing → 404, fail-fast.
+			name: "missing resource in batch returns not found",
+			seeds: []seed{
+				{path: "a.txt", content: "alpha"},
+			},
+			paths:      []string{"a.txt", "missing.txt"},
 			privs:      []string{"resources.download"},
 			wantStatus: http.StatusNotFound,
 		},
@@ -1025,10 +1309,23 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 				seedResource(t, db, seeded)
 			}
 
-			target := "/resources/download"
-			if tt.path != "" {
-				target += "?path=" + tt.path
+			var target string
+			if tt.rawQuery != "" {
+				target = "/resources/download?" + tt.rawQuery
+			} else {
+				query := []string{}
+				if tt.path != "" {
+					query = append(query, "path="+tt.path)
+				}
+				for _, p := range tt.paths {
+					query = append(query, "paths[]="+p)
+				}
+				target = "/resources/download"
+				if len(query) > 0 {
+					target += "?" + strings.Join(query, "&")
+				}
 			}
+
 			uid := tt.uid
 			if uid == 0 {
 				uid = 1
@@ -1079,7 +1376,9 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 	tests := []struct {
 		name              string
 		seeds             []seed
-		targetPath        string
+		targetPath        string   // builds ?path=<value>
+		targetPaths       []string // builds ?paths[]=<value> for each
+		rawQuery          string   // overrides targetPath/targetPaths when set
 		privs             []string
 		wantStatus        int
 		wantPaths         []string
@@ -1211,6 +1510,119 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 			wantPaths:        []string{"report.txt"},
 			wantPresentBlobs: []string{"payload"},
 		},
+
+		// ── paths[] parameter ────────────────────────────────────────────────
+		{
+			// Two sibling files deleted in one request.
+			name: "delete two files via paths[] in batch",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+				{path: "b.txt", content: "b"},
+				{path: "keep.txt", content: "keep"},
+			},
+			targetPaths:       []string{"a.txt", "b.txt"},
+			privs:             []string{"resources.delete"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"keep.txt"},
+			wantResponsePaths: []string{"a.txt", "b.txt"},
+			wantEvents: []resourceEvent{
+				{action: "deleted", path: "a.txt"},
+				{action: "deleted", path: "b.txt"},
+			},
+			wantMissingBlobs: []string{"a", "b"},
+			wantPresentBlobs: []string{"keep"},
+		},
+		{
+			// path= and paths[]= are combined.
+			name: "path= and paths[] combined delete both targets",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+				{path: "b.txt", content: "b"},
+			},
+			targetPath:        "a.txt",
+			targetPaths:       []string{"b.txt"},
+			privs:             []string{"resources.delete"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{},
+			wantResponsePaths: []string{"a.txt", "b.txt"},
+			wantEvents: []resourceEvent{
+				{action: "deleted", path: "a.txt"},
+				{action: "deleted", path: "b.txt"},
+			},
+		},
+		{
+			// Same path sent twice: each record is deleted exactly once.
+			name: "duplicate paths in paths[] deduplicated",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+			},
+			targetPaths:       []string{"a.txt", "a.txt"},
+			privs:             []string{"resources.delete"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{},
+			wantResponsePaths: []string{"a.txt"},
+			wantEvents:        []resourceEvent{{action: "deleted", path: "a.txt"}},
+			wantMissingBlobs:  []string{"a"},
+		},
+		{
+			// Whitespace-only paths[] → 400 (no valid paths provided).
+			name:       "whitespace-only paths[] returns bad request",
+			rawQuery:   "paths[]=%20%20&paths[]=%09",
+			privs:      []string{"resources.delete"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// First path valid, second path missing → 404, nothing deleted (fail-fast).
+			name: "missing second path in batch returns 404 without deleting first",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+			},
+			targetPaths: []string{"a.txt", "missing.txt"},
+			privs:       []string{"resources.delete"},
+			wantStatus:  http.StatusNotFound,
+			wantPaths:   []string{"a.txt"}, // not deleted due to fail-fast
+		},
+		{
+			// Parent and child both in delete list: all descendants collected once
+			// via ID deduplication; no double-deletion or errors.
+			name: "overlapping paths parent and child both processed correctly",
+			seeds: []seed{
+				{path: "docs", isDir: true},
+				{path: "docs/a.txt", content: "a"},
+				{path: "docs/sub", isDir: true},
+				{path: "docs/sub/b.txt", content: "b"},
+			},
+			targetPath:        "docs",
+			targetPaths:       []string{"docs/a.txt"},
+			privs:             []string{"resources.delete"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{},
+			wantResponsePaths: []string{"docs", "docs/a.txt", "docs/sub", "docs/sub/b.txt"},
+			wantEvents: []resourceEvent{
+				{action: "deleted", path: "docs"},
+				{action: "deleted", path: "docs/a.txt"},
+				{action: "deleted", path: "docs/sub"},
+				{action: "deleted", path: "docs/sub/b.txt"},
+			},
+		},
+		{
+			// Deleted entries are returned sorted by virtual path.
+			name: "response sorted by path across multiple deleted targets",
+			seeds: []seed{
+				{path: "z.txt", content: "z"},
+				{path: "a.txt", content: "a"},
+				{path: "m.txt", content: "m"},
+			},
+			targetPaths:       []string{"z.txt", "a.txt", "m.txt"},
+			privs:             []string{"resources.delete"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"a.txt", "m.txt", "z.txt"},
+			wantEvents: []resourceEvent{
+				{action: "deleted", path: "a.txt"},
+				{action: "deleted", path: "m.txt"},
+				{action: "deleted", path: "z.txt"},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1244,7 +1656,20 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 				seedResource(t, db, seeded)
 			}
 
-			c, w := newResourceTestContext(http.MethodDelete, "/resources/?path="+tt.targetPath, nil, tt.privs)
+			var target string
+			if tt.rawQuery != "" {
+				target = "/resources/?" + tt.rawQuery
+			} else {
+				query := []string{}
+				if tt.targetPath != "" {
+					query = append(query, "path="+tt.targetPath)
+				}
+				for _, p := range tt.targetPaths {
+					query = append(query, "paths[]="+p)
+				}
+				target = "/resources/?" + strings.Join(query, "&")
+			}
+			c, w := newResourceTestContext(http.MethodDelete, target, nil, tt.privs)
 			svc.DeleteResource(c)
 
 			require.Equal(t, tt.wantStatus, w.Code)

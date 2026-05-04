@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -65,8 +67,9 @@ func NewResourceService(
 // @Tags Resources
 // @Produce json
 // @Security BearerAuth
-// @Param path      query string false "virtual directory path; empty for root"
-// @Param recursive query bool   false "list recursively (default false)"
+// @Param path query string false "virtual directory path; empty for root (may be combined with paths[])"
+// @Param paths[] query []string false "additional virtual directory paths (repeatable)"
+// @Param recursive query bool false "list recursively (default false)"
 // @Success 200 {object} response.successResp{data=models.ResourceList}
 // @Failure 400 {object} response.errorResp
 // @Failure 403 {object} response.errorResp
@@ -82,28 +85,136 @@ func (s *ResourceService) ListResources(c *gin.Context) {
 		return
 	}
 
-	reqPath := strings.TrimSpace(c.Query("path"))
 	recursive := c.Query("recursive") == "true" || c.Query("recursive") == "1"
 
-	var dirPath string
-	if reqPath != "" {
-		var err error
-		dirPath, err = resources.SanitizeResourcePath(reqPath)
-		if err != nil {
-			logger.FromContext(c).WithError(err).Error("invalid path for list resources")
-			response.Error(c, response.ErrResourcesInvalidRequest, err)
-			return
-		}
+	// Collect paths from both "path" and "paths[]" query params.
+	rawPaths := c.QueryArray("paths[]")
+	if singlePath := strings.TrimSpace(c.Query("path")); singlePath != "" {
+		rawPaths = append(rawPaths, singlePath)
 	}
 
-	items, err := s.queryResources(uid, isAdmin, dirPath, recursive)
-	if err != nil {
-		logger.FromContext(c).WithError(err).Error("error listing resources")
-		response.Error(c, response.ErrInternal, err)
+	// When no paths are provided, list the root (backward-compat behaviour).
+	if len(rawPaths) == 0 {
+		items, err := s.queryResources(uid, isAdmin, "", recursive)
+		if err != nil {
+			logger.FromContext(c).WithError(err).Error("error listing resources")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		response.Success(c, http.StatusOK, models.ResourceList{Items: items, Total: uint64(len(items))})
 		return
 	}
 
-	response.Success(c, http.StatusOK, models.ResourceList{Items: items, Total: uint64(len(items))})
+	dirPaths, err := collectAndSanitizeResourcePaths(rawPaths)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Error("invalid path for list resources")
+		response.Error(c, response.ErrResourcesInvalidRequest, err)
+		return
+	}
+
+	// If all provided paths were whitespace-only, fall back to root listing.
+	if len(dirPaths) == 0 {
+		items, err := s.queryResources(uid, isAdmin, "", recursive)
+		if err != nil {
+			logger.FromContext(c).WithError(err).Error("error listing resources")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		response.Success(c, http.StatusOK, models.ResourceList{Items: items, Total: uint64(len(items))})
+		return
+	}
+
+	// Query each path and merge results, deduplicating by virtual path.
+	seenPaths := make(map[string]struct{})
+	allItems := make([]models.ResourceEntry, 0)
+	for _, dirPath := range dirPaths {
+		items, err := s.queryResources(uid, isAdmin, dirPath, recursive)
+		if err != nil {
+			logger.FromContext(c).WithError(err).Error("error listing resources")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		for _, item := range items {
+			if _, seen := seenPaths[item.Path]; !seen {
+				seenPaths[item.Path] = struct{}{}
+				allItems = append(allItems, item)
+			}
+		}
+	}
+
+	// Ensure all ancestor directories of queried paths are present so that
+	// clients can construct a complete tree without dangling nodes.
+	// For example, querying "temp2/temp" must also return "temp2".
+	ancestorCandidates := make(map[string]struct{})
+	for _, dirPath := range dirPaths {
+		parts := strings.Split(dirPath, "/")
+		for i := 1; i < len(parts); i++ {
+			ancestor := strings.Join(parts[:i], "/")
+			if _, already := seenPaths[ancestor]; !already {
+				ancestorCandidates[ancestor] = struct{}{}
+			}
+		}
+	}
+	if len(ancestorCandidates) > 0 {
+		neededAncestors := make([]string, 0, len(ancestorCandidates))
+		for p := range ancestorCandidates {
+			neededAncestors = append(neededAncestors, p)
+		}
+		q := s.db.Model(&models.UserResource{}).Where("path IN (?) AND is_dir = true", neededAncestors)
+		if !isAdmin {
+			q = q.Where("user_id = ?", uid)
+		}
+		var ancestorRecs []models.UserResource
+		if err := q.Find(&ancestorRecs).Error; err != nil {
+			logger.FromContext(c).WithError(err).Error("error fetching ancestor directories for resources listing")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		for _, rec := range ancestorRecs {
+			if _, seen := seenPaths[rec.Path]; !seen {
+				seenPaths[rec.Path] = struct{}{}
+				allItems = append(allItems, convertResource(rec))
+			}
+		}
+	}
+
+	sort.Slice(allItems, func(i, j int) bool {
+		if allItems[i].Path < allItems[j].Path {
+			return true
+		} else if allItems[i].Path > allItems[j].Path {
+			return false
+		} else if allItems[i].Name < allItems[j].Name {
+			return true
+		} else if allItems[i].Name > allItems[j].Name {
+			return false
+		}
+		return allItems[i].CreatedAt.Before(allItems[j].CreatedAt)
+	})
+	response.Success(c, http.StatusOK, models.ResourceList{Items: allItems, Total: uint64(len(allItems))})
+}
+
+// collectAndSanitizeResourcePaths sanitizes and deduplicates a slice of raw
+// virtual resource paths. Whitespace-only entries are skipped; invalid paths
+// return an error. Returns nil when all entries reduce to empty (caller decides
+// the fallback behaviour).
+func collectAndSanitizeResourcePaths(rawPaths []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(rawPaths))
+	result := make([]string, 0, len(rawPaths))
+	for _, p := range rawPaths {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
+			continue
+		}
+		sanitized, err := resources.SanitizeResourcePath(trimmed)
+		if err != nil {
+			return nil, err
+		}
+		if _, dup := seen[sanitized]; !dup {
+			seen[sanitized] = struct{}{}
+			result = append(result, sanitized)
+		}
+	}
+	return result, nil
 }
 
 // ---- POST /resources/ ------------------------------------------------------
@@ -111,11 +222,11 @@ func (s *ResourceService) ListResources(c *gin.Context) {
 // UploadResources uploads one or more files into the user's resource storage.
 // @Summary Upload files to resource storage
 // @Tags Resources
-// @Accept  mpfd
+// @Accept mpfd
 // @Produce json
 // @Security BearerAuth
-// @Param dir   query  string false "target virtual directory path; empty or omitted means root"
-// @Param files formData file true  "files to upload (field name: files or file)"
+// @Param dir query string false "target virtual directory path; empty or omitted means root"
+// @Param files formData file true "files to upload (field name: files or file)"
 // @Success 200 {object} response.successResp{data=models.ResourceList}
 // @Failure 400 {object} response.errorResp
 // @Failure 403 {object} response.errorResp
@@ -345,7 +456,7 @@ func (s *ResourceService) UploadResources(c *gin.Context) {
 // MkdirResource creates a virtual directory entry (idempotent).
 // @Summary Create a virtual directory
 // @Tags Resources
-// @Accept  json
+// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.MkdirResourceRequest true "mkdir request"
@@ -424,7 +535,7 @@ func (s *ResourceService) MkdirResource(c *gin.Context) {
 // MoveResource renames or moves a file or directory.
 // @Summary Move or rename a resource (file or directory)
 // @Tags Resources
-// @Accept  json
+// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.MoveResourceRequest true "move request"
@@ -876,7 +987,7 @@ func updateMovedResource(tx *gorm.DB, rec models.UserResource, newPath string, n
 // CopyResource copies a file or directory to a new path.
 // @Summary Copy a resource (file or directory)
 // @Tags Resources
-// @Accept  json
+// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param request body models.CopyResourceRequest true "copy request"
@@ -1191,12 +1302,13 @@ func (s *ResourceService) copyDirResource(
 
 // ---- DELETE /resources/ ----------------------------------------------------
 
-// DeleteResource deletes a file or directory (recursively) by virtual path.
+// DeleteResource deletes one or more files or directories (recursively) by virtual path.
 // @Summary Delete a resource (file or directory)
 // @Tags Resources
 // @Produce json
 // @Security BearerAuth
-// @Param path query string true "virtual path to delete"
+// @Param path query string false "virtual path to delete (may be combined with paths[])"
+// @Param paths[] query []string false "additional virtual paths to delete (repeatable)"
 // @Success 200 {object} response.successResp{data=models.ResourceList}
 // @Failure 400 {object} response.errorResp
 // @Failure 403 {object} response.errorResp
@@ -1212,55 +1324,78 @@ func (s *ResourceService) DeleteResource(c *gin.Context) {
 		return
 	}
 
-	reqPath := strings.TrimSpace(c.Query("path"))
-	if reqPath == "" {
-		response.Error(c, response.ErrResourcesInvalidRequest, errors.New("path query parameter is required"))
+	// Collect paths from both "path" and "paths[]" query params.
+	rawPaths := c.QueryArray("paths[]")
+	if singlePath := strings.TrimSpace(c.Query("path")); singlePath != "" {
+		rawPaths = append(rawPaths, singlePath)
+	}
+	if len(rawPaths) == 0 {
+		response.Error(c, response.ErrResourcesInvalidRequest,
+			errors.New("at least one path is required (use 'path' or 'paths[]' query parameters)"))
 		return
 	}
-	targetPath, err := resources.SanitizeResourcePath(reqPath)
+
+	targetPaths, err := collectAndSanitizeResourcePaths(rawPaths)
 	if err != nil {
 		response.Error(c, response.ErrResourcesInvalidRequest, err)
 		return
 	}
+	if len(targetPaths) == 0 {
+		response.Error(c, response.ErrResourcesInvalidRequest,
+			errors.New("at least one valid path is required"))
+		return
+	}
 
-	// Verify target exists and belongs to user.
-	var root models.UserResource
-	if err := s.db.Where("user_id = ? AND path = ?", uid, targetPath).First(&root).Error; err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", targetPath))
+	// Phase 1: validate every path and collect all records to delete.
+	// Validation is fail-fast so that no rows are removed if any path is missing.
+	hashSet := make(map[string]struct{})
+	idSet := make(map[uint64]struct{})
+	var toDelete []models.UserResource
+
+	for _, targetPath := range targetPaths {
+		var root models.UserResource
+		if err := s.db.Where("user_id = ? AND path = ?", uid, targetPath).First(&root).Error; err != nil {
+			if gorm.IsRecordNotFoundError(err) {
+				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", targetPath))
+				return
+			}
+			logger.FromContext(c).WithError(err).Error("error finding resource for delete")
+			response.Error(c, response.ErrInternal, err)
 			return
 		}
-		logger.FromContext(c).WithError(err).Error("error finding resource for delete")
-		response.Error(c, response.ErrInternal, err)
+
+		escapedTarget := resources.EscapeLike(targetPath)
+		var descendants []models.UserResource
+		if err := s.db.Where(
+			"user_id = ? AND (path = ? OR path LIKE ?)",
+			uid, targetPath, escapedTarget+"/%",
+		).Find(&descendants).Error; err != nil {
+			logger.FromContext(c).WithError(err).Error("error listing resources for delete")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+
+		for _, rec := range descendants {
+			if _, dup := idSet[rec.ID]; !dup {
+				idSet[rec.ID] = struct{}{}
+				toDelete = append(toDelete, rec)
+				if !rec.IsDir && rec.Hash != "" {
+					hashSet[rec.Hash] = struct{}{}
+				}
+			}
+		}
+	}
+
+	if len(toDelete) == 0 {
+		response.Success(c, http.StatusOK, models.ResourceList{})
 		return
 	}
 
-	escapedTarget := resources.EscapeLike(targetPath)
-
-	var toDelete []models.UserResource
-	if err := s.db.Where(
-		"user_id = ? AND (path = ? OR path LIKE ?)",
-		uid, targetPath, escapedTarget+"/%",
-	).Find(&toDelete).Error; err != nil {
-		logger.FromContext(c).WithError(err).Error("error listing resources for delete")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-
-	hashSet := make(map[string]struct{})
 	ids := make([]uint64, 0, len(toDelete))
 	deleted := make([]models.ResourceEntry, 0, len(toDelete))
 	for _, rec := range toDelete {
 		ids = append(ids, rec.ID)
 		deleted = append(deleted, convertResource(rec))
-		if !rec.IsDir && rec.Hash != "" {
-			hashSet[rec.Hash] = struct{}{}
-		}
-	}
-
-	if len(ids) == 0 {
-		response.Success(c, http.StatusOK, models.ResourceList{})
-		return
 	}
 
 	if err := s.db.Where("id IN (?)", ids).Delete(&models.UserResource{}).Error; err != nil {
@@ -1277,19 +1412,36 @@ func (s *ResourceService) DeleteResource(c *gin.Context) {
 		s.cleanupOrphanBlobs(c.Request.Context(), hashes)
 	}
 
+	sort.Slice(deleted, func(i, j int) bool {
+		if deleted[i].Path < deleted[j].Path {
+			return true
+		} else if deleted[i].Path > deleted[j].Path {
+			return false
+		} else if deleted[i].Name < deleted[j].Name {
+			return true
+		} else if deleted[i].Name > deleted[j].Name {
+			return false
+		}
+		return deleted[i].CreatedAt.Before(deleted[j].CreatedAt)
+	})
+
 	s.publishResourcesDeleted(c.Request.Context(), uid, deleted)
 	response.Success(c, http.StatusOK, models.ResourceList{Items: deleted, Total: uint64(len(deleted))})
 }
 
 // ---- GET /resources/download -----------------------------------------------
 
-// DownloadResource downloads a single file or a directory as a ZIP archive.
-// @Summary Download a resource
+// DownloadResource downloads one or more resources.
+// Single regular file: served as a direct attachment with an explicit
+// Content-Length header so that Swagger UI and browsers offer a download link.
+// Single directory or multiple paths (any mix): packaged into a ZIP archive.
+// @Summary Download a resource or resources
 // @Tags Resources
-// @Produce application/octet-stream
+// @Produce application/octet-stream,application/zip,json
 // @Security BearerAuth
-// @Param path query string true "virtual path to download"
-// @Success 200 {file} binary "file content, or ZIP archive for directories"
+// @Param path query string false "virtual path to download (may be combined with paths[])"
+// @Param paths[] query []string false "additional virtual paths to download (repeatable)"
+// @Success 200 {file} binary "file content, or ZIP archive for directories / multiple paths"
 // @Failure 400 {object} response.errorResp "invalid resource request data"
 // @Failure 403 {object} response.errorResp "downloading resource not permitted"
 // @Failure 404 {object} response.errorResp "resource not found"
@@ -1305,80 +1457,181 @@ func (s *ResourceService) DownloadResource(c *gin.Context) {
 		return
 	}
 
-	reqPath := strings.TrimSpace(c.Query("path"))
-	if reqPath == "" {
-		response.Error(c, response.ErrResourcesInvalidRequest, errors.New("path query parameter is required"))
+	// Collect paths from both "path" and "paths[]" query params, then deduplicate.
+	rawPaths := c.QueryArray("paths[]")
+	if singlePath := strings.TrimSpace(c.Query("path")); singlePath != "" {
+		rawPaths = append(rawPaths, singlePath)
+	}
+	if len(rawPaths) == 0 {
+		response.Error(c, response.ErrResourcesInvalidRequest,
+			errors.New("at least one path is required (use 'path' or 'paths[]' query parameters)"))
 		return
 	}
-	targetPath, err := resources.SanitizeResourcePath(reqPath)
+
+	targetPaths, err := collectAndSanitizeResourcePaths(rawPaths)
 	if err != nil {
 		response.Error(c, response.ErrResourcesInvalidRequest, err)
 		return
 	}
-
-	q := s.db.Where("path = ?", targetPath)
-	if !isAdmin {
-		q = q.Where("user_id = ?", uid)
-	}
-	var rec models.UserResource
-	if err := q.First(&rec).Error; err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", targetPath))
-			return
-		}
-		logger.FromContext(c).WithError(err).Error("error finding resource for download")
-		response.Error(c, response.ErrInternal, err)
+	if len(targetPaths) == 0 {
+		response.Error(c, response.ErrResourcesInvalidRequest,
+			errors.New("at least one valid path is required"))
 		return
 	}
 
-	if !rec.IsDir {
-		blobPath := resources.BlobPath(s.dataDir, rec.Hash)
-		if _, statErr := os.Lstat(blobPath); statErr != nil {
-			if os.IsNotExist(statErr) {
-				response.Error(c, response.ErrResourcesNotFound,
-					fmt.Errorf("blob for resource %q not found on disk", targetPath))
+	// Load each requested resource from the DB; fail-fast on missing.
+	type resolvedEntry struct {
+		rec models.UserResource
+	}
+	entries := make([]resolvedEntry, 0, len(targetPaths))
+	seenTargets := make(map[string]struct{}, len(targetPaths))
+	for _, targetPath := range targetPaths {
+		if _, dup := seenTargets[targetPath]; dup {
+			continue
+		}
+		seenTargets[targetPath] = struct{}{}
+
+		q := s.db.Where("path = ?", targetPath)
+		if !isAdmin {
+			q = q.Where("user_id = ?", uid)
+		}
+		var rec models.UserResource
+		if err := q.First(&rec).Error; err != nil {
+			if gorm.IsRecordNotFoundError(err) {
+				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", targetPath))
 				return
 			}
-			logger.FromContext(c).WithError(statErr).Error("error checking blob for download")
-			response.Error(c, response.ErrInternal, statErr)
+			logger.FromContext(c).WithError(err).Error("error finding resource for download")
+			response.Error(c, response.ErrInternal, err)
 			return
 		}
-		c.FileAttachment(blobPath, rec.Name)
+		entries = append(entries, resolvedEntry{rec: rec})
+	}
+
+	// Single regular file → serve as a direct attachment with explicit Content-Length.
+	if len(entries) == 1 && !entries[0].rec.IsDir {
+		e := entries[0]
+		blobPath := resources.BlobPath(s.dataDir, e.rec.Hash)
+		f, err := os.Open(blobPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				response.Error(c, response.ErrResourcesNotFound,
+					fmt.Errorf("blob for resource %q not found on disk", e.rec.Path))
+				return
+			}
+			logger.FromContext(c).WithError(err).Error("error opening resource blob for download")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		defer f.Close()
+
+		info, err := f.Stat()
+		if err != nil {
+			logger.FromContext(c).WithError(err).Error("error stating resource blob for download")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		c.DataFromReader(http.StatusOK, info.Size(), "application/octet-stream", f,
+			map[string]string{
+				"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{
+					"filename": e.rec.Name,
+				}),
+			})
 		return
 	}
 
-	// Directory: collect all non-directory entries recursively.
-	escapedTarget := resources.EscapeLike(targetPath)
-	var fileRecs []models.UserResource
-	if err := s.db.Where(
-		"user_id = ? AND path LIKE ? AND is_dir = false",
-		rec.UserID, escapedTarget+"/%",
-	).Find(&fileRecs).Error; err != nil {
-		logger.FromContext(c).WithError(err).Error("error listing resources for zip download")
+	// Single directory → ZIP with paths relative to that directory (backward-compat).
+	if len(entries) == 1 && entries[0].rec.IsDir {
+		e := entries[0]
+		escapedTarget := resources.EscapeLike(e.rec.Path)
+		var fileRecs []models.UserResource
+		if err := s.db.Where(
+			"user_id = ? AND path LIKE ? AND is_dir = false",
+			e.rec.UserID, escapedTarget+"/%",
+		).Find(&fileRecs).Error; err != nil {
+			logger.FromContext(c).WithError(err).Error("error listing resources for zip download")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+
+		zipEntries := make([]resources.ZipEntry, 0, len(fileRecs))
+		for _, fr := range fileRecs {
+			relPath := strings.TrimPrefix(fr.Path, e.rec.Path+"/")
+			if relPath == "" {
+				relPath = fr.Name
+			}
+			zipEntries = append(zipEntries, resources.ZipEntry{
+				BlobPath: resources.BlobPath(s.dataDir, fr.Hash),
+				ZipPath:  relPath,
+			})
+		}
+
+		dirName := path.Base(e.rec.Path)
+		var buf bytes.Buffer
+		if err := resources.ZipResources(&buf, zipEntries); err != nil {
+			logger.FromContext(c).WithError(err).Error("error creating zip archive for download")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		c.DataFromReader(http.StatusOK, int64(buf.Len()), "application/zip", &buf,
+			map[string]string{
+				"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{
+					"filename": dirName + ".zip",
+				}),
+			})
+		return
+	}
+
+	// Multiple paths (any mix of files and directories) → ZIP using the full
+	// virtual path as each entry name so the caller sees the complete path context.
+	seenZipPaths := make(map[string]struct{})
+	zipEntries := make([]resources.ZipEntry, 0)
+	for _, e := range entries {
+		if !e.rec.IsDir {
+			if _, dup := seenZipPaths[e.rec.Path]; !dup {
+				seenZipPaths[e.rec.Path] = struct{}{}
+				zipEntries = append(zipEntries, resources.ZipEntry{
+					BlobPath: resources.BlobPath(s.dataDir, e.rec.Hash),
+					ZipPath:  e.rec.Path,
+				})
+			}
+			continue
+		}
+
+		// Directory: collect all file descendants using their full virtual paths.
+		escapedTarget := resources.EscapeLike(e.rec.Path)
+		var fileRecs []models.UserResource
+		if err := s.db.Where(
+			"user_id = ? AND path LIKE ? AND is_dir = false",
+			e.rec.UserID, escapedTarget+"/%",
+		).Find(&fileRecs).Error; err != nil {
+			logger.FromContext(c).WithError(err).Error("error listing resources for zip download")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		for _, fr := range fileRecs {
+			if _, dup := seenZipPaths[fr.Path]; !dup {
+				seenZipPaths[fr.Path] = struct{}{}
+				zipEntries = append(zipEntries, resources.ZipEntry{
+					BlobPath: resources.BlobPath(s.dataDir, fr.Hash),
+					ZipPath:  fr.Path,
+				})
+			}
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := resources.ZipResources(&buf, zipEntries); err != nil {
+		logger.FromContext(c).WithError(err).Error("error creating zip archive for download")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
-
-	entries := make([]resources.ZipEntry, 0, len(fileRecs))
-	for _, fr := range fileRecs {
-		relPath := strings.TrimPrefix(fr.Path, targetPath+"/")
-		if relPath == "" {
-			relPath = fr.Name
-		}
-		entries = append(entries, resources.ZipEntry{
-			BlobPath: resources.BlobPath(s.dataDir, fr.Hash),
-			ZipPath:  relPath,
+	c.DataFromReader(http.StatusOK, int64(buf.Len()), "application/zip", &buf,
+		map[string]string{
+			"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{
+				"filename": "download.zip",
+			}),
 		})
-	}
-
-	dirName := path.Base(targetPath)
-	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
-		"filename": dirName + ".zip",
-	}))
-	c.Header("Content-Type", "application/zip")
-	if err := resources.ZipResources(c.Writer, entries); err != nil {
-		logger.FromContext(c).WithError(err).Error("error creating zip archive for download")
-	}
 }
 
 // ---- helper methods --------------------------------------------------------

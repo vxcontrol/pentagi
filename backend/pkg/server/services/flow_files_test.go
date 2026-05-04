@@ -946,18 +946,28 @@ type fakeDockerClient struct {
 	running    bool
 	runningErr error
 
-	// ContainerStatPath behaviour.
+	// ContainerStatPath behaviour (single-path fallback).
 	statPath    container.PathStat
 	statPathErr error
 
-	// ListContainerDir behaviour.
+	// ListContainerDir behaviour (single-path fallback).
 	listDir    []container.PathStat
 	listDirErr error
 
+	// Per-path overrides for multi-path tests; take precedence over the
+	// single-value fields above when the queried path has an entry here.
+	statPathMap    map[string]container.PathStat
+	statPathErrMap map[string]error
+	listDirMap     map[string][]container.PathStat
+	listDirErrMap  map[string]error
+
 	// CopyFromContainer behaviour.
-	copyFromBody []byte
-	copyFromStat container.PathStat
-	copyFromErr  error
+	copyFromBody    []byte
+	copyFromStat    container.PathStat
+	copyFromErr     error
+	copyFromBodyMap map[string][]byte // per-path override; takes precedence over copyFromBody
+	copyFromErrMap  map[string]error  // per-path override; takes precedence over copyFromErr
+	copyFromCount   int               // total number of CopyFromContainer calls
 
 	// CopyToContainer behaviour.
 	copyToErr   error
@@ -1014,10 +1024,30 @@ func (f *fakeDockerClient) ContainerExecInspect(_ context.Context, _ string) (co
 	}
 	return container.ExecInspect{ExitCode: f.execInspectCode}, nil
 }
-func (f *fakeDockerClient) ContainerStatPath(_ context.Context, _ string, _ string) (container.PathStat, error) {
+func (f *fakeDockerClient) ContainerStatPath(_ context.Context, _ string, p string) (container.PathStat, error) {
+	if f.statPathErrMap != nil {
+		if err, ok := f.statPathErrMap[p]; ok {
+			return container.PathStat{}, err
+		}
+	}
+	if f.statPathMap != nil {
+		if stat, ok := f.statPathMap[p]; ok {
+			return stat, nil
+		}
+	}
 	return f.statPath, f.statPathErr
 }
-func (f *fakeDockerClient) ListContainerDir(_ context.Context, _ string, _ string) ([]container.PathStat, error) {
+func (f *fakeDockerClient) ListContainerDir(_ context.Context, _ string, p string) ([]container.PathStat, error) {
+	if f.listDirErrMap != nil {
+		if err, ok := f.listDirErrMap[p]; ok {
+			return nil, err
+		}
+	}
+	if f.listDirMap != nil {
+		if dir, ok := f.listDirMap[p]; ok {
+			return dir, nil
+		}
+	}
 	return f.listDir, f.listDirErr
 }
 func (f *fakeDockerClient) CopyToContainer(_ context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error {
@@ -1032,9 +1062,23 @@ func (f *fakeDockerClient) CopyToContainer(_ context.Context, containerID string
 	f.mu.Unlock()
 	return f.copyToErr
 }
-func (f *fakeDockerClient) CopyFromContainer(_ context.Context, _ string, _ string) (io.ReadCloser, container.PathStat, error) {
+func (f *fakeDockerClient) CopyFromContainer(_ context.Context, _ string, containerPath string) (io.ReadCloser, container.PathStat, error) {
+	f.mu.Lock()
+	f.copyFromCount++
+	f.mu.Unlock()
+
+	if f.copyFromErrMap != nil {
+		if err, ok := f.copyFromErrMap[containerPath]; ok {
+			return nil, container.PathStat{}, err
+		}
+	}
 	if f.copyFromErr != nil {
 		return nil, container.PathStat{}, f.copyFromErr
+	}
+	if f.copyFromBodyMap != nil {
+		if body, ok := f.copyFromBodyMap[containerPath]; ok {
+			return io.NopCloser(bytes.NewReader(body)), f.copyFromStat, nil
+		}
 	}
 	return io.NopCloser(bytes.NewReader(f.copyFromBody)), f.copyFromStat, nil
 }
@@ -1613,13 +1657,23 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 		privs             []string
 		seedFlow          bool
 		seedFiles         []seedFile
-		queryPath         string
+		queryPath         string // builds ?path=<value>; empty = no path param
+		rawQuery          string // when non-empty, used verbatim as query string (overrides queryPath)
 		dockerRunning     bool
+		execCreateErr     error // simulate ContainerExecCreate failure
+		execInspectCode   int   // simulate non-zero exec exit code (must have dockerRunning:true)
 		wantStatus        int
-		wantDeletedPath   string
-		wantRemainingFile string
-		wantContainerExec bool
+		wantDeletedPath   string   // single path expected in "deleted" subscription events
+		wantDeletedPaths  []string // additional paths expected in "deleted" events (for bulk tests)
+		wantFilesGone     []string // relative paths inside flow data dir that must be absent
+		wantFilesExist    []string // relative paths that must still exist (fail-safe atomicity)
+		wantContainerExec bool     // assert at least one exec with "rm -rf"
+		wantNoExec        bool     // assert zero exec calls
+		wantSingleExec    bool     // assert exactly one exec call
+		wantExecContains  string   // exec command must contain this substring
+		wantResponseTotal int      // > 0: verify response Total and Files length
 	}{
+		// ── single-path via ?path= (existing behaviour) ───────────────────────
 		{
 			name:            "delete uploaded file",
 			flowOwner:       1,
@@ -1633,22 +1687,21 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantDeletedPath: "uploads/report.txt",
 		},
 		{
-			name:            "delete container directory recursively",
-			flowOwner:       1,
-			uid:             1,
-			flowID:          1,
-			privs:           []string{"flow_files.upload"},
-			seedFlow:        true,
-			seedFiles:       []seedFile{{relPath: "container/etc", isDir: true}, {relPath: "container/etc/nginx.conf", content: "n"}},
+			name:      "delete container directory recursively",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "container/etc", isDir: true},
+				{relPath: "container/etc/nginx.conf", content: "n"},
+			},
 			queryPath:       "container/etc",
 			wantStatus:      http.StatusOK,
 			wantDeletedPath: "container/etc",
 		},
 		{
-			name:            "delete resources file",
-			flowOwner:       1,
-			uid:             1,
-			flowID:          1,
+			name:      "delete resources file",
+			flowOwner: 1, uid: 1, flowID: 1,
 			privs:           []string{"flow_files.upload"},
 			seedFlow:        true,
 			seedFiles:       []seedFile{{relPath: "resources/creds/p.txt", content: "p"}},
@@ -1657,10 +1710,8 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantDeletedPath: "resources/creds/p.txt",
 		},
 		{
-			name:              "delete uploads file invokes container exec when running",
-			flowOwner:         1,
-			uid:               1,
-			flowID:            1,
+			name:      "delete uploads file invokes container exec when running",
+			flowOwner: 1, uid: 1, flowID: 1,
 			privs:             []string{"flow_files.upload"},
 			seedFlow:          true,
 			seedFiles:         []seedFile{{relPath: "uploads/report.txt", content: "r"}},
@@ -1670,11 +1721,11 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantDeletedPath:   "uploads/report.txt",
 			wantContainerExec: true,
 		},
+
+		// ── single-path: access control ──────────────────────────────────────
 		{
-			name:       "view privilege cannot delete",
-			flowOwner:  1,
-			uid:        1,
-			flowID:     1,
+			name:      "view privilege cannot delete",
+			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"flow_files.view"},
 			seedFlow:   true,
 			queryPath:  "uploads/report.txt",
@@ -1688,45 +1739,312 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			queryPath:  "uploads/report.txt",
 			wantStatus: http.StatusNotFound,
 		},
+
+		// ── single-path: invalid input ────────────────────────────────────────
 		{
-			name:       "missing path returns bad request",
-			flowOwner:  1,
-			uid:        1,
-			flowID:     1,
+			name:      "missing path returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"flow_files.upload"},
 			seedFlow:   true,
 			queryPath:  "",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "wrong-prefix path returns bad request",
-			flowOwner:  1,
-			uid:        1,
-			flowID:     1,
+			name:      "wrong-prefix path returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"flow_files.upload"},
 			seedFlow:   true,
 			queryPath:  "tmp/x.txt",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "path traversal returns bad request",
-			flowOwner:  1,
-			uid:        1,
-			flowID:     1,
+			name:      "path traversal returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"flow_files.upload"},
 			seedFlow:   true,
 			queryPath:  "uploads/../../etc/passwd",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "non-existent file returns not found",
-			flowOwner:  1,
-			uid:        1,
-			flowID:     1,
+			name:      "non-existent file returns not found",
+			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"flow_files.upload"},
 			seedFlow:   true,
 			queryPath:  "uploads/missing.txt",
 			wantStatus: http.StatusNotFound,
+		},
+
+		// ── paths[] parameter ─────────────────────────────────────────────────
+
+		{
+			// Verifies the paths[] param works independently without the singular path= param.
+			name:      "only paths[] param used deletes single file",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:           []string{"flow_files.upload"},
+			seedFlow:        true,
+			seedFiles:       []seedFile{{relPath: "uploads/report.txt", content: "r"}},
+			rawQuery:        "paths[]=uploads/report.txt",
+			wantStatus:      http.StatusOK,
+			wantDeletedPath: "uploads/report.txt",
+			wantFilesGone:   []string{"uploads/report.txt"},
+		},
+		{
+			// Both uploads/a.txt and uploads/b.txt are deleted in one request.
+			name:      "batch delete two uploads files via paths[]",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "uploads/a.txt", content: "a"},
+				{relPath: "uploads/b.txt", content: "b"},
+			},
+			rawQuery:          "paths[]=uploads/a.txt&paths[]=uploads/b.txt",
+			wantStatus:        http.StatusOK,
+			wantDeletedPaths:  []string{"uploads/a.txt", "uploads/b.txt"},
+			wantFilesGone:     []string{"uploads/a.txt", "uploads/b.txt"},
+			wantResponseTotal: 2,
+		},
+		{
+			// path= and paths[]= are combined; both files are deleted.
+			name:      "path and paths[] combined delete two files",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "uploads/a.txt", content: "a"},
+				{relPath: "uploads/b.txt", content: "b"},
+			},
+			rawQuery:          "path=uploads/a.txt&paths[]=uploads/b.txt",
+			wantStatus:        http.StatusOK,
+			wantDeletedPaths:  []string{"uploads/a.txt", "uploads/b.txt"},
+			wantFilesGone:     []string{"uploads/a.txt", "uploads/b.txt"},
+			wantResponseTotal: 2,
+		},
+		{
+			// Same path sent twice in paths[]; must be treated as a single deletion.
+			name:      "duplicate paths[] entries deduplicated",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:             []string{"flow_files.upload"},
+			seedFlow:          true,
+			seedFiles:         []seedFile{{relPath: "uploads/report.txt", content: "r"}},
+			rawQuery:          "paths[]=uploads/report.txt&paths[]=uploads/report.txt",
+			wantStatus:        http.StatusOK,
+			wantDeletedPath:   "uploads/report.txt",
+			wantFilesGone:     []string{"uploads/report.txt"},
+			wantResponseTotal: 1,
+		},
+		{
+			// uploads/dir covers uploads/dir/file.txt; DeduplicatePaths reduces the
+			// list to just uploads/dir.  The file disappears as part of recursive removal.
+			// After directory expansion the response and subscription must report BOTH
+			// the directory entry and its nested file.
+			name:      "paths[] parent covers child - child not separately processed",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "uploads/dir", isDir: true},
+				{relPath: "uploads/dir/file.txt", content: "x"},
+			},
+			rawQuery:          "paths[]=uploads/dir&paths[]=uploads/dir/file.txt",
+			wantStatus:        http.StatusOK,
+			wantDeletedPath:   "uploads/dir",
+			wantDeletedPaths:  []string{"uploads/dir/file.txt"},
+			wantFilesGone:     []string{"uploads/dir", "uploads/dir/file.txt"},
+			wantResponseTotal: 2, // dir entry + nested file
+		},
+
+		{
+			// Deletes a directory that contains nested sub-directories and files.
+			// The response and subscription must enumerate every removed entry,
+			// not just the top-level directory handle.
+			name:      "directory deletion reports all nested files and dirs in response",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "resources/folder", isDir: true},
+				{relPath: "resources/folder/scope.md", content: "scope"},
+				{relPath: "resources/folder/sub", isDir: true},
+				{relPath: "resources/folder/sub/detail.txt", content: "detail"},
+			},
+			queryPath:       "resources/folder",
+			wantStatus:      http.StatusOK,
+			wantDeletedPath: "resources/folder",
+			wantDeletedPaths: []string{
+				"resources/folder/scope.md",
+				"resources/folder/sub",
+				"resources/folder/sub/detail.txt",
+			},
+			wantFilesGone:     []string{"resources/folder"},
+			wantResponseTotal: 4, // dir + 1 file + sub-dir + 1 nested file
+		},
+		{
+			// Verifies the response contains file metadata for every deleted entry.
+			name:      "response contains metadata for all deleted files",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "uploads/a.txt", content: "a"},
+				{relPath: "resources/creds/p.txt", content: "p"},
+			},
+			rawQuery:          "paths[]=uploads/a.txt&paths[]=resources/creds/p.txt",
+			wantStatus:        http.StatusOK,
+			wantDeletedPaths:  []string{"uploads/a.txt", "resources/creds/p.txt"},
+			wantResponseTotal: 2,
+		},
+
+		// ── Docker exec: batch optimisation ──────────────────────────────────
+		{
+			// Two uploads paths must result in exactly one Docker exec call.
+			name:      "single Docker exec issued for two uploads paths",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "uploads/a.txt", content: "a"},
+				{relPath: "uploads/b.txt", content: "b"},
+			},
+			rawQuery:         "paths[]=uploads/a.txt&paths[]=uploads/b.txt",
+			dockerRunning:    true,
+			wantStatus:       http.StatusOK,
+			wantDeletedPaths: []string{"uploads/a.txt", "uploads/b.txt"},
+			wantSingleExec:   true,
+			wantExecContains: "rm -rf",
+		},
+		{
+			// container/ paths are host-only and must never be sent to the container.
+			name:      "container path does not trigger Docker exec",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "container/etc", isDir: true},
+				{relPath: "container/etc/nginx.conf", content: "n"},
+			},
+			rawQuery:        "paths[]=container/etc",
+			dockerRunning:   true,
+			wantStatus:      http.StatusOK,
+			wantDeletedPath: "container/etc",
+			wantNoExec:      true,
+		},
+		{
+			// resources/ paths are mirrored in the container; exec must be triggered.
+			name:      "resources path triggers Docker exec",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:             []string{"flow_files.upload"},
+			seedFlow:          true,
+			seedFiles:         []seedFile{{relPath: "resources/creds/p.txt", content: "p"}},
+			rawQuery:          "paths[]=resources/creds/p.txt",
+			dockerRunning:     true,
+			wantStatus:        http.StatusOK,
+			wantDeletedPath:   "resources/creds/p.txt",
+			wantContainerExec: true,
+		},
+		{
+			// Mixed uploads + container + resources: single exec, containing only the
+			// two mirrored paths (/work/uploads/... and /work/resources/...); the
+			// container path is excluded from the exec command.
+			name:      "mixed namespaces produce single exec with only mirrored paths",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "uploads/a.txt", content: "a"},
+				{relPath: "container/etc", isDir: true},
+				{relPath: "container/etc/nginx.conf", content: "n"},
+				{relPath: "resources/creds/p.txt", content: "p"},
+			},
+			rawQuery:         "paths[]=uploads/a.txt&paths[]=container/etc&paths[]=resources/creds/p.txt",
+			dockerRunning:    true,
+			wantStatus:       http.StatusOK,
+			wantDeletedPaths: []string{"uploads/a.txt", "container/etc", "resources/creds/p.txt"},
+			wantFilesGone:    []string{"uploads/a.txt", "container/etc", "resources/creds/p.txt"},
+			wantSingleExec:   true,
+			wantExecContains: "/work/uploads/a.txt",
+		},
+
+		// ── access control ────────────────────────────────────────────────────
+		{
+			// flow_files.admin bypasses the uid ownership filter.
+			name:      "admin can delete from other user flow",
+			flowOwner: 2, uid: 1, flowID: 1,
+			privs:           []string{"flow_files.admin"},
+			seedFlow:        true,
+			seedFiles:       []seedFile{{relPath: "uploads/report.txt", content: "r"}},
+			queryPath:       "uploads/report.txt",
+			wantStatus:      http.StatusOK,
+			wantDeletedPath: "uploads/report.txt",
+		},
+
+		// ── input validation: batch edge cases ───────────────────────────────
+		{
+			// All paths[] values consist of whitespace only; after trimming none remain.
+			name:      "all whitespace paths[] values return bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:      []string{"flow_files.upload"},
+			seedFlow:   true,
+			rawQuery:   "paths[]=%20%20%20&paths[]=%09",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// First path is valid; second has an unsupported prefix.
+			// Validation is fail-fast: the first file must NOT be deleted.
+			name:      "invalid prefix in second paths[] fails atomically",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "uploads/a.txt", content: "a"},
+			},
+			rawQuery:       "paths[]=uploads/a.txt&paths[]=tmp/evil.txt",
+			wantStatus:     http.StatusBadRequest,
+			wantFilesExist: []string{"uploads/a.txt"},
+		},
+		{
+			// First path exists; second path does not.
+			// Validation is fail-fast: the first file must NOT be deleted.
+			name:      "missing file in second paths[] fails atomically",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.upload"},
+			seedFlow: true,
+			seedFiles: []seedFile{
+				{relPath: "uploads/a.txt", content: "a"},
+			},
+			rawQuery:       "paths[]=uploads/a.txt&paths[]=uploads/missing.txt",
+			wantStatus:     http.StatusNotFound,
+			wantFilesExist: []string{"uploads/a.txt"},
+		},
+
+		// ── Docker error handling ─────────────────────────────────────────────
+		{
+			// ContainerExecCreate fails; the handler must return 500 and must NOT
+			// delete the local cache entry (container and cache would diverge otherwise).
+			name:      "exec create failure returns 500 and preserves local file",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:          []string{"flow_files.upload"},
+			seedFlow:       true,
+			seedFiles:      []seedFile{{relPath: "uploads/report.txt", content: "r"}},
+			queryPath:      "uploads/report.txt",
+			dockerRunning:  true,
+			execCreateErr:  fmt.Errorf("docker daemon unreachable"),
+			wantStatus:     http.StatusInternalServerError,
+			wantFilesExist: []string{"uploads/report.txt"},
+		},
+		{
+			// rm exits with a non-zero code; the handler must return 500 and must NOT
+			// delete the local cache entry.
+			name:      "exec non-zero exit code returns 500 and preserves local file",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:           []string{"flow_files.upload"},
+			seedFlow:        true,
+			seedFiles:       []seedFile{{relPath: "uploads/report.txt", content: "r"}},
+			queryPath:       "uploads/report.txt",
+			dockerRunning:   true,
+			execInspectCode: 1,
+			wantStatus:      http.StatusInternalServerError,
+			wantFilesExist:  []string{"uploads/report.txt"},
 		},
 	}
 
@@ -1735,7 +2053,11 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			fakeDocker := &fakeDockerClient{running: tt.dockerRunning}
+			fakeDocker := &fakeDockerClient{
+				running:         tt.dockerRunning,
+				execCreateErr:   tt.execCreateErr,
+				execInspectCode: tt.execInspectCode,
+			}
 			svc := NewFlowFileService(db, dataDir, fakeDocker, ss)
 
 			if tt.seedFlow {
@@ -1755,8 +2077,12 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 				require.NoError(t, os.WriteFile(abs, []byte(f.content), 0644))
 			}
 
+			// Build request URL.
 			target := "/flows/1/files/"
-			if tt.queryPath != "" {
+			switch {
+			case tt.rawQuery != "":
+				target += "?" + tt.rawQuery
+			case tt.queryPath != "":
 				target += "?path=" + tt.queryPath
 			}
 			c, w := newFlowFileTestContext(http.MethodDelete, target, nil, tt.privs, tt.uid, tt.flowID)
@@ -1764,23 +2090,67 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			svc.DeleteFlowFile(c)
 
 			require.Equal(t, tt.wantStatus, w.Code)
-			if tt.wantStatus == http.StatusOK {
-				abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(tt.queryPath))
-				_, err := os.Lstat(abs)
-				assert.True(t, os.IsNotExist(err), "deleted file/dir must be gone from cache")
 
-				deleted := []string{}
+			// ── success assertions ────────────────────────────────────────────
+			if tt.wantStatus == http.StatusOK {
+				// Existing: check queryPath is gone (single-path tests).
+				if tt.queryPath != "" {
+					abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(tt.queryPath))
+					_, err := os.Lstat(abs)
+					assert.True(t, os.IsNotExist(err), "deleted file/dir must be gone from cache: %s", tt.queryPath)
+				}
+				// New: check every explicitly listed gone path.
+				for _, gone := range tt.wantFilesGone {
+					abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(gone))
+					_, err := os.Lstat(abs)
+					assert.True(t, os.IsNotExist(err), "expected %q to be gone from cache", gone)
+				}
+
+				// Subscription events.
+				deleted := make([]string, 0)
 				for _, ev := range ss.snapshot() {
 					if ev.channel == "flow" && ev.action == "deleted" {
 						deleted = append(deleted, ev.path)
 					}
 				}
-				assert.Contains(t, deleted, tt.wantDeletedPath)
+				if tt.wantDeletedPath != "" {
+					assert.Contains(t, deleted, tt.wantDeletedPath)
+				}
+				for _, p := range tt.wantDeletedPaths {
+					assert.Contains(t, deleted, p, "expected deleted event for %q", p)
+				}
 
+				// Response body total.
+				if tt.wantResponseTotal > 0 {
+					resp := decodeFlowFilesResponse(t, w)
+					assert.Equal(t, uint64(tt.wantResponseTotal), resp.Total, "response Total mismatch")
+					assert.Len(t, resp.Files, tt.wantResponseTotal, "response Files length mismatch")
+				}
+
+				// Existing Docker exec check.
 				if tt.wantContainerExec {
 					assert.NotEmpty(t, fakeDocker.execCommands, "expected docker exec to be invoked")
 					assert.Contains(t, fakeDocker.execCommands[0], "rm -rf")
 				}
+			}
+
+			// ── exec count assertions (checked regardless of status) ──────────
+			if tt.wantNoExec {
+				assert.Empty(t, fakeDocker.execCommands, "expected no docker exec call")
+			}
+			if tt.wantSingleExec {
+				assert.Len(t, fakeDocker.execCommands, 1, "expected exactly one docker exec call")
+			}
+			if tt.wantExecContains != "" {
+				require.NotEmpty(t, fakeDocker.execCommands, "exec must have been called to check its content")
+				assert.Contains(t, fakeDocker.execCommands[0], tt.wantExecContains)
+			}
+
+			// ── atomicity / fail-safe: files that must still exist ────────────
+			for _, exists := range tt.wantFilesExist {
+				abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(exists))
+				_, err := os.Lstat(abs)
+				assert.NoError(t, err, "expected %q to still exist on disk (atomicity guarantee)", exists)
 			}
 		})
 	}
@@ -1797,25 +2167,25 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 		uid              uint64
 		flowID           uint64
 		privs            []string
-		queryPath        string
-		setupFile        func(t *testing.T, dataDir string, flowID uint64) string
+		queryPath        string // builds ?path=<value>
+		rawQuery         string // when set, used verbatim as query string (overrides queryPath)
+		setupFile        func(t *testing.T, dataDir string, flowID uint64)
 		wantStatus       int
 		wantBody         string
 		wantContentType  string
 		wantDispContains string
 		wantZipEntries   map[string]string
 	}{
+		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
 			name:      "download regular uploaded file",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:     []string{"flow_files.view"},
 			queryPath: "uploads/report.txt",
-			setupFile: func(t *testing.T, dataDir string, flowID uint64) string {
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
 				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
 				require.NoError(t, os.MkdirAll(dir, 0755))
-				p := filepath.Join(dir, "report.txt")
-				require.NoError(t, os.WriteFile(p, []byte("payload"), 0644))
-				return p
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "report.txt"), []byte("payload"), 0644))
 			},
 			wantStatus:       http.StatusOK,
 			wantBody:         "payload",
@@ -1826,32 +2196,32 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:     []string{"flow_files.view"},
 			queryPath: "container/etc",
-			setupFile: func(t *testing.T, dataDir string, flowID uint64) string {
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
 				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "container", "etc")
 				require.NoError(t, os.MkdirAll(filepath.Join(dir, "nginx"), 0755))
 				require.NoError(t, os.WriteFile(filepath.Join(dir, "nginx", "nginx.conf"), []byte("nginx"), 0644))
-				return dir
 			},
 			wantStatus:       http.StatusOK,
 			wantContentType:  "application/zip",
 			wantDispContains: "etc.zip",
-			wantZipEntries:   map[string]string{"nginx/nginx.conf": "nginx"},
+			// Single dir → ZipDirectory → paths relative to dir root.
+			wantZipEntries: map[string]string{"nginx/nginx.conf": "nginx"},
 		},
 		{
 			name:      "admin downloads other user's file",
 			flowOwner: 2, uid: 1, flowID: 1,
 			privs:     []string{"flow_files.admin"},
 			queryPath: "uploads/report.txt",
-			setupFile: func(t *testing.T, dataDir string, flowID uint64) string {
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
 				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
 				require.NoError(t, os.MkdirAll(dir, 0755))
-				p := filepath.Join(dir, "report.txt")
-				require.NoError(t, os.WriteFile(p, []byte("admin"), 0644))
-				return p
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "report.txt"), []byte("admin"), 0644))
 			},
 			wantStatus: http.StatusOK,
 			wantBody:   "admin",
 		},
+
+		// ── access control ────────────────────────────────────────────────────
 		{
 			name:      "non-admin cannot download other user's file",
 			flowOwner: 2, uid: 1, flowID: 1,
@@ -1866,6 +2236,8 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			queryPath:  "uploads/report.txt",
 			wantStatus: http.StatusForbidden,
 		},
+
+		// ── single-path: invalid input ────────────────────────────────────────
 		{
 			name:      "empty path returns bad request",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -1885,7 +2257,7 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:     []string{"flow_files.view"},
 			queryPath: "uploads/link.txt",
-			setupFile: func(t *testing.T, dataDir string, flowID uint64) string {
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
 				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
 				require.NoError(t, os.MkdirAll(dir, 0755))
 				target := filepath.Join(dir, "real.txt")
@@ -1894,7 +2266,189 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 				if err := os.Symlink(target, link); err != nil {
 					t.Skipf("symlink unavailable: %v", err)
 				}
-				return link
+			},
+			wantStatus: http.StatusNotFound,
+		},
+
+		// ── paths[] parameter ─────────────────────────────────────────────────
+
+		{
+			// Single file via paths[] must produce a direct file attachment.
+			name:      "single file via paths[] downloaded as direct attachment",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=uploads/report.txt",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
+				require.NoError(t, os.MkdirAll(dir, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "report.txt"), []byte("payload"), 0644))
+			},
+			wantStatus:       http.StatusOK,
+			wantBody:         "payload",
+			wantDispContains: "report.txt",
+		},
+		{
+			// Single directory via paths[] must produce a backward-compat ZIP with
+			// paths relative to the directory root (not the flow data dir).
+			name:      "single directory via paths[] uses dir-relative zip paths",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=container/etc",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "container", "etc")
+				require.NoError(t, os.MkdirAll(filepath.Join(dir, "nginx"), 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "nginx", "nginx.conf"), []byte("nginx"), 0644))
+			},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "etc.zip",
+			wantZipEntries:   map[string]string{"nginx/nginx.conf": "nginx"},
+		},
+		{
+			// Two regular files → ZIP with cache-relative paths as entry names.
+			name:      "two files via paths[] packaged into zip with cache-relative paths",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=uploads/a.txt&paths[]=uploads/b.txt",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
+				require.NoError(t, os.MkdirAll(dir, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("alpha"), 0644))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "b.txt"), []byte("bravo"), 0644))
+			},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"uploads/a.txt": "alpha",
+				"uploads/b.txt": "bravo",
+			},
+		},
+		{
+			// path= and paths[]= are combined; result is a multi-entry ZIP.
+			name:      "path= and paths[] combined produce multi-entry zip",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "path=uploads/a.txt&paths[]=resources/b.txt",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				base := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID))
+				require.NoError(t, os.MkdirAll(filepath.Join(base, "uploads"), 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(base, "uploads", "a.txt"), []byte("alpha"), 0644))
+				require.NoError(t, os.MkdirAll(filepath.Join(base, "resources"), 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(base, "resources", "b.txt"), []byte("bravo"), 0644))
+			},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"uploads/a.txt":   "alpha",
+				"resources/b.txt": "bravo",
+			},
+		},
+		{
+			// File and directory combined: directory contents use their full
+			// cache-relative paths inside the ZIP.
+			name:      "file and directory via paths[] combined in zip",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=uploads/a.txt&paths[]=container/etc",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				base := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID))
+				require.NoError(t, os.MkdirAll(filepath.Join(base, "uploads"), 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(base, "uploads", "a.txt"), []byte("alpha"), 0644))
+				require.NoError(t, os.MkdirAll(filepath.Join(base, "container", "etc"), 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(base, "container", "etc", "nginx.conf"), []byte("nginx"), 0644))
+			},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"uploads/a.txt":            "alpha",
+				"container/etc/nginx.conf": "nginx",
+			},
+		},
+		{
+			// Parent directory covers child file via DeduplicatePaths; result is a
+			// single-directory ZIP using dir-relative paths (backward compat).
+			name:      "paths[] parent covers child - single dir zip returned",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=uploads/dir&paths[]=uploads/dir/file.txt",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads", "dir")
+				require.NoError(t, os.MkdirAll(dir, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0644))
+			},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "dir.zip",
+			wantZipEntries:   map[string]string{"file.txt": "content"},
+		},
+		{
+			// Sending the same path twice must result in a single entry in the ZIP.
+			name:      "duplicate paths in paths[] produce single-file download",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=uploads/report.txt&paths[]=uploads/report.txt",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
+				require.NoError(t, os.MkdirAll(dir, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "report.txt"), []byte("payload"), 0644))
+			},
+			wantStatus:       http.StatusOK,
+			wantBody:         "payload",
+			wantDispContains: "report.txt",
+		},
+
+		// ── paths[]: invalid input ─────────────────────────────────────────────
+		{
+			name:      "whitespace-only paths[] returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:      []string{"flow_files.view"},
+			rawQuery:   "paths[]=%20%20&paths[]=%09",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:      "wrong-prefix path in paths[] returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:      []string{"flow_files.view"},
+			rawQuery:   "paths[]=tmp/evil.txt",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:      "path traversal in paths[] returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:      []string{"flow_files.view"},
+			rawQuery:   "paths[]=uploads/../../etc/passwd",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// First path is valid; second does not exist.
+			// Validation is fail-fast: request returns 404 before any download.
+			name:      "missing file in batch returns not found",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=uploads/a.txt&paths[]=uploads/missing.txt",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
+				require.NoError(t, os.MkdirAll(dir, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0644))
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			// Symlink in the batch must abort with 404 (no partial download).
+			name:      "symlink in paths[] batch returns not found",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=uploads/real.txt&paths[]=uploads/link.txt",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
+				require.NoError(t, os.MkdirAll(dir, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "real.txt"), []byte("x"), 0644))
+				if err := os.Symlink(filepath.Join(dir, "real.txt"), filepath.Join(dir, "link.txt")); err != nil {
+					t.Skipf("symlink unavailable: %v", err)
+				}
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -1914,7 +2468,10 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			}
 
 			target := "/flows/1/files/download"
-			if tt.queryPath != "" {
+			switch {
+			case tt.rawQuery != "":
+				target += "?" + tt.rawQuery
+			case tt.queryPath != "":
 				target += "?path=" + tt.queryPath
 			}
 			c, w := newFlowFileTestContext(http.MethodGet, target, nil, tt.privs, tt.uid, tt.flowID)
@@ -1957,20 +2514,25 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 
 func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 	tests := []struct {
-		name             string
-		flowOwner        uint64
-		uid              uint64
-		flowID           uint64
-		privs            []string
-		body             any // marshaled via json
-		rawBody          string
-		seedExisting     bool
-		dockerSetup      func(*fakeDockerClient)
-		dockerNil        bool
-		wantStatus       int
-		wantResponsePath string
-		wantEventChannel string // "added" | "updated" | ""
+		name                       string
+		flowOwner                  uint64
+		uid                        uint64
+		flowID                     uint64
+		privs                      []string
+		body                       any // marshaled via json
+		rawBody                    string
+		seedExisting               bool     // seeds container/etc/nginx.conf
+		seedExistingContainerFiles []string // additional relative paths to seed under container cache
+		dockerSetup                func(*fakeDockerClient)
+		dockerNil                  bool
+		wantStatus                 int
+		wantResponsePath           string   // for single-file response
+		wantResponsePaths          []string // for multi-file response (ordered)
+		wantEventChannel           string   // "added" | "updated" (checked when set, single-event tests)
+		wantEventCount             int      // > 0: assert total event count
+		wantCopyFromCount          int      // > 0: assert exact CopyFromContainer call count
 	}{
+		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
 			name:      "pull new file",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -2112,6 +2674,231 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			},
 			wantStatus: http.StatusInternalServerError,
 		},
+
+		{
+			// /etc covers /etc/nginx.conf; DeduplicatePaths reduces the list to just /etc.
+			// Only one CopyFromContainer call is made for /etc/, not a separate one for nginx.conf.
+			// Docker returns a directory TAR (entries under "etc/"), so the response includes
+			// both the directory entry and all nested files.
+			name:      "parent path covers child path - single docker call, directory contents listed",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Paths: []string{"/etc", "/etc/nginx.conf"},
+			},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBodyMap = map[string][]byte{
+					// Docker returns a directory TAR with entries under "etc/".
+					"/etc": buildContainerTar([]tarTestEntry{
+						{name: "etc/", typeflag: tar.TypeDir},
+						{name: "etc/nginx.conf", typeflag: tar.TypeReg, content: "nginx"},
+					}),
+				}
+			},
+			wantStatus: http.StatusOK,
+			// Response: the directory itself + all nested files, sorted by path.
+			wantResponsePaths: []string{
+				"container/etc",
+				"container/etc/nginx.conf",
+			},
+			wantCopyFromCount: 1, // /etc/nginx.conf is covered → no separate pull
+		},
+
+		{
+			// Two files supplied via the paths array; both are pulled and returned.
+			name:      "two files via paths array pulled and returned",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Paths: []string{"/etc/nginx.conf", "/etc/hosts"},
+			},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBodyMap = map[string][]byte{
+					"/etc/nginx.conf": buildContainerTar([]tarTestEntry{
+						{name: "nginx.conf", typeflag: tar.TypeReg, content: "nginx"},
+					}),
+					"/etc/hosts": buildContainerTar([]tarTestEntry{
+						{name: "hosts", typeflag: tar.TypeReg, content: "hosts"},
+					}),
+				}
+			},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"container/etc/hosts", "container/etc/nginx.conf"},
+			wantEventCount:    2,
+			wantCopyFromCount: 2,
+		},
+		{
+			// path and paths combined; both files are pulled.
+			name:      "path and paths combined pull both files",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Path:  "/etc/nginx.conf",
+				Paths: []string{"/etc/hosts"},
+			},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBodyMap = map[string][]byte{
+					"/etc/nginx.conf": buildContainerTar([]tarTestEntry{
+						{name: "nginx.conf", typeflag: tar.TypeReg, content: "nginx"},
+					}),
+					"/etc/hosts": buildContainerTar([]tarTestEntry{
+						{name: "hosts", typeflag: tar.TypeReg, content: "hosts"},
+					}),
+				}
+			},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"container/etc/hosts", "container/etc/nginx.conf"},
+			wantEventCount:    2,
+		},
+		{
+			// Same path in both path and paths[0]: deduplicated to a single pull.
+			name:      "duplicate path in path and paths deduplicated to single operation",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Path:  "/etc/nginx.conf",
+				Paths: []string{"/etc/nginx.conf"},
+			},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBody = buildContainerTar([]tarTestEntry{
+					{name: "nginx.conf", typeflag: tar.TypeReg, content: "nginx"},
+				})
+			},
+			wantStatus:        http.StatusOK,
+			wantResponsePath:  "container/etc/nginx.conf",
+			wantCopyFromCount: 1,
+		},
+		{
+			// All paths are whitespace-only: combined list is empty after dedup → 400.
+			name:      "whitespace-only paths returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Path:  "   ",
+				Paths: []string{"  ", "\t"},
+			},
+			dockerSetup: func(d *fakeDockerClient) { d.running = true },
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			// Second path exists in cache without force=true.
+			// Phase 1 detects the conflict before any docker operation; neither file is pulled.
+			name:      "second path already exists without force fails fast in phase 1",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Paths: []string{"/etc/nginx.conf", "/etc/hosts"},
+			},
+			seedExistingContainerFiles: []string{"etc/hosts"},
+			dockerSetup:                func(d *fakeDockerClient) { d.running = true },
+			wantStatus:                 http.StatusConflict,
+			wantCopyFromCount:          0, // no docker calls; validation failed in phase 1
+		},
+		{
+			// force=true overwrites all existing cache entries in the batch.
+			name:      "force overwrites multiple existing cache entries",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Paths: []string{"/etc/nginx.conf", "/etc/hosts"},
+				Force: true,
+			},
+			seedExisting:               true, // seeds etc/nginx.conf
+			seedExistingContainerFiles: []string{"etc/hosts"},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBodyMap = map[string][]byte{
+					"/etc/nginx.conf": buildContainerTar([]tarTestEntry{
+						{name: "nginx.conf", typeflag: tar.TypeReg, content: "new-nginx"},
+					}),
+					"/etc/hosts": buildContainerTar([]tarTestEntry{
+						{name: "hosts", typeflag: tar.TypeReg, content: "new-hosts"},
+					}),
+				}
+			},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"container/etc/hosts", "container/etc/nginx.conf"},
+			wantEventCount:    2,
+		},
+		{
+			// First copy succeeds; second copy fails.
+			// The first file is committed to cache (partial success is expected when
+			// docker errors occur in phase 2).
+			name:      "second container copy fails returns internal",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Paths: []string{"/etc/nginx.conf", "/etc/hosts"},
+			},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBodyMap = map[string][]byte{
+					"/etc/nginx.conf": buildContainerTar([]tarTestEntry{
+						{name: "nginx.conf", typeflag: tar.TypeReg, content: "nginx"},
+					}),
+				}
+				d.copyFromErrMap = map[string]error{
+					"/etc/hosts": fmt.Errorf("path not found in container"),
+				}
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			// /var/log/app.log and /etc/nginx.conf are given in that order.
+			// Sorted by cache path, /etc comes before /var alphabetically.
+			name:      "response sorted by cache path regardless of input order",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Paths: []string{"/var/log/app.log", "/etc/nginx.conf"},
+			},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBodyMap = map[string][]byte{
+					"/var/log/app.log": buildContainerTar([]tarTestEntry{
+						{name: "app.log", typeflag: tar.TypeReg, content: "log"},
+					}),
+					"/etc/nginx.conf": buildContainerTar([]tarTestEntry{
+						{name: "nginx.conf", typeflag: tar.TypeReg, content: "nginx"},
+					}),
+				}
+			},
+			wantStatus: http.StatusOK,
+			wantResponsePaths: []string{
+				"container/etc/nginx.conf",
+				"container/var/log/app.log",
+			},
+		},
+		{
+			// One path is new (added event), one path exists with force (updated event).
+			// Verify both event types are published.
+			name:      "added and updated events both published in batch",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body: models.PullFlowFilesRequest{
+				Paths: []string{"/etc/nginx.conf", "/etc/hosts"},
+				Force: true,
+			},
+			seedExistingContainerFiles: []string{"etc/hosts"}, // hosts already cached
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBodyMap = map[string][]byte{
+					"/etc/nginx.conf": buildContainerTar([]tarTestEntry{
+						{name: "nginx.conf", typeflag: tar.TypeReg, content: "nginx"},
+					}),
+					"/etc/hosts": buildContainerTar([]tarTestEntry{
+						{name: "hosts", typeflag: tar.TypeReg, content: "new-hosts"},
+					}),
+				}
+			},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"container/etc/hosts", "container/etc/nginx.conf"},
+			wantEventCount:    2, // 1 "added" (nginx.conf) + 1 "updated" (hosts)
+		},
 	}
 
 	for _, tt := range tests {
@@ -2137,6 +2924,11 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 				require.NoError(t, os.MkdirAll(dir, 0755))
 				require.NoError(t, os.WriteFile(filepath.Join(dir, "nginx.conf"), []byte("old"), 0644))
 			}
+			for _, relPath := range tt.seedExistingContainerFiles {
+				abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), "container", filepath.FromSlash(relPath))
+				require.NoError(t, os.MkdirAll(filepath.Dir(abs), 0755))
+				require.NoError(t, os.WriteFile(abs, []byte("old"), 0644))
+			}
 
 			var bodyReader io.Reader
 			if tt.rawBody != "" {
@@ -2153,17 +2945,47 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 
 			require.Equal(t, tt.wantStatus, w.Code)
 			if tt.wantStatus != http.StatusOK {
+				// Even on error, verify docker call count if specified.
+				if tt.wantCopyFromCount >= 0 && tt.wantCopyFromCount != fakeDocker.copyFromCount {
+					// Only assert when explicitly set (non-zero).
+					if tt.wantCopyFromCount > 0 {
+						assert.Equal(t, tt.wantCopyFromCount, fakeDocker.copyFromCount, "unexpected CopyFromContainer call count")
+					}
+				}
 				return
 			}
+
 			resp := decodeFlowFilesResponse(t, w)
-			require.Len(t, resp.Files, 1)
-			assert.Equal(t, tt.wantResponsePath, resp.Files[0].Path)
+
+			// Path assertions.
+			if len(tt.wantResponsePaths) > 0 {
+				paths := make([]string, len(resp.Files))
+				for i, f := range resp.Files {
+					paths[i] = f.Path
+				}
+				assert.Equal(t, tt.wantResponsePaths, paths)
+			} else if tt.wantResponsePath != "" {
+				require.Len(t, resp.Files, 1)
+				assert.Equal(t, tt.wantResponsePath, resp.Files[0].Path)
+			}
+
+			// Event assertions.
+			events := ss.snapshot()
+			if tt.wantEventCount > 0 {
+				assert.Len(t, events, tt.wantEventCount, "unexpected subscription event count")
+			}
 			if tt.wantEventChannel != "" {
-				events := ss.snapshot()
 				require.Len(t, events, 1)
 				assert.Equal(t, "flow", events[0].channel)
 				assert.Equal(t, tt.wantEventChannel, events[0].action)
-				assert.Equal(t, tt.wantResponsePath, events[0].path)
+				if tt.wantResponsePath != "" {
+					assert.Equal(t, tt.wantResponsePath, events[0].path)
+				}
+			}
+
+			// Docker call count assertion.
+			if tt.wantCopyFromCount > 0 {
+				assert.Equal(t, tt.wantCopyFromCount, fakeDocker.copyFromCount, "unexpected CopyFromContainer call count")
 			}
 		})
 	}
@@ -2180,15 +3002,18 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 		uid            uint64
 		flowID         uint64
 		privs          []string
-		queryPath      string
+		queryPath      string // builds ?path=<value>
+		rawQuery       string // when set, used verbatim as query string (overrides queryPath)
 		dockerSetup    func(*fakeDockerClient)
 		dockerNil      bool
 		wantStatus     int
 		wantPathInResp string
-		wantFileNames  []string
+		wantFileNames  []string // expected file names in sorted order (nil = don't check)
+		wantTotal      uint64   // > 0: verify response Total
 	}{
+		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
-			name:      "default path lists work directory",
+			name:      "default path lists work directory when no param given",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.view", "containers.view"},
 			dockerSetup: func(d *fakeDockerClient) {
@@ -2204,7 +3029,7 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantFileNames:  []string{"report.txt", "uploads"},
 		},
 		{
-			name:      "custom path is honoured",
+			name:      "custom single path= is honoured",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:     []string{"flow_files.view", "containers.view"},
 			queryPath: "/etc",
@@ -2232,20 +3057,44 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantPathInResp: "/etc/passwd",
 			wantFileNames:  []string{"passwd"},
 		},
+
+		// ── access control ────────────────────────────────────────────────────
 		{
-			name:      "missing flow_files privilege",
+			name:      "missing flow_files privilege returns forbidden",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"containers.view"},
 			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:      "missing containers privilege",
+			name:      "missing containers privilege returns forbidden",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"flow_files.view"},
 			wantStatus: http.StatusForbidden,
 		},
 		{
-			name:      "docker client not configured returns internal",
+			name:      "containers.admin is sufficient for container listing",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.view", "containers.admin"},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPath = container.PathStat{Mode: os.ModeDir | 0755}
+				d.listDir = []container.PathStat{{Name: "a.txt", Mode: 0644}}
+			},
+			wantStatus:     http.StatusOK,
+			wantPathInResp: "/work",
+			wantFileNames:  []string{"a.txt"},
+		},
+		{
+			name:       "missing flow returns not found",
+			uid:        1,
+			flowID:     99,
+			privs:      []string{"flow_files.view", "containers.view"},
+			wantStatus: http.StatusNotFound,
+		},
+
+		// ── infrastructure errors ─────────────────────────────────────────────
+		{
+			name:      "docker client not configured returns internal error",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"flow_files.view", "containers.view"},
 			dockerNil:  true,
@@ -2261,7 +3110,7 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:      "stat path error returns internal",
+			name:      "stat path error returns internal error",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.view", "containers.view"},
 			dockerSetup: func(d *fakeDockerClient) {
@@ -2271,7 +3120,7 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
-			name:      "list dir error returns internal",
+			name:      "list dir error returns internal error",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.view", "containers.view"},
 			dockerSetup: func(d *fakeDockerClient) {
@@ -2281,12 +3130,190 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			},
 			wantStatus: http.StatusInternalServerError,
 		},
+
+		// ── paths[] parameter ─────────────────────────────────────────────────
+
 		{
-			name:       "missing flow returns not found",
-			uid:        1,
-			flowID:     99,
-			privs:      []string{"flow_files.view", "containers.view"},
-			wantStatus: http.StatusNotFound,
+			// Single path delivered via paths[] instead of path= must behave
+			// identically, including the Path field in the response.
+			name:      "single paths[] behaves like single path=",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/etc",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPath = container.PathStat{Mode: os.ModeDir | 0755}
+				d.listDir = []container.PathStat{
+					{Name: "passwd", Size: 1, Mode: 0644},
+				}
+			},
+			wantStatus:     http.StatusOK,
+			wantPathInResp: "/etc",
+			wantFileNames:  []string{"passwd"},
+		},
+		{
+			// Two directories are queried; results are merged and sorted by name.
+			// The response Path must be empty because there is no single "current dir".
+			name:      "two directories via paths[] returns combined sorted listing",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/etc&paths[]=/var",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathMap = map[string]container.PathStat{
+					"/etc": {Mode: os.ModeDir | 0755},
+					"/var": {Mode: os.ModeDir | 0755},
+				}
+				d.listDirMap = map[string][]container.PathStat{
+					"/etc": {
+						{Name: "nginx.conf", Size: 10, Mode: 0644},
+						{Name: "passwd", Size: 1, Mode: 0644},
+					},
+					"/var": {
+						{Name: "log", Mode: os.ModeDir | 0755},
+					},
+				}
+			},
+			wantStatus:     http.StatusOK,
+			wantPathInResp: "",
+			wantFileNames:  []string{"nginx.conf", "passwd", "log"},
+			wantTotal:      3,
+		},
+		{
+			// path= and paths[]= are combined; merged listing is sorted.
+			name:      "path= and paths[] combined returns merged sorted listing",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "path=/etc&paths[]=/var",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathMap = map[string]container.PathStat{
+					"/etc": {Mode: os.ModeDir | 0755},
+					"/var": {Mode: os.ModeDir | 0755},
+				}
+				d.listDirMap = map[string][]container.PathStat{
+					"/etc": {{Name: "hosts", Size: 5, Mode: 0644}},
+					"/var": {{Name: "log", Mode: os.ModeDir | 0755}},
+				}
+			},
+			wantStatus:     http.StatusOK,
+			wantPathInResp: "",
+			wantFileNames:  []string{"hosts", "log"},
+		},
+		{
+			// Sending the same path twice must result in a single stat + list call.
+			// The response contains each file only once.
+			name:      "duplicate paths in paths[] deduplicated",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/etc&paths[]=/etc",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPath = container.PathStat{Mode: os.ModeDir | 0755}
+				d.listDir = []container.PathStat{
+					{Name: "passwd", Size: 1, Mode: 0644},
+				}
+			},
+			wantStatus:     http.StatusOK,
+			wantPathInResp: "/etc",
+			wantFileNames:  []string{"passwd"},
+			wantTotal:      1,
+		},
+		{
+			// All paths[] values are whitespace only: the combined list is empty
+			// after trimming even though params were explicitly provided → 400.
+			name:      "whitespace-only paths[] values return bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.view", "containers.view"},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+			},
+			rawQuery:   "paths[]=%20%20&paths[]=%09",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			// A regular file and a directory are combined in a single request.
+			// The file entry and the directory contents appear together, sorted.
+			name:      "mix of file and directory in paths[] combined in response",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/etc/passwd&paths[]=/var",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathMap = map[string]container.PathStat{
+					"/etc/passwd": {Name: "passwd", Size: 5, Mode: 0644},
+					"/var":        {Mode: os.ModeDir | 0755},
+				}
+				d.listDirMap = map[string][]container.PathStat{
+					"/var": {{Name: "log", Mode: os.ModeDir | 0755}},
+				}
+			},
+			wantStatus:     http.StatusOK,
+			wantPathInResp: "",
+			wantFileNames:  []string{"passwd", "log"},
+		},
+		{
+			// Docker API returns the same entry twice from a single ListContainerDir
+			// call (unexpected but possible). The response must deduplicate by path.
+			name:      "output deduplicated when Docker API returns duplicate entries",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/work",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPath = container.PathStat{Mode: os.ModeDir | 0755}
+				d.listDir = []container.PathStat{
+					{Name: "file.txt", Size: 5, Mode: 0644},
+					{Name: "file.txt", Size: 5, Mode: 0644}, // duplicate
+				}
+			},
+			wantStatus:     http.StatusOK,
+			wantPathInResp: "/work",
+			wantFileNames:  []string{"file.txt"},
+			wantTotal:      1,
+		},
+		{
+			// First path succeeds; second path's stat call fails.
+			// The handler must return 500 (fail-fast).
+			name:      "second path stat error in batch returns internal error",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/work&paths[]=/etc",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathMap = map[string]container.PathStat{
+					"/work": {Mode: os.ModeDir | 0755},
+				}
+				d.statPathErrMap = map[string]error{
+					"/etc": fmt.Errorf("path not found"),
+				}
+				d.listDirMap = map[string][]container.PathStat{
+					"/work": {{Name: "uploads", Mode: os.ModeDir | 0755}},
+				}
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			// First path directory listing succeeds; second path's listing fails.
+			// The handler must return 500 (fail-fast).
+			name:      "second path list dir error in batch returns internal error",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/work&paths[]=/etc",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathMap = map[string]container.PathStat{
+					"/work": {Mode: os.ModeDir | 0755},
+					"/etc":  {Mode: os.ModeDir | 0755},
+				}
+				d.listDirMap = map[string][]container.PathStat{
+					"/work": {{Name: "uploads", Mode: os.ModeDir | 0755}},
+				}
+				d.listDirErrMap = map[string]error{
+					"/etc": fmt.Errorf("permission denied"),
+				}
+			},
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 
@@ -2310,7 +3337,10 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			}
 
 			target := "/flows/1/files/container"
-			if tt.queryPath != "" {
+			switch {
+			case tt.rawQuery != "":
+				target += "?" + tt.rawQuery
+			case tt.queryPath != "":
 				target += "?path=" + tt.queryPath
 			}
 			c, w := newFlowFileTestContext(http.MethodGet, target, nil, tt.privs, tt.uid, tt.flowID)
@@ -2323,11 +3353,18 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			}
 			resp := decodeContainerFilesResponse(t, w)
 			assert.Equal(t, tt.wantPathInResp, resp.Path)
-			names := make([]string, len(resp.Files))
-			for i, f := range resp.Files {
-				names[i] = f.Name
+
+			if tt.wantFileNames != nil {
+				names := make([]string, len(resp.Files))
+				for i, f := range resp.Files {
+					names[i] = f.Name
+				}
+				assert.Equal(t, tt.wantFileNames, names)
 			}
-			assert.Equal(t, tt.wantFileNames, names)
+			if tt.wantTotal > 0 {
+				assert.Equal(t, tt.wantTotal, resp.Total, "response Total mismatch")
+				assert.Len(t, resp.Files, int(tt.wantTotal), "response Files length mismatch")
+			}
 		})
 	}
 }

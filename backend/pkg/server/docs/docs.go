@@ -2026,7 +2026,7 @@ const docTemplate = `{
                 "tags": [
                     "FlowFiles"
                 ],
-                "summary": "Delete flow file or directory by cached path",
+                "summary": "Delete flow files or directories by cached paths",
                 "parameters": [
                     {
                         "minimum": 0,
@@ -2038,15 +2038,24 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "relative path in cache: uploads/, resources/, or container/",
+                        "description": "relative path in cache: uploads/, resources/, or container/ (may be combined with paths[])",
                         "name": "path",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "relative paths in cache (repeatable): uploads/, resources/, or container/",
+                        "name": "paths[]",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "flow file deleted successful",
+                        "description": "flow files deleted successfully",
                         "schema": {
                             "allOf": [
                                 {
@@ -2115,8 +2124,18 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "absolute path inside the running container; defaults to /work",
+                        "description": "absolute path inside the running container; defaults to /work (may be combined with paths[])",
                         "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "absolute paths inside the running container (repeatable)",
+                        "name": "paths[]",
                         "in": "query"
                     }
                 ],
@@ -2173,6 +2192,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
+                "description": "Single regular file: served as a direct attachment.\nSingle directory or multiple paths (any mix): packaged as a ZIP archive.",
                 "produces": [
                     "application/octet-stream",
                     "application/zip",
@@ -2181,7 +2201,7 @@ const docTemplate = `{
                 "tags": [
                     "FlowFiles"
                 ],
-                "summary": "Download flow file or directory by cached path",
+                "summary": "Download flow file(s) or directory by cached path(s)",
                 "parameters": [
                     {
                         "minimum": 0,
@@ -2193,15 +2213,24 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "relative path in cache: uploads/, resources/, or container/",
+                        "description": "relative path in cache: uploads/, resources/, or container/ (may be combined with paths[])",
                         "name": "path",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "relative paths in cache (repeatable)",
+                        "name": "paths[]",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "file content, or ZIP archive for directories",
+                        "description": "file content, or ZIP archive for directories / multiple paths",
                         "schema": {
                             "type": "file"
                         }
@@ -2249,7 +2278,7 @@ const docTemplate = `{
                 "tags": [
                     "FlowFiles"
                 ],
-                "summary": "Pull a file or directory from the running container into the local cache",
+                "summary": "Pull files or directories from the running container into the local cache",
                 "parameters": [
                     {
                         "minimum": 0,
@@ -2260,7 +2289,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "pull request",
+                        "description": "pull request: path or paths are required",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -2271,7 +2300,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "container path synced to local cache",
+                        "description": "container paths synced to local cache, sorted by cache path",
                         "schema": {
                             "allOf": [
                                 {
@@ -4695,8 +4724,18 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "virtual directory path; empty for root",
+                        "description": "virtual directory path; empty for root (may be combined with paths[])",
                         "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "additional virtual directory paths (repeatable)",
+                        "name": "paths[]",
                         "in": "query"
                     },
                     {
@@ -4837,10 +4876,19 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "virtual path to delete",
+                        "description": "virtual path to delete (may be combined with paths[])",
                         "name": "path",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "additional virtual paths to delete (repeatable)",
+                        "name": "paths[]",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4977,24 +5025,35 @@ const docTemplate = `{
                     }
                 ],
                 "produces": [
-                    "application/octet-stream"
+                    "application/octet-stream",
+                    "application/zip",
+                    "application/json"
                 ],
                 "tags": [
                     "Resources"
                 ],
-                "summary": "Download a resource",
+                "summary": "Download a resource or resources",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "virtual path to download",
+                        "description": "virtual path to download (may be combined with paths[])",
                         "name": "path",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "additional virtual paths to download (repeatable)",
+                        "name": "paths[]",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "file content, or ZIP archive for directories",
+                        "description": "file content, or ZIP archive for directories / multiple paths",
                         "schema": {
                             "type": "file"
                         }
@@ -8056,12 +8115,19 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "force": {
-                    "description": "Force overwrites the local cache entry if it already exists.",
+                    "description": "Force overwrites local cache entries that already exist.",
                     "type": "boolean"
                 },
                 "path": {
-                    "description": "Path is an arbitrary path inside the container, e.g. \"/etc/nginx/conf\" or \"/work/uploads/report.txt\".",
+                    "description": "Path is a single container path (maintained for backward compatibility).\nCombined with Paths if both are provided.",
                     "type": "string"
+                },
+                "paths": {
+                    "description": "Paths is a list of container paths to pull. Combined with Path if provided.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

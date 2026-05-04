@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -300,14 +301,17 @@ func (s *FlowFileService) UploadFlowFiles(c *gin.Context) {
 	})
 }
 
-// DeleteFlowFile is a function to delete a cached flow file or directory by path
-// @Summary Delete flow file or directory by cached path
+// DeleteFlowFile is a function to delete one or more cached flow files or directories by path.
+// Accepts a single "path" query parameter and/or repeated "paths[]" parameters; both may be
+// combined and duplicates (after path normalization) are silently ignored.
+// @Summary Delete flow files or directories by cached paths
 // @Tags FlowFiles
 // @Produce json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Param path query string true "relative path in cache: uploads/, resources/, or container/"
-// @Success 200 {object} response.successResp{data=models.FlowFiles} "flow file deleted successful"
+// @Param path query string false "relative path in cache: uploads/, resources/, or container/ (may be combined with paths[])"
+// @Param paths[] query []string false "relative paths in cache (repeatable): uploads/, resources/, or container/"
+// @Success 200 {object} response.successResp{data=models.FlowFiles} "flow files deleted successfully"
 // @Failure 400 {object} response.errorResp "invalid flow file request data"
 // @Failure 403 {object} response.errorResp "deleting flow file not permitted"
 // @Failure 404 {object} response.errorResp "flow file not found"
@@ -327,52 +331,118 @@ func (s *FlowFileService) DeleteFlowFile(c *gin.Context) {
 		return
 	}
 
-	localPath, err := s.resolveCachedPath(flowID, c.Query("path"))
-	if err != nil {
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("invalid delete path")
+	// Collect paths from both "path" and "paths[]" query params, then deduplicate strings.
+	rawPaths := c.QueryArray("paths[]")
+	if singlePath := c.Query("path"); singlePath != "" {
+		rawPaths = append(rawPaths, singlePath)
+	}
+	reqPaths := flowfiles.DeduplicatePaths(rawPaths)
+	if len(reqPaths) == 0 {
+		err = errors.New("at least one path is required (use 'path' or 'paths[]' query parameters)")
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("missing delete paths")
 		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
 		return
 	}
 
-	info, err := os.Lstat(localPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			response.Error(c, response.ErrFlowFilesNotFound, fmt.Errorf("'%s' not found in local cache", c.Query("path")))
-		} else {
-			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error reading cached flow file")
-			response.Error(c, response.ErrInternal, err)
+	// Resolve and validate every path before performing any deletion; deduplicate
+	// by resolved local path to handle path-equivalent inputs (e.g. "uploads/./x" == "uploads/x").
+	type resolvedEntry struct {
+		reqPath   string
+		localPath string
+		info      os.FileInfo
+	}
+	seenLocal := make(map[string]struct{}, len(reqPaths))
+	entries := make([]resolvedEntry, 0, len(reqPaths))
+	for _, reqPath := range reqPaths {
+		localPath, err := s.resolveCachedPath(flowID, reqPath)
+		if err != nil {
+			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("invalid delete path")
+			response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+			return
 		}
-		return
-	}
-	deletedFile := convertFlowFile(flowfiles.NewFileWithPath(info, filepath.ToSlash(c.Query("path"))))
+		if _, dup := seenLocal[localPath]; dup {
+			continue
+		}
+		seenLocal[localPath] = struct{}{}
 
-	if err := s.deleteUploadFromContainer(c.Request.Context(), flowID, c.Query("path")); err != nil {
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error deleting file from primary container")
+		info, err := os.Lstat(localPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				response.Error(c, response.ErrFlowFilesNotFound, fmt.Errorf("'%s' not found in local cache", reqPath))
+			} else {
+				logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error reading cached flow file")
+				response.Error(c, response.ErrInternal, err)
+			}
+			return
+		}
+		entries = append(entries, resolvedEntry{
+			reqPath:   reqPath,
+			localPath: localPath,
+			info:      info,
+		})
+	}
+
+	// Expand each entry to collect the full set of files and directories that will
+	// actually disappear from the cache. For directories we walk recursively so
+	// that every removed sub-entry is reported to the caller and published via
+	// subscription — giving the client a precise picture of what was deleted.
+	// The actual deletion below still operates on the minimal deduplicated set.
+	expandedFiles := make([]flowfiles.File, 0, len(entries))
+	for _, e := range entries {
+		relPath := filepath.ToSlash(e.reqPath)
+		expandedFiles = append(expandedFiles, flowfiles.NewFileWithPath(e.info, relPath))
+		if e.info.IsDir() {
+			nested, nestErr := flowfiles.ListDirEntriesRecursive(e.localPath, relPath)
+			if nestErr != nil {
+				logger.FromContext(c).WithError(nestErr).WithFields(map[string]any{
+					"flow_id": flowID,
+					"path":    relPath,
+				}).Warn("could not expand directory contents before deletion; reporting top-level entry only")
+			}
+			expandedFiles = append(expandedFiles, nested...)
+		}
+	}
+	flowfiles.Sort(expandedFiles)
+	deletedFiles := convertFlowFiles(expandedFiles)
+
+	// One Docker exec removes all relevant container paths in a single API call.
+	allReqPaths := make([]string, 0, len(entries))
+	for _, e := range entries {
+		allReqPaths = append(allReqPaths, e.reqPath)
+	}
+	if err := s.deleteUploadsFromContainer(c.Request.Context(), flowID, allReqPaths); err != nil {
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error deleting files from primary container")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
 
-	if err := os.RemoveAll(localPath); err != nil {
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error deleting cached flow file")
-		response.Error(c, response.ErrInternal, err)
-		return
+	// Remove local cache entries after the container sync succeeded.
+	for _, e := range entries {
+		if err := os.RemoveAll(e.localPath); err != nil {
+			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error deleting cached flow file")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
 	}
 
-	s.publishFlowFileDeleted(c.Request.Context(), flow, deletedFile)
+	s.publishFlowFilesDeleted(c.Request.Context(), flow, deletedFiles)
 	response.Success(c, http.StatusOK, models.FlowFiles{
-		Files: nil,
-		Total: 0,
+		Files: deletedFiles,
+		Total: uint64(len(deletedFiles)),
 	})
 }
 
-// DownloadFlowFile is a function to download a flow file or directory (as ZIP) by cached path
-// @Summary Download flow file or directory by cached path
+// DownloadFlowFile is a function to download flow file(s) or directory by cached path(s)
+// @Summary Download flow file(s) or directory by cached path(s)
+// @Description Single regular file: served as a direct attachment.
+// @Description Single directory or multiple paths (any mix): packaged as a ZIP archive.
 // @Tags FlowFiles
-// @Produce octet-stream,application/zip,json
+// @Produce application/octet-stream,application/zip,json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Param path query string true "relative path in cache: uploads/, resources/, or container/"
-// @Success 200 {file} binary "file content, or ZIP archive for directories"
+// @Param path query string false "relative path in cache: uploads/, resources/, or container/ (may be combined with paths[])"
+// @Param paths[] query []string false "relative paths in cache (repeatable)"
+// @Success 200 {file} binary "file content, or ZIP archive for directories / multiple paths"
 // @Failure 400 {object} response.errorResp "invalid flow file request data"
 // @Failure 403 {object} response.errorResp "downloading flow file not permitted"
 // @Failure 404 {object} response.errorResp "flow file not found"
@@ -391,59 +461,140 @@ func (s *FlowFileService) DownloadFlowFile(c *gin.Context) {
 		return
 	}
 
-	localPath, err := s.resolveCachedPath(flowID, c.Query("path"))
-	if err != nil {
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("invalid download path")
+	// Collect paths from both "path" and "paths[]" query params, then deduplicate.
+	rawPaths := c.QueryArray("paths[]")
+	if singlePath := c.Query("path"); singlePath != "" {
+		rawPaths = append(rawPaths, singlePath)
+	}
+	reqPaths := flowfiles.DeduplicatePaths(rawPaths)
+	if len(reqPaths) == 0 {
+		err = errors.New("at least one path is required (use 'path' or 'paths[]' query parameters)")
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("missing download paths")
 		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
 		return
 	}
 
-	info, err := os.Lstat(localPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			response.Error(c, response.ErrFlowFilesNotFound, fmt.Errorf("'%s' not found in local cache", c.Query("path")))
-		} else {
-			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error reading cached flow file")
+	// Resolve and validate every path; deduplicate by resolved local path.
+	type resolvedEntry struct {
+		reqPath   string
+		localPath string
+		info      os.FileInfo
+	}
+	seenLocal := make(map[string]struct{}, len(reqPaths))
+	entries := make([]resolvedEntry, 0, len(reqPaths))
+	for _, reqPath := range reqPaths {
+		localPath, err := s.resolveCachedPath(flowID, reqPath)
+		if err != nil {
+			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("invalid download path")
+			response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+			return
+		}
+		if _, dup := seenLocal[localPath]; dup {
+			continue
+		}
+		seenLocal[localPath] = struct{}{}
+
+		info, err := os.Lstat(localPath)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				response.Error(c, response.ErrFlowFilesNotFound, fmt.Errorf("'%s' not found in local cache", reqPath))
+			} else {
+				logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error reading cached flow file")
+				response.Error(c, response.ErrInternal, err)
+			}
+			return
+		}
+		// Never serve symlinks — could point outside the flow data directory.
+		if info.Mode()&os.ModeSymlink != 0 {
+			response.Error(c, response.ErrFlowFilesNotFound, fmt.Errorf("'%s' not found in local cache", reqPath))
+			return
+		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			response.Error(c, response.ErrFlowFilesNotFound, fmt.Errorf("'%s' not found in local cache", reqPath))
+			return
+		}
+		entries = append(entries, resolvedEntry{reqPath: reqPath, localPath: localPath, info: info})
+	}
+
+	if len(entries) == 0 {
+		response.Error(c, response.ErrFlowFilesNotFound, errors.New("no accessible paths found"))
+		return
+	}
+
+	// Single regular file → serve as a direct attachment.
+	// We open the file explicitly and use DataFromReader with a known Content-Length
+	// so that Gin's response writer emits a proper Content-Length header instead of
+	// relying on http.ServeFile, which conflicts with Gin's middleware-set headers
+	// and can produce content-length: 0 in certain request contexts.
+	if len(entries) == 1 && entries[0].info.Mode().IsRegular() {
+		e := entries[0]
+		f, err := os.Open(e.localPath)
+		if err != nil {
+			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error opening flow file for download")
 			response.Error(c, response.ErrInternal, err)
+			return
 		}
+		defer f.Close()
+
+		contentType := "application/octet-stream"
+		c.DataFromReader(http.StatusOK, e.info.Size(), contentType, f,
+			map[string]string{
+				"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{
+					"filename": filepath.Base(e.localPath),
+				}),
+			})
 		return
 	}
 
-	// Never serve symlinks — could point outside the flow data directory.
-	if info.Mode()&os.ModeSymlink != 0 {
-		response.Error(c, response.ErrFlowFilesNotFound, fmt.Errorf("'%s' not found in local cache", c.Query("path")))
-		return
-	}
-
-	if info.IsDir() {
-		name := filepath.Base(localPath)
-		c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
-			"filename": name + ".zip",
-		}))
-		c.Header("Content-Type", "application/zip")
-		if err := flowfiles.ZipDirectory(c.Writer, localPath); err != nil {
+	// Single directory → ZIP with paths relative to that directory (backward-compat).
+	// The archive is buffered so an explicit Content-Length can be set; this allows
+	// clients (including Swagger UI) to recognise and download the file correctly.
+	if len(entries) == 1 && entries[0].info.IsDir() {
+		name := filepath.Base(entries[0].localPath)
+		var buf bytes.Buffer
+		if err := flowfiles.ZipDirectory(&buf, entries[0].localPath); err != nil {
 			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error creating ZIP archive")
+			response.Error(c, response.ErrInternal, err)
+			return
 		}
+		c.DataFromReader(http.StatusOK, int64(buf.Len()), "application/zip", &buf,
+			map[string]string{
+				"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{
+					"filename": name + ".zip",
+				}),
+			})
 		return
 	}
 
-	if !info.Mode().IsRegular() {
-		response.Error(c, response.ErrFlowFilesNotFound, fmt.Errorf("'%s' not found in local cache", c.Query("path")))
+	// Multiple paths (any mix of files and directories) → ZIP with cache-relative paths.
+	// Buffered for the same reason as above.
+	relPaths := make([]string, 0, len(entries))
+	for _, e := range entries {
+		relPaths = append(relPaths, filepath.ToSlash(e.reqPath))
+	}
+	var buf bytes.Buffer
+	if err := flowfiles.ZipRelativePaths(&buf, s.flowDataDir(flowID), relPaths); err != nil {
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error creating ZIP archive")
+		response.Error(c, response.ErrInternal, err)
 		return
 	}
-
-	c.FileAttachment(localPath, filepath.Base(localPath))
+	c.DataFromReader(http.StatusOK, int64(buf.Len()), "application/zip", &buf,
+		map[string]string{
+			"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{
+				"filename": "download.zip",
+			}),
+		})
 }
 
-// PullFlowFiles is a function to sync a path from the container into the local cache
-// @Summary Pull a file or directory from the running container into the local cache
+// PullFlowFiles is a function to sync one or more paths from the container into the local cache
+// @Summary Pull files or directories from the running container into the local cache
 // @Tags FlowFiles
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Param request body models.PullFlowFilesRequest true "pull request"
-// @Success 200 {object} response.successResp{data=models.FlowFiles} "container path synced to local cache"
+// @Param request body models.PullFlowFilesRequest true "pull request: path or paths are required"
+// @Success 200 {object} response.successResp{data=models.FlowFiles} "container paths synced to local cache, sorted by cache path"
 // @Failure 400 {object} response.errorResp "invalid pull request or container not running"
 // @Failure 403 {object} response.errorResp "pulling flow files not permitted"
 // @Failure 404 {object} response.errorResp "flow not found"
@@ -478,47 +629,94 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 		return
 	}
 
-	containerPath := strings.TrimSpace(req.Path)
-	if containerPath == "" {
-		err = errors.New("path is required")
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("missing container path in pull request")
+	// Collect container paths from both req.Path and req.Paths, then deduplicate
+	// with coverage semantics using flowfiles.DeduplicatePaths.
+	// Container paths (/etc/nginx.conf) are normalised to their relative form
+	// (etc/nginx.conf) so that DeduplicatePaths can apply ancestor coverage:
+	// /etc/ covers /etc/nginx.conf → only /etc/ is pulled.
+	rawPaths := req.Paths
+	if strings.TrimSpace(req.Path) != "" {
+		rawPaths = append(rawPaths, req.Path)
+	}
+	relPaths := make([]string, 0, len(rawPaths))
+	for _, p := range rawPaths {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
+			continue
+		}
+		// Mirror SanitizeContainerCachePath normalisation: prepend "/", Clean, strip "/".
+		rel := strings.TrimPrefix(path.Clean("/"+strings.ReplaceAll(trimmed, "\\", "/")), "/")
+		if rel != "" && rel != "." {
+			relPaths = append(relPaths, rel)
+		}
+	}
+	dedupedRel := flowfiles.DeduplicatePaths(relPaths)
+	if len(dedupedRel) == 0 {
+		err = errors.New("at least one valid path is required (use 'path' or 'paths' fields)")
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("missing container paths in pull request")
 		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
 		return
 	}
-
-	// Preserve the normalized container path under the local container cache:
-	// /etc/nginx/conf/ → container/etc/nginx/conf/
-	// /etc/nginx/nginx.conf → container/etc/nginx/nginx.conf
-	cacheRelPath, err := flowfiles.SanitizeContainerCachePath(containerPath)
-	if err != nil {
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":        flowID,
-			"container_path": containerPath,
-		}).Error("invalid container path")
-		response.Error(c, response.ErrFlowFilesInvalidRequest, fmt.Errorf("invalid container path: %w", err))
-		return
+	// Reconstruct absolute paths for the Docker API.
+	containerPaths := make([]string, len(dedupedRel))
+	for i, rel := range dedupedRel {
+		containerPaths[i] = "/" + rel
 	}
 
 	containerDir := s.flowContainerDir(flowID)
-	localTarget := filepath.Join(containerDir, filepath.FromSlash(cacheRelPath))
-	targetExists := false
 
-	// Check for existing cache entry; honour force flag.
-	if _, statErr := os.Lstat(localTarget); statErr == nil {
-		targetExists = true
-		if !req.Force {
-			err = fmt.Errorf("'%s' already exists in the container cache; set force=true to overwrite", cacheRelPath)
+	// ── Phase 1: validate every path and check for cache conflicts ────────────
+	// All validation is done upfront so that no docker operations are started
+	// if any path is invalid or already cached without force=true.
+	type pullEntry struct {
+		containerPath string
+		cacheRelPath  string
+		localTarget   string
+		targetExists  bool
+	}
+	seenCachePaths := make(map[string]struct{}, len(containerPaths))
+	entries := make([]pullEntry, 0, len(containerPaths))
+	for _, containerPath := range containerPaths {
+		cacheRelPath, err := flowfiles.SanitizeContainerCachePath(containerPath)
+		if err != nil {
 			logger.FromContext(c).WithError(err).WithFields(map[string]any{
-				"flow_id":    flowID,
-				"cache_path": cacheRelPath,
-			}).Error("pull target already exists")
-			response.Error(c, response.ErrFlowFilesAlreadyExists, err)
+				"flow_id":        flowID,
+				"container_path": containerPath,
+			}).Error("invalid container path")
+			response.Error(c, response.ErrFlowFilesInvalidRequest, fmt.Errorf("invalid container path %q: %w", containerPath, err))
 			return
 		}
-	} else if !errors.Is(statErr, os.ErrNotExist) {
-		logger.FromContext(c).WithError(statErr).WithField("flow_id", flowID).Error("error checking container cache entry")
-		response.Error(c, response.ErrInternal, statErr)
-		return
+
+		// Deduplicate by resolved cache path (handles /etc/foo and etc/foo being equivalent).
+		if _, dup := seenCachePaths[cacheRelPath]; dup {
+			continue
+		}
+		seenCachePaths[cacheRelPath] = struct{}{}
+
+		localTarget := filepath.Join(containerDir, filepath.FromSlash(cacheRelPath))
+		targetExists := false
+		if _, statErr := os.Lstat(localTarget); statErr == nil {
+			targetExists = true
+			if !req.Force {
+				err = fmt.Errorf("'%s' already exists in the container cache; set force=true to overwrite", cacheRelPath)
+				logger.FromContext(c).WithError(err).WithFields(map[string]any{
+					"flow_id":    flowID,
+					"cache_path": cacheRelPath,
+				}).Error("pull target already exists")
+				response.Error(c, response.ErrFlowFilesAlreadyExists, err)
+				return
+			}
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			logger.FromContext(c).WithError(statErr).WithField("flow_id", flowID).Error("error checking container cache entry")
+			response.Error(c, response.ErrInternal, statErr)
+			return
+		}
+		entries = append(entries, pullEntry{
+			containerPath: containerPath,
+			cacheRelPath:  cacheRelPath,
+			localTarget:   localTarget,
+			targetExists:  targetExists,
+		})
 	}
 
 	if err := os.MkdirAll(containerDir, 0755); err != nil {
@@ -551,96 +749,153 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 		return
 	}
 
-	reader, _, err := s.dockerClient.CopyFromContainer(c.Request.Context(), containerName, containerPath)
-	if err != nil {
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":        flowID,
-			"container_path": containerPath,
-		}).Error("error copying from container")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-	defer reader.Close()
+	// ── Phase 2: pull each validated entry from the container ─────────────────
+	syncedFiles := make([]models.FlowFile, 0, len(entries))
+	addedFiles := make([]models.FlowFile, 0, len(entries))
+	updatedFiles := make([]models.FlowFile, 0)
 
-	stagingDir, err := os.MkdirTemp(containerDir, ".pull-*")
-	if err != nil {
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error creating pull staging directory")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-	defer os.RemoveAll(stagingDir)
-
-	if err := flowfiles.ExtractTar(reader, stagingDir); err != nil {
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error extracting container TAR archive")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-
-	stagedTarget := flowfiles.ResolvePulledStagedTarget(stagingDir, cacheRelPath)
-	if stagedTarget == "" {
-		err = fmt.Errorf("pulled archive did not contain expected entry '%s'", cacheRelPath)
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":    flowID,
-			"cache_path": cacheRelPath,
-		}).Error("pulled container archive did not contain expected entry")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-	if _, err := os.Lstat(stagedTarget); err != nil {
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":    flowID,
-			"cache_path": cacheRelPath,
-		}).Error("pulled container archive did not contain expected entry")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-
-	if req.Force {
-		if err := os.RemoveAll(localTarget); err != nil {
+	for _, entry := range entries {
+		reader, _, err := s.dockerClient.CopyFromContainer(c.Request.Context(), containerName, entry.containerPath)
+		if err != nil {
 			logger.FromContext(c).WithError(err).WithFields(map[string]any{
-				"flow_id":    flowID,
-				"cache_path": cacheRelPath,
-			}).Error("error removing existing cache entry before forced pull")
+				"flow_id":        flowID,
+				"container_path": entry.containerPath,
+			}).Error("error copying from container")
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
-	}
-	if err := os.MkdirAll(filepath.Dir(localTarget), 0755); err != nil {
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":    flowID,
-			"cache_path": cacheRelPath,
-		}).Error("error creating container cache parent directory")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-	if err := os.Rename(stagedTarget, localTarget); err != nil {
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":    flowID,
-			"cache_path": cacheRelPath,
-		}).Error("error committing pulled container entry")
-		response.Error(c, response.ErrInternal, err)
-		return
+
+		stagingDir, err := os.MkdirTemp(containerDir, ".pull-*")
+		if err != nil {
+			reader.Close()
+			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error creating pull staging directory")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+
+		extractErr := flowfiles.ExtractTar(reader, stagingDir)
+		reader.Close()
+		if extractErr != nil {
+			os.RemoveAll(stagingDir)
+			logger.FromContext(c).WithError(extractErr).WithField("flow_id", flowID).Error("error extracting container TAR archive")
+			response.Error(c, response.ErrInternal, extractErr)
+			return
+		}
+
+		stagedTarget := flowfiles.ResolvePulledStagedTarget(stagingDir, entry.cacheRelPath)
+		if stagedTarget == "" {
+			os.RemoveAll(stagingDir)
+			err = fmt.Errorf("pulled archive did not contain expected entry '%s'", entry.cacheRelPath)
+			logger.FromContext(c).WithError(err).WithFields(map[string]any{
+				"flow_id":    flowID,
+				"cache_path": entry.cacheRelPath,
+			}).Error("pulled container archive did not contain expected entry")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		if _, statErr := os.Lstat(stagedTarget); statErr != nil {
+			os.RemoveAll(stagingDir)
+			logger.FromContext(c).WithError(statErr).WithFields(map[string]any{
+				"flow_id":    flowID,
+				"cache_path": entry.cacheRelPath,
+			}).Error("pulled container archive did not contain expected entry")
+			response.Error(c, response.ErrInternal, statErr)
+			return
+		}
+
+		if entry.targetExists {
+			if err := os.RemoveAll(entry.localTarget); err != nil {
+				os.RemoveAll(stagingDir)
+				logger.FromContext(c).WithError(err).WithFields(map[string]any{
+					"flow_id":    flowID,
+					"cache_path": entry.cacheRelPath,
+				}).Error("error removing existing cache entry before forced pull")
+				response.Error(c, response.ErrInternal, err)
+				return
+			}
+		}
+		if err := os.MkdirAll(filepath.Dir(entry.localTarget), 0755); err != nil {
+			os.RemoveAll(stagingDir)
+			logger.FromContext(c).WithError(err).WithFields(map[string]any{
+				"flow_id":    flowID,
+				"cache_path": entry.cacheRelPath,
+			}).Error("error creating container cache parent directory")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		if err := os.Rename(stagedTarget, entry.localTarget); err != nil {
+			os.RemoveAll(stagingDir)
+			logger.FromContext(c).WithError(err).WithFields(map[string]any{
+				"flow_id":    flowID,
+				"cache_path": entry.cacheRelPath,
+			}).Error("error committing pulled container entry")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		os.RemoveAll(stagingDir)
+
+		info, err := os.Lstat(entry.localTarget)
+		if err != nil {
+			logger.FromContext(c).WithError(err).WithFields(map[string]any{
+				"flow_id":    flowID,
+				"cache_path": entry.cacheRelPath,
+			}).Error("error stating synced container entry")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+
+		// Build the full list of synced entries: root entry + recursive contents for
+		// directories. Mirrors the expansion done in DeleteFlowFile so the caller gets
+		// a complete picture of what was actually written to the cache.
+		relPath := path.Join(flowfiles.ContainerDirName, entry.cacheRelPath)
+		rootFile := convertFlowFile(flowfiles.NewFileWithPath(info, relPath))
+		expanded := []models.FlowFile{rootFile}
+		if info.IsDir() {
+			nested, nestErr := flowfiles.ListDirEntriesRecursive(entry.localTarget, relPath)
+			if nestErr != nil {
+				logger.FromContext(c).WithError(nestErr).WithFields(map[string]any{
+					"flow_id": flowID,
+					"path":    relPath,
+				}).Warn("could not list pulled directory contents for response")
+			} else {
+				for _, f := range nested {
+					expanded = append(expanded, convertFlowFile(f))
+				}
+			}
+		}
+		syncedFiles = append(syncedFiles, expanded...)
+		if entry.targetExists {
+			updatedFiles = append(updatedFiles, expanded...)
+		} else {
+			addedFiles = append(addedFiles, expanded...)
+		}
 	}
 
-	info, err := os.Lstat(localTarget)
-	if err != nil {
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":    flowID,
-			"cache_path": cacheRelPath,
-		}).Error("error stating synced container entry")
-		response.Error(c, response.ErrInternal, err)
-		return
+	// Sort results by cache path for deterministic output.
+	sort.Slice(syncedFiles, func(i, j int) bool {
+		if syncedFiles[i].Path < syncedFiles[j].Path {
+			return true
+		} else if syncedFiles[i].Path > syncedFiles[j].Path {
+			return false
+		} else if syncedFiles[i].Name < syncedFiles[j].Name {
+			return true
+		} else if syncedFiles[i].Name > syncedFiles[j].Name {
+			return false
+		}
+		return syncedFiles[i].ModifiedAt.After(syncedFiles[j].ModifiedAt)
+	})
+
+	ctx := c.Request.Context()
+	if len(addedFiles) > 0 {
+		s.publishFlowFilesAdded(ctx, flow, addedFiles)
+	}
+	for _, f := range updatedFiles {
+		s.publishFlowFileUpdated(ctx, flow, f)
 	}
 
-	synced := convertFlowFile(flowfiles.NewFileWithPath(info, path.Join(flowfiles.ContainerDirName, cacheRelPath)))
-	if targetExists {
-		s.publishFlowFileUpdated(c.Request.Context(), flow, synced)
-	} else {
-		s.publishFlowFilesAdded(c.Request.Context(), flow, []models.FlowFile{synced})
-	}
 	response.Success(c, http.StatusOK, models.FlowFiles{
-		Files: []models.FlowFile{synced},
-		Total: 1,
+		Files: syncedFiles,
+		Total: uint64(len(syncedFiles)),
 	})
 }
 
@@ -650,7 +905,8 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Param path query string false "absolute path inside the running container; defaults to /work"
+// @Param path query string false "absolute path inside the running container; defaults to /work (may be combined with paths[])"
+// @Param paths[] query []string false "absolute paths inside the running container (repeatable)"
 // @Success 200 {object} response.successResp{data=models.ContainerFiles} "container files list received successful"
 // @Failure 400 {object} response.errorResp "invalid flow files request data or container not running"
 // @Failure 403 {object} response.errorResp "getting flow container files not permitted"
@@ -684,9 +940,22 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 		return
 	}
 
-	containerPath := strings.TrimSpace(c.Query("path"))
-	if containerPath == "" {
-		containerPath = docker.WorkFolderPathInContainer
+	// Collect paths from both "path" and "paths[]" query params, deduplicate by
+	// exact string. If explicit paths are provided but all are whitespace-only,
+	// return an error. When nothing is provided at all, default to /work.
+	rawPaths := c.QueryArray("paths[]")
+	if singlePath := strings.TrimSpace(c.Query("path")); singlePath != "" {
+		rawPaths = append(rawPaths, singlePath)
+	}
+	containerPaths := deduplicateContainerPaths(rawPaths)
+	if len(rawPaths) > 0 && len(containerPaths) == 0 {
+		err = errors.New("at least one valid path is required (use 'path' or 'paths[]' query parameters)")
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("missing container paths")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
+	if len(containerPaths) == 0 {
+		containerPaths = []string{docker.WorkFolderPathInContainer}
 	}
 
 	containerName := primaryContainerName(flowID)
@@ -706,40 +975,74 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 		return
 	}
 
-	pathStat, err := s.dockerClient.ContainerStatPath(c.Request.Context(), containerName, containerPath)
-	if err != nil {
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":        flowID,
-			"container_path": containerPath,
-		}).Error("error stating container path")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-	if !pathStat.Mode.IsDir() {
-		file := convertContainerFile(path.Dir(containerPath), pathStat)
-		response.Success(c, http.StatusOK, models.ContainerFiles{
-			Path:  containerPath,
-			Files: []models.ContainerFile{file},
-			Total: 1,
-		})
-		return
+	// Query each path and collect results. Output is deduplicated by the
+	// resolved file.Path so that overlapping queries never return the same
+	// entry twice.
+	seenPaths := make(map[string]struct{})
+	allFiles := make([]models.ContainerFile, 0)
+	for _, containerPath := range containerPaths {
+		pathStat, err := s.dockerClient.ContainerStatPath(c.Request.Context(), containerName, containerPath)
+		if err != nil {
+			logger.FromContext(c).WithError(err).WithFields(map[string]any{
+				"flow_id":        flowID,
+				"container_path": containerPath,
+			}).Error("error stating container path")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+
+		if !pathStat.Mode.IsDir() {
+			file := convertContainerFile(path.Dir(containerPath), pathStat)
+			if _, seen := seenPaths[file.Path]; !seen {
+				seenPaths[file.Path] = struct{}{}
+				allFiles = append(allFiles, file)
+			}
+			continue
+		}
+
+		stats, err := s.dockerClient.ListContainerDir(c.Request.Context(), containerName, containerPath)
+		if err != nil {
+			logger.FromContext(c).WithError(err).WithFields(map[string]any{
+				"flow_id":        flowID,
+				"container_path": containerPath,
+			}).Error("error listing container directory")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		for _, stat := range stats {
+			file := convertContainerFile(containerPath, stat)
+			if _, seen := seenPaths[file.Path]; !seen {
+				seenPaths[file.Path] = struct{}{}
+				allFiles = append(allFiles, file)
+			}
+		}
 	}
 
-	stats, err := s.dockerClient.ListContainerDir(c.Request.Context(), containerName, containerPath)
-	if err != nil {
-		logger.FromContext(c).WithError(err).WithFields(map[string]any{
-			"flow_id":        flowID,
-			"container_path": containerPath,
-		}).Error("error listing container directory")
-		response.Error(c, response.ErrInternal, err)
-		return
+	// Sort by name for deterministic output across all paths.
+	sort.Slice(allFiles, func(i, j int) bool {
+		if allFiles[i].Path < allFiles[j].Path {
+			return true
+		} else if allFiles[i].Path > allFiles[j].Path {
+			return false
+		} else if allFiles[i].Name < allFiles[j].Name {
+			return true
+		} else if allFiles[i].Name > allFiles[j].Name {
+			return false
+		}
+		return allFiles[i].ModifiedAt.Before(allFiles[j].ModifiedAt)
+	})
+
+	// Backward-compat: when exactly one container path was queried, echo it back
+	// as Path so existing callers receive the same field value as before.
+	responsePath := ""
+	if len(containerPaths) == 1 {
+		responsePath = containerPaths[0]
 	}
 
-	files := convertContainerFiles(containerPath, stats)
 	response.Success(c, http.StatusOK, models.ContainerFiles{
-		Path:  containerPath,
-		Files: files,
-		Total: uint64(len(files)),
+		Path:  responsePath,
+		Files: allFiles,
+		Total: uint64(len(allFiles)),
 	})
 }
 
@@ -875,17 +1178,27 @@ func (s *FlowFileService) pushResourcePathsToContainer(c *gin.Context, flowID ui
 	}
 }
 
-// deleteUploadFromContainer removes cache paths that mirror the primary container's
-// /work tree: uploads/... and resources/... Container mirror paths (container/...) stay
-// host-only and are not removed inside the running container.
-func (s *FlowFileService) deleteUploadFromContainer(ctx context.Context, flowID uint64, reqPath string) error {
-	if s.dockerClient == nil {
+// deleteUploadsFromContainer removes cache paths that mirror the primary container's
+// /work tree (uploads/... and resources/...) in a single Docker exec call.
+// Container mirror paths (container/...) stay host-only and are not touched inside
+// the running container. When Docker is unavailable or the container is not running,
+// the function returns nil — the cache divergence will be resolved on next container start.
+func (s *FlowFileService) deleteUploadsFromContainer(ctx context.Context, flowID uint64, reqPaths []string) error {
+	if s.dockerClient == nil || len(reqPaths) == 0 {
 		return nil
 	}
 
-	cleaned := filepath.Clean(filepath.FromSlash(strings.ReplaceAll(reqPath, "\\", "/")))
-	parts := strings.SplitN(cleaned, string(filepath.Separator), 2)
-	if len(parts) == 0 || (parts[0] != flowfiles.UploadsDirName && parts[0] != flowfiles.ResourcesDirName) {
+	// Collect container-side paths for entries that mirror into /work (uploads/ and resources/ only).
+	containerPaths := make([]string, 0, len(reqPaths))
+	for _, reqPath := range reqPaths {
+		cleaned := filepath.Clean(filepath.FromSlash(strings.ReplaceAll(reqPath, "\\", "/")))
+		parts := strings.SplitN(cleaned, string(filepath.Separator), 2)
+		if len(parts) == 0 || (parts[0] != flowfiles.UploadsDirName && parts[0] != flowfiles.ResourcesDirName) {
+			continue
+		}
+		containerPaths = append(containerPaths, path.Join(docker.WorkFolderPathInContainer, filepath.ToSlash(cleaned)))
+	}
+	if len(containerPaths) == 0 {
 		return nil
 	}
 
@@ -898,9 +1211,15 @@ func (s *FlowFileService) deleteUploadFromContainer(ctx context.Context, flowID 
 		return nil
 	}
 
-	containerPath := path.Join(docker.WorkFolderPathInContainer, filepath.ToSlash(cleaned))
+	// Build a single rm -rf command for all paths to minimise Docker API round-trips.
+	quotedPaths := make([]string, len(containerPaths))
+	for i, p := range containerPaths {
+		quotedPaths[i] = shellQuote(p)
+	}
+	cmd := "rm -rf -- " + strings.Join(quotedPaths, " ")
+
 	createResp, err := s.dockerClient.ContainerExecCreate(ctx, containerName, container.ExecOptions{
-		Cmd:          []string{"sh", "-c", fmt.Sprintf("rm -rf -- %s", shellQuote(containerPath))},
+		Cmd:          []string{"sh", "-c", cmd},
 		AttachStdout: true,
 		AttachStderr: true,
 	})
@@ -931,6 +1250,28 @@ func (s *FlowFileService) deleteUploadFromContainer(ctx context.Context, flowID 
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+// deduplicateContainerPaths returns a slice of trimmed, non-empty, unique
+// container path strings, preserving first-occurrence order. Unlike
+// flowfiles.DeduplicatePaths it applies no path.Clean or safety checks —
+// those semantics are specific to host-side cache paths, not container-internal
+// absolute paths.
+func deduplicateContainerPaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	result := make([]string, 0, len(paths))
+	for _, p := range paths {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
+			continue
+		}
+		if _, dup := seen[trimmed]; dup {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
+	}
+	return result
 }
 
 func flowScopeForFiles(
@@ -1048,13 +1389,15 @@ func (s *FlowFileService) publishFlowFileUpdated(ctx context.Context, flow model
 	publisher.FlowFileUpdated(ctx, convertModelFlowFile(file))
 }
 
-func (s *FlowFileService) publishFlowFileDeleted(ctx context.Context, flow models.Flow, file models.FlowFile) {
+func (s *FlowFileService) publishFlowFilesDeleted(ctx context.Context, flow models.Flow, files []models.FlowFile) {
 	if s.ss == nil {
 		return
 	}
 
 	publisher := s.ss.NewFlowPublisher(int64(flow.UserID), int64(flow.ID))
-	publisher.FlowFileDeleted(ctx, convertModelFlowFile(file))
+	for _, file := range files {
+		publisher.FlowFileDeleted(ctx, convertModelFlowFile(file))
+	}
 }
 
 func sortFlowFiles(files []models.FlowFile) {

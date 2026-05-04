@@ -638,6 +638,53 @@ func TestExtractTarRejectsTooManyFiles(t *testing.T) {
 	assert.Contains(t, err.Error(), "maximum file count")
 }
 
+func TestZipRelativePaths(t *testing.T) {
+	t.Run("files and directory contents with cache-relative names", func(t *testing.T) {
+		base := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "uploads"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(base, "uploads", "a.txt"), []byte("alpha"), 0644))
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "container", "etc", "nginx"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(base, "container", "etc", "nginx", "nginx.conf"), []byte("nginx"), 0644))
+		if err := os.Symlink(filepath.Join(base, "uploads", "a.txt"), filepath.Join(base, "uploads", "link.txt")); err != nil {
+			t.Skipf("symlink creation not available: %v", err)
+		}
+
+		var buf bytes.Buffer
+		err := ZipRelativePaths(&buf, base, []string{
+			"uploads/a.txt",
+			"uploads/link.txt",    // symlink: skipped
+			"container/etc",       // directory: entries under container/etc/...
+			"uploads/missing.txt", // missing: silently skipped
+		})
+		require.NoError(t, err)
+
+		zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+		require.NoError(t, err)
+		contents := map[string]string{}
+		for _, f := range zr.File {
+			rc, err := f.Open()
+			require.NoError(t, err)
+			data, _ := io.ReadAll(rc)
+			rc.Close()
+			contents[f.Name] = string(data)
+		}
+
+		assert.Equal(t, "alpha", contents["uploads/a.txt"])
+		assert.Equal(t, "nginx", contents["container/etc/nginx/nginx.conf"])
+		assert.NotContains(t, contents, "uploads/link.txt", "symlinks must be excluded")
+		assert.NotContains(t, contents, "uploads/missing.txt", "missing files must be silently skipped")
+	})
+
+	t.Run("empty relPaths produces empty zip", func(t *testing.T) {
+		var buf bytes.Buffer
+		require.NoError(t, ZipRelativePaths(&buf, t.TempDir(), nil))
+
+		zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+		require.NoError(t, err)
+		assert.Empty(t, zr.File)
+	})
+}
+
 func TestZipDirectory(t *testing.T) {
 	src := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("hello"), 0644))
@@ -685,16 +732,226 @@ func TestZipDirectoryExcludesSymlinks(t *testing.T) {
 	assert.NotContains(t, names, "link.txt")
 }
 
+func TestDeduplicatePaths(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		// ── core user scenario ────────────────────────────────────────────────
+		{
+			name: "user example: parent covers nested paths, underscore sibling survives",
+			input: []string{
+				"uploads/my_dir1/my_dir2/",
+				"uploads/my_dir1/my_file1.txt",
+				"uploads/my_dir1/my_dir2/my_file2.txt",
+				"uploads/my_dir1_temp",
+				"uploads/my_dir1",
+			},
+			// uploads/my_dir1 covers the first three; uploads/my_dir1_temp is independent
+			expected: []string{"uploads/my_dir1_temp", "uploads/my_dir1"},
+		},
+
+		// ── exact deduplication ───────────────────────────────────────────────
+		{
+			name:     "exact string duplicates keep first occurrence",
+			input:    []string{"uploads/file.txt", "uploads/file.txt", "uploads/file.txt"},
+			expected: []string{"uploads/file.txt"},
+		},
+		{
+			name:     "trailing slash and no trailing slash are the same path",
+			input:    []string{"uploads/dir/", "uploads/dir"},
+			expected: []string{"uploads/dir/"},
+		},
+		{
+			name:  "normalisation via .. collapses to same path as plain entry",
+			input: []string{"uploads/my_dir1_temp/../my_dir1/", "uploads/my_dir1"},
+			// both clean to "uploads/my_dir1"; original of first occurrence is returned
+			expected: []string{"uploads/my_dir1_temp/../my_dir1/"},
+		},
+
+		// ── parent-covers-child ───────────────────────────────────────────────
+		{
+			name:     "parent covers direct child file",
+			input:    []string{"uploads/dir/file.txt", "uploads/dir"},
+			expected: []string{"uploads/dir"},
+		},
+		{
+			name:     "parent covers nested subdirectory",
+			input:    []string{"uploads/dir/sub/", "uploads/dir"},
+			expected: []string{"uploads/dir"},
+		},
+		{
+			name:     "top-level covers deep nesting",
+			input:    []string{"uploads/a/b/c/d.txt", "uploads/a"},
+			expected: []string{"uploads/a"},
+		},
+		{
+			name:     "all descendants collapsed to single ancestor",
+			input:    []string{"uploads/a/x.txt", "uploads/a/y.txt", "uploads/a/sub/z.txt", "uploads/a"},
+			expected: []string{"uploads/a"},
+		},
+		{
+			name:     "ancestor given last still covers earlier entries",
+			input:    []string{"uploads/dir/file.txt", "uploads/dir/sub/", "uploads/dir"},
+			expected: []string{"uploads/dir"},
+		},
+		{
+			name:     "intermediate node covers its subtree but is covered by root",
+			input:    []string{"uploads/a", "uploads/a/b", "uploads/a/b/c.txt"},
+			expected: []string{"uploads/a"},
+		},
+
+		// ── no false positives ────────────────────────────────────────────────
+		{
+			name:     "underscore suffix prevents false parent match",
+			input:    []string{"uploads/dir", "uploads/dir_extra"},
+			expected: []string{"uploads/dir", "uploads/dir_extra"},
+		},
+		{
+			name:     "numeric suffix does not create false match",
+			input:    []string{"uploads/dir1", "uploads/dir"},
+			expected: []string{"uploads/dir1", "uploads/dir"},
+		},
+		{
+			name:     "sibling directories both survive",
+			input:    []string{"uploads/a", "uploads/b"},
+			expected: []string{"uploads/a", "uploads/b"},
+		},
+		{
+			name:     "independent flat files both survive",
+			input:    []string{"uploads/a.txt", "uploads/b.txt"},
+			expected: []string{"uploads/a.txt", "uploads/b.txt"},
+		},
+
+		// ── order preservation ────────────────────────────────────────────────
+		{
+			name:     "input order preserved when no path is covered",
+			input:    []string{"uploads/z.txt", "uploads/a.txt", "uploads/m.txt"},
+			expected: []string{"uploads/z.txt", "uploads/a.txt", "uploads/m.txt"},
+		},
+
+		// ── multiple namespaces ───────────────────────────────────────────────
+		{
+			name:     "uploads resources container do not interfere with each other",
+			input:    []string{"uploads/dir", "resources/dir", "container/dir"},
+			expected: []string{"uploads/dir", "resources/dir", "container/dir"},
+		},
+		{
+			name:     "same relative name in different namespaces are independent",
+			input:    []string{"uploads/dir/file.txt", "container/dir"},
+			expected: []string{"uploads/dir/file.txt", "container/dir"},
+		},
+		{
+			name:     "coverage is scoped within each namespace",
+			input:    []string{"uploads/dir/file.txt", "uploads/dir", "resources/dir/file.txt"},
+			expected: []string{"uploads/dir", "resources/dir/file.txt"},
+		},
+
+		// ── original value preservation ───────────────────────────────────────
+		{
+			name:     "original path with trailing slash returned when it survives",
+			input:    []string{"uploads/dir/", "resources/other.txt"},
+			expected: []string{"uploads/dir/", "resources/other.txt"},
+		},
+		{
+			name:  "original dotdot path returned when it survives and is safe",
+			input: []string{"uploads/tmp/../keep/"},
+			// path.Clean → "uploads/keep"; not absolute, not leading ".." → safe; original returned
+			expected: []string{"uploads/tmp/../keep/"},
+		},
+
+		// ── security: reject path traversal ──────────────────────────────────
+		{
+			name:     "leading dotdot path rejected",
+			input:    []string{"../etc/passwd"},
+			expected: nil,
+		},
+		{
+			name:     "absolute path rejected",
+			input:    []string{"/etc/passwd"},
+			expected: nil,
+		},
+		{
+			name:  "path that cleans to dotdot escape rejected",
+			input: []string{"uploads/../../etc/passwd"},
+			// path.Clean → "../../etc/passwd" → starts with "../" → rejected
+			expected: nil,
+		},
+		{
+			name:  "dotdot that fully escapes root rejected",
+			input: []string{"../"},
+			// path.Clean → ".." → equals ".." → rejected
+			expected: nil,
+		},
+		{
+			name:     "mixed safe and unsafe: only safe paths returned",
+			input:    []string{"uploads/safe.txt", "../etc/passwd", "/etc/shadow", "uploads/../../evil"},
+			expected: []string{"uploads/safe.txt"},
+		},
+		{
+			name:     "all unsafe inputs return nil",
+			input:    []string{"../a", "/b", "uploads/../../c"},
+			expected: nil,
+		},
+
+		// ── edge cases ────────────────────────────────────────────────────────
+		{
+			name:     "nil input returns nil",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "empty slice returns nil",
+			input:    []string{},
+			expected: nil,
+		},
+		{
+			name:     "whitespace-only entries dropped",
+			input:    []string{"", "   ", "\t", "uploads/file.txt"},
+			expected: []string{"uploads/file.txt"},
+		},
+		{
+			name:     "single safe path returned unchanged",
+			input:    []string{"uploads/report.txt"},
+			expected: []string{"uploads/report.txt"},
+		},
+		{
+			name:     "backslash normalised to slash for comparison, original returned",
+			input:    []string{`uploads\file.txt`},
+			expected: []string{`uploads\file.txt`},
+		},
+		{
+			name:  "backslash and slash variants of same path are deduplicated",
+			input: []string{`uploads\file.txt`, "uploads/file.txt"},
+			// both clean to "uploads/file.txt"; first occurrence wins
+			expected: []string{`uploads\file.txt`},
+		},
+		{
+			name:     "dot in middle is cleaned and deduped correctly",
+			input:    []string{"uploads/./file.txt", "uploads/file.txt"},
+			expected: []string{"uploads/./file.txt"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DeduplicatePaths(tt.input)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
 func TestSort(t *testing.T) {
 	now := time.Now()
 	files := []File{
-		{Name: "b.txt", ModifiedAt: now.Add(-2 * time.Hour)},
-		{Name: "a.txt", ModifiedAt: now.Add(-1 * time.Hour)},
-		{Name: "c.txt", ModifiedAt: now.Add(-1 * time.Hour)},
+		{Name: "b.txt", Path: "b.txt", ModifiedAt: now.Add(-2 * time.Hour)},
+		{Name: "a.txt", Path: "a.txt", ModifiedAt: now.Add(-1 * time.Hour)},
+		{Name: "c.txt", Path: "c.txt", ModifiedAt: now.Add(-1 * time.Hour)},
 	}
 	Sort(files)
 
 	assert.Equal(t, "a.txt", files[0].Name)
-	assert.Equal(t, "c.txt", files[1].Name)
-	assert.Equal(t, "b.txt", files[2].Name)
+	assert.Equal(t, "c.txt", files[2].Name)
+	assert.Equal(t, "b.txt", files[1].Name)
 }
