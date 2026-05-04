@@ -510,6 +510,33 @@ definitions:
     - input
     - provider
     type: object
+  models.CreateKnowledgeDocRequest:
+    properties:
+      answer_type:
+        type: string
+      code_lang:
+        maxLength: 100
+        type: string
+      content:
+        maxLength: 65536
+        minLength: 1
+        type: string
+      description:
+        maxLength: 1000
+        type: string
+      doc_type:
+        type: string
+      guide_type:
+        type: string
+      question:
+        maxLength: 2048
+        minLength: 1
+        type: string
+    required:
+    - content
+    - doc_type
+    - question
+    type: object
   models.DailyFlowsStats:
     properties:
       date:
@@ -757,6 +784,97 @@ definitions:
         type: number
     required:
     - function_name
+    type: object
+  models.KnowledgeDocEntry:
+    properties:
+      answer_type:
+        type: string
+      code_lang:
+        type: string
+      content:
+        type: string
+      description:
+        type: string
+      doc_type:
+        type: string
+      flow_id:
+        type: integer
+      guide_type:
+        type: string
+      id:
+        type: string
+      manual:
+        type: boolean
+      part_size:
+        type: integer
+      question:
+        type: string
+      subtask_id:
+        type: integer
+      task_id:
+        type: integer
+      total_size:
+        type: integer
+      user_id:
+        type: integer
+    type: object
+  models.KnowledgeDocList:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.KnowledgeDocEntry'
+        type: array
+      total:
+        type: integer
+    type: object
+  models.KnowledgeDocWithScore:
+    properties:
+      document:
+        $ref: '#/definitions/models.KnowledgeDocEntry'
+      score:
+        type: number
+    type: object
+  models.KnowledgeSearchRequest:
+    properties:
+      answer_types:
+        items:
+          type: string
+        type: array
+      code_langs:
+        items:
+          type: string
+        type: array
+      doc_types:
+        items:
+          type: string
+        type: array
+      flow_id:
+        type: integer
+      guide_types:
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 100
+        minimum: 1
+        type: integer
+      manual:
+        type: boolean
+      query:
+        maxLength: 2048
+        minLength: 1
+        type: string
+    required:
+    - query
+    type: object
+  models.KnowledgeSearchResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.KnowledgeDocWithScore'
+        type: array
+      total:
+        type: integer
     type: object
   models.Login:
     properties:
@@ -1307,6 +1425,29 @@ definitions:
         type: string
       status:
         type: string
+    type: object
+  models.UpdateKnowledgeDocRequest:
+    properties:
+      answer_type:
+        type: string
+      code_lang:
+        maxLength: 100
+        type: string
+      content:
+        maxLength: 65536
+        minLength: 1
+        type: string
+      description:
+        maxLength: 1000
+        type: string
+      guide_type:
+        type: string
+      question:
+        maxLength: 2048
+        minLength: 1
+        type: string
+    required:
+    - content
     type: object
   models.UsageStats:
     properties:
@@ -4494,6 +4635,301 @@ paths:
       summary: Retrieve current user and system settings
       tags:
       - Public
+  /knowledge/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+            order is required if prop is not empty
+        in: query
+        items:
+          type: string
+        name: sort[]
+        type: array
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      - description: include document text in the response
+        in: query
+        name: with_content
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeDocList'
+              type: object
+        "400":
+          description: invalid query parameters
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List knowledge documents
+      tags:
+      - Knowledge
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create request
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateKnowledgeDocRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeDocEntry'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: embedding provider not configured
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create knowledge document
+      tags:
+      - Knowledge
+  /knowledge/{id}:
+    delete:
+      parameters:
+      - description: Document UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: document deleted
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "403":
+          description: not permitted or wrong owner
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: document not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete knowledge document
+      tags:
+      - Knowledge
+    get:
+      parameters:
+      - description: Document UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeDocEntry'
+              type: object
+        "403":
+          description: not permitted or wrong owner
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: document not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get knowledge document
+      tags:
+      - Knowledge
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Document UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateKnowledgeDocRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeDocEntry'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted or wrong owner
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: document not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: embedding provider not configured
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update knowledge document
+      tags:
+      - Knowledge
+  /knowledge/search:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Search request
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.KnowledgeSearchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeSearchResult'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: embedding provider not configured
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Semantic search in knowledge base
+      tags:
+      - Knowledge
   /msglogs/:
     get:
       parameters:

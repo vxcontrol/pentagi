@@ -9,6 +9,9 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/sqlc-dev/pqtype"
 )
 
 type AssistantStatus string
@@ -953,6 +956,20 @@ type FlowTemplate struct {
 	Text      string       `json:"text"`
 	CreatedAt sql.NullTime `json:"created_at"`
 	UpdatedAt sql.NullTime `json:"updated_at"`
+}
+
+type LangchainPgCollection struct {
+	Name      sql.NullString        `json:"name"`
+	Cmetadata pqtype.NullRawMessage `json:"cmetadata"`
+	Uuid      uuid.UUID             `json:"uuid"`
+}
+
+type LangchainPgEmbedding struct {
+	CollectionID uuid.NullUUID         `json:"collection_id"`
+	Embedding    string                `json:"embedding"`
+	Document     sql.NullString        `json:"document"`
+	Cmetadata    pqtype.NullRawMessage `json:"cmetadata"`
+	Uuid         uuid.UUID             `json:"uuid"`
 }
 
 type Msgchain struct {

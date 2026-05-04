@@ -208,6 +208,12 @@ func (s *captureSubscriptions) NewFlowTemplatePublisher(int64) subscriptions.Flo
 func (s *captureSubscriptions) NewResourcePublisher(int64) subscriptions.ResourcePublisher {
 	return &captureResourcePublisher{events: &s.events}
 }
+func (s *captureSubscriptions) NewKnowledgeSubscriber(int64) subscriptions.KnowledgeSubscriber {
+	return nil
+}
+func (s *captureSubscriptions) NewKnowledgePublisher(int64) subscriptions.KnowledgePublisher {
+	return nil
+}
 
 type captureResourcePublisher struct {
 	userID int64
@@ -499,9 +505,9 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 				{userID: 1, path: "shared/sub", isDir: true},
 				{userID: 1, path: "shared/sub/file.txt", content: "x"},
 			},
-			paths:             []string{"shared/sub"},
-			privs:             []string{"resources.view"},
-			wantStatus:        http.StatusOK,
+			paths:      []string{"shared/sub"},
+			privs:      []string{"resources.view"},
+			wantStatus: http.StatusOK,
 			// "shared" belongs to user 2 → not returned for user 1
 			wantResponsePaths: []string{"shared/sub", "shared/sub/file.txt"},
 		},
@@ -1242,8 +1248,8 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			wantContentType:  "application/zip",
 			wantDispContains: "download.zip",
 			wantZipEntries: map[string]string{
-				"report.txt":    "report-data",
-				"docs/a.txt":    "a-data",
+				"report.txt":     "report-data",
+				"docs/a.txt":     "a-data",
 				"docs/sub/b.txt": "b-data",
 			},
 		},

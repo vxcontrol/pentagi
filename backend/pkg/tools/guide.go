@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/graph/model"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 
@@ -26,27 +27,32 @@ const (
 )
 
 type guide struct {
+	userID    int64
 	flowID    int64
 	taskID    *int64
 	subtaskID *int64
 	replacer  anonymizer.Replacer
 	store     *pgvector.Store
 	vslp      VectorStoreLogProvider
+	knp       KnowledgeProvider
 }
 
 func NewGuideTool(
-	flowID int64, taskID, subtaskID *int64,
+	userID int64, flowID int64, taskID, subtaskID *int64,
 	replacer anonymizer.Replacer,
 	store *pgvector.Store,
 	vslp VectorStoreLogProvider,
+	knp KnowledgeProvider,
 ) Tool {
 	return &guide{
+		userID:    userID,
 		flowID:    flowID,
 		taskID:    taskID,
 		subtaskID: subtaskID,
 		replacer:  replacer,
 		store:     store,
 		vslp:      vslp,
+		knp:       knp,
 	}
 }
 
@@ -245,6 +251,7 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			if doc.Metadata == nil {
 				doc.Metadata = map[string]any{}
 			}
+			doc.Metadata["user_id"] = g.userID
 			doc.Metadata["flow_id"] = g.flowID
 			if g.taskID != nil {
 				doc.Metadata["task_id"] = *g.taskID
@@ -259,7 +266,8 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			doc.Metadata["total_size"] = len(anonymizedGuide)
 		}
 
-		if _, err := g.store.AddDocuments(ctx, docs); err != nil {
+		ids, err := g.store.AddDocuments(ctx, docs)
+		if err != nil {
 			observation.Event(append(opts,
 				langfuse.WithEventStatus(err.Error()),
 				langfuse.WithEventLevel(langfuse.ObservationLevelError),
@@ -273,6 +281,32 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			langfuse.WithEventLevel(langfuse.ObservationLevelDebug),
 			langfuse.WithEventOutput(docs),
 		)...)
+
+		if g.knp != nil {
+			guideType := model.KnowledgeGuideType(action.Type)
+			for i, doc := range docs {
+				if i >= len(ids) {
+					break
+				}
+				knDoc := &model.KnowledgeDocument{
+					ID:        ids[i],
+					UserID:    g.userID,
+					DocType:   model.KnowledgeDocTypeGuide,
+					Content:   doc.PageContent,
+					Question:  anonymizedQuestion,
+					GuideType: &guideType,
+					PartSize:  len(doc.PageContent),
+					TotalSize: len(anonymizedGuide),
+					Manual:    false,
+				}
+				if g.flowID != 0 {
+					knDoc.FlowID = &g.flowID
+				}
+				knDoc.TaskID = g.taskID
+				knDoc.SubtaskID = g.subtaskID
+				g.knp.KnowledgeDocumentCreated(ctx, knDoc)
+			}
+		}
 
 		if agentCtx, ok := GetAgentContext(ctx); ok {
 			data := map[string]any{

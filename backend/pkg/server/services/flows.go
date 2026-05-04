@@ -602,6 +602,18 @@ func (s *FlowService) DeleteFlow(c *gin.Context) {
 		return
 	}
 
+	// Best-effort cleanup: remove accumulated long-term memory documents for this
+	// flow from the vector store. They will never be re-used after the flow is gone.
+	if err := s.db.Exec(
+		`DELETE FROM langchain_pg_embedding
+		 WHERE collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = 'langchain')
+		   AND COALESCE(cmetadata ->> 'doc_type', '') = 'memory'
+		   AND (cmetadata ->> 'flow_id') = ?`,
+		strconv.FormatUint(flow.ID, 10),
+	).Error; err != nil {
+		logger.FromContext(c).WithError(err).Warnf("failed to clean up memory documents for deleted flow %d", flow.ID)
+	}
+
 	flowDB, err := convertFlowToDatabase(flow)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error converting flow to database")

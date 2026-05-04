@@ -253,3 +253,41 @@ func (s *resourceSubscriber) ResourceUpdatedAdmin(ctx context.Context) (<-chan *
 func (s *resourceSubscriber) ResourceDeletedAdmin(ctx context.Context) (<-chan *model.UserResource, error) {
 	return s.ctrl.resourceDeletedAdmin.Subscribe(ctx, s.userID), nil
 }
+
+// knowledgeSubscriber subscribes to global knowledge document events (broadcast to all users).
+type knowledgeSubscriber struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (s *knowledgeSubscriber) GetUserID() int64 {
+	return s.userID
+}
+
+func (s *knowledgeSubscriber) SetUserID(userID int64) {
+	s.userID = userID
+}
+
+func (s *knowledgeSubscriber) KnowledgeDocumentCreated(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	return s.ctrl.knowledgeDocumentCreated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *knowledgeSubscriber) KnowledgeDocumentUpdated(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	return s.ctrl.knowledgeDocumentUpdated.Subscribe(ctx, s.userID), nil
+}
+
+func (s *knowledgeSubscriber) KnowledgeDocumentDeleted(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	return s.ctrl.knowledgeDocumentDeleted.Subscribe(ctx, s.userID), nil
+}
+
+func (s *knowledgeSubscriber) KnowledgeDocumentCreatedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	return s.ctrl.knowledgeDocumentCreatedAdmin.Subscribe(ctx, s.userID), nil
+}
+
+func (s *knowledgeSubscriber) KnowledgeDocumentUpdatedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	return s.ctrl.knowledgeDocumentUpdatedAdmin.Subscribe(ctx, s.userID), nil
+}
+
+func (s *knowledgeSubscriber) KnowledgeDocumentDeletedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	return s.ctrl.knowledgeDocumentDeletedAdmin.Subscribe(ctx, s.userID), nil
+}

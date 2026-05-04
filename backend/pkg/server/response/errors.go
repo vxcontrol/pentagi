@@ -143,6 +143,14 @@ var ErrResourcesAlreadyExists  = NewHttpError(409, "Resources.AlreadyExists", "r
 var ErrResourcesInvalidData    = NewHttpError(400, "Resources.InvalidData", "invalid resource data")
 var ErrResourcesConflict       = NewHttpError(409, "Resources.Conflict", "resource conflict: use force=true to merge")
 
+// knowledge
+
+var ErrKnowledgeInvalidRequest = NewHttpError(400, "Knowledge.InvalidRequest", "invalid knowledge request data")
+var ErrKnowledgeNotFound       = NewHttpError(404, "Knowledge.NotFound", "knowledge document not found")
+var ErrKnowledgeUnauthorized   = NewHttpError(403, "Knowledge.Unauthorized", "not authorized to manage this knowledge document")
+var ErrKnowledgeStoreUnavail   = NewHttpError(503, "Knowledge.StoreUnavailable", "knowledge store (embedding provider) is not configured")
+var ErrKnowledgeInvalidData    = NewHttpError(500, "Knowledge.InvalidData", "invalid knowledge document data")
+
 // tokens
 
 var ErrTokenCreationDisabled = NewHttpError(400, "Token.CreationDisabled", "token creation is disabled with default configuration")

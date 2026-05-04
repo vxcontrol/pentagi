@@ -221,6 +221,16 @@ export type CreateFlowTemplateInput = {
     title: Scalars['String']['input'];
 };
 
+export type CreateKnowledgeDocumentInput = {
+    answerType?: InputMaybe<KnowledgeAnswerType>;
+    codeLang?: InputMaybe<Scalars['String']['input']>;
+    content: Scalars['String']['input'];
+    description?: InputMaybe<Scalars['String']['input']>;
+    docType: KnowledgeDocType;
+    guideType?: InputMaybe<KnowledgeGuideType>;
+    question: Scalars['String']['input'];
+};
+
 export type DailyFlowsStats = {
     date: Scalars['Time']['output'];
     stats: FlowsStats;
@@ -323,6 +333,61 @@ export type FunctionToolcallsStats = {
     totalDurationSeconds: Scalars['Float']['output'];
 };
 
+export enum KnowledgeAnswerType {
+    Code = 'code',
+    Guide = 'guide',
+    Other = 'other',
+    Tool = 'tool',
+    Vulnerability = 'vulnerability',
+}
+
+export enum KnowledgeDocType {
+    Answer = 'answer',
+    Code = 'code',
+    Guide = 'guide',
+}
+
+export type KnowledgeDocument = {
+    answerType?: Maybe<KnowledgeAnswerType>;
+    codeLang?: Maybe<Scalars['String']['output']>;
+    content: Scalars['String']['output'];
+    description?: Maybe<Scalars['String']['output']>;
+    docType: KnowledgeDocType;
+    flowId?: Maybe<Scalars['ID']['output']>;
+    guideType?: Maybe<KnowledgeGuideType>;
+    id: Scalars['String']['output'];
+    manual: Scalars['Boolean']['output'];
+    partSize: Scalars['Int']['output'];
+    question: Scalars['String']['output'];
+    subtaskId?: Maybe<Scalars['ID']['output']>;
+    taskId?: Maybe<Scalars['ID']['output']>;
+    totalSize: Scalars['Int']['output'];
+    userId: Scalars['ID']['output'];
+};
+
+export type KnowledgeDocumentWithScore = {
+    document: KnowledgeDocument;
+    score: Scalars['Float']['output'];
+};
+
+export type KnowledgeFilter = {
+    answerTypes?: InputMaybe<Array<KnowledgeAnswerType>>;
+    codeLangs?: InputMaybe<Array<Scalars['String']['input']>>;
+    docTypes?: InputMaybe<Array<KnowledgeDocType>>;
+    flowId?: InputMaybe<Scalars['ID']['input']>;
+    guideTypes?: InputMaybe<Array<KnowledgeGuideType>>;
+    manual?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+export enum KnowledgeGuideType {
+    Configure = 'configure',
+    Development = 'development',
+    Install = 'install',
+    Other = 'other',
+    Pentest = 'pentest',
+    Use = 'use',
+}
+
 export type MessageLog = {
     createdAt: Scalars['Time']['output'];
     flowId: Scalars['ID']['output'];
@@ -392,6 +457,7 @@ export type Mutation = {
     createAssistant: FlowAssistant;
     createFlow: Flow;
     createFlowTemplate: FlowTemplate;
+    createKnowledgeDocument: KnowledgeDocument;
     createPrompt: UserPrompt;
     createProvider: ProviderConfig;
     deleteAPIToken: Scalars['Boolean']['output'];
@@ -399,6 +465,7 @@ export type Mutation = {
     deleteFavoriteFlow: ResultType;
     deleteFlow: ResultType;
     deleteFlowTemplate: ResultType;
+    deleteKnowledgeDocument: ResultType;
     deletePrompt: ResultType;
     deleteProvider: ResultType;
     finishFlow: ResultType;
@@ -410,6 +477,7 @@ export type Mutation = {
     testProvider: ProviderTestResult;
     updateAPIToken: ApiToken;
     updateFlowTemplate: FlowTemplate;
+    updateKnowledgeDocument: KnowledgeDocument;
     updatePrompt: UserPrompt;
     updateProvider: ProviderConfig;
     validatePrompt: PromptValidationResult;
@@ -449,6 +517,10 @@ export type MutationCreateFlowTemplateArgs = {
     input: CreateFlowTemplateInput;
 };
 
+export type MutationCreateKnowledgeDocumentArgs = {
+    input: CreateKnowledgeDocumentInput;
+};
+
 export type MutationCreatePromptArgs = {
     template: Scalars['String']['input'];
     type: PromptType;
@@ -479,6 +551,10 @@ export type MutationDeleteFlowArgs = {
 
 export type MutationDeleteFlowTemplateArgs = {
     templateId: Scalars['ID']['input'];
+};
+
+export type MutationDeleteKnowledgeDocumentArgs = {
+    id: Scalars['String']['input'];
 };
 
 export type MutationDeletePromptArgs = {
@@ -533,6 +609,11 @@ export type MutationUpdateApiTokenArgs = {
 export type MutationUpdateFlowTemplateArgs = {
     input: UpdateFlowTemplateInput;
     templateId: Scalars['ID']['input'];
+};
+
+export type MutationUpdateKnowledgeDocumentArgs = {
+    id: Scalars['String']['input'];
+    input: UpdateKnowledgeDocumentInput;
 };
 
 export type MutationUpdatePromptArgs = {
@@ -711,10 +792,13 @@ export type Query = {
     flowsExecutionStatsByPeriod: Array<FlowExecutionStats>;
     flowsStatsByPeriod: Array<DailyFlowsStats>;
     flowsStatsTotal: FlowsStats;
+    knowledgeDocument: KnowledgeDocument;
+    knowledgeDocuments: Array<KnowledgeDocument>;
     messageLogs?: Maybe<Array<MessageLog>>;
     providers: Array<Provider>;
     resources: Array<UserResource>;
     screenshots?: Maybe<Array<Screenshot>>;
+    searchKnowledge: Array<KnowledgeDocumentWithScore>;
     searchLogs?: Maybe<Array<SearchLog>>;
     settings: Settings;
     settingsPrompts: PromptsConfig;
@@ -779,6 +863,15 @@ export type QueryFlowsStatsByPeriodArgs = {
     period: UsageStatsPeriod;
 };
 
+export type QueryKnowledgeDocumentArgs = {
+    id: Scalars['String']['input'];
+};
+
+export type QueryKnowledgeDocumentsArgs = {
+    filter?: InputMaybe<KnowledgeFilter>;
+    withContent: Scalars['Boolean']['input'];
+};
+
 export type QueryMessageLogsArgs = {
     flowId: Scalars['ID']['input'];
 };
@@ -790,6 +883,12 @@ export type QueryResourcesArgs = {
 
 export type QueryScreenshotsArgs = {
     flowId: Scalars['ID']['input'];
+};
+
+export type QuerySearchKnowledgeArgs = {
+    filter?: InputMaybe<KnowledgeFilter>;
+    limit?: InputMaybe<Scalars['Int']['input']>;
+    query: Scalars['String']['input'];
 };
 
 export type QuerySearchLogsArgs = {
@@ -920,6 +1019,9 @@ export type Subscription = {
     flowTemplateDeleted: FlowTemplate;
     flowTemplateUpdated: FlowTemplate;
     flowUpdated: Flow;
+    knowledgeDocumentCreated: KnowledgeDocument;
+    knowledgeDocumentDeleted: KnowledgeDocument;
+    knowledgeDocumentUpdated: KnowledgeDocument;
     messageLogAdded: MessageLog;
     messageLogUpdated: MessageLog;
     providerCreated: ProviderConfig;
@@ -1118,6 +1220,15 @@ export type UpdateApiTokenInput = {
 export type UpdateFlowTemplateInput = {
     text: Scalars['String']['input'];
     title: Scalars['String']['input'];
+};
+
+export type UpdateKnowledgeDocumentInput = {
+    answerType?: InputMaybe<KnowledgeAnswerType>;
+    codeLang?: InputMaybe<Scalars['String']['input']>;
+    content: Scalars['String']['input'];
+    description?: InputMaybe<Scalars['String']['input']>;
+    guideType?: InputMaybe<KnowledgeGuideType>;
+    question?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UsageStats = {
@@ -1546,6 +1657,26 @@ export type FlowExecutionStatsFragmentFragment = {
     tasks: Array<TaskExecutionStatsFragmentFragment>;
 };
 
+export type KnowledgeDocumentFragmentFragment = {
+    id: string;
+    docType: KnowledgeDocType;
+    content: string;
+    question: string;
+    description?: string | null;
+    userId: string;
+    flowId?: string | null;
+    taskId?: string | null;
+    subtaskId?: string | null;
+    guideType?: KnowledgeGuideType | null;
+    answerType?: KnowledgeAnswerType | null;
+    codeLang?: string | null;
+    partSize: number;
+    totalSize: number;
+    manual: boolean;
+};
+
+export type KnowledgeDocumentWithScoreFragmentFragment = { score: number; document: KnowledgeDocumentFragmentFragment };
+
 export type FlowsQueryVariables = Exact<{ [key: string]: never }>;
 
 export type FlowsQuery = { flows?: Array<FlowFragmentFragment> | null };
@@ -1802,6 +1933,27 @@ export type ApiTokenQueryVariables = Exact<{
 
 export type ApiTokenQuery = { apiToken?: ApiTokenFragmentFragment | null };
 
+export type KnowledgeDocumentsQueryVariables = Exact<{
+    filter?: InputMaybe<KnowledgeFilter>;
+    withContent: Scalars['Boolean']['input'];
+}>;
+
+export type KnowledgeDocumentsQuery = { knowledgeDocuments: Array<KnowledgeDocumentFragmentFragment> };
+
+export type KnowledgeDocumentQueryVariables = Exact<{
+    id: Scalars['String']['input'];
+}>;
+
+export type KnowledgeDocumentQuery = { knowledgeDocument: KnowledgeDocumentFragmentFragment };
+
+export type SearchKnowledgeQueryVariables = Exact<{
+    query: Scalars['String']['input'];
+    filter?: InputMaybe<KnowledgeFilter>;
+    limit?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+export type SearchKnowledgeQuery = { searchKnowledge: Array<KnowledgeDocumentWithScoreFragmentFragment> };
+
 export type UserPreferencesFragmentFragment = { id: string; favoriteFlows: Array<string> };
 
 export type SettingsUserQueryVariables = Exact<{ [key: string]: never }>;
@@ -2010,6 +2162,25 @@ export type DeleteApiTokenMutationVariables = Exact<{
 
 export type DeleteApiTokenMutation = { deleteAPIToken: boolean };
 
+export type CreateKnowledgeDocumentMutationVariables = Exact<{
+    input: CreateKnowledgeDocumentInput;
+}>;
+
+export type CreateKnowledgeDocumentMutation = { createKnowledgeDocument: KnowledgeDocumentFragmentFragment };
+
+export type UpdateKnowledgeDocumentMutationVariables = Exact<{
+    id: Scalars['String']['input'];
+    input: UpdateKnowledgeDocumentInput;
+}>;
+
+export type UpdateKnowledgeDocumentMutation = { updateKnowledgeDocument: KnowledgeDocumentFragmentFragment };
+
+export type DeleteKnowledgeDocumentMutationVariables = Exact<{
+    id: Scalars['String']['input'];
+}>;
+
+export type DeleteKnowledgeDocumentMutation = { deleteKnowledgeDocument: ResultType };
+
 export type TerminalLogAddedSubscriptionVariables = Exact<{
     flowId: Scalars['ID']['input'];
 }>;
@@ -2183,6 +2354,18 @@ export type ResourceUpdatedSubscription = { resourceUpdated: UserResourceFragmen
 export type ResourceDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
 export type ResourceDeletedSubscription = { resourceDeleted: UserResourceFragmentFragment };
+
+export type KnowledgeDocumentCreatedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type KnowledgeDocumentCreatedSubscription = { knowledgeDocumentCreated: KnowledgeDocumentFragmentFragment };
+
+export type KnowledgeDocumentUpdatedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type KnowledgeDocumentUpdatedSubscription = { knowledgeDocumentUpdated: KnowledgeDocumentFragmentFragment };
+
+export type KnowledgeDocumentDeletedSubscriptionVariables = Exact<{ [key: string]: never }>;
+
+export type KnowledgeDocumentDeletedSubscription = { knowledgeDocumentDeleted: KnowledgeDocumentFragmentFragment };
 
 export const SettingsFragmentFragmentDoc = gql`
     fragment settingsFragment on Settings {
@@ -2738,6 +2921,34 @@ export const FlowExecutionStatsFragmentFragmentDoc = gql`
         }
     }
     ${TaskExecutionStatsFragmentFragmentDoc}
+`;
+export const KnowledgeDocumentFragmentFragmentDoc = gql`
+    fragment knowledgeDocumentFragment on KnowledgeDocument {
+        id
+        docType
+        content
+        question
+        description
+        userId
+        flowId
+        taskId
+        subtaskId
+        guideType
+        answerType
+        codeLang
+        partSize
+        totalSize
+        manual
+    }
+`;
+export const KnowledgeDocumentWithScoreFragmentFragmentDoc = gql`
+    fragment knowledgeDocumentWithScoreFragment on KnowledgeDocumentWithScore {
+        score
+        document {
+            ...knowledgeDocumentFragment
+        }
+    }
+    ${KnowledgeDocumentFragmentFragmentDoc}
 `;
 export const UserPreferencesFragmentFragmentDoc = gql`
     fragment userPreferencesFragment on UserPreferences {
@@ -5004,6 +5215,207 @@ export type ApiTokenQueryHookResult = ReturnType<typeof useApiTokenQuery>;
 export type ApiTokenLazyQueryHookResult = ReturnType<typeof useApiTokenLazyQuery>;
 export type ApiTokenSuspenseQueryHookResult = ReturnType<typeof useApiTokenSuspenseQuery>;
 export type ApiTokenQueryResult = Apollo.QueryResult<ApiTokenQuery, ApiTokenQueryVariables>;
+export const KnowledgeDocumentsDocument = gql`
+    query knowledgeDocuments($filter: KnowledgeFilter, $withContent: Boolean!) {
+        knowledgeDocuments(filter: $filter, withContent: $withContent) {
+            ...knowledgeDocumentFragment
+        }
+    }
+    ${KnowledgeDocumentFragmentFragmentDoc}
+`;
+
+/**
+ * __useKnowledgeDocumentsQuery__
+ *
+ * To run a query within a React component, call `useKnowledgeDocumentsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useKnowledgeDocumentsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useKnowledgeDocumentsQuery({
+ *   variables: {
+ *      filter: // value for 'filter'
+ *      withContent: // value for 'withContent'
+ *   },
+ * });
+ */
+export function useKnowledgeDocumentsQuery(
+    baseOptions: Apollo.QueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables> &
+        ({ variables: KnowledgeDocumentsQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>(
+        KnowledgeDocumentsDocument,
+        options,
+    );
+}
+export function useKnowledgeDocumentsLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>(
+        KnowledgeDocumentsDocument,
+        options,
+    );
+}
+// @ts-ignore
+export function useKnowledgeDocumentsSuspenseQuery(
+    baseOptions?: Apollo.SuspenseQueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>,
+): Apollo.UseSuspenseQueryResult<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>;
+export function useKnowledgeDocumentsSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>,
+): Apollo.UseSuspenseQueryResult<KnowledgeDocumentsQuery | undefined, KnowledgeDocumentsQueryVariables>;
+export function useKnowledgeDocumentsSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>(
+        KnowledgeDocumentsDocument,
+        options,
+    );
+}
+export type KnowledgeDocumentsQueryHookResult = ReturnType<typeof useKnowledgeDocumentsQuery>;
+export type KnowledgeDocumentsLazyQueryHookResult = ReturnType<typeof useKnowledgeDocumentsLazyQuery>;
+export type KnowledgeDocumentsSuspenseQueryHookResult = ReturnType<typeof useKnowledgeDocumentsSuspenseQuery>;
+export type KnowledgeDocumentsQueryResult = Apollo.QueryResult<
+    KnowledgeDocumentsQuery,
+    KnowledgeDocumentsQueryVariables
+>;
+export const KnowledgeDocumentDocument = gql`
+    query knowledgeDocument($id: String!) {
+        knowledgeDocument(id: $id) {
+            ...knowledgeDocumentFragment
+        }
+    }
+    ${KnowledgeDocumentFragmentFragmentDoc}
+`;
+
+/**
+ * __useKnowledgeDocumentQuery__
+ *
+ * To run a query within a React component, call `useKnowledgeDocumentQuery` and pass it any options that fit your needs.
+ * When your component renders, `useKnowledgeDocumentQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useKnowledgeDocumentQuery({
+ *   variables: {
+ *      id: // value for 'id'
+ *   },
+ * });
+ */
+export function useKnowledgeDocumentQuery(
+    baseOptions: Apollo.QueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables> &
+        ({ variables: KnowledgeDocumentQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>(KnowledgeDocumentDocument, options);
+}
+export function useKnowledgeDocumentLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>(
+        KnowledgeDocumentDocument,
+        options,
+    );
+}
+// @ts-ignore
+export function useKnowledgeDocumentSuspenseQuery(
+    baseOptions?: Apollo.SuspenseQueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>,
+): Apollo.UseSuspenseQueryResult<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>;
+export function useKnowledgeDocumentSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>,
+): Apollo.UseSuspenseQueryResult<KnowledgeDocumentQuery | undefined, KnowledgeDocumentQueryVariables>;
+export function useKnowledgeDocumentSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>(
+        KnowledgeDocumentDocument,
+        options,
+    );
+}
+export type KnowledgeDocumentQueryHookResult = ReturnType<typeof useKnowledgeDocumentQuery>;
+export type KnowledgeDocumentLazyQueryHookResult = ReturnType<typeof useKnowledgeDocumentLazyQuery>;
+export type KnowledgeDocumentSuspenseQueryHookResult = ReturnType<typeof useKnowledgeDocumentSuspenseQuery>;
+export type KnowledgeDocumentQueryResult = Apollo.QueryResult<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>;
+export const SearchKnowledgeDocument = gql`
+    query searchKnowledge($query: String!, $filter: KnowledgeFilter, $limit: Int) {
+        searchKnowledge(query: $query, filter: $filter, limit: $limit) {
+            ...knowledgeDocumentWithScoreFragment
+        }
+    }
+    ${KnowledgeDocumentWithScoreFragmentFragmentDoc}
+`;
+
+/**
+ * __useSearchKnowledgeQuery__
+ *
+ * To run a query within a React component, call `useSearchKnowledgeQuery` and pass it any options that fit your needs.
+ * When your component renders, `useSearchKnowledgeQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useSearchKnowledgeQuery({
+ *   variables: {
+ *      query: // value for 'query'
+ *      filter: // value for 'filter'
+ *      limit: // value for 'limit'
+ *   },
+ * });
+ */
+export function useSearchKnowledgeQuery(
+    baseOptions: Apollo.QueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables> &
+        ({ variables: SearchKnowledgeQueryVariables; skip?: boolean } | { skip: boolean }),
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useQuery<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>(SearchKnowledgeDocument, options);
+}
+export function useSearchKnowledgeLazyQuery(
+    baseOptions?: Apollo.LazyQueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useLazyQuery<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>(SearchKnowledgeDocument, options);
+}
+// @ts-ignore
+export function useSearchKnowledgeSuspenseQuery(
+    baseOptions?: Apollo.SuspenseQueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>,
+): Apollo.UseSuspenseQueryResult<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>;
+export function useSearchKnowledgeSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>,
+): Apollo.UseSuspenseQueryResult<SearchKnowledgeQuery | undefined, SearchKnowledgeQueryVariables>;
+export function useSearchKnowledgeSuspenseQuery(
+    baseOptions?:
+        | Apollo.SkipToken
+        | Apollo.SuspenseQueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>,
+) {
+    const options = baseOptions === Apollo.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
+    return Apollo.useSuspenseQuery<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>(
+        SearchKnowledgeDocument,
+        options,
+    );
+}
+export type SearchKnowledgeQueryHookResult = ReturnType<typeof useSearchKnowledgeQuery>;
+export type SearchKnowledgeLazyQueryHookResult = ReturnType<typeof useSearchKnowledgeLazyQuery>;
+export type SearchKnowledgeSuspenseQueryHookResult = ReturnType<typeof useSearchKnowledgeSuspenseQuery>;
+export type SearchKnowledgeQueryResult = Apollo.QueryResult<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>;
 export const SettingsUserDocument = gql`
     query settingsUser {
         settingsUser {
@@ -6261,6 +6673,139 @@ export type DeleteApiTokenMutationOptions = Apollo.BaseMutationOptions<
     DeleteApiTokenMutation,
     DeleteApiTokenMutationVariables
 >;
+export const CreateKnowledgeDocumentDocument = gql`
+    mutation createKnowledgeDocument($input: CreateKnowledgeDocumentInput!) {
+        createKnowledgeDocument(input: $input) {
+            ...knowledgeDocumentFragment
+        }
+    }
+    ${KnowledgeDocumentFragmentFragmentDoc}
+`;
+export type CreateKnowledgeDocumentMutationFn = Apollo.MutationFunction<
+    CreateKnowledgeDocumentMutation,
+    CreateKnowledgeDocumentMutationVariables
+>;
+
+/**
+ * __useCreateKnowledgeDocumentMutation__
+ *
+ * To run a mutation, you first call `useCreateKnowledgeDocumentMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useCreateKnowledgeDocumentMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [createKnowledgeDocumentMutation, { data, loading, error }] = useCreateKnowledgeDocumentMutation({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useCreateKnowledgeDocumentMutation(
+    baseOptions?: Apollo.MutationHookOptions<CreateKnowledgeDocumentMutation, CreateKnowledgeDocumentMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<CreateKnowledgeDocumentMutation, CreateKnowledgeDocumentMutationVariables>(
+        CreateKnowledgeDocumentDocument,
+        options,
+    );
+}
+export type CreateKnowledgeDocumentMutationHookResult = ReturnType<typeof useCreateKnowledgeDocumentMutation>;
+export type CreateKnowledgeDocumentMutationResult = Apollo.MutationResult<CreateKnowledgeDocumentMutation>;
+export type CreateKnowledgeDocumentMutationOptions = Apollo.BaseMutationOptions<
+    CreateKnowledgeDocumentMutation,
+    CreateKnowledgeDocumentMutationVariables
+>;
+export const UpdateKnowledgeDocumentDocument = gql`
+    mutation updateKnowledgeDocument($id: String!, $input: UpdateKnowledgeDocumentInput!) {
+        updateKnowledgeDocument(id: $id, input: $input) {
+            ...knowledgeDocumentFragment
+        }
+    }
+    ${KnowledgeDocumentFragmentFragmentDoc}
+`;
+export type UpdateKnowledgeDocumentMutationFn = Apollo.MutationFunction<
+    UpdateKnowledgeDocumentMutation,
+    UpdateKnowledgeDocumentMutationVariables
+>;
+
+/**
+ * __useUpdateKnowledgeDocumentMutation__
+ *
+ * To run a mutation, you first call `useUpdateKnowledgeDocumentMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUpdateKnowledgeDocumentMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [updateKnowledgeDocumentMutation, { data, loading, error }] = useUpdateKnowledgeDocumentMutation({
+ *   variables: {
+ *      id: // value for 'id'
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useUpdateKnowledgeDocumentMutation(
+    baseOptions?: Apollo.MutationHookOptions<UpdateKnowledgeDocumentMutation, UpdateKnowledgeDocumentMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<UpdateKnowledgeDocumentMutation, UpdateKnowledgeDocumentMutationVariables>(
+        UpdateKnowledgeDocumentDocument,
+        options,
+    );
+}
+export type UpdateKnowledgeDocumentMutationHookResult = ReturnType<typeof useUpdateKnowledgeDocumentMutation>;
+export type UpdateKnowledgeDocumentMutationResult = Apollo.MutationResult<UpdateKnowledgeDocumentMutation>;
+export type UpdateKnowledgeDocumentMutationOptions = Apollo.BaseMutationOptions<
+    UpdateKnowledgeDocumentMutation,
+    UpdateKnowledgeDocumentMutationVariables
+>;
+export const DeleteKnowledgeDocumentDocument = gql`
+    mutation deleteKnowledgeDocument($id: String!) {
+        deleteKnowledgeDocument(id: $id)
+    }
+`;
+export type DeleteKnowledgeDocumentMutationFn = Apollo.MutationFunction<
+    DeleteKnowledgeDocumentMutation,
+    DeleteKnowledgeDocumentMutationVariables
+>;
+
+/**
+ * __useDeleteKnowledgeDocumentMutation__
+ *
+ * To run a mutation, you first call `useDeleteKnowledgeDocumentMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useDeleteKnowledgeDocumentMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [deleteKnowledgeDocumentMutation, { data, loading, error }] = useDeleteKnowledgeDocumentMutation({
+ *   variables: {
+ *      id: // value for 'id'
+ *   },
+ * });
+ */
+export function useDeleteKnowledgeDocumentMutation(
+    baseOptions?: Apollo.MutationHookOptions<DeleteKnowledgeDocumentMutation, DeleteKnowledgeDocumentMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<DeleteKnowledgeDocumentMutation, DeleteKnowledgeDocumentMutationVariables>(
+        DeleteKnowledgeDocumentDocument,
+        options,
+    );
+}
+export type DeleteKnowledgeDocumentMutationHookResult = ReturnType<typeof useDeleteKnowledgeDocumentMutation>;
+export type DeleteKnowledgeDocumentMutationResult = Apollo.MutationResult<DeleteKnowledgeDocumentMutation>;
+export type DeleteKnowledgeDocumentMutationOptions = Apollo.BaseMutationOptions<
+    DeleteKnowledgeDocumentMutation,
+    DeleteKnowledgeDocumentMutationVariables
+>;
 export const TerminalLogAddedDocument = gql`
     subscription terminalLogAdded($flowId: ID!) {
         terminalLogAdded(flowId: $flowId) {
@@ -7474,3 +8019,120 @@ export function useResourceDeletedSubscription(
 }
 export type ResourceDeletedSubscriptionHookResult = ReturnType<typeof useResourceDeletedSubscription>;
 export type ResourceDeletedSubscriptionResult = Apollo.SubscriptionResult<ResourceDeletedSubscription>;
+export const KnowledgeDocumentCreatedDocument = gql`
+    subscription knowledgeDocumentCreated {
+        knowledgeDocumentCreated {
+            ...knowledgeDocumentFragment
+        }
+    }
+    ${KnowledgeDocumentFragmentFragmentDoc}
+`;
+
+/**
+ * __useKnowledgeDocumentCreatedSubscription__
+ *
+ * To run a query within a React component, call `useKnowledgeDocumentCreatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useKnowledgeDocumentCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useKnowledgeDocumentCreatedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useKnowledgeDocumentCreatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<
+        KnowledgeDocumentCreatedSubscription,
+        KnowledgeDocumentCreatedSubscriptionVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<KnowledgeDocumentCreatedSubscription, KnowledgeDocumentCreatedSubscriptionVariables>(
+        KnowledgeDocumentCreatedDocument,
+        options,
+    );
+}
+export type KnowledgeDocumentCreatedSubscriptionHookResult = ReturnType<typeof useKnowledgeDocumentCreatedSubscription>;
+export type KnowledgeDocumentCreatedSubscriptionResult =
+    Apollo.SubscriptionResult<KnowledgeDocumentCreatedSubscription>;
+export const KnowledgeDocumentUpdatedDocument = gql`
+    subscription knowledgeDocumentUpdated {
+        knowledgeDocumentUpdated {
+            ...knowledgeDocumentFragment
+        }
+    }
+    ${KnowledgeDocumentFragmentFragmentDoc}
+`;
+
+/**
+ * __useKnowledgeDocumentUpdatedSubscription__
+ *
+ * To run a query within a React component, call `useKnowledgeDocumentUpdatedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useKnowledgeDocumentUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useKnowledgeDocumentUpdatedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useKnowledgeDocumentUpdatedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<
+        KnowledgeDocumentUpdatedSubscription,
+        KnowledgeDocumentUpdatedSubscriptionVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<KnowledgeDocumentUpdatedSubscription, KnowledgeDocumentUpdatedSubscriptionVariables>(
+        KnowledgeDocumentUpdatedDocument,
+        options,
+    );
+}
+export type KnowledgeDocumentUpdatedSubscriptionHookResult = ReturnType<typeof useKnowledgeDocumentUpdatedSubscription>;
+export type KnowledgeDocumentUpdatedSubscriptionResult =
+    Apollo.SubscriptionResult<KnowledgeDocumentUpdatedSubscription>;
+export const KnowledgeDocumentDeletedDocument = gql`
+    subscription knowledgeDocumentDeleted {
+        knowledgeDocumentDeleted {
+            ...knowledgeDocumentFragment
+        }
+    }
+    ${KnowledgeDocumentFragmentFragmentDoc}
+`;
+
+/**
+ * __useKnowledgeDocumentDeletedSubscription__
+ *
+ * To run a query within a React component, call `useKnowledgeDocumentDeletedSubscription` and pass it any options that fit your needs.
+ * When your component renders, `useKnowledgeDocumentDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useKnowledgeDocumentDeletedSubscription({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useKnowledgeDocumentDeletedSubscription(
+    baseOptions?: Apollo.SubscriptionHookOptions<
+        KnowledgeDocumentDeletedSubscription,
+        KnowledgeDocumentDeletedSubscriptionVariables
+    >,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useSubscription<KnowledgeDocumentDeletedSubscription, KnowledgeDocumentDeletedSubscriptionVariables>(
+        KnowledgeDocumentDeletedDocument,
+        options,
+    );
+}
+export type KnowledgeDocumentDeletedSubscriptionHookResult = ReturnType<typeof useKnowledgeDocumentDeletedSubscription>;
+export type KnowledgeDocumentDeletedSubscriptionResult =
+    Apollo.SubscriptionResult<KnowledgeDocumentDeletedSubscription>;

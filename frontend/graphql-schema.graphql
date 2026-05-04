@@ -494,6 +494,31 @@ fragment flowExecutionStatsFragment on FlowExecutionStats {
     }
 }
 
+fragment knowledgeDocumentFragment on KnowledgeDocument {
+    id
+    docType
+    content
+    question
+    description
+    userId
+    flowId
+    taskId
+    subtaskId
+    guideType
+    answerType
+    codeLang
+    partSize
+    totalSize
+    manual
+}
+
+fragment knowledgeDocumentWithScoreFragment on KnowledgeDocumentWithScore {
+    score
+    document {
+        ...knowledgeDocumentFragment
+    }
+}
+
 # ==================== Queries ====================
 
 query flows {
@@ -939,6 +964,26 @@ query apiToken($tokenId: String!) {
     }
 }
 
+# ==================== Knowledge ====================
+
+query knowledgeDocuments($filter: KnowledgeFilter, $withContent: Boolean!) {
+    knowledgeDocuments(filter: $filter, withContent: $withContent) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+query knowledgeDocument($id: String!) {
+    knowledgeDocument(id: $id) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+query searchKnowledge($query: String!, $filter: KnowledgeFilter, $limit: Int) {
+    searchKnowledge(query: $query, filter: $filter, limit: $limit) {
+        ...knowledgeDocumentWithScoreFragment
+    }
+}
+
 fragment userPreferencesFragment on UserPreferences {
     id
     favoriteFlows
@@ -1109,6 +1154,22 @@ mutation updateAPIToken($tokenId: String!, $input: UpdateAPITokenInput!) {
 
 mutation deleteAPIToken($tokenId: String!) {
     deleteAPIToken(tokenId: $tokenId)
+}
+
+mutation createKnowledgeDocument($input: CreateKnowledgeDocumentInput!) {
+    createKnowledgeDocument(input: $input) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+mutation updateKnowledgeDocument($id: String!, $input: UpdateKnowledgeDocumentInput!) {
+    updateKnowledgeDocument(id: $id, input: $input) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+mutation deleteKnowledgeDocument($id: String!) {
+    deleteKnowledgeDocument(id: $id)
 }
 
 # ==================== Subscriptions ====================
@@ -1314,5 +1375,23 @@ subscription resourceUpdated {
 subscription resourceDeleted {
     resourceDeleted {
         ...userResourceFragment
+    }
+}
+
+subscription knowledgeDocumentCreated {
+    knowledgeDocumentCreated {
+        ...knowledgeDocumentFragment
+    }
+}
+
+subscription knowledgeDocumentUpdated {
+    knowledgeDocumentUpdated {
+        ...knowledgeDocumentFragment
+    }
+}
+
+subscription knowledgeDocumentDeleted {
+    knowledgeDocumentDeleted {
+        ...knowledgeDocumentFragment
     }
 }

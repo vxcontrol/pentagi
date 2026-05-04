@@ -159,7 +159,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	}
 
 	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
-	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, awc.functions, awc.flowID)
+	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, awc.functions, awc.userID, awc.flowID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow tools executor", err)
 	}
@@ -214,6 +214,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(awc.provs.GraphitiClient())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -326,7 +327,7 @@ func LoadAssistantWorker(
 	}
 
 	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
-	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, functions, awc.flowID)
+	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, functions, awc.userID, awc.flowID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow tools executor", err)
 	}
@@ -354,6 +355,7 @@ func LoadAssistantWorker(
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetKnowledgeProvider(pub)
 
 	var msgChainID int64
 	pmsgChainID := database.NullInt64ToInt64(assistant.MsgchainID)

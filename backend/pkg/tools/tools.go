@@ -17,6 +17,7 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/flowfiles"
+	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
@@ -140,7 +141,12 @@ type VectorStoreLogProvider interface {
 	) (int64, error)
 }
 
+type KnowledgeProvider interface {
+	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
+}
+
 type flowToolsExecutor struct {
+	userID int64
 	flowID int64
 	scp    ScreenshotProvider
 	alp    AgentLogProvider
@@ -148,6 +154,7 @@ type flowToolsExecutor struct {
 	slp    SearchLogProvider
 	tlp    TermLogProvider
 	vslp   VectorStoreLogProvider
+	knp    KnowledgeProvider
 
 	db             database.Querier
 	cfg            *config.Config
@@ -293,6 +300,7 @@ type ReporterExecutorConfig struct {
 }
 
 type FlowToolsExecutor interface {
+	SetUserID(userID int64)
 	SetFlowID(flowID int64)
 	SetImage(image string)
 	SetEmbedder(embedder embeddings.Embedder)
@@ -303,6 +311,7 @@ type FlowToolsExecutor interface {
 	SetSearchLogProvider(slp SearchLogProvider)
 	SetTermLogProvider(tlp TermLogProvider)
 	SetVectorStoreLogProvider(vslp VectorStoreLogProvider)
+	SetKnowledgeProvider(knp KnowledgeProvider)
 	SetGraphitiClient(client *graphiti.Client)
 
 	Prepare(ctx context.Context) error
@@ -326,7 +335,7 @@ func NewFlowToolsExecutor(
 	cfg *config.Config,
 	docker docker.DockerClient,
 	functions *Functions,
-	flowID int64,
+	userID, flowID int64,
 ) (FlowToolsExecutor, error) {
 	allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
 	if err != nil {
@@ -348,9 +357,14 @@ func NewFlowToolsExecutor(
 		replacer:    replacer,
 		cfg:         cfg,
 		flowID:      flowID,
+		userID:      userID,
 		definitions: make(map[string]llms.FunctionDefinition),
 		handlers:    make(map[string]ExecutorHandler),
 	}, nil
+}
+
+func (fte *flowToolsExecutor) SetUserID(userID int64) {
+	fte.userID = userID
 }
 
 func (fte *flowToolsExecutor) SetFlowID(flowID int64) {
@@ -374,6 +388,7 @@ func (fte *flowToolsExecutor) SetEmbedder(embedder embeddings.Embedder) {
 		context.Background(),
 		pgvector.WithConnectionURL(fte.cfg.DatabaseURL),
 		pgvector.WithEmbedder(embedder),
+		pgvector.WithCollectionName("langchain"),
 	)
 	if err == nil {
 		fte.store = &store
@@ -406,6 +421,10 @@ func (fte *flowToolsExecutor) SetTermLogProvider(tlp TermLogProvider) {
 
 func (fte *flowToolsExecutor) SetVectorStoreLogProvider(vslp VectorStoreLogProvider) {
 	fte.vslp = vslp
+}
+
+func (fte *flowToolsExecutor) SetKnowledgeProvider(knp KnowledgeProvider) {
+	fte.knp = knp
 }
 
 func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
@@ -703,6 +722,7 @@ func (fte *flowToolsExecutor) GetCustomExecutor(cfg CustomExecutorConfig) (Conte
 	}
 
 	return &customExecutor{
+		userID:      fte.userID,
 		flowID:      fte.flowID,
 		taskID:      cfg.TaskID,
 		subtaskID:   cfg.SubtaskID,
@@ -804,10 +824,11 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		}
 
 		guide := NewGuideTool(
-			fte.flowID, nil, nil,
+			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
 			fte.vslp,
+			fte.knp,
 		)
 		if guide.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchGuideToolName])
@@ -815,10 +836,11 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		}
 
 		search := NewSearchTool(
-			fte.flowID, nil, nil,
+			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
 			fte.vslp,
+			fte.knp,
 		)
 		if search.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchAnswerToolName])
@@ -826,10 +848,11 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		}
 
 		code := NewCodeTool(
-			fte.flowID, nil, nil,
+			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
 			fte.vslp,
+			fte.knp,
 		)
 		if code.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchCodeToolName])
@@ -933,6 +956,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 	}
 
 	ce := &customExecutor{
+		userID:      fte.userID,
 		flowID:      fte.flowID,
 		mlp:         fte.mlp,
 		vslp:        fte.vslp,
@@ -977,6 +1001,7 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 	}
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    &cfg.TaskID,
 		subtaskID: &cfg.SubtaskID,
@@ -1051,6 +1076,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
@@ -1095,12 +1121,14 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 	}
 
 	guide := NewGuideTool(
+		fte.userID,
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
 		fte.vslp,
+		fte.knp,
 	)
 	if guide.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreGuideToolName])
@@ -1150,6 +1178,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
@@ -1196,12 +1225,14 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 	}
 
 	code := NewCodeTool(
+		fte.userID,
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
 		fte.vslp,
+		fte.knp,
 	)
 	if code.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchCodeToolName])
@@ -1266,6 +1297,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
@@ -1314,12 +1346,14 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 	}
 
 	guide := NewGuideTool(
+		fte.userID,
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
 		fte.vslp,
+		fte.knp,
 	)
 	if guide.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreGuideToolName])
@@ -1364,6 +1398,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	}
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
@@ -1487,12 +1522,14 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	}
 
 	search := NewSearchTool(
+		fte.userID,
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
 		fte.vslp,
+		fte.knp,
 	)
 	if search.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchAnswerToolName])
@@ -1530,6 +1567,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 	)
 
 	ce := &customExecutor{
+		userID: fte.userID,
 		flowID: fte.flowID,
 		taskID: &cfg.TaskID,
 		mlp:    fte.mlp,
@@ -1596,6 +1634,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 	)
 
 	ce := &customExecutor{
+		userID: fte.userID,
 		flowID: fte.flowID,
 		taskID: &cfg.TaskID,
 		mlp:    fte.mlp,
@@ -1658,6 +1697,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
@@ -1727,6 +1767,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
@@ -1794,6 +1835,7 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 	}
 
 	return &customExecutor{
+		userID:      fte.userID,
 		flowID:      fte.flowID,
 		taskID:      cfg.TaskID,
 		subtaskID:   cfg.SubtaskID,

@@ -821,6 +821,93 @@ input AgentsConfigInput {
   pentester: AgentConfigInput!
 }
 
+# ==================== Knowledge (Vector Store) Types ====================
+
+# Document type discriminator stored in cmetadata doc_type field
+enum KnowledgeDocType {
+  answer
+  guide
+  code
+}
+
+# Guide sub-type stored in cmetadata guide_type field
+enum KnowledgeGuideType {
+  install
+  configure
+  use
+  pentest
+  development
+  other
+}
+
+# Answer sub-type stored in cmetadata answer_type field
+enum KnowledgeAnswerType {
+  guide
+  vulnerability
+  code
+  tool
+  other
+}
+
+# A single document stored in the pgvector knowledge base
+type KnowledgeDocument {
+  # UUID primary key of the embedding row
+  id: String!
+  docType: KnowledgeDocType!
+  # Chunk text; empty string when withContent=false was requested (to save bandwidth)
+  content: String!
+  question: String!
+  description: String
+  userId: ID!
+  flowId: ID
+  taskId: ID
+  subtaskId: ID
+  guideType: KnowledgeGuideType
+  answerType: KnowledgeAnswerType
+  codeLang: String
+  partSize: Int!
+  totalSize: Int!
+  # True when document was created manually via API rather than by an agent
+  manual: Boolean!
+}
+
+# Knowledge document enriched with semantic similarity score from vector search
+type KnowledgeDocumentWithScore {
+  score: Float!
+  document: KnowledgeDocument!
+}
+
+# Optional filter for listing or searching knowledge documents
+input KnowledgeFilter {
+  docTypes: [KnowledgeDocType!]
+  guideTypes: [KnowledgeGuideType!]
+  answerTypes: [KnowledgeAnswerType!]
+  codeLangs: [String!]
+  flowId: ID
+  manual: Boolean
+}
+
+# Input for creating a new knowledge document manually
+input CreateKnowledgeDocumentInput {
+  docType: KnowledgeDocType!
+  content: String!
+  question: String!
+  description: String
+  guideType: KnowledgeGuideType
+  answerType: KnowledgeAnswerType
+  codeLang: String
+}
+
+# Input for updating an existing knowledge document; non-null fields trigger re-embedding
+input UpdateKnowledgeDocumentInput {
+  content: String!
+  question: String
+  description: String
+  guideType: KnowledgeGuideType
+  answerType: KnowledgeAnswerType
+  codeLang: String
+}
+
 # ==================== GraphQL Operations ====================
 
 type Query {
@@ -884,6 +971,11 @@ type Query {
 
   # User Resources management
   resources(path: String, recursive: Boolean): [UserResource!]!
+
+  # Knowledge (vector store) management
+  knowledgeDocuments(filter: KnowledgeFilter, withContent: Boolean!): [KnowledgeDocument!]!
+  knowledgeDocument(id: String!): KnowledgeDocument!
+  searchKnowledge(query: String!, filter: KnowledgeFilter, limit: Int): [KnowledgeDocumentWithScore!]!
 }
 
 type Mutation {
@@ -927,6 +1019,11 @@ type Mutation {
   createFlowTemplate(input: CreateFlowTemplateInput!): FlowTemplate!
   updateFlowTemplate(templateId: ID!, input: UpdateFlowTemplateInput!): FlowTemplate!
   deleteFlowTemplate(templateId: ID!): ResultType!
+
+  # Knowledge (vector store) management
+  createKnowledgeDocument(input: CreateKnowledgeDocumentInput!): KnowledgeDocument!
+  updateKnowledgeDocument(id: String!, input: UpdateKnowledgeDocumentInput!): KnowledgeDocument!
+  deleteKnowledgeDocument(id: String!): ResultType!
 }
 
 type Subscription {
@@ -980,4 +1077,9 @@ type Subscription {
   resourceAdded: UserResource!
   resourceUpdated: UserResource!
   resourceDeleted: UserResource!
+
+  # Knowledge (vector store) events
+  knowledgeDocumentCreated: KnowledgeDocument!
+  knowledgeDocumentUpdated: KnowledgeDocument!
+  knowledgeDocumentDeleted: KnowledgeDocument!
 }

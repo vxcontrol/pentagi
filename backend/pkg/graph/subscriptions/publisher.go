@@ -117,6 +117,11 @@ func (p *flowPublisher) AssistantLogUpdated(ctx context.Context, assistantLog da
 	p.ctrl.assistantLogUpdated.Publish(ctx, p.flowID, converter.ConvertAssistantLog(assistantLog, appendPart))
 }
 
+func (p *flowPublisher) KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument) {
+	p.ctrl.knowledgeDocumentCreated.Publish(ctx, p.userID, doc)
+	p.ctrl.knowledgeDocumentCreatedAdmin.Broadcast(ctx, doc)
+}
+
 // providerPublisher publishes user-scoped provider events.
 type providerPublisher struct {
 	userID int64
@@ -240,4 +245,33 @@ func (p *resourcePublisher) ResourceUpdated(ctx context.Context, resource *model
 func (p *resourcePublisher) ResourceDeleted(ctx context.Context, resource *model.UserResource) {
 	p.ctrl.resourceDeleted.Publish(ctx, p.userID, resource)
 	p.ctrl.resourceDeletedAdmin.Broadcast(ctx, resource)
+}
+
+// knowledgePublisher publishes knowledge document events scoped to userID and broadcasts to admins.
+type knowledgePublisher struct {
+	userID int64
+	ctrl   *controller
+}
+
+func (p *knowledgePublisher) GetUserID() int64 {
+	return p.userID
+}
+
+func (p *knowledgePublisher) SetUserID(userID int64) {
+	p.userID = userID
+}
+
+func (p *knowledgePublisher) KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument) {
+	p.ctrl.knowledgeDocumentCreated.Publish(ctx, p.userID, doc)
+	p.ctrl.knowledgeDocumentCreatedAdmin.Broadcast(ctx, doc)
+}
+
+func (p *knowledgePublisher) KnowledgeDocumentUpdated(ctx context.Context, doc *model.KnowledgeDocument) {
+	p.ctrl.knowledgeDocumentUpdated.Publish(ctx, p.userID, doc)
+	p.ctrl.knowledgeDocumentUpdatedAdmin.Broadcast(ctx, doc)
+}
+
+func (p *knowledgePublisher) KnowledgeDocumentDeleted(ctx context.Context, doc *model.KnowledgeDocument) {
+	p.ctrl.knowledgeDocumentDeleted.Publish(ctx, p.userID, doc)
+	p.ctrl.knowledgeDocumentDeletedAdmin.Broadcast(ctx, doc)
 }

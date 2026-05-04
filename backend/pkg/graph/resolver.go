@@ -4,6 +4,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/server/auth"
@@ -25,4 +26,5 @@ type Resolver struct {
 	ProvidersCtrl   providers.ProviderController
 	Controller      controller.FlowController
 	Subscriptions   subscriptions.SubscriptionsController
+	Knowledge       knowledge.KnowledgeStore
 }

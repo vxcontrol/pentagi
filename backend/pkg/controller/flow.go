@@ -177,7 +177,7 @@ func NewFlowWorker(
 	ctx, _ = flowSpan.Observation(ctx)
 
 	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
-	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, fwc.functions, flow.ID)
+	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, fwc.functions, fwc.userID, flow.ID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
 	}
@@ -223,6 +223,7 @@ func NewFlowWorker(
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
 	flowCtx := &FlowContext{
@@ -345,7 +346,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	}
 
 	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
-	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, functions, flow.ID)
+	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, functions, flow.UserID, flow.ID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
 	}
@@ -375,6 +376,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
 	flowCtx := &FlowContext{

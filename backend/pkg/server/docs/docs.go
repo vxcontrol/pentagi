@@ -4124,6 +4124,470 @@ const docTemplate = `{
                 }
             }
         },
+        "/knowledge/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "List knowledge documents",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "include document text in the response",
+                        "name": "with_content",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeDocList"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Create knowledge document",
+                "parameters": [
+                    {
+                        "description": "Create request",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CreateKnowledgeDocRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeDocEntry"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "embedding provider not configured",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/knowledge/search": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Semantic search in knowledge base",
+                "parameters": [
+                    {
+                        "description": "Search request",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.KnowledgeSearchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeSearchResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "embedding provider not configured",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/knowledge/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Get knowledge document",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeDocEntry"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted or wrong owner",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "document not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Update knowledge document",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.UpdateKnowledgeDocRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeDocEntry"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted or wrong owner",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "document not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "embedding provider not configured",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Delete knowledge document",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "document deleted",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted or wrong owner",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "document not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/msglogs/": {
             "get": {
                 "security": [
@@ -7435,6 +7899,43 @@ const docTemplate = `{
                 }
             }
         },
+        "models.CreateKnowledgeDocRequest": {
+            "type": "object",
+            "required": [
+                "content",
+                "doc_type",
+                "question"
+            ],
+            "properties": {
+                "answer_type": {
+                    "type": "string"
+                },
+                "code_lang": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "content": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "minLength": 1
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "doc_type": {
+                    "type": "string"
+                },
+                "guide_type": {
+                    "type": "string"
+                },
+                "question": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1
+                }
+            }
+        },
         "models.DailyFlowsStats": {
             "type": "object",
             "required": [
@@ -7784,6 +8285,143 @@ const docTemplate = `{
                 "total_duration_seconds": {
                     "type": "number",
                     "minimum": 0
+                }
+            }
+        },
+        "models.KnowledgeDocEntry": {
+            "type": "object",
+            "properties": {
+                "answer_type": {
+                    "type": "string"
+                },
+                "code_lang": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "doc_type": {
+                    "type": "string"
+                },
+                "flow_id": {
+                    "type": "integer"
+                },
+                "guide_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "manual": {
+                    "type": "boolean"
+                },
+                "part_size": {
+                    "type": "integer"
+                },
+                "question": {
+                    "type": "string"
+                },
+                "subtask_id": {
+                    "type": "integer"
+                },
+                "task_id": {
+                    "type": "integer"
+                },
+                "total_size": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.KnowledgeDocList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.KnowledgeDocEntry"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.KnowledgeDocWithScore": {
+            "type": "object",
+            "properties": {
+                "document": {
+                    "$ref": "#/definitions/models.KnowledgeDocEntry"
+                },
+                "score": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.KnowledgeSearchRequest": {
+            "type": "object",
+            "required": [
+                "query"
+            ],
+            "properties": {
+                "answer_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "code_langs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "doc_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "flow_id": {
+                    "type": "integer"
+                },
+                "guide_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 1
+                },
+                "manual": {
+                    "type": "boolean"
+                },
+                "query": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1
+                }
+            }
+        },
+        "models.KnowledgeSearchResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.KnowledgeDocWithScore"
+                    }
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -8572,6 +9210,38 @@ const docTemplate = `{
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "models.UpdateKnowledgeDocRequest": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "answer_type": {
+                    "type": "string"
+                },
+                "code_lang": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "content": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "minLength": 1
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "guide_type": {
+                    "type": "string"
+                },
+                "question": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1
                 }
             }
         },

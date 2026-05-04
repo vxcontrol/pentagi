@@ -842,6 +842,12 @@ func (s *flowFileCaptureSubscriptions) NewFlowTemplateSubscriber(int64) subscrip
 func (s *flowFileCaptureSubscriptions) NewFlowTemplatePublisher(int64) subscriptions.FlowTemplatePublisher {
 	return nil
 }
+func (s *flowFileCaptureSubscriptions) NewKnowledgeSubscriber(int64) subscriptions.KnowledgeSubscriber {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewKnowledgePublisher(int64) subscriptions.KnowledgePublisher {
+	return nil
+}
 
 func (s *flowFileCaptureSubscriptions) record(e flowFileEvent) {
 	s.mu.Lock()
@@ -900,6 +906,8 @@ func (p *captureFlowPublisher) VectorStoreLogAdded(_ context.Context, _ database
 }
 func (p *captureFlowPublisher) AssistantLogAdded(_ context.Context, _ database.Assistantlog) {}
 func (p *captureFlowPublisher) AssistantLogUpdated(_ context.Context, _ database.Assistantlog, _ bool) {
+}
+func (p *captureFlowPublisher) KnowledgeDocumentCreated(_ context.Context, _ *graphmodel.KnowledgeDocument) {
 }
 
 var _ subscriptions.FlowPublisher = (*captureFlowPublisher)(nil)

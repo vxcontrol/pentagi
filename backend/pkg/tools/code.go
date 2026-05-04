@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/graph/model"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 
@@ -26,28 +27,34 @@ const (
 )
 
 type code struct {
+	userID    int64
 	flowID    int64
 	taskID    *int64
 	subtaskID *int64
 	replacer  anonymizer.Replacer
 	store     *pgvector.Store
 	vslp      VectorStoreLogProvider
+	knp       KnowledgeProvider
 }
 
 func NewCodeTool(
+	userID int64,
 	flowID int64,
 	taskID, subtaskID *int64,
 	replacer anonymizer.Replacer,
 	store *pgvector.Store,
 	vslp VectorStoreLogProvider,
+	knp KnowledgeProvider,
 ) Tool {
 	return &code{
+		userID:    userID,
 		flowID:    flowID,
 		taskID:    taskID,
 		subtaskID: subtaskID,
 		replacer:  replacer,
 		store:     store,
 		vslp:      vslp,
+		knp:       knp,
 	}
 }
 
@@ -251,6 +258,7 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			if doc.Metadata == nil {
 				doc.Metadata = map[string]any{}
 			}
+			doc.Metadata["user_id"] = c.userID
 			doc.Metadata["flow_id"] = c.flowID
 			if c.taskID != nil {
 				doc.Metadata["task_id"] = *c.taskID
@@ -266,7 +274,8 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			doc.Metadata["total_size"] = len(anonymizedCode)
 		}
 
-		if _, err := c.store.AddDocuments(ctx, docs); err != nil {
+		ids, err := c.store.AddDocuments(ctx, docs)
+		if err != nil {
 			observation.Event(append(opts,
 				langfuse.WithEventStatus(err.Error()),
 				langfuse.WithEventLevel(langfuse.ObservationLevelError),
@@ -280,6 +289,34 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			langfuse.WithEventLevel(langfuse.ObservationLevelDebug),
 			langfuse.WithEventOutput(docs),
 		)...)
+
+		if c.knp != nil {
+			codeLang := action.Lang
+			for i, doc := range docs {
+				if i >= len(ids) {
+					break
+				}
+				desc := action.Description
+				knDoc := &model.KnowledgeDocument{
+					ID:          ids[i],
+					UserID:      c.userID,
+					DocType:     model.KnowledgeDocTypeCode,
+					Content:     doc.PageContent,
+					Question:    anonymizedQuestion,
+					Description: &desc,
+					CodeLang:    &codeLang,
+					PartSize:    len(doc.PageContent),
+					TotalSize:   len(anonymizedCode),
+					Manual:      false,
+				}
+				if c.flowID != 0 {
+					knDoc.FlowID = &c.flowID
+				}
+				knDoc.TaskID = c.taskID
+				knDoc.SubtaskID = c.subtaskID
+				c.knp.KnowledgeDocumentCreated(ctx, knDoc)
+			}
+		}
 
 		if agentCtx, ok := GetAgentContext(ctx); ok {
 			data := map[string]any{

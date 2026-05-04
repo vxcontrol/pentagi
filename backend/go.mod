@@ -45,6 +45,7 @@ require (
 	github.com/rivo/uniseg v0.4.7
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.9.3
+	github.com/sqlc-dev/pqtype v0.3.0
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/gin-swagger v1.3.0
 	github.com/swaggo/swag v1.8.7

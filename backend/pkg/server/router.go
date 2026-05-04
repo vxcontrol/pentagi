@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/gob"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
@@ -35,6 +37,7 @@ import (
 	"github.com/sirupsen/logrus"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 const baseURL = "/api/v1"
@@ -118,6 +121,27 @@ func NewRouter(
 		oauthClients[githubClient.ProviderName()] = githubClient
 	}
 
+	// ---- Knowledge (pgvector) store -----------------------------------------
+	// Shared by both the GraphQL and REST layers.
+	// Store and embedder are nil when no embedding provider is configured;
+	// the knowledge store handles that gracefully (embedding-dependent ops error).
+	embedder := providers.Embedder()
+	var pgStore *pgvector.Store
+	if embedder.IsAvailable() {
+		if s, err := pgvector.New(
+			context.Background(),
+			pgvector.WithConnectionURL(cfg.DatabaseURL),
+			pgvector.WithEmbedder(embedder),
+			pgvector.WithCollectionName("langchain"),
+		); err == nil {
+			pgStore = &s
+		} else {
+			logrus.WithError(err).Warn("failed to initialise pgvector store for knowledge API; embedding operations will be unavailable")
+		}
+	}
+	var knowledgeStore knowledge.KnowledgeStore
+	knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher)
+
 	// services
 	authService := services.NewAuthService(
 		services.AuthServiceConfig{
@@ -148,8 +172,9 @@ func NewRouter(
 	promptService := services.NewPromptService(orm)
 	analyticsService := services.NewAnalyticsService(orm)
 	tokenService := services.NewTokenService(orm, cfg.CookieSigningSalt, tokenCache, subscriptions)
+	knowledgeService := services.NewKnowledgeService(orm, knowledgeStore)
 	graphqlService := services.NewGraphqlService(
-		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions,
+		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions, knowledgeStore,
 	)
 
 	router := gin.Default()
@@ -225,6 +250,7 @@ func NewRouter(
 	{
 		setGraphqlGroup(privateGroup, graphqlService)
 
+		setKnowledgeGroup(privateGroup, knowledgeService)
 		setProvidersGroup(privateGroup, providerService)
 		setFlowsGroup(privateGroup, flowService)
 		setFlowFilesGroup(privateGroup, flowFileService)
@@ -311,6 +337,18 @@ func NewRouter(
 	}
 
 	return router
+}
+
+func setKnowledgeGroup(parent *gin.RouterGroup, svc *services.KnowledgeService) {
+	kg := parent.Group("/knowledge")
+	{
+		kg.GET("/", svc.ListDocuments)
+		kg.GET("/:id", svc.GetDocument)
+		kg.POST("/", svc.CreateDocument)
+		kg.POST("/search", svc.SearchDocuments)
+		kg.PUT("/:id", svc.UpdateDocument)
+		kg.DELETE("/:id", svc.DeleteDocument)
+	}
 }
 
 func setProvidersGroup(parent *gin.RouterGroup, svc *services.ProviderService) {

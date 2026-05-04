@@ -28,6 +28,8 @@ type SubscriptionsController interface {
 	NewSettingsPublisher(userID int64) SettingsPublisher
 	NewFlowTemplateSubscriber(userID int64) FlowTemplateSubscriber
 	NewFlowTemplatePublisher(userID int64) FlowTemplatePublisher
+	NewKnowledgeSubscriber(userID int64) KnowledgeSubscriber
+	NewKnowledgePublisher(userID int64) KnowledgePublisher
 }
 
 type UserContext interface {
@@ -125,7 +127,30 @@ type FlowPublisher interface {
 	VectorStoreLogAdded(ctx context.Context, vectorStoreLog database.Vecstorelog)
 	AssistantLogAdded(ctx context.Context, assistantLog database.Assistantlog)
 	AssistantLogUpdated(ctx context.Context, assistantLog database.Assistantlog, appendPart bool)
+	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
 	FlowContext
+	UserContext
+}
+
+// KnowledgeSubscriber subscribes to knowledge document events.
+// Regular users receive only their own events (scoped by userID via Publish).
+// Admin users additionally use the Admin variants which receive all events via Broadcast.
+type KnowledgeSubscriber interface {
+	KnowledgeDocumentCreated(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentUpdated(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentDeleted(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentCreatedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentUpdatedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentDeletedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	UserContext
+}
+
+// KnowledgePublisher publishes knowledge document events.
+// Regular events are scoped by userID (Publish); admin channels receive all via Broadcast.
+type KnowledgePublisher interface {
+	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
+	KnowledgeDocumentUpdated(ctx context.Context, doc *model.KnowledgeDocument)
+	KnowledgeDocumentDeleted(ctx context.Context, doc *model.KnowledgeDocument)
 	UserContext
 }
 
@@ -163,88 +188,112 @@ type ResourcePublisher interface {
 }
 
 type controller struct {
-	flowCreatedAdmin     Channel[*model.Flow]
-	flowCreated          Channel[*model.Flow]
-	flowDeletedAdmin     Channel[*model.Flow]
-	flowDeleted          Channel[*model.Flow]
-	flowUpdatedAdmin     Channel[*model.Flow]
-	flowUpdated          Channel[*model.Flow]
-	taskCreated          Channel[*model.Task]
-	taskUpdated          Channel[*model.Task]
-	assistantCreated     Channel[*model.Assistant]
-	assistantUpdated     Channel[*model.Assistant]
-	assistantDeleted     Channel[*model.Assistant]
-	flowFileAdded        Channel[*model.FlowFile]
-	flowFileUpdated      Channel[*model.FlowFile]
-	flowFileDeleted      Channel[*model.FlowFile]
-	screenshotAdded      Channel[*model.Screenshot]
-	terminalLogAdded     Channel[*model.TerminalLog]
-	messageLogAdded      Channel[*model.MessageLog]
-	messageLogUpdated    Channel[*model.MessageLog]
-	agentLogAdded        Channel[*model.AgentLog]
-	searchLogAdded       Channel[*model.SearchLog]
-	vecStoreLogAdded     Channel[*model.VectorStoreLog]
-	assistantLogAdded    Channel[*model.AssistantLog]
-	assistantLogUpdated  Channel[*model.AssistantLog]
-	providerCreated      Channel[*model.ProviderConfig]
-	providerUpdated      Channel[*model.ProviderConfig]
-	providerDeleted      Channel[*model.ProviderConfig]
-	apiTokenCreated      Channel[*model.APIToken]
-	apiTokenUpdated      Channel[*model.APIToken]
-	apiTokenDeleted      Channel[*model.APIToken]
-	settingsUserUpdated  Channel[*model.UserPreferences]
-	flowTemplateCreated  Channel[*model.FlowTemplate]
-	flowTemplateUpdated  Channel[*model.FlowTemplate]
-	flowTemplateDeleted  Channel[*model.FlowTemplate]
+	flowCreatedAdmin    Channel[*model.Flow]
+	flowCreated         Channel[*model.Flow]
+	flowDeletedAdmin    Channel[*model.Flow]
+	flowDeleted         Channel[*model.Flow]
+	flowUpdatedAdmin    Channel[*model.Flow]
+	flowUpdated         Channel[*model.Flow]
+	taskCreated         Channel[*model.Task]
+	taskUpdated         Channel[*model.Task]
+	assistantCreated    Channel[*model.Assistant]
+	assistantUpdated    Channel[*model.Assistant]
+	assistantDeleted    Channel[*model.Assistant]
+	flowFileAdded       Channel[*model.FlowFile]
+	flowFileUpdated     Channel[*model.FlowFile]
+	flowFileDeleted     Channel[*model.FlowFile]
+	screenshotAdded     Channel[*model.Screenshot]
+	terminalLogAdded    Channel[*model.TerminalLog]
+	messageLogAdded     Channel[*model.MessageLog]
+	messageLogUpdated   Channel[*model.MessageLog]
+	agentLogAdded       Channel[*model.AgentLog]
+	searchLogAdded      Channel[*model.SearchLog]
+	vecStoreLogAdded    Channel[*model.VectorStoreLog]
+	assistantLogAdded   Channel[*model.AssistantLog]
+	assistantLogUpdated Channel[*model.AssistantLog]
+
+	providerCreated Channel[*model.ProviderConfig]
+	providerUpdated Channel[*model.ProviderConfig]
+	providerDeleted Channel[*model.ProviderConfig]
+
+	apiTokenCreated Channel[*model.APIToken]
+	apiTokenUpdated Channel[*model.APIToken]
+	apiTokenDeleted Channel[*model.APIToken]
+
+	settingsUserUpdated Channel[*model.UserPreferences]
+
+	flowTemplateCreated Channel[*model.FlowTemplate]
+	flowTemplateUpdated Channel[*model.FlowTemplate]
+	flowTemplateDeleted Channel[*model.FlowTemplate]
+
 	resourceAdded        Channel[*model.UserResource]
 	resourceUpdated      Channel[*model.UserResource]
 	resourceDeleted      Channel[*model.UserResource]
 	resourceAddedAdmin   Channel[*model.UserResource]
 	resourceUpdatedAdmin Channel[*model.UserResource]
 	resourceDeletedAdmin Channel[*model.UserResource]
+
+	knowledgeDocumentCreated      Channel[*model.KnowledgeDocument]
+	knowledgeDocumentUpdated      Channel[*model.KnowledgeDocument]
+	knowledgeDocumentDeleted      Channel[*model.KnowledgeDocument]
+	knowledgeDocumentCreatedAdmin Channel[*model.KnowledgeDocument]
+	knowledgeDocumentUpdatedAdmin Channel[*model.KnowledgeDocument]
+	knowledgeDocumentDeletedAdmin Channel[*model.KnowledgeDocument]
 }
 
 func NewSubscriptionsController() SubscriptionsController {
 	return &controller{
-		flowCreatedAdmin:     NewChannel[*model.Flow](),
-		flowCreated:          NewChannel[*model.Flow](),
-		flowDeletedAdmin:     NewChannel[*model.Flow](),
-		flowDeleted:          NewChannel[*model.Flow](),
-		flowUpdatedAdmin:     NewChannel[*model.Flow](),
-		flowUpdated:          NewChannel[*model.Flow](),
-		taskCreated:          NewChannel[*model.Task](),
-		taskUpdated:          NewChannel[*model.Task](),
-		assistantCreated:     NewChannel[*model.Assistant](),
-		assistantUpdated:     NewChannel[*model.Assistant](),
-		assistantDeleted:     NewChannel[*model.Assistant](),
-		flowFileAdded:        NewChannel[*model.FlowFile](),
-		flowFileUpdated:      NewChannel[*model.FlowFile](),
-		flowFileDeleted:      NewChannel[*model.FlowFile](),
-		screenshotAdded:      NewChannel[*model.Screenshot](),
-		terminalLogAdded:     NewChannel[*model.TerminalLog](),
-		messageLogAdded:      NewChannel[*model.MessageLog](),
-		messageLogUpdated:    NewChannel[*model.MessageLog](),
-		agentLogAdded:        NewChannel[*model.AgentLog](),
-		searchLogAdded:       NewChannel[*model.SearchLog](),
-		vecStoreLogAdded:     NewChannel[*model.VectorStoreLog](),
-		assistantLogAdded:    NewChannel[*model.AssistantLog](),
-		assistantLogUpdated:  NewChannel[*model.AssistantLog](),
-		providerCreated:      NewChannel[*model.ProviderConfig](),
-		providerUpdated:      NewChannel[*model.ProviderConfig](),
-		providerDeleted:      NewChannel[*model.ProviderConfig](),
-		apiTokenCreated:      NewChannel[*model.APIToken](),
-		apiTokenUpdated:      NewChannel[*model.APIToken](),
-		apiTokenDeleted:      NewChannel[*model.APIToken](),
-		settingsUserUpdated:  NewChannel[*model.UserPreferences](),
-		flowTemplateCreated:  NewChannel[*model.FlowTemplate](),
-		flowTemplateUpdated:  NewChannel[*model.FlowTemplate](),
-		flowTemplateDeleted:  NewChannel[*model.FlowTemplate](),
+		flowCreatedAdmin:    NewChannel[*model.Flow](),
+		flowCreated:         NewChannel[*model.Flow](),
+		flowDeletedAdmin:    NewChannel[*model.Flow](),
+		flowDeleted:         NewChannel[*model.Flow](),
+		flowUpdatedAdmin:    NewChannel[*model.Flow](),
+		flowUpdated:         NewChannel[*model.Flow](),
+		taskCreated:         NewChannel[*model.Task](),
+		taskUpdated:         NewChannel[*model.Task](),
+		assistantCreated:    NewChannel[*model.Assistant](),
+		assistantUpdated:    NewChannel[*model.Assistant](),
+		assistantDeleted:    NewChannel[*model.Assistant](),
+		flowFileAdded:       NewChannel[*model.FlowFile](),
+		flowFileUpdated:     NewChannel[*model.FlowFile](),
+		flowFileDeleted:     NewChannel[*model.FlowFile](),
+		screenshotAdded:     NewChannel[*model.Screenshot](),
+		terminalLogAdded:    NewChannel[*model.TerminalLog](),
+		messageLogAdded:     NewChannel[*model.MessageLog](),
+		messageLogUpdated:   NewChannel[*model.MessageLog](),
+		agentLogAdded:       NewChannel[*model.AgentLog](),
+		searchLogAdded:      NewChannel[*model.SearchLog](),
+		vecStoreLogAdded:    NewChannel[*model.VectorStoreLog](),
+		assistantLogAdded:   NewChannel[*model.AssistantLog](),
+		assistantLogUpdated: NewChannel[*model.AssistantLog](),
+
+		providerCreated: NewChannel[*model.ProviderConfig](),
+		providerUpdated: NewChannel[*model.ProviderConfig](),
+		providerDeleted: NewChannel[*model.ProviderConfig](),
+
+		apiTokenCreated: NewChannel[*model.APIToken](),
+		apiTokenUpdated: NewChannel[*model.APIToken](),
+		apiTokenDeleted: NewChannel[*model.APIToken](),
+
+		settingsUserUpdated: NewChannel[*model.UserPreferences](),
+
+		flowTemplateCreated: NewChannel[*model.FlowTemplate](),
+		flowTemplateUpdated: NewChannel[*model.FlowTemplate](),
+		flowTemplateDeleted: NewChannel[*model.FlowTemplate](),
+
 		resourceAdded:        NewChannel[*model.UserResource](),
 		resourceUpdated:      NewChannel[*model.UserResource](),
 		resourceDeleted:      NewChannel[*model.UserResource](),
 		resourceAddedAdmin:   NewChannel[*model.UserResource](),
 		resourceUpdatedAdmin: NewChannel[*model.UserResource](),
 		resourceDeletedAdmin: NewChannel[*model.UserResource](),
+
+		knowledgeDocumentCreated:      NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentUpdated:      NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentDeleted:      NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentCreatedAdmin: NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentUpdatedAdmin: NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentDeletedAdmin: NewChannel[*model.KnowledgeDocument](),
 	}
 }
 
@@ -308,6 +357,14 @@ func (s *controller) NewFlowTemplatePublisher(userID int64) FlowTemplatePublishe
 
 func (s *controller) NewFlowTemplateSubscriber(userID int64) FlowTemplateSubscriber {
 	return &flowTemplateSubscriber{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewKnowledgePublisher(userID int64) KnowledgePublisher {
+	return &knowledgePublisher{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewKnowledgeSubscriber(userID int64) KnowledgeSubscriber {
+	return &knowledgeSubscriber{userID: userID, ctrl: s}
 }
 
 type Channel[T any] interface {

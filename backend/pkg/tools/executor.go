@@ -130,6 +130,7 @@ func (w *noopObservationWrapper) end(result string, err error, durationSeconds f
 }
 
 type customExecutor struct {
+	userID    int64
 	flowID    int64
 	taskID    *int64
 	subtaskID *int64
@@ -563,13 +564,14 @@ func (ce *customExecutor) storeToolResult(ctx context.Context, name, result stri
 		if doc.Metadata == nil {
 			doc.Metadata = map[string]any{}
 		}
+		doc.Metadata["user_id"] = ce.userID
+		doc.Metadata["flow_id"] = ce.flowID
 		if ce.taskID != nil {
 			doc.Metadata["task_id"] = *ce.taskID
 		}
 		if ce.subtaskID != nil {
 			doc.Metadata["subtask_id"] = *ce.subtaskID
 		}
-		doc.Metadata["flow_id"] = ce.flowID
 		doc.Metadata["tool_name"] = name
 		if def, ok := registryDefinitions[name]; ok {
 			doc.Metadata["tool_description"] = def.Description

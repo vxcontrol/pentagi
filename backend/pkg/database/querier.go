@@ -38,7 +38,14 @@ type Querier interface {
 	DeleteFavoriteFlow(ctx context.Context, arg DeleteFavoriteFlowParams) (UserPreference, error)
 	DeleteFlow(ctx context.Context, id int64) (Flow, error)
 	DeleteFlowAssistantLog(ctx context.Context, id int64) error
+	// Delete all memory-type documents for a specific flow.
+	// Called on flow deletion to free long-term memory that will never be re-used.
+	// $1 is the decimal text representation of the flow ID (e.g. "55"), matching the
+	// text result of (cmetadata ->> 'flow_id') which uses JSON ->> extraction.
+	DeleteFlowMemoryDocuments(ctx context.Context, dollar_1 sql.NullString) error
 	DeleteFlowTemplate(ctx context.Context, arg DeleteFlowTemplateParams) error
+	// Delete a knowledge document by UUID (admin — no user_id check).
+	DeleteKnowledgeDocument(ctx context.Context, dollar_1 sql.NullString) error
 	DeletePrompt(ctx context.Context, id int64) error
 	DeleteProvider(ctx context.Context, id int64) (Provider, error)
 	DeleteSubtask(ctx context.Context, id int64) error
@@ -46,6 +53,8 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserAPIToken(ctx context.Context, arg DeleteUserAPITokenParams) (ApiToken, error)
 	DeleteUserAPITokenByTokenID(ctx context.Context, arg DeleteUserAPITokenByTokenIDParams) (ApiToken, error)
+	// Delete a knowledge document by UUID, only if it belongs to the given user.
+	DeleteUserKnowledgeDocument(ctx context.Context, arg DeleteUserKnowledgeDocumentParams) error
 	DeleteUserPreferences(ctx context.Context, userID int64) error
 	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
 	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
@@ -112,6 +121,8 @@ type Querier interface {
 	GetFlowsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastMonthRow, error)
 	// Get flows stats by day for the last week
 	GetFlowsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastWeekRow, error)
+	// Fetch a single knowledge document by its UUID (admin view — no user_id check).
+	GetKnowledgeDocument(ctx context.Context, uuid string) (GetKnowledgeDocumentRow, error)
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
 	// Get all msgchains for a flow (including task and subtask level)
 	GetMsgchainsForFlow(ctx context.Context, flowID int64) ([]GetMsgchainsForFlowRow, error)
@@ -202,6 +213,8 @@ type Querier interface {
 	GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLogsParams) ([]Termlog, error)
 	GetUserFlowVectorStoreLogs(ctx context.Context, arg GetUserFlowVectorStoreLogsParams) ([]Vecstorelog, error)
 	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
+	// Fetch a single knowledge document by UUID, scoped to a specific user.
+	GetUserKnowledgeDocument(ctx context.Context, arg GetUserKnowledgeDocumentParams) (GetUserKnowledgeDocumentRow, error)
 	GetUserPreferencesByUserID(ctx context.Context, userID int64) (UserPreference, error)
 	GetUserPrompt(ctx context.Context, arg GetUserPromptParams) (Prompt, error)
 	GetUserPromptByType(ctx context.Context, arg GetUserPromptByTypeParams) (Prompt, error)
@@ -222,6 +235,12 @@ type Querier interface {
 	GetUserTotalToolcallsStats(ctx context.Context, userID int64) (GetUserTotalToolcallsStatsRow, error)
 	GetUserTotalUsageStats(ctx context.Context, userID int64) (GetUserTotalUsageStatsRow, error)
 	GetUsers(ctx context.Context) ([]GetUsersRow, error)
+	// List all knowledge documents excluding the noisy memory type (admin view).
+	ListAllKnowledgeDocuments(ctx context.Context) ([]ListAllKnowledgeDocumentsRow, error)
+	// List non-memory knowledge documents belonging to a specific flow (admin scoped).
+	ListFlowKnowledgeDocuments(ctx context.Context, cmetadata sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error)
+	// List all non-memory knowledge documents owned by a specific user (user-scoped view).
+	ListUserKnowledgeDocuments(ctx context.Context, cmetadata sql.NullString) ([]ListUserKnowledgeDocumentsRow, error)
 	UpdateAPIToken(ctx context.Context, arg UpdateAPITokenParams) (ApiToken, error)
 	UpdateAssistant(ctx context.Context, arg UpdateAssistantParams) (Assistant, error)
 	UpdateAssistantLanguage(ctx context.Context, arg UpdateAssistantLanguageParams) (Assistant, error)
@@ -243,6 +262,10 @@ type Querier interface {
 	UpdateFlowTemplate(ctx context.Context, arg UpdateFlowTemplateParams) (FlowTemplate, error)
 	UpdateFlowTitle(ctx context.Context, arg UpdateFlowTitleParams) (Flow, error)
 	UpdateFlowToolCallIDTemplate(ctx context.Context, arg UpdateFlowToolCallIDTemplateParams) (Flow, error)
+	// Update an existing document's embedding, text and metadata atomically.
+	// $2 must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
+	// $4 must be valid JSON text.
+	UpdateKnowledgeDocument(ctx context.Context, arg UpdateKnowledgeDocumentParams) (UpdateKnowledgeDocumentRow, error)
 	UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error)
 	UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsageParams) (Msgchain, error)
 	UpdateMsgLogResult(ctx context.Context, arg UpdateMsgLogResultParams) (Msglog, error)

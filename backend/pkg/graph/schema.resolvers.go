@@ -217,6 +217,14 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		return model.ResultTypeError, err
 	}
 
+	// Best-effort cleanup: remove accumulated long-term memory documents for this
+	// flow from the vector store. They will never be re-used after the flow is gone.
+	if err := r.DB.DeleteFlowMemoryDocuments(ctx,
+		database.StringToNullString(fmt.Sprintf("%d", flow.ID)),
+	); err != nil {
+		r.Logger.WithError(err).Warnf("failed to clean up memory documents for deleted flow %d", flow.ID)
+	}
+
 	publisher := r.Subscriptions.NewFlowPublisher(flow.UserID, flow.ID)
 	publisher.FlowUpdated(ctx, flow, containers)
 	publisher.FlowDeleted(ctx, flow, containers)
@@ -1110,6 +1118,65 @@ func (r *mutationResolver) DeleteFlowTemplate(ctx context.Context, templateID in
 
 	r.Subscriptions.NewFlowTemplatePublisher(uid).FlowTemplateDeleted(ctx, template)
 
+	return model.ResultTypeSuccess, nil
+}
+
+// CreateKnowledgeDocument is the resolver for the createKnowledgeDocument field.
+func (r *mutationResolver) CreateKnowledgeDocument(ctx context.Context, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
+	uid, _, err := validatePermission(ctx, "knowledge.create")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":      uid,
+		"doc_type": input.DocType,
+	}).Debug("create knowledge document")
+
+	return r.Knowledge.CreateDocument(ctx, uid, input)
+}
+
+// UpdateKnowledgeDocument is the resolver for the updateKnowledgeDocument field.
+func (r *mutationResolver) UpdateKnowledgeDocument(ctx context.Context, id string, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.edit")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"id":    id,
+	}).Debug("update knowledge document")
+
+	if admin {
+		return r.Knowledge.UpdateDocument(ctx, uid, id, input)
+	}
+	return r.Knowledge.UpdateUserDocument(ctx, uid, id, input)
+}
+
+// DeleteKnowledgeDocument is the resolver for the deleteKnowledgeDocument field.
+func (r *mutationResolver) DeleteKnowledgeDocument(ctx context.Context, id string) (model.ResultType, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.delete")
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"id":    id,
+	}).Debug("delete knowledge document")
+
+	var deleteErr error
+	if admin {
+		deleteErr = r.Knowledge.DeleteDocument(ctx, uid, id)
+	} else {
+		deleteErr = r.Knowledge.DeleteUserDocument(ctx, uid, id)
+	}
+	if deleteErr != nil {
+		return model.ResultTypeError, deleteErr
+	}
 	return model.ResultTypeSuccess, nil
 }
 
@@ -2310,6 +2377,68 @@ func (r *queryResolver) Resources(ctx context.Context, path *string, recursive *
 	return converter.ConvertUserResources(recs), nil
 }
 
+// KnowledgeDocuments is the resolver for the knowledgeDocuments field.
+func (r *queryResolver) KnowledgeDocuments(ctx context.Context, filter *model.KnowledgeFilter, withContent bool) ([]*model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.view")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":          uid,
+		"admin":        admin,
+		"with_content": withContent,
+	}).Debug("list knowledge documents")
+
+	if admin {
+		return r.Knowledge.ListDocuments(ctx, filter, withContent)
+	}
+	return r.Knowledge.ListUserDocuments(ctx, uid, filter, withContent)
+}
+
+// KnowledgeDocument is the resolver for the knowledgeDocument field.
+func (r *queryResolver) KnowledgeDocument(ctx context.Context, id string) (*model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.view")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"id":    id,
+	}).Debug("get knowledge document")
+
+	if admin {
+		return r.Knowledge.GetDocument(ctx, id)
+	}
+	return r.Knowledge.GetUserDocument(ctx, uid, id)
+}
+
+// SearchKnowledge is the resolver for the searchKnowledge field.
+func (r *queryResolver) SearchKnowledge(ctx context.Context, query string, filter *model.KnowledgeFilter, limit *int) ([]*model.KnowledgeDocumentWithScore, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.search")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"query": query[:min(len(query), 200)],
+	}).Debug("search knowledge documents")
+
+	lim := 0
+	if limit != nil {
+		lim = *limit
+	}
+
+	if admin {
+		return r.Knowledge.SearchDocuments(ctx, query, filter, lim)
+	}
+	return r.Knowledge.SearchUserDocuments(ctx, uid, query, filter, lim)
+}
+
 // FlowCreated is the resolver for the flowCreated field.
 func (r *subscriptionResolver) FlowCreated(ctx context.Context) (<-chan *model.Flow, error) {
 	uid, admin, err := validatePermission(ctx, "flows.subscribe")
@@ -2728,6 +2857,48 @@ func (r *subscriptionResolver) ResourceDeleted(ctx context.Context) (<-chan *mod
 		return sub.ResourceDeletedAdmin(ctx)
 	}
 	return sub.ResourceDeleted(ctx)
+}
+
+// KnowledgeDocumentCreated is the resolver for the knowledgeDocumentCreated field.
+func (r *subscriptionResolver) KnowledgeDocumentCreated(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewKnowledgeSubscriber(uid)
+	if admin {
+		return sub.KnowledgeDocumentCreatedAdmin(ctx)
+	}
+	return sub.KnowledgeDocumentCreated(ctx)
+}
+
+// KnowledgeDocumentUpdated is the resolver for the knowledgeDocumentUpdated field.
+func (r *subscriptionResolver) KnowledgeDocumentUpdated(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewKnowledgeSubscriber(uid)
+	if admin {
+		return sub.KnowledgeDocumentUpdatedAdmin(ctx)
+	}
+	return sub.KnowledgeDocumentUpdated(ctx)
+}
+
+// KnowledgeDocumentDeleted is the resolver for the knowledgeDocumentDeleted field.
+func (r *subscriptionResolver) KnowledgeDocumentDeleted(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewKnowledgeSubscriber(uid)
+	if admin {
+		return sub.KnowledgeDocumentDeletedAdmin(ctx)
+	}
+	return sub.KnowledgeDocumentDeleted(ctx)
 }
 
 // Mutation returns MutationResolver implementation.
