@@ -617,7 +617,7 @@ describe('computeRowClickSelection — toggle modifier', () => {
 describe('computeRowClickSelection — range modifier', () => {
     const flatVisible = ['a', 'b', 'c', 'd', 'e'];
 
-    it('selects from anchor to target (forward)', () => {
+    it('selects from anchor to target (forward) and unions onto prev', () => {
         const result = computeRowClickSelection({
             anchor: 'b',
             flatVisible,
@@ -626,11 +626,11 @@ describe('computeRowClickSelection — range modifier', () => {
             prev: new Set(['a', 'b']),
         });
 
-        expect([...result.next]).toEqual(['b', 'c', 'd']);
+        expect([...result.next].sort()).toEqual(['a', 'b', 'c', 'd']);
         expect(result.nextAnchor).toBe('b');
     });
 
-    it('selects from anchor to target (backward)', () => {
+    it('selects from anchor to target (backward) and unions onto prev', () => {
         const result = computeRowClickSelection({
             anchor: 'd',
             flatVisible,
@@ -639,24 +639,27 @@ describe('computeRowClickSelection — range modifier', () => {
             prev: new Set(['d']),
         });
 
-        expect([...result.next]).toEqual(['b', 'c', 'd']);
+        expect([...result.next].sort()).toEqual(['b', 'c', 'd']);
         expect(result.nextAnchor).toBe('d');
     });
 
-    it('replaces previous selection (does not extend it)', () => {
+    it('extends — never erases — earlier picks that fall outside the range', () => {
+        // Regression: a Cmd-click added `a` to the selection at anchor `c`,
+        // then Shift+click on `e` must keep `a` AROUND. Replacing `prev` with
+        // just the visible slice would silently drop the user's first pick.
         const result = computeRowClickSelection({
             anchor: 'c',
             flatVisible,
             modifier: 'range',
             path: 'e',
-            prev: new Set(['a']),
+            prev: new Set(['a', 'c']),
         });
 
-        expect([...result.next]).toEqual(['c', 'd', 'e']);
+        expect([...result.next].sort()).toEqual(['a', 'c', 'd', 'e']);
         expect(result.nextAnchor).toBe('c');
     });
 
-    it('reduces to a single-row selection when anchor === target', () => {
+    it('reduces to "just add the anchor row" when anchor === target', () => {
         const result = computeRowClickSelection({
             anchor: 'c',
             flatVisible,
@@ -669,7 +672,23 @@ describe('computeRowClickSelection — range modifier', () => {
         expect(result.nextAnchor).toBe('c');
     });
 
-    it('falls back to "single" when no anchor is set yet (and moves the anchor)', () => {
+    it('does not shrink the selection when the new range is a subset of prev', () => {
+        // After a wide Shift+click `a..e` (sel={a,b,c,d,e}), a user who Shift-
+        // clicks `c` is asking to "still cover c"; additive semantics keep the
+        // wider selection so the gesture never feels destructive.
+        const result = computeRowClickSelection({
+            anchor: 'a',
+            flatVisible,
+            modifier: 'range',
+            path: 'c',
+            prev: new Set(['a', 'b', 'c', 'd', 'e']),
+        });
+
+        expect([...result.next].sort()).toEqual(['a', 'b', 'c', 'd', 'e']);
+        expect(result.nextAnchor).toBe('a');
+    });
+
+    it('falls back to a single-row ADD when no anchor is set yet (and moves the anchor)', () => {
         const result = computeRowClickSelection({
             anchor: null,
             flatVisible,
@@ -678,11 +697,11 @@ describe('computeRowClickSelection — range modifier', () => {
             prev: new Set(['a']),
         });
 
-        expect([...result.next]).toEqual(['c']);
+        expect([...result.next].sort()).toEqual(['a', 'c']);
         expect(result.nextAnchor).toBe('c');
     });
 
-    it('falls back to "single" when the anchor is no longer visible (and PRESERVES the anchor)', () => {
+    it('falls back to a single-row ADD when the anchor is no longer visible (and PRESERVES the anchor)', () => {
         // Scenario: user cmd-clicked `dir/a`, then collapsed `dir`. The anchor
         // is now off-screen but should not be silently overwritten — a follow-up
         // shift-click after re-expanding the dir should still extend from there.
@@ -694,11 +713,11 @@ describe('computeRowClickSelection — range modifier', () => {
             prev: new Set(['dir/a']),
         });
 
-        expect([...result.next]).toEqual(['other']);
+        expect([...result.next].sort()).toEqual(['dir/a', 'other']);
         expect(result.nextAnchor).toBe('dir/a');
     });
 
-    it('falls back to "single" when the target is not in flatVisible (defensive)', () => {
+    it('falls back to a single-row ADD when the target is not in flatVisible (defensive)', () => {
         const result = computeRowClickSelection({
             anchor: 'a',
             flatVisible,
@@ -707,15 +726,19 @@ describe('computeRowClickSelection — range modifier', () => {
             prev: new Set(['a']),
         });
 
-        expect([...result.next]).toEqual(['ghost']);
+        expect([...result.next].sort()).toEqual(['a', 'ghost']);
         expect(result.nextAnchor).toBe('a');
     });
 
-    it('range click on a directory uses flatVisible (not subtreePaths) when anchor is valid', () => {
-        // The directory's own subtree is irrelevant for range clicks — only the
-        // visible-order span matters, mirroring Finder/Explorer.
+    it('range click that lands on a directory expands it via dirSubtreePaths', () => {
+        // The slice walks `flatVisible`; when one of the items is a directory,
+        // `dirSubtreePaths` is consulted so the folder's full branch joins the
+        // selection (matching the contract of a plain folder click). Without
+        // this, the folder's tri-state checkbox would render unchecked because
+        // its descendants stayed out of the selection.
         const result = computeRowClickSelection({
             anchor: 'a',
+            dirSubtreePaths: new Map<string, readonly string[]>([['dir', ['dir', 'dir/x', 'dir/y']]]),
             flatVisible: ['a', 'b', 'dir', 'e'],
             modifier: 'range',
             path: 'dir',
@@ -723,8 +746,51 @@ describe('computeRowClickSelection — range modifier', () => {
             subtreePaths: ['dir', 'dir/x', 'dir/y'],
         });
 
-        expect([...result.next]).toEqual(['a', 'b', 'dir']);
+        expect([...result.next].sort()).toEqual(['a', 'b', 'dir', 'dir/x', 'dir/y']);
         expect(result.nextAnchor).toBe('a');
+    });
+
+    it('range click after a folder click keeps the folder subtree alive', () => {
+        // Regression: clicking a collapsed folder selects {dir, dir/x, dir/y},
+        // a follow-up Shift+click on a sibling file must keep the subtree (the
+        // pre-additive behaviour wiped it because the descendants weren't in
+        // `flatVisible`).
+        const result = computeRowClickSelection({
+            anchor: 'dir',
+            flatVisible: ['dir', 'sib'],
+            modifier: 'range',
+            path: 'sib',
+            prev: new Set(['dir', 'dir/x', 'dir/y']),
+        });
+
+        expect([...result.next].sort()).toEqual(['dir', 'dir/x', 'dir/y', 'sib']);
+        expect(result.nextAnchor).toBe('dir');
+    });
+
+    it('range click across three sibling folders selects every folder + its subtree', () => {
+        // User scenario: three collapsed folders side-by-side. Click `f1`,
+        // Shift+click `f3` — every folder must end up "fully checked", which
+        // requires every descendant to be in the selection. Without
+        // `dirSubtreePaths` the slice would only contain the folder paths
+        // themselves and the tri-state checkbox would render `false` for f2
+        // and f3 because their descendants are missing from `selectedPaths`.
+        const dirSubtreePaths = new Map<string, readonly string[]>([
+            ['f1', ['f1', 'f1/a', 'f1/b']],
+            ['f2', ['f2', 'f2/a', 'f2/b']],
+            ['f3', ['f3', 'f3/a', 'f3/b']],
+        ]);
+        const result = computeRowClickSelection({
+            anchor: 'f1',
+            dirSubtreePaths,
+            flatVisible: ['f1', 'f2', 'f3'],
+            modifier: 'range',
+            path: 'f3',
+            prev: new Set(['f1', 'f1/a', 'f1/b']),
+            subtreePaths: ['f3', 'f3/a', 'f3/b'],
+        });
+
+        expect([...result.next].sort()).toEqual(['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b', 'f3', 'f3/a', 'f3/b']);
+        expect(result.nextAnchor).toBe('f1');
     });
 });
 
@@ -768,8 +834,11 @@ describe('computeRowClickSelection — anchor stability across chained clicks', 
         expect(step3.nextAnchor).toBe('b');
     });
 
-    it('toggle click moves the anchor (so subsequent shift-click extends from the new origin)', () => {
-        // single 'a' → anchor 'a'; toggle 'c' → anchor 'c'; shift 'd' → c..d
+    it('toggle click moves the anchor and the next shift-click EXTENDS prev from the new origin', () => {
+        // single 'a' → anchor 'a' / sel={a}; toggle 'c' → anchor 'c' / sel={a,c};
+        // shift 'd' → range c..d ADDED to {a,c} = {a,c,d}, anchor still 'c'.
+        // The cmd-pick `a` survives the shift gesture — that's the whole point
+        // of the additive contract for users layering selections.
         const s1 = computeRowClickSelection({
             anchor: null,
             flatVisible,
@@ -792,7 +861,7 @@ describe('computeRowClickSelection — anchor stability across chained clicks', 
             prev: s2.next,
         });
 
-        expect([...s3.next]).toEqual(['c', 'd']);
+        expect([...s3.next].sort()).toEqual(['a', 'c', 'd']);
         expect(s3.nextAnchor).toBe('c');
     });
 
@@ -855,6 +924,384 @@ describe('computeRowClickSelection — purity', () => {
 
         expect(result.next).not.toBe(prev);
     });
+
+    it('never mutates the input prev Set on a range click that expands directories', () => {
+        // Defensive: the additive range branch builds `next` via `addAllToSet`
+        // on a clone of `prev`. If the clone step ever regressed, every
+        // directory expansion would silently corrupt React state. Shaped after
+        // the user's three-folder scenario so a regression here always lights
+        // up a real-world failure mode.
+        const prev = new Set(['f1', 'f1/a', 'f1/b']);
+        const snapshot = [...prev];
+
+        computeRowClickSelection({
+            anchor: 'f1',
+            dirSubtreePaths: new Map<string, readonly string[]>([
+                ['f1', ['f1', 'f1/a', 'f1/b']],
+                ['f3', ['f3', 'f3/a', 'f3/b']],
+            ]),
+            flatVisible: ['f1', 'f2', 'f3'],
+            modifier: 'range',
+            path: 'f3',
+            prev,
+        });
+
+        expect([...prev]).toEqual(snapshot);
+    });
+});
+
+describe('computeRowClickSelection — range edge cases (additive + folder expansion)', () => {
+    /** Visible order with all three folders collapsed at the same level. */
+    const collapsedFlat = ['f1', 'f2', 'f3'];
+    /** Same tree, but every folder expanded (so descendants are visible too). */
+    const expandedFlat = ['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b', 'f3', 'f3/a', 'f3/b'];
+    /** Subtree map kept stable across the cases — three sibling folders, two children each. */
+    const dirSubtreePaths = new Map<string, readonly string[]>([
+        ['f1', ['f1', 'f1/a', 'f1/b']],
+        ['f2', ['f2', 'f2/a', 'f2/b']],
+        ['f3', ['f3', 'f3/a', 'f3/b']],
+    ]);
+
+    it('range click backward across folders (anchor = last, target = first) still selects every folder + subtree', () => {
+        // Symmetric to the forward case the user reported. The bug looked
+        // worse forward (because forward clicks land on the visually-collapsed
+        // tail), but the same `dirSubtreePaths` expansion has to fire when the
+        // range is computed in reverse — otherwise `f1` and `f2` would render
+        // unchecked even though their paths are in the selection.
+        const result = computeRowClickSelection({
+            anchor: 'f3',
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f1',
+            prev: new Set(['f3', 'f3/a', 'f3/b']),
+            subtreePaths: ['f1', 'f1/a', 'f1/b'],
+        });
+
+        expect([...result.next].sort()).toEqual(['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b', 'f3', 'f3/a', 'f3/b']);
+        expect(result.nextAnchor).toBe('f3');
+    });
+
+    it('range across already-EXPANDED folders does not double-count children (Set dedup)', () => {
+        // When folders are open, the slice already contains every descendant
+        // AND `expandDir` also returns them via `dirSubtreePaths`. The two
+        // sources overlap fully — `Set` semantics must collapse them so the
+        // resulting size matches the unique-paths count exactly.
+        const result = computeRowClickSelection({
+            anchor: 'f1',
+            dirSubtreePaths,
+            flatVisible: expandedFlat,
+            modifier: 'range',
+            path: 'f3',
+            prev: new Set(),
+            subtreePaths: ['f3', 'f3/a', 'f3/b'],
+        });
+
+        expect(result.next.size).toBe(expandedFlat.length);
+        expect([...result.next].sort()).toEqual([...expandedFlat].sort());
+        expect(result.nextAnchor).toBe('f1');
+    });
+
+    it('range with anchor = file and target = collapsed folder expands ONLY the target folder', () => {
+        // Files in the slice contribute just themselves; folders contribute
+        // their whole subtree. Mixed slice — `a` (file) → `f1` (folder) —
+        // must include `a` flat plus `f1`'s entire branch.
+        const result = computeRowClickSelection({
+            anchor: 'a',
+            dirSubtreePaths,
+            flatVisible: ['a', 'f1', 'f3'],
+            modifier: 'range',
+            path: 'f1',
+            prev: new Set(),
+            subtreePaths: ['f1', 'f1/a', 'f1/b'],
+        });
+
+        expect([...result.next].sort()).toEqual(['a', 'f1', 'f1/a', 'f1/b']);
+        expect(result.nextAnchor).toBe('a');
+    });
+
+    it('range with anchor = collapsed folder and target = file expands ONLY the anchor folder', () => {
+        // Mirror of the previous case from the other side — the anchor folder
+        // expands, the trailing file stays single.
+        const result = computeRowClickSelection({
+            anchor: 'f1',
+            dirSubtreePaths,
+            flatVisible: ['f1', 'a', 'b'],
+            modifier: 'range',
+            path: 'b',
+            prev: new Set(['f1', 'f1/a', 'f1/b']),
+        });
+
+        expect([...result.next].sort()).toEqual(['a', 'b', 'f1', 'f1/a', 'f1/b']);
+        expect(result.nextAnchor).toBe('f1');
+    });
+
+    it('range expands an empty folder to just its own path (no descendants to fold in)', () => {
+        // Defensive: an empty folder's `dirSubtreePaths` entry is `[folder]`.
+        // The expansion has to gracefully no-op — adding the same path twice
+        // through a Set is fine, but the result must not silently grow.
+        const result = computeRowClickSelection({
+            anchor: 'a',
+            dirSubtreePaths: new Map<string, readonly string[]>([['empty', ['empty']]]),
+            flatVisible: ['a', 'empty', 'b'],
+            modifier: 'range',
+            path: 'b',
+            prev: new Set(),
+        });
+
+        expect([...result.next].sort()).toEqual(['a', 'b', 'empty']);
+        expect(result.nextAnchor).toBe('a');
+    });
+
+    it('range expands NESTED directories — outer folder pulls inner folder + grandchildren', () => {
+        // `outer` contains `outer/inner` which contains `outer/inner/leaf`.
+        // A range click that picks up `outer` must include every level via
+        // the precomputed subtree (we do NOT recurse `expandDir` ourselves —
+        // `dirSubtreePaths['outer']` already lists every descendant).
+        const dirSubtreeMap = new Map<string, readonly string[]>([
+            ['outer', ['outer', 'outer/inner', 'outer/inner/leaf']],
+            ['outer/inner', ['outer/inner', 'outer/inner/leaf']],
+        ]);
+        const result = computeRowClickSelection({
+            anchor: 'a',
+            dirSubtreePaths: dirSubtreeMap,
+            flatVisible: ['a', 'outer', 'b'],
+            modifier: 'range',
+            path: 'outer',
+            prev: new Set(),
+            subtreePaths: ['outer', 'outer/inner', 'outer/inner/leaf'],
+        });
+
+        expect([...result.next].sort()).toEqual(['a', 'outer', 'outer/inner', 'outer/inner/leaf']);
+        expect(result.nextAnchor).toBe('a');
+    });
+
+    it('range works with dirSubtreePaths omitted — every slice path stays flat (tree-less callers)', () => {
+        // Backwards-compatibility contract: callers that don't have a tree
+        // map should still get a sensible additive range. Folders inside the
+        // slice degrade to single-path inserts, which is exactly the
+        // pre-expansion behaviour and is fine for flat consumers.
+        const result = computeRowClickSelection({
+            anchor: 'f1',
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f3',
+            prev: new Set(['x']),
+        });
+
+        expect([...result.next].sort()).toEqual(['f1', 'f2', 'f3', 'x']);
+        expect(result.nextAnchor).toBe('f1');
+    });
+
+    it('anchor-null fallback adds the target folder + subtree (not just the bare path)', () => {
+        // Edge case the caller hits when the user's very first interaction is
+        // a Shift+click. The fallback path must still respect folder
+        // semantics so the click "feels like a click" — the folder lights up
+        // fully, not as an indeterminate row.
+        const result = computeRowClickSelection({
+            anchor: null,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f2',
+            prev: new Set(),
+            subtreePaths: ['f2', 'f2/a', 'f2/b'],
+        });
+
+        expect([...result.next].sort()).toEqual(['f2', 'f2/a', 'f2/b']);
+        expect(result.nextAnchor).toBe('f2');
+    });
+
+    it('off-screen anchor fallback adds the target folder + subtree and PRESERVES the original anchor', () => {
+        // Scenario: user cmd-clicked `dir/a` (anchor lives inside a folder),
+        // collapsed the folder, then Shift+clicked another folder. The anchor
+        // is no longer in `flatVisible` so the reducer falls back to a
+        // single-shaped add — and that add still has to expand the target.
+        const result = computeRowClickSelection({
+            anchor: 'dir/a',
+            dirSubtreePaths,
+            flatVisible: ['f1', 'f2'],
+            modifier: 'range',
+            path: 'f2',
+            prev: new Set(['dir/a']),
+            subtreePaths: ['f2', 'f2/a', 'f2/b'],
+        });
+
+        expect([...result.next].sort()).toEqual(['dir/a', 'f2', 'f2/a', 'f2/b']);
+        expect(result.nextAnchor).toBe('dir/a');
+    });
+
+    it('chained shift-clicks accumulate folder subtrees from the same anchor', () => {
+        // Step 1: single-click `f1` → sel = whole f1 branch, anchor = f1.
+        const step1 = computeRowClickSelection({
+            anchor: null,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'single',
+            path: 'f1',
+            prev: new Set(),
+            subtreePaths: ['f1', 'f1/a', 'f1/b'],
+        });
+
+        expect([...step1.next].sort()).toEqual(['f1', 'f1/a', 'f1/b']);
+
+        // Step 2: shift-click `f2` → range f1..f2 expands BOTH folders.
+        const step2 = computeRowClickSelection({
+            anchor: step1.nextAnchor,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f2',
+            prev: step1.next,
+            subtreePaths: ['f2', 'f2/a', 'f2/b'],
+        });
+
+        expect([...step2.next].sort()).toEqual(['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b']);
+        expect(step2.nextAnchor).toBe('f1');
+
+        // Step 3: shift-click `f3` → anchor still f1, range now covers all 3.
+        const step3 = computeRowClickSelection({
+            anchor: step2.nextAnchor,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f3',
+            prev: step2.next,
+            subtreePaths: ['f3', 'f3/a', 'f3/b'],
+        });
+
+        expect([...step3.next].sort()).toEqual(['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b', 'f3', 'f3/a', 'f3/b']);
+        expect(step3.nextAnchor).toBe('f1');
+    });
+
+    it('toggle a folder, then shift-click another folder → cmd-picked subtree survives + target subtree joins', () => {
+        // Real workflow: pick one folder, Cmd-pick a different one, then
+        // Shift-click a third to grab everything in between. The toggle moves
+        // the anchor to its target, the shift-range expands every folder it
+        // touches, and the *original* cmd-pick that lives outside the range
+        // stays intact thanks to the additive contract.
+        const cmdPick = computeRowClickSelection({
+            anchor: null,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'toggle',
+            path: 'f1',
+            prev: new Set(),
+            subtreePaths: ['f1', 'f1/a', 'f1/b'],
+        });
+        const shiftPick = computeRowClickSelection({
+            anchor: cmdPick.nextAnchor,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f3',
+            prev: cmdPick.next,
+            subtreePaths: ['f3', 'f3/a', 'f3/b'],
+        });
+
+        expect([...shiftPick.next].sort()).toEqual(['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b', 'f3', 'f3/a', 'f3/b']);
+        // Anchor moved to `f1` on toggle, so the range was f1..f3 — and a
+        // follow-up shift-click would still extend from `f1`, not `f3`.
+        expect(shiftPick.nextAnchor).toBe('f1');
+    });
+
+    it('two cmd-picks on separate folders, then shift-click a third → all three subtrees are present', () => {
+        // Anchor moves with each toggle, so the final range is rooted at the
+        // most recent cmd-pick. Earlier folders survive via the additive
+        // union — the test makes sure the union expands their subtrees too,
+        // not just the bare folder paths.
+        const cmd1 = computeRowClickSelection({
+            anchor: null,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'toggle',
+            path: 'f1',
+            prev: new Set(),
+            subtreePaths: ['f1', 'f1/a', 'f1/b'],
+        });
+        const cmd2 = computeRowClickSelection({
+            anchor: cmd1.nextAnchor,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'toggle',
+            path: 'f2',
+            prev: cmd1.next,
+            subtreePaths: ['f2', 'f2/a', 'f2/b'],
+        });
+        const shift = computeRowClickSelection({
+            anchor: cmd2.nextAnchor,
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f3',
+            prev: cmd2.next,
+            subtreePaths: ['f3', 'f3/a', 'f3/b'],
+        });
+
+        expect([...shift.next].sort()).toEqual(['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b', 'f3', 'f3/a', 'f3/b']);
+        expect(shift.nextAnchor).toBe('f2');
+    });
+
+    it('shift-click with anchor === target (a folder) adds the folder subtree exactly once', () => {
+        // `slice` reduces to `[folder]`; the expansion has to fire just like
+        // a normal range so the user sees the row "fully checked" instead of
+        // indeterminate. Idempotent — re-clicking shouldn't toggle anything.
+        const result = computeRowClickSelection({
+            anchor: 'f1',
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f1',
+            prev: new Set(['f1', 'f1/a', 'f1/b']),
+            subtreePaths: ['f1', 'f1/a', 'f1/b'],
+        });
+
+        expect([...result.next].sort()).toEqual(['f1', 'f1/a', 'f1/b']);
+        expect(result.nextAnchor).toBe('f1');
+    });
+
+    it('shift-click does not shrink a wider selection even when range is fully inside it', () => {
+        // Additive contract: a Shift-click that picks a *narrower* range than
+        // the previous one keeps the wider selection intact. This is the one
+        // place the behaviour openly diverges from Finder/Explorer (those
+        // would replace), and the test pins it down so the divergence stays
+        // intentional.
+        const result = computeRowClickSelection({
+            anchor: 'f1',
+            dirSubtreePaths,
+            flatVisible: collapsedFlat,
+            modifier: 'range',
+            path: 'f2',
+            prev: new Set(['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b', 'f3', 'f3/a', 'f3/b']),
+            subtreePaths: ['f2', 'f2/a', 'f2/b'],
+        });
+
+        expect([...result.next].sort()).toEqual(['f1', 'f1/a', 'f1/b', 'f2', 'f2/a', 'f2/b', 'f3', 'f3/a', 'f3/b']);
+        expect(result.nextAnchor).toBe('f1');
+    });
+
+    it('shift-click adds a target folder subtree when the anchor sits inside an unrelated branch', () => {
+        // Anchor is the deepest leaf of `dir1`; user shift-clicks `dir2` (a
+        // sibling folder). The range slice covers both folder rows and the
+        // file rows in between, but the test explicitly verifies that the
+        // target folder's full subtree joins the selection — not just `dir2`.
+        const dirSubtreeMap = new Map<string, readonly string[]>([
+            ['dir1', ['dir1', 'dir1/a']],
+            ['dir2', ['dir2', 'dir2/x', 'dir2/y']],
+        ]);
+        const result = computeRowClickSelection({
+            anchor: 'dir1/a',
+            dirSubtreePaths: dirSubtreeMap,
+            flatVisible: ['dir1', 'dir1/a', 'between', 'dir2'],
+            modifier: 'range',
+            path: 'dir2',
+            prev: new Set(['dir1', 'dir1/a']),
+            subtreePaths: ['dir2', 'dir2/x', 'dir2/y'],
+        });
+
+        expect([...result.next].sort()).toEqual(['between', 'dir1', 'dir1/a', 'dir2', 'dir2/x', 'dir2/y']);
+        expect(result.nextAnchor).toBe('dir1/a');
+    });
 });
 
 describe('computeToggleSelection (Space / row checkbox)', () => {
@@ -876,27 +1323,23 @@ describe('computeToggleSelection (Space / row checkbox)', () => {
         ).toEqual(['dir', 'dir/a', 'dir/b']);
 
         // fully selected → cleared
-        expect(
-            [
-                ...computeToggleSelection({
-                    path: 'dir',
-                    prev: new Set(['dir', 'dir/a', 'dir/b']),
-                    subtreePaths: ['dir', 'dir/a', 'dir/b'],
-                }),
-            ],
-        ).toEqual([]);
+        expect([
+            ...computeToggleSelection({
+                path: 'dir',
+                prev: new Set(['dir', 'dir/a', 'dir/b']),
+                subtreePaths: ['dir', 'dir/a', 'dir/b'],
+            }),
+        ]).toEqual([]);
     });
 
     it('preserves unrelated paths on subtree toggle', () => {
-        expect(
-            [
-                ...computeToggleSelection({
-                    path: 'dir',
-                    prev: new Set(['dir', 'dir/a', 'dir/b', 'x']),
-                    subtreePaths: ['dir', 'dir/a', 'dir/b'],
-                }),
-            ],
-        ).toEqual(['x']);
+        expect([
+            ...computeToggleSelection({
+                path: 'dir',
+                prev: new Set(['dir', 'dir/a', 'dir/b', 'x']),
+                subtreePaths: ['dir', 'dir/a', 'dir/b'],
+            }),
+        ]).toEqual(['x']);
     });
 
     it('treats empty subtreePaths as "single path" (defensive)', () => {
@@ -920,9 +1363,7 @@ describe('computeToggleSelectAll', () => {
     });
 
     it('clears the selection when everything is already selected', () => {
-        expect([
-            ...computeToggleSelectAll({ allSelectablePaths: ['a', 'b'], prev: new Set(['a', 'b']) }),
-        ]).toEqual([]);
+        expect([...computeToggleSelectAll({ allSelectablePaths: ['a', 'b'], prev: new Set(['a', 'b']) })]).toEqual([]);
     });
 
     it('returns an empty Set when the universe is empty (no selectable paths)', () => {

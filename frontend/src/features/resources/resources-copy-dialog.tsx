@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Copy, Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
 import type { FileNode } from '@/components/file-manager';
@@ -14,17 +14,38 @@ import { Switch } from '@/components/ui/switch';
 import { ResourcesConflictDialog } from './resources-conflict-dialog';
 import { resourcesCopyFormSchema, type ResourcesCopyFormValues, useResourcesCopy } from './use-resources-copy';
 
+/** Guaranteed non-empty by `ResourcesCopyDialog` (which gates rendering on `files.length > 0`). */
 interface ResourcesCopyDialogFormProps {
-    file: FileNode;
+    files: readonly [FileNode, ...FileNode[]];
     onClose: () => void;
 }
 
 interface ResourcesCopyDialogProps {
-    file: FileNode | null;
+    /**
+     * One or more files to copy. Single-element arrays render the "duplicate to a
+     * new path" UI (full path edit with a `-copy` suffix), multi-element arrays
+     * render the "copy N items into…" UI (destination directory only — every file
+     * keeps its current name).
+     *
+     * Use `null` or an empty array to close the dialog.
+     */
+    files: FileNode[] | null;
     onClose: () => void;
 }
 
-const buildDefaultDestination = (file: FileNode): string => {
+/** Parent directory of a virtual path; `''` for root. */
+const getParentDir = (path: string): string => {
+    const idx = path.lastIndexOf('/');
+
+    return idx === -1 ? '' : path.slice(0, idx);
+};
+
+/**
+ * Build the single-file copy default destination. Inserts a `-copy` suffix
+ * before the extension so the user can submit immediately without manual
+ * editing — same convention as Finder's "Duplicate".
+ */
+const buildSingleDefaultDestination = (file: FileNode): string => {
     const segments = file.path.split('/');
     const lastSegment = segments.at(-1) ?? file.name;
     const parent = segments.slice(0, -1).join('/');
@@ -36,12 +57,32 @@ const buildDefaultDestination = (file: FileNode): string => {
     return parent ? `${parent}/${candidateName}` : candidateName;
 };
 
-const ResourcesCopyDialogForm = ({ file, onClose }: ResourcesCopyDialogFormProps) => {
+/**
+ * Default destination directory for a multi-file copy: the common parent if
+ * every selection lives under the same one, otherwise the library root.
+ * Mirrors `ResourcesMoveDialog`'s logic.
+ */
+const computeCommonParent = (files: readonly [FileNode, ...FileNode[]]): string => {
+    const first = getParentDir(files[0].path);
+
+    return files.every((file) => getParentDir(file.path) === first) ? first : '';
+};
+
+const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProps) => {
     const { cancelConflicts, copy, isCopying, pendingConflicts, resolveConflicts } = useResourcesCopy();
+    const isMulti = files.length > 1;
+
+    const defaultDestination = useMemo(() => {
+        if (isMulti) {
+            return computeCommonParent(files);
+        }
+
+        return buildSingleDefaultDestination(files[0]);
+    }, [files, isMulti]);
 
     const form = useForm<ResourcesCopyFormValues>({
         defaultValues: {
-            destination: buildDefaultDestination(file),
+            destination: defaultDestination,
             shouldOverwrite: false,
         },
         mode: 'onChange',
@@ -50,22 +91,39 @@ const ResourcesCopyDialogForm = ({ file, onClose }: ResourcesCopyDialogFormProps
 
     useEffect(() => {
         form.reset({
-            destination: buildDefaultDestination(file),
+            destination: defaultDestination,
             shouldOverwrite: false,
         });
-    }, [file, form]);
+    }, [defaultDestination, form]);
 
     const handleSubmit = form.handleSubmit(async (values) => {
-        const wasCopied = await copy(file.path, values);
+        if (isMulti) {
+            const targetDir = values.destination.trim().replace(/\/+$/, '');
+            const results = await Promise.all(
+                files.map((file) => {
+                    const destination = targetDir ? `${targetDir}/${file.name}` : file.name;
+
+                    return copy(file.path, { destination, shouldOverwrite: values.shouldOverwrite });
+                }),
+            );
+
+            if (results.every(Boolean)) {
+                onClose();
+            }
+
+            return;
+        }
+
+        const wasCopied = await copy(files[0].path, values);
 
         if (wasCopied) {
             onClose();
         }
     });
 
-    // After the user picks "Replace" in the conflict dialog the hook retries the copy
-    // with `force = true`. Close the form so it doesn't leave a stale modal — the
-    // resolveConflicts promise resolves once every retry has settled.
+    // After the user picks "Replace" in the conflict dialog the hook retries every
+    // failed copy with `force = true`. Close the form so it doesn't leave a stale
+    // modal — the resolveConflicts promise resolves once every retry has settled.
     const handleResolveConflicts = async () => {
         await resolveConflicts();
         onClose();
@@ -73,15 +131,23 @@ const ResourcesCopyDialogForm = ({ file, onClose }: ResourcesCopyDialogFormProps
 
     const isSubmitDisabled = !form.formState.isValid || isCopying;
 
+    const titleText = isMulti ? `Copy ${files.length} items` : files[0].isDir ? 'Copy directory' : 'Copy resource';
+
     return (
         <DialogContent>
             <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                     <Copy className="size-4" />
-                    {file.isDir ? 'Copy directory' : 'Copy resource'}
+                    {titleText}
                 </DialogTitle>
                 <DialogDescription>
-                    Duplicate <code>{file.path}</code> to a new path.
+                    {isMulti ? (
+                        <>Duplicate every selected item into the destination directory.</>
+                    ) : (
+                        <>
+                            Duplicate <code>{files[0].path}</code> to a new path.
+                        </>
+                    )}
                 </DialogDescription>
             </DialogHeader>
 
@@ -95,16 +161,26 @@ const ResourcesCopyDialogForm = ({ file, onClose }: ResourcesCopyDialogFormProps
                         name="destination"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Destination path</FormLabel>
+                                <FormLabel>{isMulti ? 'Destination directory' : 'Destination path'}</FormLabel>
                                 <FormControl>
                                     <Input
                                         {...field}
                                         autoComplete="off"
                                         autoFocus
                                         disabled={isCopying}
+                                        placeholder={isMulti ? 'Leave empty to copy into the library root' : undefined}
                                     />
                                 </FormControl>
-                                <FormDescription>Relative path inside your library.</FormDescription>
+                                <FormDescription>
+                                    {isMulti ? (
+                                        <>
+                                            Relative directory inside your library. Leave empty for the root. Each item
+                                            keeps its current filename.
+                                        </>
+                                    ) : (
+                                        <>Relative path inside your library.</>
+                                    )}
+                                </FormDescription>
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -123,7 +199,9 @@ const ResourcesCopyDialogForm = ({ file, onClose }: ResourcesCopyDialogFormProps
                                     />
                                 </FormControl>
                                 <FormLabel className="cursor-pointer font-normal">
-                                    Overwrite or merge if the destination already exists
+                                    {isMulti
+                                        ? 'Overwrite or merge if any destination already exists'
+                                        : 'Overwrite or merge if the destination already exists'}
                                 </FormLabel>
                             </FormItem>
                         )}
@@ -158,21 +236,25 @@ const ResourcesCopyDialogForm = ({ file, onClose }: ResourcesCopyDialogFormProps
     );
 };
 
-export const ResourcesCopyDialog = ({ file, onClose }: ResourcesCopyDialogProps) => {
+export const ResourcesCopyDialog = ({ files, onClose }: ResourcesCopyDialogProps) => {
     const handleDialogOpenChange = (nextOpen: boolean) => {
         if (!nextOpen) {
             onClose();
         }
     };
 
+    // Narrow to a non-empty tuple so the inner form can index `files[0]` without
+    // optional-chain noise. The Dialog only mounts when this guard passes.
+    const nonEmptyFiles = files && files.length > 0 ? (files as [FileNode, ...FileNode[]]) : null;
+
     return (
         <Dialog
             onOpenChange={handleDialogOpenChange}
-            open={!!file}
+            open={!!nonEmptyFiles}
         >
-            {file && (
+            {nonEmptyFiles && (
                 <ResourcesCopyDialogForm
-                    file={file}
+                    files={nonEmptyFiles}
                     onClose={onClose}
                 />
             )}

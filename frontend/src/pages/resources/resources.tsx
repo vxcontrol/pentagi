@@ -3,11 +3,16 @@ import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import {
+    bulkCopyAction,
+    bulkCopyPathsAction,
+    bulkDeleteAction,
+    bulkMoveAction,
     copyPathAction,
     deleteAction,
     downloadAction,
     FileManager,
     type FileManagerAction,
+    type FileManagerBulkAction,
     type FileNode,
 } from '@/components/file-manager';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -24,7 +29,7 @@ import { ResourcesConflictDialog } from '@/features/resources/resources-conflict
 import { ResourcesCopyDialog } from '@/features/resources/resources-copy-dialog';
 import { ResourcesMkdirDialog } from '@/features/resources/resources-mkdir-dialog';
 import { ResourcesMoveDialog } from '@/features/resources/resources-move-dialog';
-import { buildResourceDownloadHref, toFileNode } from '@/features/resources/resources-utils';
+import { buildResourceDownloadHref, pluralizeItems, toFileNode } from '@/features/resources/resources-utils';
 import { useResourcesDelete } from '@/features/resources/use-resources-delete';
 import { useResourcesMove } from '@/features/resources/use-resources-move';
 import { useResourcesSearch } from '@/features/resources/use-resources-search';
@@ -38,8 +43,11 @@ const Resources = () => {
     const search = useResourcesSearch();
 
     const [isMkdirOpen, setIsMkdirOpen] = useState(false);
-    const [fileToRename, setFileToRename] = useState<FileNode | null>(null);
-    const [fileToCopy, setFileToCopy] = useState<FileNode | null>(null);
+    // Both dialogs accept an array now: a row-action click pushes a single-element
+    // array, the bulk bar pushes the full deduped selection. Empty / null array
+    // closes the dialog.
+    const [filesToMove, setFilesToMove] = useState<FileNode[] | null>(null);
+    const [filesToCopy, setFilesToCopy] = useState<FileNode[] | null>(null);
 
     const upload = useResourcesUpload();
     const deletion = useResourcesDelete();
@@ -84,6 +92,28 @@ const Resources = () => {
     }, []);
 
     /**
+     * Bulk "copy paths" handler: join every selected file's path with `\n` so the
+     * user can paste a clean newline-separated list straight into the agent chat,
+     * a shell command, or notes. Reports the count for clarity — silent failures
+     * confuse users when the clipboard happens to already contain the same text.
+     */
+    const handleBulkCopyPaths = useCallback(async (paths: string[]) => {
+        if (paths.length === 0) {
+            return;
+        }
+
+        const wasCopied = await copyToClipboard(paths.join('\n'));
+
+        if (wasCopied) {
+            toast.success(`${paths.length} ${pluralizeItems(paths.length)} copied to clipboard`);
+
+            return;
+        }
+
+        toast.error('Failed to copy paths');
+    }, []);
+
+    /**
      * "Open" gesture — fires on double-click or Enter for a file row.
      * Triggers the same download the dropdown's Download action would, by clicking
      * a transient `<a download>` element. We can't just `window.open()` here because
@@ -110,18 +140,31 @@ const Resources = () => {
                 icon: FileSymlink,
                 id: 'resources-rename',
                 label: 'Rename or move',
-                onSelect: (file) => setFileToRename(file),
+                onSelect: (file) => setFilesToMove([file]),
             },
             {
                 appliesToDirs: true,
                 icon: Copy,
                 id: 'resources-copy',
                 label: 'Copy to…',
-                onSelect: (file) => setFileToCopy(file),
+                onSelect: (file) => setFilesToCopy([file]),
             },
             deleteAction(deletion.requestDelete),
         ],
         [deletion.requestDelete, handleCopyPath],
+    );
+
+    // Bulk-action set, rendered in the bulk-actions bar when at least one row
+    // is selected. Order matters — primary CTAs first, then less frequent
+    // actions in the overflow `…` menu, then destructive Delete on the right.
+    const fileManagerBulkActions = useMemo<FileManagerBulkAction[]>(
+        () => [
+            bulkMoveAction((files) => setFilesToMove(files)),
+            bulkCopyAction((files) => setFilesToCopy(files), { overflow: true }),
+            bulkCopyPathsAction(handleBulkCopyPaths),
+            bulkDeleteAction(deletion.deleteBulk),
+        ],
+        [deletion.deleteBulk, handleBulkCopyPaths],
     );
 
     const handleDeleteDialogOpenChange = useCallback(
@@ -277,11 +320,11 @@ const Resources = () => {
 
                 <FileManager
                     actions={fileManagerActions}
+                    bulkActions={fileManagerBulkActions}
                     className="min-h-0 flex-1"
                     emptyState={noResourcesState}
                     files={fileNodes}
                     isLoading={isInitialLoading}
-                    onBulkDelete={deletion.deleteBulk}
                     onMoveItems={handleMoveItems}
                     onOpen={handleOpenFile}
                     search={{ emptyState: noMatchesState, query: search.debouncedQuery }}
@@ -293,13 +336,13 @@ const Resources = () => {
                 />
 
                 <ResourcesMoveDialog
-                    file={fileToRename}
-                    onClose={() => setFileToRename(null)}
+                    files={filesToMove}
+                    onClose={() => setFilesToMove(null)}
                 />
 
                 <ResourcesCopyDialog
-                    file={fileToCopy}
-                    onClose={() => setFileToCopy(null)}
+                    files={filesToCopy}
+                    onClose={() => setFilesToCopy(null)}
                 />
 
                 <ResourcesConflictDialog

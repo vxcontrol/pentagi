@@ -4,12 +4,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 
 import type { FileManagerRowDisplay, FileManagerRowHandlers } from './file-manager-row';
-import type { FileManagerAction, FileManagerProps, FileNode } from './file-manager-types';
+import type { FileManagerAction, FileManagerBulkAction, FileManagerProps, FileNode } from './file-manager-types';
 
 import { FileManagerBulkActionsBar } from './file-manager-bulk-actions-bar';
 import { FileManagerSkeleton } from './file-manager-skeleton';
 import { FileManagerTreeNode } from './file-manager-tree-node';
-import { collectVisibleFlat, computeDirSelectionState, findNodeByPath, getCheckboxState } from './file-manager-utils';
+import {
+    collectVisibleFlat,
+    computeDirSelectionState,
+    computeSelectionTotalBytes,
+    dedupeOverlappingPaths,
+    findNodeByPath,
+    getCheckboxState,
+} from './file-manager-utils';
 import { useFileManagerData } from './use-file-manager-data';
 import { useFileManagerDnd } from './use-file-manager-dnd';
 import { useFileManagerExpansion } from './use-file-manager-expansion';
@@ -17,9 +24,11 @@ import { useFileManagerKeyboardNavigation } from './use-file-manager-keyboard';
 import { useFileManagerSelection } from './use-file-manager-selection';
 
 const EMPTY_ACTIONS: readonly FileManagerAction[] = Object.freeze([]);
+const EMPTY_BULK_ACTIONS: readonly FileManagerBulkAction[] = Object.freeze([]);
 
 export const FileManager = ({
     actions,
+    bulkActions,
     className,
     columns,
     emptyState,
@@ -27,14 +36,15 @@ export const FileManager = ({
     files,
     isLoading,
     labels,
-    onBulkDelete,
     onMoveItems,
     onOpen,
     onSelectionChange,
     rootGroups,
     search,
 }: FileManagerProps) => {
-    const isCheckboxVisible = enableSelection ?? !!onBulkDelete;
+    const effectiveBulkActions = bulkActions ?? EMPTY_BULK_ACTIONS;
+    const hasBulkActions = effectiveBulkActions.length > 0;
+    const isCheckboxVisible = enableSelection ?? hasBulkActions;
     const hasActions = !!actions?.length;
 
     const {
@@ -74,9 +84,22 @@ export const FileManager = ({
         onRowClick,
         onToggleSelection,
         selectedPaths,
-        setSelection,
         toggleSelectAll,
-    } = useFileManagerSelection({ allSelectablePaths, flatVisible });
+    } = useFileManagerSelection({ allSelectablePaths, dirSubtreePaths, flatVisible });
+
+    // Cumulative byte total of the deduped selection — fed into the bulk bar's
+    // size suffix ("3 selected · 14.2 MB"). Recomputed on selection / tree
+    // changes; cheap because the dedup keeps the visit list short and each
+    // subtree walk uses the same `findNodeByPath` traversal as the bar's other
+    // helpers. Skipped entirely when the bar is hidden so a no-checkbox tree
+    // never pays the cost.
+    const selectionTotalBytes = useMemo(() => {
+        if (!hasBulkActions || selectedPaths.size === 0) {
+            return 0;
+        }
+
+        return computeSelectionTotalBytes(fullTree, dedupeOverlappingPaths(selectedPaths));
+    }, [fullTree, hasBulkActions, selectedPaths]);
 
     // Tri-state checkbox values per directory: derived from `selectedPaths` so a
     // single state change updates every parent checkbox in lock-step. The map is
@@ -286,7 +309,7 @@ export const FileManager = ({
                     // ring follow the outer container's rounded corners (top corners are
                     // hidden behind the header, so only the bottom is visually affected).
                     dnd.container.isRootDropTarget &&
-                        'bg-primary/10 ring-primary ring-1 ring-inset [border-radius:inherit]',
+                        'bg-primary/10 ring-primary [border-radius:inherit] ring-1 ring-inset',
                 )}
                 onDragEnter={dnd.isEnabled ? dnd.container.onDragEnter : undefined}
                 onDragLeave={dnd.isEnabled ? dnd.container.onDragLeave : undefined}
@@ -313,14 +336,14 @@ export const FileManager = ({
                 ))}
             </div>
 
-            {onBulkDelete && (
+            {hasBulkActions && (
                 <FileManagerBulkActionsBar
+                    actions={effectiveBulkActions}
                     files={files}
                     labels={effectiveLabels}
-                    onBulkDelete={onBulkDelete}
                     onClearSelection={clearSelection}
-                    onSelectionChange={setSelection}
                     selectedPaths={selectedPaths}
+                    selectionTotalBytes={selectionTotalBytes}
                 />
             )}
         </div>

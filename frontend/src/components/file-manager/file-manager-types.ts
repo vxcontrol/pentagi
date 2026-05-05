@@ -25,6 +25,56 @@ export interface FileManagerAction {
     variant?: 'default' | 'destructive';
 }
 
+/**
+ * Single entry in the bulk-actions bar. By analogy with `FileManagerAction` for
+ * row dropdowns: the host owns the array, the bar just renders it.
+ *
+ * The `files` argument always arrives **deduped** — a directory and its descendants
+ * never both appear in the list, the parent wins (see `dedupeOverlappingPaths`).
+ */
+export interface FileManagerBulkAction {
+    /**
+     * Optional confirm dialog. When set, the bar gates `onSelect` behind it
+     * (used for destructive actions like delete).
+     */
+    confirm?: FileManagerBulkActionConfirm;
+    icon?: ComponentType<{ className?: string }>;
+    /** Stable identifier — used as React `key`. */
+    id: string;
+    /**
+     * Greys-out the button when `true`. Receives the deduped selection so the
+     * action can disable itself contextually (e.g. when only directories are
+     * selected and it doesn't apply to them).
+     */
+    isDisabled?: (files: FileNode[]) => boolean;
+    /**
+     * Removes the entry entirely when `true`. Same args as `isDisabled` —
+     * useful for actions that simply don't make sense for the current selection.
+     */
+    isHidden?: (files: FileNode[]) => boolean;
+    label: string;
+    /** Invoked with the deduped selection. */
+    onSelect: (files: FileNode[]) => Promise<void> | void;
+    /**
+     * When `true`, the action is collapsed into the trailing overflow `…` menu
+     * instead of being rendered as a standalone button. Use for less-frequent
+     * actions to keep the bar uncluttered.
+     */
+    overflow?: boolean;
+    /** Visual treatment of the inline button (no effect when `overflow: true`). */
+    variant?: 'default' | 'destructive';
+}
+
+/** Optional confirmation dialog config for a bulk action. */
+export interface FileManagerBulkActionConfirm {
+    /** Submit-button label (default: action's `label`). */
+    confirmText?: string;
+    /** Body text. Receives the already-pluralized count label (e.g. "3 items"). */
+    description?: (countLabel: string) => string;
+    /** Title text. Receives the already-pluralized count label (e.g. "3 items"). */
+    title: (countLabel: string) => string;
+}
+
 /** Optional column toggles. Both columns default to visible. */
 export interface FileManagerColumnsConfig {
     isModifiedVisible?: boolean;
@@ -45,12 +95,8 @@ export interface FileManagerInternalNode extends FileNode {
 export interface FileManagerLabels {
     /** Cancel button in the bulk-actions bar. */
     bulkCancel?: string;
-    /** Confirm button in the bulk-delete dialog. */
-    bulkConfirm?: string;
-    /** Description of the bulk-delete dialog. Receives the already-pluralized count label. */
-    bulkDescription?: (countLabel: string) => string;
-    /** Title of the bulk-delete dialog. Receives the already-pluralized count label. */
-    bulkTitle?: (countLabel: string) => string;
+    /** Trigger label / aria-label for the trailing overflow `…` menu in the bulk bar. */
+    bulkMoreActions?: string;
     columnModified?: string;
     columnName?: string;
     columnSize?: string;
@@ -60,7 +106,15 @@ export interface FileManagerLabels {
      * the default English relative formatter is used.
      */
     formatModified?: (modifiedAt: Date | string | undefined) => string;
-    /** Pluralized "N item" / "N items" used for the dialog title and description. */
+    /**
+     * Custom formatter for the cumulative size summary shown in the bulk bar.
+     * Receives the byte total of every selected file (directories contribute
+     * the recursive sum of their descendants); when omitted, the default
+     * `formatFileSize` formatter is used. Return an empty string to suppress
+     * the size suffix entirely.
+     */
+    formatSelectionSize?: (totalBytes: number) => string;
+    /** Pluralized "N item" / "N items" used for confirmation dialogs. */
     pluralizeItems?: (count: number) => string;
     /** aria-label for the header "select all" checkbox. */
     selectAllAriaLabel?: string;
@@ -71,27 +125,34 @@ export interface FileManagerLabels {
 export interface FileManagerProps {
     /** Single, ordered list of available row actions (built-in helpers live in `file-manager-actions`). */
     actions?: readonly FileManagerAction[];
+    /**
+     * Ordered list of bulk actions rendered in the footer bar when at least one row
+     * is selected. When the list is empty / undefined, the bar is not shown at all
+     * unless `enableSelection` forces checkboxes (e.g. picker dialogs).
+     *
+     * Built-in helpers live in `file-manager-actions` (`bulkDeleteAction`,
+     * `bulkCopyPathsAction`, `bulkMoveAction`, `bulkCopyAction`).
+     *
+     * Each callback receives the **deduped** `FileNode[]`: if both a directory and
+     * one of its descendants were selected, only the directory is forwarded.
+     */
+    bulkActions?: readonly FileManagerBulkAction[];
     className?: string;
     /** Per-column visibility flags. Defaults: `{ isSizeVisible: true, isModifiedVisible: true }`. */
     columns?: FileManagerColumnsConfig;
     /** Empty state node (rendered when files.length === 0 and not loading). */
     emptyState?: ReactNode;
     /**
-     * Forces row checkboxes to be visible / hidden, independently of `onBulkDelete`.
-     * - `true` → checkboxes shown even without a bulk-delete handler (e.g. picker dialogs).
-     * - `false` → checkboxes hidden even when `onBulkDelete` is provided.
-     * - `undefined` (default) → checkboxes shown whenever `onBulkDelete` is set.
+     * Forces row checkboxes to be visible / hidden, independently of `bulkActions`.
+     * - `true` → checkboxes shown even without bulk actions (e.g. picker dialogs).
+     * - `false` → checkboxes hidden even when bulk actions are provided.
+     * - `undefined` (default) → checkboxes shown whenever `bulkActions` is non-empty.
      */
     enableSelection?: boolean;
     files: FileNode[];
     isLoading?: boolean;
     /** Localizable user-facing strings. */
     labels?: FileManagerLabels;
-    /**
-     * Callback invoked when bulk delete is confirmed. The list is already deduped:
-     * if both a directory and one of its descendants were selected, only the directory is included.
-     */
-    onBulkDelete?: (files: FileNode[]) => Promise<void> | void;
     /**
      * Enables internal drag-and-drop: rows become draggable and directories accept drops.
      * Invoked with the dragged item(s) and the destination directory path (`''` for root).

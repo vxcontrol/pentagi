@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FolderInput, Loader2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
 import type { FileNode } from '@/components/file-manager';
@@ -14,22 +14,61 @@ import { Switch } from '@/components/ui/switch';
 import { ResourcesConflictDialog } from './resources-conflict-dialog';
 import { resourcesMoveFormSchema, type ResourcesMoveFormValues, useResourcesMove } from './use-resources-move';
 
+/** Guaranteed non-empty by `ResourcesMoveDialog` (which gates rendering on `files.length > 0`). */
 interface ResourcesMoveDialogFormProps {
-    file: FileNode;
+    files: readonly [FileNode, ...FileNode[]];
     onClose: () => void;
 }
 
 interface ResourcesMoveDialogProps {
-    file: FileNode | null;
+    /**
+     * One or more files to move. Single-element arrays render the "rename or move"
+     * UI (full path edit), multi-element arrays render the "move N items into…"
+     * UI (destination directory only — every file keeps its current name).
+     *
+     * Use `null` or an empty array to close the dialog.
+     */
+    files: FileNode[] | null;
     onClose: () => void;
 }
 
-const ResourcesMoveDialogForm = ({ file, onClose }: ResourcesMoveDialogFormProps) => {
+/** Parent directory of a virtual path; `''` for root. Mirrors `getParentDir` from the DnD hook. */
+const getParentDir = (path: string): string => {
+    const idx = path.lastIndexOf('/');
+
+    return idx === -1 ? '' : path.slice(0, idx);
+};
+
+/**
+ * Default destination directory for a multi-file move. Use the common parent
+ * directory when every selected file lives under the same one (so the user
+ * sees "where things came from"); otherwise default to the library root so
+ * they don't have to first clear an unrelated path.
+ */
+const computeCommonParent = (files: readonly [FileNode, ...FileNode[]]): string => {
+    const first = getParentDir(files[0].path);
+
+    return files.every((file) => getParentDir(file.path) === first) ? first : '';
+};
+
+const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProps) => {
     const { cancelConflicts, isMoving, move, pendingConflicts, resolveConflicts } = useResourcesMove();
+    const isMulti = files.length > 1;
+
+    // Default destination differs by mode: single-file rename keeps the existing
+    // path so the user can edit only the name part; multi-file move pre-fills
+    // the common parent directory so a no-op submission is impossible.
+    const defaultDestination = useMemo(() => {
+        if (isMulti) {
+            return computeCommonParent(files);
+        }
+
+        return files[0].path;
+    }, [files, isMulti]);
 
     const form = useForm<ResourcesMoveFormValues>({
         defaultValues: {
-            destination: file.path,
+            destination: defaultDestination,
             shouldOverwrite: false,
         },
         mode: 'onChange',
@@ -38,22 +77,46 @@ const ResourcesMoveDialogForm = ({ file, onClose }: ResourcesMoveDialogFormProps
 
     useEffect(() => {
         form.reset({
-            destination: file.path,
+            destination: defaultDestination,
             shouldOverwrite: false,
         });
-    }, [file, form]);
+    }, [defaultDestination, form]);
 
     const handleSubmit = form.handleSubmit(async (values) => {
-        const wasMoved = await move(file.path, values);
+        if (isMulti) {
+            // Multi-file move: `destination` is the *target directory*, every
+            // file keeps its name. Strip a trailing `/` for consistency with the
+            // single-file branch (which never has one). Empty string = root.
+            const targetDir = values.destination.trim().replace(/\/+$/, '');
+            const results = await Promise.all(
+                files.map((file) => {
+                    const destination = targetDir ? `${targetDir}/${file.name}` : file.name;
+
+                    return move(file.path, { destination, shouldOverwrite: values.shouldOverwrite });
+                }),
+            );
+
+            // Close only when nothing is left over (every move either succeeded
+            // or surfaced a conflict that the conflict dialog will pick up).
+            // If ANY move actually completed, the bulk bar's selection paths
+            // are stale anyway — the host clears them after onSelect resolves.
+            if (results.every(Boolean)) {
+                onClose();
+            }
+
+            return;
+        }
+
+        const wasMoved = await move(files[0].path, values);
 
         if (wasMoved) {
             onClose();
         }
     });
 
-    // After the user picks "Replace" in the conflict dialog the hook retries the move
-    // with `force = true`. Close the form so it doesn't leave a stale modal — the
-    // resolveConflicts promise resolves once every retry has settled.
+    // After the user picks "Replace" in the conflict dialog the hook retries every
+    // failed move with `force = true`. Close the form so it doesn't leave a stale
+    // modal — the resolveConflicts promise resolves once every retry has settled.
     const handleResolveConflicts = async () => {
         await resolveConflicts();
         onClose();
@@ -61,15 +124,27 @@ const ResourcesMoveDialogForm = ({ file, onClose }: ResourcesMoveDialogFormProps
 
     const isSubmitDisabled = !form.formState.isValid || isMoving;
 
+    const titleText = isMulti
+        ? `Move ${files.length} items`
+        : files[0].isDir
+          ? 'Move directory'
+          : 'Rename or move resource';
+
     return (
         <DialogContent>
             <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                     <FolderInput className="size-4" />
-                    {file.isDir ? 'Move directory' : 'Rename or move resource'}
+                    {titleText}
                 </DialogTitle>
                 <DialogDescription>
-                    Update the path of <code>{file.path}</code>.
+                    {isMulti ? (
+                        <>Move every selected item into the destination directory.</>
+                    ) : (
+                        <>
+                            Update the path of <code>{files[0].path}</code>.
+                        </>
+                    )}
                 </DialogDescription>
             </DialogHeader>
 
@@ -83,18 +158,28 @@ const ResourcesMoveDialogForm = ({ file, onClose }: ResourcesMoveDialogFormProps
                         name="destination"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>New path</FormLabel>
+                                <FormLabel>{isMulti ? 'Destination directory' : 'New path'}</FormLabel>
                                 <FormControl>
                                     <Input
                                         {...field}
                                         autoComplete="off"
                                         autoFocus
                                         disabled={isMoving}
+                                        placeholder={isMulti ? 'Leave empty to move into the library root' : undefined}
                                     />
                                 </FormControl>
                                 <FormDescription>
-                                    Relative path inside your library. End with <code>/</code> to drop the entry into
-                                    that directory.
+                                    {isMulti ? (
+                                        <>
+                                            Relative directory inside your library. Leave empty for the root. Each item
+                                            keeps its current filename.
+                                        </>
+                                    ) : (
+                                        <>
+                                            Relative path inside your library. End with <code>/</code> to drop the entry
+                                            into that directory.
+                                        </>
+                                    )}
                                 </FormDescription>
                                 <FormMessage />
                             </FormItem>
@@ -114,7 +199,9 @@ const ResourcesMoveDialogForm = ({ file, onClose }: ResourcesMoveDialogFormProps
                                     />
                                 </FormControl>
                                 <FormLabel className="cursor-pointer font-normal">
-                                    Overwrite if a resource already exists at the destination
+                                    {isMulti
+                                        ? 'Overwrite if a resource already exists at any destination'
+                                        : 'Overwrite if a resource already exists at the destination'}
                                 </FormLabel>
                             </FormItem>
                         )}
@@ -149,21 +236,25 @@ const ResourcesMoveDialogForm = ({ file, onClose }: ResourcesMoveDialogFormProps
     );
 };
 
-export const ResourcesMoveDialog = ({ file, onClose }: ResourcesMoveDialogProps) => {
+export const ResourcesMoveDialog = ({ files, onClose }: ResourcesMoveDialogProps) => {
     const handleDialogOpenChange = (nextOpen: boolean) => {
         if (!nextOpen) {
             onClose();
         }
     };
 
+    // Narrow to a non-empty tuple so the inner form can index `files[0]` without
+    // optional-chain noise. The Dialog only mounts when this guard passes.
+    const nonEmptyFiles = files && files.length > 0 ? (files as [FileNode, ...FileNode[]]) : null;
+
     return (
         <Dialog
             onOpenChange={handleDialogOpenChange}
-            open={!!file}
+            open={!!nonEmptyFiles}
         >
-            {file && (
+            {nonEmptyFiles && (
                 <ResourcesMoveDialogForm
-                    file={file}
+                    files={nonEmptyFiles}
                     onClose={onClose}
                 />
             )}

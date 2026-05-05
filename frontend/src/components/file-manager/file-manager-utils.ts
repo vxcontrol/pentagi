@@ -334,7 +334,10 @@ export const buildFileManagerGridTemplate = (showSize: boolean, showModified: bo
 };
 
 /** Recursively locate a node by its absolute path. Returns `undefined` when missing. */
-export const findNodeByPath = (nodes: FileManagerInternalNode[], path: string): FileManagerInternalNode | undefined => {
+export const findNodeByPath = (
+    nodes: readonly FileManagerInternalNode[],
+    path: string,
+): FileManagerInternalNode | undefined => {
     for (const node of nodes) {
         if (node.path === path) {
             return node;
@@ -419,6 +422,59 @@ export const collectSubtreePaths = (node: FileManagerInternalNode): string[] => 
 export const pluralizeItemsEnglish = (count: number): string => `${count} ${count === 1 ? 'item' : 'items'}`;
 
 /**
+ * Recursively sum every file's `size` inside a node's subtree. Synthetic group
+ * roots and directories themselves contribute nothing — only their leaf files
+ * carry bytes. Files without a `size` are treated as 0 so a partial backend
+ * payload doesn't poison the total.
+ */
+const sumSubtreeBytes = (node: FileManagerInternalNode): number => {
+    if (node.children.length > 0) {
+        let total = 0;
+
+        for (const child of node.children) {
+            total += sumSubtreeBytes(child);
+        }
+
+        return total;
+    }
+
+    if (node.isDir || node.isGroupRoot) {
+        return 0;
+    }
+
+    return node.size ?? 0;
+};
+
+/**
+ * Cumulative byte total for the bulk-bar size summary. Walks `paths` (which the
+ * caller is expected to have already deduped via `dedupeOverlappingPaths`) and
+ * adds each entry's contribution: a file pulls its own `size`, a directory pulls
+ * the recursive sum of its descendants.
+ *
+ * Missing nodes are skipped silently — selection paths can transiently lag the
+ * tree during async refreshes, and counting "0 bytes" for a vanished entry is
+ * less surprising than throwing.
+ */
+export const computeSelectionTotalBytes = (
+    tree: readonly FileManagerInternalNode[],
+    paths: Iterable<string>,
+): number => {
+    let total = 0;
+
+    for (const path of paths) {
+        const node = findNodeByPath(tree, path);
+
+        if (!node) {
+            continue;
+        }
+
+        total += sumSubtreeBytes(node);
+    }
+
+    return total;
+};
+
+/**
  * Mutates `set` in place by adding every path from `paths`. Designed for "build a
  * fresh `next` from `prev`, then add a batch" patterns inside `setState` updaters
  * — never call on a state-owned Set directly.
@@ -477,6 +533,19 @@ export const toggleSubtreeOnSet = (prev: ReadonlySet<string>, paths: readonly st
 interface ComputeRowClickSelectionArgs {
     /** Last-clicked path used as the range anchor. `null` when nothing has been clicked yet. */
     anchor: null | string;
+    /**
+     * Subtree map for every directory in the *visible* tree, keyed by the
+     * directory's own path. Used to expand directories that appear inside a
+     * `range`-modifier slice into their full subtree (folder rows are atomic
+     * for the Shift+click gesture too — clicking one selects its branch, so a
+     * Shift-range that crosses a folder must do the same; otherwise the
+     * folder's checkbox would render unchecked even though its own path is in
+     * the selection, because `computeDirSelectionState` derives the state
+     * from descendants). Optional — when omitted, range slices stay flat
+     * (covers tree-less callers and unit tests that don't care about
+     * directory expansion).
+     */
+    dirSubtreePaths?: ReadonlyMap<string, readonly string[]>;
     /** Visible nodes in DFS order; range modifier resolves anchor/target indices against this list. */
     flatVisible: readonly string[];
     modifier: 'range' | 'single' | 'toggle';
@@ -486,9 +555,10 @@ interface ComputeRowClickSelectionArgs {
     prev: ReadonlySet<string>;
     /**
      * For directory rows: the directory's own path plus every descendant. Single
-     * and toggle modifiers operate on the whole branch; range modifier still
-     * defers to the visible-order anchor and uses `subtreePaths` only as the
-     * fallback payload when the range cannot be resolved.
+     * and toggle modifiers operate on the whole branch; range modifier uses it
+     * for the fallback payload when the range cannot be resolved AND for the
+     * target row inside the slice (via `dirSubtreePaths`, which already
+     * contains the same data keyed by every directory's path).
      */
     subtreePaths?: readonly string[];
 }
@@ -516,15 +586,25 @@ interface ComputeRowClickSelectionResult {
  *     (files). Anchor moves to `path`.
  *   - **toggle**: all-or-nothing flip of `subtreePaths` (folders) or single
  *     `path` (files). Anchor moves to `path`.
- *   - **range**: replaces selection with the slice of `flatVisible` between
- *     `anchor` and `path` (inclusive, direction-agnostic). Anchor is preserved.
- *     If `anchor` is `null` → behaves like `single` and moves the anchor.
- *     If either anchor or target is missing from `flatVisible` → falls back to
- *     a `single`-style replacement but preserves the anchor (the original
- *     reference point may still be valid once it scrolls back into view).
+ *   - **range**: ADDITIVELY unions the slice of `flatVisible` between `anchor`
+ *     and `path` (inclusive, direction-agnostic) onto the previous selection
+ *     so a Shift-click extends — never erases — what's already selected.
+ *     Concretely: a Cmd+click‑based selection set, an explicitly clicked
+ *     folder's full subtree, and any earlier range slice are all preserved
+ *     when the user reaches for Shift+click to grab "everything from the last
+ *     click down to here". Anchor is preserved across chained Shift+clicks so
+ *     each one re-extends from the same origin (matches Finder/Explorer for
+ *     the anchor; the additive merge is the deliberate divergence the rest of
+ *     this codebase relies on — folder rows would otherwise drop their
+ *     subtree on every Shift+click). If `anchor` is `null` → behaves like a
+ *     `single`-shaped add (no anchor, nothing to extend FROM) and moves the
+ *     anchor. If either anchor or target is missing from `flatVisible` →
+ *     falls back to the same single-shaped add but preserves the anchor (the
+ *     original reference point may still be valid once it scrolls back in).
  */
 export const computeRowClickSelection = ({
     anchor,
+    dirSubtreePaths,
     flatVisible,
     modifier,
     path,
@@ -532,8 +612,7 @@ export const computeRowClickSelection = ({
     subtreePaths,
 }: ComputeRowClickSelectionArgs): ComputeRowClickSelectionResult => {
     const hasSubtree = !!subtreePaths && subtreePaths.length > 0;
-    const buildReplacement = (): Set<string> =>
-        hasSubtree && subtreePaths ? new Set(subtreePaths) : new Set([path]);
+    const buildReplacement = (): Set<string> => (hasSubtree && subtreePaths ? new Set(subtreePaths) : new Set([path]));
 
     if (modifier === 'single') {
         return { next: buildReplacement(), nextAnchor: path };
@@ -555,20 +634,48 @@ export const computeRowClickSelection = ({
         return { next, nextAnchor: path };
     }
 
+    // Range modifier — additive. The slice computed below is unioned onto
+    // `prev`, never replaced, so the user can build up a selection across
+    // multiple gestures (single → cmd-click → shift-click → shift-click…)
+    // without watching earlier picks vanish. The "fallback to a single-shaped
+    // add" branches below honour the same contract: each one extends `prev`
+    // by exactly one item (the clicked path or its subtree), never wipes it.
+    //
+    // Directories inside the slice expand to their full subtree via
+    // `dirSubtreePaths` so a Shift-range over collapsed folders behaves like
+    // a series of plain folder clicks: every folder picks up its children
+    // even when those children aren't in `flatVisible` (folder collapsed).
+    // This keeps the tri-state checkbox visibly "fully checked" — without
+    // the expansion, `computeDirSelectionState` would render a folder
+    // unchecked because its descendants stayed out of the selection.
+    const expandDir = (p: string): readonly string[] => dirSubtreePaths?.get(p) ?? [p];
+
+    const addRangeToPrev = (paths: Iterable<string>): Set<string> => {
+        const next = new Set(prev);
+
+        for (const p of paths) {
+            addAllToSet(next, expandDir(p));
+        }
+
+        return next;
+    };
+
+    const buildAdditiveFallback = (): Set<string> => addRangeToPrev(hasSubtree && subtreePaths ? subtreePaths : [path]);
+
     if (!anchor) {
-        return { next: buildReplacement(), nextAnchor: path };
+        return { next: buildAdditiveFallback(), nextAnchor: path };
     }
 
     const fromIndex = flatVisible.indexOf(anchor);
     const toIndex = flatVisible.indexOf(path);
 
     if (fromIndex < 0 || toIndex < 0) {
-        return { next: buildReplacement(), nextAnchor: anchor };
+        return { next: buildAdditiveFallback(), nextAnchor: anchor };
     }
 
     const [startIndex, endIndex] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
 
-    return { next: new Set(flatVisible.slice(startIndex, endIndex + 1)), nextAnchor: anchor };
+    return { next: addRangeToPrev(flatVisible.slice(startIndex, endIndex + 1)), nextAnchor: anchor };
 };
 
 interface ComputeToggleSelectionArgs {

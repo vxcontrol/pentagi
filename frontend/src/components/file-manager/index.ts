@@ -1,9 +1,20 @@
 export { FileManager } from './file-manager';
-export { copyPathAction, deleteAction, downloadAction } from './file-manager-actions';
+export {
+    bulkCopyAction,
+    bulkCopyPathsAction,
+    bulkDeleteAction,
+    bulkMoveAction,
+    bulkPromoteAction,
+    copyPathAction,
+    deleteAction,
+    downloadAction,
+} from './file-manager-actions';
 export { getFileTypeIcon } from './file-manager-icons';
 export type { FileTypeIcon } from './file-manager-icons';
 export type {
     FileManagerAction,
+    FileManagerBulkAction,
+    FileManagerBulkActionConfirm,
     FileManagerLabels,
     FileManagerProps,
     FileManagerRootGroup,

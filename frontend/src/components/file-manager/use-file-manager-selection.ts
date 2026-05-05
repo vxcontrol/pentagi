@@ -48,6 +48,14 @@ interface UseFileManagerSelection {
 interface UseFileManagerSelectionArgs {
     /** Universe of selectable paths (files + real directories) in the *visible* tree. */
     allSelectablePaths: string[];
+    /**
+     * Subtree paths per directory in the *visible* tree (the dir itself plus
+     * descendants). Forwarded to the range-click reducer so directories caught
+     * inside a Shift-range expand to their full branch — keeping their
+     * tri-state checkbox fully checked even when they were collapsed at the
+     * moment of the gesture (no descendants in `flatVisible` to count).
+     */
+    dirSubtreePaths: ReadonlyMap<string, readonly string[]>;
     /** Visible nodes in DFS order — used for shift-range selection. */
     flatVisible: string[];
 }
@@ -66,6 +74,7 @@ interface UseFileManagerSelectionArgs {
  */
 export const useFileManagerSelection = ({
     allSelectablePaths,
+    dirSubtreePaths,
     flatVisible,
 }: UseFileManagerSelectionArgs): UseFileManagerSelection => {
     const [rawSelectedPaths, setRawSelectedPaths] = useState<Set<string>>(() => new Set());
@@ -80,6 +89,7 @@ export const useFileManagerSelection = ({
     // already used in `use-file-manager-dnd` for `selectionRef`.
     const flatVisibleRef = useRef(flatVisible);
     const allSelectablePathsRef = useRef(allSelectablePaths);
+    const dirSubtreePathsRef = useRef(dirSubtreePaths);
 
     useEffect(() => {
         flatVisibleRef.current = flatVisible;
@@ -88,6 +98,10 @@ export const useFileManagerSelection = ({
     useEffect(() => {
         allSelectablePathsRef.current = allSelectablePaths;
     }, [allSelectablePaths]);
+
+    useEffect(() => {
+        dirSubtreePathsRef.current = dirSubtreePaths;
+    }, [dirSubtreePaths]);
 
     const allSelectablePathsSet = useMemo(() => new Set(allSelectablePaths), [allSelectablePaths]);
 
@@ -116,6 +130,7 @@ export const useFileManagerSelection = ({
         setRawSelectedPaths((prev) => {
             const { next, nextAnchor } = computeRowClickSelection({
                 anchor: lastClickedRef.current,
+                dirSubtreePaths: dirSubtreePathsRef.current,
                 flatVisible: flatVisibleRef.current,
                 modifier,
                 path,

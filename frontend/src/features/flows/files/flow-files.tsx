@@ -3,11 +3,15 @@ import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import {
+    bulkCopyPathsAction,
+    bulkDeleteAction,
+    bulkPromoteAction,
     copyPathAction,
     deleteAction,
     downloadAction,
     FileManager,
     type FileManagerAction,
+    type FileManagerBulkAction,
     type FileNode,
 } from '@/components/file-manager';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -25,7 +29,7 @@ import { FlowFilesAttachResourcesDialog } from './flow-files-attach-resources-di
 import { ROOT_GROUPS } from './flow-files-constants';
 import { FlowFilesPromoteDialog } from './flow-files-promote-dialog';
 import { FlowFilesPullDialog } from './flow-files-pull-dialog';
-import { buildDownloadHref } from './flow-files-utils';
+import { buildDownloadHref, pluralizeItems } from './flow-files-utils';
 import { useFlowFilesData } from './use-flow-files-data';
 import { useFlowFilesDelete } from './use-flow-files-delete';
 import { useFlowFilesRealtime } from './use-flow-files-realtime';
@@ -36,7 +40,9 @@ const FlowFiles = () => {
     const { flowId, flowStatus } = useFlow();
     const [isPullDialogOpen, setIsPullDialogOpen] = useState(false);
     const [isAttachResourcesDialogOpen, setIsAttachResourcesDialogOpen] = useState(false);
-    const [fileToPromote, setFileToPromote] = useState<FileNode | null>(null);
+    // Array now: row-action click pushes a single-element array, the bulk bar
+    // pushes the deduped selection. Empty array / null closes the dialog.
+    const [filesToPromote, setFilesToPromote] = useState<FileNode[] | null>(null);
 
     const { fileNodes, isInitialLoading, isLoading, refetchFiles } = useFlowFilesData({ flowId });
 
@@ -67,13 +73,34 @@ const FlowFiles = () => {
         toast.error('Failed to copy path');
     }, []);
 
+    /**
+     * Bulk "copy paths" handler: join every selected file's path with `\n` so the
+     * user can paste a clean newline-separated list straight into the agent chat,
+     * a shell command, or a tool argument. Reports the count for clarity.
+     */
+    const handleBulkCopyPaths = useCallback(async (paths: string[]) => {
+        if (paths.length === 0) {
+            return;
+        }
+
+        const wasCopied = await copyToClipboard(paths.join('\n'));
+
+        if (wasCopied) {
+            toast.success(`${paths.length} ${pluralizeItems(paths.length)} copied to clipboard`);
+
+            return;
+        }
+
+        toast.error('Failed to copy paths');
+    }, []);
+
     const getDownloadHref = useCallback((file: FileNode): string => buildDownloadHref(flowId, file) ?? '', [flowId]);
 
     const handleRequestPromote = useCallback((file: FileNode) => {
-        setFileToPromote(file);
+        setFilesToPromote([file]);
     }, []);
 
-    const handleClosePromoteDialog = useCallback(() => setFileToPromote(null), []);
+    const handleClosePromoteDialog = useCallback(() => setFilesToPromote(null), []);
 
     const promoteAction = useMemo<FileManagerAction>(
         () => ({
@@ -94,6 +121,18 @@ const FlowFiles = () => {
             deleteAction(deletion.requestDelete),
         ],
         [getDownloadHref, handleCopyPath, promoteAction, deletion.requestDelete],
+    );
+
+    // Bulk-action set: primary "Save as resources" (most common workflow on this
+    // page — promote interesting artifacts into the global library), copy-paths
+    // in overflow, destructive Delete on the right.
+    const fileManagerBulkActions = useMemo<FileManagerBulkAction[]>(
+        () => [
+            bulkPromoteAction((files) => setFilesToPromote(files)),
+            bulkCopyPathsAction(handleBulkCopyPaths),
+            bulkDeleteAction(deletion.deleteBulk),
+        ],
+        [deletion.deleteBulk, handleBulkCopyPaths],
     );
 
     const handleOpenPullDialog = useCallback(() => setIsPullDialogOpen(true), []);
@@ -279,11 +318,11 @@ const FlowFiles = () => {
 
             <FileManager
                 actions={fileManagerActions}
+                bulkActions={fileManagerBulkActions}
                 className="min-h-0 flex-1"
                 emptyState={noFilesState}
                 files={fileNodes}
                 isLoading={isInitialLoading}
-                onBulkDelete={deletion.deleteBulk}
                 rootGroups={ROOT_GROUPS}
                 search={{ emptyState: noMatchesState, query: search.debouncedQuery }}
             />
@@ -303,7 +342,7 @@ const FlowFiles = () => {
             />
 
             <FlowFilesPromoteDialog
-                file={fileToPromote}
+                files={filesToPromote}
                 flowId={flowId}
                 onClose={handleClosePromoteDialog}
             />
