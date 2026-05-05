@@ -142,14 +142,13 @@ func (m *FormModel) ensureFocusVisible() {
 **What is currently known**:
 - Use only the official PentAGI installer downloads linked from the project README.
 - Select the archive that matches your Mac CPU architecture: `darwin/amd64` for Intel Macs or `darwin/arm64` for Apple silicon.
-- The maintainers reported in [issue #249](https://github.com/vxcontrol/pentagi/issues/249) that the installer files are signed with the project certificate.
-- The maintainers also reported zero VirusTotal detections for the checked `arm64` and `amd64` installer builds in that issue.
-- The maintainers reported in that issue that they contacted Apple about the warning and are waiting for a response.
+- Maintainer notes in [issue #249](https://github.com/vxcontrol/pentagi/issues/249) report that the installer files are signed with the project certificate and that the checked `arm64` and `amd64` builds had zero VirusTotal detections.
+- The maintainers have contacted Apple about the warning and are awaiting a response.
 
 **Recommended handling**:
 - Treat any unexpected malware warning as a reason to stop and verify the download source before continuing.
 - Re-download the installer from the official PentAGI link if the archive came from a mirror, chat attachment, or any unofficial source.
-- If you trust the official release after verification, try to open the installer once, then open **System Settings** -> **Privacy & Security**, scroll to the security section that says the installer was blocked, click **Open Anyway**, and confirm the follow-up prompt to allow that specific app to run.
+- If you trust the official release after verification, try to open the installer once. Then open **System Settings** -> **Privacy & Security**, find the security message that says the installer was blocked, click **Open Anyway**, and confirm the follow-up prompt to allow that specific app to run.
 - If your version of macOS shows different wording, follow Apple's guidance for opening a Mac app from an unidentified developer: <https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac>.
 - Do not reuse an installer archive that was downloaded from an unknown source, even if its filename matches the official archive name.
 
