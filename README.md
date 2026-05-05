@@ -578,6 +578,8 @@ PentAGI provides an interactive installer with a terminal-based UI for streamlin
 - **Windows**: amd64 [download](https://pentagi.com/downloads/windows/amd64/installer-latest.zip)
 - **macOS**: amd64 (Intel) [download](https://pentagi.com/downloads/darwin/amd64/installer-latest.zip) | arm64 (M-series) [download](https://pentagi.com/downloads/darwin/arm64/installer-latest.zip)
 
+> **macOS security warning:** If macOS flags a downloaded installer, use only the official PentAGI links above, choose the archive that matches your CPU architecture, verify the source before continuing, and follow the [installer troubleshooting guide](backend/docs/installer/installer-troubleshooting.md#macos-reports-the-installer-as-malware) before allowing the app to run.
+
 **Quick Installation (Linux amd64):**
 
 ```bash
