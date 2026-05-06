@@ -17,7 +17,7 @@ type FileAction struct {
 	Action  FileOp `json:"action" jsonschema:"required,enum=read_file,enum=update_file" jsonschema_description:"Action to perform with the code. 'read_file' - Returns the content of the file. 'update_file' - Updates the content of the file"`
 	Content string `json:"content" jsonschema_description:"Content to write to the file"`
 	Path    string `json:"path" jsonschema:"required" jsonschema_description:"Path to the file to read or update"`
-	Message string `json:"message" jsonschema:"required,title=File action message" jsonschema_description:"Not so long message which explain what do you want to read or to write to the file and explain written content to send to the user in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=File action message" jsonschema_description:"Not so long message which explain what do you want to read or to write to the file and explain written content to send to the user in English"`
 }
 
 type BrowserAction string
@@ -31,7 +31,7 @@ const (
 type Browser struct {
 	Url     string        `json:"url" jsonschema:"required" jsonschema_description:"url to open in the browser"`
 	Action  BrowserAction `json:"action" jsonschema:"required,enum=markdown,enum=html,enum=links" jsonschema_description:"action to perform in the browser. 'markdown' - Returns the content of the page in markdown format. 'html' - Returns the content of the page in html format. 'links' - Get the list of all URLs on the page to be used in later calls (e.g., open search results after the initial search lookup)."`
-	Message string        `json:"message" jsonschema:"required,title=Task result message" jsonschema_description:"Not so long message which explain what do you want to get, what format do you want to get and why do you need this to send to the user in user's language only"`
+	Message string        `json:"message" jsonschema:"required,title=Task result message" jsonschema_description:"Not so long message which explain what do you want to get, what format do you want to get and why do you need this to send to the user in English"`
 }
 
 type SubtaskInfo struct {
@@ -41,7 +41,7 @@ type SubtaskInfo struct {
 
 type SubtaskList struct {
 	Subtasks []SubtaskInfo `json:"subtasks" jsonschema:"required,title=Subtasks to complete" jsonschema_description:"Ordered list of subtasks to execute after decomposing the task in the user language"`
-	Message  string        `json:"message" jsonschema:"required,title=Subtask generation result" jsonschema_description:"Not so long message with the generation result and main goal of work to send to the user in user's language only"`
+	Message  string        `json:"message" jsonschema:"required,title=Subtask generation result" jsonschema_description:"Not so long message with the generation result and main goal of work to send to the user in English"`
 }
 
 // SubtaskOperationType defines the type of operation to perform on a subtask
@@ -71,23 +71,23 @@ type SubtaskInfoPatch struct {
 // SubtaskPatch is the delta-based refinement output for modifying subtask lists
 type SubtaskPatch struct {
 	Operations []SubtaskOperation `json:"operations" jsonschema:"required" jsonschema_description:"List of operations to apply to the current subtask list. Empty array means no changes needed."`
-	Message    string             `json:"message" jsonschema:"required,title=Refinement summary" jsonschema_description:"Summary of changes made and justification for modifications to send to the user in user's language only"`
+	Message    string             `json:"message" jsonschema:"required,title=Refinement summary" jsonschema_description:"Summary of changes made and justification for modifications to send to the user in English"`
 }
 
 type TaskResult struct {
 	Success Bool   `json:"success" jsonschema:"title=Execution result,type=boolean" jsonschema_description:"True if the task was executed successfully and the user task result was reached"`
-	Result  string `json:"result" jsonschema:"required,title=Task result description" jsonschema_description:"Fully detailed report or error message of the task or subtask result what was achieved or not (in user's language only)"`
-	Message string `json:"message" jsonschema:"required,title=Task result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in user's language only"`
+	Result  string `json:"result" jsonschema:"required,title=Task result description" jsonschema_description:"Fully detailed report or error message of the task or subtask result what was achieved or not (in English)"`
+	Message string `json:"message" jsonschema:"required,title=Task result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in English"`
 }
 
 type AskUser struct {
-	Message string `json:"message" jsonschema:"required,title=Question for user" jsonschema_description:"Question or any other information that should be sent to the user for clarifications in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=Question for user" jsonschema_description:"Question or any other information that should be sent to the user for clarifications in English"`
 }
 
 type Done struct {
 	Success Bool   `json:"success" jsonschema:"title=Execution result,type=boolean" jsonschema_description:"True if the subtask was executed successfully and the user subtask result was reached"`
-	Result  string `json:"result" jsonschema:"required,title=Task result description" jsonschema_description:"Fully detailed report or error message of the subtask result what was achieved or not (in user's language only)"`
-	Message string `json:"message" jsonschema:"required,title=Task result message" jsonschema_description:"Not so long message with the result to send to the user in user's language only"`
+	Result  string `json:"result" jsonschema:"required,title=Task result description" jsonschema_description:"Fully detailed report or error message of the subtask result what was achieved or not (in English)"`
+	Message string `json:"message" jsonschema:"required,title=Task result message" jsonschema_description:"Not so long message with the result to send to the user in English"`
 }
 
 type TerminalAction struct {
@@ -95,30 +95,30 @@ type TerminalAction struct {
 	Cwd     string `json:"cwd" jsonschema:"required" jsonschema_description:"Custom current working directory to execute commands in or default directory otherwise if it's not specified"`
 	Detach  Bool   `json:"detach" jsonschema:"required,type=boolean" jsonschema_description:"Set to true for INTERACTIVE or LONG-RUNNING commands: shells (msfconsole, bash, python), listeners (nc -lvnp, socat TCP-LISTEN), servers (python -m http.server, php -S), monitors (tcpdump, tail -f). These commands expect user input or run indefinitely. When true: command runs in background, you get immediate confirmation, no stdout/stderr captured. When false: command must complete within timeout and return output. For quick batch commands (nmap, curl, ls) use false"`
 	Timeout Int64  `json:"timeout" jsonschema:"required,type=integer" jsonschema_description:"Execution time limit in seconds (minimum 10; maximum 1200; default 60). For batch commands that may run long, use the 'timeout' shell utility INSIDE your command to ensure clean completion with full output: 'timeout 55 nmap -sV target' (set 5-10 seconds less than this parameter). For interactive/long-running commands, use detach=true instead of relying solely on timeout"`
-	Message string `json:"message" jsonschema:"required,title=Terminal command message" jsonschema_description:"Not so long message which explain what do you want to achieve and to execute in terminal to send to the user in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=Terminal command message" jsonschema_description:"Not so long message which explain what do you want to achieve and to execute in terminal to send to the user in English"`
 }
 
 type AskAdvice struct {
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Question with detailed information about issue to much better understand what's happend that should be sent to the mentor for clarifications in English"`
 	Code     string `json:"code" jsonschema_description:"If your request related to code you may send snippet with relevant part of this"`
 	Output   string `json:"output" jsonschema_description:"If your request related to terminal problem you may send stdout or stderr part of this"`
-	Message  string `json:"message" jsonschema:"required,title=Ask advice message" jsonschema_description:"Not so long message which explain what do you want to aks and solve and why do you need this and what do want to figure out to send to the user in user's language only"`
+	Message  string `json:"message" jsonschema:"required,title=Ask advice message" jsonschema_description:"Not so long message which explain what do you want to aks and solve and why do you need this and what do want to figure out to send to the user in English"`
 }
 
 type ComplexSearch struct {
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Question to search by researcher team member in the internet and long-term memory with full explanation of what do you want to find and why do you need this in English"`
-	Message  string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Not so long message with the question to send to the user in user's language only"`
+	Message  string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Not so long message with the question to send to the user in English"`
 }
 
 type SearchAction struct {
 	Query      string `json:"query" jsonschema:"required" jsonschema_description:"Query to search in the the specific search engine (e.g. google duckduckgo tavily traversaal perplexity serper etc.) Short and exact query is much better for better search result in English"`
 	MaxResults Int64  `json:"max_results" jsonschema:"required,type=integer" jsonschema_description:"Maximum number of results to return (minimum 1; maximum 10; default 5)"`
-	Message    string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Not so long message with the expected result and path to reach goal to send to the user in user's language only"`
+	Message    string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Not so long message with the expected result and path to reach goal to send to the user in English"`
 }
 
 type SearchResult struct {
 	Result  string `json:"result" jsonschema:"required,title=Search result" jsonschema_description:"Fully detailed report or error message of the search result and as a answer for the user question in English"`
-	Message string `json:"message" jsonschema:"required,title=Search result message" jsonschema_description:"Not so long message with the result and short answer to send to the user in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=Search result message" jsonschema_description:"Not so long message with the result and short answer to send to the user in English"`
 }
 
 type SploitusAction struct {
@@ -126,7 +126,7 @@ type SploitusAction struct {
 	ExploitType string `json:"exploit_type,omitempty" jsonschema:"enum=exploits,enum=tools" jsonschema_description:"What to search for: 'exploits' (default) for exploit code and PoCs, 'tools' for offensive security tools"`
 	Sort        string `json:"sort,omitempty" jsonschema:"enum=default,enum=date,enum=score" jsonschema_description:"Result ordering: 'default' (relevance), 'date' (newest first), 'score' (highest CVSS first)"`
 	MaxResults  Int64  `json:"max_results" jsonschema:"required,type=integer" jsonschema_description:"Maximum number of results to return (minimum 1; maximum 25; default 10)"`
-	Message     string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Not so long message with the expected result and path to reach goal to send to the user in user's language only"`
+	Message     string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Not so long message with the expected result and path to reach goal to send to the user in English"`
 }
 
 type GraphitiSearchAction struct {
@@ -142,31 +142,31 @@ type GraphitiSearchAction struct {
 	DiversityLevel string   `json:"diversity_level,omitempty" jsonschema:"enum=low,enum=medium,enum=high" jsonschema_description:"How much diversity to prioritize (default: medium, for diverse_results)"`
 	MinMentions    *Int64   `json:"min_mentions,omitempty" jsonschema:"title=Minimum Mentions,type=integer" jsonschema_description:"Minimum episode mentions (default: 2, for successful_tools)"`
 	RecencyWindow  string   `json:"recency_window,omitempty" jsonschema:"enum=1h,enum=6h,enum=24h,enum=7d" jsonschema_description:"How far back to search (default: 24h, for recent_context)"`
-	Message        string   `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Not so long message with the summary of the search query and expected results to send to the user in user's language only"`
+	Message        string   `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Not so long message with the summary of the search query and expected results to send to the user in English"`
 }
 
 type EnricherResult struct {
 	Result  string `json:"result" jsonschema:"required,title=Enricher result" jsonschema_description:"Fully detailed report or error message what you can enriches of the user's question from different sources to take advice according to this data in English"`
-	Message string `json:"message" jsonschema:"required,title=Enricher result message" jsonschema_description:"Not so long message with the result and short view of the enriched data to send to the user in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=Enricher result message" jsonschema_description:"Not so long message with the result and short view of the enriched data to send to the user in English"`
 }
 
 type MemoristAction struct {
 	Question  string `json:"question" jsonschema:"required" jsonschema_description:"Question to complex search in the previous work and tasks and calls what kind information you need with full explanation context what was happened and what you want to find in English"`
 	TaskID    *Int64 `json:"task_id,omitempty" jsonschema:"title=Task ID,type=integer" jsonschema_description:"If you know task id you can use it to get more relevant information from the vector database; it will be used as a hard filter for search (optional)"`
 	SubtaskID *Int64 `json:"subtask_id,omitempty" jsonschema:"title=Subtask ID,type=integer" jsonschema_description:"If you know subtask id you can use it to get more relevant information from the vector database; it will be used as a hard filter for search (optional)"`
-	Message   string `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Not so long message with the summary of the question to send and path to reach goal to the user in user's language only"`
+	Message   string `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Not so long message with the summary of the question to send and path to reach goal to the user in English"`
 }
 
 type MemoristResult struct {
 	Result  string `json:"result" jsonschema:"required,title=Search in long-term memory result" jsonschema_description:"Fully detailed report or error message of the long-term memory search result and as a answer for the user question in English"`
-	Message string `json:"message" jsonschema:"required,title=Search in long-term memory result message" jsonschema_description:"Not so long message with the result and short answer to send to the user in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=Search in long-term memory result message" jsonschema_description:"Not so long message with the result and short answer to send to the user in English"`
 }
 
 type SearchInMemoryAction struct {
 	Questions []string `json:"questions" jsonschema:"required,minItems=1,maxItems=5" jsonschema_description:"A list of 1 to 5 detailed, context-rich natural language queries describing the specific information you need to retrieve from the vector database. Each query should provide sufficient context, intent, and specific details to optimize semantic search accuracy. Include descriptive phrases, synonyms, and related terms where appropriate. Multiple queries allow exploring different semantic angles and improving recall. Note: If TaskID or SubtaskID are provided, they will be used as strict filters in the search."`
 	TaskID    *Int64   `json:"task_id,omitempty" jsonschema:"title=Task ID" jsonschema_description:"Optional. The Task ID to use as a strict filter, retrieving information specifically related to this task. Used to enhance relevance by narrowing down the search scope. Type: integer."`
 	SubtaskID *Int64   `json:"subtask_id,omitempty" jsonschema:"title=Subtask ID" jsonschema_description:"Optional. The Subtask ID to use as a strict filter, retrieving information specifically related to this subtask. Helps in refining search results for increased relevancy. Type: integer."`
-	Message   string   `json:"message" jsonschema:"required,title=User-Facing Message" jsonschema_description:"A concise summary of the queries or the information retrieval process to be presented to the user, in the user's language only. This message should guide the user towards their goal in a clear and approachable manner."`
+	Message   string   `json:"message" jsonschema:"required,title=User-Facing Message" jsonschema_description:"A concise summary of the queries or the information retrieval process to be presented to the user, in English. This message should guide the user towards their goal in a clear and approachable manner."`
 }
 
 type SearchGuideAction struct {
@@ -179,7 +179,7 @@ type StoreGuideAction struct {
 	Guide    string `json:"guide" jsonschema:"required" jsonschema_description:"Ready guide to the question that will be stored as a guide in markdown format for future search in English"`
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Question to the guide which was used to prepare this guide in English"`
 	Type     string `json:"type" jsonschema:"required,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"Type of the guide what you need to store; it will be used as a hard filter for search"`
-	Message  string `json:"message" jsonschema:"required,title=Store guide message" jsonschema_description:"Not so long message with the summary of the guide to send to the user in user's language only"`
+	Message  string `json:"message" jsonschema:"required,title=Store guide message" jsonschema_description:"Not so long message with the summary of the guide to send to the user in English"`
 }
 
 type SearchAnswerAction struct {
@@ -192,7 +192,7 @@ type StoreAnswerAction struct {
 	Answer   string `json:"answer" jsonschema:"required" jsonschema_description:"Ready answer to the question (search query) that will be stored as a answer in markdown format for future search in English"`
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Question to the answer which was used to prepare this answer in English"`
 	Type     string `json:"type" jsonschema:"required,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"Type of the search query and answer what you need to store; it will be used as a hard filter for search"`
-	Message  string `json:"message" jsonschema:"required,title=Store answer message" jsonschema_description:"Not so long message with the summary of the answer to send to the user in user's language only"`
+	Message  string `json:"message" jsonschema:"required,title=Store answer message" jsonschema_description:"Not so long message with the summary of the answer to send to the user in English"`
 }
 
 type SearchCodeAction struct {
@@ -207,37 +207,37 @@ type StoreCodeAction struct {
 	Lang        string `json:"lang" jsonschema:"required" jsonschema_description:"Programming language of the code sample; use markdown code block language name like python or bash or golang etc."`
 	Explanation string `json:"explanation" jsonschema:"required" jsonschema_description:"Fully detailed explanation of the code sample and what it does and how it works and why it's useful and list of libraries and tools used in English"`
 	Description string `json:"description" jsonschema:"required" jsonschema_description:"Short description of the code sample as a summary of explanation in English"`
-	Message     string `json:"message" jsonschema:"required,title=Store code result message" jsonschema_description:"Not so long message with the summary of the code sample to send to the user in user's language only"`
+	Message     string `json:"message" jsonschema:"required,title=Store code result message" jsonschema_description:"Not so long message with the summary of the code sample to send to the user in English"`
 }
 
 type MaintenanceAction struct {
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Question to DevOps team member as a task to maintain local environment and tools inside the docker container in English"`
-	Message  string `json:"message" jsonschema:"required,title=Maintenance task message" jsonschema_description:"Not so long message with the task and question to maintain local environment to send to the user in user's language only"`
+	Message  string `json:"message" jsonschema:"required,title=Maintenance task message" jsonschema_description:"Not so long message with the task and question to maintain local environment to send to the user in English"`
 }
 
 type MaintenanceResult struct {
 	Result  string `json:"result" jsonschema:"required,title=Maintenance result description" jsonschema_description:"Fully detailed report or error message of the maintenance result what was achieved or not with detailed explanation and guide how to use this result in English"`
-	Message string `json:"message" jsonschema:"required,title=Maintenance result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=Maintenance result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in English"`
 }
 
 type CoderAction struct {
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Question to developer team member as a task to write a code for the specific task with detailed explanation of what do you want to achieve and how to do this if it's not obvious in English"`
-	Message  string `json:"message" jsonschema:"required,title=Coder action message" jsonschema_description:"Not so long message with the question and summary of the task to send to the user in user's language only"`
+	Message  string `json:"message" jsonschema:"required,title=Coder action message" jsonschema_description:"Not so long message with the question and summary of the task to send to the user in English"`
 }
 
 type CodeResult struct {
 	Result  string `json:"result" jsonschema:"required,title=Code result description" jsonschema_description:"Fully detailed report or error message of the writing code result what was achieved or not with detailed explanation and guide how to use this result in English"`
-	Message string `json:"message" jsonschema:"required,title=Code result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=Code result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in English"`
 }
 
 type PentesterAction struct {
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Question to pentester team member as a task to perform a penetration test on the local environment and find vulnerabilities and weaknesses in the remote target in English"`
-	Message  string `json:"message" jsonschema:"required,title=Pentester action message" jsonschema_description:"Not so long message with the question and summary of the task to send to the user in user's language only"`
+	Message  string `json:"message" jsonschema:"required,title=Pentester action message" jsonschema_description:"Not so long message with the question and summary of the task to send to the user in English"`
 }
 
 type HackResult struct {
 	Result  string `json:"result" jsonschema:"required,title=Hack result description" jsonschema_description:"Fully detailed report or error message of the penetration test result what was achieved or not with detailed explanation and guide how to use this result in English"`
-	Message string `json:"message" jsonschema:"required,title=Hack result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in user's language only"`
+	Message string `json:"message" jsonschema:"required,title=Hack result message" jsonschema_description:"Not so long message with the result and path to reach goal to send to the user in English"`
 }
 
 type Bool bool
