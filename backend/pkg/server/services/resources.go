@@ -532,8 +532,23 @@ func (s *ResourceService) MkdirResource(c *gin.Context) {
 
 // ---- PUT /resources/move ---------------------------------------------------
 
-// MoveResource renames or moves a file or directory.
-// @Summary Move or rename a resource (file or directory)
+// MoveResource moves or renames one or more resource files / directories.
+//
+// Single-source behaviour (exactly one unique source after dedup):
+//
+//	Destination is the exact target path, inheriting existing trailing-slash
+//	and existing-directory semantics (unchanged from original behaviour).
+//
+// Multi-source behaviour (two or more unique sources after dedup):
+//
+//	Destination is always treated as a base directory. Each source lands at
+//	destination/<basename>. All moves are executed in a single DB transaction
+//	so the operation is atomic: either all succeed or none do.
+//
+// Response includes every Added (e.g. newly created parent directories) and
+// every Updated (moved items) entry so the Apollo cache can be updated correctly.
+//
+// @Summary Move or rename resource(s) (files or directories)
 // @Tags Resources
 // @Accept json
 // @Produce json
@@ -561,45 +576,71 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 		return
 	}
 
-	srcPath, err := resources.SanitizeResourcePath(req.Source)
-	if err != nil {
-		response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid source: %w", err))
+	// ── Merge + deduplicate source paths ─────────────────────────────────────
+	rawSources := req.Sources
+	if req.Source != "" {
+		rawSources = append(rawSources, req.Source)
+	}
+	// reuse the same dedup helper used elsewhere (trims blanks, normalises, deduplicates)
+	dedupSources := deduplicateResourcePaths(rawSources)
+	if len(dedupSources) == 0 {
+		response.Error(c, response.ErrResourcesInvalidRequest,
+			errors.New("at least one source path is required (use 'source' or 'sources')"))
 		return
 	}
+
+	// ── Sanitize destination ──────────────────────────────────────────────────
 	dstPath, err := resources.SanitizeResourcePath(req.Destination)
 	if err != nil {
 		response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid destination: %w", err))
 		return
 	}
-	if srcPath == dstPath {
-		response.Error(c, response.ErrResourcesInvalidRequest, errors.New("source and destination are the same"))
-		return
-	}
 
-	var src models.UserResource
-	if err := s.db.Where("user_id = ? AND path = ?", uid, srcPath).First(&src).Error; err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
+	// ── Sanitize all source paths ─────────────────────────────────────────────
+	srcPaths := make([]string, 0, len(dedupSources))
+	for _, raw := range dedupSources {
+		sp, sanitizeErr := resources.SanitizeResourcePath(raw)
+		if sanitizeErr != nil {
+			response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid source %q: %w", raw, sanitizeErr))
 			return
 		}
-		logger.FromContext(c).WithError(err).Error("error finding source resource for move")
-		response.Error(c, response.ErrInternal, err)
-		return
+		srcPaths = append(srcPaths, sp)
 	}
 
-	result, moveErr := s.moveResource(uid, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
-	if moveErr != nil {
+	// ── Route to single-source or multi-source path ───────────────────────────
+	var result moveResourceResult
+	if len(srcPaths) == 1 {
+		srcPath := srcPaths[0]
+		if srcPath == dstPath {
+			response.Error(c, response.ErrResourcesInvalidRequest, errors.New("source and destination are the same"))
+			return
+		}
+		var src models.UserResource
+		if err := s.db.Where("user_id = ? AND path = ?", uid, srcPath).First(&src).Error; err != nil {
+			if gorm.IsRecordNotFoundError(err) {
+				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
+				return
+			}
+			logger.FromContext(c).WithError(err).Error("error finding source resource for move")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		result, err = s.moveResource(uid, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
+	} else {
+		result, err = s.moveMultipleSources(uid, srcPaths, dstPath, req.Force)
+	}
+
+	if err != nil {
 		switch {
-		case errors.Is(moveErr, errResourceInvalid):
-			response.Error(c, response.ErrResourcesInvalidRequest, moveErr)
-		case errors.Is(moveErr, errResourceConflict):
-			response.Error(c, response.ErrResourcesConflict,
-				fmt.Errorf("destination %q already exists; move items individually", dstPath))
-		case errors.Is(moveErr, errResourceNotFound):
-			response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
+		case errors.Is(err, errResourceInvalid):
+			response.Error(c, response.ErrResourcesInvalidRequest, err)
+		case errors.Is(err, errResourceConflict):
+			response.Error(c, response.ErrResourcesConflict, err)
+		case errors.Is(err, errResourceNotFound):
+			response.Error(c, response.ErrResourcesNotFound, err)
 		default:
-			logger.FromContext(c).WithError(moveErr).Error("error moving resource")
-			response.Error(c, response.ErrInternal, moveErr)
+			logger.FromContext(c).WithError(err).Error("error moving resource(s)")
+			response.Error(c, response.ErrInternal, err)
 		}
 		return
 	}
@@ -609,7 +650,144 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 	s.publishResourcesAdded(c.Request.Context(), uid, result.Added)
 	s.publishResourcesUpdated(c.Request.Context(), uid, result.Updated)
 	s.publishResourcesDeleted(c.Request.Context(), uid, result.DeletedAfter)
-	response.Success(c, http.StatusOK, models.ResourceList{Items: result.Updated, Total: uint64(len(result.Updated))})
+
+	// Return Added + Updated: the frontend Apollo cache needs both newly created
+	// parent directories (Added) and the moved items themselves (Updated) to
+	// reflect the full post-move state.
+	all := append(result.Added, result.Updated...)
+	response.Success(c, http.StatusOK, models.ResourceList{Items: all, Total: uint64(len(all))})
+}
+
+// moveMultipleSources moves every source path to destination/<source.Name>
+// inside a single DB transaction for full atomicity.
+//
+// Optimisations vs calling moveResource N times:
+//   - One TX for all moves (atomic: all-or-nothing).
+//   - Batch source lookup (one query regardless of N).
+//   - Within-batch duplicate-basename detection before any DB writes.
+//   - ensureResourceDirs for the destination dir is called once; inner
+//     per-source calls are no-ops because the dir already exists.
+func (s *ResourceService) moveMultipleSources(
+	uid uint64,
+	srcPaths []string,
+	dstPath string,
+	force bool,
+) (moveResourceResult, error) {
+	result := moveResourceResult{}
+
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return result, tx.Error
+	}
+
+	// ── Batch-load all source records in one query ────────────────────────────
+	srcs, err := findResourcesByPaths(tx, uid, srcPaths)
+	if err != nil {
+		tx.Rollback()
+		return result, err
+	}
+
+	// Verify every source exists.
+	if len(srcs) != len(srcPaths) {
+		tx.Rollback()
+		found := resourcesByPath(srcs)
+		for _, sp := range srcPaths {
+			if _, ok := found[sp]; !ok {
+				return result, fmt.Errorf("%w: resource %q not found", errResourceNotFound, sp)
+			}
+		}
+	}
+
+	// ── Within-batch target-basename conflict check ───────────────────────────
+	// Two sources sharing a basename would both land at the same target path.
+	basenameToSrc := make(map[string]string, len(srcs))
+	for _, src := range srcs {
+		if prev, conflict := basenameToSrc[src.Name]; conflict {
+			tx.Rollback()
+			return result, fmt.Errorf(
+				"%w: sources %q and %q share the same base name %q",
+				errResourceConflict, prev, src.Path, src.Name,
+			)
+		}
+		basenameToSrc[src.Name] = src.Path
+	}
+
+	// Self-move guard: no source may be a directory that contains dstPath.
+	for _, src := range srcs {
+		if src.IsDir && resources.PathHasPrefix(dstPath, src.Path) {
+			tx.Rollback()
+			return result, fmt.Errorf(
+				"%w: cannot move directory %q into itself", errResourceInvalid, src.Path,
+			)
+		}
+		if resources.FilePath(dstPath, src.Name) == src.Path {
+			tx.Rollback()
+			return result, fmt.Errorf(
+				"%w: source and destination are the same for %q", errResourceInvalid, src.Path,
+			)
+		}
+	}
+
+	// ── Ensure destination directory ──────────────────────────────────────────
+	dest, destExists, err := findResourceByPath(tx, uid, dstPath)
+	if err != nil {
+		tx.Rollback()
+		return result, err
+	}
+	if destExists && !dest.IsDir {
+		tx.Rollback()
+		return result, fmt.Errorf(
+			"%w: destination %q is a file; cannot move multiple sources into it",
+			errResourceConflict, dstPath,
+		)
+	}
+	if !destExists {
+		createdDirs, deletedDirs, orphanHashes, dirErr := ensureResourceDirs(tx, uid, dstPath, force)
+		if dirErr != nil {
+			tx.Rollback()
+			return result, dirErr
+		}
+		result.Added = append(result.Added, convertResources(createdDirs)...)
+		result.DeletedBefore = append(result.DeletedBefore, convertResources(deletedDirs)...)
+		result.OrphanHashes = append(result.OrphanHashes, orphanHashes...)
+	}
+
+	// ── Move each source into destination/<basename> ──────────────────────────
+	// The inner move functions (moveFileResource / moveDirResource) call
+	// ensureResourceDirs for the parent of the target path. Since dstPath is
+	// already ensured above, those calls are idempotent no-ops.
+	srcByPath := resourcesByPath(srcs)
+	for _, sp := range srcPaths { // preserve original request order
+		src, ok := srcByPath[sp]
+		if !ok {
+			continue // guarded by existence check above
+		}
+		targetPath := resources.FilePath(dstPath, src.Name)
+
+		var moveResult moveResourceResult
+		if !src.IsDir {
+			// Pass dstIsDirHint=false: targetPath is the exact file destination.
+			moveResult, err = s.moveFileResource(tx, uid, src, targetPath, force, false)
+		} else {
+			moveResult, err = s.moveDirResource(tx, uid, src.Path, targetPath, force)
+		}
+		if err != nil {
+			tx.Rollback()
+			return result, err
+		}
+
+		result.Added = append(result.Added, moveResult.Added...)
+		result.Updated = append(result.Updated, moveResult.Updated...)
+		result.DeletedBefore = append(result.DeletedBefore, moveResult.DeletedBefore...)
+		result.DeletedAfter = append(result.DeletedAfter, moveResult.DeletedAfter...)
+		result.OrphanHashes = append(result.OrphanHashes, moveResult.OrphanHashes...)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return result, err
+	}
+	return result, nil
 }
 
 var errResourceConflict = errors.New("resource conflict")
@@ -984,8 +1162,20 @@ func updateMovedResource(tx *gorm.DB, rec models.UserResource, newPath string, n
 
 // ---- POST /resources/copy --------------------------------------------------
 
-// CopyResource copies a file or directory to a new path.
-// @Summary Copy a resource (file or directory)
+// CopyResource copies one or more resource files / directories to a new path.
+//
+// Single-source behaviour (exactly one unique source after dedup):
+//
+//	Destination is the exact target path, inheriting existing trailing-slash
+//	and existing-directory semantics (unchanged from original behaviour).
+//
+// Multi-source behaviour (two or more unique sources after dedup):
+//
+//	Destination is always treated as a base directory. Each source lands at
+//	destination/<basename>. All copies are executed in a single DB transaction
+//	so the operation is atomic: either all succeed or none do.
+//
+// @Summary Copy resource(s) (files or directories)
 // @Tags Resources
 // @Accept json
 // @Produce json
@@ -1013,56 +1203,208 @@ func (s *ResourceService) CopyResource(c *gin.Context) {
 		return
 	}
 
-	srcPath, err := resources.SanitizeResourcePath(req.Source)
-	if err != nil {
-		response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid source: %w", err))
+	// ── Merge + deduplicate source paths ─────────────────────────────────────
+	rawSources := req.Sources
+	if req.Source != "" {
+		rawSources = append(rawSources, req.Source)
+	}
+	dedupSources := deduplicateResourcePaths(rawSources)
+	if len(dedupSources) == 0 {
+		response.Error(c, response.ErrResourcesInvalidRequest,
+			errors.New("at least one source path is required (use 'source' or 'sources')"))
 		return
 	}
+
+	// ── Sanitize destination ──────────────────────────────────────────────────
 	dstPath, err := resources.SanitizeResourcePath(req.Destination)
 	if err != nil {
 		response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid destination: %w", err))
 		return
 	}
-	if srcPath == dstPath {
-		response.Error(c, response.ErrResourcesInvalidRequest, errors.New("source and destination are the same"))
-		return
-	}
 
-	var src models.UserResource
-	if err := s.db.Where("user_id = ? AND path = ?", uid, srcPath).First(&src).Error; err != nil {
-		if gorm.IsRecordNotFoundError(err) {
-			response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
+	// ── Sanitize all source paths ─────────────────────────────────────────────
+	srcPaths := make([]string, 0, len(dedupSources))
+	for _, raw := range dedupSources {
+		sp, sanitizeErr := resources.SanitizeResourcePath(raw)
+		if sanitizeErr != nil {
+			response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid source %q: %w", raw, sanitizeErr))
 			return
 		}
-		logger.FromContext(c).WithError(err).Error("error finding source resource for copy")
-		response.Error(c, response.ErrInternal, err)
-		return
+		srcPaths = append(srcPaths, sp)
 	}
 
-	result, copyErr := s.copyResource(uid, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
-	if copyErr != nil {
+	// ── Route to single-source or multi-source path ───────────────────────────
+	var result copyResourceResult
+	if len(srcPaths) == 1 {
+		srcPath := srcPaths[0]
+		if srcPath == dstPath {
+			response.Error(c, response.ErrResourcesInvalidRequest, errors.New("source and destination are the same"))
+			return
+		}
+		var src models.UserResource
+		if err := s.db.Where("user_id = ? AND path = ?", uid, srcPath).First(&src).Error; err != nil {
+			if gorm.IsRecordNotFoundError(err) {
+				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
+				return
+			}
+			logger.FromContext(c).WithError(err).Error("error finding source resource for copy")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		result, err = s.copyResource(uid, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
+	} else {
+		result, err = s.copyMultipleSources(uid, srcPaths, dstPath, req.Force)
+	}
+
+	if err != nil {
 		switch {
-		case errors.Is(copyErr, errResourceInvalid):
-			response.Error(c, response.ErrResourcesInvalidRequest, copyErr)
-		case errors.Is(copyErr, errResourceConflict):
-			response.Error(c, response.ErrResourcesConflict,
-				fmt.Errorf("destination already exists; use force=true to merge/overwrite"))
+		case errors.Is(err, errResourceInvalid):
+			response.Error(c, response.ErrResourcesInvalidRequest, err)
+		case errors.Is(err, errResourceConflict):
+			response.Error(c, response.ErrResourcesConflict, err)
+		case errors.Is(err, errResourceNotFound):
+			response.Error(c, response.ErrResourcesNotFound, err)
 		default:
-			logger.FromContext(c).WithError(copyErr).Error("error copying resource")
-			response.Error(c, response.ErrInternal, copyErr)
+			logger.FromContext(c).WithError(err).Error("error copying resource(s)")
+			response.Error(c, response.ErrInternal, err)
 		}
 		return
 	}
 
-	// Orphan-check for overwritten blobs (after TX committed).
 	s.cleanupOrphanBlobs(c.Request.Context(), result.OrphanHashes)
-
 	s.publishResourcesDeleted(c.Request.Context(), uid, result.Deleted)
 	s.publishResourcesAdded(c.Request.Context(), uid, result.Added)
 	s.publishResourcesUpdated(c.Request.Context(), uid, result.Updated)
 
 	all := append(result.Added, result.Updated...)
 	response.Success(c, http.StatusOK, models.ResourceList{Items: all, Total: uint64(len(all))})
+}
+
+// copyMultipleSources copies every source path to destination/<source.Name>
+// inside a single DB transaction for full atomicity.
+//
+// Optimisations vs calling copyResource N times:
+//   - One TX for all copies (atomic: all-or-nothing).
+//   - Batch source lookup (one query regardless of N).
+//   - Within-batch duplicate-basename detection before any DB writes.
+//   - ensureResourceDirs for the destination dir is called once; inner
+//     per-source calls are no-ops because the dir already exists.
+func (s *ResourceService) copyMultipleSources(
+	uid uint64,
+	srcPaths []string,
+	dstPath string,
+	force bool,
+) (copyResourceResult, error) {
+	result := copyResourceResult{}
+
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return result, tx.Error
+	}
+
+	// ── Batch-load all source records ─────────────────────────────────────────
+	srcs, err := findResourcesByPaths(tx, uid, srcPaths)
+	if err != nil {
+		tx.Rollback()
+		return result, err
+	}
+
+	// Verify every source exists.
+	if len(srcs) != len(srcPaths) {
+		tx.Rollback()
+		found := resourcesByPath(srcs)
+		for _, sp := range srcPaths {
+			if _, ok := found[sp]; !ok {
+				return result, fmt.Errorf("%w: resource %q not found", errResourceNotFound, sp)
+			}
+		}
+	}
+
+	// ── Within-batch target-basename conflict check ───────────────────────────
+	basenameToSrc := make(map[string]string, len(srcs))
+	for _, src := range srcs {
+		if prev, conflict := basenameToSrc[src.Name]; conflict {
+			tx.Rollback()
+			return result, fmt.Errorf(
+				"%w: sources %q and %q share the same base name %q",
+				errResourceConflict, prev, src.Path, src.Name,
+			)
+		}
+		basenameToSrc[src.Name] = src.Path
+	}
+
+	// Self-copy guard: copying a directory into itself.
+	for _, src := range srcs {
+		if src.IsDir && resources.PathHasPrefix(dstPath, src.Path) {
+			tx.Rollback()
+			return result, fmt.Errorf(
+				"%w: cannot copy directory %q into itself", errResourceInvalid, src.Path,
+			)
+		}
+		if resources.FilePath(dstPath, src.Name) == src.Path {
+			tx.Rollback()
+			return result, fmt.Errorf(
+				"%w: source and destination are the same for %q", errResourceInvalid, src.Path,
+			)
+		}
+	}
+
+	// ── Ensure destination directory ──────────────────────────────────────────
+	dest, destExists, err := findResourceByPath(tx, uid, dstPath)
+	if err != nil {
+		tx.Rollback()
+		return result, err
+	}
+	if destExists && !dest.IsDir {
+		tx.Rollback()
+		return result, fmt.Errorf(
+			"%w: destination %q is a file; cannot copy multiple sources into it",
+			errResourceConflict, dstPath,
+		)
+	}
+	if !destExists {
+		createdDirs, deletedDirs, orphanHashes, dirErr := ensureResourceDirs(tx, uid, dstPath, force)
+		if dirErr != nil {
+			tx.Rollback()
+			return result, dirErr
+		}
+		result.Added = append(result.Added, convertResources(createdDirs)...)
+		result.Deleted = append(result.Deleted, convertResources(deletedDirs)...)
+		result.OrphanHashes = append(result.OrphanHashes, orphanHashes...)
+	}
+
+	// ── Copy each source into destination/<basename> ──────────────────────────
+	srcByPath := resourcesByPath(srcs)
+	for _, sp := range srcPaths { // preserve original request order
+		src, ok := srcByPath[sp]
+		if !ok {
+			continue
+		}
+		targetPath := resources.FilePath(dstPath, src.Name)
+
+		var copyResult copyResourceResult
+		if !src.IsDir {
+			// Pass dstIsDirHint=false: targetPath is the exact file destination.
+			copyResult, err = s.copyFileResource(tx, uid, src, targetPath, force, false)
+		} else {
+			copyResult, err = s.copyDirResource(tx, uid, src.Path, targetPath, force)
+		}
+		if err != nil {
+			tx.Rollback()
+			return result, err
+		}
+
+		result.Added = append(result.Added, copyResult.Added...)
+		result.Updated = append(result.Updated, copyResult.Updated...)
+		result.Deleted = append(result.Deleted, copyResult.Deleted...)
+		result.OrphanHashes = append(result.OrphanHashes, copyResult.OrphanHashes...)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return result, err
+	}
+	return result, nil
 }
 
 type copyResourceResult struct {
@@ -1786,6 +2128,26 @@ func cleanupResourceUploads(pending []pendingResourceUpload) {
 			os.Remove(p.tmpPath)
 		}
 	}
+}
+
+// deduplicateResourcePaths removes blank and duplicate virtual resource paths,
+// preserving the first occurrence of each unique (cleaned) path.
+func deduplicateResourcePaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	result := make([]string, 0, len(paths))
+	for _, p := range paths {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
+			continue
+		}
+		normalized := path.Clean(trimmed)
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, trimmed)
+	}
+	return result
 }
 
 func pathHasTrailingSeparator(p string) bool {

@@ -1561,17 +1561,36 @@ func (s *FlowFileService) AddResourcesToFlow(c *gin.Context) {
 	})
 }
 
-// AddResourceFromFlow promotes a flow cache file or directory tree into the
-// user's global resource store. The response always lists every created or
-// updated entry, including any virtual parent directories that were ensured
-// during the promotion.
-// @Summary Promote a flow file or directory to user resources
+// sourceEntry is a validated (absPath → destPath) pair used internally by
+// AddResourceFromFlow to represent one item to promote to user resources.
+type sourceEntry struct {
+	absPath  string // validated absolute path inside the flow cache
+	destPath string // sanitized virtual destination path in the resource tree
+	isDir    bool
+}
+
+// AddResourceFromFlow promotes one or more flow cache files or directory trees
+// into the user's global resource store. Both Source (single, backward-compat)
+// and Sources (multi) can be provided and are merged + deduplicated before
+// processing. The response lists every created or updated entry.
+//
+// Single-source behaviour (exactly one unique source after dedup):
+//
+//	Destination is the exact target path (file) or tree root (directory).
+//
+// Multi-source behaviour (two or more unique sources):
+//
+//	Destination is treated as a base directory; each source's base name is
+//	appended automatically so that "uploads/a.txt" + "container/b.txt" with
+//	destination "results" → "results/a.txt" and "results/b.txt".
+//
+// @Summary Promote flow file(s) or directory/directories to user resources
 // @Tags FlowFiles
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param flowID path int true "flow id" minimum(0)
-// @Param body body models.AddResourceFromFlowRequest true "source path, destination and force flag"
+// @Param body body models.AddResourceFromFlowRequest true "source(s), destination and force flag"
 // @Success 200 {object} response.successResp{data=models.ResourceList} "resources created or updated"
 // @Failure 400 {object} response.errorResp "invalid request"
 // @Failure 403 {object} response.errorResp "not permitted"
@@ -1612,31 +1631,19 @@ func (s *FlowFileService) AddResourceFromFlow(c *gin.Context) {
 		return
 	}
 
-	absPath, err := flowfiles.ResolveCachedPath(s.dataDir, flowID, req.Source)
-	if err != nil {
-		logger.FromContext(c).WithError(err).Error("invalid source path for add resource from flow")
-		response.Error(c, response.ErrFlowFilesInvalidData, err)
+	// ── Merge + deduplicate source paths ──────────────────────────────────────
+	rawSources := req.Sources
+	if req.Source != "" {
+		rawSources = append(rawSources, req.Source)
+	}
+	dedupSources := flowfiles.DeduplicatePaths(rawSources)
+	if len(dedupSources) == 0 {
+		response.Error(c, response.ErrFlowFilesInvalidRequest,
+			errors.New("at least one source path is required (use 'source' or 'sources')"))
 		return
 	}
 
-	info, statErr := os.Lstat(absPath)
-	if statErr != nil {
-		if os.IsNotExist(statErr) {
-			response.Error(c, response.ErrFlowFilesNotFound, statErr)
-			return
-		}
-		logger.FromContext(c).WithError(statErr).Error("error stating flow source")
-		response.Error(c, response.ErrInternal, statErr)
-		return
-	}
-	if !info.IsDir() && !info.Mode().IsRegular() {
-		// Reject symlinks and other special files: os.Open would follow
-		// symlinks at the OS level, bypassing the cache-root constraint.
-		response.Error(c, response.ErrFlowFilesInvalidData,
-			fmt.Errorf("source must be a regular file or a directory"))
-		return
-	}
-
+	// ── Sanitize destination ──────────────────────────────────────────────────
 	destPath, err := resources.SanitizeResourcePath(req.Destination)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Error("invalid destination path for add resource from flow")
@@ -1644,7 +1651,59 @@ func (s *FlowFileService) AddResourceFromFlow(c *gin.Context) {
 		return
 	}
 
-	saved, ok := s.promoteToResources(c, uid, absPath, destPath, info.IsDir(), req.Force)
+	multiSource := len(dedupSources) > 1
+
+	// ── Validate and build source entries ─────────────────────────────────────
+	entries := make([]sourceEntry, 0, len(dedupSources))
+	for _, rawSrc := range dedupSources {
+		absPath, resolveErr := flowfiles.ResolveCachedPath(s.dataDir, flowID, rawSrc)
+		if resolveErr != nil {
+			logger.FromContext(c).WithError(resolveErr).Errorf("invalid source path %q", rawSrc)
+			response.Error(c, response.ErrFlowFilesInvalidData, resolveErr)
+			return
+		}
+
+		info, statErr := os.Lstat(absPath)
+		if statErr != nil {
+			if os.IsNotExist(statErr) {
+				response.Error(c, response.ErrFlowFilesNotFound, statErr)
+				return
+			}
+			logger.FromContext(c).WithError(statErr).Errorf("error stating flow source %q", rawSrc)
+			response.Error(c, response.ErrInternal, statErr)
+			return
+		}
+		if !info.IsDir() && !info.Mode().IsRegular() {
+			// Reject symlinks and other special files.
+			response.Error(c, response.ErrFlowFilesInvalidData,
+				fmt.Errorf("source %q must be a regular file or a directory", rawSrc))
+			return
+		}
+
+		var entryDest string
+		if multiSource {
+			// Multi-source: each entry lands under destination/<basename>.
+			baseName := path.Base(absPath)
+			var sanitizeErr error
+			entryDest, sanitizeErr = resources.SanitizeResourcePath(destPath + "/" + baseName)
+			if sanitizeErr != nil {
+				logger.FromContext(c).WithError(sanitizeErr).Errorf("invalid derived destination for source %q", rawSrc)
+				response.Error(c, response.ErrFlowFilesInvalidData, sanitizeErr)
+				return
+			}
+		} else {
+			// Single source: destination is used exactly as specified.
+			entryDest = destPath
+		}
+
+		entries = append(entries, sourceEntry{
+			absPath:  absPath,
+			destPath: entryDest,
+			isDir:    info.IsDir(),
+		})
+	}
+
+	saved, ok := s.promoteToResources(c, uid, entries, req.Force)
 	if !ok {
 		return
 	}
@@ -1652,20 +1711,23 @@ func (s *FlowFileService) AddResourceFromFlow(c *gin.Context) {
 		models.ResourceList{Items: saved, Total: uint64(len(saved))})
 }
 
-// promoteToResources promotes a single regular file or a directory tree from
-// the flow cache into the user's resource store. Mirrors the three-phase
-// pattern used by UploadResources:
-//  1. walk and stream every regular file to a temporary blob (MD5-keyed)
-//  2. atomically commit blobs into the content-addressed store
-//  3. persist all directory and file rows inside one DB transaction
+// promoteToResources promotes one or more flow cache files / directory trees
+// into the user's resource store using a single three-phase transaction.
 //
-// Returns the slice of resulting entries (newly-created dirs, added files,
-// updated files in that order) on success, or false after writing an error
-// response on failure.
+// Phase 1 – walk all sources and stream every regular file to a temporary blob.
+// Phase 2 – atomically commit each temp blob (idempotent on duplicate hashes).
+// Phase 3 – persist all directory and file rows in a single DB transaction.
+//
+// A seenVPaths map detects within-batch destination conflicts early (before
+// any DB work is done). The top-level destination directory of every directory
+// source is ensured even when the directory is empty.
+//
+// Returns the slice of resulting entries (created dirs → added files → updated
+// files in that order) on success, or false after writing an error response.
 func (s *FlowFileService) promoteToResources(
 	c *gin.Context, uid uint64,
-	absSourceRoot, destPath string,
-	sourceIsDir, force bool,
+	sources []sourceEntry,
+	force bool,
 ) ([]models.ResourceEntry, bool) {
 	log := logger.FromContext(c)
 	ctx := c.Request.Context()
@@ -1677,73 +1739,96 @@ func (s *FlowFileService) promoteToResources(
 	}
 	blobsDir := resources.ResourcesDir(s.dataDir)
 
-	// ── Phase 1: stream every regular file to a temporary blob ────────────────
+	// ── Phase 1: walk all sources, stream every regular file to a temp blob ───
+	//
+	// seenVPaths detects destination collisions within this single promotion
+	// batch (two different sources mapping to the same virtual path).
+	// topLevelDirs collects the root destination dirs of directory sources so
+	// that empty directories still get a row in the DB.
 	var pending []pendingResourceUpload
-	walkErr := filepath.Walk(absSourceRoot, func(filePath string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		// filepath.Walk uses Lstat → symlinks and special files are NOT regular
-		// and are skipped here (defense-in-depth against symlinked-target reads).
-		if !fi.Mode().IsRegular() {
-			return nil
+	seenVPaths := make(map[string]bool)
+	var topLevelDirs []string
+
+	for _, src := range sources {
+		if src.isDir {
+			topLevelDirs = append(topLevelDirs, src.destPath)
 		}
 
-		var virtPath string
-		if sourceIsDir {
-			rel, relErr := filepath.Rel(absSourceRoot, filePath)
-			if relErr != nil {
-				return fmt.Errorf("relative path: %w", relErr)
+		walkErr := filepath.Walk(src.absPath, func(filePath string, fi os.FileInfo, err error) error {
+			if err != nil {
+				return err
 			}
-			sanitized, sanitizeErr := resources.SanitizeResourcePath(destPath + "/" + filepath.ToSlash(rel))
-			if sanitizeErr != nil {
-				log.WithError(sanitizeErr).Warnf("skipping unsafe file name %q", rel)
+			// filepath.Walk uses Lstat → symlinks and special files are NOT
+			// regular and are skipped here (defense-in-depth).
+			if !fi.Mode().IsRegular() {
 				return nil
 			}
-			virtPath = sanitized
-		} else {
-			virtPath = destPath
-		}
 
-		// Phase 1 conflict pre-check: avoid IO when the destination obviously
-		// conflicts. Phase 3 re-checks inside the TX as the source of truth.
-		if !force {
-			_, exists, dbErr := findResourceByPath(s.db, uid, virtPath)
-			if dbErr != nil {
-				return fmt.Errorf("checking %s: %w", virtPath, dbErr)
+			var virtPath string
+			if src.isDir {
+				rel, relErr := filepath.Rel(src.absPath, filePath)
+				if relErr != nil {
+					return fmt.Errorf("relative path: %w", relErr)
+				}
+				sanitized, sanitizeErr := resources.SanitizeResourcePath(
+					src.destPath + "/" + filepath.ToSlash(rel),
+				)
+				if sanitizeErr != nil {
+					log.WithError(sanitizeErr).Warnf("skipping unsafe file name %q", rel)
+					return nil
+				}
+				virtPath = sanitized
+			} else {
+				virtPath = src.destPath
 			}
-			if exists {
-				return fmt.Errorf("%w: resource already exists at %q", errResourceConflict, virtPath)
-			}
-		}
 
-		f, openErr := os.Open(filePath)
-		if openErr != nil {
-			return fmt.Errorf("open %s: %w", filePath, openErr)
-		}
-		tmpPath, hash, size, saveErr := resources.SaveToTemp(f, blobsDir)
-		f.Close()
-		if saveErr != nil {
-			return fmt.Errorf("save temp for %s: %w", filePath, saveErr)
-		}
-		pending = append(pending, pendingResourceUpload{
-			name:    path.Base(virtPath),
-			vPath:   virtPath,
-			tmpPath: tmpPath,
-			hash:    hash,
-			size:    size,
+			// Within-batch collision check: two sources mapping to the same
+			// virtual destination path is always an error.
+			if seenVPaths[virtPath] {
+				return fmt.Errorf("%w: two sources both target %q", errResourceConflict, virtPath)
+			}
+			seenVPaths[virtPath] = true
+
+			// Phase 1 conflict pre-check: avoid IO when the destination
+			// obviously conflicts. Phase 3 re-checks inside the TX.
+			if !force {
+				_, exists, dbErr := findResourceByPath(s.db, uid, virtPath)
+				if dbErr != nil {
+					return fmt.Errorf("checking %s: %w", virtPath, dbErr)
+				}
+				if exists {
+					return fmt.Errorf("%w: resource already exists at %q", errResourceConflict, virtPath)
+				}
+			}
+
+			f, openErr := os.Open(filePath)
+			if openErr != nil {
+				return fmt.Errorf("open %s: %w", filePath, openErr)
+			}
+			tmpPath, hash, size, saveErr := resources.SaveToTemp(f, blobsDir)
+			f.Close()
+			if saveErr != nil {
+				return fmt.Errorf("save temp for %s: %w", filePath, saveErr)
+			}
+			pending = append(pending, pendingResourceUpload{
+				name:    path.Base(virtPath),
+				vPath:   virtPath,
+				tmpPath: tmpPath,
+				hash:    hash,
+				size:    size,
+			})
+			return nil
 		})
-		return nil
-	})
-	if walkErr != nil {
-		cleanupResourceUploads(pending)
-		if errors.Is(walkErr, errResourceConflict) {
-			response.Error(c, response.ErrFlowFilesAlreadyExists, walkErr)
-		} else {
-			log.WithError(walkErr).Error("error reading source files for promotion")
-			response.Error(c, response.ErrInternal, walkErr)
+		if walkErr != nil {
+			cleanupResourceUploads(pending)
+			if errors.Is(walkErr, errResourceConflict) {
+				response.Error(c, response.ErrFlowFilesAlreadyExists, walkErr)
+			} else {
+				log.WithError(walkErr).Errorf("error reading source files for promotion")
+				response.Error(c, response.ErrInternal, walkErr)
+			}
+			return nil, false
 		}
-		return nil, false
 	}
 
 	// ── Phase 2: commit blobs (atomic rename; idempotent on duplicate hashes) ─
@@ -1768,18 +1853,6 @@ func (s *FlowFileService) promoteToResources(
 		p.newBlob = !existed
 	}
 
-	// Determine the directory chain to ensure: the destination itself for a
-	// directory promotion, or the parent of the file otherwise. May be empty
-	// when promoting a single file at the resource root.
-	parentDir := destPath
-	if !sourceIsDir {
-		if d := path.Dir(destPath); d != "." && d != "/" {
-			parentDir = d
-		} else {
-			parentDir = ""
-		}
-	}
-
 	// ── Phase 3: persist all rows in a single DB transaction ──────────────────
 	tx := s.db.Begin()
 	if tx.Error != nil {
@@ -1793,21 +1866,47 @@ func (s *FlowFileService) promoteToResources(
 	var orphanHashes []string
 	var txErr error
 
-	if parentDir != "" {
-		rootDirs, _, rootOrphans, dirErr := ensureResourceDirs(tx, uid, parentDir, force)
+	// ensuredDirs tracks every directory path already ensured in this TX to
+	// avoid redundant DB calls for shared ancestor chains.
+	ensuredDirs := make(map[string]bool)
+
+	// Ensure top-level destination dirs of directory sources first. This
+	// guarantees a DB row even when the source directory is empty.
+	for _, dir := range topLevelDirs {
+		if ensuredDirs[dir] {
+			continue
+		}
+		ensuredDirs[dir] = true
+		rootDirs, _, rootOrphans, dirErr := ensureResourceDirs(tx, uid, dir, force)
 		if dirErr != nil {
 			txErr = dirErr
-		} else {
-			allDirs = append(allDirs, rootDirs...)
-			orphanHashes = append(orphanHashes, rootOrphans...)
+			break
+		}
+		allDirs = append(allDirs, rootDirs...)
+		orphanHashes = append(orphanHashes, rootOrphans...)
+	}
+
+	// For single-file sources that land inside a directory, ensure the parent.
+	for _, src := range sources {
+		if txErr != nil {
+			break
+		}
+		if src.isDir {
+			continue // top-level already ensured above
+		}
+		if parentDir := path.Dir(src.destPath); parentDir != "." && parentDir != "/" && !ensuredDirs[parentDir] {
+			ensuredDirs[parentDir] = true
+			parentDirs, _, parentOrphans, dirErr := ensureResourceDirs(tx, uid, parentDir, force)
+			if dirErr != nil {
+				txErr = dirErr
+				break
+			}
+			allDirs = append(allDirs, parentDirs...)
+			orphanHashes = append(orphanHashes, parentOrphans...)
 		}
 	}
 
-	// Ensure each unique parent directory chain only once across all files.
-	ensuredDirs := make(map[string]bool, len(pending))
-	if parentDir != "" {
-		ensuredDirs[parentDir] = true
-	}
+	// Persist every pending file, ensuring any additional nested directories.
 	for _, p := range pending {
 		if txErr != nil {
 			break

@@ -112,7 +112,7 @@ func (s *RoleService) GetRoles(c *gin.Context) {
 // @Summary Retrieve role by id
 // @Tags Roles
 // @Produce json
-// @Param id path uint64 true "role id"
+// @Param roleID path uint64 true "role id"
 // @Success 200 {object} response.successResp{data=models.RolePrivileges} "role received successful"
 // @Failure 400 {object} response.errorResp "invalid query request data"
 // @Failure 403 {object} response.errorResp "getting role not permitted"

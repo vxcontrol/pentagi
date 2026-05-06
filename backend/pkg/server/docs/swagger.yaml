@@ -163,20 +163,27 @@ definitions:
   models.AddResourceFromFlowRequest:
     properties:
       destination:
-        description: Destination is the virtual path the resource will have in the
-          user's resource tree.
+        description: Destination is the virtual path prefix in the user's resource
+          tree.
         type: string
       force:
-        description: Force overwrites an existing resource at Destination if one already
-          exists.
+        description: Force overwrites existing resources at the target paths when
+          true.
         type: boolean
       source:
-        description: Source is a relative path within the flow cache, e.g. "container/work/result.md"
-          or "uploads/task.md" or "uploads/work/".
+        description: |-
+          Source is a single relative path within the flow cache (kept for backward
+          compatibility). Combined with Sources when both are provided.
         type: string
+      sources:
+        description: |-
+          Sources is a list of relative paths within the flow cache. Combined with
+          Source when both are provided; duplicate entries are silently removed.
+        items:
+          type: string
+        type: array
     required:
     - destination
-    - source
     type: object
   models.AddResourcesRequest:
     properties:
@@ -449,14 +456,28 @@ definitions:
   models.CopyResourceRequest:
     properties:
       destination:
+        description: |-
+          Destination is the exact target path (single source) or base directory
+          (multiple sources). Required.
         type: string
       force:
+        description: Force overwrites existing resources at the target paths when
+          true.
         type: boolean
       source:
+        description: |-
+          Source is kept for backward compatibility (single source).
+          Combined with Sources when both are provided; duplicates are removed.
         type: string
+      sources:
+        description: |-
+          Sources is a list of virtual resource paths to copy.
+          Combined with Source when both are provided; duplicates are removed.
+        items:
+          type: string
+        type: array
     required:
     - destination
-    - source
     type: object
   models.CreateAPITokenRequest:
     properties:
@@ -912,14 +933,28 @@ definitions:
   models.MoveResourceRequest:
     properties:
       destination:
+        description: |-
+          Destination is the exact target path (single source) or base directory
+          (multiple sources). Required.
         type: string
       force:
+        description: Force overwrites existing resources at the target paths when
+          true.
         type: boolean
       source:
+        description: |-
+          Source is kept for backward compatibility (single source).
+          Combined with Sources when both are provided; duplicates are removed.
         type: string
+      sources:
+        description: |-
+          Sources is a list of virtual resource paths to move.
+          Combined with Source when both are provided; duplicates are removed.
+        items:
+          type: string
+        type: array
     required:
     - destination
-    - source
     type: object
   models.Msglog:
     properties:
@@ -3495,7 +3530,7 @@ paths:
         name: flowID
         required: true
         type: integer
-      - description: source path, destination and force flag
+      - description: source(s), destination and force flag
         in: body
         name: body
         required: true
@@ -3535,7 +3570,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Promote a flow file or directory to user resources
+      summary: Promote flow file(s) or directory/directories to user resources
       tags:
       - FlowFiles
   /flows/{flowID}/graph:
@@ -5491,7 +5526,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Copy a resource (file or directory)
+      summary: Copy resource(s) (files or directories)
       tags:
       - Resources
   /resources/download:
@@ -5623,7 +5658,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Move or rename a resource (file or directory)
+      summary: Move or rename resource(s) (files or directories)
       tags:
       - Resources
   /roles/:
@@ -5713,7 +5748,7 @@ paths:
       parameters:
       - description: role id
         in: path
-        name: id
+        name: roleID
         required: true
         type: integer
       produces:

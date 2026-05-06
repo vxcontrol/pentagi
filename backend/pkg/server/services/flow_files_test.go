@@ -3884,6 +3884,184 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			},
 			wantEventChannel: "added",
 		},
+
+		// ── multi-source (sources []) tests ──────────────────────────────────
+		{
+			name:      "multi-source: two files promoted to a common base directory",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/hosts.txt", content: "10.0.0.1"},
+				{relPath: "container/ports.txt", content: "80,443"},
+			},
+			body: map[string]any{
+				"sources":     []string{"uploads/hosts.txt", "container/ports.txt"},
+				"destination": "scan-results",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"scan-results/hosts.txt",
+				"scan-results/ports.txt",
+			},
+			wantEventChannel: "added",
+		},
+		{
+			name:      "multi-source: source and sources are merged and deduplicated",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/a.txt", content: "aaa"},
+				{relPath: "uploads/b.txt", content: "bbb"},
+			},
+			body: map[string]any{
+				// 'source' and 'sources' both provide uploads/a.txt → dedup to one
+				"source":      "uploads/a.txt",
+				"sources":     []string{"uploads/a.txt", "uploads/b.txt"},
+				"destination": "merged",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"merged/a.txt",
+				"merged/b.txt",
+			},
+			wantEventChannel: "added",
+		},
+		{
+			name:      "multi-source: two directories promoted to a common base",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "container/web/index.html", content: "<html/>"},
+				{relPath: "container/web/style.css", content: "body{}"},
+				{relPath: "uploads/docs/readme.md", content: "# doc"},
+			},
+			body: map[string]any{
+				"sources":     []string{"container/web", "uploads/docs"},
+				"destination": "artifacts",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"artifacts/web",
+				"artifacts/web/index.html",
+				"artifacts/web/style.css",
+				"artifacts/docs",
+				"artifacts/docs/readme.md",
+			},
+			wantEventChannel: "added",
+		},
+		{
+			name:      "multi-source: mixed file and directory",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/report.txt", content: "report"},
+				{relPath: "container/scan/out.txt", content: "scan output"},
+			},
+			body: map[string]any{
+				"sources":     []string{"uploads/report.txt", "container/scan"},
+				"destination": "bundle",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"bundle/report.txt",
+				"bundle/scan",
+				"bundle/scan/out.txt",
+			},
+			wantEventChannel: "added",
+		},
+		{
+			name:      "multi-source: force overwrites existing resource",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/a.txt", content: "new-a"},
+				{relPath: "uploads/b.txt", content: "new-b"},
+			},
+			existingResource: &models.UserResource{
+				Hash: md5HexForFlowFiles("old-a"), Name: "a.txt", Path: "out/a.txt", Size: 5,
+			},
+			body: map[string]any{
+				"sources":     []string{"uploads/a.txt", "uploads/b.txt"},
+				"destination": "out",
+				"force":       true,
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"out/a.txt",
+				"out/b.txt",
+			},
+			wantEventChannel: "added",
+		},
+		{
+			name:      "multi-source: without force returns conflict when destination exists",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/a.txt", content: "new"},
+				{relPath: "uploads/extra.txt", content: "extra"}, // second source makes multiSource=true
+			},
+			existingResource: &models.UserResource{
+				Hash: md5HexForFlowFiles("old"), Name: "a.txt", Path: "out/a.txt", Size: 3,
+			},
+			body: map[string]any{
+				// two sources → multiSource=true → "out" + "/" + "a.txt" = "out/a.txt" → conflict
+				"sources":     []string{"uploads/a.txt", "uploads/extra.txt"},
+				"destination": "out",
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name:      "multi-source: empty sources returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			body: map[string]any{
+				"sources":     []string{},
+				"destination": "out",
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:      "multi-source: sources with blank entries deduplicated to none returns bad request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			body: map[string]any{
+				"sources":     []string{"   ", ""},
+				"destination": "out",
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:      "multi-source: one missing source returns not found",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/good.txt", content: "ok"},
+			},
+			body: map[string]any{
+				"sources":     []string{"uploads/good.txt", "uploads/missing.txt"},
+				"destination": "out",
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:      "multi-source: empty directory in sources creates dir entry",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:      []string{"resources.upload", "flow_files.view"},
+			sourceDirs: []string{"uploads/empty-dir"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/note.txt", content: "hi"},
+			},
+			body: map[string]any{
+				"sources":     []string{"uploads/empty-dir", "uploads/note.txt"},
+				"destination": "multi-out",
+			},
+			wantStatus: http.StatusOK,
+			wantResourcePaths: []string{
+				"multi-out/empty-dir",
+				"multi-out/note.txt",
+			},
+			wantEventChannel: "added",
+		},
 	}
 
 	for _, tt := range tests {

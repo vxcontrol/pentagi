@@ -54,12 +54,26 @@ type AddResourcesRequest struct {
 	Force bool `json:"force"`
 }
 
-// AddResourceFromFlowRequest is the request body for promoting a flow file to user resources.
+// AddResourceFromFlowRequest is the request body for promoting one or more flow
+// files / directories into the user's global resource store.
+//
+// At least one of Source or Sources must be non-empty after deduplication.
+//
+//   - Single source (Source XOR one entry in Sources):
+//     Destination is the exact target path (file) or root directory (dir tree).
+//   - Multiple sources:
+//     Destination is treated as a base directory; each source's base name is
+//     appended automatically, e.g. sources ["uploads/a.txt", "container/b.txt"]
+//     with destination "results" → "results/a.txt" and "results/b.txt".
 type AddResourceFromFlowRequest struct {
-	// Source is a relative path within the flow cache, e.g. "container/work/result.md" or "uploads/task.md" or "uploads/work/".
-	Source string `json:"source" binding:"required"`
-	// Destination is the virtual path the resource will have in the user's resource tree.
+	// Source is a single relative path within the flow cache (kept for backward
+	// compatibility). Combined with Sources when both are provided.
+	Source string `json:"source"`
+	// Sources is a list of relative paths within the flow cache. Combined with
+	// Source when both are provided; duplicate entries are silently removed.
+	Sources []string `json:"sources"`
+	// Destination is the virtual path prefix in the user's resource tree.
 	Destination string `json:"destination" binding:"required"`
-	// Force overwrites an existing resource at Destination if one already exists.
+	// Force overwrites existing resources at the target paths when true.
 	Force bool `json:"force"`
 }

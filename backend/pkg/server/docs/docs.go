@@ -2455,7 +2455,7 @@ const docTemplate = `{
                 "tags": [
                     "FlowFiles"
                 ],
-                "summary": "Promote a flow file or directory to user resources",
+                "summary": "Promote flow file(s) or directory/directories to user resources",
                 "parameters": [
                     {
                         "minimum": 0,
@@ -2466,7 +2466,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "source path, destination and force flag",
+                        "description": "source(s), destination and force flag",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -5417,7 +5417,7 @@ const docTemplate = `{
                 "tags": [
                     "Resources"
                 ],
-                "summary": "Copy a resource (file or directory)",
+                "summary": "Copy resource(s) (files or directories)",
                 "parameters": [
                     {
                         "description": "copy request",
@@ -5633,7 +5633,7 @@ const docTemplate = `{
                 "tags": [
                     "Resources"
                 ],
-                "summary": "Move or rename a resource (file or directory)",
+                "summary": "Move or rename resource(s) (files or directories)",
                 "parameters": [
                     {
                         "description": "move request",
@@ -5820,7 +5820,7 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "role id",
-                        "name": "id",
+                        "name": "roleID",
                         "in": "path",
                         "required": true
                     }
@@ -7415,21 +7415,27 @@ const docTemplate = `{
         "models.AddResourceFromFlowRequest": {
             "type": "object",
             "required": [
-                "destination",
-                "source"
+                "destination"
             ],
             "properties": {
                 "destination": {
-                    "description": "Destination is the virtual path the resource will have in the user's resource tree.",
+                    "description": "Destination is the virtual path prefix in the user's resource tree.",
                     "type": "string"
                 },
                 "force": {
-                    "description": "Force overwrites an existing resource at Destination if one already exists.",
+                    "description": "Force overwrites existing resources at the target paths when true.",
                     "type": "boolean"
                 },
                 "source": {
-                    "description": "Source is a relative path within the flow cache, e.g. \"container/work/result.md\" or \"uploads/task.md\" or \"uploads/work/\".",
+                    "description": "Source is a single relative path within the flow cache (kept for backward\ncompatibility). Combined with Sources when both are provided.",
                     "type": "string"
+                },
+                "sources": {
+                    "description": "Sources is a list of relative paths within the flow cache. Combined with\nSource when both are provided; duplicate entries are silently removed.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -7810,18 +7816,27 @@ const docTemplate = `{
         "models.CopyResourceRequest": {
             "type": "object",
             "required": [
-                "destination",
-                "source"
+                "destination"
             ],
             "properties": {
                 "destination": {
+                    "description": "Destination is the exact target path (single source) or base directory\n(multiple sources). Required.",
                     "type": "string"
                 },
                 "force": {
+                    "description": "Force overwrites existing resources at the target paths when true.",
                     "type": "boolean"
                 },
                 "source": {
+                    "description": "Source is kept for backward compatibility (single source).\nCombined with Sources when both are provided; duplicates are removed.",
                     "type": "string"
+                },
+                "sources": {
+                    "description": "Sources is a list of virtual resource paths to copy.\nCombined with Source when both are provided; duplicates are removed.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -8476,18 +8491,27 @@ const docTemplate = `{
         "models.MoveResourceRequest": {
             "type": "object",
             "required": [
-                "destination",
-                "source"
+                "destination"
             ],
             "properties": {
                 "destination": {
+                    "description": "Destination is the exact target path (single source) or base directory\n(multiple sources). Required.",
                     "type": "string"
                 },
                 "force": {
+                    "description": "Force overwrites existing resources at the target paths when true.",
                     "type": "boolean"
                 },
                 "source": {
+                    "description": "Source is kept for backward compatibility (single source).\nCombined with Sources when both are provided; duplicates are removed.",
                     "type": "string"
+                },
+                "sources": {
+                    "description": "Sources is a list of virtual resource paths to move.\nCombined with Source when both are provided; duplicates are removed.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

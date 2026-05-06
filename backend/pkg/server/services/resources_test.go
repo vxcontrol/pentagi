@@ -1706,9 +1706,10 @@ func TestResourceService_CopyResourceScenarios(t *testing.T) {
 		content string
 	}
 	type copyRequest struct {
-		Source      string `json:"source"`
-		Destination string `json:"destination"`
-		Force       bool   `json:"force,omitempty"`
+		Source      string   `json:"source,omitempty"`
+		Sources     []string `json:"sources,omitempty"`
+		Destination string   `json:"destination"`
+		Force       bool     `json:"force,omitempty"`
 	}
 
 	tests := []struct {
@@ -1975,6 +1976,184 @@ func TestResourceService_CopyResourceScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantPaths:  []string{"a.txt"},
 		},
+
+		// ── multi-source (sources []) ─────────────────────────────────────────
+		{
+			name: "multi-source: two files copied to a common base directory",
+			seeds: []seed{
+				{path: "a.txt", content: "aaa"},
+				{path: "b.txt", content: "bbb"},
+			},
+			req:               copyRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "backup"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"a.txt", "b.txt", "backup", "backup/a.txt", "backup/b.txt"},
+			wantResponsePaths: []string{"backup", "backup/a.txt", "backup/b.txt"},
+			wantEvents: []resourceEvent{
+				{action: "added", path: "backup"},
+				{action: "added", path: "backup/a.txt"},
+				{action: "added", path: "backup/b.txt"},
+			},
+		},
+		{
+			name: "multi-source: source and sources merged and deduplicated",
+			seeds: []seed{
+				{path: "a.txt", content: "aaa"},
+				{path: "b.txt", content: "bbb"},
+			},
+			req:               copyRequest{Source: "a.txt", Sources: []string{"a.txt", "b.txt"}, Destination: "backup"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"a.txt", "b.txt", "backup", "backup/a.txt", "backup/b.txt"},
+			wantResponsePaths: []string{"backup", "backup/a.txt", "backup/b.txt"},
+			wantEvents: []resourceEvent{
+				{action: "added", path: "backup"},
+				{action: "added", path: "backup/a.txt"},
+				{action: "added", path: "backup/b.txt"},
+			},
+		},
+		{
+			name: "multi-source: file and directory copied to existing base directory",
+			seeds: []seed{
+				{path: "report.txt", content: "r"},
+				{path: "docs", isDir: true},
+				{path: "docs/readme.md", content: "readme"},
+				{path: "dest", isDir: true},
+			},
+			req:        copyRequest{Sources: []string{"report.txt", "docs"}, Destination: "dest"},
+			wantStatus: http.StatusOK,
+			wantPaths:  []string{"report.txt", "docs", "docs/readme.md", "dest", "dest/report.txt", "dest/docs", "dest/docs/readme.md"},
+			wantResponsePaths: []string{
+				"dest/report.txt",
+				"dest/docs",
+				"dest/docs/readme.md",
+			},
+			wantEvents: []resourceEvent{
+				{action: "added", path: "dest/report.txt"},
+				{action: "added", path: "dest/docs"},
+				{action: "added", path: "dest/docs/readme.md"},
+			},
+		},
+		{
+			name: "multi-source: force overwrites existing file at target",
+			seeds: []seed{
+				{path: "a.txt", content: "new-a"},
+				{path: "b.txt", content: "new-b"},
+				{path: "backup", isDir: true},
+				{path: "backup/a.txt", content: "old-a"},
+			},
+			req:        copyRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "backup", Force: true},
+			wantStatus: http.StatusOK,
+			wantPaths:  []string{"a.txt", "b.txt", "backup", "backup/a.txt", "backup/b.txt"},
+			wantResponsePaths: []string{
+				"backup/a.txt",
+				"backup/b.txt",
+			},
+			// Publish order: Deleted → Added → Updated.
+			wantEvents: []resourceEvent{
+				{action: "deleted", path: "backup/a.txt"},
+				{action: "added", path: "backup/b.txt"},
+				{action: "updated", path: "backup/a.txt"},
+			},
+			wantDeletedBlobTexts: []string{"old-a"},
+		},
+		{
+			name: "multi-source: without force returns conflict when target exists",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+				{path: "b.txt", content: "b"},
+				{path: "backup", isDir: true},
+				{path: "backup/a.txt", content: "old"},
+			},
+			req:        copyRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "backup"},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a.txt", "b.txt", "backup", "backup/a.txt"},
+		},
+		{
+			name: "multi-source: duplicate basenames returns conflict",
+			seeds: []seed{
+				{path: "dir1/x.txt", content: "x1"},
+				{path: "dir2/x.txt", content: "x2"},
+			},
+			req:        copyRequest{Sources: []string{"dir1/x.txt", "dir2/x.txt"}, Destination: "backup"},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"dir1/x.txt", "dir2/x.txt"},
+		},
+		{
+			name: "multi-source: one missing source returns not found",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+			},
+			req:        copyRequest{Sources: []string{"a.txt", "ghost.txt"}, Destination: "backup"},
+			wantStatus: http.StatusNotFound,
+			wantPaths:  []string{"a.txt"},
+		},
+		{
+			name:       "multi-source: empty sources returns bad request",
+			req:        copyRequest{Sources: []string{}, Destination: "backup"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "multi-source: blank entries only returns bad request",
+			req:        copyRequest{Sources: []string{"   ", ""}, Destination: "backup"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "multi-source: destination is a file returns conflict",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+				{path: "b.txt", content: "b"},
+				{path: "dest.file", content: "file"},
+			},
+			req:        copyRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "dest.file"},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a.txt", "b.txt", "dest.file"},
+		},
+		{
+			name: "multi-source: directory into itself returns bad request",
+			seeds: []seed{
+				{path: "docs", isDir: true},
+				{path: "a.txt", content: "a"},
+			},
+			req:        copyRequest{Sources: []string{"docs", "a.txt"}, Destination: "docs/sub"},
+			wantStatus: http.StatusBadRequest,
+			wantPaths:  []string{"a.txt", "docs"},
+		},
+		{
+			name: "multi-source: two directories copied to common base",
+			seeds: []seed{
+				{path: "src1", isDir: true},
+				{path: "src1/file1.txt", content: "f1"},
+				{path: "src2", isDir: true},
+				{path: "src2/file2.txt", content: "f2"},
+			},
+			req:        copyRequest{Sources: []string{"src1", "src2"}, Destination: "all"},
+			wantStatus: http.StatusOK,
+			wantPaths: []string{
+				"src1", "src1/file1.txt",
+				"src2", "src2/file2.txt",
+				"all", "all/src1", "all/src1/file1.txt",
+				"all/src2", "all/src2/file2.txt",
+			},
+			wantResponsePaths: []string{
+				"all", "all/src1", "all/src1/file1.txt",
+				"all/src2", "all/src2/file2.txt",
+			},
+			wantEvents: []resourceEvent{
+				{action: "added", path: "all"},
+				{action: "added", path: "all/src1"},
+				{action: "added", path: "all/src1/file1.txt"},
+				{action: "added", path: "all/src2"},
+				{action: "added", path: "all/src2/file2.txt"},
+			},
+		},
+		{
+			name: "multi-source: invalid source path returns bad request",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+			},
+			req:        copyRequest{Sources: []string{"../escape.txt", "a.txt"}, Destination: "backup"},
+			wantStatus: http.StatusBadRequest,
+			wantPaths:  []string{"a.txt"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -2082,9 +2261,10 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 		content string
 	}
 	type moveRequest struct {
-		Source      string `json:"source"`
-		Destination string `json:"destination"`
-		Force       bool   `json:"force,omitempty"`
+		Source      string   `json:"source,omitempty"`
+		Sources     []string `json:"sources,omitempty"`
+		Destination string   `json:"destination"`
+		Force       bool     `json:"force,omitempty"`
 	}
 
 	tests := []struct {
@@ -2123,7 +2303,7 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			req:               moveRequest{Source: "a.txt", Destination: "docs/"},
 			wantStatus:        http.StatusOK,
 			wantPaths:         []string{"docs", "docs/a.txt"},
-			wantResponsePaths: []string{"docs/a.txt"},
+			wantResponsePaths: []string{"docs", "docs/a.txt"},
 			wantEvents:        []resourceEvent{{action: "added", path: "docs"}, {action: "updated", path: "docs/a.txt"}},
 		},
 		{
@@ -2148,7 +2328,7 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			req:                  moveRequest{Source: "a.txt", Destination: "docs/", Force: true},
 			wantStatus:           http.StatusOK,
 			wantPaths:            []string{"docs", "docs/a.txt"},
-			wantResponsePaths:    []string{"docs/a.txt"},
+			wantResponsePaths:    []string{"docs", "docs/a.txt"},
 			wantEvents:           []resourceEvent{{action: "deleted", path: "docs"}, {action: "added", path: "docs"}, {action: "updated", path: "docs/a.txt"}},
 			wantDeletedBlobTexts: []string{"blocking"},
 		},
@@ -2186,7 +2366,7 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			req:               moveRequest{Source: "a.txt", Destination: "one/two/three/a.txt"},
 			wantStatus:        http.StatusOK,
 			wantPaths:         []string{"one", "one/two", "one/two/three", "one/two/three/a.txt"},
-			wantResponsePaths: []string{"one/two/three/a.txt"},
+			wantResponsePaths: []string{"one", "one/two", "one/two/three", "one/two/three/a.txt"},
 			wantEvents: []resourceEvent{
 				{action: "added", path: "one"},
 				{action: "added", path: "one/two"},
@@ -2255,7 +2435,7 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			req:               moveRequest{Source: "docs", Destination: "archive/docs"},
 			wantStatus:        http.StatusOK,
 			wantPaths:         []string{"archive", "archive/docs", "archive/docs/a.txt", "archive/docs/sub", "archive/docs/sub/b.txt"},
-			wantResponsePaths: []string{"archive/docs", "archive/docs/a.txt", "archive/docs/sub", "archive/docs/sub/b.txt"},
+			wantResponsePaths: []string{"archive", "archive/docs", "archive/docs/a.txt", "archive/docs/sub", "archive/docs/sub/b.txt"},
 			wantEvents: []resourceEvent{
 				{action: "added", path: "archive"},
 				{action: "updated", path: "archive/docs"},
@@ -2353,6 +2533,160 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			name:       "same source and destination is invalid",
 			seeds:      []seed{{path: "a.txt", content: "a"}},
 			req:        moveRequest{Source: "a.txt", Destination: "a.txt", Force: true},
+			wantStatus: http.StatusBadRequest,
+			wantPaths:  []string{"a.txt"},
+		},
+
+		// ── multi-source (sources []) ─────────────────────────────────────────
+		{
+			name: "multi-source: two files moved to a common base directory",
+			seeds: []seed{
+				{path: "a.txt", content: "aaa"},
+				{path: "b.txt", content: "bbb"},
+			},
+			req:               moveRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "archive"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"archive", "archive/a.txt", "archive/b.txt"},
+			wantResponsePaths: []string{"archive", "archive/a.txt", "archive/b.txt"},
+			wantEvents: []resourceEvent{
+				{action: "added", path: "archive"},
+				{action: "updated", path: "archive/a.txt"},
+				{action: "updated", path: "archive/b.txt"},
+			},
+		},
+		{
+			name: "multi-source: source and sources merged and deduplicated",
+			seeds: []seed{
+				{path: "a.txt", content: "aaa"},
+				{path: "b.txt", content: "bbb"},
+			},
+			// a.txt appears in both source and sources → deduplicated to one
+			req:               moveRequest{Source: "a.txt", Sources: []string{"a.txt", "b.txt"}, Destination: "archive"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"archive", "archive/a.txt", "archive/b.txt"},
+			wantResponsePaths: []string{"archive", "archive/a.txt", "archive/b.txt"},
+			wantEvents: []resourceEvent{
+				{action: "added", path: "archive"},
+				{action: "updated", path: "archive/a.txt"},
+				{action: "updated", path: "archive/b.txt"},
+			},
+		},
+		{
+			name: "multi-source: file and directory moved to existing directory",
+			seeds: []seed{
+				{path: "report.txt", content: "r"},
+				{path: "docs", isDir: true},
+				{path: "docs/readme.md", content: "readme"},
+				{path: "dest", isDir: true},
+			},
+			req:        moveRequest{Sources: []string{"report.txt", "docs"}, Destination: "dest"},
+			wantStatus: http.StatusOK,
+			wantPaths:  []string{"dest", "dest/report.txt", "dest/docs", "dest/docs/readme.md"},
+			wantResponsePaths: []string{
+				"dest/report.txt",
+				"dest/docs",
+				"dest/docs/readme.md",
+			},
+			wantEvents: []resourceEvent{
+				{action: "updated", path: "dest/report.txt"},
+				{action: "updated", path: "dest/docs"},
+				{action: "updated", path: "dest/docs/readme.md"},
+			},
+		},
+		{
+			name: "multi-source: force overwrites existing file at target",
+			seeds: []seed{
+				{path: "a.txt", content: "new-a"},
+				{path: "b.txt", content: "new-b"},
+				// "archive" dir record is intentionally absent; ensureResourceDirs creates it.
+				{path: "archive/a.txt", content: "old-a"},
+			},
+			req:        moveRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "archive", Force: true},
+			wantStatus: http.StatusOK,
+			wantPaths:  []string{"archive", "archive/a.txt", "archive/b.txt"},
+			// "archive" is Added by ensureResourceDirs; Updated contains moved files.
+			wantResponsePaths: []string{"archive", "archive/a.txt", "archive/b.txt"},
+			// Publish order: DeletedBefore → Added → Updated → DeletedAfter.
+			// archive/a.txt is in DeletedBefore (overwritten), archive dir is in Added.
+			wantEvents: []resourceEvent{
+				{action: "deleted", path: "archive/a.txt"},
+				{action: "added", path: "archive"},
+				{action: "updated", path: "archive/a.txt"},
+				{action: "updated", path: "archive/b.txt"},
+			},
+			wantDeletedBlobTexts: []string{"old-a"},
+		},
+		{
+			name: "multi-source: without force returns conflict when target exists",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+				{path: "b.txt", content: "b"},
+				// "archive" dir record absent; "archive/a.txt" causes conflict.
+				{path: "archive/a.txt", content: "old"},
+			},
+			req:        moveRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "archive"},
+			wantStatus: http.StatusConflict,
+			// TX rolled back: "archive" dir record was never committed.
+			wantPaths: []string{"a.txt", "archive/a.txt", "b.txt"},
+		},
+		{
+			name: "multi-source: duplicate basenames returns conflict",
+			seeds: []seed{
+				{path: "dir1/x.txt", content: "x1"},
+				{path: "dir2/x.txt", content: "x2"},
+			},
+			// both sources have basename "x.txt" → conflict
+			req:        moveRequest{Sources: []string{"dir1/x.txt", "dir2/x.txt"}, Destination: "archive"},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"dir1/x.txt", "dir2/x.txt"},
+		},
+		{
+			name: "multi-source: one missing source returns not found",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+			},
+			req:        moveRequest{Sources: []string{"a.txt", "ghost.txt"}, Destination: "archive"},
+			wantStatus: http.StatusNotFound,
+			wantPaths:  []string{"a.txt"},
+		},
+		{
+			name:       "multi-source: empty sources returns bad request",
+			req:        moveRequest{Sources: []string{}, Destination: "archive"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "multi-source: blank entries only returns bad request",
+			req:        moveRequest{Sources: []string{"   ", ""}, Destination: "archive"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "multi-source: destination is a file returns conflict",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+				{path: "b.txt", content: "b"},
+				{path: "dest.file", content: "file"},
+			},
+			req:        moveRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "dest.file"},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a.txt", "b.txt", "dest.file"},
+		},
+		{
+			name: "multi-source: directory into itself returns bad request",
+			seeds: []seed{
+				{path: "docs", isDir: true},
+				{path: "a.txt", content: "a"},
+			},
+			// moving "docs" to "docs/sub" would move it into itself
+			req:        moveRequest{Sources: []string{"docs", "a.txt"}, Destination: "docs/sub"},
+			wantStatus: http.StatusBadRequest,
+			wantPaths:  []string{"a.txt", "docs"},
+		},
+		{
+			name: "multi-source: invalid source path returns bad request",
+			seeds: []seed{
+				{path: "a.txt", content: "a"},
+			},
+			req:        moveRequest{Sources: []string{"../escape.txt", "a.txt"}, Destination: "archive"},
 			wantStatus: http.StatusBadRequest,
 			wantPaths:  []string{"a.txt"},
 		},

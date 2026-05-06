@@ -43,15 +43,49 @@ type MkdirResourceRequest struct {
 }
 
 // MoveResourceRequest is the request body for moving or renaming a resource.
+//
+// At least one of Source or Sources must be non-empty after deduplication.
+//
+//   - Single source: Destination is the exact target path (file) or root
+//     directory (dir tree), identical to the original single-source behaviour.
+//   - Multiple sources: Destination is treated as a base directory; each
+//     source's base name is appended automatically, e.g. moving "a.txt" and
+//     "b.txt" to "archive" produces "archive/a.txt" and "archive/b.txt".
+//     All moves happen atomically inside a single DB transaction.
 type MoveResourceRequest struct {
-	Source      string `json:"source"      binding:"required"`
+	// Source is kept for backward compatibility (single source).
+	// Combined with Sources when both are provided; duplicates are removed.
+	Source string `json:"source"`
+	// Sources is a list of virtual resource paths to move.
+	// Combined with Source when both are provided; duplicates are removed.
+	Sources []string `json:"sources"`
+	// Destination is the exact target path (single source) or base directory
+	// (multiple sources). Required.
 	Destination string `json:"destination" binding:"required"`
-	Force       bool   `json:"force"`
+	// Force overwrites existing resources at the target paths when true.
+	Force bool `json:"force"`
 }
 
 // CopyResourceRequest is the request body for copying a resource.
+//
+// At least one of Source or Sources must be non-empty after deduplication.
+//
+//   - Single source: Destination is the exact target path (file) or root
+//     directory (dir tree), identical to the original single-source behaviour.
+//   - Multiple sources: Destination is treated as a base directory; each
+//     source's base name is appended automatically, e.g. copying "a.txt" and
+//     "b.txt" to "backup" produces "backup/a.txt" and "backup/b.txt".
+//     All copies happen atomically inside a single DB transaction.
 type CopyResourceRequest struct {
-	Source      string `json:"source"      binding:"required"`
+	// Source is kept for backward compatibility (single source).
+	// Combined with Sources when both are provided; duplicates are removed.
+	Source string `json:"source"`
+	// Sources is a list of virtual resource paths to copy.
+	// Combined with Source when both are provided; duplicates are removed.
+	Sources []string `json:"sources"`
+	// Destination is the exact target path (single source) or base directory
+	// (multiple sources). Required.
 	Destination string `json:"destination" binding:"required"`
-	Force       bool   `json:"force"`
+	// Force overwrites existing resources at the target paths when true.
+	Force bool `json:"force"`
 }
