@@ -2,7 +2,10 @@ package providers
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1170,4 +1173,85 @@ func TestExecutionMonitorDetector_TotalCallsSequence(t *testing.T) {
 
 func mockToolCall(name string) llms.ToolCall {
 	return llms.ToolCall{FunctionCall: &llms.FunctionCall{Name: name}}
+}
+
+func TestWrapToolCallIDTemplateError(t *testing.T) {
+	t.Parallel()
+
+	// Mirror the real upstream wrap chain so the test traps regressions in
+	// substring detection if the inner wraps ever change.
+	ollamaErr := fmt.Errorf(
+		"all sample collection attempts failed: %w",
+		fmt.Errorf("failed to call LLM: %w",
+			errors.New("400 Bad Request: registry.ollama.ai/library/gemma3:27b-it-q4_K_M does not support tools")),
+	)
+	genericErr := errors.New("connection refused")
+
+	cases := []struct {
+		name           string
+		input          error
+		wantNil        bool
+		wantContains   []string
+		wantUnwrapsTo  error
+		wantNotContain []string
+	}{
+		{
+			name:    "nil error passes through",
+			input:   nil,
+			wantNil: true,
+		},
+		{
+			name:  "ollama tools error gets actionable hint",
+			input: ollamaErr,
+			wantContains: []string{
+				"failed to determine tool call ID template",
+				"does not support tool/function calling",
+				"PentAGI requires",
+				"\"tools\" capability",
+				"does not support tools",
+			},
+			wantUnwrapsTo: ollamaErr,
+		},
+		{
+			name:  "non-tools error keeps existing wrap",
+			input: genericErr,
+			wantContains: []string{
+				"failed to determine tool call ID template",
+				"connection refused",
+			},
+			wantNotContain: []string{
+				"does not support tool/function calling",
+				"\"tools\" capability",
+			},
+			wantUnwrapsTo: genericErr,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := wrapToolCallIDTemplateError(tc.input)
+			if tc.wantNil {
+				assert.Nil(t, got)
+				return
+			}
+			if !assert.NotNil(t, got) {
+				return
+			}
+			msg := got.Error()
+			for _, want := range tc.wantContains {
+				assert.Truef(t, strings.Contains(msg, want),
+					"expected error message to contain %q; got %q", want, msg)
+			}
+			for _, banned := range tc.wantNotContain {
+				assert.Falsef(t, strings.Contains(msg, banned),
+					"expected error message NOT to contain %q; got %q", banned, msg)
+			}
+			if tc.wantUnwrapsTo != nil {
+				assert.True(t, errors.Is(got, tc.wantUnwrapsTo),
+					"expected wrapped error to unwrap to original via errors.Is")
+			}
+		})
+	}
 }
