@@ -1037,6 +1037,27 @@ Each flow also includes an **Assistant** view for interactive guidance. This is 
 - Treat this as an explicit control path for the current flow, not as an invisible background queue. If you want to change direction, say so clearly and keep the new instruction tied to the current engagement scope.
 - This works best for clarifying scope, redirecting priorities after intermediate findings, or answering an automation checkpoint without losing the rest of the flow context.
 
+### 5. Manage flow-scoped files
+
+Each flow has its own **Files** tab in the flow page. Files are scoped to the parent flow: they live in `{dataDir}/flow-{id}-data/` on the host and never leak into other flows.
+
+The tab exposes three sources of files:
+
+- **Uploads** (`uploads/`): files you provide from the web UI. Use the **Upload files** action, or drag and drop directly onto the Files tab. While the agent container is running, uploaded files are also pushed into it at `/work/uploads/` so the agent can read them with normal shell tools.
+- **Resources** (`resources/`): files attached from your saved user resources library via **Attach resources from library**. Attached resources are copied into the flow and pushed into the running container at `/work/resources/`.
+- **Container** (`container/`): snapshots pulled from the running agent container via **Pull file or directory from container**. These are read-only on the flow side and are never sent back to the container.
+
+Per-file actions in the Files tab include **Download**, **Copy path**, **Save as resource** (promote a flow file into your reusable resources library), and **Delete**. The Pull action is disabled when the container is not running, with the tooltip "Container is not running".
+
+Uploaded files and attached resources are listed automatically in the agent's system prompts via the `{{.UserFiles}}` template variable, which renders a compact `<task_files>` XML block (with nested `<uploads>` and `<resources>` sections), so the assistant and automation agents can reference them by path without you pasting the contents into chat. Container snapshots are visible in the UI only and are not auto-injected back into the prompt.
+
+Current limits and limitations to be aware of:
+
+- Maximum upload file size is 300 MB; per upload request up to 1000 files and 2 GB total. File names are capped at 255 bytes (roughly 255 ASCII characters; non-ASCII names use multiple bytes per character).
+- Uploads and resources are mirrored into the running container at the fixed paths `/work/uploads/` and `/work/resources/`; files written to other container paths are not auto-mirrored back into the flow file model. Container snapshots can originate from any container path you pull (for example `/etc/...`) and are cached on the flow side under `container/`; they are not pushed back into the container.
+- Container snapshots are point-in-time pulls. Editing a snapshot in the UI does not write back into the running container.
+- Deleting a flow today removes the flow record and its long-term memory entries, but does not yet archive or remove the flow's `flow-{id}-data/` directory on disk. Operators are still expected to clean up the data directory manually if they want to reclaim the space.
+
 For early testing, start with a narrow target and a single clear objective. This makes the output easier to review and helps you refine your prompts before running larger assessments.
 
 ## API Access
