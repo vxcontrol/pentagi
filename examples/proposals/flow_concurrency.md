@@ -13,7 +13,7 @@ The same anti-patterns must be avoided here. Any flow queue must be:
 - **Persistent** across restart, crash, and stop.
 - **Visible** in the database, GraphQL/REST, and the UI.
 - **Manageable** by the user (inspect, cancel, reorder).
-- **Explicit** about the definition of "finished" and the moment the next flow is promoted.
+- **Explicit** about the definition of *terminal* (`finished` or `failed`) and the moment the next flow is promoted.
 
 ## Goals
 
@@ -37,7 +37,7 @@ The same anti-patterns must be avoided here. Any flow queue must be:
 2. **Visibility everywhere.** Every queued flow appears in the same listing, filtering, and detail surfaces as running flows.
 3. **Manageability.** A queued flow can be inspected, canceled, or removed by the same actor and the same authorization that already controls flows.
 4. **Explicit promotion.** The transition from queued to running is performed by an explicit promoter, not by an implicit timer or input pump. The promoter only runs when a slot frees up.
-5. **Clear finished semantics.** A flow is "finished" when its status reaches `finished` or `failed`. Webhooks and queue promotion read from that single source of truth.
+5. **Clear terminal semantics.** A flow is *terminal* when its status reaches `finished` or `failed`. `finished` and `failed` are distinct statuses, but the queue and webhook layers treat both as terminal and read from that single source of truth. Wording in this RFC reserves "finished" for the success status only and uses "terminal" whenever both outcomes are meant.
 6. **At-least-once delivery, not exactly-once.** Webhook receivers must be idempotent. Delivery state is persisted so retries survive restarts.
 
 ## Proposed Concurrency Model
@@ -47,9 +47,13 @@ The same anti-patterns must be avoided here. Any flow queue must be:
 Introduce a new persisted flow status, for example `queued`, that sits before `running`:
 
 ```text
-created -> queued -> running -> waiting -> finished
-                                          \-> failed
+created -> queued -> running <-> waiting
+                       |          |
+                       v          v
+                       finished | failed
 ```
+
+`waiting` is a paused state: an active flow enters it when the agent calls a tool such as `ask` and resumes back to `running` once user input arrives. Both `running` and `waiting` can transition to the terminal statuses `finished` (success) or `failed`, which is why this RFC tracks queue capacity against "running plus waiting" rather than `running` alone.
 
 A flow enters `queued` when a `createFlow` call would otherwise exceed the configured concurrency cap. A queued flow:
 
@@ -106,11 +110,11 @@ If neither is set, webhooks are disabled for that flow and the existing notifier
 
 ### Payload shape
 
-A small JSON document. Example:
+A small JSON document. The event name mirrors the terminal flow status, so a successful run fires `flow.finished` and a failed run fires `flow.failed`. Example for a successful flow:
 
 ```json
 {
-  "event": "flow.completed",
+  "event": "flow.finished",
   "delivered_at": "2026-04-22T00:00:00Z",
   "flow": {
     "id": 4242,
@@ -125,7 +129,7 @@ A small JSON document. Example:
 }
 ```
 
-The payload intentionally does not embed the full report or evidence bundle. Receivers fetch the report through the existing API once they know the flow finished.
+A failed flow uses the same envelope with `event` set to `flow.failed` and `flow.status` set to `failed`; `report_available` may be `false` if the flow did not produce a report. The payload intentionally does not embed the full report or evidence bundle. Receivers fetch the report through the existing API once they know the flow has reached a terminal status.
 
 ## Safety and Security
 
