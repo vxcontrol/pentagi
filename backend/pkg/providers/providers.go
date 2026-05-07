@@ -439,7 +439,7 @@ func (pc *providerController) NewFlowProvider(
 
 	tcIDTemplate, err := prv.GetToolCallIDTemplate(ctx, prompter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine tool call ID template: %w", err)
+		return nil, wrapToolCallIDTemplateError(err)
 	}
 
 	fp := &flowProvider{
@@ -581,7 +581,7 @@ func (pc *providerController) NewAssistantProvider(
 
 	tcIDTemplate, err := prv.GetToolCallIDTemplate(ctx, prompter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to determine tool call ID template: %w", err)
+		return nil, wrapToolCallIDTemplateError(err)
 	}
 
 	ap := &assistantProvider{
