@@ -46,11 +46,12 @@ type dummyMessage struct {
 
 // wrapToolCallIDTemplateError annotates an error returned by
 // Provider.GetToolCallIDTemplate so the user sees an actionable hint when a
-// known upstream limitation blocks flow creation. Currently it covers the
-// Ollama "model does not support tools" case (issue #280): the underlying
-// error is returned by the Ollama API itself and surfaces five wraps deep,
-// which previously left the user with a cryptic "failed to determine tool
-// call ID template" message.
+// known upstream limitation blocks provider initialization. Currently it
+// covers the Ollama "model does not support tools" case (issue #280): the
+// underlying error is returned by the Ollama API itself and surfaces five
+// wraps deep, which previously left the user with a cryptic "failed to
+// determine tool call ID template" message. This helper is shared by the
+// flow and assistant provider paths, so the wording stays context-neutral.
 //
 // The function preserves the original error chain via %w so downstream code
 // (logs, langfuse spans, errors.Is/As) keeps working.
@@ -62,9 +63,9 @@ func wrapToolCallIDTemplateError(err error) error {
 		return fmt.Errorf(
 			"failed to determine tool call ID template: the selected model "+
 				"does not support tool/function calling, which PentAGI requires "+
-				"for flow execution; pick an Ollama model that advertises the "+
-				"\"tools\" capability (for example llama3.1, qwen2.5, or "+
-				"mistral-nemo) and update the provider configuration: %w",
+				"for tool execution in flows and assistant sessions; select an "+
+				"Ollama model whose metadata advertises tool/function calling "+
+				"support and update the provider configuration: %w",
 			err)
 	}
 	return fmt.Errorf("failed to determine tool call ID template: %w", err)

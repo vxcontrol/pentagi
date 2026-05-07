@@ -1207,8 +1207,23 @@ func TestWrapToolCallIDTemplateError(t *testing.T) {
 				"failed to determine tool call ID template",
 				"does not support tool/function calling",
 				"PentAGI requires",
-				"\"tools\" capability",
+				"flows and assistant sessions",
+				"metadata advertises tool/function calling",
 				"does not support tools",
+			},
+			wantNotContain: []string{
+				// The hint must not name specific model tags as
+				// tool-capable, because Ollama model capabilities are
+				// not verified by PentAGI and any concrete list ages
+				// poorly.
+				"llama3.1",
+				"qwen2.5",
+				"mistral-nemo",
+				// The helper is shared by both the flow and assistant
+				// provider paths, so the message must not imply this
+				// is a flow-only failure mode.
+				"flow execution",
+				"flow creation",
 			},
 			wantUnwrapsTo: ollamaErr,
 		},
@@ -1221,7 +1236,7 @@ func TestWrapToolCallIDTemplateError(t *testing.T) {
 			},
 			wantNotContain: []string{
 				"does not support tool/function calling",
-				"\"tools\" capability",
+				"metadata advertises tool/function calling",
 			},
 			wantUnwrapsTo: genericErr,
 		},
