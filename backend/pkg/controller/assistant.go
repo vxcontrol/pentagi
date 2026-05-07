@@ -71,6 +71,12 @@ type assistantWorkerCtx struct {
 	userID int64
 	flowID int64
 
+	// prompter is an optional reusable prompter for the user. When non-nil,
+	// LoadAssistantWorker uses it instead of issuing another GetUserPrompts
+	// query and merging defaults. LoadFlowWorker sets this so a flow load
+	// with multiple assistants only pays the DB+merge cost once.
+	prompter templates.Prompter
+
 	flowWorkerCtx
 }
 
@@ -154,7 +160,10 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow assistant log worker", err)
 	}
 
-	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
+	prompter, err := newUserPrompter(ctx, awc.db, awc.userID)
+	if err != nil {
+		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to build user prompter", err)
+	}
 	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, awc.functions, awc.flowID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow tools executor", err)
@@ -319,7 +328,13 @@ func LoadAssistantWorker(
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow assistant log worker", err)
 	}
 
-	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
+	prompter := awc.prompter
+	if prompter == nil {
+		prompter, err = newUserPrompter(ctx, awc.db, awc.userID)
+		if err != nil {
+			return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to build user prompter", err)
+		}
+	}
 	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, functions, awc.flowID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow tools executor", err)

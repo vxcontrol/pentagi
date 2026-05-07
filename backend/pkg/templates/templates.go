@@ -636,12 +636,31 @@ func (dp *defaultPrompter) RenderTemplate(promptType PromptType, params any) (st
 }
 
 func (dp *defaultPrompter) DumpTemplates() ([]byte, error) {
+	promptsMap, err := LoadDefaultPromptsMap()
+	if err != nil {
+		return nil, err
+	}
+
+	blob, err := json.Marshal(promptsMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal templates: %w", err)
+	}
+
+	return blob, nil
+}
+
+// LoadDefaultPromptsMap returns a freshly populated PromptsMap of the embedded
+// default templates. Callers that need to overlay overrides on top of the
+// defaults can mutate the returned map directly, without going through the
+// JSON dump path used by Prompter.DumpTemplates(). Each call returns a new
+// map, so mutations do not affect subsequent callers.
+func LoadDefaultPromptsMap() (PromptsMap, error) {
 	prompts, err := promptTemplates.ReadDir("prompts")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read templates: %w", err)
 	}
 
-	promptsMap := make(PromptsMap)
+	promptsMap := make(PromptsMap, len(prompts))
 	for _, prompt := range prompts {
 		promptBytes, err := promptTemplates.ReadFile(path.Join("prompts", prompt.Name()))
 		if err != nil {
@@ -652,12 +671,7 @@ func (dp *defaultPrompter) DumpTemplates() ([]byte, error) {
 		promptsMap[PromptType(promptName)] = string(promptBytes)
 	}
 
-	blob, err := json.Marshal(promptsMap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal templates: %w", err)
-	}
-
-	return blob, nil
+	return promptsMap, nil
 }
 
 func RenderPrompt(name, prompt string, params any) (string, error) {

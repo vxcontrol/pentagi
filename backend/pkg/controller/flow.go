@@ -19,7 +19,6 @@ import (
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
-	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
 	"github.com/sirupsen/logrus"
@@ -166,7 +165,10 @@ func NewFlowWorker(
 	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
 	ctx, _ = flowSpan.Observation(ctx)
 
-	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
+	prompter, err := newUserPrompter(ctx, fwc.db, fwc.userID)
+	if err != nil {
+		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to build user prompter", err)
+	}
 	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, fwc.functions, flow.ID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
@@ -332,7 +334,10 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to unmarshal functions", err)
 	}
 
-	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
+	prompter, err := newUserPrompter(ctx, fwc.db, flow.UserID)
+	if err != nil {
+		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to build user prompter", err)
+	}
 	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, functions, flow.ID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
@@ -420,6 +425,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	awc := assistantWorkerCtx{
 		userID:        flow.UserID,
 		flowID:        flow.ID,
+		prompter:      prompter,
 		flowWorkerCtx: fwc,
 	}
 	for _, assistant := range assistants {
