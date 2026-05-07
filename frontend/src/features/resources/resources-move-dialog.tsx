@@ -4,15 +4,27 @@ import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
 import type { FileNode } from '@/components/shared/file-manager';
+import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
 
+import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
 import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
+import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useResources } from '@/providers/resources-provider';
 
-import { ResourcesConflictDialog } from './resources-conflict-dialog';
 import { resourcesMoveFormSchema, type ResourcesMoveFormValues, useResourcesMove } from './use-resources-move';
+
+interface MovePlan {
+    /** Final destination string sent to the backend (exact path or base directory). */
+    destination: string;
+    /** Resource paths being moved (sent as `sources[]`). */
+    sources: readonly string[];
+    /** Pre-computed `(destination, destinationName)` pairs for client-side preflight + 409 fallback. */
+    targets: OverwriteConflict[];
+}
 
 /** Guaranteed non-empty by `ResourcesMoveDialog` (which gates rendering on `files.length > 0`). */
 interface ResourcesMoveDialogFormProps {
@@ -51,27 +63,45 @@ const computeCommonParent = (files: readonly [FileNode, ...FileNode[]]): string 
     return files.every((file) => getParentDir(file.path) === first) ? first : '';
 };
 
+const splitName = (path: string): string => path.split('/').pop() ?? path;
+
 /**
- * Resolve the per-file destination from the form value:
- *   - single rename / move → use the typed path verbatim,
- *   - multi-file batch     → derive `<targetDir>/<file.name>`, root when empty.
+ * Pre-compute the per-file destinations the backend will write to. This mirrors
+ * the server's resolution rules so the client can preflight against the local
+ * snapshot and so the conflict dialog can name the exact items at risk:
+ *
+ *   - 1 source, no trailing `/` → destination is the exact target path
+ *   - 1 source, trailing `/`    → backend treats destination as a dir;
+ *                                 target = `<dir>/<file.name>`
+ *   - 2+ sources                → destination is always a base directory;
+ *                                 each source lands at `<dir>/<file.name>`.
  */
-const resolveDestination = (
-    file: FileNode,
-    values: ResourcesMoveFormValues,
-    isMulti: boolean,
-): string => {
-    if (!isMulti) {
-        return values.destination;
+const computeTargets = (files: readonly [FileNode, ...FileNode[]], destination: string): OverwriteConflict[] => {
+    const trimmed = destination.trim();
+    const treatAsDir = files.length > 1 || (trimmed.length > 1 && trimmed.endsWith('/'));
+
+    if (treatAsDir) {
+        const baseDir = trimmed.replace(/\/+$/, '');
+
+        return files.map((file) => {
+            const dest = baseDir ? `${baseDir}/${file.name}` : file.name;
+
+            return { destination: dest, destinationName: file.name };
+        });
     }
 
-    const targetDir = values.destination.trim().replace(/\/+$/, '');
-
-    return targetDir ? `${targetDir}/${file.name}` : file.name;
+    return [{ destination: trimmed, destinationName: splitName(trimmed) }];
 };
 
+const buildMovePlan = (files: readonly [FileNode, ...FileNode[]], values: ResourcesMoveFormValues): MovePlan => ({
+    destination: values.destination.trim(),
+    sources: files.map((file) => file.path),
+    targets: computeTargets(files, values.destination),
+});
+
 const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProps) => {
-    const { cancelConflicts, isMoving, move, pendingConflicts, resolveConflicts } = useResourcesMove();
+    const { isMoving, move } = useResourcesMove();
+    const { resources } = useResources();
     const isMulti = files.length > 1;
 
     // Default destination differs by mode: single-file rename keeps the existing
@@ -95,44 +125,36 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
         form.reset({ destination: defaultDestination });
     }, [defaultDestination, form]);
 
-    /**
-     * Run every move in parallel with the given `force` flag. Returns `true`
-     * when every operation either succeeded or surfaced as a 409 conflict
-     * (the latter feeds into `pendingConflicts` for the aggregated dialog).
-     * `false` means at least one entry hit a non-conflict error and the form
-     * should stay open so the user can read the toast and retry.
-     */
-    const submitAll = async (values: ResourcesMoveFormValues, force: boolean): Promise<boolean> => {
-        const results = await Promise.all(
-            files.map((file) => move(file.path, { destination: resolveDestination(file, values, isMulti) }, force)),
-        );
+    // Lazy snapshot of every existing resource path. Recomputed only when the
+    // library changes; reused by `findConflicts` for the local preflight.
+    const resourcePaths = useMemo(() => new Set(resources.map((resource) => resource.path)), [resources]);
+    const sourcePaths = useMemo(() => new Set(files.map((file) => file.path)), [files]);
 
-        return results.every(Boolean);
-    };
+    /**
+     * Drive the canonical "Move / Move with overwrite / Replace all" workflow
+     * with a single atomic batch request. Backend handles `sources[]` in one
+     * DB transaction (all-or-nothing) — no per-source aggregation needed here.
+     */
+    const overwriteAction = useOverwriteAction<MovePlan>({
+        execute: (plan, force) => move(plan.sources, plan.destination, force),
+        // Local preflight: filter out targets that match an item we're moving
+        // (those are no-ops, not conflicts) and keep the ones already taken
+        // by some other resource.
+        findConflicts: (plan) =>
+            plan.targets.filter((t) => !sourcePaths.has(t.destination) && resourcePaths.has(t.destination)),
+        onSuccess: onClose,
+        // Race-fallback: backend doesn't return per-path conflict descriptors
+        // on a 409, so we synthesize them from the plan we just submitted.
+        synthesizeFallbackConflicts: (plan) => plan.targets,
+    });
 
     const handleSave = form.handleSubmit(async (values) => {
-        const ok = await submitAll(values, false);
-
-        if (ok) {
-            onClose();
-        }
+        await overwriteAction.primaryExecute(buildMovePlan(files, values));
     });
 
     const handleSaveWithOverwrite = form.handleSubmit(async (values) => {
-        const ok = await submitAll(values, true);
-
-        if (ok) {
-            onClose();
-        }
+        await overwriteAction.forceExecute(buildMovePlan(files, values));
     });
-
-    // After the user picks "Replace" in the conflict dialog the hook retries every
-    // failed move with `force = true`. Close the form so it doesn't leave a stale
-    // modal — the resolveConflicts promise resolves once every retry has settled.
-    const handleResolveConflicts = async () => {
-        await resolveConflicts();
-        onClose();
-    };
 
     const isSubmitDisabled = !form.formState.isValid;
     const titleText = isMulti
@@ -143,91 +165,95 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
     const overwriteCtaLabel = isMulti ? `Move ${files.length} with overwrite` : 'Move with overwrite';
 
     return (
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                    <FolderInput className="size-4" />
-                    {titleText}
-                </DialogTitle>
-                <DialogDescription>
-                    {isMulti ? (
-                        <>Move every selected item into the destination directory.</>
-                    ) : (
-                        <>
-                            Update the path of <code>{files[0].path}</code>.
-                        </>
-                    )}
-                </DialogDescription>
-            </DialogHeader>
-
-            <Form {...form}>
-                <form
-                    className="flex flex-col gap-4"
-                    onSubmit={handleSave}
-                >
-                    <FormField
-                        control={form.control}
-                        name="destination"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>{isMulti ? 'Destination directory' : 'New path'}</FormLabel>
-                                <FormControl>
-                                    <Input
-                                        {...field}
-                                        autoComplete="off"
-                                        autoFocus
-                                        disabled={isMoving}
-                                        placeholder={isMulti ? 'Leave empty to move into the library root' : undefined}
-                                    />
-                                </FormControl>
-                                <FormDescription>
-                                    {isMulti ? (
-                                        <>
-                                            Relative directory inside your library. Leave empty for the root. Each item
-                                            keeps its current filename.
-                                        </>
-                                    ) : (
-                                        <>
-                                            Relative path inside your library. End with <code>/</code> to drop the entry
-                                            into that directory.
-                                        </>
-                                    )}
-                                </FormDescription>
-                                <FormMessage />
-                            </FormItem>
+        <>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <FolderInput className="size-4" />
+                        {titleText}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {isMulti ? (
+                            <>Move every selected item into the destination directory.</>
+                        ) : (
+                            <>
+                                Update the path of <code>{files[0].path}</code>.
+                            </>
                         )}
-                    />
+                    </DialogDescription>
+                </DialogHeader>
 
-                    <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                            disabled={isMoving}
-                            onClick={onClose}
-                            type="button"
-                            variant="outline"
-                        >
-                            Cancel
-                        </Button>
-                        <OverwriteCtaButtons
-                            isDisabled={isSubmitDisabled}
-                            isProcessing={isMoving}
-                            onOverwrite={() => {
-                                void handleSaveWithOverwrite();
-                            }}
-                            overwriteLabel={overwriteCtaLabel}
-                            primaryIcon={FolderInput}
-                            primaryLabel="Move"
-                            primaryType="submit"
+                <Form {...form}>
+                    <form
+                        className="flex flex-col gap-4"
+                        onSubmit={handleSave}
+                    >
+                        <FormField
+                            control={form.control}
+                            name="destination"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>{isMulti ? 'Destination directory' : 'New path'}</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            {...field}
+                                            autoComplete="off"
+                                            autoFocus
+                                            disabled={isMoving}
+                                            placeholder={
+                                                isMulti ? 'Leave empty to move into the library root' : undefined
+                                            }
+                                        />
+                                    </FormControl>
+                                    <FormDescription>
+                                        {isMulti ? (
+                                            <>
+                                                Relative directory inside your library. Leave empty for the root. Each
+                                                item keeps its current filename.
+                                            </>
+                                        ) : (
+                                            <>
+                                                Relative path inside your library. End with <code>/</code> to drop the
+                                                entry into that directory.
+                                            </>
+                                        )}
+                                    </FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
                         />
-                    </div>
-                </form>
-            </Form>
 
-            <ResourcesConflictDialog
-                conflicts={pendingConflicts}
-                onCancel={cancelConflicts}
-                onReplaceAll={handleResolveConflicts}
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                                disabled={isMoving}
+                                onClick={onClose}
+                                type="button"
+                                variant="outline"
+                            >
+                                Cancel
+                            </Button>
+                            <OverwriteCtaButtons
+                                isDisabled={isSubmitDisabled}
+                                isProcessing={isMoving}
+                                onOverwrite={() => {
+                                    void handleSaveWithOverwrite();
+                                }}
+                                overwriteLabel={overwriteCtaLabel}
+                                primaryIcon={FolderInput}
+                                primaryLabel="Move"
+                                primaryType="submit"
+                            />
+                        </div>
+                    </form>
+                </Form>
+            </DialogContent>
+
+            <OverwriteConfirmDialog
+                conflicts={overwriteAction.conflicts}
+                onCancel={overwriteAction.resetConflicts}
+                onReplaceAll={overwriteAction.handleReplaceAll}
             />
-        </DialogContent>
+        </>
     );
 };
 

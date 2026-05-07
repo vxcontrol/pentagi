@@ -5,6 +5,15 @@ interface DragHandlers {
     onDragLeave: (event: React.DragEvent<HTMLDivElement>) => void;
     onDragOver: (event: React.DragEvent<HTMLDivElement>) => void;
     onDrop: (event: React.DragEvent<HTMLDivElement>) => void;
+    /**
+     * Capture-phase drop listener: resets the internal counter and the
+     * `isDragging` flag *before* any nested handler can call
+     * `event.stopPropagation()`. Necessary so a child component (e.g. the
+     * `FileManager`'s row-level external-file drop) can claim the drop and
+     * stop the bubble — the bubble-phase `onDrop` below would otherwise
+     * never fire and `isDragging` would stay stuck on `true`.
+     */
+    onDropCapture: (event: React.DragEvent<HTMLDivElement>) => void;
 }
 
 interface UseFilesDragAndDropParams {
@@ -74,10 +83,23 @@ export const useFilesDragAndDrop = ({
         }
     }, []);
 
+    // Capture-phase: ALWAYS reset the local state, even if a descendant claims
+    // the drop and stops bubble propagation. Without this, a child handler
+    // (e.g. row-level upload-into-folder) leaves the page-level overlay
+    // visually stuck on "Drop files to upload" because no `dragleave` fires
+    // after a drop and the bubble-phase reset never runs.
+    const handleDropCapture = useCallback(() => {
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+    }, []);
+
     const handleDrop = useCallback(
         (event: React.DragEvent<HTMLDivElement>) => {
             event.preventDefault();
             event.stopPropagation();
+            // Capture-phase already cleared these — keep the lines as a defensive
+            // belt-and-braces in case the capture handler is ever omitted by a
+            // consumer that forgets to spread the full handler bundle.
             dragCounterRef.current = 0;
             setIsDragging(false);
 
@@ -102,6 +124,7 @@ export const useFilesDragAndDrop = ({
             onDragLeave: handleDragLeave,
             onDragOver: handleDragOver,
             onDrop: handleDrop,
+            onDropCapture: handleDropCapture,
         },
         isDragging,
     };

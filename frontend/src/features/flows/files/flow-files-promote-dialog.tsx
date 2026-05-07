@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 
 import type { FileNode } from '@/components/shared/file-manager';
 import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
-import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
 
 import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
 import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
@@ -44,12 +43,12 @@ interface FlowFilesPromoteDialogProps {
 }
 
 interface PromotePlan {
-    /** Final virtual path inside the user's library. */
+    /** Destination string sent to the backend (exact path or base directory). */
     destination: string;
-    /** Display name extracted from the destination for the conflict dialog. */
-    destinationName: string;
-    /** Source path inside the flow cache (e.g. `uploads/result.md`). */
-    source: string;
+    /** Source paths inside the flow cache (sent as `sources[]`). */
+    sources: readonly string[];
+    /** Pre-computed `(destination, destinationName)` pairs for client-side preflight + 409 fallback. */
+    targets: OverwriteConflict[];
 }
 
 const buildSingleDefaultDestination = (file: FileNode): string => stripFlowRootPrefix(file.path) || file.name;
@@ -74,39 +73,40 @@ const computeMultiDefaultDestination = (files: readonly [FileNode, ...FileNode[]
 };
 
 /**
- * Build the final set of `(source, destination)` promotion plans from the form
- * value and the picked files. For a single file the user types the full path;
- * for a batch the input is a directory and every entry keeps its name.
+ * Pre-compute the per-file destinations the backend will write to. Mirrors the
+ * server's resolution rules:
+ *   - 1 source                  → destination is the exact target path
+ *   - 2+ sources                → destination is a base directory; each source
+ *                                 lands at `<dir>/<file.name>`.
  */
-const buildPromotePlans = (
-    files: readonly [FileNode, ...FileNode[]],
-    values: FlowFilesPromoteFormValues,
-): PromotePlan[] => {
+const computeTargets = (files: readonly [FileNode, ...FileNode[]], destination: string): OverwriteConflict[] => {
+    const trimmed = destination.trim();
+
     if (files.length > 1) {
-        const targetDir = values.destination.trim().replace(/\/+$/, '');
+        const baseDir = trimmed.replace(/\/+$/, '');
 
-        return files.map((file) => ({
-            destination: targetDir ? `${targetDir}/${file.name}` : file.name,
-            destinationName: file.name,
-            source: file.path,
-        }));
+        return files.map((file) => {
+            const dest = baseDir ? `${baseDir}/${file.name}` : file.name;
+
+            return { destination: dest, destinationName: file.name };
+        });
     }
-
-    const [single] = files;
-    const destination = values.destination.trim();
 
     return [
         {
-            destination,
-            destinationName: destination.split('/').pop() ?? destination,
-            source: single.path,
+            destination: trimmed,
+            destinationName: trimmed.split('/').pop() ?? trimmed,
         },
     ];
 };
 
-const planToConflict = ({ destination, destinationName }: PromotePlan): OverwriteConflict => ({
-    destination,
-    destinationName,
+const buildPromotePlan = (
+    files: readonly [FileNode, ...FileNode[]],
+    values: FlowFilesPromoteFormValues,
+): PromotePlan => ({
+    destination: values.destination.trim(),
+    sources: files.map((file) => file.path),
+    targets: computeTargets(files, values.destination),
 });
 
 const FlowFilesPromoteDialogForm = ({ files, flowId, onClose }: FlowFilesPromoteDialogFormProps) => {
@@ -136,52 +136,26 @@ const FlowFilesPromoteDialogForm = ({ files, flowId, onClose }: FlowFilesPromote
 
     /**
      * Drive the canonical "Save / Save with overwrite / Replace all" workflow
-     * from the shared hook. The plan is the array of promote operations
-     * derived from the form on submit; per-file outcomes are aggregated into
-     * a single `OverwriteOutcome` so the hook can branch uniformly.
+     * with a single atomic batch request. Backend handles `sources[]` in one
+     * DB transaction (all-or-nothing) — no per-source aggregation needed here.
      */
-    const overwriteAction = useOverwriteAction<readonly PromotePlan[]>({
-        execute: async (plans, force): Promise<OverwriteOutcome> => {
-            const outcomes = await Promise.all(
-                plans.map((plan) => promote(plan.source, { destination: plan.destination }, force)),
-            );
-
-            // Surface per-file conflict descriptors so the dialog names exactly
-            // which destinations are taken — far more useful for multi-promote
-            // than a count-based fallback.
-            const conflicts: OverwriteConflict[] = [];
-
-            outcomes.forEach((outcome, index) => {
-                if (outcome.kind === 'conflict') {
-                    const plan = plans[index];
-
-                    if (plan) {
-                        conflicts.push(planToConflict(plan));
-                    }
-                }
-            });
-
-            if (conflicts.length > 0) {
-                return { conflicts, kind: 'conflict' };
-            }
-
-            if (outcomes.some((outcome) => outcome.kind === 'error')) {
-                return { kind: 'error' };
-            }
-
-            return { kind: 'ok' };
-        },
-        findConflicts: (plans) =>
-            plans.filter((plan) => resourcePaths.has(plan.destination)).map(planToConflict),
+    const overwriteAction = useOverwriteAction<PromotePlan>({
+        execute: (plan, force) => promote(plan.sources, plan.destination, force),
+        // Local preflight against the resource library snapshot — flags the
+        // exact destinations already taken so the dialog can name them.
+        findConflicts: (plan) => plan.targets.filter((t) => resourcePaths.has(t.destination)),
         onSuccess: onClose,
+        // Race-fallback: backend doesn't return per-path conflict descriptors
+        // on a 409, so we synthesize them from the plan we just submitted.
+        synthesizeFallbackConflicts: (plan) => plan.targets,
     });
 
     const handleSave = form.handleSubmit(async (values) => {
-        await overwriteAction.primaryExecute(buildPromotePlans(files, values));
+        await overwriteAction.primaryExecute(buildPromotePlan(files, values));
     });
 
     const handleSaveWithOverwrite = form.handleSubmit(async (values) => {
-        await overwriteAction.forceExecute(buildPromotePlans(files, values));
+        await overwriteAction.forceExecute(buildPromotePlan(files, values));
     });
 
     const isSubmitDisabled = !form.formState.isValid;

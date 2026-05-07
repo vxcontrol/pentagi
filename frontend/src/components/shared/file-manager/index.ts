@@ -16,6 +16,7 @@ export type {
     FileManagerAction,
     FileManagerBulkAction,
     FileManagerBulkActionConfirm,
+    FileManagerEmptyAreaAction,
     FileManagerLabels,
     FileManagerProps,
     FileManagerRootGroup,

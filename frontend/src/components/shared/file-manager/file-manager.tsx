@@ -1,10 +1,31 @@
-import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    type MouseEvent as ReactMouseEvent,
+    type ReactNode,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 
 import type { FileManagerRowDisplay, FileManagerRowHandlers } from './file-manager-row';
-import type { FileManagerAction, FileManagerBulkAction, FileManagerProps, FileNode } from './file-manager-types';
+import type {
+    FileManagerAction,
+    FileManagerBulkAction,
+    FileManagerEmptyAreaAction,
+    FileManagerProps,
+    FileNode,
+} from './file-manager-types';
 
 import { FileManagerBulkActionsBar } from './file-manager-bulk-actions-bar';
 import { FileManagerSkeleton } from './file-manager-skeleton';
@@ -25,17 +46,54 @@ import { useFileManagerSelection } from './use-file-manager-selection';
 
 const EMPTY_ACTIONS: readonly FileManagerAction[] = Object.freeze([]);
 const EMPTY_BULK_ACTIONS: readonly FileManagerBulkAction[] = Object.freeze([]);
+const EMPTY_AREA_ACTIONS: readonly FileManagerEmptyAreaAction[] = Object.freeze([]);
+
+/**
+ * Renders the right-click context menu items for the empty area of the tree.
+ * Kept as a plain helper so the same JSX can be reused inside the
+ * `<ContextMenuContent>` regardless of where it lives in the render tree.
+ */
+const renderEmptyAreaItems = (items: readonly FileManagerEmptyAreaAction[]): ReactNode[] => {
+    const nodes: ReactNode[] = [];
+
+    for (const action of items) {
+        if (action.separatorBefore && nodes.length > 0) {
+            nodes.push(<ContextMenuSeparator key={`separator-${action.id}`} />);
+        }
+
+        const ActionIcon = action.icon;
+
+        nodes.push(
+            <ContextMenuItem
+                className={cn(
+                    action.variant === 'destructive' &&
+                        'text-destructive focus:bg-destructive/10 focus:text-destructive',
+                )}
+                key={action.id}
+                onSelect={() => action.onSelect()}
+            >
+                {ActionIcon ? <ActionIcon className="size-4" /> : null}
+                {action.label}
+            </ContextMenuItem>,
+        );
+    }
+
+    return nodes;
+};
 
 export const FileManager = ({
     actions,
     bulkActions,
     className,
     columns,
+    emptyAreaActions,
     emptyState,
     enableSelection,
     files,
     isLoading,
     labels,
+    onActiveRowChange,
+    onExternalFileDrop,
     onMoveItems,
     onOpen,
     onOpenDirectory,
@@ -175,6 +233,22 @@ export const FileManager = ({
         return flatVisible[0] ?? null;
     }, [activeRowPath, flatVisible]);
 
+    // Mirror the `onSelectionChange` plumbing for the focused row: stash the
+    // callback in a ref so the effect only re-fires on actual `activeRowPath`
+    // changes, not on every parent re-render passing a fresh function. We
+    // emit the raw `activeRowPath` (not `resolvedActiveRow`) so consumers can
+    // distinguish "user picked something" from the auto-fallback to the first
+    // visible row that the roving tabindex uses internally.
+    const onActiveRowChangeRef = useRef(onActiveRowChange);
+
+    useEffect(() => {
+        onActiveRowChangeRef.current = onActiveRowChange;
+    }, [onActiveRowChange]);
+
+    useEffect(() => {
+        onActiveRowChangeRef.current?.(activeRowPath);
+    }, [activeRowPath]);
+
     const focusRow = useCallback((path: null | string) => {
         if (!path) {
             return;
@@ -210,6 +284,7 @@ export const FileManager = ({
     const dnd = useFileManagerDnd({
         findNode: useCallback((path: string) => findNodeByPath(fullTree, path), [fullTree]),
         onClearSelection: clearSelection,
+        onExternalFileDrop,
         onMoveItems,
         selectedPaths,
     });
@@ -284,6 +359,63 @@ export const FileManager = ({
         return <div className={className}>{search?.emptyState ?? emptyState}</div>;
     }
 
+    const effectiveEmptyAreaActions = emptyAreaActions ?? EMPTY_AREA_ACTIONS;
+    const hasEmptyAreaActions = effectiveEmptyAreaActions.length > 0;
+
+    // The scrollable tree element. Wrapped in a Radix `<ContextMenu>` below
+    // when the host registered empty-area items — right-clicks on rows still
+    // open the row-level menu because rows stop the contextmenu event there
+    // (see `file-manager-row.tsx`), so the outer trigger only fires for
+    // clicks outside any row, which is the entire point.
+    const treeBody = (
+        <div
+            aria-label="File tree"
+            aria-multiselectable={isCheckboxVisible || undefined}
+            className={cn(
+                'flex flex-1 flex-col overflow-y-auto py-1 transition-colors',
+                // Highlight the whole tree only when the cursor is actually hovering
+                // the empty area outside any row — that's the only place a "drop to
+                // root" will be accepted. `border-radius: inherit` makes the inset
+                // ring follow the outer container's rounded corners (top corners are
+                // hidden behind the header, so only the bottom is visually affected).
+                dnd.container.isRootDropTarget &&
+                    'bg-primary/10 ring-primary [border-radius:inherit] ring-1 ring-inset',
+            )}
+            onDragEnter={dnd.isEnabled ? dnd.container.onDragEnter : undefined}
+            onDragLeave={dnd.isEnabled ? dnd.container.onDragLeave : undefined}
+            onDragOver={dnd.isEnabled ? dnd.container.onDragOver : undefined}
+            onDrop={dnd.isEnabled ? dnd.container.onDrop : undefined}
+            role="tree"
+        >
+            {visibleTree.map((node, index) => (
+                <FileManagerTreeNode
+                    actions={effectiveActions}
+                    activeRowPath={resolvedActiveRow}
+                    bindNodeDnd={dnd.bindNodeDnd}
+                    dirSelectionStates={dirSelectionStates}
+                    dirSubtreePaths={dirSubtreePaths}
+                    display={display}
+                    expandedPaths={expandedPaths}
+                    handlers={handlers}
+                    key={node.id}
+                    node={node}
+                    posInSet={index + 1}
+                    selectedPaths={selectedPaths}
+                    setSize={visibleTree.length}
+                />
+            ))}
+        </div>
+    );
+
+    const tree = hasEmptyAreaActions ? (
+        <ContextMenu>
+            <ContextMenuTrigger asChild>{treeBody}</ContextMenuTrigger>
+            <ContextMenuContent>{renderEmptyAreaItems(effectiveEmptyAreaActions)}</ContextMenuContent>
+        </ContextMenu>
+    ) : (
+        treeBody
+    );
+
     return (
         <div
             className={cn('bg-card flex flex-col overflow-hidden rounded-lg border', className)}
@@ -318,43 +450,7 @@ export const FileManager = ({
                 )}
             </div>
 
-            <div
-                aria-label="File tree"
-                aria-multiselectable={isCheckboxVisible || undefined}
-                className={cn(
-                    'flex flex-1 flex-col overflow-y-auto py-1 transition-colors',
-                    // Highlight the whole tree only when the cursor is actually hovering
-                    // the empty area outside any row — that's the only place a "drop to
-                    // root" will be accepted. `border-radius: inherit` makes the inset
-                    // ring follow the outer container's rounded corners (top corners are
-                    // hidden behind the header, so only the bottom is visually affected).
-                    dnd.container.isRootDropTarget &&
-                        'bg-primary/10 ring-primary [border-radius:inherit] ring-1 ring-inset',
-                )}
-                onDragEnter={dnd.isEnabled ? dnd.container.onDragEnter : undefined}
-                onDragLeave={dnd.isEnabled ? dnd.container.onDragLeave : undefined}
-                onDragOver={dnd.isEnabled ? dnd.container.onDragOver : undefined}
-                onDrop={dnd.isEnabled ? dnd.container.onDrop : undefined}
-                role="tree"
-            >
-                {visibleTree.map((node, index) => (
-                    <FileManagerTreeNode
-                        actions={effectiveActions}
-                        activeRowPath={resolvedActiveRow}
-                        bindNodeDnd={dnd.bindNodeDnd}
-                        dirSelectionStates={dirSelectionStates}
-                        dirSubtreePaths={dirSubtreePaths}
-                        display={display}
-                        expandedPaths={expandedPaths}
-                        handlers={handlers}
-                        key={node.id}
-                        node={node}
-                        posInSet={index + 1}
-                        selectedPaths={selectedPaths}
-                        setSize={visibleTree.length}
-                    />
-                ))}
-            </div>
+            {tree}
 
             {hasBulkActions && (
                 <FileManagerBulkActionsBar

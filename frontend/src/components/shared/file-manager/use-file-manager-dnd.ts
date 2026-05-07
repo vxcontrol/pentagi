@@ -19,6 +19,14 @@ export interface FileManagerContainerDndHandlers {
 
 export interface FileManagerNodeDndHandlers {
     /**
+     * `true` when intra-tree move DnD is on (i.e. the row should set
+     * `draggable={true}` so the user can grab it). When only external-file
+     * drops are enabled, rows still bind drop handlers (so the highlight /
+     * counter logic works) but stay non-draggable, since there's no move
+     * destination contract for them.
+     */
+    canDrag: boolean;
+    /**
      * `true` when this row is part of the in-flight drag operation. Drives the
      * "ghosted" appearance for every selected row when the user drags one of them,
      * so it's obvious that the whole batch is being moved (not just the row whose
@@ -44,6 +52,19 @@ interface UseFileManagerDndParams {
      * the items live elsewhere). Optional — when omitted, selection isn't touched.
      */
     onClearSelection?: () => void;
+    /**
+     * Optional handler for external (OS-side) file drops onto a directory row.
+     * When provided, dropping files from the desktop / file explorer onto any
+     * folder row (including a file row whose parent is a real folder, mirroring
+     * the intra-tree resolution) lands them in that folder instead of bubbling
+     * up to a page-level handler. When omitted, external drops fall through
+     * to the parent's drag handlers as before.
+     *
+     * The handler receives the dropped `File` list and the resolved destination
+     * directory (never the synthetic root sentinel — top-level rows that
+     * resolve to root still pass through, see {@link isRootPassthrough}).
+     */
+    onExternalFileDrop?: (files: File[], destinationDir: string) => Promise<void> | void;
     /** When undefined, DnD is fully disabled. */
     onMoveItems?: (sources: FileNode[], destinationDir: string) => Promise<void> | void;
     /**
@@ -104,6 +125,18 @@ const isValidMove = (sources: FileManagerInternalNode[], destDir: string): boole
 
 const isFmDragEvent = (event: ReactDragEvent<HTMLDivElement>): boolean =>
     event.dataTransfer.types?.includes(FM_DND_MIME) ?? false;
+
+/**
+ * `true` when the drag carries OS-side files (i.e. an external drag from the
+ * desktop / file explorer rather than an intra-tree row drag). Used to route
+ * the row-level handlers into the upload code path instead of the move one.
+ *
+ * Browsers report these drags via the `'Files'` entry in
+ * `dataTransfer.types`; we deliberately don't read `dataTransfer.files` until
+ * `drop` because most browsers gate it for security on `dragenter` / `dragover`.
+ */
+const isExternalFileDragEvent = (event: ReactDragEvent<HTMLDivElement>): boolean =>
+    event.dataTransfer.types?.includes('Files') ?? false;
 
 /**
  * Top-level files (no parent directory) act as a pass-through to the container's
@@ -177,10 +210,21 @@ const resolveDropTargetDir = (
 export const useFileManagerDnd = ({
     findNode,
     onClearSelection,
+    onExternalFileDrop,
     onMoveItems,
     selectedPaths,
 }: UseFileManagerDndParams): UseFileManagerDndResult => {
+    // `isEnabled` keeps its legacy meaning ("internal move DnD is on") so
+    // existing consumers (e.g. row `draggable` flag, container root-drop
+    // wiring) keep working unchanged. External-file drops live on a separate
+    // flag and only contribute row-level handlers; they never make rows
+    // draggable or wire the container.
     const isEnabled = !!onMoveItems;
+    const isExternalDropEnabled = !!onExternalFileDrop;
+    // Some node-level branches need to know whether the row should react to
+    // *any* drag event (move OR external) — this combined flag avoids
+    // repeating the OR at every entry.
+    const reactsToDrags = isEnabled || isExternalDropEnabled;
 
     // Stash via ref so the dragstart handler doesn't re-create on every selection
     // change (which would invalidate `bindNodeDnd` and re-render every row through
@@ -297,12 +341,30 @@ export const useFileManagerDnd = ({
 
     const handleNodeDragEnter = useCallback(
         (node: FileManagerInternalNode, event: ReactDragEvent<HTMLDivElement>): void => {
-            if (!isEnabled || !isFmDragEvent(event)) {
+            if (!reactsToDrags) {
+                return;
+            }
+
+            const isFm = isFmDragEvent(event);
+            // External file drags are only honoured when the host registered an
+            // `onExternalFileDrop` callback — otherwise the event must bubble
+            // out so a page-level handler can pick it up.
+            const isExternal = !isFm && isExternalDropEnabled && isExternalFileDragEvent(event);
+
+            if (!isFm && !isExternal) {
+                return;
+            }
+
+            // The "internal" branches need a registered move callback to do
+            // anything useful — gate accordingly so an external-only setup
+            // doesn't accidentally claim FM-mime drags it can't complete.
+            if (isFm && !isEnabled) {
                 return;
             }
 
             // Top-level files behave as part of the root drop area — let the event
-            // bubble so the container handler shows the root highlight.
+            // bubble so the container handler (for FM-mime drags) or the page-
+            // level external drop handler can pick it up.
             if (isRootPassthrough(node)) {
                 return;
             }
@@ -319,8 +381,12 @@ export const useFileManagerDnd = ({
             // automatically because every row compares `dropTargetPath` to its own
             // `node.path`, and we set the parent's path here.
             const targetDir = resolveDropTargetDir(node, findNode);
+            // External drags accept any directory; move drags additionally need
+            // a valid source/destination pairing (no self-into-self / parent etc.).
+            const isAcceptable =
+                targetDir !== null && (isExternal || isValidMove(dragSourcesRef.current, targetDir));
 
-            if (targetDir === null || !isValidMove(dragSourcesRef.current, targetDir)) {
+            if (!isAcceptable) {
                 // Cursor is now over a non-droppable row — make sure the previously
                 // shown root highlight (if any) gets cleared. Container `dragleave`
                 // gates clearing on `relatedTarget` to avoid flicker, so the row
@@ -341,17 +407,29 @@ export const useFileManagerDnd = ({
                 setDropTargetPath(targetDir);
             }
         },
-        [findNode, isEnabled],
+        [findNode, isEnabled, isExternalDropEnabled, reactsToDrags],
     );
 
     const handleNodeDragLeave = useCallback(
         (node: FileManagerInternalNode, event: ReactDragEvent<HTMLDivElement>): void => {
-            if (!isEnabled || !isFmDragEvent(event)) {
+            if (!reactsToDrags) {
+                return;
+            }
+
+            const isFm = isFmDragEvent(event);
+            const isExternal = !isFm && isExternalDropEnabled && isExternalFileDragEvent(event);
+
+            if (!isFm && !isExternal) {
+                return;
+            }
+
+            if (isFm && !isEnabled) {
                 return;
             }
 
             // Mirrors `handleNodeDragEnter`: pass-through rows must let `dragleave`
-            // bubble too, so the container's enter/leave counter stays balanced.
+            // bubble too, so the container's / page-level enter/leave counter
+            // stays balanced.
             if (isRootPassthrough(node)) {
                 return;
             }
@@ -382,16 +460,28 @@ export const useFileManagerDnd = ({
                 counters.set(targetDir, current - 1);
             }
         },
-        [findNode, isEnabled],
+        [findNode, isEnabled, isExternalDropEnabled, reactsToDrags],
     );
 
     const handleNodeDragOver = useCallback(
         (node: FileManagerInternalNode, event: ReactDragEvent<HTMLDivElement>): void => {
-            if (!isEnabled || !isFmDragEvent(event)) {
+            if (!reactsToDrags) {
                 return;
             }
 
-            // Pass-through rows defer drop-acceptance to the container (= root drop).
+            const isFm = isFmDragEvent(event);
+            const isExternal = !isFm && isExternalDropEnabled && isExternalFileDragEvent(event);
+
+            if (!isFm && !isExternal) {
+                return;
+            }
+
+            if (isFm && !isEnabled) {
+                return;
+            }
+
+            // Pass-through rows defer drop-acceptance to the container (= root drop)
+            // for FM-mime drags, and to the page-level handler for external drags.
             if (isRootPassthrough(node)) {
                 return;
             }
@@ -403,59 +493,105 @@ export const useFileManagerDnd = ({
 
             const targetDir = resolveDropTargetDir(node, findNode);
 
-            if (targetDir === null || !isValidMove(dragSourcesRef.current, targetDir)) {
+            if (targetDir === null) {
+                return;
+            }
+
+            if (isFm && !isValidMove(dragSourcesRef.current, targetDir)) {
                 return;
             }
 
             event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
+            event.dataTransfer.dropEffect = isFm ? 'move' : 'copy';
         },
-        [findNode, isEnabled],
+        [findNode, isEnabled, isExternalDropEnabled, reactsToDrags],
     );
 
     const handleNodeDrop = useCallback(
         (node: FileManagerInternalNode, event: ReactDragEvent<HTMLDivElement>): void => {
-            if (!isEnabled || !isFmDragEvent(event)) {
+            if (!reactsToDrags) {
                 return;
             }
 
-            // Pass-through rows let the container handle the actual drop (= root move).
+            const isFm = isFmDragEvent(event);
+            const isExternal = !isFm && isExternalDropEnabled && isExternalFileDragEvent(event);
+
+            if (!isFm && !isExternal) {
+                return;
+            }
+
+            if (isFm && !isEnabled) {
+                return;
+            }
+
+            // Pass-through rows let the container handle the FM-mime drop (= root move)
+            // or, for external drags, bubble out to the page-level handler.
             if (isRootPassthrough(node)) {
                 return;
             }
 
-            // Otherwise stop propagation so a drop on a row never bubbles to the
-            // container, which would otherwise treat the drop as a root move (the source
-            // bug behind "drag a file, return it back" → unintended API call).
+            // Stop propagation so the drop never bubbles to the container — both
+            // for FM-mime drags (otherwise the row position would be treated as
+            // a root move) and for external drags (otherwise a page-level
+            // listener would also process the same files and double-upload).
             event.stopPropagation();
 
-            const sources = dragSourcesRef.current;
             const targetDir = resolveDropTargetDir(node, findNode);
 
-            if (targetDir === null || !isValidMove(sources, targetDir)) {
+            if (targetDir === null) {
                 resetDragState();
 
                 return;
             }
 
+            if (isFm) {
+                const sources = dragSourcesRef.current;
+
+                if (!isValidMove(sources, targetDir)) {
+                    resetDragState();
+
+                    return;
+                }
+
+                event.preventDefault();
+                resetDragState();
+                // Selection paths reference the OLD locations, which the move call is
+                // about to invalidate. Clear them so the bulk-actions bar / "select-all"
+                // checkbox don't show stale state.
+                onClearSelection?.();
+                void onMoveItems?.(sources, targetDir);
+
+                return;
+            }
+
+            // External-file branch — `dataTransfer.files` is finally readable on
+            // `drop` (most browsers gate access during enter/over for security).
+            const droppedFiles = Array.from(event.dataTransfer.files ?? []);
+
             event.preventDefault();
             resetDragState();
-            // Selection paths reference the OLD locations, which the move call is
-            // about to invalidate. Clear them so the bulk-actions bar / "select-all"
-            // checkbox don't show stale state.
-            onClearSelection?.();
-            void onMoveItems?.(sources, targetDir);
+
+            if (droppedFiles.length === 0) {
+                return;
+            }
+
+            void onExternalFileDrop?.(droppedFiles, targetDir);
         },
-        [findNode, isEnabled, onClearSelection, onMoveItems, resetDragState],
+        [findNode, isEnabled, isExternalDropEnabled, onClearSelection, onExternalFileDrop, onMoveItems, reactsToDrags, resetDragState],
     );
 
     const bindNodeDnd = useCallback(
         (node: FileManagerInternalNode): FileManagerNodeDndHandlers | null => {
-            if (!isEnabled) {
+            // Bind handlers whenever ANY drag interaction is enabled (move OR
+            // external file drop). Rows still gate their own `draggable` flag
+            // on `isEnabled` via `file-manager-row.tsx`, so external-only
+            // setups don't accidentally make rows look grabbable.
+            if (!reactsToDrags) {
                 return null;
             }
 
             return {
+                canDrag: isEnabled,
                 isBeingDragged: draggingPaths.has(node.path),
                 isDropTarget: dropTargetPath === node.path,
                 onDragEnd: resetDragState,
@@ -475,6 +611,7 @@ export const useFileManagerDnd = ({
             handleNodeDragStart,
             handleNodeDrop,
             isEnabled,
+            reactsToDrags,
             resetDragState,
         ],
     );

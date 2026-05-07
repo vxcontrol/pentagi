@@ -2,9 +2,12 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
+
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { RESOURCES_COPY_API_PATH } from './resources-constants';
+import { pluralizeItems } from './resources-utils';
 
 export const resourcesCopyFormSchema = z.object({
     destination: z
@@ -15,81 +18,68 @@ export const resourcesCopyFormSchema = z.object({
         .refine((value) => !value.split('/').includes('..'), { message: 'Destination must not contain ".."' }),
 });
 
-export interface ResourcesCopyConflict {
-    destination: string;
-    /** Display name extracted from `destination` for the confirm dialog. */
-    destinationName: string;
-    sourcePath: string;
-}
-
 export type ResourcesCopyFormValues = z.infer<typeof resourcesCopyFormSchema>;
 
 interface CopyRequestBody {
     destination: string;
     force: boolean;
-    source: string;
+    sources: readonly string[];
 }
 
 interface UseResourcesCopyResult {
-    /** Drop the pending conflicts without retrying. */
-    cancelConflicts: () => void;
     /**
-     * Issue a single copy. `force=false` collects 409s into `pendingConflicts`
-     * for an aggregated dialog; `force=true` skips that branch and toasts on
-     * any failure (used by the "Copy with overwrite" CTA path).
+     * Issue a batch copy in a single atomic request and return a discriminated outcome:
+     *   - `ok`        — every source was copied (success toast already fired),
+     *   - `conflict`  — at least one destination is occupied (no toast, caller
+     *                   resolves via the shared overwrite workflow),
+     *   - `error`     — anything else (failure toast already fired).
+     *
+     * Backend semantics: with one source, `destination` is the exact target
+     * path; with multiple sources, `destination` is a base directory and each
+     * source lands at `destination/<basename>`. Either way, the whole batch
+     * executes inside one DB transaction.
      */
-    copy: (sourcePath: string, values: ResourcesCopyFormValues, force: boolean) => Promise<boolean>;
+    copy: (sources: readonly string[], destination: string, force: boolean) => Promise<OverwriteOutcome>;
     isCopying: boolean;
-    /**
-     * 409 conflicts collected across one or more parallel `copy()` calls. The consumer
-     * shows a single "Replace?" dialog summarising the count; clicking Replace retries
-     * every entry with `force = true`.
-     */
-    pendingConflicts: ResourcesCopyConflict[];
-    /** Retry every pending conflict with `force = true`. Promise resolves when all settle. */
-    resolveConflicts: () => Promise<void>;
 }
 
-const extractName = (path: string): string => path.split('/').pop() ?? path;
-
-/** Wraps `POST /resources/copy`. */
+/** Wraps `POST /resources/copy` for single and batch copy operations. */
 export const useResourcesCopy = (): UseResourcesCopyResult => {
     const [isCopying, setIsCopying] = useState(false);
-    const [pendingConflicts, setPendingConflicts] = useState<ResourcesCopyConflict[]>([]);
 
-    const performCopy = useCallback(
-        async (sourcePath: string, destination: string, force: boolean): Promise<boolean> => {
+    const copy = useCallback(
+        async (sources: readonly string[], destination: string, force: boolean): Promise<OverwriteOutcome> => {
+            if (sources.length === 0) {
+                return { kind: 'error' };
+            }
+
             setIsCopying(true);
 
             try {
                 await api.post<void, CopyRequestBody>(RESOURCES_COPY_API_PATH, {
                     destination,
                     force,
-                    source: sourcePath,
+                    sources,
                 });
 
-                toast.success('Resource copied', { description: `Copied to /${destination}` });
+                const description =
+                    sources.length === 1
+                        ? `Copied to /${destination}`
+                        : `Copied ${sources.length} ${pluralizeItems(sources.length)} into /${destination}`;
 
-                return true;
+                toast.success('Resource copied', { description });
+
+                return { kind: 'ok' };
             } catch (error) {
-                if (getApiErrorStatusCode(error) === 409 && !force) {
-                    setPendingConflicts((prev) => [
-                        ...prev,
-                        {
-                            destination,
-                            destinationName: extractName(destination),
-                            sourcePath,
-                        },
-                    ]);
-
-                    return false;
+                if (!force && getApiErrorStatusCode(error) === 409) {
+                    return { kind: 'conflict' };
                 }
 
                 const description = getApiErrorMessage(error, 'Failed to copy resource');
 
                 toast.error('Copy failed', { description });
 
-                return false;
+                return { kind: 'error' };
             } finally {
                 setIsCopying(false);
             }
@@ -97,35 +87,8 @@ export const useResourcesCopy = (): UseResourcesCopyResult => {
         [],
     );
 
-    const copy = useCallback(
-        (sourcePath: string, { destination }: ResourcesCopyFormValues, force: boolean): Promise<boolean> =>
-            performCopy(sourcePath, destination.trim(), force),
-        [performCopy],
-    );
-
-    const resolveConflicts = useCallback(async (): Promise<void> => {
-        if (pendingConflicts.length === 0) {
-            return;
-        }
-
-        const conflicts = pendingConflicts;
-
-        setPendingConflicts([]);
-
-        await Promise.allSettled(
-            conflicts.map((conflict) => performCopy(conflict.sourcePath, conflict.destination, true)),
-        );
-    }, [pendingConflicts, performCopy]);
-
-    const cancelConflicts = useCallback(() => {
-        setPendingConflicts([]);
-    }, []);
-
     return {
-        cancelConflicts,
         copy,
         isCopying,
-        pendingConflicts,
-        resolveConflicts,
     };
 };

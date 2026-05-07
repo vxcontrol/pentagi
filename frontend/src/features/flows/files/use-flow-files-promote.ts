@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
 import type { RestResourceList } from '@/features/resources/resources-rest';
 
+import { pluralizeItems } from '@/features/resources/resources-utils';
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { FLOW_FILES_PROMOTE_API_PATH } from './flow-files-constants';
@@ -23,7 +24,7 @@ export type FlowFilesPromoteFormValues = z.infer<typeof flowFilesPromoteFormSche
 interface PromoteRequestBody {
     destination: string;
     force: boolean;
-    source: string;
+    sources: readonly string[];
 }
 
 interface UseFlowFilesPromoteParams {
@@ -32,34 +33,31 @@ interface UseFlowFilesPromoteParams {
 
 interface UseFlowFilesPromoteResult {
     isPromoting: boolean;
-    promote: (
-        source: string,
-        values: FlowFilesPromoteFormValues,
-        force: boolean,
-    ) => Promise<OverwriteOutcome>;
+    /**
+     * Issue a batch promote in a single atomic request and return a discriminated outcome:
+     *   - `ok`        — every flow file/dir was promoted (success toast already fired),
+     *   - `conflict`  — at least one resource path is occupied (no toast, caller
+     *                   resolves via the shared overwrite workflow),
+     *   - `error`     — anything else (failure toast already fired).
+     *
+     * Backend semantics: with one source, `destination` is the exact target
+     * path; with multiple sources, `destination` is a base directory and each
+     * source lands at `destination/<basename>`. The Apollo cache stays in sync
+     * via `resourceAdded` / `resourceUpdated` GraphQL subscriptions.
+     */
+    promote: (sources: readonly string[], destination: string, force: boolean) => Promise<OverwriteOutcome>;
 }
 
 /**
  * Wraps the "promote flow file → user resource" REST call (`POST /files/to-resources`)
- * with toast notifications and a loading flag. Returns a discriminated outcome
- * so callers can branch between success, a 409 conflict that warrants a user
- * prompt, and any other failure (already toasted).
- *
- * The endpoint accepts both single files and directories — the backend always returns
- * a `ResourceList` covering every entry it created or updated. The response payload
- * itself is discarded: the resource library Apollo cache is kept in sync via the
- * `resourceAdded` / `resourceUpdated` GraphQL subscriptions.
+ * with toast notifications and a loading flag.
  */
 export const useFlowFilesPromote = ({ flowId }: UseFlowFilesPromoteParams): UseFlowFilesPromoteResult => {
     const [isPromoting, setIsPromoting] = useState(false);
 
     const promote = useCallback(
-        async (
-            source: string,
-            { destination }: FlowFilesPromoteFormValues,
-            force: boolean,
-        ): Promise<OverwriteOutcome> => {
-            if (!flowId) {
+        async (sources: readonly string[], destination: string, force: boolean): Promise<OverwriteOutcome> => {
+            if (!flowId || sources.length === 0) {
                 return { kind: 'error' };
             }
 
@@ -71,14 +69,17 @@ export const useFlowFilesPromote = ({ flowId }: UseFlowFilesPromoteParams): UseF
                     {
                         destination: destination.trim(),
                         force,
-                        source,
+                        sources,
                     },
                     { timeout: 0 },
                 );
 
-                toast.success('Saved to resources', {
-                    description: `Stored at ${destination.trim()} in your resource library`,
-                });
+                const description =
+                    sources.length === 1
+                        ? `Stored at ${destination.trim()} in your resource library`
+                        : `Stored ${sources.length} ${pluralizeItems(sources.length)} under ${destination.trim()} in your resource library`;
+
+                toast.success('Saved to resources', { description });
 
                 return { kind: 'ok' };
             } catch (error) {

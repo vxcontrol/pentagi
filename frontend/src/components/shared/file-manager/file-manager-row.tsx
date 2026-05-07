@@ -1,5 +1,13 @@
 import { ChevronRight, MoreVertical } from 'lucide-react';
-import { type CSSProperties, memo, type MouseEvent as ReactMouseEvent, type ReactNode, useMemo } from 'react';
+import {
+    type CSSProperties,
+    memo,
+    type FocusEvent as ReactFocusEvent,
+    type MouseEvent as ReactMouseEvent,
+    type ReactNode,
+    type SyntheticEvent,
+    useMemo,
+} from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -115,10 +123,39 @@ interface FileManagerRowProps {
 const isClickInsideSkipZone = (target: EventTarget | null): boolean =>
     target instanceof Element && !!target.closest(`[${SKIP_ROW_CLICK_ATTR}]`);
 
+/**
+ * Returns `true` when the synthetic event originated from a portal-mounted
+ * descendant of this row in the React tree — e.g. a dropdown / context-menu
+ * item rendered to `document.body` by Radix.
+ *
+ * React synthetic events bubble through the **component tree**, not the DOM
+ * tree, so a click on a portaled `<DropdownMenuItem>` still bubbles up to
+ * the row's `onClick` even though its DOM lives outside the row. The
+ * `data-fm-skip-row-click` opt-out doesn't help here either — `closest()`
+ * walks DOM ancestors, and the portal isn't a DOM child of the row.
+ *
+ * The fix is structural: if the event's actual DOM target is not contained
+ * within the row's DOM subtree (the row is `event.currentTarget`), the event
+ * came from a portal — ignore it for selection / focus / open gestures.
+ */
+const isEventFromOutsideRowDom = (event: SyntheticEvent): boolean => {
+    const { currentTarget, target } = event;
+
+    return currentTarget instanceof Node && target instanceof Node && !currentTarget.contains(target);
+};
+
+// Filter rules:
+//   - directory row → keep only actions with `appliesToDirs: true`
+//   - file row      → keep only actions with `appliesToFiles !== false` (default true)
+// So the legacy `appliesToDirs` semantics (omit → files-only, true → both) still hold,
+// and `appliesToFiles: false` carves out the directory-only subset.
 const buildVisibleActions = (
     actions: readonly FileManagerAction[],
     file: FileManagerInternalNode,
-): FileManagerAction[] => actions.filter((action) => action.appliesToDirs || !file.isDir);
+): FileManagerAction[] =>
+    actions.filter((action) =>
+        file.isDir ? action.appliesToDirs === true : action.appliesToFiles !== false,
+    );
 
 const FileManagerRowImpl = ({
     actions,
@@ -156,6 +193,15 @@ const FileManagerRowImpl = ({
     const visibleActions = useMemo(() => buildVisibleActions(actions, file), [actions, file]);
 
     const handleRowClick = (event: ReactMouseEvent) => {
+        // Drop events bubbling up from portaled menu content (Radix dropdown /
+        // context menu items rendered to document.body) — they reach this
+        // handler through React's component-tree bubbling, not DOM bubbling,
+        // and would otherwise reset / mutate the multi-selection on every
+        // action invocation.
+        if (isEventFromOutsideRowDom(event)) {
+            return;
+        }
+
         if (isClickInsideSkipZone(event.target)) {
             return;
         }
@@ -177,6 +223,13 @@ const FileManagerRowImpl = ({
     // chevron icon on the row's left edge always toggles expand/collapse for
     // directories, regardless of `onOpenDirectory`.
     const handleRowDoubleClick = (event: ReactMouseEvent) => {
+        // Same React-tree-bubbling guard as `handleRowClick` — a double-click
+        // on a portaled menu item must not be treated as a row "open" gesture
+        // (which would, for files, kick off a download via `onOpen`).
+        if (isEventFromOutsideRowDom(event)) {
+            return;
+        }
+
         if (isClickInsideSkipZone(event.target)) {
             return;
         }
@@ -256,6 +309,7 @@ const FileManagerRowImpl = ({
 
     const dropdownItems = hasActions ? renderActionItems('dropdown') : [];
     const contextItems = renderActionItems('context');
+    const hasOwnContextMenu = contextItems.length > 0;
     const isActiveRow = activeRowPath === file.path;
 
     const rowStyle = {
@@ -263,7 +317,10 @@ const FileManagerRowImpl = ({
         gridTemplateColumns: gridTemplate,
     } as CSSProperties & Record<'--fm-depth', number>;
 
-    const isDraggable = !!dnd && !file.isGroupRoot;
+    // Bind handlers may be present even when intra-tree move is off (external
+    // file-drop only) — in that case `dnd.canDrag` is false and the row should
+    // not advertise itself as grabbable.
+    const isDraggable = !!dnd && dnd.canDrag && !file.isGroupRoot;
     const isDropTarget = dnd?.isDropTarget ?? false;
     const isBeingDragged = dnd?.isBeingDragged ?? false;
 
@@ -296,6 +353,16 @@ const FileManagerRowImpl = ({
             data-path={file.path}
             draggable={isDraggable}
             onClick={handleRowClick}
+            // Stop the contextmenu event from bubbling to the FileManager's
+            // empty-area context menu when the row has its own. `composeEventHandlers`
+            // (used by Radix's `asChild` Slot) only stops on `defaultPrevented`,
+            // not `propagationStopped`, so the row's own ContextMenuTrigger
+            // still fires after our handler — both behaviors compose cleanly.
+            // For rows without their own items we leave the event alone so it
+            // falls through to the outer empty-area menu (a sensible fallback).
+            onContextMenu={
+                hasOwnContextMenu ? (event: ReactMouseEvent<HTMLDivElement>) => event.stopPropagation() : undefined
+            }
             onDoubleClick={handleRowDoubleClick}
             onDragEnd={dnd?.onDragEnd}
             onDragEnter={dnd?.onDragEnter}
@@ -303,7 +370,19 @@ const FileManagerRowImpl = ({
             onDragOver={dnd?.onDragOver}
             onDragStart={dnd?.onDragStart}
             onDrop={dnd?.onDrop}
-            onFocus={() => onFocusRow(file.path)}
+            // `focusin` (which React's `onFocus` listens to) bubbles through
+            // both DOM and React trees, so focusing a portaled menu item — or
+            // navigating between them with arrow keys — would otherwise fire
+            // the row's focus handler and silently change `activeRowPath` /
+            // the focus-derived "current dir". Same containment check as the
+            // click handlers gates this off.
+            onFocus={(event: ReactFocusEvent<HTMLDivElement>) => {
+                if (isEventFromOutsideRowDom(event)) {
+                    return;
+                }
+
+                onFocusRow(file.path);
+            }}
             role="treeitem"
             style={rowStyle}
             tabIndex={isActiveRow ? 0 : -1}

@@ -2,9 +2,12 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
+
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { RESOURCES_MOVE_API_PATH } from './resources-constants';
+import { pluralizeItems } from './resources-utils';
 
 export const resourcesMoveFormSchema = z.object({
     destination: z
@@ -15,86 +18,72 @@ export const resourcesMoveFormSchema = z.object({
         .refine((value) => !value.split('/').includes('..'), { message: 'Destination must not contain ".."' }),
 });
 
-export interface ResourcesMoveConflict {
-    destination: string;
-    /** Display name extracted from `destination` for the confirm dialog. */
-    destinationName: string;
-    sourcePath: string;
-}
-
 export type ResourcesMoveFormValues = z.infer<typeof resourcesMoveFormSchema>;
 
 interface MoveRequestBody {
     destination: string;
     force: boolean;
-    source: string;
+    sources: readonly string[];
 }
 
 interface UseResourcesMoveResult {
-    /** Drop the pending conflicts without retrying. */
-    cancelConflicts: () => void;
     isMoving: boolean;
     /**
-     * Issue a single move. `force=false` collects 409s into `pendingConflicts`
-     * for an aggregated dialog; `force=true` skips that branch and toasts on
-     * any failure (used by the "Move with overwrite" CTA path).
+     * Issue a batch move in a single atomic request and return a discriminated outcome:
+     *   - `ok`        — every source was moved (success toast already fired),
+     *   - `conflict`  — at least one destination is occupied (no toast, caller
+     *                   resolves via the shared overwrite workflow),
+     *   - `error`     — anything else (failure toast already fired).
+     *
+     * Backend semantics: with one source, `destination` is the exact target
+     * path; with multiple sources, `destination` is treated as a base directory
+     * and each source lands at `destination/<basename>`. Either way, the whole
+     * batch executes inside one DB transaction — partial state is impossible.
      */
-    move: (sourcePath: string, values: ResourcesMoveFormValues, force: boolean) => Promise<boolean>;
-    /**
-     * 409 conflicts collected across one or more parallel `move()` calls. The consumer
-     * shows a single "Replace?" dialog summarising the count; clicking Replace retries
-     * every entry with `force = true`.
-     */
-    pendingConflicts: ResourcesMoveConflict[];
-    /** Retry every pending conflict with `force = true`. Promise resolves when all settle. */
-    resolveConflicts: () => Promise<void>;
+    move: (sources: readonly string[], destination: string, force: boolean) => Promise<OverwriteOutcome>;
 }
 
-const extractName = (path: string): string => path.split('/').pop() ?? path;
-
-/** Wraps `PUT /resources/move` for rename / move operations. */
+/** Wraps `PUT /resources/move` for rename / move / batch-move operations. */
 export const useResourcesMove = (): UseResourcesMoveResult => {
     const [isMoving, setIsMoving] = useState(false);
-    const [pendingConflicts, setPendingConflicts] = useState<ResourcesMoveConflict[]>([]);
 
-    const performMove = useCallback(
-        async (sourcePath: string, destination: string, force: boolean): Promise<boolean> => {
+    const move = useCallback(
+        async (sources: readonly string[], destination: string, force: boolean): Promise<OverwriteOutcome> => {
+            if (sources.length === 0) {
+                return { kind: 'error' };
+            }
+
             setIsMoving(true);
 
             try {
                 await api.put<void, MoveRequestBody>(RESOURCES_MOVE_API_PATH, {
                     destination,
                     force,
-                    source: sourcePath,
+                    sources,
                 });
 
-                toast.success('Resource moved', { description: `Moved to /${destination}` });
+                const description =
+                    sources.length === 1
+                        ? `Moved to /${destination}`
+                        : `Moved ${sources.length} ${pluralizeItems(sources.length)} into /${destination}`;
 
-                return true;
+                toast.success('Resource moved', { description });
+
+                return { kind: 'ok' };
             } catch (error) {
-                // 409 = destination already exists. Push to the conflict array so the
-                // consumer can render a single aggregated "Replace?" dialog covering
-                // every parallel `move()` call. `force = true` skips this branch (the
-                // overwrite was already pre-confirmed), so retries land in the toast
-                // path on any unexpected re-conflict.
-                if (getApiErrorStatusCode(error) === 409 && !force) {
-                    setPendingConflicts((prev) => [
-                        ...prev,
-                        {
-                            destination,
-                            destinationName: extractName(destination),
-                            sourcePath,
-                        },
-                    ]);
-
-                    return false;
+                // 409 = at least one destination already exists. Surface as
+                // `conflict` so the shared overwrite workflow can prompt the
+                // user; success / error toasts stay aligned with the outcome
+                // they pick.
+                if (!force && getApiErrorStatusCode(error) === 409) {
+                    return { kind: 'conflict' };
                 }
 
                 const description = getApiErrorMessage(error, 'Failed to move resource');
 
                 toast.error('Move failed', { description });
 
-                return false;
+                return { kind: 'error' };
             } finally {
                 setIsMoving(false);
             }
@@ -102,35 +91,8 @@ export const useResourcesMove = (): UseResourcesMoveResult => {
         [],
     );
 
-    const move = useCallback(
-        (sourcePath: string, { destination }: ResourcesMoveFormValues, force: boolean): Promise<boolean> =>
-            performMove(sourcePath, destination.trim(), force),
-        [performMove],
-    );
-
-    const resolveConflicts = useCallback(async (): Promise<void> => {
-        if (pendingConflicts.length === 0) {
-            return;
-        }
-
-        const conflicts = pendingConflicts;
-
-        setPendingConflicts([]);
-
-        await Promise.allSettled(
-            conflicts.map((conflict) => performMove(conflict.sourcePath, conflict.destination, true)),
-        );
-    }, [pendingConflicts, performMove]);
-
-    const cancelConflicts = useCallback(() => {
-        setPendingConflicts([]);
-    }, []);
-
     return {
-        cancelConflicts,
         isMoving,
         move,
-        pendingConflicts,
-        resolveConflicts,
     };
 };

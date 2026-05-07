@@ -1,8 +1,22 @@
 import type { ComponentType, ReactNode } from 'react';
 
 export interface FileManagerAction {
-    /** When true, action is shown for both files and directories. Defaults to false (files only). */
+    /**
+     * When true, the action is shown for directory rows. Defaults to false.
+     *
+     * Combine with {@link FileManagerAction.appliesToFiles} to scope the action:
+     *   - `appliesToDirs: false, appliesToFiles: true` (default) → files only
+     *   - `appliesToDirs: true,  appliesToFiles: true` (default) → files + directories
+     *   - `appliesToDirs: true,  appliesToFiles: false`           → directories only
+     *   - `appliesToDirs: false, appliesToFiles: false`           → never (filtered out)
+     */
     appliesToDirs?: boolean;
+    /**
+     * When true (default), the action is shown for file rows. Set to `false` for
+     * actions that only make sense on directory rows (e.g. "Upload files here",
+     * "New folder here") combined with `appliesToDirs: true`.
+     */
+    appliesToFiles?: boolean;
     /**
      * If provided, the action is rendered as an `<a href>` link instead of a button.
      * Useful for native browser downloads.
@@ -81,6 +95,28 @@ export interface FileManagerColumnsConfig {
     isSizeVisible?: boolean;
 }
 
+/**
+ * Single entry in the right-click context menu surfaced over the empty area
+ * of the tree (i.e. anywhere outside a row). Distinct from {@link FileManagerAction}
+ * because it cannot reference a `FileNode` — the user clicked between rows,
+ * not on one. Typical use: "Upload files", "New folder" at the tree's root.
+ *
+ * The menu only renders when the host supplies a non-empty
+ * `emptyAreaActions` array. When a row has its own context items, the
+ * row-level menu wins (right-clicks on rows do not propagate to the empty-area
+ * menu — see `file-manager-row.tsx`).
+ */
+export interface FileManagerEmptyAreaAction {
+    icon?: ComponentType<{ className?: string }>;
+    /** Stable identifier — used as React `key`. */
+    id: string;
+    label: string;
+    onSelect: () => void;
+    /** When true, separator is rendered before this item. */
+    separatorBefore?: boolean;
+    variant?: 'default' | 'destructive';
+}
+
 export interface FileManagerInternalNode extends FileNode {
     children: FileManagerInternalNode[];
     depth: number;
@@ -140,6 +176,13 @@ export interface FileManagerProps {
     className?: string;
     /** Per-column visibility flags. Defaults: `{ isSizeVisible: true, isModifiedVisible: true }`. */
     columns?: FileManagerColumnsConfig;
+    /**
+     * Items rendered in the right-click context menu over the tree's empty
+     * area (anywhere outside a row). When omitted / empty, no empty-area
+     * menu is registered and the browser's native context menu is shown.
+     * See {@link FileManagerEmptyAreaAction} for the item shape.
+     */
+    emptyAreaActions?: readonly FileManagerEmptyAreaAction[];
     /** Empty state node (rendered when files.length === 0 and not loading). */
     emptyState?: ReactNode;
     /**
@@ -153,6 +196,35 @@ export interface FileManagerProps {
     isLoading?: boolean;
     /** Localizable user-facing strings. */
     labels?: FileManagerLabels;
+    /**
+     * Fires whenever the focused row changes (roving tabindex). The path is `null`
+     * until the user actually focuses a row via click or keyboard navigation —
+     * it does NOT auto-fall back to the first visible row, so callers can
+     * distinguish "user picked something" from "tree just rendered".
+     *
+     * Use it to implement context-aware actions (e.g. "Upload here" defaulting
+     * to the focused directory, or its parent for files). The supplied callback
+     * is read through a ref, so it does not need to be memoized.
+     *
+     * Emitted values may reference paths that no longer exist in `files` (e.g.
+     * the focused row was deleted by an external mutation); consumers should
+     * validate against their own data before using the path.
+     */
+    onActiveRowChange?: (path: null | string) => void;
+    /**
+     * Optional handler for files dragged in from outside the page (e.g. the
+     * desktop / OS file explorer). When provided, dropping files onto a
+     * directory row — or onto any file row whose parent is a real directory —
+     * fires this callback with the dropped `File[]` and the resolved
+     * destination directory path. Drops on the empty area outside any row,
+     * on synthetic group-root headers and on top-level files fall through
+     * to whatever drag handler the host attaches around `FileManager`
+     * (e.g. a page-level DnD upload zone).
+     *
+     * The callback is independent of {@link onMoveItems}: external-file drop
+     * support can be enabled without intra-tree move support, and vice versa.
+     */
+    onExternalFileDrop?: (files: File[], destinationDir: string) => Promise<void> | void;
     /**
      * Enables internal drag-and-drop: rows become draggable and directories accept drops.
      * Invoked with the dragged item(s) and the destination directory path (`''` for root).

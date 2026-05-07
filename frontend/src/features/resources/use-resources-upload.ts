@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { UserResourceFragmentFragment } from '@/graphql/types';
@@ -25,6 +25,15 @@ interface UploadResponse {
 }
 
 interface UseResourcesUploadParams {
+    /**
+     * Default virtual directory used when `uploadFiles` is called without an explicit
+     * `options.dir`. Drives the toolbar/file-picker / external-DnD flows that don't
+     * have a per-call target — empty string keeps uploads at the library root.
+     *
+     * Stored in a ref internally so changes do NOT invalidate `uploadFiles`,
+     * keeping memoized consumers (e.g. `useFilesDragAndDrop`) reference-stable.
+     */
+    defaultDir?: string;
     onSuccess?: (uploaded: UploadResponse) => void;
 }
 
@@ -35,7 +44,20 @@ interface UseResourcesUploadResult {
         ref: React.RefObject<HTMLInputElement | null>;
     };
     isUploading: boolean;
+    /**
+     * Opens the native file picker. The next picked batch uploads to the
+     * hook's `defaultDir` (typically the focused folder in the manager, or
+     * the library root if nothing is focused). Wired to toolbar buttons,
+     * the empty-state CTA, the sidebar quick-upload and external DnD.
+     */
     openFilePicker: () => void;
+    /**
+     * Same picker, but the next picked batch is force-targeted at the
+     * supplied directory regardless of `defaultDir`. Drives row-level
+     * "Upload here" actions / context-menu items where the user explicitly
+     * names the destination folder.
+     */
+    openFilePickerForDir: (targetDir: string) => void;
     uploadFiles: (selectedFiles: File[], options?: UploadOptions) => Promise<null | UploadResponse>;
 }
 
@@ -92,12 +114,39 @@ const buildUploadSuccessMessage = (uploadedCount: number, dir?: string) => {
  * each upload so the consumer can remount the hidden `<input>` and clear it
  * declaratively.
  */
-export const useResourcesUpload = ({ onSuccess }: UseResourcesUploadParams = {}): UseResourcesUploadResult => {
+export const useResourcesUpload = ({
+    defaultDir,
+    onSuccess,
+}: UseResourcesUploadParams = {}): UseResourcesUploadResult => {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [fileInputKey, setFileInputKey] = useState(0);
 
+    // Stash the default target directory in a ref so every call to `uploadFiles`
+    // sees the latest value without invalidating its memoization. Without this,
+    // wrapping consumers (e.g. `useFilesDragAndDrop`) would re-create their
+    // handlers on every focus change in the file tree.
+    const defaultDirRef = useRef(defaultDir);
+
+    useEffect(() => {
+        defaultDirRef.current = defaultDir;
+    }, [defaultDir]);
+
+    // One-shot directory override consumed on the next file-picker selection.
+    // Lets row-level "Upload here" actions target a specific directory without
+    // mutating the hook's default. Both picker entry points reset this ref
+    // before opening the dialog, so a stashed override can never leak into a
+    // subsequent toolbar / sidebar invocation — even if the user cancels the
+    // picker (`change` only fires on actual selection).
+    const pendingDirRef = useRef<string | undefined>(undefined);
+
     const openFilePicker = useCallback(() => {
+        pendingDirRef.current = undefined;
+        inputRef.current?.click();
+    }, []);
+
+    const openFilePickerForDir = useCallback((targetDir: string) => {
+        pendingDirRef.current = targetDir;
         inputRef.current?.click();
     }, []);
 
@@ -119,12 +168,17 @@ export const useResourcesUpload = ({ onSuccess }: UseResourcesUploadParams = {})
 
             selectedFiles.forEach((file) => formData.append('files', file));
 
+            // Per-call `options.dir` wins over the hook-level default so callers
+            // can target a specific directory ad-hoc (e.g. row-level "Upload here"
+            // actions) without mutating the global default.
+            const targetDir = options?.dir ?? defaultDirRef.current;
+
             setIsUploading(true);
 
             try {
                 const response = await api.post<RestResourceList, FormData>(RESOURCES_API_PATH, formData, {
                     headers: { 'Content-Type': undefined },
-                    params: options?.dir ? { dir: options.dir } : undefined,
+                    params: targetDir ? { dir: targetDir } : undefined,
                     timeout: 0,
                 });
                 // Backend sends `models.ResourceList` (snake_case, numeric IDs).
@@ -138,7 +192,7 @@ export const useResourcesUpload = ({ onSuccess }: UseResourcesUploadParams = {})
                     total: raw.total ?? 0,
                 };
                 const uploadedCount = data.items.length;
-                const message = buildUploadSuccessMessage(uploadedCount, options?.dir);
+                const message = buildUploadSuccessMessage(uploadedCount, targetDir);
 
                 toast.success(message.title, { description: message.description });
 
@@ -163,9 +217,19 @@ export const useResourcesUpload = ({ onSuccess }: UseResourcesUploadParams = {})
     const handleFileSelection = useCallback(
         async (event: React.ChangeEvent<HTMLInputElement>) => {
             const selectedFiles = Array.from(event.target.files ?? []);
+            // Drain the one-shot override so a subsequent toolbar pick (no arg)
+            // resolves through `defaultDirRef` again. Forwarding `undefined`
+            // would override `defaultDir` with `undefined`, sending uploads to
+            // the root instead of the currently focused folder.
+            const pendingDir = pendingDirRef.current;
+
+            pendingDirRef.current = undefined;
 
             try {
-                await uploadFiles(selectedFiles);
+                await uploadFiles(
+                    selectedFiles,
+                    pendingDir !== undefined ? { dir: pendingDir } : undefined,
+                );
             } finally {
                 setFileInputKey((previousKey) => previousKey + 1);
             }
@@ -181,6 +245,7 @@ export const useResourcesUpload = ({ onSuccess }: UseResourcesUploadParams = {})
         },
         isUploading,
         openFilePicker,
+        openFilePickerForDir,
         uploadFiles,
     };
 };

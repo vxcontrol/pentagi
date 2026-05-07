@@ -4,15 +4,27 @@ import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
 import type { FileNode } from '@/components/shared/file-manager';
+import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
 
+import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
 import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
+import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useResources } from '@/providers/resources-provider';
 
-import { ResourcesConflictDialog } from './resources-conflict-dialog';
 import { resourcesCopyFormSchema, type ResourcesCopyFormValues, useResourcesCopy } from './use-resources-copy';
+
+interface CopyPlan {
+    /** Final destination string sent to the backend (exact path or base directory). */
+    destination: string;
+    /** Resource paths being copied (sent as `sources[]`). */
+    sources: readonly string[];
+    /** Pre-computed `(destination, destinationName)` pairs for client-side preflight + 409 fallback. */
+    targets: OverwriteConflict[];
+}
 
 /** Guaranteed non-empty by `ResourcesCopyDialog` (which gates rendering on `files.length > 0`). */
 interface ResourcesCopyDialogFormProps {
@@ -39,6 +51,8 @@ const getParentDir = (path: string): string => {
 
     return idx === -1 ? '' : path.slice(0, idx);
 };
+
+const splitName = (path: string): string => path.split('/').pop() ?? path;
 
 /**
  * Build the single-file copy default destination. Inserts a `-copy` suffix
@@ -69,26 +83,37 @@ const computeCommonParent = (files: readonly [FileNode, ...FileNode[]]): string 
 };
 
 /**
- * Resolve the per-file destination from the form value:
- *   - single copy → use the typed path verbatim,
- *   - multi-file batch → derive `<targetDir>/<file.name>`, root when empty.
+ * Pre-compute the per-file destinations the backend will write to. Mirrors the
+ * server's resolution rules so the client can preflight and so the conflict
+ * dialog can name the exact items at risk. See {@link computeTargets} in the
+ * move dialog for the full rule table.
  */
-const resolveDestination = (
-    file: FileNode,
-    values: ResourcesCopyFormValues,
-    isMulti: boolean,
-): string => {
-    if (!isMulti) {
-        return values.destination;
+const computeTargets = (files: readonly [FileNode, ...FileNode[]], destination: string): OverwriteConflict[] => {
+    const trimmed = destination.trim();
+    const treatAsDir = files.length > 1 || (trimmed.length > 1 && trimmed.endsWith('/'));
+
+    if (treatAsDir) {
+        const baseDir = trimmed.replace(/\/+$/, '');
+
+        return files.map((file) => {
+            const dest = baseDir ? `${baseDir}/${file.name}` : file.name;
+
+            return { destination: dest, destinationName: file.name };
+        });
     }
 
-    const targetDir = values.destination.trim().replace(/\/+$/, '');
-
-    return targetDir ? `${targetDir}/${file.name}` : file.name;
+    return [{ destination: trimmed, destinationName: splitName(trimmed) }];
 };
 
+const buildCopyPlan = (files: readonly [FileNode, ...FileNode[]], values: ResourcesCopyFormValues): CopyPlan => ({
+    destination: values.destination.trim(),
+    sources: files.map((file) => file.path),
+    targets: computeTargets(files, values.destination),
+});
+
 const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProps) => {
-    const { cancelConflicts, copy, isCopying, pendingConflicts, resolveConflicts } = useResourcesCopy();
+    const { copy, isCopying } = useResourcesCopy();
+    const { resources } = useResources();
     const isMulti = files.length > 1;
 
     const defaultDestination = useMemo(() => {
@@ -109,132 +134,121 @@ const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProp
         form.reset({ destination: defaultDestination });
     }, [defaultDestination, form]);
 
-    /**
-     * Run every copy in parallel with the given `force` flag. Returns `true`
-     * when every operation either succeeded or surfaced as a 409 conflict
-     * (the latter feeds into `pendingConflicts` for the aggregated dialog).
-     * `false` means at least one entry hit a non-conflict error and the form
-     * should stay open so the user can read the toast and retry.
-     */
-    const submitAll = async (values: ResourcesCopyFormValues, force: boolean): Promise<boolean> => {
-        const results = await Promise.all(
-            files.map((file) => copy(file.path, { destination: resolveDestination(file, values, isMulti) }, force)),
-        );
+    const resourcePaths = useMemo(() => new Set(resources.map((resource) => resource.path)), [resources]);
 
-        return results.every(Boolean);
-    };
+    /**
+     * Drive the canonical "Copy / Copy with overwrite / Replace all" workflow
+     * with a single atomic batch request. Backend handles `sources[]` in one
+     * DB transaction (all-or-nothing).
+     */
+    const overwriteAction = useOverwriteAction<CopyPlan>({
+        execute: (plan, force) => copy(plan.sources, plan.destination, force),
+        // Copy never deletes the sources, so collisions with sources are real
+        // conflicts (unlike move). Just intersect targets with existing paths.
+        findConflicts: (plan) => plan.targets.filter((t) => resourcePaths.has(t.destination)),
+        onSuccess: onClose,
+        synthesizeFallbackConflicts: (plan) => plan.targets,
+    });
 
     const handleSave = form.handleSubmit(async (values) => {
-        const ok = await submitAll(values, false);
-
-        if (ok) {
-            onClose();
-        }
+        await overwriteAction.primaryExecute(buildCopyPlan(files, values));
     });
 
     const handleSaveWithOverwrite = form.handleSubmit(async (values) => {
-        const ok = await submitAll(values, true);
-
-        if (ok) {
-            onClose();
-        }
+        await overwriteAction.forceExecute(buildCopyPlan(files, values));
     });
-
-    // After the user picks "Replace" in the conflict dialog the hook retries every
-    // failed copy with `force = true`. Close the form so it doesn't leave a stale
-    // modal — the resolveConflicts promise resolves once every retry has settled.
-    const handleResolveConflicts = async () => {
-        await resolveConflicts();
-        onClose();
-    };
 
     const isSubmitDisabled = !form.formState.isValid;
     const titleText = isMulti ? `Copy ${files.length} items` : files[0].isDir ? 'Copy directory' : 'Copy resource';
     const overwriteCtaLabel = isMulti ? `Copy ${files.length} with overwrite` : 'Copy with overwrite';
 
     return (
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                    <Copy className="size-4" />
-                    {titleText}
-                </DialogTitle>
-                <DialogDescription>
-                    {isMulti ? (
-                        <>Duplicate every selected item into the destination directory.</>
-                    ) : (
-                        <>
-                            Duplicate <code>{files[0].path}</code> to a new path.
-                        </>
-                    )}
-                </DialogDescription>
-            </DialogHeader>
-
-            <Form {...form}>
-                <form
-                    className="flex flex-col gap-4"
-                    onSubmit={handleSave}
-                >
-                    <FormField
-                        control={form.control}
-                        name="destination"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>{isMulti ? 'Destination directory' : 'Destination path'}</FormLabel>
-                                <FormControl>
-                                    <Input
-                                        {...field}
-                                        autoComplete="off"
-                                        autoFocus
-                                        disabled={isCopying}
-                                        placeholder={isMulti ? 'Leave empty to copy into the library root' : undefined}
-                                    />
-                                </FormControl>
-                                <FormDescription>
-                                    {isMulti ? (
-                                        <>
-                                            Relative directory inside your library. Leave empty for the root. Each item
-                                            keeps its current filename.
-                                        </>
-                                    ) : (
-                                        <>Relative path inside your library.</>
-                                    )}
-                                </FormDescription>
-                                <FormMessage />
-                            </FormItem>
+        <>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Copy className="size-4" />
+                        {titleText}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {isMulti ? (
+                            <>Duplicate every selected item into the destination directory.</>
+                        ) : (
+                            <>
+                                Duplicate <code>{files[0].path}</code> to a new path.
+                            </>
                         )}
-                    />
+                    </DialogDescription>
+                </DialogHeader>
 
-                    <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                            disabled={isCopying}
-                            onClick={onClose}
-                            type="button"
-                            variant="outline"
-                        >
-                            Cancel
-                        </Button>
-                        <OverwriteCtaButtons
-                            isDisabled={isSubmitDisabled}
-                            isProcessing={isCopying}
-                            onOverwrite={() => {
-                                void handleSaveWithOverwrite();
-                            }}
-                            overwriteLabel={overwriteCtaLabel}
-                            primaryIcon={Copy}
-                            primaryLabel="Copy"
-                            primaryType="submit"
+                <Form {...form}>
+                    <form
+                        className="flex flex-col gap-4"
+                        onSubmit={handleSave}
+                    >
+                        <FormField
+                            control={form.control}
+                            name="destination"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>{isMulti ? 'Destination directory' : 'Destination path'}</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            {...field}
+                                            autoComplete="off"
+                                            autoFocus
+                                            disabled={isCopying}
+                                            placeholder={
+                                                isMulti ? 'Leave empty to copy into the library root' : undefined
+                                            }
+                                        />
+                                    </FormControl>
+                                    <FormDescription>
+                                        {isMulti ? (
+                                            <>
+                                                Relative directory inside your library. Leave empty for the root. Each
+                                                item keeps its current filename.
+                                            </>
+                                        ) : (
+                                            <>Relative path inside your library.</>
+                                        )}
+                                    </FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
                         />
-                    </div>
-                </form>
-            </Form>
 
-            <ResourcesConflictDialog
-                conflicts={pendingConflicts}
-                onCancel={cancelConflicts}
-                onReplaceAll={handleResolveConflicts}
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                                disabled={isCopying}
+                                onClick={onClose}
+                                type="button"
+                                variant="outline"
+                            >
+                                Cancel
+                            </Button>
+                            <OverwriteCtaButtons
+                                isDisabled={isSubmitDisabled}
+                                isProcessing={isCopying}
+                                onOverwrite={() => {
+                                    void handleSaveWithOverwrite();
+                                }}
+                                overwriteLabel={overwriteCtaLabel}
+                                primaryIcon={Copy}
+                                primaryLabel="Copy"
+                                primaryType="submit"
+                            />
+                        </div>
+                    </form>
+                </Form>
+            </DialogContent>
+
+            <OverwriteConfirmDialog
+                conflicts={overwriteAction.conflicts}
+                onCancel={overwriteAction.resetConflicts}
+                onReplaceAll={overwriteAction.handleReplaceAll}
             />
-        </DialogContent>
+        </>
     );
 };
 
