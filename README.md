@@ -1049,12 +1049,12 @@ The tab exposes three sources of files:
 
 Per-file actions in the Files tab include **Download**, **Copy path**, **Save as resource** (promote a flow file into your reusable resources library), and **Delete**. The Pull action is disabled when the container is not running, with the tooltip "Container is not running".
 
-Uploaded files and attached resources are listed automatically in the agent's system prompts under a `<UserFiles>` block, so the assistant and automation agents can reference them by path without you pasting the contents into chat. Container snapshots are visible in the UI only and are not auto-injected back into the prompt.
+Uploaded files and attached resources are listed automatically in the agent's system prompts via the `{{.UserFiles}}` template variable, which renders a compact `<task_files>` XML block (with nested `<uploads>` and `<resources>` sections), so the assistant and automation agents can reference them by path without you pasting the contents into chat. Container snapshots are visible in the UI only and are not auto-injected back into the prompt.
 
 Current limits and limitations to be aware of:
 
-- Maximum upload file size is 300 MB; per upload request up to 1000 files and 2 GB total. File names are capped at 255 characters.
-- The container path is fixed at `/work/uploads/` and `/work/resources/`. Files outside of those paths are not part of the flow file model.
+- Maximum upload file size is 300 MB; per upload request up to 1000 files and 2 GB total. File names are capped at 255 bytes (roughly 255 ASCII characters; non-ASCII names use multiple bytes per character).
+- Uploads and resources are mirrored into the running container at the fixed paths `/work/uploads/` and `/work/resources/`; files written to other container paths are not auto-mirrored back into the flow file model. Container snapshots can originate from any container path you pull (for example `/etc/...`) and are cached on the flow side under `container/`; they are not pushed back into the container.
 - Container snapshots are point-in-time pulls. Editing a snapshot in the UI does not write back into the running container.
 - Deleting a flow today removes the flow record and its long-term memory entries, but does not yet archive or remove the flow's `flow-{id}-data/` directory on disk. Operators are still expected to clean up the data directory manually if they want to reclaim the space.
 
