@@ -549,22 +549,32 @@ func TestSearchAnswerAction_QuestionsUnmarshal(t *testing.T) {
 	}
 }
 
-// TestToolSchemasDoNotMentionUsersLanguageOnly is a regression guard for #285:
-// every tool schema served to the LLM must avoid the locale-ambiguous phrase
-// "user's language only". The maintainer's stated policy in #216 is English-only,
-// and the system prompt already renders {{.Lang}} as English; if the schema
-// disagrees, the model picks up the weaker instruction and emits Russian or
-// mixed-language `message`/`result` fields even when the Flow is English.
-func TestToolSchemasDoNotMentionUsersLanguageOnly(t *testing.T) {
+// TestToolSchemasDoNotInstructUsersLanguage is a regression guard for #285:
+// every tool schema served to the LLM must avoid locale-ambiguous phrases that
+// instruct the model to respond in the end user's language. The maintainer's
+// stated policy in #216 is English-only, and the system prompt already renders
+// {{.Lang}} as English; if a tool schema disagrees, the model picks up the
+// weaker instruction and emits Russian or mixed-language `message`/`result`
+// fields even when the Flow is English. We ban "user's language" outright so
+// future schema edits cannot quietly reintroduce variants like "the user's
+// language" or the older "user's language only".
+func TestToolSchemasDoNotInstructUsersLanguage(t *testing.T) {
 	t.Parallel()
+
+	forbidden := []string{
+		"user's language",
+		"the user's language",
+	}
 
 	for name, def := range GetRegistryDefinitions() {
 		blob, err := json.Marshal(def.Parameters)
 		if err != nil {
 			t.Fatalf("tool %q: marshal parameters: %v", name, err)
 		}
-		if bytes.Contains(blob, []byte("user's language only")) {
-			t.Errorf("tool %q schema still contains \"user's language only\" (issue #285)", name)
+		for _, banned := range forbidden {
+			if bytes.Contains(blob, []byte(banned)) {
+				t.Errorf("tool %q schema still contains %q (issue #285)", name, banned)
+			}
 		}
 	}
 }
