@@ -162,13 +162,25 @@ export interface FileManagerProps {
      */
     onMoveItems?: (sources: FileNode[], destinationDir: string) => Promise<void> | void;
     /**
-     * Fired when the user "opens" a *file* row via double-click or `Enter`. Directories
-     * are not passed through this callback; they always toggle expand/collapse on
-     * activation, mirroring Finder/Explorer semantics.
+     * Fired when the user "opens" a *file* row via double-click or `Enter`.
+     * Directories go through `onOpenDirectory` instead; when that is omitted,
+     * they fall back to the default Finder/Explorer-style expand/collapse.
      *
      * Use it to wire downloads, in-app previews, or open-in-tab behavior.
      */
     onOpen?: (file: FileNode) => void;
+    /**
+     * Fired when the user "opens" a *directory* row via double-click or `Enter`.
+     * When provided, **replaces** the default expand/collapse gesture — useful
+     * for navigation-style file browsers (e.g. drilling into a remote directory
+     * by replacing the listing instead of expanding inline). When omitted,
+     * directories keep the default expand/collapse behaviour.
+     *
+     * The chevron icon on the row's left edge always toggles expand/collapse
+     * regardless of this prop, so the user still has access to inline
+     * exploration when it makes sense.
+     */
+    onOpenDirectory?: (dir: FileNode) => void;
     /**
      * Fires whenever the multi-selection changes. Use it from selection-only
      * flows (e.g. resource pickers) where the parent owns its own confirm button

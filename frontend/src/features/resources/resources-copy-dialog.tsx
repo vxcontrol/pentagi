@@ -1,15 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Copy, Loader2 } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
-import type { FileNode } from '@/components/file-manager';
+import type { FileNode } from '@/components/shared/file-manager';
 
+import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 
 import { ResourcesConflictDialog } from './resources-conflict-dialog';
 import { resourcesCopyFormSchema, type ResourcesCopyFormValues, useResourcesCopy } from './use-resources-copy';
@@ -68,6 +68,25 @@ const computeCommonParent = (files: readonly [FileNode, ...FileNode[]]): string 
     return files.every((file) => getParentDir(file.path) === first) ? first : '';
 };
 
+/**
+ * Resolve the per-file destination from the form value:
+ *   - single copy → use the typed path verbatim,
+ *   - multi-file batch → derive `<targetDir>/<file.name>`, root when empty.
+ */
+const resolveDestination = (
+    file: FileNode,
+    values: ResourcesCopyFormValues,
+    isMulti: boolean,
+): string => {
+    if (!isMulti) {
+        return values.destination;
+    }
+
+    const targetDir = values.destination.trim().replace(/\/+$/, '');
+
+    return targetDir ? `${targetDir}/${file.name}` : file.name;
+};
+
 const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProps) => {
     const { cancelConflicts, copy, isCopying, pendingConflicts, resolveConflicts } = useResourcesCopy();
     const isMulti = files.length > 1;
@@ -81,42 +100,42 @@ const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProp
     }, [files, isMulti]);
 
     const form = useForm<ResourcesCopyFormValues>({
-        defaultValues: {
-            destination: defaultDestination,
-            shouldOverwrite: false,
-        },
+        defaultValues: { destination: defaultDestination },
         mode: 'onChange',
         resolver: zodResolver(resourcesCopyFormSchema),
     });
 
     useEffect(() => {
-        form.reset({
-            destination: defaultDestination,
-            shouldOverwrite: false,
-        });
+        form.reset({ destination: defaultDestination });
     }, [defaultDestination, form]);
 
-    const handleSubmit = form.handleSubmit(async (values) => {
-        if (isMulti) {
-            const targetDir = values.destination.trim().replace(/\/+$/, '');
-            const results = await Promise.all(
-                files.map((file) => {
-                    const destination = targetDir ? `${targetDir}/${file.name}` : file.name;
+    /**
+     * Run every copy in parallel with the given `force` flag. Returns `true`
+     * when every operation either succeeded or surfaced as a 409 conflict
+     * (the latter feeds into `pendingConflicts` for the aggregated dialog).
+     * `false` means at least one entry hit a non-conflict error and the form
+     * should stay open so the user can read the toast and retry.
+     */
+    const submitAll = async (values: ResourcesCopyFormValues, force: boolean): Promise<boolean> => {
+        const results = await Promise.all(
+            files.map((file) => copy(file.path, { destination: resolveDestination(file, values, isMulti) }, force)),
+        );
 
-                    return copy(file.path, { destination, shouldOverwrite: values.shouldOverwrite });
-                }),
-            );
+        return results.every(Boolean);
+    };
 
-            if (results.every(Boolean)) {
-                onClose();
-            }
+    const handleSave = form.handleSubmit(async (values) => {
+        const ok = await submitAll(values, false);
 
-            return;
+        if (ok) {
+            onClose();
         }
+    });
 
-        const wasCopied = await copy(files[0].path, values);
+    const handleSaveWithOverwrite = form.handleSubmit(async (values) => {
+        const ok = await submitAll(values, true);
 
-        if (wasCopied) {
+        if (ok) {
             onClose();
         }
     });
@@ -129,9 +148,9 @@ const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProp
         onClose();
     };
 
-    const isSubmitDisabled = !form.formState.isValid || isCopying;
-
+    const isSubmitDisabled = !form.formState.isValid;
     const titleText = isMulti ? `Copy ${files.length} items` : files[0].isDir ? 'Copy directory' : 'Copy resource';
+    const overwriteCtaLabel = isMulti ? `Copy ${files.length} with overwrite` : 'Copy with overwrite';
 
     return (
         <DialogContent>
@@ -154,7 +173,7 @@ const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProp
             <Form {...form}>
                 <form
                     className="flex flex-col gap-4"
-                    onSubmit={handleSubmit}
+                    onSubmit={handleSave}
                 >
                     <FormField
                         control={form.control}
@@ -186,28 +205,7 @@ const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProp
                         )}
                     />
 
-                    <FormField
-                        control={form.control}
-                        name="shouldOverwrite"
-                        render={({ field }) => (
-                            <FormItem className="flex flex-row items-center gap-2">
-                                <FormControl>
-                                    <Switch
-                                        checked={field.value}
-                                        disabled={isCopying}
-                                        onCheckedChange={field.onChange}
-                                    />
-                                </FormControl>
-                                <FormLabel className="cursor-pointer font-normal">
-                                    {isMulti
-                                        ? 'Overwrite or merge if any destination already exists'
-                                        : 'Overwrite or merge if the destination already exists'}
-                                </FormLabel>
-                            </FormItem>
-                        )}
-                    />
-
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                         <Button
                             disabled={isCopying}
                             onClick={onClose}
@@ -216,13 +214,17 @@ const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProp
                         >
                             Cancel
                         </Button>
-                        <Button
-                            disabled={isSubmitDisabled}
-                            type="submit"
-                        >
-                            {isCopying ? <Loader2 className="animate-spin" /> : <Copy />}
-                            Copy
-                        </Button>
+                        <OverwriteCtaButtons
+                            isDisabled={isSubmitDisabled}
+                            isProcessing={isCopying}
+                            onOverwrite={() => {
+                                void handleSaveWithOverwrite();
+                            }}
+                            overwriteLabel={overwriteCtaLabel}
+                            primaryIcon={Copy}
+                            primaryLabel="Copy"
+                            primaryType="submit"
+                        />
                     </div>
                 </form>
             </Form>

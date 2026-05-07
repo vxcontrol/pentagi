@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 
-import type { FileNode } from '@/components/file-manager';
+import type { FileNode } from '@/components/shared/file-manager';
 
 import { useFlowFilesQuery } from '@/graphql/types';
 

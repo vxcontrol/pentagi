@@ -59,6 +59,12 @@ export interface FileManagerRowHandlers {
     onClick: (event: ReactMouseEvent, path: string, subtreePaths?: readonly string[]) => void;
     onFocusRow: (path: string) => void;
     onOpen?: (file: FileNode) => void;
+    /**
+     * Optional override for the directory "open" gesture (double-click / Enter).
+     * When set, replaces the default expand/collapse — used by navigation-style
+     * file browsers (e.g. drilling into a remote folder by replacing the listing).
+     */
+    onOpenDirectory?: (dir: FileNode) => void;
     onToggleExpand: (path: string, wasExpanded: boolean) => void;
     /**
      * Polymorphic selection toggle: file rows pass just `path`, directory rows
@@ -137,7 +143,7 @@ const FileManagerRowImpl = ({
         isSizeVisible,
         searchQuery,
     } = display;
-    const { onClick, onFocusRow, onOpen, onToggleExpand, onToggleSelection } = handlers;
+    const { onClick, onFocusRow, onOpen, onOpenDirectory, onToggleExpand, onToggleSelection } = handlers;
 
     const { icon: Icon, tone } = useMemo(
         () =>
@@ -161,11 +167,15 @@ const FileManagerRowImpl = ({
         onClick(event, file.path, file.isDir ? dirSubtreePaths : undefined);
     };
 
-    // Double-click is the row's "open" gesture. For directories it expands or
-    // collapses (decoupling expansion from the single click keeps `Shift`/`Cmd`+click
-    // pure selection gestures and matches Finder/Explorer). For files it forwards
+    // Double-click is the row's "open" gesture. Directories default to expand /
+    // collapse (decoupling expansion from the single click keeps `Shift`/`Cmd`+click
+    // pure selection gestures and matches Finder/Explorer); navigation-style
+    // browsers can override this by passing `onOpenDirectory`, which gets called
+    // instead — typical for drilling into a remote container directory by
+    // replacing the listing rather than expanding inline. Files always forward
     // to `onOpen` — typically wired to download / preview / open-in-tab. The
-    // chevron icon and arrow keys remain alternative ways to expand without selecting.
+    // chevron icon on the row's left edge always toggles expand/collapse for
+    // directories, regardless of `onOpenDirectory`.
     const handleRowDoubleClick = (event: ReactMouseEvent) => {
         if (isClickInsideSkipZone(event.target)) {
             return;
@@ -173,7 +183,12 @@ const FileManagerRowImpl = ({
 
         if (file.isDir) {
             event.preventDefault();
-            onToggleExpand(file.path, isExpanded);
+
+            if (onOpenDirectory) {
+                onOpenDirectory(file);
+            } else {
+                onToggleExpand(file.path, isExpanded);
+            }
 
             return;
         }

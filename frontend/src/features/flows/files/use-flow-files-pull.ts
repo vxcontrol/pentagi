@@ -1,18 +1,12 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { z } from 'zod';
 
-import { api, getApiErrorMessage } from '@/lib/axios';
+import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
+
+import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { CONTAINER_TARGET_DIRECTORY, FLOW_FILES_PULL_API_PATH } from './flow-files-constants';
-import { type FlowFilesResponse } from './flow-files-utils';
-
-export const flowFilesPullFormSchema = z.object({
-    containerPath: z.string().trim().min(1, { message: 'Container path cannot be empty' }),
-    shouldOverwrite: z.boolean(),
-});
-
-export type FlowFilesPullFormValues = z.infer<typeof flowFilesPullFormSchema>;
+import { type FlowFilesResponse, pluralizeItems } from './flow-files-utils';
 
 interface UseFlowFilesPullParams {
     flowId: null | string;
@@ -21,23 +15,28 @@ interface UseFlowFilesPullParams {
 
 interface UseFlowFilesPullResult {
     isPulling: boolean;
-    pull: (values: FlowFilesPullFormValues) => Promise<boolean>;
+    /**
+     * Pulls one or more absolute container paths into the local cache. Returns
+     * a discriminated outcome so callers can branch between success, a 409
+     * conflict that warrants a user prompt, and any other failure (toasted).
+     * The backend deduplicates and validates atomically (fail-fast on cache
+     * conflicts unless `force=true`).
+     */
+    pull: (paths: readonly string[], force: boolean) => Promise<OverwriteOutcome>;
 }
 
-const PULL_OVERWRITE_HINT = 'Entry already exists — enable "Overwrite" to replace it';
-
 /**
- * Wraps the "pull from container" REST call with toast notifications and a loading flag.
- * Returns a `pull(values)` callback that resolves to `true` on success, so the dialog
- * can decide whether to close itself.
+ * Wraps the "pull from container" REST call. The hook is path-agnostic — it
+ * always sends the array as `paths` in the body (single-path callers just pass
+ * a 1-element array), matching the wire shape the rest of our file APIs use.
  */
 export const useFlowFilesPull = ({ flowId, onSuccess }: UseFlowFilesPullParams): UseFlowFilesPullResult => {
     const [isPulling, setIsPulling] = useState(false);
 
     const pull = useCallback(
-        async ({ containerPath, shouldOverwrite }: FlowFilesPullFormValues): Promise<boolean> => {
-            if (!flowId) {
-                return false;
+        async (paths: readonly string[], force: boolean): Promise<OverwriteOutcome> => {
+            if (!flowId || paths.length === 0) {
+                return { kind: 'error' };
             }
 
             setIsPulling(true);
@@ -46,28 +45,35 @@ export const useFlowFilesPull = ({ flowId, onSuccess }: UseFlowFilesPullParams):
                 await api.post<FlowFilesResponse>(
                     FLOW_FILES_PULL_API_PATH(flowId),
                     {
-                        force: shouldOverwrite,
-                        path: containerPath,
+                        force,
+                        paths,
                     },
                     // Copying a directory out of the container can take longer than the default 30s
                     // (large logs, deep trees) — disable the per-call timeout entirely.
                     { timeout: 0 },
                 );
 
-                toast.success('Pulled from container', {
-                    description: `Saved to local cache under ${CONTAINER_TARGET_DIRECTORY}`,
-                });
+                const description =
+                    paths.length === 1
+                        ? `Saved to local cache under ${CONTAINER_TARGET_DIRECTORY}`
+                        : `Saved ${paths.length} ${pluralizeItems(paths.length)} to local cache under ${CONTAINER_TARGET_DIRECTORY}`;
+
+                toast.success('Pulled from container', { description });
                 onSuccess();
 
-                return true;
+                return { kind: 'ok' };
             } catch (error) {
-                const description = getApiErrorMessage(error, 'Failed to pull from container', {
-                    409: PULL_OVERWRITE_HINT,
-                });
+                if (!force && getApiErrorStatusCode(error) === 409) {
+                    // The caller resolves conflicts through a richer dialog, so we
+                    // intentionally skip the toast here to avoid double-surfacing.
+                    return { kind: 'conflict' };
+                }
+
+                const description = getApiErrorMessage(error, 'Failed to pull from container');
 
                 toast.error('Pull failed', { description });
 
-                return false;
+                return { kind: 'error' };
             } finally {
                 setIsPulling(false);
             }

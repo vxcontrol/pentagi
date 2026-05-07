@@ -3,6 +3,7 @@ export {
     bulkCopyAction,
     bulkCopyPathsAction,
     bulkDeleteAction,
+    bulkDownloadAction,
     bulkMoveAction,
     bulkPromoteAction,
     copyPathAction,

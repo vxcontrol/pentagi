@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
+import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
+
 import { resourceIdsToWire } from '@/features/resources/resources-rest';
-import { api, getApiErrorMessage } from '@/lib/axios';
+import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import type { FlowFilesResponse } from './flow-files-utils';
 
@@ -14,32 +16,21 @@ interface AttachOptions {
     shouldOverwrite: boolean;
 }
 
-/**
- * Wire shape of `models.AddResourcesRequest`. Backend expects `ids` as
- * uint64 (JSON numbers); see {@link resourceIdsToWire} for the bridge from
- * the GraphQL `string` ID convention used internally.
- */
-interface AttachResourcesRequestBody {
-    force: boolean;
-    ids: number[];
-}
-
 interface UseFlowFilesAttachResourcesParams {
     flowId: null | string;
     onSuccess?: () => void;
 }
 
 interface UseFlowFilesAttachResourcesResult {
-    attach: (options: AttachOptions) => Promise<boolean>;
+    attach: (options: AttachOptions) => Promise<OverwriteOutcome>;
     isAttaching: boolean;
 }
 
-const ATTACH_OVERWRITE_HINT = 'Some files already exist — enable "Overwrite" to replace them';
-
 /**
  * Wraps the "attach user resources to flow" REST call (`POST /files/resources`)
- * with toast notifications and a loading flag. Resolves to `true` on success so
- * the caller dialog can close itself on a successful attach.
+ * with toast notifications and a loading flag. Returns a discriminated outcome
+ * so callers can branch between success, a 409 conflict that warrants a user
+ * prompt, and any other failure (already toasted).
  */
 export const useFlowFilesAttachResources = ({
     flowId,
@@ -48,9 +39,9 @@ export const useFlowFilesAttachResources = ({
     const [isAttaching, setIsAttaching] = useState(false);
 
     const attach = useCallback(
-        async ({ ids, shouldOverwrite }: AttachOptions): Promise<boolean> => {
+        async ({ ids, shouldOverwrite }: AttachOptions): Promise<OverwriteOutcome> => {
             if (!flowId || ids.length === 0) {
-                return false;
+                return { kind: 'error' };
             }
 
             let numericIds: number[];
@@ -64,13 +55,13 @@ export const useFlowFilesAttachResources = ({
 
                 toast.error('Attach failed', { description });
 
-                return false;
+                return { kind: 'error' };
             }
 
             setIsAttaching(true);
 
             try {
-                await api.post<FlowFilesResponse, AttachResourcesRequestBody>(
+                await api.post<FlowFilesResponse, { force: boolean; ids: number[] }>(
                     FLOW_FILES_ATTACH_RESOURCES_API_PATH(flowId),
                     {
                         force: shouldOverwrite,
@@ -84,15 +75,17 @@ export const useFlowFilesAttachResources = ({
                 });
                 onSuccess?.();
 
-                return true;
+                return { kind: 'ok' };
             } catch (error) {
-                const description = getApiErrorMessage(error, 'Failed to attach resources', {
-                    409: ATTACH_OVERWRITE_HINT,
-                });
+                if (!shouldOverwrite && getApiErrorStatusCode(error) === 409) {
+                    return { kind: 'conflict' };
+                }
+
+                const description = getApiErrorMessage(error, 'Failed to attach resources');
 
                 toast.error('Attach failed', { description });
 
-                return false;
+                return { kind: 'error' };
             } finally {
                 setIsAttaching(false);
             }

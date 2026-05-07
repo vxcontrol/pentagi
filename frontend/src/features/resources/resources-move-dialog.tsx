@@ -1,15 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { FolderInput, Loader2 } from 'lucide-react';
+import { FolderInput } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
-import type { FileNode } from '@/components/file-manager';
+import type { FileNode } from '@/components/shared/file-manager';
 
+import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 
 import { ResourcesConflictDialog } from './resources-conflict-dialog';
 import { resourcesMoveFormSchema, type ResourcesMoveFormValues, useResourcesMove } from './use-resources-move';
@@ -51,6 +51,25 @@ const computeCommonParent = (files: readonly [FileNode, ...FileNode[]]): string 
     return files.every((file) => getParentDir(file.path) === first) ? first : '';
 };
 
+/**
+ * Resolve the per-file destination from the form value:
+ *   - single rename / move → use the typed path verbatim,
+ *   - multi-file batch     → derive `<targetDir>/<file.name>`, root when empty.
+ */
+const resolveDestination = (
+    file: FileNode,
+    values: ResourcesMoveFormValues,
+    isMulti: boolean,
+): string => {
+    if (!isMulti) {
+        return values.destination;
+    }
+
+    const targetDir = values.destination.trim().replace(/\/+$/, '');
+
+    return targetDir ? `${targetDir}/${file.name}` : file.name;
+};
+
 const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProps) => {
     const { cancelConflicts, isMoving, move, pendingConflicts, resolveConflicts } = useResourcesMove();
     const isMulti = files.length > 1;
@@ -67,49 +86,42 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
     }, [files, isMulti]);
 
     const form = useForm<ResourcesMoveFormValues>({
-        defaultValues: {
-            destination: defaultDestination,
-            shouldOverwrite: false,
-        },
+        defaultValues: { destination: defaultDestination },
         mode: 'onChange',
         resolver: zodResolver(resourcesMoveFormSchema),
     });
 
     useEffect(() => {
-        form.reset({
-            destination: defaultDestination,
-            shouldOverwrite: false,
-        });
+        form.reset({ destination: defaultDestination });
     }, [defaultDestination, form]);
 
-    const handleSubmit = form.handleSubmit(async (values) => {
-        if (isMulti) {
-            // Multi-file move: `destination` is the *target directory*, every
-            // file keeps its name. Strip a trailing `/` for consistency with the
-            // single-file branch (which never has one). Empty string = root.
-            const targetDir = values.destination.trim().replace(/\/+$/, '');
-            const results = await Promise.all(
-                files.map((file) => {
-                    const destination = targetDir ? `${targetDir}/${file.name}` : file.name;
+    /**
+     * Run every move in parallel with the given `force` flag. Returns `true`
+     * when every operation either succeeded or surfaced as a 409 conflict
+     * (the latter feeds into `pendingConflicts` for the aggregated dialog).
+     * `false` means at least one entry hit a non-conflict error and the form
+     * should stay open so the user can read the toast and retry.
+     */
+    const submitAll = async (values: ResourcesMoveFormValues, force: boolean): Promise<boolean> => {
+        const results = await Promise.all(
+            files.map((file) => move(file.path, { destination: resolveDestination(file, values, isMulti) }, force)),
+        );
 
-                    return move(file.path, { destination, shouldOverwrite: values.shouldOverwrite });
-                }),
-            );
+        return results.every(Boolean);
+    };
 
-            // Close only when nothing is left over (every move either succeeded
-            // or surfaced a conflict that the conflict dialog will pick up).
-            // If ANY move actually completed, the bulk bar's selection paths
-            // are stale anyway — the host clears them after onSelect resolves.
-            if (results.every(Boolean)) {
-                onClose();
-            }
+    const handleSave = form.handleSubmit(async (values) => {
+        const ok = await submitAll(values, false);
 
-            return;
+        if (ok) {
+            onClose();
         }
+    });
 
-        const wasMoved = await move(files[0].path, values);
+    const handleSaveWithOverwrite = form.handleSubmit(async (values) => {
+        const ok = await submitAll(values, true);
 
-        if (wasMoved) {
+        if (ok) {
             onClose();
         }
     });
@@ -122,13 +134,13 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
         onClose();
     };
 
-    const isSubmitDisabled = !form.formState.isValid || isMoving;
-
+    const isSubmitDisabled = !form.formState.isValid;
     const titleText = isMulti
         ? `Move ${files.length} items`
         : files[0].isDir
           ? 'Move directory'
           : 'Rename or move resource';
+    const overwriteCtaLabel = isMulti ? `Move ${files.length} with overwrite` : 'Move with overwrite';
 
     return (
         <DialogContent>
@@ -151,7 +163,7 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
             <Form {...form}>
                 <form
                     className="flex flex-col gap-4"
-                    onSubmit={handleSubmit}
+                    onSubmit={handleSave}
                 >
                     <FormField
                         control={form.control}
@@ -186,28 +198,7 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
                         )}
                     />
 
-                    <FormField
-                        control={form.control}
-                        name="shouldOverwrite"
-                        render={({ field }) => (
-                            <FormItem className="flex flex-row items-center gap-2">
-                                <FormControl>
-                                    <Switch
-                                        checked={field.value}
-                                        disabled={isMoving}
-                                        onCheckedChange={field.onChange}
-                                    />
-                                </FormControl>
-                                <FormLabel className="cursor-pointer font-normal">
-                                    {isMulti
-                                        ? 'Overwrite if a resource already exists at any destination'
-                                        : 'Overwrite if a resource already exists at the destination'}
-                                </FormLabel>
-                            </FormItem>
-                        )}
-                    />
-
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                         <Button
                             disabled={isMoving}
                             onClick={onClose}
@@ -216,13 +207,17 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
                         >
                             Cancel
                         </Button>
-                        <Button
-                            disabled={isSubmitDisabled}
-                            type="submit"
-                        >
-                            {isMoving ? <Loader2 className="animate-spin" /> : <FolderInput />}
-                            Move
-                        </Button>
+                        <OverwriteCtaButtons
+                            isDisabled={isSubmitDisabled}
+                            isProcessing={isMoving}
+                            onOverwrite={() => {
+                                void handleSaveWithOverwrite();
+                            }}
+                            overwriteLabel={overwriteCtaLabel}
+                            primaryIcon={FolderInput}
+                            primaryLabel="Move"
+                            primaryType="submit"
+                        />
                     </div>
                 </form>
             </Form>

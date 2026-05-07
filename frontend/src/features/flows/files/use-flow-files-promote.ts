@@ -2,9 +2,10 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
 import type { RestResourceList } from '@/features/resources/resources-rest';
 
-import { api, getApiErrorMessage } from '@/lib/axios';
+import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { FLOW_FILES_PROMOTE_API_PATH } from './flow-files-constants';
 
@@ -15,7 +16,6 @@ export const flowFilesPromoteFormSchema = z.object({
         .min(1, { message: 'Destination cannot be empty' })
         .refine((value) => !value.startsWith('/'), { message: 'Destination must be a relative path' })
         .refine((value) => !value.split('/').includes('..'), { message: 'Destination must not contain ".."' }),
-    shouldOverwrite: z.boolean(),
 });
 
 export type FlowFilesPromoteFormValues = z.infer<typeof flowFilesPromoteFormSchema>;
@@ -32,15 +32,18 @@ interface UseFlowFilesPromoteParams {
 
 interface UseFlowFilesPromoteResult {
     isPromoting: boolean;
-    promote: (source: string, values: FlowFilesPromoteFormValues) => Promise<boolean>;
+    promote: (
+        source: string,
+        values: FlowFilesPromoteFormValues,
+        force: boolean,
+    ) => Promise<OverwriteOutcome>;
 }
-
-const PROMOTE_OVERWRITE_HINT = 'Resource already exists — enable "Overwrite" to replace it';
 
 /**
  * Wraps the "promote flow file → user resource" REST call (`POST /files/to-resources`)
- * with toast notifications and a loading flag. Returns a `promote(source, values)`
- * callback that resolves to `true` on success so the dialog can decide whether to close.
+ * with toast notifications and a loading flag. Returns a discriminated outcome
+ * so callers can branch between success, a 409 conflict that warrants a user
+ * prompt, and any other failure (already toasted).
  *
  * The endpoint accepts both single files and directories — the backend always returns
  * a `ResourceList` covering every entry it created or updated. The response payload
@@ -51,9 +54,13 @@ export const useFlowFilesPromote = ({ flowId }: UseFlowFilesPromoteParams): UseF
     const [isPromoting, setIsPromoting] = useState(false);
 
     const promote = useCallback(
-        async (source: string, { destination, shouldOverwrite }: FlowFilesPromoteFormValues): Promise<boolean> => {
+        async (
+            source: string,
+            { destination }: FlowFilesPromoteFormValues,
+            force: boolean,
+        ): Promise<OverwriteOutcome> => {
             if (!flowId) {
-                return false;
+                return { kind: 'error' };
             }
 
             setIsPromoting(true);
@@ -63,7 +70,7 @@ export const useFlowFilesPromote = ({ flowId }: UseFlowFilesPromoteParams): UseF
                     FLOW_FILES_PROMOTE_API_PATH(flowId),
                     {
                         destination: destination.trim(),
-                        force: shouldOverwrite,
+                        force,
                         source,
                     },
                     { timeout: 0 },
@@ -73,15 +80,17 @@ export const useFlowFilesPromote = ({ flowId }: UseFlowFilesPromoteParams): UseF
                     description: `Stored at ${destination.trim()} in your resource library`,
                 });
 
-                return true;
+                return { kind: 'ok' };
             } catch (error) {
-                const description = getApiErrorMessage(error, 'Failed to save resource', {
-                    409: PROMOTE_OVERWRITE_HINT,
-                });
+                if (!force && getApiErrorStatusCode(error) === 409) {
+                    return { kind: 'conflict' };
+                }
+
+                const description = getApiErrorMessage(error, 'Failed to save resource');
 
                 toast.error('Save as resource failed', { description });
 
-                return false;
+                return { kind: 'error' };
             } finally {
                 setIsPromoting(false);
             }

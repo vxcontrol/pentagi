@@ -1,15 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { BookmarkPlus, Loader2 } from 'lucide-react';
+import { BookmarkPlus } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
-import type { FileNode } from '@/components/file-manager';
+import type { FileNode } from '@/components/shared/file-manager';
+import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
+import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
 
+import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
+import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
+import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
+import { useResources } from '@/providers/resources-provider';
 
 import { stripFlowRootPrefix } from './flow-files-utils';
 import {
@@ -38,14 +43,22 @@ interface FlowFilesPromoteDialogProps {
     onClose: () => void;
 }
 
-const buildSingleDefaultDestination = (file: FileNode) => stripFlowRootPrefix(file.path) || file.name;
+interface PromotePlan {
+    /** Final virtual path inside the user's library. */
+    destination: string;
+    /** Display name extracted from the destination for the conflict dialog. */
+    destinationName: string;
+    /** Source path inside the flow cache (e.g. `uploads/result.md`). */
+    source: string;
+}
+
+const buildSingleDefaultDestination = (file: FileNode): string => stripFlowRootPrefix(file.path) || file.name;
 
 /**
  * Default destination directory for a multi-file promote: strip the synthetic
  * root-group prefix (`uploads/`, `container/`, `resources/`) from the file's
- * parent path so the user sees a "library-relative" suggestion. When selections
- * span different parents, fall back to the library root so we don't pick one
- * arbitrarily.
+ * parent path. When selections span different parents, fall back to the
+ * library root so we don't pick one arbitrarily.
  */
 const computeMultiDefaultDestination = (files: readonly [FileNode, ...FileNode[]]): string => {
     const stripParent = (path: string): string => {
@@ -60,8 +73,45 @@ const computeMultiDefaultDestination = (files: readonly [FileNode, ...FileNode[]
     return files.every((file) => stripParent(file.path) === first) ? first : '';
 };
 
+/**
+ * Build the final set of `(source, destination)` promotion plans from the form
+ * value and the picked files. For a single file the user types the full path;
+ * for a batch the input is a directory and every entry keeps its name.
+ */
+const buildPromotePlans = (
+    files: readonly [FileNode, ...FileNode[]],
+    values: FlowFilesPromoteFormValues,
+): PromotePlan[] => {
+    if (files.length > 1) {
+        const targetDir = values.destination.trim().replace(/\/+$/, '');
+
+        return files.map((file) => ({
+            destination: targetDir ? `${targetDir}/${file.name}` : file.name,
+            destinationName: file.name,
+            source: file.path,
+        }));
+    }
+
+    const [single] = files;
+    const destination = values.destination.trim();
+
+    return [
+        {
+            destination,
+            destinationName: destination.split('/').pop() ?? destination,
+            source: single.path,
+        },
+    ];
+};
+
+const planToConflict = ({ destination, destinationName }: PromotePlan): OverwriteConflict => ({
+    destination,
+    destinationName,
+});
+
 const FlowFilesPromoteDialogForm = ({ files, flowId, onClose }: FlowFilesPromoteDialogFormProps) => {
     const { isPromoting, promote } = useFlowFilesPromote({ flowId });
+    const { resources } = useResources();
     const isMulti = files.length > 1;
 
     const defaultDestination = useMemo(() => {
@@ -73,158 +123,167 @@ const FlowFilesPromoteDialogForm = ({ files, flowId, onClose }: FlowFilesPromote
     }, [files, isMulti]);
 
     const form = useForm<FlowFilesPromoteFormValues>({
-        defaultValues: {
-            destination: defaultDestination,
-            shouldOverwrite: false,
-        },
+        defaultValues: { destination: defaultDestination },
         mode: 'onChange',
         resolver: zodResolver(flowFilesPromoteFormSchema),
     });
 
     useEffect(() => {
-        form.reset({
-            destination: defaultDestination,
-            shouldOverwrite: false,
-        });
+        form.reset({ destination: defaultDestination });
     }, [defaultDestination, form]);
 
-    const handleSubmit = form.handleSubmit(async (values) => {
-        if (isMulti) {
-            // Multi-file promote: `destination` is the *target directory* inside
-            // the resource library, every file keeps its current name. Strip a
-            // trailing `/` for consistency with the single-file branch.
-            const targetDir = values.destination.trim().replace(/\/+$/, '');
-            const results = await Promise.all(
-                files.map((file) => {
-                    const destination = targetDir ? `${targetDir}/${file.name}` : file.name;
+    const resourcePaths = useMemo(() => new Set(resources.map((resource) => resource.path)), [resources]);
 
-                    return promote(file.path, { destination, shouldOverwrite: values.shouldOverwrite });
-                }),
+    /**
+     * Drive the canonical "Save / Save with overwrite / Replace all" workflow
+     * from the shared hook. The plan is the array of promote operations
+     * derived from the form on submit; per-file outcomes are aggregated into
+     * a single `OverwriteOutcome` so the hook can branch uniformly.
+     */
+    const overwriteAction = useOverwriteAction<readonly PromotePlan[]>({
+        execute: async (plans, force): Promise<OverwriteOutcome> => {
+            const outcomes = await Promise.all(
+                plans.map((plan) => promote(plan.source, { destination: plan.destination }, force)),
             );
 
-            if (results.every(Boolean)) {
-                onClose();
+            // Surface per-file conflict descriptors so the dialog names exactly
+            // which destinations are taken — far more useful for multi-promote
+            // than a count-based fallback.
+            const conflicts: OverwriteConflict[] = [];
+
+            outcomes.forEach((outcome, index) => {
+                if (outcome.kind === 'conflict') {
+                    const plan = plans[index];
+
+                    if (plan) {
+                        conflicts.push(planToConflict(plan));
+                    }
+                }
+            });
+
+            if (conflicts.length > 0) {
+                return { conflicts, kind: 'conflict' };
             }
 
-            return;
-        }
+            if (outcomes.some((outcome) => outcome.kind === 'error')) {
+                return { kind: 'error' };
+            }
 
-        const wasPromoted = await promote(files[0].path, values);
-
-        if (wasPromoted) {
-            onClose();
-        }
+            return { kind: 'ok' };
+        },
+        findConflicts: (plans) =>
+            plans.filter((plan) => resourcePaths.has(plan.destination)).map(planToConflict),
+        onSuccess: onClose,
     });
 
-    const isSubmitDisabled = !form.formState.isValid || isPromoting;
+    const handleSave = form.handleSubmit(async (values) => {
+        await overwriteAction.primaryExecute(buildPromotePlans(files, values));
+    });
+
+    const handleSaveWithOverwrite = form.handleSubmit(async (values) => {
+        await overwriteAction.forceExecute(buildPromotePlans(files, values));
+    });
+
+    const isSubmitDisabled = !form.formState.isValid;
     const titleText = isMulti ? `Save ${files.length} items as resources` : 'Save as resource';
+    const overwriteCtaLabel = isMulti ? `Save ${files.length} with overwrite` : 'Save with overwrite';
 
     return (
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                    <BookmarkPlus className="size-4" />
-                    {titleText}
-                </DialogTitle>
-                <DialogDescription>
-                    {isMulti ? (
-                        <>
-                            Promote every selected entry from this flow into your global resource library so you can
-                            reuse them in other flows.
-                        </>
-                    ) : (
-                        <>
-                            Promote <code>{files[0].path}</code> from this flow into your global resource library so you
-                            can reuse it in other flows.
-                        </>
-                    )}
-                </DialogDescription>
-            </DialogHeader>
-
-            <Form {...form}>
-                <form
-                    className="flex flex-col gap-4"
-                    onSubmit={handleSubmit}
-                >
-                    <FormField
-                        control={form.control}
-                        name="destination"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>{isMulti ? 'Destination directory' : 'Destination path'}</FormLabel>
-                                <FormControl>
-                                    <Input
-                                        {...field}
-                                        autoComplete="off"
-                                        autoFocus
-                                        disabled={isPromoting}
-                                        placeholder={
-                                            isMulti ? 'Leave empty to save into the library root' : 'results/scan.txt'
-                                        }
-                                    />
-                                </FormControl>
-                                <FormDescription>
-                                    {isMulti ? (
-                                        <>
-                                            Relative directory inside your resource library. Leave empty for the root.
-                                            Each item keeps its current filename.
-                                        </>
-                                    ) : (
-                                        <>
-                                            Relative path inside your resource library. Use <code>/</code> to nest into
-                                            subdirectories.
-                                        </>
-                                    )}
-                                </FormDescription>
-                                <FormMessage />
-                            </FormItem>
+        <>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <BookmarkPlus className="size-4" />
+                        {titleText}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {isMulti ? (
+                            <>
+                                Promote every selected entry from this flow into your global resource library so you can
+                                reuse them in other flows.
+                            </>
+                        ) : (
+                            <>
+                                Promote <code>{files[0].path}</code> from this flow into your global resource library so
+                                you can reuse it in other flows.
+                            </>
                         )}
-                    />
+                    </DialogDescription>
+                </DialogHeader>
 
-                    <FormField
-                        control={form.control}
-                        name="shouldOverwrite"
-                        render={({ field }) => (
-                            <FormItem className="flex flex-row items-center gap-2">
-                                <FormControl>
-                                    <Switch
-                                        checked={field.value}
-                                        disabled={isPromoting}
-                                        onCheckedChange={field.onChange}
-                                    />
-                                </FormControl>
-                                <FormLabel className="cursor-pointer font-normal">
-                                    {isMulti
-                                        ? 'Overwrite if a resource already exists at any destination'
-                                        : 'Overwrite if a resource already exists at this path'}
-                                </FormLabel>
-                                <FormDescription className="sr-only">
-                                    Replace the existing resource entry when one already exists.
-                                </FormDescription>
-                            </FormItem>
-                        )}
-                    />
+                <Form {...form}>
+                    <form
+                        className="flex flex-col gap-4"
+                        onSubmit={handleSave}
+                    >
+                        <FormField
+                            control={form.control}
+                            name="destination"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>{isMulti ? 'Destination directory' : 'Destination path'}</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            {...field}
+                                            autoComplete="off"
+                                            autoFocus
+                                            disabled={isPromoting}
+                                            placeholder={
+                                                isMulti
+                                                    ? 'Leave empty to save into the library root'
+                                                    : 'results/scan.txt'
+                                            }
+                                        />
+                                    </FormControl>
+                                    <FormDescription>
+                                        {isMulti ? (
+                                            <>
+                                                Relative directory inside your resource library. Leave empty for the
+                                                root. Each item keeps its current filename.
+                                            </>
+                                        ) : (
+                                            <>
+                                                Relative path inside your resource library. Use <code>/</code> to nest
+                                                into subdirectories.
+                                            </>
+                                        )}
+                                    </FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
-                    <div className="flex justify-end gap-2">
-                        <Button
-                            disabled={isPromoting}
-                            onClick={onClose}
-                            type="button"
-                            variant="outline"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            disabled={isSubmitDisabled}
-                            type="submit"
-                        >
-                            {isPromoting ? <Loader2 className="animate-spin" /> : <BookmarkPlus />}
-                            Save
-                        </Button>
-                    </div>
-                </form>
-            </Form>
-        </DialogContent>
+                        <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                                disabled={isPromoting}
+                                onClick={onClose}
+                                type="button"
+                                variant="outline"
+                            >
+                                Cancel
+                            </Button>
+                            <OverwriteCtaButtons
+                                isDisabled={isSubmitDisabled}
+                                isProcessing={isPromoting}
+                                onOverwrite={() => {
+                                    void handleSaveWithOverwrite();
+                                }}
+                                overwriteLabel={overwriteCtaLabel}
+                                primaryIcon={BookmarkPlus}
+                                primaryLabel="Save"
+                                primaryType="submit"
+                            />
+                        </div>
+                    </form>
+                </Form>
+            </DialogContent>
+
+            <OverwriteConfirmDialog
+                conflicts={overwriteAction.conflicts}
+                onCancel={overwriteAction.resetConflicts}
+                onReplaceAll={overwriteAction.handleReplaceAll}
+            />
+        </>
     );
 };
 

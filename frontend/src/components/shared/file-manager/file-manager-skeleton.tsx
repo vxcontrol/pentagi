@@ -100,9 +100,7 @@ export const FileManagerSkeleton = ({
                             </div>
 
                             {isSizeVisible && (
-                                <Skeleton
-                                    className={cn('h-3 shrink-0', row.isDir ? 'w-0 opacity-0' : row.sizeWidth)}
-                                />
+                                <Skeleton className={cn('h-3 shrink-0', row.isDir ? 'w-0 opacity-0' : row.sizeWidth)} />
                             )}
                             {isModifiedVisible && <Skeleton className="h-3 w-16 shrink-0" />}
                             {hasActions && (

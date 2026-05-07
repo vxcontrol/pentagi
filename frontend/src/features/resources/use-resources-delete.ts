@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
-import type { FileNode } from '@/components/file-manager';
+import type { FileNode } from '@/components/shared/file-manager';
 
 import { api, getApiErrorMessage } from '@/lib/axios';
 
 import { RESOURCES_API_PATH } from './resources-constants';
-import { pluralizeItems } from './resources-utils';
+import { buildPathsQuery, pluralizeItems } from './resources-utils';
 
 interface UseResourcesDeleteParams {
     onAfterDelete?: () => void;
@@ -15,33 +15,30 @@ interface UseResourcesDeleteParams {
 interface UseResourcesDeleteResult {
     clearFileToDelete: () => void;
     confirmDelete: () => Promise<void>;
-    deleteBulk: (filesToDelete: FileNode[]) => Promise<void>;
+    /**
+     * Delete one or more resources in a single atomic backend call. Both the
+     * row-level "Delete" action and the bulk-bar entry funnel through this
+     * method — the only difference is that the row flow shows a one-name
+     * confirm dialog first via `requestDelete` / `confirmDelete`.
+     */
+    deleteFiles: (filesToDelete: readonly FileNode[]) => Promise<void>;
     fileToDelete: FileNode | null;
     requestDelete: (file: FileNode) => void;
 }
 
-const deleteResourceRequest = (path: string) => api.delete<void>(RESOURCES_API_PATH, { params: { path } });
-
-const reportBulkDeleteOutcome = (succeededCount: number, failedCount: number): void => {
-    if (failedCount === 0) {
-        toast.success(`${succeededCount} ${pluralizeItems(succeededCount)} deleted`);
-
-        return;
-    }
-
-    if (succeededCount === 0) {
-        toast.error('Bulk delete failed', {
-            description: `Failed to delete ${failedCount} ${pluralizeItems(failedCount)}`,
-        });
-
-        return;
-    }
-
-    toast.warning(`${succeededCount} succeeded · ${failedCount} failed`);
-};
+/**
+ * Issues one `DELETE /resources/?paths[]=…` regardless of how many files are
+ * passed in. The backend deduplicates and validates atomically: either every
+ * path is removed or nothing is, so callers don't have to reconcile partial
+ * failures. The response payload enumerates every entry that was actually
+ * removed — but we ignore it here because the GraphQL `resourceDeleted`
+ * subscription already drives the Apollo cache update.
+ */
+const deleteResourcesRequest = (paths: readonly string[]) =>
+    api.delete<void>(`${RESOURCES_API_PATH}?${buildPathsQuery(paths)}`);
 
 /**
- * Owns both the single-resource and bulk-delete flows. Component drives the
+ * Owns both the single-resource and bulk-delete flows. The component drives the
  * confirmation dialog state through the returned `fileToDelete`/`requestDelete`/
  * `clearFileToDelete` triple, while the hook hides every API call and toast.
  *
@@ -59,44 +56,48 @@ export const useResourcesDelete = ({ onAfterDelete }: UseResourcesDeleteParams =
         setFileToDelete(null);
     }, []);
 
+    const deleteFiles = useCallback(
+        async (filesToDelete: readonly FileNode[]) => {
+            if (filesToDelete.length === 0) {
+                return;
+            }
+
+            try {
+                await deleteResourcesRequest(filesToDelete.map((file) => file.path));
+
+                if (filesToDelete.length === 1) {
+                    const single = filesToDelete[0];
+                    toast.success(single.isDir ? 'Directory deleted' : 'Resource deleted');
+                } else {
+                    toast.success(`${filesToDelete.length} ${pluralizeItems(filesToDelete.length)} deleted`);
+                }
+
+                onAfterDelete?.();
+            } catch (error) {
+                const description = getApiErrorMessage(error, 'Failed to delete resource');
+
+                toast.error('Delete failed', { description });
+            }
+        },
+        [onAfterDelete],
+    );
+
     const confirmDelete = useCallback(async () => {
         if (!fileToDelete) {
             return;
         }
 
         try {
-            await deleteResourceRequest(fileToDelete.path);
-            toast.success(fileToDelete.isDir ? 'Directory deleted' : 'Resource deleted');
-            onAfterDelete?.();
-        } catch (error) {
-            const description = getApiErrorMessage(error, 'Failed to delete resource');
-
-            toast.error('Delete failed', { description });
+            await deleteFiles([fileToDelete]);
         } finally {
             setFileToDelete(null);
         }
-    }, [fileToDelete, onAfterDelete]);
-
-    const deleteBulk = useCallback(
-        async (filesToDelete: FileNode[]) => {
-            if (filesToDelete.length === 0) {
-                return;
-            }
-
-            const results = await Promise.allSettled(filesToDelete.map((file) => deleteResourceRequest(file.path)));
-            const succeededCount = results.filter((result) => result.status === 'fulfilled').length;
-            const failedCount = results.length - succeededCount;
-
-            reportBulkDeleteOutcome(succeededCount, failedCount);
-            onAfterDelete?.();
-        },
-        [onAfterDelete],
-    );
+    }, [deleteFiles, fileToDelete]);
 
     return {
         clearFileToDelete,
         confirmDelete,
-        deleteBulk,
+        deleteFiles,
         fileToDelete,
         requestDelete,
     };

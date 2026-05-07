@@ -2,10 +2,12 @@ import { Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, Search, X } f
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
     bulkCopyAction,
     bulkCopyPathsAction,
     bulkDeleteAction,
+    bulkDownloadAction,
     bulkMoveAction,
     copyPathAction,
     deleteAction,
@@ -14,8 +16,7 @@ import {
     type FileManagerAction,
     type FileManagerBulkAction,
     type FileNode,
-} from '@/components/file-manager';
-import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+} from '@/components/shared/file-manager';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -29,7 +30,7 @@ import { ResourcesConflictDialog } from '@/features/resources/resources-conflict
 import { ResourcesCopyDialog } from '@/features/resources/resources-copy-dialog';
 import { ResourcesMkdirDialog } from '@/features/resources/resources-mkdir-dialog';
 import { ResourcesMoveDialog } from '@/features/resources/resources-move-dialog';
-import { buildResourceDownloadHref, pluralizeItems, toFileNode } from '@/features/resources/resources-utils';
+import { buildResourcesDownloadHref, pluralizeItems, toFileNode } from '@/features/resources/resources-utils';
 import { useResourcesDelete } from '@/features/resources/use-resources-delete';
 import { useResourcesMove } from '@/features/resources/use-resources-move';
 import { useResourcesSearch } from '@/features/resources/use-resources-search';
@@ -64,7 +65,9 @@ const Resources = () => {
     /**
      * Drag-and-drop entry point: move every dragged item into `destinationDir` by issuing
      * one `PUT /resources/move` per source. We don't pre-check or batch — each request
-     * goes out independently so a partial failure still moves the rest.
+     * goes out independently so a partial failure still moves the rest. Conflicts feed
+     * into `pendingConflicts` and surface through the shared overwrite confirm dialog;
+     * `force=false` is therefore safe even for repeated drags onto the same target.
      */
     const handleMoveItems = useCallback(
         async (sources: FileNode[], destinationDir: string) => {
@@ -72,7 +75,7 @@ const Resources = () => {
                 sources.map((source) => {
                     const destination = destinationDir ? `${destinationDir}/${source.name}` : source.name;
 
-                    return moveAction.move(source.path, { destination, shouldOverwrite: false });
+                    return moveAction.move(source.path, { destination }, false);
                 }),
             );
         },
@@ -123,7 +126,7 @@ const Resources = () => {
     const handleOpenFile = useCallback((file: FileNode) => {
         const anchor = document.createElement('a');
 
-        anchor.href = buildResourceDownloadHref(file);
+        anchor.href = buildResourcesDownloadHref([file]);
         anchor.download = file.name;
         anchor.rel = 'noopener';
         document.body.appendChild(anchor);
@@ -133,7 +136,10 @@ const Resources = () => {
 
     const fileManagerActions = useMemo<FileManagerAction[]>(
         () => [
-            downloadAction(buildResourceDownloadHref),
+            // Row download is the single-file specialisation of the bulk download:
+            // we hand the URL builder a 1-element array so the same backend
+            // contract (`?paths[]=`) is used everywhere.
+            downloadAction((file) => buildResourcesDownloadHref([file])),
             copyPathAction(handleCopyPath),
             {
                 appliesToDirs: true,
@@ -159,12 +165,13 @@ const Resources = () => {
     // actions in the overflow `…` menu, then destructive Delete on the right.
     const fileManagerBulkActions = useMemo<FileManagerBulkAction[]>(
         () => [
+            bulkDownloadAction(buildResourcesDownloadHref),
             bulkMoveAction((files) => setFilesToMove(files)),
             bulkCopyAction((files) => setFilesToCopy(files), { overflow: true }),
             bulkCopyPathsAction(handleBulkCopyPaths),
-            bulkDeleteAction(deletion.deleteBulk),
+            bulkDeleteAction(deletion.deleteFiles),
         ],
-        [deletion.deleteBulk, handleBulkCopyPaths],
+        [deletion.deleteFiles, handleBulkCopyPaths],
     );
 
     const handleDeleteDialogOpenChange = useCallback(

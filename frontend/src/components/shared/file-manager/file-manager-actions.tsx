@@ -154,3 +154,66 @@ export const bulkPromoteAction = (
     onSelect: onPromote,
     overflow: options.overflow,
 });
+
+interface BulkDownloadOptions {
+    /** Override the suggested filename hint passed to the browser. */
+    getDownloadName?: (files: FileNode[]) => string;
+    label?: string;
+    overflow?: boolean;
+}
+
+/**
+ * Default browser-side filename hint for bulk download. Mirrors what the
+ * backend will set via `Content-Disposition` so the browser shows a sensible
+ * name even when the response header is missing or stripped:
+ *
+ *   - 1 file       → original filename
+ *   - 1 directory  → `${name}.zip`
+ *   - many entries → `download.zip`
+ */
+const defaultBulkDownloadName = (files: FileNode[]): string => {
+    const [single, ...rest] = files;
+
+    if (single && rest.length === 0) {
+        return single.isDir ? `${single.name}.zip` : single.name;
+    }
+
+    return 'download.zip';
+};
+
+/**
+ * Built-in "download" bulk action. The host supplies a function that builds the
+ * download URL from the selection (typically with `?paths[]=…&paths[]=…`); the
+ * helper takes care of triggering the actual browser download via a transient
+ * `<a download>` element. Backend decides the response shape: a single file is
+ * served as-is, anything else is packaged into a ZIP archive.
+ */
+export const bulkDownloadAction = (
+    getDownloadHref: (files: FileNode[]) => string,
+    options: BulkDownloadOptions = {},
+): FileManagerBulkAction => ({
+    icon: Download,
+    id: '__builtin_bulk_download',
+    label: options.label ?? 'Download',
+    onSelect: (files) => {
+        if (files.length === 0) {
+            return;
+        }
+
+        const href = getDownloadHref(files);
+
+        // Trigger the download via a transient anchor so the browser respects
+        // the `download` attribute and the backend's `Content-Disposition`.
+        // `window.open` would do, but it can be blocked as a popup and doesn't
+        // honour the filename hint the same way.
+        const anchor = document.createElement('a');
+
+        anchor.href = href;
+        anchor.download = (options.getDownloadName ?? defaultBulkDownloadName)(files);
+        anchor.rel = 'noopener';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    },
+    overflow: options.overflow,
+});

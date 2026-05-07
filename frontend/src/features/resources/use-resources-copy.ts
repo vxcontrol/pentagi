@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-import { api, type ApiHttpError, getApiErrorMessage } from '@/lib/axios';
+import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { RESOURCES_COPY_API_PATH } from './resources-constants';
 
@@ -13,7 +13,6 @@ export const resourcesCopyFormSchema = z.object({
         .min(1, { message: 'Destination cannot be empty' })
         .refine((value) => !value.startsWith('/'), { message: 'Destination must be a relative path' })
         .refine((value) => !value.split('/').includes('..'), { message: 'Destination must not contain ".."' }),
-    shouldOverwrite: z.boolean(),
 });
 
 export interface ResourcesCopyConflict {
@@ -34,7 +33,12 @@ interface CopyRequestBody {
 interface UseResourcesCopyResult {
     /** Drop the pending conflicts without retrying. */
     cancelConflicts: () => void;
-    copy: (sourcePath: string, values: ResourcesCopyFormValues) => Promise<boolean>;
+    /**
+     * Issue a single copy. `force=false` collects 409s into `pendingConflicts`
+     * for an aggregated dialog; `force=true` skips that branch and toasts on
+     * any failure (used by the "Copy with overwrite" CTA path).
+     */
+    copy: (sourcePath: string, values: ResourcesCopyFormValues, force: boolean) => Promise<boolean>;
     isCopying: boolean;
     /**
      * 409 conflicts collected across one or more parallel `copy()` calls. The consumer
@@ -45,12 +49,6 @@ interface UseResourcesCopyResult {
     /** Retry every pending conflict with `force = true`. Promise resolves when all settle. */
     resolveConflicts: () => Promise<void>;
 }
-
-const getStatusCode = (error: unknown): number | undefined => {
-    const httpError = error as ApiHttpError | null | undefined;
-
-    return httpError?.statusCode ?? httpError?.response?.status;
-};
 
 const extractName = (path: string): string => path.split('/').pop() ?? path;
 
@@ -74,7 +72,7 @@ export const useResourcesCopy = (): UseResourcesCopyResult => {
 
                 return true;
             } catch (error) {
-                if (getStatusCode(error) === 409 && !force) {
+                if (getApiErrorStatusCode(error) === 409 && !force) {
                     setPendingConflicts((prev) => [
                         ...prev,
                         {
@@ -100,8 +98,8 @@ export const useResourcesCopy = (): UseResourcesCopyResult => {
     );
 
     const copy = useCallback(
-        (sourcePath: string, { destination, shouldOverwrite }: ResourcesCopyFormValues): Promise<boolean> =>
-            performCopy(sourcePath, destination.trim(), shouldOverwrite),
+        (sourcePath: string, { destination }: ResourcesCopyFormValues, force: boolean): Promise<boolean> =>
+            performCopy(sourcePath, destination.trim(), force),
         [performCopy],
     );
 

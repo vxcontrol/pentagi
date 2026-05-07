@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-import { api, type ApiHttpError, getApiErrorMessage } from '@/lib/axios';
+import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { RESOURCES_MOVE_API_PATH } from './resources-constants';
 
@@ -13,7 +13,6 @@ export const resourcesMoveFormSchema = z.object({
         .min(1, { message: 'Destination cannot be empty' })
         .refine((value) => !value.startsWith('/'), { message: 'Destination must be a relative path' })
         .refine((value) => !value.split('/').includes('..'), { message: 'Destination must not contain ".."' }),
-    shouldOverwrite: z.boolean(),
 });
 
 export interface ResourcesMoveConflict {
@@ -35,7 +34,12 @@ interface UseResourcesMoveResult {
     /** Drop the pending conflicts without retrying. */
     cancelConflicts: () => void;
     isMoving: boolean;
-    move: (sourcePath: string, values: ResourcesMoveFormValues) => Promise<boolean>;
+    /**
+     * Issue a single move. `force=false` collects 409s into `pendingConflicts`
+     * for an aggregated dialog; `force=true` skips that branch and toasts on
+     * any failure (used by the "Move with overwrite" CTA path).
+     */
+    move: (sourcePath: string, values: ResourcesMoveFormValues, force: boolean) => Promise<boolean>;
     /**
      * 409 conflicts collected across one or more parallel `move()` calls. The consumer
      * shows a single "Replace?" dialog summarising the count; clicking Replace retries
@@ -45,12 +49,6 @@ interface UseResourcesMoveResult {
     /** Retry every pending conflict with `force = true`. Promise resolves when all settle. */
     resolveConflicts: () => Promise<void>;
 }
-
-const getStatusCode = (error: unknown): number | undefined => {
-    const httpError = error as ApiHttpError | null | undefined;
-
-    return httpError?.statusCode ?? httpError?.response?.status;
-};
 
 const extractName = (path: string): string => path.split('/').pop() ?? path;
 
@@ -79,7 +77,7 @@ export const useResourcesMove = (): UseResourcesMoveResult => {
                 // every parallel `move()` call. `force = true` skips this branch (the
                 // overwrite was already pre-confirmed), so retries land in the toast
                 // path on any unexpected re-conflict.
-                if (getStatusCode(error) === 409 && !force) {
+                if (getApiErrorStatusCode(error) === 409 && !force) {
                     setPendingConflicts((prev) => [
                         ...prev,
                         {
@@ -105,8 +103,8 @@ export const useResourcesMove = (): UseResourcesMoveResult => {
     );
 
     const move = useCallback(
-        (sourcePath: string, { destination, shouldOverwrite }: ResourcesMoveFormValues): Promise<boolean> =>
-            performMove(sourcePath, destination.trim(), shouldOverwrite),
+        (sourcePath: string, { destination }: ResourcesMoveFormValues, force: boolean): Promise<boolean> =>
+            performMove(sourcePath, destination.trim(), force),
         [performMove],
     );
 

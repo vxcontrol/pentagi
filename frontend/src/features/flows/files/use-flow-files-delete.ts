@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
-import type { FileNode } from '@/components/file-manager';
+import type { FileNode } from '@/components/shared/file-manager';
 
+import { buildPathsQuery } from '@/features/resources/resources-utils';
 import { api, getApiErrorMessage } from '@/lib/axios';
 
 import { FLOW_FILES_API_PATH } from './flow-files-constants';
@@ -16,31 +17,27 @@ interface UseFlowFilesDeleteParams {
 interface UseFlowFilesDeleteResult {
     clearFileToDelete: () => void;
     confirmDelete: () => Promise<void>;
-    deleteBulk: (filesToDelete: FileNode[]) => Promise<void>;
+    /**
+     * Delete one or more flow files in a single atomic backend call. Both the
+     * row-level "Delete" action and the bulk-bar entry funnel through this
+     * method — the row flow shows a one-name confirm dialog first via
+     * `requestDelete` / `confirmDelete`.
+     */
+    deleteFiles: (filesToDelete: readonly FileNode[]) => Promise<void>;
     fileToDelete: FileNode | null;
     requestDelete: (file: FileNode) => void;
 }
 
-const deleteFileRequest = (flowId: string, path: string) =>
-    api.delete<FlowFilesResponse>(FLOW_FILES_API_PATH(flowId), { params: { path } });
-
-const reportBulkDeleteOutcome = (succeededCount: number, failedCount: number): void => {
-    if (failedCount === 0) {
-        toast.success(`${succeededCount} ${pluralizeItems(succeededCount)} deleted`);
-
-        return;
-    }
-
-    if (succeededCount === 0) {
-        toast.error('Bulk delete failed', {
-            description: `Failed to delete ${failedCount} ${pluralizeItems(failedCount)}`,
-        });
-
-        return;
-    }
-
-    toast.warning(`${succeededCount} succeeded · ${failedCount} failed`);
-};
+/**
+ * Issues one `DELETE /flows/{id}/files?paths[]=…` regardless of how many files
+ * are passed in. The backend deduplicates and validates atomically: either every
+ * path is removed or nothing is. The response enumerates every entry that was
+ * actually deleted (including nested files for directory removals) — we still
+ * trigger an explicit refetch because flow files don't have a deletion
+ * subscription wired into Apollo yet.
+ */
+const deleteFlowFilesRequest = (flowId: string, paths: readonly string[]) =>
+    api.delete<FlowFilesResponse>(`${FLOW_FILES_API_PATH(flowId)}?${buildPathsQuery(paths)}`);
 
 /**
  * Owns both the single-file and bulk-delete flows. The component drives the
@@ -59,45 +56,53 @@ export const useFlowFilesDelete = ({ flowId, refetchFiles }: UseFlowFilesDeleteP
         setFileToDelete(null);
     }, []);
 
-    const confirmDelete = useCallback(async () => {
-        if (!flowId || !fileToDelete) {
-            return;
-        }
-
-        try {
-            await deleteFileRequest(flowId, fileToDelete.path);
-            toast.success(fileToDelete.isDir ? 'Directory deleted' : 'File deleted');
-            await refetchFiles();
-        } catch (error) {
-            const description = getApiErrorMessage(error, 'Failed to delete file');
-
-            toast.error('Delete failed', { description });
-        } finally {
-            setFileToDelete(null);
-        }
-    }, [flowId, fileToDelete, refetchFiles]);
-
-    const deleteBulk = useCallback(
-        async (filesToDelete: FileNode[]) => {
+    const deleteFiles = useCallback(
+        async (filesToDelete: readonly FileNode[]) => {
             if (!flowId || filesToDelete.length === 0) {
                 return;
             }
 
-            const results = await Promise.allSettled(filesToDelete.map((file) => deleteFileRequest(flowId, file.path)));
-            const succeededCount = results.filter((result) => result.status === 'fulfilled').length;
-            const failedCount = results.length - succeededCount;
+            try {
+                await deleteFlowFilesRequest(
+                    flowId,
+                    filesToDelete.map((file) => file.path),
+                );
 
-            reportBulkDeleteOutcome(succeededCount, failedCount);
+                if (filesToDelete.length === 1) {
+                    const single = filesToDelete[0];
+                    toast.success(single.isDir ? 'Directory deleted' : 'File deleted');
+                } else {
+                    toast.success(`${filesToDelete.length} ${pluralizeItems(filesToDelete.length)} deleted`);
+                }
+            } catch (error) {
+                const description = getApiErrorMessage(error, 'Failed to delete file');
 
-            await refetchFiles();
+                toast.error('Delete failed', { description });
+            } finally {
+                // Always refetch — succeeded paths now leave the cache, failed
+                // paths may have been partially recreated by other clients.
+                await refetchFiles();
+            }
         },
         [flowId, refetchFiles],
     );
 
+    const confirmDelete = useCallback(async () => {
+        if (!fileToDelete) {
+            return;
+        }
+
+        try {
+            await deleteFiles([fileToDelete]);
+        } finally {
+            setFileToDelete(null);
+        }
+    }, [deleteFiles, fileToDelete]);
+
     return {
         clearFileToDelete,
         confirmDelete,
-        deleteBulk,
+        deleteFiles,
         fileToDelete,
         requestDelete,
     };

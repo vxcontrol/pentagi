@@ -224,5 +224,23 @@ export const getApiErrorMessage = (
     return err.message || fallback;
 };
 
+/**
+ * Extract the HTTP status code from an unknown error thrown by axios. Returns
+ * `undefined` for non-axios errors or when the request never reached a server.
+ *
+ * Used across hooks that need to branch on a specific status (most commonly
+ * 409 conflict) without re-implementing the same `error.statusCode ??
+ * error.response?.status` shape every time.
+ */
+export const getApiErrorStatusCode = (error: unknown): number | undefined => {
+    if (!error || typeof error !== 'object') {
+        return undefined;
+    }
+
+    const httpError = error as ApiHttpError;
+
+    return httpError.statusCode ?? httpError.response?.status;
+};
+
 export default axios;
 export { axios };

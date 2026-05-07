@@ -38,6 +38,7 @@ export const FileManager = ({
     labels,
     onMoveItems,
     onOpen,
+    onOpenDirectory,
     onSelectionChange,
     rootGroups,
     search,
@@ -132,18 +133,35 @@ export const FileManager = ({
         onSelectionChangeRef.current?.(selectedPaths);
     }, [selectedPaths]);
 
-    // Same latest-ref pattern for `onOpen`: it bleeds into the keyboard handler's
-    // deps and through `TreeNode` → `Row`, so a non-memoized parent callback would
-    // otherwise invalidate the memo on every row whenever the parent re-renders.
+    // Same latest-ref pattern for `onOpen` / `onOpenDirectory`: both bleed into
+    // the keyboard handler's deps and through `TreeNode` → `Row`, so a
+    // non-memoized parent callback would otherwise invalidate the memo on every
+    // row whenever the parent re-renders.
     const onOpenRef = useRef(onOpen);
+    const onOpenDirectoryRef = useRef(onOpenDirectory);
 
     useEffect(() => {
         onOpenRef.current = onOpen;
     }, [onOpen]);
 
+    useEffect(() => {
+        onOpenDirectoryRef.current = onOpenDirectory;
+    }, [onOpenDirectory]);
+
     const handleOpen = useCallback((file: FileNode) => {
         onOpenRef.current?.(file);
     }, []);
+
+    // We need the row + keyboard handler to know whether the consumer registered
+    // a custom directory-open callback so the default expand/collapse is bypassed
+    // only when an override actually exists. Wrapping in a stable callback keeps
+    // the row memo intact across parent re-renders, but we conditionally pass it
+    // (vs. an always-defined wrapper) by gating on the prop reference itself.
+    const handleOpenDirectory = useCallback((dir: FileNode) => {
+        onOpenDirectoryRef.current?.(dir);
+    }, []);
+
+    const stableHandleOpenDirectory = onOpenDirectory ? handleOpenDirectory : undefined;
 
     // ── roving tabindex / keyboard navigation ────────────────────────────────
     const [activeRowPath, setActiveRowPath] = useState<null | string>(null);
@@ -180,6 +198,7 @@ export const FileManager = ({
         isCheckboxVisible,
         onClearSelection: clearSelection,
         onOpen: handleOpen,
+        onOpenDirectory: stableHandleOpenDirectory,
         onSelectAll: toggleSelectAll,
         onSetActiveRow: setActiveRowPath,
         onToggleExpand: toggleExpand,
@@ -238,10 +257,11 @@ export const FileManager = ({
             onClick: onRowClick,
             onFocusRow: handleRowFocus,
             onOpen: handleOpen,
+            onOpenDirectory: stableHandleOpenDirectory,
             onToggleExpand: toggleExpand,
             onToggleSelection,
         }),
-        [handleOpen, handleRowFocus, onRowClick, onToggleSelection, toggleExpand],
+        [handleOpen, handleRowFocus, onRowClick, onToggleSelection, stableHandleOpenDirectory, toggleExpand],
     );
 
     if (isLoading) {

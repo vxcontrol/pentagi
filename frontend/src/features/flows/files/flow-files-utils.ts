@@ -1,9 +1,20 @@
-import type { FileNode } from '@/components/file-manager';
+import type { FileNode } from '@/components/shared/file-manager';
 import type { FlowFileFragmentFragment } from '@/graphql/types';
 
+import { buildPathsQuery } from '@/features/resources/resources-utils';
 import { baseUrl } from '@/models/api';
 
 import { CONTAINER_PATH_PREFIX, RESOURCES_PATH_PREFIX, UPLOADS_PATH_PREFIX } from './flow-files-constants';
+
+/**
+ * Wire shape of `models.ContainerFiles`. `path` echoes back the queried path
+ * when exactly one was requested — empty string for multi-path queries.
+ */
+export interface ContainerFilesResponse {
+    files: RestContainerFile[];
+    path: string;
+    total: number;
+}
 
 export type FlowFile = FlowFileFragmentFragment;
 
@@ -16,6 +27,16 @@ export type FlowFile = FlowFileFragmentFragment;
 export interface FlowFilesResponse {
     files: RestFlowFile[];
     total: number;
+}
+
+/** Wire shape of `models.ContainerFile` — matches `RestFlowFile` exactly today. */
+export interface RestContainerFile {
+    id: string;
+    is_dir: boolean;
+    modified_at: string;
+    name: string;
+    path: string;
+    size: number;
 }
 
 export interface RestFlowFile {
@@ -45,22 +66,41 @@ export const stripFlowRootPrefix = (path: string): string => {
 };
 
 /**
- * Builds the absolute URL the browser hits to download a single file or directory archive
- * for the given flow. Returns `null` when no flow is selected so callers can disable
- * the download UI without checking `flowId` themselves.
+ * Build the absolute download URL for one or more flow files. Returns `null`
+ * when no flow is selected so callers can disable the download UI without
+ * checking `flowId` themselves. The backend decides the response shape on its
+ * own (single file → attachment, single directory → `<dirname>.zip`, multiple
+ * paths → `download.zip`); callers just pass the file list.
  */
-export const buildDownloadHref = (flowId: null | string, file: FileNode): null | string => {
+export const buildFlowFilesDownloadHref = (flowId: null | string, files: readonly FileNode[]): null | string => {
     if (!flowId) {
         return null;
     }
 
-    return `${baseUrl}/flows/${flowId}/files/download?path=${encodeURIComponent(file.path)}`;
+    const query = buildPathsQuery(files.map((file) => file.path));
+
+    return `${baseUrl}/flows/${flowId}/files/download?${query}`;
 };
 
 export const toFileNode = (file: FlowFile): FileNode => ({
     id: file.id,
     isDir: file.isDir,
     modifiedAt: file.modifiedAt,
+    name: file.name,
+    path: file.path,
+    size: file.size,
+});
+
+/**
+ * Convert a `RestContainerFile` (snake_case wire shape) into a `FileNode` the
+ * FileManager can render. Container paths are absolute (`/work/foo.txt`); the
+ * Pull dialog sends them straight back to `POST /files/pull?paths=…` so no
+ * normalisation is needed here — we pass the path through verbatim.
+ */
+export const containerFileToFileNode = (file: RestContainerFile): FileNode => ({
+    id: file.id,
+    isDir: file.is_dir,
+    modifiedAt: file.modified_at,
     name: file.name,
     path: file.path,
     size: file.size,

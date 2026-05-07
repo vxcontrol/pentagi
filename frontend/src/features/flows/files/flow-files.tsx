@@ -2,9 +2,11 @@ import { ArrowDownToLine, FolderInput, FolderOutput, FolderUp, Info, Loader2, Se
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
     bulkCopyPathsAction,
     bulkDeleteAction,
+    bulkDownloadAction,
     bulkPromoteAction,
     copyPathAction,
     deleteAction,
@@ -13,8 +15,7 @@ import {
     type FileManagerAction,
     type FileManagerBulkAction,
     type FileNode,
-} from '@/components/file-manager';
-import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+} from '@/components/shared/file-manager';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
@@ -29,7 +30,7 @@ import { FlowFilesAttachResourcesDialog } from './flow-files-attach-resources-di
 import { ROOT_GROUPS } from './flow-files-constants';
 import { FlowFilesPromoteDialog } from './flow-files-promote-dialog';
 import { FlowFilesPullDialog } from './flow-files-pull-dialog';
-import { buildDownloadHref, pluralizeItems } from './flow-files-utils';
+import { buildFlowFilesDownloadHref, pluralizeItems } from './flow-files-utils';
 import { useFlowFilesData } from './use-flow-files-data';
 import { useFlowFilesDelete } from './use-flow-files-delete';
 import { useFlowFilesRealtime } from './use-flow-files-realtime';
@@ -94,7 +95,18 @@ const FlowFiles = () => {
         toast.error('Failed to copy paths');
     }, []);
 
-    const getDownloadHref = useCallback((file: FileNode): string => buildDownloadHref(flowId, file) ?? '', [flowId]);
+    // Single-file row download specialises the bulk URL builder via a 1-element
+    // array. `flowId` may be missing (no flow selected yet) — return '' so
+    // FileManager renders a noop link instead of crashing on `null`.
+    const getRowDownloadHref = useCallback(
+        (file: FileNode): string => buildFlowFilesDownloadHref(flowId, [file]) ?? '',
+        [flowId],
+    );
+
+    const getBulkDownloadHref = useCallback(
+        (files: FileNode[]): string => buildFlowFilesDownloadHref(flowId, files) ?? '',
+        [flowId],
+    );
 
     const handleRequestPromote = useCallback((file: FileNode) => {
         setFilesToPromote([file]);
@@ -115,12 +127,12 @@ const FlowFiles = () => {
 
     const fileManagerActions = useMemo<FileManagerAction[]>(
         () => [
-            downloadAction(getDownloadHref),
+            downloadAction(getRowDownloadHref),
             copyPathAction(handleCopyPath),
             promoteAction,
             deleteAction(deletion.requestDelete),
         ],
-        [getDownloadHref, handleCopyPath, promoteAction, deletion.requestDelete],
+        [getRowDownloadHref, handleCopyPath, promoteAction, deletion.requestDelete],
     );
 
     // Bulk-action set: primary "Save as resources" (most common workflow on this
@@ -128,11 +140,12 @@ const FlowFiles = () => {
     // in overflow, destructive Delete on the right.
     const fileManagerBulkActions = useMemo<FileManagerBulkAction[]>(
         () => [
+            bulkDownloadAction(getBulkDownloadHref),
             bulkPromoteAction((files) => setFilesToPromote(files)),
             bulkCopyPathsAction(handleBulkCopyPaths),
-            bulkDeleteAction(deletion.deleteBulk),
+            bulkDeleteAction(deletion.deleteFiles),
         ],
-        [deletion.deleteBulk, handleBulkCopyPaths],
+        [deletion.deleteFiles, getBulkDownloadHref, handleBulkCopyPaths],
     );
 
     const handleOpenPullDialog = useCallback(() => setIsPullDialogOpen(true), []);
@@ -328,6 +341,7 @@ const FlowFiles = () => {
             />
 
             <FlowFilesPullDialog
+                cachedFiles={fileNodes}
                 flowId={flowId}
                 isOpen={isPullDialogOpen}
                 onClose={handleClosePullDialog}
@@ -335,6 +349,7 @@ const FlowFiles = () => {
             />
 
             <FlowFilesAttachResourcesDialog
+                cachedFiles={fileNodes}
                 flowId={flowId}
                 isOpen={isAttachResourcesDialogOpen}
                 onClose={handleCloseAttachResourcesDialog}

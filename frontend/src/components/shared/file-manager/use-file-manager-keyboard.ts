@@ -11,8 +11,14 @@ interface UseFileManagerKeyboardNavigationArgs {
     focusRow: (path: null | string) => void;
     isCheckboxVisible: boolean;
     onClearSelection: () => void;
-    /** Open handler for file rows (Enter). Directories always toggle expand. */
+    /** Open handler for file rows (Enter). */
     onOpen?: (file: FileNode) => void;
+    /**
+     * Open handler for directory rows (Enter). When set, replaces the default
+     * expand/collapse gesture for the focused folder — used by navigation-style
+     * browsers that drill into a remote directory instead of expanding inline.
+     */
+    onOpenDirectory?: (dir: FileNode) => void;
     onSelectAll: () => void;
     onSetActiveRow: (path: null | string) => void;
     onToggleExpand: (path: string, wasExpanded: boolean) => void;
@@ -26,8 +32,8 @@ interface UseFileManagerKeyboardNavigationArgs {
 /**
  * Keyboard handler implementing the WAI-ARIA Tree pattern:
  * Arrow Up/Down → move focus, Home/End → jump to ends, Arrow Left/Right → collapse/expand
- * directories, Enter → expand/collapse a directory or fire `onOpen` for a file,
- * Space → toggle the row's checkbox (only when checkboxes are shown),
+ * directories, Enter → fire `onOpenDirectory`/`onOpen` (file), defaulting to expand/collapse
+ * for directories, Space → toggle the row's checkbox (only when checkboxes are shown),
  * Ctrl/Cmd+A → select all, Escape → clear selection.
  */
 export const useFileManagerKeyboardNavigation = ({
@@ -37,6 +43,7 @@ export const useFileManagerKeyboardNavigation = ({
     isCheckboxVisible,
     onClearSelection,
     onOpen,
+    onOpenDirectory,
     onSelectAll,
     onSetActiveRow,
     onToggleExpand,
@@ -141,7 +148,13 @@ export const useFileManagerKeyboardNavigation = ({
                     event.preventDefault();
 
                     if (node.isDir) {
-                        onToggleExpand(node.path, expandedPaths.has(node.path));
+                        // Navigation-style consumers (e.g. remote container browser)
+                        // override expand/collapse with a "drill in" handler.
+                        if (onOpenDirectory) {
+                            onOpenDirectory(node);
+                        } else {
+                            onToggleExpand(node.path, expandedPaths.has(node.path));
+                        }
 
                         return;
                     }
@@ -167,6 +180,7 @@ export const useFileManagerKeyboardNavigation = ({
             isCheckboxVisible,
             onClearSelection,
             onOpen,
+            onOpenDirectory,
             onSelectAll,
             onSetActiveRow,
             onToggleExpand,

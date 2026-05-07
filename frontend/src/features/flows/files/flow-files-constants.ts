@@ -1,6 +1,6 @@
 import { Folder, FolderUp, HardDrive } from 'lucide-react';
 
-import type { FileManagerRootGroup } from '@/components/file-manager';
+import type { FileManagerRootGroup } from '@/components/shared/file-manager';
 
 export const SEARCH_DEBOUNCE_MS = 300;
 
@@ -16,6 +16,7 @@ export const ROOT_GROUPS: FileManagerRootGroup[] = [
 
 export const FLOW_FILES_API_PATH = (flowId: string) => `/flows/${flowId}/files/`;
 export const FLOW_FILES_PULL_API_PATH = (flowId: string) => `/flows/${flowId}/files/pull`;
+export const FLOW_FILES_CONTAINER_API_PATH = (flowId: string) => `/flows/${flowId}/files/container`;
 export const FLOW_FILES_ATTACH_RESOURCES_API_PATH = (flowId: string) => `/flows/${flowId}/files/resources`;
 export const FLOW_FILES_PROMOTE_API_PATH = (flowId: string) => `/flows/${flowId}/files/to-resources`;
 export const RESOURCES_LIST_API_PATH = '/resources/';
@@ -23,3 +24,6 @@ export const RESOURCES_LIST_API_PATH = '/resources/';
 export const UPLOADS_TARGET_DIRECTORY = '/work/uploads';
 export const CONTAINER_TARGET_DIRECTORY = 'container/';
 export const RESOURCES_TARGET_DIRECTORY = '/work/resources';
+
+/** Default container path browsed when the Pull dialog opens. */
+export const CONTAINER_DEFAULT_PATH = '/work';
