@@ -16,6 +16,7 @@ import (
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
 	"github.com/sirupsen/logrus"
@@ -69,6 +70,12 @@ type newAssistantWorkerCtx struct {
 type assistantWorkerCtx struct {
 	userID int64
 	flowID int64
+
+	// prompter is an optional reusable prompter for the user. When non-nil,
+	// LoadAssistantWorker uses it instead of issuing another GetUserPrompts
+	// query and merging defaults. LoadFlowWorker sets this so a flow load
+	// with multiple assistants only pays the DB+merge cost once.
+	prompter templates.Prompter
 
 	flowWorkerCtx
 }
@@ -321,9 +328,12 @@ func LoadAssistantWorker(
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow assistant log worker", err)
 	}
 
-	prompter, err := newUserPrompter(ctx, awc.db, awc.userID)
-	if err != nil {
-		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to build user prompter", err)
+	prompter := awc.prompter
+	if prompter == nil {
+		prompter, err = newUserPrompter(ctx, awc.db, awc.userID)
+		if err != nil {
+			return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to build user prompter", err)
+		}
 	}
 	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, functions, awc.flowID)
 	if err != nil {

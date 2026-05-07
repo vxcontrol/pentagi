@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"pentagi/pkg/database"
@@ -19,24 +18,22 @@ func newUserPrompter(ctx context.Context, db database.Querier, userID int64) (te
 	if err != nil {
 		return nil, fmt.Errorf("failed to load user prompts: %w", err)
 	}
-	return buildUserPrompter(templates.NewDefaultPrompter(), userPrompts)
+
+	defaults, err := templates.LoadDefaultPromptsMap()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load default templates: %w", err)
+	}
+
+	return buildUserPrompter(defaults, userPrompts), nil
 }
 
-// buildUserPrompter is the pure merge step extracted from newUserPrompter
-// so it can be unit-tested without a database fake. It seeds the result
-// with every default template and then overrides each prompt type the
-// user has saved a non-empty body for.
-func buildUserPrompter(defaults templates.Prompter, userPrompts []database.Prompt) (templates.Prompter, error) {
-	blob, err := defaults.DumpTemplates()
-	if err != nil {
-		return nil, fmt.Errorf("failed to dump default templates: %w", err)
-	}
-
-	merged := templates.PromptsMap{}
-	if err := json.Unmarshal(blob, &merged); err != nil {
-		return nil, fmt.Errorf("failed to parse default templates: %w", err)
-	}
-
+// buildUserPrompter is the pure merge step extracted from newUserPrompter so
+// it can be unit-tested without a database fake or filesystem access. It
+// mutates the supplied defaults map by overlaying each non-empty user
+// override on top, then returns a Prompter backed by that map. Callers must
+// pass a fresh map (e.g., from templates.LoadDefaultPromptsMap) so the
+// embedded defaults are not modified.
+func buildUserPrompter(defaults templates.PromptsMap, userPrompts []database.Prompt) templates.Prompter {
 	for _, p := range userPrompts {
 		if p.Prompt == "" {
 			// The Prompts UI uses delete (or reset, which writes the
@@ -46,8 +43,8 @@ func buildUserPrompter(defaults templates.Prompter, userPrompts []database.Promp
 			// ErrTemplateNotFound deep inside agent rendering.
 			continue
 		}
-		merged[templates.PromptType(p.Type)] = p.Prompt
+		defaults[templates.PromptType(p.Type)] = p.Prompt
 	}
 
-	return templates.NewFlowPrompter(merged), nil
+	return templates.NewFlowPrompter(defaults)
 }

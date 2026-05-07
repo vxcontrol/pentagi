@@ -37,12 +37,19 @@ func getDefaultTemplate(t *testing.T, pt templates.PromptType) string {
 	return body
 }
 
-func TestBuildUserPrompter_NoUserPrompts(t *testing.T) {
-	defaults := templates.NewDefaultPrompter()
-	prompter, err := buildUserPrompter(defaults, nil)
+// loadDefaults returns a fresh PromptsMap of the embedded default templates so
+// each test mutates its own map without leaking state between cases.
+func loadDefaults(t *testing.T) templates.PromptsMap {
+	t.Helper()
+	defaults, err := templates.LoadDefaultPromptsMap()
 	if err != nil {
-		t.Fatalf("buildUserPrompter returned error: %v", err)
+		t.Fatalf("LoadDefaultPromptsMap error: %v", err)
 	}
+	return defaults
+}
+
+func TestBuildUserPrompter_NoUserPrompts(t *testing.T) {
+	prompter := buildUserPrompter(loadDefaults(t), nil)
 
 	for _, pt := range []templates.PromptType{
 		templates.PromptTypePrimaryAgent,
@@ -65,10 +72,7 @@ func TestBuildUserPrompter_SingleOverride(t *testing.T) {
 		{Type: database.PromptTypePrimaryAgent, Prompt: customBody},
 	}
 
-	prompter, err := buildUserPrompter(templates.NewDefaultPrompter(), userPrompts)
-	if err != nil {
-		t.Fatalf("buildUserPrompter error: %v", err)
-	}
+	prompter := buildUserPrompter(loadDefaults(t), userPrompts)
 
 	got, err := prompter.GetTemplate(templates.PromptTypePrimaryAgent)
 	if err != nil {
@@ -105,10 +109,7 @@ func TestBuildUserPrompter_PartialOverridesPreserveDefaults(t *testing.T) {
 		userPrompts = append(userPrompts, database.Prompt{Type: pt, Prompt: body})
 	}
 
-	prompter, err := buildUserPrompter(templates.NewDefaultPrompter(), userPrompts)
-	if err != nil {
-		t.Fatalf("buildUserPrompter error: %v", err)
-	}
+	prompter := buildUserPrompter(loadDefaults(t), userPrompts)
 
 	for pt, want := range overrides {
 		got, err := prompter.GetTemplate(templates.PromptType(pt))
@@ -141,10 +142,7 @@ func TestBuildUserPrompter_EmptyBodyIsIgnored(t *testing.T) {
 		{Type: database.PromptTypePrimaryAgent, Prompt: ""},
 	}
 
-	prompter, err := buildUserPrompter(templates.NewDefaultPrompter(), userPrompts)
-	if err != nil {
-		t.Fatalf("buildUserPrompter error: %v", err)
-	}
+	prompter := buildUserPrompter(loadDefaults(t), userPrompts)
 
 	got, err := prompter.GetTemplate(templates.PromptTypePrimaryAgent)
 	if err != nil {
