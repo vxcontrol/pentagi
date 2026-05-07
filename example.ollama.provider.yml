@@ -1,0 +1,103 @@
+# Basic tasks - moderate determinism for general interactions
+simple:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.2
+  top_p: 0.85
+  n: 1
+  max_tokens: 4000
+
+# JSON formatting - maximum determinism for structured output
+simple_json:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.0
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+
+# Orchestrator - balanced: needs reliability + some flexibility in delegation decisions
+primary_agent:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.2
+  top_p: 0.85
+  n: 1
+  max_tokens: 4000
+
+# Assistant - user-facing, needs balance between accuracy and natural conversation
+assistant:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.25
+  top_p: 0.85
+  n: 1
+  max_tokens: 4000
+
+# Generator - subtask planning requires creativity and diverse approaches
+generator:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.4
+  top_p: 0.9
+  n: 1
+  max_tokens: 5000
+
+# Refiner - plan optimization needs both analysis and creative problem-solving
+refiner:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.35
+  top_p: 0.9
+  n: 1
+  max_tokens: 4000
+
+# Adviser - strategic consultation requires creative solutions and diverse thinking
+adviser:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.35
+  top_p: 0.9
+  n: 1
+  max_tokens: 4000
+
+# Reflector - error analysis requires precision and clear guidance
+reflector:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.2
+  top_p: 0.85
+  n: 1
+  max_tokens: 3000
+
+# Searcher - information retrieval needs precision and efficiency
+searcher:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.15
+  top_p: 0.85
+  n: 1
+  max_tokens: 4000
+
+# Enricher - context enhancement needs accuracy
+enricher:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.15
+  top_p: 0.85
+  n: 1
+  max_tokens: 4000
+
+# Coder - code generation requires maximum precision and determinism
+coder:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.1
+  top_p: 0.8
+  n: 1
+  max_tokens: 8000
+
+# Installer - DevOps tasks need high reliability and exact commands
+installer:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.1
+  top_p: 0.8
+  n: 1
+  max_tokens: 6000
+
+# Pentester - security testing needs precision but also creative attack vectors
+pentester:
+  model: "llama3.1:8b-instruct-q8_0"
+  temperature: 0.25
+  top_p: 0.85
+  n: 1
+  max_tokens: 8000
