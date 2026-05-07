@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import type { UserResourceFragmentFragment } from '@/graphql/types';
 
 import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
+import { validateUploadBatch } from '@/lib/upload-validation';
 
 import {
     MAX_FILE_SIZE_MB,
@@ -62,39 +63,6 @@ interface UseResourcesUploadResult {
 }
 
 const UPLOAD_OVERWRITE_HINT = 'Resource already exists — please rename or remove the existing entry';
-
-/**
- * Mirrors the per-file / per-batch limits enforced by the backend
- * (`pkg/resources/resources.go`). The backend itself does not whitelist file
- * extensions, so neither does the client.
- */
-const validateUploadBatch = (files: File[]): null | string => {
-    if (files.length > MAX_UPLOAD_FILES_PER_REQUEST) {
-        return `Too many files: max ${MAX_UPLOAD_FILES_PER_REQUEST} per upload`;
-    }
-
-    const maxBytesPerFile = MAX_FILE_SIZE_MB * 1024 * 1024;
-    const maxTotalBytes = MAX_UPLOAD_TOTAL_SIZE_MB * 1024 * 1024;
-    let totalBytes = 0;
-
-    for (const file of files) {
-        if (file.size === 0) {
-            return `File "${file.name}" is empty`;
-        }
-
-        if (file.size > maxBytesPerFile) {
-            return `File "${file.name}" is larger than ${MAX_FILE_SIZE_MB} MB`;
-        }
-
-        totalBytes += file.size;
-    }
-
-    if (totalBytes > maxTotalBytes) {
-        return `Total upload size exceeds the ${MAX_UPLOAD_TOTAL_SIZE_MB} MB limit`;
-    }
-
-    return null;
-};
 
 const buildUploadSuccessMessage = (uploadedCount: number, dir?: string) => {
     const target = dir ? `to /${dir}` : 'to your library';
@@ -156,7 +124,11 @@ export const useResourcesUpload = ({
                 return null;
             }
 
-            const validationError = validateUploadBatch(selectedFiles);
+            const validationError = validateUploadBatch(selectedFiles, {
+                maxFiles: MAX_UPLOAD_FILES_PER_REQUEST,
+                maxFileSizeMb: MAX_FILE_SIZE_MB,
+                maxTotalSizeMb: MAX_UPLOAD_TOTAL_SIZE_MB,
+            });
 
             if (validationError) {
                 toast.error('Upload failed', { description: validationError });

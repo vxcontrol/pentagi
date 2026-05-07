@@ -34,7 +34,12 @@ interface FlowFilesPullDialogFormProps {
     cachedFiles: readonly FileNode[];
     flowId: null | string;
     onClose: () => void;
-    onSuccess: () => void;
+    /**
+     * Optional UI hook fired after a successful pull. The flow-files Apollo
+     * cache itself is updated via the `flowFileAdded` subscription, so callers
+     * should NOT use this to drive an imperative refetch.
+     */
+    onSuccess?: () => void;
 }
 
 interface FlowFilesPullDialogProps {
@@ -42,7 +47,8 @@ interface FlowFilesPullDialogProps {
     flowId: null | string;
     isOpen: boolean;
     onClose: () => void;
-    onSuccess: () => void;
+    /** See {@link FlowFilesPullDialogFormProps.onSuccess}. */
+    onSuccess?: () => void;
 }
 
 /**
@@ -109,7 +115,7 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
         // (or, with `force=true`, replaced ones) reflect their fresh state.
         onSuccess: () => {
             void refetchListing();
-            onSuccess();
+            onSuccess?.();
         },
     });
 

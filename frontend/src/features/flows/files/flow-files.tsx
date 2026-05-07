@@ -45,13 +45,13 @@ const FlowFiles = () => {
     // pushes the deduped selection. Empty array / null closes the dialog.
     const [filesToPromote, setFilesToPromote] = useState<FileNode[] | null>(null);
 
-    const { fileNodes, isInitialLoading, isLoading, refetchFiles } = useFlowFilesData({ flowId });
+    const { fileNodes, isInitialLoading, isLoading } = useFlowFilesData({ flowId });
 
     useFlowFilesRealtime({ flowId, isPaused: isLoading });
 
     const search = useFlowFilesSearch();
-    const upload = useFlowFilesUpload({ flowId, refetchFiles });
-    const deletion = useFlowFilesDelete({ flowId, refetchFiles });
+    const upload = useFlowFilesUpload({ flowId });
+    const deletion = useFlowFilesDelete({ flowId });
 
     const canAcceptDrop = !!flowId && !upload.isUploading;
     const { dragHandlers, isDragging } = useFilesDragAndDrop({
@@ -345,7 +345,6 @@ const FlowFiles = () => {
                 flowId={flowId}
                 isOpen={isPullDialogOpen}
                 onClose={handleClosePullDialog}
-                onSuccess={refetchFiles}
             />
 
             <FlowFilesAttachResourcesDialog
@@ -353,7 +352,6 @@ const FlowFiles = () => {
                 flowId={flowId}
                 isOpen={isAttachResourcesDialogOpen}
                 onClose={handleCloseAttachResourcesDialog}
-                onSuccess={refetchFiles}
             />
 
             <FlowFilesPromoteDialog

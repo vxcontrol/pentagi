@@ -31,7 +31,12 @@ interface FlowFilesAttachResourcesDialogProps {
     flowId: null | string;
     isOpen: boolean;
     onClose: () => void;
-    onSuccess: () => void;
+    /**
+     * Optional UI hook fired after a successful attach. The flow-files Apollo
+     * cache itself is updated via the `flowFileAdded` subscription, so callers
+     * should NOT use this to drive an imperative refetch.
+     */
+    onSuccess?: () => void;
 }
 
 const EMPTY_SELECTION: ReadonlySet<string> = new Set();
@@ -78,7 +83,7 @@ const FlowFilesAttachResourcesDialogBody = ({
         execute: async ({ ids }, force) => attach({ ids: [...ids], shouldOverwrite: force }),
         findConflicts: ({ resourcePaths }) => findAttachConflicts(resourcePaths, cachedFiles),
         onSuccess: () => {
-            onSuccess();
+            onSuccess?.();
             onClose();
         },
         synthesizeFallbackConflicts: ({ resourcePaths }) =>

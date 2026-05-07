@@ -27,3 +27,18 @@ export const RESOURCES_TARGET_DIRECTORY = '/work/resources';
 
 /** Default container path browsed when the Pull dialog opens. */
 export const CONTAINER_DEFAULT_PATH = '/work';
+
+// ── Upload limits (mirror backend's `pkg/flowfiles/files.go`) ──────────────
+//
+// Symmetric with the resources library limits (`features/resources/resources-constants.ts`)
+// today, but kept as a separate set so they can diverge from resources without
+// touching the resources call sites.
+
+/** Mirrors `flowfiles.MaxUploadFileSize` (300 MB). */
+export const FLOW_FILES_MAX_FILE_SIZE_MB = 300;
+
+/** Mirrors `flowfiles.MaxUploadTotalSize` (2 GB) — combined size of one request. */
+export const FLOW_FILES_MAX_UPLOAD_TOTAL_SIZE_MB = 2 * 1024;
+
+/** Mirrors `flowfiles.MaxUploadFiles`. */
+export const FLOW_FILES_MAX_UPLOAD_FILES_PER_REQUEST = 1000;

@@ -2,13 +2,19 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
+import { validateUploadBatch } from '@/lib/upload-validation';
 
-import { FLOW_FILES_API_PATH, UPLOADS_TARGET_DIRECTORY } from './flow-files-constants';
+import {
+    FLOW_FILES_API_PATH,
+    FLOW_FILES_MAX_FILE_SIZE_MB,
+    FLOW_FILES_MAX_UPLOAD_FILES_PER_REQUEST,
+    FLOW_FILES_MAX_UPLOAD_TOTAL_SIZE_MB,
+    UPLOADS_TARGET_DIRECTORY,
+} from './flow-files-constants';
 import { type FlowFilesResponse } from './flow-files-utils';
 
 interface UseFlowFilesUploadParams {
     flowId: null | string;
-    refetchFiles: () => Promise<unknown>;
 }
 
 interface UseFlowFilesUploadResult {
@@ -44,8 +50,12 @@ const buildUploadSuccessMessage = (uploadedCount: number, firstFileName?: string
  *
  * The `key` value is bumped after every upload so React remounts the `<input>` —
  * this clears its native value declaratively without mutating the DOM directly.
+ *
+ * No imperative refetch is performed: the GraphQL `flowFileAdded` subscription
+ * is wired into the Apollo cache (see `lib/apollo.ts`) and appends the newly
+ * uploaded entries automatically.
  */
-export const useFlowFilesUpload = ({ flowId, refetchFiles }: UseFlowFilesUploadParams): UseFlowFilesUploadResult => {
+export const useFlowFilesUpload = ({ flowId }: UseFlowFilesUploadParams): UseFlowFilesUploadResult => {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [fileInputKey, setFileInputKey] = useState(0);
@@ -57,6 +67,18 @@ export const useFlowFilesUpload = ({ flowId, refetchFiles }: UseFlowFilesUploadP
     const uploadFiles = useCallback(
         async (selectedFiles: File[]) => {
             if (!flowId || selectedFiles.length === 0) {
+                return;
+            }
+
+            const validationError = validateUploadBatch(selectedFiles, {
+                maxFiles: FLOW_FILES_MAX_UPLOAD_FILES_PER_REQUEST,
+                maxFileSizeMb: FLOW_FILES_MAX_FILE_SIZE_MB,
+                maxTotalSizeMb: FLOW_FILES_MAX_UPLOAD_TOTAL_SIZE_MB,
+            });
+
+            if (validationError) {
+                toast.error('Upload failed', { description: validationError });
+
                 return;
             }
 
@@ -78,8 +100,6 @@ export const useFlowFilesUpload = ({ flowId, refetchFiles }: UseFlowFilesUploadP
                 const successMessage = buildUploadSuccessMessage(uploadedCount, data.files?.[0]?.name);
 
                 toast.success(successMessage.title, { description: successMessage.description });
-
-                await refetchFiles();
             } catch (error) {
                 const description = getApiErrorMessage(error, 'Failed to upload files');
 
@@ -88,7 +108,7 @@ export const useFlowFilesUpload = ({ flowId, refetchFiles }: UseFlowFilesUploadP
                 setIsUploading(false);
             }
         },
-        [flowId, refetchFiles],
+        [flowId],
     );
 
     const handleFileSelection = useCallback(
