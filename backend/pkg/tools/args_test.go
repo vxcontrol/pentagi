@@ -1,7 +1,9 @@
 package tools
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -542,6 +544,90 @@ func TestSearchAnswerAction_QuestionsUnmarshal(t *testing.T) {
 			}
 			if !tt.wantErr && len(action.Questions) != tt.wantLen {
 				t.Errorf("Questions length = %d, want %d", len(action.Questions), tt.wantLen)
+			}
+		})
+	}
+}
+
+// TestToolSchemasDoNotInstructUsersLanguage is a regression guard for #285:
+// every tool schema served to the LLM must avoid locale-ambiguous phrases that
+// instruct the model to respond in the end user's language. The maintainer's
+// stated policy in #216 is English-only, and the system prompt already renders
+// {{.Lang}} as English; if a tool schema disagrees, the model picks up the
+// weaker instruction and emits Russian or mixed-language `message`/`result`
+// fields even when the Flow is English. We ban "user's language" outright so
+// future schema edits cannot quietly reintroduce variants like "the user's
+// language" or the older "user's language only".
+func TestToolSchemasDoNotInstructUsersLanguage(t *testing.T) {
+	t.Parallel()
+
+	forbidden := []string{
+		"user's language",
+		"the user's language",
+	}
+
+	for name, def := range GetRegistryDefinitions() {
+		blob, err := json.Marshal(def.Parameters)
+		if err != nil {
+			t.Fatalf("tool %q: marshal parameters: %v", name, err)
+		}
+		for _, banned := range forbidden {
+			if bytes.Contains(blob, []byte(banned)) {
+				t.Errorf("tool %q schema still contains %q (issue #285)", name, banned)
+			}
+		}
+	}
+}
+
+// TestUserFacingMessageDescriptionsAreEnglishAnchored picks one struct per tool
+// family touched by #285 and asserts that the previously locale-ambiguous
+// `message` and `result` descriptions now anchor to English at the schema
+// level, not just by absence of a banned substring.
+func TestUserFacingMessageDescriptionsAreEnglishAnchored(t *testing.T) {
+	t.Parallel()
+
+	type schemaDoc struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+
+	cases := []struct {
+		name   string
+		target any
+		fields []string
+	}{
+		{"AskUser", &AskUser{}, []string{"message"}},
+		{"Done", &Done{}, []string{"message", "result"}},
+		{"TaskResult", &TaskResult{}, []string{"message", "result"}},
+		{"TerminalAction", &TerminalAction{}, []string{"message"}},
+		{"FileAction", &FileAction{}, []string{"message"}},
+		{"SubtaskList", &SubtaskList{}, []string{"message"}},
+		{"SubtaskPatch", &SubtaskPatch{}, []string{"message"}},
+		{"SearchInMemoryAction", &SearchInMemoryAction{}, []string{"message"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			blob, err := json.Marshal(reflector.Reflect(tc.target))
+			if err != nil {
+				t.Fatalf("marshal schema for %T: %v", tc.target, err)
+			}
+			var doc schemaDoc
+			if err := json.Unmarshal(blob, &doc); err != nil {
+				t.Fatalf("unmarshal schema for %T: %v", tc.target, err)
+			}
+			for _, f := range tc.fields {
+				prop, ok := doc.Properties[f]
+				if !ok {
+					t.Errorf("%T has no %q property in schema", tc.target, f)
+					continue
+				}
+				if !strings.Contains(prop.Description, "in English") {
+					t.Errorf("%T.%s description should anchor to English, got %q", tc.target, f, prop.Description)
+				}
 			}
 		})
 	}
