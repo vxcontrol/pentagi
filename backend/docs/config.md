@@ -1610,6 +1610,8 @@ The SSL settings provide additional security configuration:
 
 ## Graphiti Knowledge Graph Settings
 
+> The Graphiti integration is currently a **beta** feature with notable provider limitations. See [Current Limitations (Beta)](#current-limitations-beta) at the end of this section before enabling it in production.
+
 These settings control the integration with Graphiti, a temporal knowledge graph system powered by Neo4j, for advanced semantic understanding and relationship tracking of AI agent operations.
 
 | Option          | Environment Variable | Default Value           | Description                                            |
@@ -1655,6 +1657,17 @@ These settings enable:
 - Learning from past successful approaches and strategies
 
 The integration is designed to be non-blocking - if Graphiti operations fail, they are logged but don't interrupt the agent workflow.
+
+### Current Limitations (Beta)
+
+The Graphiti integration is currently a beta feature. Operators should plan around the following constraints before enabling it in production:
+
+- **OpenAI-compatible LLM only.** The bundled `vxcontrol/graphiti` container reads `OPENAI_API_KEY` and a single base URL via `OPEN_AI_SERVER_URL` (default `https://api.openai.com/v1`) to drive entity extraction. Provider credentials configured elsewhere in PentAGI for Anthropic, Google AI (Gemini), AWS Bedrock, DeepSeek, GLM, Kimi, or Qwen are not consumed by Graphiti.
+- **Single fixed model per deployment.** Graphiti uses one model name (`GRAPHITI_MODEL_NAME`, default `gpt-5-mini`) for all extractions; per-agent or per-flow selection is not supported.
+- **Independent billing.** Graphiti billing is tied to the configured OpenAI-compatible endpoint, even when the main flow runs against a non-OpenAI provider.
+- **No in-app graph explorer yet.** The captured graph is inspected through the Neo4j Browser at `http://localhost:7474` and the Graphiti Swagger UI at `http://localhost:8000/docs`; there is no PentAGI UI surface for it today.
+
+If your deployment cannot reach an OpenAI-compatible endpoint, set `GRAPHITI_ENABLED=false`. The rest of PentAGI continues to function without the knowledge graph.
 
 ## Agent Supervision Settings
 

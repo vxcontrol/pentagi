@@ -2353,6 +2353,9 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 
 ### Knowledge Graph Integration (Graphiti)
 
+> [!IMPORTANT]
+> The Graphiti integration is currently a **beta** feature and has notable provider limitations. See [Current Limitations](#current-limitations) below before enabling it in production.
+
 PentAGI integrates with [Graphiti](https://github.com/vxcontrol/pentagi-graphiti), a temporal knowledge graph system powered by Neo4j, to provide advanced semantic understanding and relationship tracking for AI agent operations. The vxcontrol fork provides custom entity and edge types that are specific to pentesting purposes.
 
 #### What is Graphiti?
@@ -2423,6 +2426,17 @@ When enabled, PentAGI automatically captures:
 - **Agent Responses**: All agent reasoning, analysis, and decisions
 - **Tool Executions**: Commands executed, tools used, and their results
 - **Context Information**: Flow, task, and subtask hierarchy
+
+#### Current Limitations
+
+The Graphiti integration is currently a beta feature. Operators should plan around the following constraints before enabling it in production:
+
+- **OpenAI-compatible LLM only.** The bundled `vxcontrol/graphiti` image authenticates with `OPENAI_API_KEY` and calls a single base URL set via `OPEN_AI_SERVER_URL` (default `https://api.openai.com/v1`). Provider credentials configured elsewhere in PentAGI for Anthropic, Google AI (Gemini), AWS Bedrock, DeepSeek, GLM, Kimi, or Qwen are **not** used by Graphiti for entity extraction. If your deployment cannot reach an OpenAI-compatible endpoint, leave `GRAPHITI_ENABLED=false`.
+- **Single fixed model per deployment.** Graphiti uses one model name (`GRAPHITI_MODEL_NAME`, default `gpt-5-mini`) for all extractions. The model cannot be selected per agent or per flow.
+- **Independent billing.** Even when a flow runs against a non-OpenAI provider, Graphiti still incurs cost on the configured OpenAI-compatible endpoint.
+- **No in-app graph explorer yet.** Browsing the captured graph relies on the Neo4j Browser at `http://localhost:7474` and the Graphiti Swagger UI at `http://localhost:8000/docs`. There is no PentAGI UI surface for the graph today.
+
+When `GRAPHITI_ENABLED=false`, PentAGI continues to operate with its primary memory and vector store; only the additional knowledge graph features are skipped.
 
 ### GitHub and Google OAuth Integration
 
