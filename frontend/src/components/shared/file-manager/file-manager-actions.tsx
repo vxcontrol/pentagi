@@ -1,4 +1,4 @@
-import { BookmarkPlus, ClipboardCopy, Copy, Download, FileSymlink, Trash2 } from 'lucide-react';
+import { ClipboardCopy, Copy, Download, FileSymlink, FolderOutput, Trash2 } from 'lucide-react';
 
 import type { FileManagerAction, FileManagerBulkAction, FileNode } from './file-manager-types';
 
@@ -29,7 +29,7 @@ export const downloadAction = (
 /** Built-in copy-path action. */
 export const copyPathAction = (onCopyPath: (file: FileNode) => void): FileManagerAction => ({
     appliesToDirs: true,
-    icon: Copy,
+    icon: ClipboardCopy,
     id: '__builtin_copy_path',
     label: 'Copy path',
     onSelect: onCopyPath,
@@ -148,7 +148,7 @@ export const bulkPromoteAction = (
     onPromote: (files: FileNode[]) => void,
     options: { label?: string; overflow?: boolean } = {},
 ): FileManagerBulkAction => ({
-    icon: BookmarkPlus,
+    icon: FolderOutput,
     id: '__builtin_bulk_promote',
     label: options.label ?? 'Save as resources',
     onSelect: onPromote,

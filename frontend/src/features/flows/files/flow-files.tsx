@@ -1,4 +1,4 @@
-import { ArrowDownToLine, FolderInput, FolderOutput, FolderUp, Info, Loader2, Search, X } from 'lucide-react';
+import { ArrowDownToLine, FolderInput, FolderOutput, FolderUp, Loader2, Search, Upload, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -251,28 +251,6 @@ const FlowFiles = () => {
 
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
-                                    size="icon-sm"
-                                    type="button"
-                                    variant="ghost"
-                                >
-                                    <Info className="text-muted-foreground size-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-64 text-center text-xs">
-                                <p>
-                                    <strong>Uploads</strong> are pushed to <code>/work/uploads</code> and are
-                                    immediately accessible inside the container.
-                                </p>
-                                <p className="mt-1">
-                                    <strong>Container</strong> files are snapshots pulled via Pull and stored
-                                    separately.
-                                </p>
-                            </TooltipContent>
-                        </Tooltip>
-
-                        <Tooltip>
-                            <TooltipTrigger asChild>
                                 <span>
                                     <Button
                                         disabled={upload.isUploading || isLoading}
@@ -281,11 +259,16 @@ const FlowFiles = () => {
                                         type="button"
                                         variant="outline"
                                     >
-                                        {upload.isUploading ? <Loader2 className="animate-spin" /> : <FolderUp />}
+                                        {upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
                                     </Button>
                                 </span>
                             </TooltipTrigger>
-                            <TooltipContent>Upload files</TooltipContent>
+                            <TooltipContent className="max-w-64 text-center text-xs">
+                                <p className="font-medium">Upload files</p>
+                                <p className="mt-1">
+                                    Pushed to <code>/work/uploads</code> — immediately accessible inside the container.
+                                </p>
+                            </TooltipContent>
                         </Tooltip>
 
                         <Tooltip>
@@ -302,7 +285,13 @@ const FlowFiles = () => {
                                     </Button>
                                 </span>
                             </TooltipTrigger>
-                            <TooltipContent>Attach resources from library</TooltipContent>
+                            <TooltipContent className="max-w-64 text-center text-xs">
+                                <p className="font-medium">Attach resources</p>
+                                <p className="mt-1">
+                                    Copied from the library to <code>/work/resources</code> — immediately accessible
+                                    inside the container.
+                                </p>
+                            </TooltipContent>
                         </Tooltip>
 
                         <Tooltip>
@@ -319,10 +308,17 @@ const FlowFiles = () => {
                                     </Button>
                                 </span>
                             </TooltipTrigger>
-                            <TooltipContent>
-                                {isContainerRunning
-                                    ? 'Pull file or directory from container'
-                                    : 'Container is not running'}
+                            <TooltipContent className="max-w-64 text-center text-xs">
+                                {isContainerRunning ? (
+                                    <>
+                                        <p className="font-medium">Pull file or directory from container</p>
+                                        <p className="mt-1">
+                                            Snapshots are stored separately under <strong>Container</strong>.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="font-medium">Container is not running</p>
+                                )}
                             </TooltipContent>
                         </Tooltip>
                     </div>

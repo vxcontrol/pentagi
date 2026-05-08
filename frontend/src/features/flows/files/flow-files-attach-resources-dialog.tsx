@@ -6,7 +6,14 @@ import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-di
 import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
 import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { toFileNode } from '@/features/resources/resources-utils';
@@ -174,11 +181,11 @@ const FlowFilesAttachResourcesDialogBody = ({
 
     return (
         <>
-            <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col gap-4">
-                <DialogHeader>
+            <DialogContent className="flex max-h-[85vh] min-h-[min(85vh,580px)] flex-col gap-4 sm:max-w-3xl">
+                <DialogHeader className="text-left">
                     <DialogTitle className="flex items-center gap-2">
                         <FolderInput className="size-4" />
-                        Attach resources from library
+                        Attach resources
                     </DialogTitle>
                     <DialogDescription>
                         Pick files and/or folders from your global library — they will be copied into{' '}
@@ -218,7 +225,7 @@ const FlowFilesAttachResourcesDialogBody = ({
                         </div>
                     ) : (
                         <FileManager
-                            className="min-h-[280px] flex-1"
+                            className="min-h-0 flex-1"
                             emptyState={emptyState}
                             enableSelection
                             files={files}
@@ -229,15 +236,15 @@ const FlowFilesAttachResourcesDialogBody = ({
                     )}
                 </div>
 
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground text-xs">
+                <DialogFooter className="flex-wrap gap-4 sm:items-center">
+                    <span className="text-muted-foreground order-last mr-auto text-xs sm:order-first">
                         {selectedCount > 0
                             ? `${selectedCount} selected`
                             : hasResources
                               ? 'Select one or more items'
                               : ''}
                     </span>
-                    <div className="flex flex-wrap justify-end gap-2">
+                    <div className="flex flex-col-reverse gap-2 sm:ml-auto sm:flex-row sm:justify-end">
                         <Button
                             disabled={isAttaching}
                             onClick={onClose}
@@ -256,7 +263,7 @@ const FlowFilesAttachResourcesDialogBody = ({
                             primaryLabel={primaryLabel}
                         />
                     </div>
-                </div>
+                </DialogFooter>
             </DialogContent>
 
             <OverwriteConfirmDialog

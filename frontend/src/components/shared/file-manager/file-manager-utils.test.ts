@@ -513,6 +513,58 @@ describe('toggleSubtreeOnSet', () => {
         expect(next).not.toBe(prev);
         expect([...prev]).toEqual(['x']);
     });
+
+    it('REGRESSION: with `rootPath`, clears the branch when every descendant is selected even though the dir itself is missing from prev', () => {
+        // User scenario: inside an expanded folder, select every file via the
+        // row checkboxes one by one (or via the header "select all" while the
+        // folder is the only visible group). The folder's own path is NEVER
+        // added to `selectedPaths` — the tri-state still renders "checked"
+        // because `computeDirSelectionState` only counts descendants. A single
+        // click on the folder's checkbox must clear the branch; without
+        // `rootPath` the strict `isEverySelected` check would treat the dir's
+        // missing path as "not all selected" and ADD it instead, requiring a
+        // second click to actually deselect.
+        expect([...toggleSubtreeOnSet(new Set(['dir/a', 'dir/b']), ['dir', 'dir/a', 'dir/b'], 'dir')]).toEqual([]);
+    });
+
+    it('with `rootPath`, still adds the missing pieces when only some descendants are selected', () => {
+        expect([...toggleSubtreeOnSet(new Set(['dir/a']), ['dir', 'dir/a', 'dir/b'], 'dir')].sort()).toEqual([
+            'dir',
+            'dir/a',
+            'dir/b',
+        ]);
+    });
+
+    it('with `rootPath`, treats a fully selected branch (dir + descendants) the same as descendants-only', () => {
+        // Both shapes ("dir + every descendant" and "every descendant, no dir")
+        // render the checkbox as fully checked, so a single click must clear
+        // the entire branch in either case.
+        expect([...toggleSubtreeOnSet(new Set(['dir', 'dir/a', 'dir/b']), ['dir', 'dir/a', 'dir/b'], 'dir')]).toEqual(
+            [],
+        );
+    });
+
+    it('with `rootPath` on an empty folder (paths === [folder]), falls back to a simple binary toggle of the folder itself', () => {
+        // Empty folder: `paths.length === 1`, the descendant-only short-circuit
+        // would treat "no descendants" as vacuously all-selected, which would
+        // make every click on an unselected empty folder remove its own path
+        // (a no-op). Falling through to the strict path keeps the binary
+        // semantics that match `computeDirSelectionState` for empty folders.
+        expect([...toggleSubtreeOnSet(new Set(), ['empty'], 'empty')]).toEqual(['empty']);
+        expect([...toggleSubtreeOnSet(new Set(['empty']), ['empty'], 'empty')]).toEqual([]);
+    });
+
+    it('with `rootPath`, preserves unrelated entries on both add and remove', () => {
+        expect([...toggleSubtreeOnSet(new Set(['dir/a', 'x']), ['dir', 'dir/a', 'dir/b'], 'dir')].sort()).toEqual([
+            'dir',
+            'dir/a',
+            'dir/b',
+            'x',
+        ]);
+        expect([...toggleSubtreeOnSet(new Set(['dir/a', 'dir/b', 'x']), ['dir', 'dir/a', 'dir/b'], 'dir')]).toEqual([
+            'x',
+        ]);
+    });
 });
 
 describe('computeRowClickSelection — single modifier', () => {
@@ -606,6 +658,26 @@ describe('computeRowClickSelection — toggle modifier', () => {
             modifier: 'toggle',
             path: 'dir',
             prev: new Set(['dir', 'dir/a', 'dir/b', 'unrelated']),
+            subtreePaths: ['dir', 'dir/a', 'dir/b'],
+        });
+
+        expect([...result.next]).toEqual(['unrelated']);
+        expect(result.nextAnchor).toBe('dir');
+    });
+
+    it('REGRESSION: cmd-click on a folder whose descendants are all selected (dir itself missing) clears the branch in one gesture', () => {
+        // Mirror of the checkbox-toggle regression — `Cmd`/`Ctrl`+click on a
+        // folder row goes through the same `toggleSubtreeOnSet` path. If the
+        // user single-clicked each child to fill the branch (so `dir`'s own
+        // path was never added), a follow-up cmd-click on the folder row must
+        // strip everything in one gesture, not silently add `dir` and require
+        // a second click.
+        const result = computeRowClickSelection({
+            anchor: null,
+            flatVisible: ['dir', 'dir/a', 'dir/b'],
+            modifier: 'toggle',
+            path: 'dir',
+            prev: new Set(['dir/a', 'dir/b', 'unrelated']),
             subtreePaths: ['dir', 'dir/a', 'dir/b'],
         });
 
@@ -1344,6 +1416,24 @@ describe('computeToggleSelection (Space / row checkbox)', () => {
 
     it('treats empty subtreePaths as "single path" (defensive)', () => {
         expect([...computeToggleSelection({ path: 'a', prev: new Set(), subtreePaths: [] })]).toEqual(['a']);
+    });
+
+    it('REGRESSION: clears the branch in one click when every descendant is selected but the dir itself was never added', () => {
+        // Real-world: user opens `dir`, ticks each child checkbox (or the
+        // header's "select all" with `dir` being the only visible group). The
+        // folder's tri-state shows "checked" because every descendant is in
+        // the selection — but `dir` itself isn't. A single click on the
+        // folder checkbox must DESELECT the whole branch; the previous code
+        // required two clicks (the first one silently added `dir`'s own path,
+        // the second one finally removed everything because by then the
+        // strict "every path including dir" check passed).
+        expect([
+            ...computeToggleSelection({
+                path: 'dir',
+                prev: new Set(['dir/a', 'dir/b']),
+                subtreePaths: ['dir', 'dir/a', 'dir/b'],
+            }),
+        ]).toEqual([]);
     });
 });
 

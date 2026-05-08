@@ -515,13 +515,47 @@ export const isEverySelected = (paths: Iterable<string>, selected: ReadonlySet<s
  * if every path is already selected, the whole batch is removed; otherwise
  * the missing ones are added. Mirrors the directory-checkbox semantics.
  *
+ * When `rootPath` is provided (the directory's own path inside `paths`), the
+ * "is every path selected?" check is computed over the *descendants only* —
+ * i.e. it ignores whether `rootPath` itself is in `prev`. This matches what
+ * `computeDirSelectionState` shows on the visible tri-state checkbox, so a
+ * single click reliably toggles a folder whose descendants are all selected
+ * even though the folder's own path was never added to the selection (which
+ * happens whenever the user fills the branch one file at a time, e.g. via
+ * the row checkboxes or the header "select all" inside an expanded folder).
+ * Without `rootPath`, the legacy strict contract is used (every path,
+ * including the dir's own, must be present to qualify as "all selected").
+ *
  * Always returns a freshly cloned Set so React's reference-equality bail-out
  * still works for downstream memoized consumers.
  */
-export const toggleSubtreeOnSet = (prev: ReadonlySet<string>, paths: readonly string[]): Set<string> => {
+export const toggleSubtreeOnSet = (
+    prev: ReadonlySet<string>,
+    paths: readonly string[],
+    rootPath?: string,
+): Set<string> => {
     const next = new Set(prev);
 
-    if (isEverySelected(paths, next)) {
+    let allSelected: boolean;
+
+    if (rootPath !== undefined && paths.length > 1) {
+        allSelected = true;
+
+        for (const p of paths) {
+            if (p === rootPath) {
+                continue;
+            }
+
+            if (!next.has(p)) {
+                allSelected = false;
+                break;
+            }
+        }
+    } else {
+        allSelected = isEverySelected(paths, next);
+    }
+
+    if (allSelected) {
         removeAllFromSet(next, paths);
     } else {
         addAllToSet(next, paths);
@@ -620,7 +654,7 @@ export const computeRowClickSelection = ({
 
     if (modifier === 'toggle') {
         if (hasSubtree && subtreePaths) {
-            return { next: toggleSubtreeOnSet(prev, subtreePaths), nextAnchor: path };
+            return { next: toggleSubtreeOnSet(prev, subtreePaths, path), nextAnchor: path };
         }
 
         const next = new Set(prev);
@@ -695,7 +729,7 @@ interface ComputeToggleSelectionArgs {
  */
 export const computeToggleSelection = ({ path, prev, subtreePaths }: ComputeToggleSelectionArgs): Set<string> => {
     if (subtreePaths && subtreePaths.length > 0) {
-        return toggleSubtreeOnSet(prev, subtreePaths);
+        return toggleSubtreeOnSet(prev, subtreePaths, path);
     }
 
     const next = new Set(prev);

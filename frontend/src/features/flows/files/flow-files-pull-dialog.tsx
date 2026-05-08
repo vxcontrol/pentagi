@@ -109,6 +109,43 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
         refetch: refetchListing,
     } = useFlowContainerFiles({ flowId, paths: listingPaths });
 
+    /**
+     * Feed the FileManager a flat single-level view of the current directory.
+     *
+     * The container endpoint returns absolute paths (`/work/foo.txt`) and
+     * passing those straight in would have `buildFileManagerTree` synthesise
+     * placeholder parent folders for every leading segment (e.g. a collapsed
+     * `work/` wrapper around the actual entries). That wrapper makes the
+     * navigation-style chevron / double-click drill-in feel broken — the
+     * chevron of the synthetic root just toggles a wrapper that has no
+     * meaningful navigation target ("we are already there").
+     *
+     * Workaround: expose `name` as `path` (so every entry is a top-level
+     * sibling) and stash the absolute container path inside `id`. The dialog
+     * uses `id` for navigation / pull, the FileManager uses `path` for
+     * selection / row keys / focus management — the two stay in sync because
+     * directory listings always have unique entry names.
+     */
+    const flatFiles = useMemo<FileNode[]>(
+        () => files.map((file) => ({ ...file, id: file.path, path: file.name })),
+        [files],
+    );
+
+    /**
+     * Reverse lookup `name → absolute container path`, used to map the
+     * FileManager's name-keyed selection back to the absolute paths the
+     * backend's pull endpoint expects.
+     */
+    const nameToAbsolutePath = useMemo(() => {
+        const map = new Map<string, string>();
+
+        for (const file of files) {
+            map.set(file.name, file.path);
+        }
+
+        return map;
+    }, [files]);
+
     const { isPulling, pull } = useFlowFilesPull({
         flowId,
         // Refresh the listing after a successful pull so newly available entries
@@ -146,7 +183,11 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
 
     const handleOpenDirectory = useCallback(
         (dir: FileNode) => {
-            navigateTo(dir.path);
+            // `dir.id` is the absolute container path (we flattened the
+            // listing into `flatFiles` for the FileManager). `dir.path` is
+            // just the entry's name in this dialog and would normalise to
+            // a wrong absolute path (`/${name}`) if we used it directly.
+            navigateTo(dir.id);
         },
         [navigateTo],
     );
@@ -170,15 +211,28 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
     }, [refetchListing]);
 
     // Final list of paths to pull. Empty selection → fall back to the directory
-    // the user is currently browsing. Non-empty selection wins and is deduped
-    // so a folder + one of its descendants don't double-process.
+    // the user is currently browsing. Non-empty selection wins and is mapped
+    // back from the FileManager's name-keyed selection to absolute container
+    // paths, then deduped so a folder + one of its descendants don't
+    // double-process. (Dedup is mostly defensive in this dialog because the
+    // listing is single-level, so descendants aren't visible.)
     const pullTargets = useMemo<readonly string[]>(() => {
-        if (selectedPaths.size > 0) {
-            return dedupeOverlappingPaths(selectedPaths);
+        if (selectedPaths.size === 0) {
+            return [currentPath];
         }
 
-        return [currentPath];
-    }, [currentPath, selectedPaths]);
+        const absolutePaths: string[] = [];
+
+        for (const name of selectedPaths) {
+            const absolute = nameToAbsolutePath.get(name);
+
+            if (absolute) {
+                absolutePaths.push(absolute);
+            }
+        }
+
+        return dedupeOverlappingPaths(absolutePaths);
+    }, [currentPath, nameToAbsolutePath, selectedPaths]);
 
     const isUpDisabled = currentPath === '/' || isListingLoading || isPulling;
     const isPullDisabled = isListingLoading || pullTargets.length === 0 || !flowId;
@@ -237,7 +291,7 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
                     </DialogTitle>
                     <DialogDescription>
                         Browse the running container and select files or directories to sync into the local cache under{' '}
-                        <code>container/</code>. Double-click a folder to drill in.
+                        <code>container/</code>. Click the arrow on a folder row or double-click the row to drill in.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -302,8 +356,8 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
                         className="h-[360px]"
                         emptyState={emptyState}
                         enableSelection
-                        files={files}
-                        isLoading={isListingLoading && files.length === 0}
+                        files={flatFiles}
+                        isLoading={isListingLoading && flatFiles.length === 0}
                         onOpenDirectory={handleOpenDirectory}
                         onSelectionChange={setSelectedPaths}
                     />
@@ -343,13 +397,7 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
     );
 };
 
-export const FlowFilesPullDialog = ({
-    cachedFiles,
-    flowId,
-    isOpen,
-    onClose,
-    onSuccess,
-}: FlowFilesPullDialogProps) => {
+export const FlowFilesPullDialog = ({ cachedFiles, flowId, isOpen, onClose, onSuccess }: FlowFilesPullDialogProps) => {
     const handleDialogOpenChange = (nextOpen: boolean) => {
         if (!nextOpen) {
             onClose();

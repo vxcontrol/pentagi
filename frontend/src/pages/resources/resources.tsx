@@ -1,4 +1,4 @@
-import { Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, Search, X } from 'lucide-react';
+import { Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, Search, Upload, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -49,84 +49,38 @@ const Resources = () => {
 
     const [isMkdirOpen, setIsMkdirOpen] = useState(false);
     // When the user invokes "New folder here" from a directory row's menu, we
-    // need the dialog to seed itself with that *specific* directory rather
-    // than the focus-derived `currentDir`. Cleared whenever the dialog closes
-    // so the toolbar mkdir falls back to the focus default again.
+    // need the dialog to seed itself with that *specific* directory. Cleared
+    // whenever the dialog closes so the toolbar mkdir falls back to the
+    // library root again.
     const [mkdirParentOverride, setMkdirParentOverride] = useState<null | string>(null);
     // Both dialogs accept an array now: a row-action click pushes a single-element
     // array, the bulk bar pushes the full deduped selection. Empty / null array
     // closes the dialog.
     const [filesToMove, setFilesToMove] = useState<FileNode[] | null>(null);
     const [filesToCopy, setFilesToCopy] = useState<FileNode[] | null>(null);
-    // The path of the row currently focused in the FileManager (roving tabindex).
-    // `null` until the user has actually clicked / Tab-ed into a row, so that we
-    // can distinguish "user explicitly chose a directory" from the auto-fallback
-    // the FileManager uses for its keyboard handler.
-    const [activeRowPath, setActiveRowPath] = useState<null | string>(null);
 
-    // Index resources by virtual path so deriving `currentDir` (and other
-    // path-based lookups) stays O(1) regardless of library size.
-    const resourcesByPath = useMemo(() => {
-        const map = new Map<string, (typeof resources)[number]>();
-
-        for (const resource of resources) {
-            map.set(resource.path, resource);
-        }
-
-        return map;
-    }, [resources]);
-
-    /**
-     * Virtual directory the next upload / mkdir / drop should target. Resolved
-     * from `activeRowPath`:
-     *   - directory row    → the directory's own path (upload lands inside it)
-     *   - file row         → the file's parent directory (sibling upload)
-     *   - no focused row   → '' (library root)
-     *   - stale path       → '' (focused row was deleted by a subscription)
-     *
-     * Mirrors the same resolution rule that the FileManager's internal
-     * drag-and-drop uses (`resolveDropTargetDir` in `use-file-manager-dnd`),
-     * so context-aware uploads land where users would expect a file dropped
-     * onto the same row to land.
-     */
-    const currentDir = useMemo(() => {
-        if (!activeRowPath) {
-            return '';
-        }
-
-        const resource = resourcesByPath.get(activeRowPath);
-
-        if (!resource) {
-            return '';
-        }
-
-        if (resource.isDir) {
-            return resource.path;
-        }
-
-        const idx = resource.path.lastIndexOf('/');
-
-        return idx === -1 ? '' : resource.path.slice(0, idx);
-    }, [activeRowPath, resourcesByPath]);
-
-    const upload = useResourcesUpload({ defaultDir: currentDir });
+    // Toolbar / empty-area mkdir + upload always target the library root —
+    // row-level "Upload here" / "New folder here" handlers carry their own
+    // explicit path, and DnD passes the destination per drop, so these
+    // entry points don't need a focus-derived fallback directory.
+    const upload = useResourcesUpload();
     const deletion = useResourcesDelete();
     const { move } = useResourcesMove();
 
     const canAcceptDrop = !upload.isUploading;
     const { dragHandlers, isDragging } = useFilesDragAndDrop({
         canAcceptDrop,
-        // `upload.uploadFiles` is reference-stable: it reads the latest
-        // `defaultDir` through a ref, so changing the focused row does not
-        // invalidate the drag handlers below.
+        // Page-level drop falls back to the hook's defaults — i.e. the
+        // library root, since `useResourcesUpload` is invoked without a
+        // `defaultDir`.
         onDrop: upload.uploadFiles,
     });
 
     // Per-row external file drop (OS desktop → folder row): forward the
     // dropped files together with the resolved directory so the upload lands
-    // exactly where the user released, not in the focus-derived `currentDir`.
-    // FileManager already stops propagation on the row, so this never
-    // double-fires alongside the page-level `dragHandlers` above.
+    // exactly where the user released, not in the library root that the
+    // page-level `dragHandlers` above default to. FileManager already stops
+    // propagation on the row, so this never double-fires.
     const handleExternalFileDrop = useCallback(
         async (droppedFiles: File[], destinationDir: string): Promise<void> => {
             await upload.uploadFiles(droppedFiles, { dir: destinationDir });
@@ -270,19 +224,19 @@ const Resources = () => {
             {
                 appliesToDirs: true,
                 appliesToFiles: false,
-                icon: FolderUp,
-                id: 'resources-upload-here',
-                label: 'Upload files here',
-                onSelect: handleUploadHere,
+                icon: FolderPlus,
+                id: 'resources-mkdir-here',
+                label: 'New folder',
+                onSelect: handleMkdirHere,
                 separatorBefore: true,
             },
             {
                 appliesToDirs: true,
                 appliesToFiles: false,
-                icon: FolderPlus,
-                id: 'resources-mkdir-here',
-                label: 'New folder here',
-                onSelect: handleMkdirHere,
+                icon: Upload,
+                id: 'resources-upload-here',
+                label: 'Upload files',
+                onSelect: handleUploadHere,
             },
             {
                 appliesToDirs: true,
@@ -320,10 +274,7 @@ const Resources = () => {
 
     // Right-click anywhere outside a row in the tree → mirror the toolbar
     // gestures so users have a closer-to-pointer entry point. Both items
-    // resolve through the same focus-derived `currentDir` as the toolbar
-    // buttons (via `defaultDir` / `mkdirParentOverride === null`), so the
-    // outcome — and the toolbar tooltip telling the user *where* it lands —
-    // stays identical no matter which surface the user invokes.
+    // target the library root, identical to the toolbar buttons.
     const fileManagerEmptyAreaActions = useMemo<FileManagerEmptyAreaAction[]>(
         () => [
             {
@@ -385,11 +336,6 @@ const Resources = () => {
         />
     );
 
-    // Human-readable target for the toolbar tooltips: matches the same wording
-    // used in the upload success toast so users see the same "to /reports/2025"
-    // / "to your library" phrasing both before and after the action.
-    const uploadTargetLabel = currentDir ? `/${currentDir}` : 'library root';
-
     const noMatchesState = (
         <Empty>
             <EmptyHeader>
@@ -408,7 +354,7 @@ const Resources = () => {
         <>
             {pageHeader}
             <div
-                className="relative flex flex-1 flex-col gap-4 p-4"
+                className="relative flex h-[calc(100dvh-3rem)] flex-col gap-4 p-4"
                 {...dragHandlers}
             >
                 <input
@@ -476,7 +422,7 @@ const Resources = () => {
                                     </Button>
                                 </span>
                             </TooltipTrigger>
-                            <TooltipContent>Create directory in {uploadTargetLabel}</TooltipContent>
+                            <TooltipContent>Create new folder</TooltipContent>
                         </Tooltip>
 
                         <Tooltip>
@@ -489,11 +435,11 @@ const Resources = () => {
                                         type="button"
                                         variant="outline"
                                     >
-                                        {upload.isUploading ? <Loader2 className="animate-spin" /> : <FolderUp />}
+                                        {upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
                                     </Button>
                                 </span>
                             </TooltipTrigger>
-                            <TooltipContent>Upload files to {uploadTargetLabel}</TooltipContent>
+                            <TooltipContent>Upload files</TooltipContent>
                         </Tooltip>
                     </div>
                 </Form>
@@ -506,7 +452,6 @@ const Resources = () => {
                     emptyState={noResourcesState}
                     files={fileNodes}
                     isLoading={isInitialLoading}
-                    onActiveRowChange={setActiveRowPath}
                     onExternalFileDrop={handleExternalFileDrop}
                     onMoveItems={handleMoveItems}
                     onOpen={handleOpenFile}
@@ -514,7 +459,7 @@ const Resources = () => {
                 />
 
                 <ResourcesMkdirDialog
-                    defaultParentPath={mkdirParentOverride ?? currentDir}
+                    defaultParentPath={mkdirParentOverride ?? ''}
                     isOpen={isMkdirOpen}
                     onClose={closeMkdirDialog}
                 />

@@ -13,8 +13,8 @@ export interface FileManagerAction {
     appliesToDirs?: boolean;
     /**
      * When true (default), the action is shown for file rows. Set to `false` for
-     * actions that only make sense on directory rows (e.g. "Upload files here",
-     * "New folder here") combined with `appliesToDirs: true`.
+     * actions that only make sense on directory rows (e.g. "Upload files",
+     * "New folder") combined with `appliesToDirs: true`.
      */
     appliesToFiles?: boolean;
     /**
@@ -242,15 +242,12 @@ export interface FileManagerProps {
      */
     onOpen?: (file: FileNode) => void;
     /**
-     * Fired when the user "opens" a *directory* row via double-click or `Enter`.
-     * When provided, **replaces** the default expand/collapse gesture — useful
-     * for navigation-style file browsers (e.g. drilling into a remote directory
-     * by replacing the listing instead of expanding inline). When omitted,
-     * directories keep the default expand/collapse behaviour.
-     *
-     * The chevron icon on the row's left edge always toggles expand/collapse
-     * regardless of this prop, so the user still has access to inline
-     * exploration when it makes sense.
+     * Fired when the user "opens" a *directory* row via double-click, `Enter`,
+     * or a click on the row's chevron. When provided, **replaces** the default
+     * expand/collapse gesture — useful for navigation-style file browsers
+     * (e.g. drilling into a remote directory by replacing the listing instead
+     * of expanding inline). When omitted, directories keep the default
+     * expand/collapse behaviour for all three gestures.
      */
     onOpenDirectory?: (dir: FileNode) => void;
     /**

@@ -153,9 +153,7 @@ const buildVisibleActions = (
     actions: readonly FileManagerAction[],
     file: FileManagerInternalNode,
 ): FileManagerAction[] =>
-    actions.filter((action) =>
-        file.isDir ? action.appliesToDirs === true : action.appliesToFiles !== false,
-    );
+    actions.filter((action) => (file.isDir ? action.appliesToDirs === true : action.appliesToFiles !== false));
 
 const FileManagerRowImpl = ({
     actions,
@@ -425,7 +423,18 @@ const FileManagerRowImpl = ({
                     <span
                         aria-hidden="true"
                         className="text-muted-foreground hover:bg-muted -mx-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded transition-colors"
-                        onClick={() => onToggleExpand(file.path, isExpanded)}
+                        onClick={() => {
+                            // Mirror the double-click / Enter semantics here so the
+                            // chevron stays consistent with the row-level "open"
+                            // gesture: navigation-style consumers (e.g. the remote
+                            // container browser) drill into the folder instead of
+                            // toggling expansion that has no children to show.
+                            if (onOpenDirectory) {
+                                onOpenDirectory(file);
+                            } else {
+                                onToggleExpand(file.path, isExpanded);
+                            }
+                        }}
                         {...skipRowClickProps}
                     >
                         <ChevronRight className={cn('size-3.5 transition-transform', isExpanded && 'rotate-90')} />

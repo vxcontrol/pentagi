@@ -1,4 +1,4 @@
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, X } from 'lucide-react';
 import { type ComponentType, useCallback, useMemo, useState } from 'react';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -136,15 +136,18 @@ export const FileManagerBulkActionsBar = ({
 
     return (
         <>
-            <div className="bg-background flex items-center justify-between gap-2 border-t px-3 py-2">
+            <div className="bg-background flex flex-wrap items-center gap-2 border-t px-3 py-2">
                 <span className="text-muted-foreground text-sm">{selectedText}</span>
-                <div className="flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-2">
                     <Button
+                        aria-label={cancelText}
+                        className="max-sm:size-8 max-sm:px-0"
                         onClick={onClearSelection}
                         size="sm"
                         variant="ghost"
                     >
-                        {cancelText}
+                        <X className="sm:hidden" />
+                        <span className="hidden sm:inline">{cancelText}</span>
                     </Button>
 
                     {inlineActions.map(({ action, isDisabled }) => (
@@ -221,12 +224,13 @@ const BulkActionButton = ({ action, isDisabled, onClick }: BulkActionButtonProps
     const Icon = action.icon as ComponentType<{ className?: string }> | undefined;
     const button = (
         <Button
+            className={cn(action.icon && 'max-sm:size-8 max-sm:px-0')}
             disabled={isDisabled}
             onClick={() => onClick(action)}
             size="sm"
             variant={action.variant === 'destructive' ? 'destructive' : 'outline'}
         >
-            {Icon ? <Icon className="size-4" /> : null}
+            {Icon ? <Icon /> : null}
             <span className={cn(action.icon ? 'hidden sm:inline' : undefined)}>{action.label}</span>
         </Button>
     );
