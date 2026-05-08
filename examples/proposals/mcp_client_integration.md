@@ -17,10 +17,11 @@ surface for maintainers to push back on before any code lands.
 The RFC is intentionally staged. MCP is powerful, and the issue's most
 direct reading -- auto-discover every MCP tool from every configured
 server and expose all of them to every agent -- would land near the
-pattern PR [#268](https://github.com/vxcontrol/pentagi/pull/268) was
-rejected for: implicit lifecycle state, weak operator visibility, and
-weak operator control. The proposed v1 below is narrower on purpose so a
-later implementation PR can be reviewed in small slices.
+patterns that were pushed back on during PR
+[#268](https://github.com/vxcontrol/pentagi/pull/268) review: implicit
+lifecycle state, weak operator visibility, and weak operator control.
+The proposed v1 below is narrower on purpose so a later implementation
+PR can be reviewed in small slices.
 
 ## Goals
 
@@ -46,10 +47,11 @@ later implementation PR can be reviewed in small slices.
   allowlists them.
 - This RFC does not propose hidden background execution of MCP tool
   calls. Calls happen inside the same agent loop and are visible the
-  same way native tool calls are. This is the explicit lesson from PR
-  [#268](https://github.com/vxcontrol/pentagi/pull/268): no hidden
-  in-memory queues, no implicit lifecycle state, no invisible background
-  behavior.
+  same way native tool calls are. This carries forward the explicit
+  lessons from PR
+  [#268](https://github.com/vxcontrol/pentagi/pull/268) review: no
+  hidden in-memory queues, no implicit lifecycle state, no invisible
+  background behavior.
 - This RFC does not propose a hidden queue, retry buffer, or implicit
   per-tool state machine sitting between agents and MCP servers.
 - This RFC does not grant MCP servers arbitrary host or network access
@@ -228,28 +230,41 @@ A pentester running Burp Suite Pro on their own analyst workstation,
 or on a controlled internal host, enables the Burp MCP extension. The
 extension exposes an MCP endpoint over HTTP on localhost. From a
 PentAGI compose deployment running on the same workstation, that
-endpoint is reachable as `http://host.docker.internal:<port>` from
-the backend container, which is the existing pattern PentAGI already
-uses for other host-reachable services.
+endpoint can be reached at `http://host.docker.internal:<port>` from
+the backend container -- but this name is not universally available.
+Docker Desktop on macOS and Windows commonly resolves
+`host.docker.internal` automatically, while on Linux and other
+operator-managed compose stacks the operator typically has to add an
+explicit `extra_hosts: - "host.docker.internal:host-gateway"` mapping
+to the relevant service, or point the MCP server `url` at another
+controlled endpoint (a routed internal IP, a reverse proxy, etc.).
+Either way, host reachability for an MCP server should be explicit
+and operator-controlled, not implied by the design.
 
 The operator adds a single named server entry (call it `burp`),
 explicitly enables it, supplies any required header or token, and
 allowlists a small set of read-only tools. Nothing else changes.
+Anything beyond read-only -- in particular active scan -- is not part
+of this safe initial setup and is described separately below.
 
 ### Candidate tool categories
 
 The Burp MCP server, depending on version and configured access, can
 expose a range of capabilities. From the issue's framing, useful
-categories for PentAGI agents would include:
+read-only categories for PentAGI agents would include:
 
 - reading the current Burp sitemap or list of discovered URLs;
-- starting an active scan against a specific in-scope URL;
 - retrieving structured findings (vulnerability type, severity,
   request and response evidence) for incorporation into the agent's
   reasoning and reports;
 - retrieving Collaborator or other out-of-band events, if the MCP
   server exposes them, to detect blind classes of vulnerabilities
   that PentAGI's CLI-only toolset cannot detect today.
+
+Active capabilities -- in particular starting an active scan against
+a specific in-scope URL -- are higher risk and intentionally **not**
+part of the safe initial example. They belong to a later, explicitly
+gated milestone and are discussed under "Scope discipline" below.
 
 ### Scope discipline
 
@@ -262,10 +277,11 @@ and can be destructive against fragile targets. They must be:
 - bounded by the same scope and approval mindset PentAGI applies to
   other intrusive tools.
 
-PentAGI must not be inferred from this RFC to "freely scan arbitrary
-targets" once Burp MCP is wired in. The agent only ever invokes a
-Burp MCP tool that an operator has both configured and allowlisted,
-against a target that already exists inside the engagement's scope.
+It should not be inferred from this RFC that PentAGI can freely scan
+arbitrary targets once Burp MCP is wired in. The agent only ever
+invokes a Burp MCP tool that an operator has both configured and
+allowlisted, against a target that already exists inside the
+engagement's scope.
 
 ### Illustrative configuration (non-final pseudocode)
 
@@ -288,9 +304,12 @@ mcp:
         header: X-API-Key
         secret_ref: burp_mcp_token
       allowlist:
+        # safe initial set: read-only tools only.
+        # active capabilities like start_active_scan are intentionally
+        # excluded here and would be added later, under explicit
+        # in-scope target checks and operator approval.
         - get_sitemap
         - get_findings
-        - start_active_scan
 ```
 
 ## Security and Safety
