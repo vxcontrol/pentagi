@@ -234,7 +234,7 @@ func (s *AssistantService) GetFlowAssistant(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param flowID path int true "flow id" minimum(0)
+// @Param flowID path int true "flow id (use 0 to create a new flow together with the assistant)" minimum(0)
 // @Param json body models.CreateAssistant true "assistant model to create"
 // @Success 201 {object} response.successResp{data=models.AssistantFlow} "assistant created successful"
 // @Failure 400 {object} response.errorResp "invalid assistant request data"
@@ -245,7 +245,7 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 	var (
 		err             error
 		flowID          uint64
-		assistant       models.AssistantFlow
+		resp            models.AssistantFlow
 		createAssistant models.CreateAssistant
 	)
 
@@ -267,14 +267,42 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 		return
 	}
 
+	uid := c.GetUint64("uid")
 	privs := c.GetStringSlice("prm")
-	if !slices.Contains(privs, "assistants.create") {
-		logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
-		response.Error(c, response.ErrNotPermitted, nil)
-		return
+
+	if flowID == 0 {
+		// Creating a new flow together with the assistant requires both permissions.
+		if !slices.Contains(privs, "assistants.create") || !slices.Contains(privs, "flows.create") {
+			logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+	} else {
+		if !slices.Contains(privs, "assistants.create") {
+			logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+
+		// Verify the flow exists and belongs to the user (unless admin).
+		var flow models.Flow
+		var flowScope func(db *gorm.DB) *gorm.DB
+		if slices.Contains(privs, "flows.admin") {
+			flowScope = func(db *gorm.DB) *gorm.DB { return db.Where("id = ?", flowID) }
+		} else {
+			flowScope = func(db *gorm.DB) *gorm.DB { return db.Where("id = ? AND user_id = ?", flowID, uid) }
+		}
+		if err = s.db.Model(&flow).Scopes(flowScope).Take(&flow).Error; err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error getting flow by id")
+			if gorm.IsRecordNotFoundError(err) {
+				response.Error(c, response.ErrFlowsNotFound, err)
+			} else {
+				response.Error(c, response.ErrInternal, err)
+			}
+			return
+		}
 	}
 
-	uid := c.GetUint64("uid")
 	prvname := provider.ProviderName(createAssistant.Provider)
 
 	prv, err := s.pc.GetProvider(c, prvname, int64(uid))
@@ -309,14 +337,19 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 		return
 	}
 
-	err = s.db.Model(&assistant).Where("id = ?", aw.GetAssistantID()).Take(&assistant).Error
-	if err != nil {
+	if err = s.db.Model(&resp.Assistant).Where("id = ?", aw.GetAssistantID()).Take(&resp.Assistant).Error; err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting assistant by id")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
 
-	response.Success(c, http.StatusCreated, assistant)
+	if err = s.db.Model(&resp.Flow).Where("id = ?", resp.Assistant.FlowID).Take(&resp.Flow).Error; err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error getting flow by id")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, resp)
 }
 
 // PatchAssistant is a function to patch assistant

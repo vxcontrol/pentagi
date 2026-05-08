@@ -2903,7 +2903,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: flow id
+      - description: flow id (use 0 to create a new flow together with the assistant)
         in: path
         minimum: 0
         name: flowID

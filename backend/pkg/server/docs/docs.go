@@ -1390,7 +1390,7 @@ const docTemplate = `{
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "flow id",
+                        "description": "flow id (use 0 to create a new flow together with the assistant)",
                         "name": "flowID",
                         "in": "path",
                         "required": true
