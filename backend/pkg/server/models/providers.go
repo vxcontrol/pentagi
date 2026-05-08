@@ -96,11 +96,35 @@ func (pp PatchProvider) Valid() error {
 	return validate.Struct(pp)
 }
 
+// ModelPriceInfo is model to contain price information for a model
+// nolint:lll
+type ModelPriceInfo struct {
+	Input      float64 `form:"input" json:"input" validate:"omitempty,numeric,min=0" example:"1.1"`
+	Output     float64 `form:"output" json:"output" validate:"omitempty,numeric,min=0" example:"3.0"`
+	CacheRead  float64 `form:"cache_read" json:"cache_read" validate:"omitempty,numeric,min=0" example:"0.1"`
+	CacheWrite float64 `form:"cache_write" json:"cache_write" validate:"omitempty,numeric,min=0" example:"0.3"`
+}
+
+// Valid is function to control input/output data
+func (mpi ModelPriceInfo) Valid() error {
+	return validate.Struct(mpi)
+}
+
+// ModelInfo is model to contain model short information for display
+// nolint:lll
+type ModelInfo struct {
+	Name       string          `form:"name" json:"name" validate:"required" example:"gpt-4o"`
+	AgentTypes []string        `form:"agent_types" json:"agent_types" validate:"required"`
+	PriceInfo  *ModelPriceInfo `form:"price_info" json:"price_info" validate:"omitempty,valid"`
+}
+
 // ProviderInfo is model to contain provider short information for display
 // nolint:lll
 type ProviderInfo struct {
-	Name string       `form:"name" json:"name" validate:"required" example:"my openai provider"`
-	Type ProviderType `form:"type" json:"type" validate:"valid,required" example:"openai"`
+	Name         string       `form:"name" json:"name" validate:"required" example:"my openai provider"`
+	Type         ProviderType `form:"type" json:"type" validate:"valid,required" example:"openai"`
+	DefaultModel string       `form:"default_model" json:"default_model" validate:"required" example:"gpt-4o"`
+	Models       []ModelInfo  `form:"models" json:"models" validate:"required"`
 }
 
 // Valid is function to control input/output data

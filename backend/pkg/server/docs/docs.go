@@ -5155,7 +5155,10 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.ProviderInfo"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.ProviderInfo"
+                                            }
                                         }
                                     }
                                 }
@@ -6088,6 +6091,48 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "internal error on getting searchlogs",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Retrieve settings",
+                "responses": {
+                    "200": {
+                        "description": "settings received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Settings"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting settings not permitted",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -8469,6 +8514,53 @@ const docTemplate = `{
                 }
             }
         },
+        "models.ModelInfo": {
+            "type": "object",
+            "required": [
+                "agent_types",
+                "name"
+            ],
+            "properties": {
+                "agent_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "example": "gpt-4o"
+                },
+                "price_info": {
+                    "$ref": "#/definitions/models.ModelPriceInfo"
+                }
+            }
+        },
+        "models.ModelPriceInfo": {
+            "type": "object",
+            "properties": {
+                "cache_read": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0.1
+                },
+                "cache_write": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0.3
+                },
+                "input": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 1.1
+                },
+                "output": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 3
+                }
+            }
+        },
         "models.ModelUsageStats": {
             "type": "object",
             "required": [
@@ -8744,10 +8836,22 @@ const docTemplate = `{
         "models.ProviderInfo": {
             "type": "object",
             "required": [
+                "default_model",
+                "models",
                 "name",
                 "type"
             ],
             "properties": {
+                "default_model": {
+                    "type": "string",
+                    "example": "gpt-4o"
+                },
+                "models": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ModelInfo"
+                    }
+                },
                 "name": {
                     "type": "string",
                     "example": "my openai provider"
@@ -8953,6 +9057,35 @@ const docTemplate = `{
                 "task_id": {
                     "type": "integer",
                     "minimum": 0
+                }
+            }
+        },
+        "models.Settings": {
+            "type": "object",
+            "properties": {
+                "ask_user": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "assistant_use_agents": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "debug": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "docker_inside": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_develop_mode": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "version": {
+                    "type": "string",
+                    "example": "v1.0.0"
                 }
             }
         },

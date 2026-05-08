@@ -917,6 +917,40 @@ definitions:
     required:
     - path
     type: object
+  models.ModelInfo:
+    properties:
+      agent_types:
+        items:
+          type: string
+        type: array
+      name:
+        example: gpt-4o
+        type: string
+      price_info:
+        $ref: '#/definitions/models.ModelPriceInfo'
+    required:
+    - agent_types
+    - name
+    type: object
+  models.ModelPriceInfo:
+    properties:
+      cache_read:
+        example: 0.1
+        minimum: 0
+        type: number
+      cache_write:
+        example: 0.3
+        minimum: 0
+        type: number
+      input:
+        example: 1.1
+        minimum: 0
+        type: number
+      output:
+        example: 3
+        minimum: 0
+        type: number
+    type: object
   models.ModelUsageStats:
     properties:
       model:
@@ -1115,6 +1149,13 @@ definitions:
     type: object
   models.ProviderInfo:
     properties:
+      default_model:
+        example: gpt-4o
+        type: string
+      models:
+        items:
+          $ref: '#/definitions/models.ModelInfo'
+        type: array
       name:
         example: my openai provider
         type: string
@@ -1122,6 +1163,8 @@ definitions:
         example: openai
         type: string
     required:
+    - default_model
+    - models
     - name
     - type
     type: object
@@ -1264,6 +1307,27 @@ definitions:
     - flow_id
     - initiator
     - query
+    type: object
+  models.Settings:
+    properties:
+      ask_user:
+        example: false
+        type: boolean
+      assistant_use_agents:
+        example: false
+        type: boolean
+      debug:
+        example: false
+        type: boolean
+      docker_inside:
+        example: false
+        type: boolean
+      is_develop_mode:
+        example: false
+        type: boolean
+      version:
+        example: v1.0.0
+        type: string
     type: object
   models.Subtask:
     properties:
@@ -5330,7 +5394,9 @@ paths:
             - $ref: '#/definitions/SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.ProviderInfo'
+                  items:
+                    $ref: '#/definitions/models.ProviderInfo'
+                  type: array
               type: object
         "403":
           description: getting providers not permitted
@@ -5946,6 +6012,29 @@ paths:
       summary: Retrieve searchlogs list
       tags:
       - Searchlogs
+  /settings/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: settings received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Settings'
+              type: object
+        "403":
+          description: getting settings not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve settings
+      tags:
+      - Settings
   /termlogs/:
     get:
       parameters:

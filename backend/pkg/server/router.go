@@ -155,6 +155,7 @@ func NewRouter(
 	userService := services.NewUserService(orm, userCache)
 	roleService := services.NewRoleService(orm)
 	providerService := services.NewProviderService(providers)
+	settingsService := services.NewSettingsService(cfg)
 	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
 	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, dockerClient, subscriptions)
 	resourceService := services.NewResourceService(orm, cfg.DataDir, subscriptions)
@@ -252,6 +253,7 @@ func NewRouter(
 
 		setKnowledgeGroup(privateGroup, knowledgeService)
 		setProvidersGroup(privateGroup, providerService)
+		setSettingsGroup(privateGroup, settingsService)
 		setFlowsGroup(privateGroup, flowService)
 		setFlowFilesGroup(privateGroup, flowFileService)
 		setResourcesGroup(privateGroup, resourceService)
@@ -355,6 +357,13 @@ func setProvidersGroup(parent *gin.RouterGroup, svc *services.ProviderService) {
 	providersGroup := parent.Group("/providers")
 	{
 		providersGroup.GET("/", svc.GetProviders)
+	}
+}
+
+func setSettingsGroup(parent *gin.RouterGroup, svc *services.SettingsService) {
+	settingsGroup := parent.Group("/settings")
+	{
+		settingsGroup.GET("/", svc.GetSettings)
 	}
 }
 

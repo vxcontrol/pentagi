@@ -448,10 +448,12 @@ type SearchLog struct {
 }
 
 type Settings struct {
-	Debug              bool `json:"debug"`
-	AskUser            bool `json:"askUser"`
-	DockerInside       bool `json:"dockerInside"`
-	AssistantUseAgents bool `json:"assistantUseAgents"`
+	Debug              bool   `json:"debug"`
+	AskUser            bool   `json:"askUser"`
+	Version            string `json:"version"`
+	DockerInside       bool   `json:"dockerInside"`
+	IsDevelopMode      bool   `json:"isDevelopMode"`
+	AssistantUseAgents bool   `json:"assistantUseAgents"`
 }
 
 type Subscription struct {

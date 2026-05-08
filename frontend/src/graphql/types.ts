@@ -990,6 +990,8 @@ export type Settings = {
     assistantUseAgents: Scalars['Boolean']['output'];
     debug: Scalars['Boolean']['output'];
     dockerInside: Scalars['Boolean']['output'];
+    isDevelopMode: Scalars['Boolean']['output'];
+    version: Scalars['String']['output'];
 };
 
 export enum StatusType {
@@ -1292,7 +1294,9 @@ export type VectorStoreLog = {
 export type SettingsFragmentFragment = {
     debug: boolean;
     askUser: boolean;
+    version: string;
     dockerInside: boolean;
+    isDevelopMode: boolean;
     assistantUseAgents: boolean;
 };
 
@@ -2371,7 +2375,9 @@ export const SettingsFragmentFragmentDoc = gql`
     fragment settingsFragment on Settings {
         debug
         askUser
+        version
         dockerInside
+        isDevelopMode
         assistantUseAgents
     }
 `;

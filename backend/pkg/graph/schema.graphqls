@@ -158,7 +158,9 @@ enum VectorStoreAction {
 type Settings {
   debug: Boolean!
   askUser: Boolean!
+  version: String!
   dockerInside: Boolean!
+  isDevelopMode: Boolean!
   assistantUseAgents: Boolean!
 }
 

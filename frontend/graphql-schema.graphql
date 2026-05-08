@@ -3,7 +3,9 @@
 fragment settingsFragment on Settings {
     debug
     askUser
+    version
     dockerInside
+    isDevelopMode
     assistantUseAgents
 }
 

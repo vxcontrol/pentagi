@@ -29,6 +29,7 @@ import (
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/templates/validator"
+	"pentagi/pkg/version"
 	"strings"
 	"time"
 
@@ -1960,7 +1961,9 @@ func (r *queryResolver) Settings(ctx context.Context) (*model.Settings, error) {
 	settings := &model.Settings{
 		Debug:              r.Config.Debug,
 		AskUser:            r.Config.AskUser,
+		Version:            version.GetBinaryVersion(),
 		DockerInside:       r.Config.DockerInside,
+		IsDevelopMode:      version.IsDevelopMode(),
 		AssistantUseAgents: r.Config.AssistantUseAgents,
 	}
 

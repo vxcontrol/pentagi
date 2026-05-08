@@ -536,6 +536,8 @@ type ComplexityRoot struct {
 		AssistantUseAgents func(childComplexity int) int
 		Debug              func(childComplexity int) int
 		DockerInside       func(childComplexity int) int
+		IsDevelopMode      func(childComplexity int) int
+		Version            func(childComplexity int) int
 	}
 
 	Subscription struct {
@@ -3539,6 +3541,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Settings.DockerInside(childComplexity), true
+
+	case "Settings.isDevelopMode":
+		if e.complexity.Settings.IsDevelopMode == nil {
+			break
+		}
+
+		return e.complexity.Settings.IsDevelopMode(childComplexity), true
+
+	case "Settings.version":
+		if e.complexity.Settings.Version == nil {
+			break
+		}
+
+		return e.complexity.Settings.Version(childComplexity), true
 
 	case "Subscription.apiTokenCreated":
 		if e.complexity.Subscription.APITokenCreated == nil {
@@ -23912,8 +23928,12 @@ func (ec *executionContext) fieldContext_Query_settings(_ context.Context, field
 				return ec.fieldContext_Settings_debug(ctx, field)
 			case "askUser":
 				return ec.fieldContext_Settings_askUser(ctx, field)
+			case "version":
+				return ec.fieldContext_Settings_version(ctx, field)
 			case "dockerInside":
 				return ec.fieldContext_Settings_dockerInside(ctx, field)
+			case "isDevelopMode":
+				return ec.fieldContext_Settings_isDevelopMode(ctx, field)
 			case "assistantUseAgents":
 				return ec.fieldContext_Settings_assistantUseAgents(ctx, field)
 			}
@@ -25680,6 +25700,50 @@ func (ec *executionContext) fieldContext_Settings_askUser(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Settings_version(ctx context.Context, field graphql.CollectedField, obj *model.Settings) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Settings_version(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Version, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Settings_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Settings",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Settings_dockerInside(ctx context.Context, field graphql.CollectedField, obj *model.Settings) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Settings_dockerInside(ctx, field)
 	if err != nil {
@@ -25712,6 +25776,50 @@ func (ec *executionContext) _Settings_dockerInside(ctx context.Context, field gr
 }
 
 func (ec *executionContext) fieldContext_Settings_dockerInside(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Settings",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Settings_isDevelopMode(ctx context.Context, field graphql.CollectedField, obj *model.Settings) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Settings_isDevelopMode(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDevelopMode, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Settings_isDevelopMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Settings",
 		Field:      field,
@@ -39224,8 +39332,18 @@ func (ec *executionContext) _Settings(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "version":
+			out.Values[i] = ec._Settings_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "dockerInside":
 			out.Values[i] = ec._Settings_dockerInside(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDevelopMode":
+			out.Values[i] = ec._Settings_isDevelopMode(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
