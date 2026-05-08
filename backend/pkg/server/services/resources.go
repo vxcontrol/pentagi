@@ -590,7 +590,8 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 	}
 
 	// ── Sanitize destination ──────────────────────────────────────────────────
-	dstPath, err := resources.SanitizeResourcePath(req.Destination)
+	// Empty destination is allowed and means "move into the root directory".
+	dstPath, err := resources.SanitizeResourceDir(req.Destination)
 	if err != nil {
 		response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid destination: %w", err))
 		return
@@ -611,7 +612,10 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 	var result moveResourceResult
 	if len(srcPaths) == 1 {
 		srcPath := srcPaths[0]
-		if srcPath == dstPath {
+		// When destination is root (""), the effective target is <root>/<src.Name>.
+		// A source already living at root would land on itself — catch it early.
+		dstIsDirHint := dstPath == "" || pathHasTrailingSeparator(req.Destination)
+		if srcPath == dstPath || (dstPath == "" && !strings.Contains(srcPath, "/")) {
 			response.Error(c, response.ErrResourcesInvalidRequest, errors.New("source and destination are the same"))
 			return
 		}
@@ -625,7 +629,7 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
-		result, err = s.moveResource(uid, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
+		result, err = s.moveResource(uid, src, srcPath, dstPath, req.Force, dstIsDirHint)
 	} else {
 		result, err = s.moveMultipleSources(uid, srcPaths, dstPath, req.Force)
 	}
@@ -827,6 +831,19 @@ func (s *ResourceService) moveResource(
 		return result, nil
 	}
 
+	// For directory sources: if the destination is an existing directory,
+	// move the source INTO it (Unix mv semantics: "mv docs archive" where
+	// archive exists → archive/docs), just like moveFileResource already does
+	// for files.  When the destination is absent the source is renamed to it.
+	dest, destExists, err := findResourceByPath(tx, uid, dstPath)
+	if err != nil {
+		tx.Rollback()
+		return moveResourceResult{}, err
+	}
+	if destExists && dest.IsDir {
+		dstPath = resources.FilePath(dstPath, src.Name)
+	}
+
 	result, err := s.moveDirResource(tx, uid, srcPath, dstPath, force)
 	if err != nil {
 		tx.Rollback()
@@ -916,6 +933,10 @@ func (s *ResourceService) moveDirResource(
 	result := moveResourceResult{}
 	if resources.PathHasPrefix(dstPath, srcPath) {
 		return result, fmt.Errorf("%w: cannot move directory into itself", errResourceInvalid)
+	}
+	// Moving a directory to root (dstPath=="") means placing it at root level
+	if dstPath == "" {
+		dstPath = path.Base(srcPath)
 	}
 
 	createdParents, deletedParents, orphanHashes, err := ensureResourceDirs(tx, uid, resources.ParentDir(dstPath), force)

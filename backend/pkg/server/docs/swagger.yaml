@@ -969,7 +969,7 @@ definitions:
       destination:
         description: |-
           Destination is the exact target path (single source) or base directory
-          (multiple sources). Required.
+          (multiple sources). Empty string means the root directory.
         type: string
       force:
         description: Force overwrites existing resources at the target paths when
@@ -987,8 +987,6 @@ definitions:
         items:
           type: string
         type: array
-    required:
-    - destination
     type: object
   models.Msglog:
     properties:

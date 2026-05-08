@@ -60,8 +60,8 @@ type MoveResourceRequest struct {
 	// Combined with Source when both are provided; duplicates are removed.
 	Sources []string `json:"sources"`
 	// Destination is the exact target path (single source) or base directory
-	// (multiple sources). Required.
-	Destination string `json:"destination" binding:"required"`
+	// (multiple sources). Empty string means the root directory.
+	Destination string `json:"destination"`
 	// Force overwrites existing resources at the target paths when true.
 	Force bool `json:"force"`
 }

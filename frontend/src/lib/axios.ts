@@ -142,6 +142,13 @@ axios.interceptors.response.use(
                     break;
                 }
 
+                case 409: {
+                    // Conflict is an expected outcome for operations with an
+                    // overwrite workflow (move, copy, etc.).  The calling hook
+                    // handles it and shows a prompt; there is nothing to log.
+                    break;
+                }
+
                 default: {
                     Log.error(err.response?.data);
                 }

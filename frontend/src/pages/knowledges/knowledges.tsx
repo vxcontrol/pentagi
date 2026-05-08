@@ -379,7 +379,7 @@ const Knowledges = () => {
                     columns={columns}
                     data={knowledges}
                     filterColumn="question"
-                    filterPlaceholder="Filter by question..."
+                    filterPlaceholder="Filter knowledge documents..."
                     onRowClick={(k) => handleOpen(k.id)}
                     renderRowContextMenu={renderRowContextMenu}
                 />

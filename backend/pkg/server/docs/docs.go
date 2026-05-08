@@ -8582,12 +8582,9 @@ const docTemplate = `{
         },
         "models.MoveResourceRequest": {
             "type": "object",
-            "required": [
-                "destination"
-            ],
             "properties": {
                 "destination": {
-                    "description": "Destination is the exact target path (single source) or base directory\n(multiple sources). Required.",
+                    "description": "Destination is the exact target path (single source) or base directory\n(multiple sources). Empty string means the root directory.",
                     "type": "string"
                 },
                 "force": {
