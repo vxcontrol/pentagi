@@ -53,6 +53,8 @@ var frontendRoutes = []string{
 	"/flows",
 	"/settings",
 	"/templates",
+	"/resources",
+	"/knowledges",
 	"/dashboard",
 }
 
