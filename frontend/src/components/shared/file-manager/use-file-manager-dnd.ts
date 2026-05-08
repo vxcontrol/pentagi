@@ -383,8 +383,7 @@ export const useFileManagerDnd = ({
             const targetDir = resolveDropTargetDir(node, findNode);
             // External drags accept any directory; move drags additionally need
             // a valid source/destination pairing (no self-into-self / parent etc.).
-            const isAcceptable =
-                targetDir !== null && (isExternal || isValidMove(dragSourcesRef.current, targetDir));
+            const isAcceptable = targetDir !== null && (isExternal || isValidMove(dragSourcesRef.current, targetDir));
 
             if (!isAcceptable) {
                 // Cursor is now over a non-droppable row — make sure the previously
@@ -577,7 +576,16 @@ export const useFileManagerDnd = ({
 
             void onExternalFileDrop?.(droppedFiles, targetDir);
         },
-        [findNode, isEnabled, isExternalDropEnabled, onClearSelection, onExternalFileDrop, onMoveItems, reactsToDrags, resetDragState],
+        [
+            findNode,
+            isEnabled,
+            isExternalDropEnabled,
+            onClearSelection,
+            onExternalFileDrop,
+            onMoveItems,
+            reactsToDrags,
+            resetDragState,
+        ],
     );
 
     const bindNodeDnd = useCallback(

@@ -36,10 +36,7 @@ const MEGABYTE = 1024 * 1024;
  * Empty batches are treated as a no-op (`null`); callers usually short-circuit
  * before reaching the validator anyway.
  */
-export const validateUploadBatch = (
-    files: readonly File[],
-    limits: UploadValidationLimits,
-): null | string => {
+export const validateUploadBatch = (files: readonly File[], limits: UploadValidationLimits): null | string => {
     if (files.length > limits.maxFiles) {
         return `Too many files: max ${limits.maxFiles} per upload`;
     }

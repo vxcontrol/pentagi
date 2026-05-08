@@ -418,7 +418,7 @@ const Template = () => {
             <>
                 {pageHeader}
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center">
-                    <Spinner />
+                    <Spinner variant="circle" />
                 </div>
             </>
         );

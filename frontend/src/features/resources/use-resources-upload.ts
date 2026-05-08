@@ -198,10 +198,7 @@ export const useResourcesUpload = ({
             pendingDirRef.current = undefined;
 
             try {
-                await uploadFiles(
-                    selectedFiles,
-                    pendingDir !== undefined ? { dir: pendingDir } : undefined,
-                );
+                await uploadFiles(selectedFiles, pendingDir !== undefined ? { dir: pendingDir } : undefined);
             } finally {
                 setFileInputKey((previousKey) => previousKey + 1);
             }

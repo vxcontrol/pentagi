@@ -7,6 +7,7 @@ import {
     GitFork,
     KeyRound,
     LayoutDashboard,
+    LibraryBig,
     LogOut,
     Monitor,
     Moon,
@@ -95,6 +96,7 @@ export const MainSidebar = () => {
     const isDashboardActive = useMatch('/dashboard');
     const isFlowsActive = useMatch('/flows/*');
     const isTemplatesActive = useMatch('/templates/*');
+    const isKnowledgesActive = useMatch('/knowledges/*');
     const isResourcesActive = useMatch('/resources/*');
     const isSettingsActive = useMatch('/settings/*');
     const { flowId: flowIdParam } = useParams<{ flowId: string }>();
@@ -221,6 +223,26 @@ export const MainSidebar = () => {
                                     type="button"
                                 >
                                     <Plus />
+                                </SidebarMenuAction>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={!!isKnowledgesActive}
+                                >
+                                    <Link to="/knowledges">
+                                        <LibraryBig />
+                                        Knowledges
+                                    </Link>
+                                </SidebarMenuButton>
+                                <SidebarMenuAction
+                                    asChild
+                                    className="data-[state=open]:bg-accent rounded-sm"
+                                    showOnHover
+                                >
+                                    <Link to="/knowledges/new">
+                                        <Plus />
+                                    </Link>
                                 </SidebarMenuAction>
                             </SidebarMenuItem>
                         </SidebarMenu>

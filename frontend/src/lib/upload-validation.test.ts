@@ -37,26 +37,18 @@ describe('validateUploadBatch', () => {
     it('rejects batches exceeding the file count cap', () => {
         const files = Array.from({ length: 5 }, (_, i) => makeFile(`f-${i}.txt`, 1));
 
-        expect(validateUploadBatch(files, { ...DEFAULT_LIMITS, maxFiles: 4 })).toBe(
-            'Too many files: max 4 per upload',
-        );
+        expect(validateUploadBatch(files, { ...DEFAULT_LIMITS, maxFiles: 4 })).toBe('Too many files: max 4 per upload');
     });
 
     it('rejects a single file that is larger than the per-file cap', () => {
         const files = [makeFile('ok.txt', 1 * MB), makeFile('huge.bin', 350 * MB)];
 
-        expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBe(
-            'File "huge.bin" is larger than 300 MB',
-        );
+        expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBe('File "huge.bin" is larger than 300 MB');
     });
 
     it('rejects batches whose combined size exceeds the total cap', () => {
         // Each file fits under maxFileSizeMb, but the sum is over the batch limit.
-        const files = [
-            makeFile('a.bin', 250 * MB),
-            makeFile('b.bin', 250 * MB),
-            makeFile('c.bin', 250 * MB),
-        ];
+        const files = [makeFile('a.bin', 250 * MB), makeFile('b.bin', 250 * MB), makeFile('c.bin', 250 * MB)];
 
         expect(validateUploadBatch(files, { ...DEFAULT_LIMITS, maxTotalSizeMb: 600 })).toBe(
             'Total upload size exceeds the 600 MB limit',
@@ -80,8 +72,6 @@ describe('validateUploadBatch', () => {
         // check runs first by contract.
         const files = Array.from({ length: 6 }, (_, i) => makeFile(`f-${i}.bin`, 400 * MB));
 
-        expect(validateUploadBatch(files, { ...DEFAULT_LIMITS, maxFiles: 5 })).toBe(
-            'Too many files: max 5 per upload',
-        );
+        expect(validateUploadBatch(files, { ...DEFAULT_LIMITS, maxFiles: 5 })).toBe('Too many files: max 5 per upload');
     });
 });
