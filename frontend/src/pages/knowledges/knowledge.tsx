@@ -13,19 +13,14 @@ import type {
     UpdateKnowledgeDocumentInput,
 } from '@/graphql/types';
 
+import { MarkdownEditor } from '@/components/shared/markdown-editor';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import {
-    InputGroup,
-    InputGroupAddon,
-    InputGroupButton,
-    InputGroupTextarea,
-    InputGroupTextareaAutosize,
-} from '@/components/ui/input-group';
+import { InputGroup, InputGroupTextareaAutosize } from '@/components/ui/input-group';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
@@ -97,14 +92,15 @@ const documentToFormValues = (k: KnowledgeDocumentFragmentFragment): FormValues 
     question: k.question,
 });
 
-interface KnowledgeFormCardProps {
+interface KnowledgeFormViewProps {
     initialValues: FormValues;
     isNew: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
+    knowledgeName: null | string;
     onSubmit: (values: FormValues) => Promise<void>;
 }
 
-const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: KnowledgeFormCardProps) => {
+const KnowledgeFormView = ({ initialValues, isNew, knowledge, knowledgeName, onSubmit }: KnowledgeFormViewProps) => {
     const { isDesktop } = useBreakpoint();
     const [isSaving, setIsSaving] = useState(false);
 
@@ -118,6 +114,7 @@ const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: Knowle
 
     const docType = watch('docType');
     const hasUnsavedChanges = formState.isDirty;
+    const canSubmit = !isSaving && formState.isValid && (isNew || hasUnsavedChanges);
 
     const onSubmitWithGuard = async (values: FormValues) => {
         if (isSaving) {
@@ -130,7 +127,6 @@ const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: Knowle
             await onSubmit(values);
 
             if (!isNew) {
-                // Successful update — make form pristine with new values as the new defaults
                 reset(values, { keepDefaultValues: false });
             }
         } catch {
@@ -140,7 +136,7 @@ const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: Knowle
         }
     };
 
-    const headerSection = (
+    const introBlock = (
         <div className="flex flex-col gap-4">
             <div className="text-center">
                 <h1 className="text-2xl font-semibold">
@@ -349,35 +345,21 @@ const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: Knowle
         </div>
     );
 
-    const submitButton = (
-        <InputGroupButton
-            className="ml-auto"
-            disabled={isSaving || !formState.isValid || (!isNew && !hasUnsavedChanges)}
-            size="icon-xs"
-            type="submit"
-            variant="default"
-        >
-            {isSaving ? <Spinner variant="circle" /> : <Save />}
-        </InputGroupButton>
-    );
-
-    const contentFieldFill = (
+    const contentField = (
         <FormField
             control={control}
             name="content"
             render={({ field }) => (
                 <FormItem className="flex min-h-0 flex-1 flex-col">
-                    <FormLabel>Content</FormLabel>
                     <FormControl>
-                        <InputGroup className="flex h-full min-h-0 flex-1 flex-col items-stretch !rounded-md">
-                            <InputGroupTextarea
-                                {...field}
-                                className="min-h-0 flex-1"
-                                disabled={isSaving}
-                                placeholder="Knowledge content (will be embedded into the vector store)"
-                            />
-                            <InputGroupAddon align="block-end">{submitButton}</InputGroupAddon>
-                        </InputGroup>
+                        <MarkdownEditor
+                            className="min-h-0 flex-1"
+                            disabled={isSaving}
+                            onBlur={field.onBlur}
+                            onChange={field.onChange}
+                            placeholder="Knowledge content (will be embedded into the vector store)"
+                            value={field.value}
+                        />
                     </FormControl>
                     <FormMessage />
                 </FormItem>
@@ -385,7 +367,7 @@ const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: Knowle
         />
     );
 
-    const contentFieldAutosize = (
+    const contentFieldStandalone = (
         <FormField
             control={control}
             name="content"
@@ -393,17 +375,15 @@ const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: Knowle
                 <FormItem>
                     <FormLabel>Content</FormLabel>
                     <FormControl>
-                        <InputGroup className="block">
-                            <InputGroupTextareaAutosize
-                                {...field}
-                                className="min-h-0"
-                                disabled={isSaving}
-                                maxRows={24}
-                                minRows={6}
-                                placeholder="Knowledge content (will be embedded into the vector store)"
-                            />
-                            <InputGroupAddon align="block-end">{submitButton}</InputGroupAddon>
-                        </InputGroup>
+                        <MarkdownEditor
+                            className="min-h-[280px]"
+                            contentClassName="min-h-[240px]"
+                            disabled={isSaving}
+                            onBlur={field.onBlur}
+                            onChange={field.onChange}
+                            placeholder="Knowledge content (will be embedded into the vector store)"
+                            value={field.value}
+                        />
                     </FormControl>
                     <FormMessage />
                 </FormItem>
@@ -411,46 +391,75 @@ const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: Knowle
         />
     );
 
+    const pageHeader = (
+        <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator
+                className="mr-2 h-4"
+                orientation="vertical"
+            />
+            <Breadcrumb>
+                <BreadcrumbList>
+                    <BreadcrumbItem>
+                        <LibraryBig className="size-4 shrink-0" />
+                        <BreadcrumbPage className="max-w-[240px] truncate">
+                            {isNew ? 'New knowledge' : (knowledgeName ?? 'Knowledge')}
+                        </BreadcrumbPage>
+                    </BreadcrumbItem>
+                </BreadcrumbList>
+            </Breadcrumb>
+            <div className="ml-auto flex items-center gap-2">
+                <Button
+                    disabled={!canSubmit}
+                    size="sm"
+                    type="submit"
+                >
+                    {isSaving ? <Spinner variant="circle" /> : <Save />}
+                    {isNew ? 'Create' : 'Save'}
+                </Button>
+            </div>
+        </header>
+    );
+
     if (isDesktop) {
         return (
             <Form {...form}>
                 <form
-                    className="flex h-full min-h-0 w-full flex-1"
+                    className="flex h-full min-h-0 w-full flex-1 flex-col"
                     onSubmit={handleSubmit(onSubmitWithGuard)}
                 >
-                    <ResizablePanelGroup
-                        className="w-full"
-                        direction="horizontal"
-                    >
-                        <ResizablePanel
-                            defaultSize={45}
-                            minSize={30}
+                    {pageHeader}
+                    <div className="flex h-[calc(100dvh-3rem)] min-h-0 w-full max-w-full flex-1 overflow-hidden">
+                        <ResizablePanelGroup
+                            className="w-full"
+                            direction="horizontal"
                         >
-                            <div className="h-full overflow-auto">
-                                <Card className="mx-auto size-full max-w-2xl rounded-none border-0">
-                                    <CardContent className="flex flex-col gap-6 pt-6">
-                                        {headerSection}
-                                        {metaFields}
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </ResizablePanel>
-                        <ResizableHandle withHandle>
-                            <GripVertical className="size-4" />
-                        </ResizableHandle>
-                        <ResizablePanel
-                            defaultSize={55}
-                            minSize={30}
-                        >
-                            <div className="flex h-full flex-col p-4">
-                                <Card className="flex min-h-0 flex-1 flex-col">
-                                    <CardContent className="flex min-h-0 flex-1 flex-col pt-6">
-                                        {contentFieldFill}
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </ResizablePanel>
-                    </ResizablePanelGroup>
+                            <ResizablePanel
+                                className="h-[calc(100dvh-3rem)] min-h-0"
+                                defaultSize={45}
+                                minSize={30}
+                            >
+                                <div className="h-full min-h-0 overflow-y-auto">
+                                    <Card className="mx-auto min-h-full w-full max-w-2xl rounded-none border-0">
+                                        <CardContent className="flex flex-col gap-6 py-6">
+                                            {introBlock}
+                                            {metaFields}
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            </ResizablePanel>
+                            <ResizableHandle withHandle>
+                                <GripVertical className="size-4" />
+                            </ResizableHandle>
+                            <ResizablePanel
+                                className="h-[calc(100dvh-3rem)] min-h-0"
+                                defaultSize={55}
+                                minSize={30}
+                            >
+                                <div className="flex h-full min-h-0 flex-col overflow-hidden p-4">{contentField}</div>
+                            </ResizablePanel>
+                        </ResizablePanelGroup>
+                    </div>
                 </form>
             </Form>
         );
@@ -459,16 +468,19 @@ const KnowledgeFormCard = ({ initialValues, isNew, knowledge, onSubmit }: Knowle
     return (
         <Form {...form}>
             <form
-                className="flex min-w-0 flex-1 items-start justify-center p-4"
+                className="flex min-h-[100dvh] flex-col"
                 onSubmit={handleSubmit(onSubmitWithGuard)}
             >
-                <Card className="w-full max-w-3xl">
-                    <CardContent className="flex flex-col gap-6 pt-6">
-                        {headerSection}
-                        {metaFields}
-                        {contentFieldAutosize}
-                    </CardContent>
-                </Card>
+                {pageHeader}
+                <div className="flex min-w-0 flex-1 items-start justify-center p-4">
+                    <Card className="w-full max-w-3xl">
+                        <CardContent className="flex flex-col gap-6 pt-6">
+                            {introBlock}
+                            {metaFields}
+                            {contentFieldStandalone}
+                        </CardContent>
+                    </Card>
+                </div>
             </form>
         </Form>
     );
@@ -528,7 +540,7 @@ const Knowledge = () => {
         await updateKnowledge(knowledgeId, input);
     };
 
-    const pageHeader = (
+    const placeholderHeader = (
         <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator
@@ -551,7 +563,7 @@ const Knowledge = () => {
     if (!isNew && isLoadingKnowledge) {
         return (
             <>
-                {pageHeader}
+                {placeholderHeader}
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center">
                     <Spinner variant="circle" />
                 </div>
@@ -562,7 +574,7 @@ const Knowledge = () => {
     if (!isNew && !knowledge) {
         return (
             <>
-                {pageHeader}
+                {placeholderHeader}
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center p-4">
                     <Card className="w-full max-w-2xl">
                         <CardContent className="flex flex-col items-center gap-4 pt-6 text-center">
@@ -579,18 +591,14 @@ const Knowledge = () => {
     }
 
     return (
-        <>
-            {pageHeader}
-            <div className="flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
-                <KnowledgeFormCard
-                    initialValues={initialValues}
-                    isNew={isNew}
-                    key={knowledgeId ?? 'new'}
-                    knowledge={knowledge}
-                    onSubmit={handleSubmit}
-                />
-            </div>
-        </>
+        <KnowledgeFormView
+            initialValues={initialValues}
+            isNew={isNew}
+            key={knowledgeId ?? 'new'}
+            knowledge={knowledge}
+            knowledgeName={knowledgeName}
+            onSubmit={handleSubmit}
+        />
     );
 };
 

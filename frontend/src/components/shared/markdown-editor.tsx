@@ -1,0 +1,363 @@
+import type { Editor } from '@tiptap/react';
+
+import { Placeholder } from '@tiptap/extensions';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import {
+    Bold,
+    Code,
+    Code2,
+    Heading1,
+    Heading2,
+    Heading3,
+    Italic,
+    Link as LinkIcon,
+    List,
+    ListOrdered,
+    Minus,
+    Quote,
+    Redo,
+    Strikethrough,
+    Undo,
+} from 'lucide-react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { Markdown } from 'tiptap-markdown';
+
+import { Separator } from '@/components/ui/separator';
+import { Toggle } from '@/components/ui/toggle';
+import { cn } from '@/lib/utils';
+
+export interface MarkdownEditorHandle {
+    focus: () => void;
+    getEditor: () => Editor | null;
+}
+
+export interface MarkdownEditorProps {
+    autoFocus?: boolean;
+    className?: string;
+    contentClassName?: string;
+    disabled?: boolean;
+    onBlur?: () => void;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    showToolbar?: boolean;
+    value: string;
+}
+
+const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
+    (
+        {
+            autoFocus,
+            className,
+            contentClassName,
+            disabled,
+            onBlur,
+            onChange,
+            placeholder = 'Write something…',
+            showToolbar = true,
+            value,
+        },
+        ref,
+    ) => {
+        const onChangeRef = useRef(onChange);
+        const onBlurRef = useRef(onBlur);
+
+        useEffect(() => {
+            onChangeRef.current = onChange;
+            onBlurRef.current = onBlur;
+        }, [onChange, onBlur]);
+
+        const editor = useEditor({
+            content: value,
+            editable: !disabled,
+            extensions: [
+                StarterKit.configure({
+                    codeBlock: { HTMLAttributes: { class: 'hljs' } },
+                }),
+                Placeholder.configure({
+                    emptyEditorClass: 'is-editor-empty',
+                    placeholder,
+                }),
+                Markdown.configure({
+                    breaks: true,
+                    html: false,
+                    linkify: true,
+                    tightLists: true,
+                    transformCopiedText: true,
+                    transformPastedText: true,
+                }),
+            ],
+            immediatelyRender: false,
+            onBlur: () => onBlurRef.current?.(),
+            onUpdate: ({ editor: instance }) => {
+                onChangeRef.current?.(instance.storage.markdown.getMarkdown());
+            },
+        });
+
+        useImperativeHandle(
+            ref,
+            () => ({
+                focus: () => editor?.commands.focus(),
+                getEditor: () => editor,
+            }),
+            [editor],
+        );
+
+        // Keep external value in sync (e.g. on form reset). Avoid resetting if
+        // the editor already reflects the same markdown to keep cursor stable.
+        useEffect(() => {
+            if (!editor) {
+                return;
+            }
+
+            const current = editor.storage.markdown.getMarkdown();
+
+            if (current !== value) {
+                editor.commands.setContent(value, { emitUpdate: false });
+            }
+        }, [editor, value]);
+
+        useEffect(() => {
+            if (!editor) {
+                return;
+            }
+
+            editor.setEditable(!disabled);
+        }, [editor, disabled]);
+
+        useEffect(() => {
+            if (autoFocus && editor) {
+                editor.commands.focus('end');
+            }
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [editor]);
+
+        if (!editor) {
+            return null;
+        }
+
+        return (
+            <div
+                className={cn(
+                    'border-input dark:bg-input/30 group/markdown-editor flex w-full flex-col overflow-hidden rounded-md border shadow-2xs outline-hidden transition-[color,box-shadow]',
+                    'focus-within:ring-ring focus-within:ring-1',
+                    disabled && 'pointer-events-none opacity-60',
+                    className,
+                )}
+                data-slot="markdown-editor"
+            >
+                {showToolbar ? (
+                    <MarkdownEditorToolbar
+                        disabled={disabled}
+                        editor={editor}
+                    />
+                ) : null}
+                <EditorContent
+                    className={cn(
+                        'prose prose-sm dark:prose-invert tiptap-content min-w-0 max-w-none flex-1 overflow-auto px-3 py-2',
+                        '[&_.ProseMirror]:min-h-full [&_.ProseMirror]:outline-none',
+                        contentClassName,
+                    )}
+                    editor={editor}
+                />
+            </div>
+        );
+    },
+);
+
+MarkdownEditor.displayName = 'MarkdownEditor';
+
+interface MarkdownEditorToolbarProps {
+    disabled?: boolean;
+    editor: Editor;
+}
+
+const MarkdownEditorToolbar = ({ disabled, editor }: MarkdownEditorToolbarProps) => {
+    const handleSetLink = useCallback(() => {
+        const previousUrl = editor.getAttributes('link').href as string | undefined;
+        const url = window.prompt('URL', previousUrl ?? '');
+
+        if (url === null) {
+            return;
+        }
+
+        if (url === '') {
+            editor.chain().focus().extendMarkRange('link').unsetLink().run();
+
+            return;
+        }
+
+        editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    }, [editor]);
+
+    return (
+        <div
+            className={cn(
+                'bg-muted/40 flex flex-wrap items-center gap-0.5 border-b px-1 py-1',
+                disabled && 'pointer-events-none opacity-60',
+            )}
+            data-slot="markdown-editor-toolbar"
+        >
+            <Toggle
+                aria-label="Bold"
+                onPressedChange={() => editor.chain().focus().toggleBold().run()}
+                pressed={editor.isActive('bold')}
+                size="sm"
+                title="Bold (Ctrl+B)"
+            >
+                <Bold />
+            </Toggle>
+            <Toggle
+                aria-label="Italic"
+                onPressedChange={() => editor.chain().focus().toggleItalic().run()}
+                pressed={editor.isActive('italic')}
+                size="sm"
+                title="Italic (Ctrl+I)"
+            >
+                <Italic />
+            </Toggle>
+            <Toggle
+                aria-label="Strikethrough"
+                onPressedChange={() => editor.chain().focus().toggleStrike().run()}
+                pressed={editor.isActive('strike')}
+                size="sm"
+                title="Strikethrough"
+            >
+                <Strikethrough />
+            </Toggle>
+            <Toggle
+                aria-label="Inline code"
+                onPressedChange={() => editor.chain().focus().toggleCode().run()}
+                pressed={editor.isActive('code')}
+                size="sm"
+                title="Inline code"
+            >
+                <Code />
+            </Toggle>
+
+            <Separator
+                className="mx-1 h-5"
+                orientation="vertical"
+            />
+
+            <Toggle
+                aria-label="Heading 1"
+                onPressedChange={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                pressed={editor.isActive('heading', { level: 1 })}
+                size="sm"
+                title="Heading 1"
+            >
+                <Heading1 />
+            </Toggle>
+            <Toggle
+                aria-label="Heading 2"
+                onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                pressed={editor.isActive('heading', { level: 2 })}
+                size="sm"
+                title="Heading 2"
+            >
+                <Heading2 />
+            </Toggle>
+            <Toggle
+                aria-label="Heading 3"
+                onPressedChange={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+                pressed={editor.isActive('heading', { level: 3 })}
+                size="sm"
+                title="Heading 3"
+            >
+                <Heading3 />
+            </Toggle>
+
+            <Separator
+                className="mx-1 h-5"
+                orientation="vertical"
+            />
+
+            <Toggle
+                aria-label="Bullet list"
+                onPressedChange={() => editor.chain().focus().toggleBulletList().run()}
+                pressed={editor.isActive('bulletList')}
+                size="sm"
+                title="Bullet list"
+            >
+                <List />
+            </Toggle>
+            <Toggle
+                aria-label="Ordered list"
+                onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}
+                pressed={editor.isActive('orderedList')}
+                size="sm"
+                title="Ordered list"
+            >
+                <ListOrdered />
+            </Toggle>
+
+            <Separator
+                className="mx-1 h-5"
+                orientation="vertical"
+            />
+
+            <Toggle
+                aria-label="Blockquote"
+                onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
+                pressed={editor.isActive('blockquote')}
+                size="sm"
+                title="Blockquote"
+            >
+                <Quote />
+            </Toggle>
+            <Toggle
+                aria-label="Code block"
+                onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()}
+                pressed={editor.isActive('codeBlock')}
+                size="sm"
+                title="Code block"
+            >
+                <Code2 />
+            </Toggle>
+            <Toggle
+                aria-label="Link"
+                onPressedChange={handleSetLink}
+                pressed={editor.isActive('link')}
+                size="sm"
+                title="Insert link"
+            >
+                <LinkIcon />
+            </Toggle>
+            <Toggle
+                aria-label="Horizontal rule"
+                onPressedChange={() => editor.chain().focus().setHorizontalRule().run()}
+                pressed={false}
+                size="sm"
+                title="Horizontal rule"
+            >
+                <Minus />
+            </Toggle>
+
+            <div className="ml-auto flex items-center gap-0.5">
+                <Toggle
+                    aria-label="Undo"
+                    disabled={!editor.can().undo()}
+                    onPressedChange={() => editor.chain().focus().undo().run()}
+                    pressed={false}
+                    size="sm"
+                    title="Undo (Ctrl+Z)"
+                >
+                    <Undo />
+                </Toggle>
+                <Toggle
+                    aria-label="Redo"
+                    disabled={!editor.can().redo()}
+                    onPressedChange={() => editor.chain().focus().redo().run()}
+                    pressed={false}
+                    size="sm"
+                    title="Redo (Ctrl+Shift+Z)"
+                >
+                    <Redo />
+                </Toggle>
+            </div>
+        </div>
+    );
+};
+
+export { MarkdownEditor };

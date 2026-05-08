@@ -566,3 +566,69 @@
 .recharts-wrapper * {
     outline: none !important;
 }
+
+/* Tiptap editor */
+.tiptap-content .ProseMirror {
+    outline: none;
+    min-height: 100%;
+}
+
+.tiptap-content .ProseMirror p.is-editor-empty:first-child::before {
+    color: var(--muted-foreground);
+    opacity: 0.6;
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+}
+
+.tiptap-content .ProseMirror > :first-child {
+    margin-top: 0;
+}
+
+.tiptap-content .ProseMirror > :last-child {
+    margin-bottom: 0;
+}
+
+.tiptap-content .ProseMirror p.is-empty::before {
+    content: '';
+}
+
+.tiptap-content .ProseMirror code:not(pre code) {
+    background-color: var(--muted);
+    padding: 0.125rem 0.25rem;
+    border-radius: calc(var(--radius) - 4px);
+    font-size: 0.875em;
+}
+
+.tiptap-content .ProseMirror pre {
+    background-color: var(--muted);
+    color: var(--foreground);
+    padding: 0.75rem 1rem;
+    border-radius: calc(var(--radius) - 2px);
+    overflow-x: auto;
+}
+
+.tiptap-content .ProseMirror pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.875em;
+}
+
+.tiptap-content .ProseMirror blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 1rem;
+    color: var(--muted-foreground);
+}
+
+.tiptap-content .ProseMirror a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.tiptap-content .ProseMirror hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+}
