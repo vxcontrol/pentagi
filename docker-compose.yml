@@ -28,9 +28,9 @@ services:
     container_name: pentagi
     hostname: pentagi
     expose:
-      - 8443/tcp
+      - 8444/tcp
     ports:
-      - ${PENTAGI_LISTEN_IP:-127.0.0.1}:${PENTAGI_LISTEN_PORT:-8443}:8443
+      - ${PENTAGI_LISTEN_IP:-127.0.0.1}:${PENTAGI_LISTEN_PORT:-8444}:8444
     depends_on:
       pgvector:
         condition: service_healthy
@@ -120,7 +120,7 @@ services:
       - PUBLIC_URL=${PUBLIC_URL:-}
       - STATIC_DIR=${STATIC_DIR:-}
       - STATIC_URL=${STATIC_URL:-}
-      - SERVER_PORT=${SERVER_PORT:-8443}
+      - SERVER_PORT=${SERVER_PORT:-8444}
       - SERVER_HOST=${SERVER_HOST:-0.0.0.0}
       - SERVER_SSL_CRT=${SERVER_SSL_CRT:-}
       - SERVER_SSL_KEY=${SERVER_SSL_KEY:-}
@@ -240,7 +240,7 @@ services:
     expose:
       - 443/tcp
     ports:
-      - ${SCRAPER_LISTEN_IP:-127.0.0.1}:${SCRAPER_LISTEN_PORT:-9443}:443
+      - ${SCRAPER_LISTEN_IP:-127.0.0.1}:${SCRAPER_LISTEN_PORT:-9444}:443
     environment:
       - MAX_CONCURRENT_SESSIONS=${LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS:-10}
       - USERNAME=${LOCAL_SCRAPER_USERNAME:-someuser}
