@@ -1853,6 +1853,52 @@ describe('sortFileManagerTree', () => {
     });
 });
 
+// `compareSizes` collapses directories (and synthetic group roots) to size `0`.
+// While `isFoldersFirst: true` is active the folders-first partition runs
+// before the comparator, so that detail is invisible. Once the user flips the
+// "Folders first" toggle off (Resources page), directories sort as 0-byte
+// rows alongside files. The behaviour is intentional but easy to regress;
+// these tests pin both sides of the contract explicitly.
+describe('sortFileManagerTree by size with directories', () => {
+    const collectTopNames = (nodes: FileManagerInternalNode[]): string[] => nodes.map((n) => n.name);
+
+    it('places directories with files at 0 bytes when folders-first is disabled', () => {
+        const tree = buildFileManagerTree([
+            file('a.txt', { size: 100 }),
+            dir('big-empty-folder'),
+            file('b.txt', { size: 50 }),
+        ]);
+
+        const sorted = sortFileManagerTree(tree, { column: 'size', direction: 'asc' }, false);
+
+        expect(collectTopNames(sorted)).toEqual(['big-empty-folder', 'b.txt', 'a.txt']);
+    });
+
+    it('keeps directories above files when folders-first is enabled, regardless of size', () => {
+        const tree = buildFileManagerTree([
+            file('big.txt', { size: 1000 }),
+            dir('zzz-folder'),
+            file('small.txt', { size: 1 }),
+        ]);
+
+        const sorted = sortFileManagerTree(tree, { column: 'size', direction: 'asc' }, true);
+
+        expect(collectTopNames(sorted)).toEqual(['zzz-folder', 'small.txt', 'big.txt']);
+    });
+
+    it('keeps directories above files in desc direction too when folders-first is enabled', () => {
+        const tree = buildFileManagerTree([
+            file('big.txt', { size: 1000 }),
+            dir('zzz-folder'),
+            file('small.txt', { size: 1 }),
+        ]);
+
+        const sorted = sortFileManagerTree(tree, { column: 'size', direction: 'desc' }, true);
+
+        expect(collectTopNames(sorted)).toEqual(['zzz-folder', 'big.txt', 'small.txt']);
+    });
+});
+
 describe('computeNextSort', () => {
     it('cycles none → asc', () => {
         expect(computeNextSort(null, 'name')).toEqual({ column: 'name', direction: 'asc' });
