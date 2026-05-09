@@ -752,6 +752,17 @@ const KnowledgeFormView = ({ initialValues, isNew, knowledge, knowledgeName, onS
         [navigate, onSubmit, reset],
     );
 
+    // The ref below breaks an otherwise circular hook dependency:
+    //
+    //   performSave           → skipNextBlockRef.current()        (ref filled by effect below)
+    //   onSaveFromDialog      → performSave
+    //   useUnsavedChangesGuard({ onSave: onSaveFromDialog }) → exposes skipNextBlock
+    //   useEffect             → wires the exposed skipNextBlock back into the ref
+    //
+    // Replacing the ref with a plain dep would force `performSave` to depend
+    // on `guard.skipNextBlock`, which is produced by a hook (`guard`) whose
+    // own input (`onSave`) closes over `performSave` — a real cycle that
+    // can't be expressed in deps without `useRef`.
     const skipNextBlockRef = useRef<() => void>(() => {});
 
     const onSubmitWithGuard: SubmitHandler<FormValues> = useCallback(
