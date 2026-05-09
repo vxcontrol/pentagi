@@ -672,24 +672,33 @@ export const computeSelectionTotalBytes = (
 };
 
 /**
- * Mutates `set` in place by adding every path from `paths`. Designed for "build a
- * fresh `next` from `prev`, then add a batch" patterns inside `setState` updaters
- * — never call on a state-owned Set directly.
+ * Returns a freshly cloned Set with every path from `paths` added. Pure —
+ * safe to call on a state-owned Set inside a `setState` updater because the
+ * input is never mutated. Empty `paths` still produces a fresh clone.
  */
-export const addAllToSet = (set: Set<string>, paths: Iterable<string>): void => {
+export const addAll = (prev: ReadonlySet<string>, paths: Iterable<string>): Set<string> => {
+    const next = new Set(prev);
+
     for (const path of paths) {
-        set.add(path);
+        next.add(path);
     }
+
+    return next;
 };
 
 /**
- * Mutates `set` in place by removing every path from `paths`. Same locality
- * contract as `addAllToSet`: only meaningful on a freshly cloned Set.
+ * Returns a freshly cloned Set with every path from `paths` removed. Same
+ * purity contract as `addAll`: input is never mutated, missing paths are
+ * silently ignored.
  */
-export const removeAllFromSet = (set: Set<string>, paths: Iterable<string>): void => {
+export const removeAll = (prev: ReadonlySet<string>, paths: Iterable<string>): Set<string> => {
+    const next = new Set(prev);
+
     for (const path of paths) {
-        set.delete(path);
+        next.delete(path);
     }
+
+    return next;
 };
 
 /**
@@ -731,8 +740,6 @@ export const toggleSubtreeOnSet = (
     paths: readonly string[],
     rootPath?: string,
 ): Set<string> => {
-    const next = new Set(prev);
-
     let allSelected: boolean;
 
     if (rootPath !== undefined && paths.length > 1) {
@@ -743,22 +750,16 @@ export const toggleSubtreeOnSet = (
                 continue;
             }
 
-            if (!next.has(p)) {
+            if (!prev.has(p)) {
                 allSelected = false;
                 break;
             }
         }
     } else {
-        allSelected = isEverySelected(paths, next);
+        allSelected = isEverySelected(paths, prev);
     }
 
-    if (allSelected) {
-        removeAllFromSet(next, paths);
-    } else {
-        addAllToSet(next, paths);
-    }
-
-    return next;
+    return allSelected ? removeAll(prev, paths) : addAll(prev, paths);
 };
 
 interface ComputeRowClickSelectionArgs {
@@ -881,15 +882,8 @@ export const computeRowClickSelection = ({
     // unchecked because its descendants stayed out of the selection.
     const expandDir = (p: string): readonly string[] => dirSubtreePaths?.get(p) ?? [p];
 
-    const addRangeToPrev = (paths: Iterable<string>): Set<string> => {
-        const next = new Set(prev);
-
-        for (const p of paths) {
-            addAllToSet(next, expandDir(p));
-        }
-
-        return next;
-    };
+    const addRangeToPrev = (paths: Iterable<string>): Set<string> =>
+        addAll(prev, Array.from(paths).flatMap((p) => [...expandDir(p)]));
 
     const buildAdditiveFallback = (): Set<string> => addRangeToPrev(hasSubtree && subtreePaths ? subtreePaths : [path]);
 

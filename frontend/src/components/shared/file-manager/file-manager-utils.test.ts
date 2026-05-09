@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileManagerInternalNode, FileManagerRootGroup, FileNode } from './file-manager-types';
 
 import {
-    addAllToSet,
+    addAll,
     buildFileManagerGridTemplate,
     buildFileManagerTree,
     clamp,
@@ -27,7 +27,7 @@ import {
     isEverySelected,
     normalizeRootGroups,
     pluralizeItemsEnglish,
-    removeAllFromSet,
+    removeAll,
     resolveSelectionModifier,
     sortFileManagerTree,
     toggleSubtreeOnSet,
@@ -491,47 +491,59 @@ describe('pluralizeItemsEnglish', () => {
     });
 });
 
-describe('addAllToSet', () => {
-    it('adds every path from the iterable into the set', () => {
-        const set = new Set(['a']);
+describe('addAll', () => {
+    it('returns a new set containing every path from prev plus the iterable', () => {
+        const prev = new Set(['a']);
+        const next = addAll(prev, ['b', 'c']);
 
-        addAllToSet(set, ['b', 'c']);
-
-        expect([...set].sort()).toEqual(['a', 'b', 'c']);
+        expect([...next].sort()).toEqual(['a', 'b', 'c']);
     });
 
-    it('is a no-op for an empty iterable', () => {
-        const set = new Set(['a']);
+    it('does not mutate the input set', () => {
+        const prev = new Set(['a']);
+        const next = addAll(prev, ['b', 'c']);
 
-        addAllToSet(set, []);
+        expect(next).not.toBe(prev);
+        expect([...prev]).toEqual(['a']);
+    });
 
-        expect([...set]).toEqual(['a']);
+    it('returns a freshly cloned set even for an empty iterable', () => {
+        const prev = new Set(['a']);
+        const next = addAll(prev, []);
+
+        expect(next).not.toBe(prev);
+        expect([...next]).toEqual(['a']);
     });
 
     it('accepts another Set as the source', () => {
-        const set = new Set<string>();
+        const next = addAll(new Set<string>(), new Set(['x', 'y']));
 
-        addAllToSet(set, new Set(['x', 'y']));
-
-        expect([...set].sort()).toEqual(['x', 'y']);
+        expect([...next].sort()).toEqual(['x', 'y']);
     });
 });
 
-describe('removeAllFromSet', () => {
-    it('removes every present path and ignores missing ones', () => {
-        const set = new Set(['a', 'b', 'c']);
+describe('removeAll', () => {
+    it('returns a new set without the requested paths and ignores missing ones', () => {
+        const prev = new Set(['a', 'b', 'c']);
+        const next = removeAll(prev, ['b', 'missing']);
 
-        removeAllFromSet(set, ['b', 'missing']);
-
-        expect([...set].sort()).toEqual(['a', 'c']);
+        expect([...next].sort()).toEqual(['a', 'c']);
     });
 
-    it('is a no-op for an empty iterable', () => {
-        const set = new Set(['a']);
+    it('does not mutate the input set', () => {
+        const prev = new Set(['a', 'b']);
+        const next = removeAll(prev, ['b']);
 
-        removeAllFromSet(set, []);
+        expect(next).not.toBe(prev);
+        expect([...prev].sort()).toEqual(['a', 'b']);
+    });
 
-        expect([...set]).toEqual(['a']);
+    it('returns a freshly cloned set even for an empty iterable', () => {
+        const prev = new Set(['a']);
+        const next = removeAll(prev, []);
+
+        expect(next).not.toBe(prev);
+        expect([...next]).toEqual(['a']);
     });
 });
 
@@ -1060,11 +1072,11 @@ describe('computeRowClickSelection — purity', () => {
     });
 
     it('never mutates the input prev Set on a range click that expands directories', () => {
-        // Defensive: the additive range branch builds `next` via `addAllToSet`
-        // on a clone of `prev`. If the clone step ever regressed, every
-        // directory expansion would silently corrupt React state. Shaped after
-        // the user's three-folder scenario so a regression here always lights
-        // up a real-world failure mode.
+        // Defensive: the additive range branch funnels every expansion through
+        // `addAll`, which clones internally. If that contract ever regressed,
+        // every directory expansion would silently corrupt React state.
+        // Shaped after the user's three-folder scenario so a regression here
+        // always lights up a real-world failure mode.
         const prev = new Set(['f1', 'f1/a', 'f1/b']);
         const snapshot = [...prev];
 
