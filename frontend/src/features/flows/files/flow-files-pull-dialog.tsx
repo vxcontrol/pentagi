@@ -10,6 +10,14 @@ import {
 import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
 import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
 import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
+import {
+    Autocomplete,
+    AutocompleteContent,
+    AutocompleteEmpty,
+    AutocompleteGroup,
+    AutocompleteInput,
+    AutocompleteItem,
+} from '@/components/ui/autocomplete';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -20,12 +28,11 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { findPullConflicts } from './flow-files-conflicts';
-import { CONTAINER_DEFAULT_PATH } from './flow-files-constants';
+import { CONTAINER_DEFAULT_PATH, CONTAINER_PATH_PREFIX } from './flow-files-constants';
 import { pluralizeItems } from './flow-files-utils';
 import { useFlowContainerFiles } from './use-flow-container-files';
 import { useFlowFilesPull } from './use-flow-files-pull';
@@ -196,19 +203,61 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
         navigateTo(getParentContainerPath(currentPath));
     }, [currentPath, navigateTo]);
 
-    const handlePathInputKeyDown = useCallback(
-        (event: React.KeyboardEvent<HTMLInputElement>) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                navigateTo(pathInputValue);
-            }
-        },
-        [navigateTo, pathInputValue],
-    );
-
     const handleRefresh = useCallback(() => {
         void refetchListing();
     }, [refetchListing]);
+
+    /**
+     * Suggestions surfaced under the path input. We collect every container
+     * directory the user has already touched: ancestors of cached files (those
+     * sit under the synthetic `container/` cache prefix and need to be
+     * unwrapped back into absolute container paths) plus directories from the
+     * directory currently being browsed. Files are mapped to their parent
+     * directory — pulling a file path through the address bar would only
+     * produce a listing error.
+     *
+     * Seeded with `/` and `CONTAINER_DEFAULT_PATH` so the dropdown is useful
+     * the first time the dialog is opened, before anything is cached.
+     */
+    const pathSuggestions = useMemo<readonly string[]>(() => {
+        const paths = new Set<string>();
+        const containerCachePrefix = `${CONTAINER_PATH_PREFIX}/`;
+
+        const addWithAncestors = (dirPath: string) => {
+            let current = dirPath;
+
+            while (current && current !== '/') {
+                paths.add(current);
+                current = getParentContainerPath(current);
+            }
+
+            paths.add('/');
+        };
+
+        paths.add('/');
+        paths.add(CONTAINER_DEFAULT_PATH);
+        addWithAncestors(currentPath);
+
+        for (const file of cachedFiles) {
+            if (!file.path.startsWith(containerCachePrefix)) {
+                continue;
+            }
+
+            const stripped = file.path.slice(CONTAINER_PATH_PREFIX.length);
+            const containerPath = stripped.startsWith('/') ? stripped : `/${stripped}`;
+            const dir = file.isDir ? containerPath : getParentContainerPath(containerPath);
+
+            addWithAncestors(dir);
+        }
+
+        for (const file of files) {
+            const dir = file.isDir ? file.path : getParentContainerPath(file.path);
+
+            addWithAncestors(dir);
+        }
+
+        return [...paths].sort((a, b) => a.localeCompare(b));
+    }, [cachedFiles, currentPath, files]);
 
     // Final list of paths to pull. Empty selection → fall back to the directory
     // the user is currently browsing. Non-empty selection wins and is mapped
@@ -298,22 +347,31 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
                 <div className="flex flex-col gap-3">
                     <div className="flex items-end gap-2">
                         <div className="flex-1">
-                            <Label
-                                className="mb-1.5 block text-sm font-normal"
-                                htmlFor="flow-files-pull-path"
-                            >
-                                Container path
-                            </Label>
-                            <Input
-                                autoComplete="off"
-                                autoFocus
-                                disabled={isPulling}
-                                id="flow-files-pull-path"
-                                onChange={(event) => setPathInputValue(event.target.value)}
-                                onKeyDown={handlePathInputKeyDown}
-                                placeholder="/work"
+                            <Label className="mb-1.5 block text-sm font-normal">Container path</Label>
+                            <Autocomplete
+                                onCommit={navigateTo}
+                                onValueChange={setPathInputValue}
                                 value={pathInputValue}
-                            />
+                            >
+                                <AutocompleteInput
+                                    autoFocus
+                                    disabled={isPulling}
+                                    placeholder="/work"
+                                />
+                                <AutocompleteContent>
+                                    <AutocompleteEmpty>No matching paths</AutocompleteEmpty>
+                                    <AutocompleteGroup>
+                                        {pathSuggestions.map((suggestion) => (
+                                            <AutocompleteItem
+                                                key={suggestion}
+                                                value={suggestion}
+                                            >
+                                                {suggestion}
+                                            </AutocompleteItem>
+                                        ))}
+                                    </AutocompleteGroup>
+                                </AutocompleteContent>
+                            </Autocomplete>
                         </div>
 
                         <Tooltip>

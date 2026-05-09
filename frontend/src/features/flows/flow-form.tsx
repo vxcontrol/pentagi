@@ -707,7 +707,7 @@ export const FlowForm = ({
                                                 }}
                                             >
                                                 {upload.isUploading ? <Loader2 className="animate-spin" /> : <Plus />}
-                                                {upload.isUploading ? 'Uploading…' : 'Upload file'}
+                                                {upload.isUploading ? 'Uploading…' : 'Upload files'}
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
