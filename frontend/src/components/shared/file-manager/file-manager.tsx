@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight } from 'lucide-react';
 import {
     type MouseEvent as ReactMouseEvent,
     type ReactNode,
@@ -36,6 +36,7 @@ import { FileManagerBulkActionsBar } from './file-manager-bulk-actions-bar';
 import { FileManagerSkeleton } from './file-manager-skeleton';
 import { FileManagerTreeNode } from './file-manager-tree-node';
 import {
+    collectDirectoryPaths,
     collectVisibleFlat,
     computeDirSelectionState,
     computeSelectionTotalBytes,
@@ -172,11 +173,39 @@ export const FileManager = ({
         sorting,
     });
 
-    const { expandedPaths, toggleExpand } = useFileManagerExpansion({
+    const { expandedPaths, setExpansion, toggleExpand } = useFileManagerExpansion({
         isFiltering,
         normalizedRootGroups,
         visibleTree,
     });
+
+    // Universe of every directory path in the *full* tree (filter-independent).
+    // Powers the header "expand/collapse all" toggle: per the consumer-facing
+    // contract the gesture always operates on the entire tree, even when a
+    // search filter is active and only matching dirs are visible.
+    const allDirPaths = useMemo(() => collectDirectoryPaths(fullTree), [fullTree]);
+
+    const isAllExpanded = useMemo(() => {
+        if (allDirPaths.length === 0) {
+            return false;
+        }
+
+        for (const path of allDirPaths) {
+            if (!expandedPaths.has(path)) {
+                return false;
+            }
+        }
+
+        return true;
+    }, [allDirPaths, expandedPaths]);
+
+    const toggleExpandAll = useCallback(() => {
+        if (allDirPaths.length === 0) {
+            return;
+        }
+
+        setExpansion(allDirPaths, !isAllExpanded);
+    }, [allDirPaths, isAllExpanded, setExpansion]);
 
     // Owned by the host (not the data hook) because it depends on `expandedPaths`,
     // which in turn depends on `visibleTree` from the data hook — moving it inside
@@ -502,7 +531,31 @@ export const FileManager = ({
                         className="size-4"
                     />
                 )}
-                {renderSortableHeader('name', effectiveLabels.columnName ?? 'Name', isNameSortable)}
+                <div className="flex min-w-0 items-center gap-1.5">
+                    {allDirPaths.length > 0 ? (
+                        <button
+                            aria-expanded={isAllExpanded}
+                            aria-label={
+                                isAllExpanded
+                                    ? (effectiveLabels.collapseAllAriaLabel ?? 'Collapse all')
+                                    : (effectiveLabels.expandAllAriaLabel ?? 'Expand all')
+                            }
+                            className="text-muted-foreground hover:bg-muted hover:text-primary focus-visible:ring-ring -mx-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded transition-colors outline-none focus-visible:ring-1"
+                            onClick={toggleExpandAll}
+                            type="button"
+                        >
+                            <ChevronRight
+                                className={cn('size-3.5 transition-transform', isAllExpanded && 'rotate-90')}
+                            />
+                        </button>
+                    ) : (
+                        <span
+                            aria-hidden="true"
+                            className="-mx-0.5 size-4 shrink-0"
+                        />
+                    )}
+                    {renderSortableHeader('name', effectiveLabels.columnName ?? 'Name', isNameSortable)}
+                </div>
                 {isSizeVisible && renderSortableHeader('size', effectiveLabels.columnSize ?? 'Size', isSizeSortable)}
                 {isModifiedVisible &&
                     renderSortableHeader('modified', effectiveLabels.columnModified ?? 'Modified', isModifiedSortable)}

@@ -8,6 +8,12 @@ interface UseFileManagerExpansion {
     /** Effective set of expanded directory paths (auto-expansion + user overrides). */
     expandedPaths: Set<string>;
     /**
+     * Bulk override for "expand all" / "collapse all" gestures. Each path in
+     * `paths` gets its override set to `isExpanded`, replacing any previous
+     * per-path value. Passing an empty iterable is a no-op.
+     */
+    setExpansion: (paths: Iterable<string>, isExpanded: boolean) => void;
+    /**
      * Toggle expansion of a directory based on the state the caller is currently
      * displaying. Passing `wasExpanded` is intentional — it captures the user's
      * intent ("invert what I see") and lets the callback stay stable across renders,
@@ -75,5 +81,21 @@ export const useFileManagerExpansion = ({
         });
     }, []);
 
-    return { expandedPaths, toggleExpand };
+    const setExpansion = useCallback((paths: Iterable<string>, isExpanded: boolean) => {
+        setOverrides((prev) => {
+            const next = new Map(prev);
+            let didChange = false;
+
+            for (const path of paths) {
+                if (next.get(path) !== isExpanded) {
+                    next.set(path, isExpanded);
+                    didChange = true;
+                }
+            }
+
+            return didChange ? next : prev;
+        });
+    }, []);
+
+    return { expandedPaths, setExpansion, toggleExpand };
 };

@@ -53,7 +53,10 @@ export const FileManagerSkeleton = ({
                         className="size-4"
                     />
                 )}
-                <Skeleton className="h-3 w-12" />
+                <div className="flex items-center gap-1.5">
+                    <Skeleton className="size-4 shrink-0 rounded-sm" />
+                    <Skeleton className="h-3 w-12" />
+                </div>
                 {isSizeVisible && <Skeleton className="h-3 w-10" />}
                 {isModifiedVisible && <Skeleton className="h-3 w-16" />}
                 {hasActions && (

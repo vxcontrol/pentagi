@@ -139,9 +139,13 @@ export interface FileManagerLabels {
     bulkCancel?: string;
     /** Trigger label / aria-label for the trailing overflow `…` menu in the bulk bar. */
     bulkMoreActions?: string;
+    /** aria-label for the header "expand/collapse all" toggle when the tree is fully expanded. */
+    collapseAllAriaLabel?: string;
     columnModified?: string;
     columnName?: string;
     columnSize?: string;
+    /** aria-label for the header "expand/collapse all" toggle when at least one directory is collapsed. */
+    expandAllAriaLabel?: string;
     /**
      * Custom formatter for the "Modified" column. Receives the raw `modifiedAt`
      * and must return a display string (or empty string for no value). When omitted,
