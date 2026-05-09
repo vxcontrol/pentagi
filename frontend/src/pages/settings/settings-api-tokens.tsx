@@ -9,10 +9,10 @@ import {
     CalendarIcon,
     Check,
     Copy,
+    Ellipsis,
     ExternalLink,
     Key,
     Loader2,
-    MoreHorizontal,
     Pencil,
     Plus,
     Trash,
@@ -762,7 +762,7 @@ const SettingsAPITokens = () => {
                                         variant="ghost"
                                     >
                                         <span className="sr-only">Open menu</span>
-                                        <MoreHorizontal className="size-4" />
+                                        <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent

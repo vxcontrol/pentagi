@@ -1,4 +1,4 @@
-import { MoreHorizontal, X } from 'lucide-react';
+import { Ellipsis, X } from 'lucide-react';
 import { type ComponentType, useCallback, useMemo, useState } from 'react';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -167,7 +167,7 @@ export const FileManagerBulkActionsBar = ({
                                     size="icon-sm"
                                     variant="outline"
                                 >
-                                    <MoreHorizontal className="size-4" />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">

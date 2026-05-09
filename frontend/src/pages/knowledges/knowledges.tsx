@@ -1,16 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import {
-    ArrowDown,
-    ArrowUp,
-    BrainCircuit,
-    LibraryBig,
-    Loader2,
-    MoreHorizontal,
-    Pencil,
-    Plus,
-    Trash,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, Ellipsis, LibraryBig, Loader2, Pencil, Plus, Trash } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -32,6 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { KnowledgeDocType } from '@/graphql/types';
+import { cycleColumnSort } from '@/lib/table-sort';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 const docTypeBadgeVariant: Record<KnowledgeDocType, BadgeVariant> = {
@@ -126,7 +117,7 @@ const Knowledges = () => {
                 return (
                     <Button
                         className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        onClick={() => cycleColumnSort(column)}
                         variant="link"
                     >
                         Type
@@ -162,7 +153,7 @@ const Knowledges = () => {
                 return (
                     <Button
                         className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        onClick={() => cycleColumnSort(column)}
                         variant="link"
                     >
                         Question
@@ -242,7 +233,7 @@ const Knowledges = () => {
                                     onClick={(event) => event.stopPropagation()}
                                     variant="ghost"
                                 >
-                                    <MoreHorizontal />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -313,7 +304,7 @@ const Knowledges = () => {
                 <Breadcrumb>
                     <BreadcrumbList>
                         <BreadcrumbItem>
-                            <BrainCircuit className="size-4" />
+                            <LibraryBig className="size-4" />
                             <BreadcrumbPage>Knowledges</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>

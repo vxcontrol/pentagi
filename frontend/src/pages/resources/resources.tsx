@@ -1,4 +1,4 @@
-import { Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, Search, Upload, X } from 'lucide-react';
+import { ChevronDown, Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, Search, Upload, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,19 +18,28 @@ import {
     type FileManagerAction,
     type FileManagerBulkAction,
     type FileManagerEmptyAreaAction,
+    type FileManagerLabels,
     type FileNode,
+    formatModifiedAbsolute,
+    formatModifiedRelative,
 } from '@/components/shared/file-manager';
 import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
 import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResourcesCopyDialog } from '@/features/resources/resources-copy-dialog';
 import { ResourcesMkdirDialog } from '@/features/resources/resources-mkdir-dialog';
 import { ResourcesMoveDialog } from '@/features/resources/resources-move-dialog';
@@ -39,9 +48,52 @@ import { useResourcesDelete } from '@/features/resources/use-resources-delete';
 import { useResourcesMove } from '@/features/resources/use-resources-move';
 import { useResourcesSearch } from '@/features/resources/use-resources-search';
 import { useResourcesUpload } from '@/features/resources/use-resources-upload';
+import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
 import { copyToClipboard } from '@/lib/report';
+import { getColumnStorageKey } from '@/lib/storage-keys';
+import { loadColumnVisibility, saveColumnVisibility } from '@/lib/table-storage';
 import { useResources } from '@/providers/resources-provider';
+
+/**
+ * Per-page persisted toggles for FileManager view options:
+ *   - `size` / `modified`    — optional column visibility
+ *   - `foldersFirst`         — whether directories cluster above files at every
+ *                              level when a sort is active
+ *   - `isModifiedRelative`   — render Modified as a relative label ("5m ago",
+ *                              the FileManager default) when `true`, or as an
+ *                              absolute, minute-precision timestamp when `false`
+ *
+ * All flags persist into the same `column` storage bucket because the schema is
+ * `Record<string, boolean>` — adding more toggles later does not require a new key.
+ */
+interface ResourcesViewOptions {
+    foldersFirst: boolean;
+    isModifiedRelative: boolean;
+    modified: boolean;
+    size: boolean;
+}
+
+/** Defaults match FileManager's out-of-the-box behaviour (relative dates, folders first, both columns visible). */
+const defaultViewOptions: ResourcesViewOptions = {
+    foldersFirst: true,
+    isModifiedRelative: true,
+    modified: true,
+    size: true,
+};
+
+type ResourcesViewOptionKey = keyof ResourcesViewOptions;
+
+const loadViewOptions = (storageKey: string): ResourcesViewOptions => {
+    const stored = loadColumnVisibility(storageKey) ?? {};
+
+    return {
+        foldersFirst: stored.foldersFirst ?? defaultViewOptions.foldersFirst,
+        isModifiedRelative: stored.isModifiedRelative ?? defaultViewOptions.isModifiedRelative,
+        modified: stored.modified ?? defaultViewOptions.modified,
+        size: stored.size ?? defaultViewOptions.size,
+    };
+};
 
 const Resources = () => {
     const { isInitialLoading, resources } = useResources();
@@ -58,6 +110,31 @@ const Resources = () => {
     // closes the dialog.
     const [filesToMove, setFilesToMove] = useState<FileNode[] | null>(null);
     const [filesToCopy, setFilesToCopy] = useState<FileNode[] | null>(null);
+
+    const viewOptionsStorageKey = useMemo(() => getColumnStorageKey('/resources'), []);
+    const [viewOptions, setViewOptions] = useState<ResourcesViewOptions>(() => loadViewOptions(viewOptionsStorageKey));
+
+    useEffectAfterMount(() => {
+        // Cast: `ResourcesViewOptions` is structurally a `Record<string, boolean>`
+        // but TS doesn't widen object types with declared keys to an index
+        // signature implicitly.
+        saveColumnVisibility(viewOptionsStorageKey, viewOptions as unknown as Record<string, boolean>);
+    }, [viewOptions, viewOptionsStorageKey]);
+
+    const toggleViewOption = useCallback((option: ResourcesViewOptionKey) => {
+        setViewOptions((previous) => ({ ...previous, [option]: !previous[option] }));
+    }, []);
+
+    // Keep the `labels` reference stable while the user keeps the same
+    // formatting choice — FileManager threads it through the memoized row
+    // bundle, and a fresh object identity on every render would invalidate
+    // the row memo for the whole tree on unrelated re-renders.
+    const fileManagerLabels = useMemo<FileManagerLabels>(
+        () => ({
+            formatModified: viewOptions.isModifiedRelative ? formatModifiedRelative : formatModifiedAbsolute,
+        }),
+        [viewOptions.isModifiedRelative],
+    );
 
     // Toolbar / empty-area mkdir + upload always target the library root —
     // row-level "Upload here" / "New folder here" handlers carry their own
@@ -278,16 +355,16 @@ const Resources = () => {
     const fileManagerEmptyAreaActions = useMemo<FileManagerEmptyAreaAction[]>(
         () => [
             {
-                icon: FolderUp,
-                id: 'resources-empty-upload',
-                label: 'Upload files',
-                onSelect: upload.openFilePicker,
-            },
-            {
                 icon: FolderPlus,
                 id: 'resources-empty-mkdir',
                 label: 'New folder',
                 onSelect: () => setIsMkdirOpen(true),
+            },
+            {
+                icon: Upload,
+                id: 'resources-empty-upload',
+                label: 'Upload files',
+                onSelect: upload.openFilePicker,
             },
         ],
         [upload.openFilePicker],
@@ -318,6 +395,26 @@ const Resources = () => {
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
+            </div>
+            <div className="ml-auto flex items-center gap-2 px-4">
+                <Button
+                    disabled={upload.isUploading}
+                    onClick={() => setIsMkdirOpen(true)}
+                    size="sm"
+                    variant="outline"
+                >
+                    <FolderPlus />
+                    New folder
+                </Button>
+                <Button
+                    disabled={upload.isUploading}
+                    onClick={upload.openFilePicker}
+                    size="sm"
+                    variant="secondary"
+                >
+                    {upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    {upload.isUploading ? 'Uploading...' : 'Upload files'}
+                </Button>
             </div>
         </header>
     );
@@ -374,13 +471,13 @@ const Resources = () => {
                     </div>
                 )}
 
-                <Form {...search.form}>
-                    <div className="flex gap-2 p-px">
+                <div className="flex items-center gap-2">
+                    <Form {...search.form}>
                         <FormField
                             control={search.form.control}
                             name="search"
                             render={({ field }) => (
-                                <FormItem className="flex-1">
+                                <FormItem className="max-w-sm flex-1">
                                     <FormControl>
                                         <InputGroup>
                                             <InputGroupAddon>
@@ -407,51 +504,65 @@ const Resources = () => {
                                 </FormItem>
                             )}
                         />
-
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span>
-                                    <Button
-                                        disabled={upload.isUploading}
-                                        onClick={() => setIsMkdirOpen(true)}
-                                        size="icon-sm"
-                                        type="button"
-                                        variant="outline"
-                                    >
-                                        <FolderPlus />
-                                    </Button>
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipContent>Create new folder</TooltipContent>
-                        </Tooltip>
-
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span>
-                                    <Button
-                                        disabled={upload.isUploading}
-                                        onClick={upload.openFilePicker}
-                                        size="icon-sm"
-                                        type="button"
-                                        variant="outline"
-                                    >
-                                        {upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
-                                    </Button>
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipContent>Upload files</TooltipContent>
-                        </Tooltip>
-                    </div>
-                </Form>
+                    </Form>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                className="ml-auto"
+                                variant="outline"
+                            >
+                                Columns <ChevronDown className="ml-2" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuCheckboxItem
+                                checked={viewOptions.size}
+                                onCheckedChange={() => toggleViewOption('size')}
+                                onSelect={(event) => event.preventDefault()}
+                            >
+                                Size
+                            </DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem
+                                checked={viewOptions.modified}
+                                onCheckedChange={() => toggleViewOption('modified')}
+                                onSelect={(event) => event.preventDefault()}
+                            >
+                                Modified
+                            </DropdownMenuCheckboxItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuCheckboxItem
+                                checked={viewOptions.foldersFirst}
+                                onCheckedChange={() => toggleViewOption('foldersFirst')}
+                                onSelect={(event) => event.preventDefault()}
+                            >
+                                Folders first
+                            </DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem
+                                checked={viewOptions.isModifiedRelative}
+                                disabled={!viewOptions.modified}
+                                onCheckedChange={() => toggleViewOption('isModifiedRelative')}
+                                onSelect={(event) => event.preventDefault()}
+                            >
+                                Relative dates
+                            </DropdownMenuCheckboxItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
 
                 <FileManager
                     actions={fileManagerActions}
                     bulkActions={fileManagerBulkActions}
                     className="min-h-0 flex-1"
+                    columns={{
+                        isModifiedVisible: viewOptions.modified,
+                        isSizeVisible: viewOptions.size,
+                    }}
                     emptyAreaActions={fileManagerEmptyAreaActions}
                     emptyState={noResourcesState}
                     files={fileNodes}
+                    isFoldersFirst={viewOptions.foldersFirst}
                     isLoading={isInitialLoading}
+                    labels={fileManagerLabels}
                     onExternalFileDrop={handleExternalFileDrop}
                     onMoveItems={handleMoveItems}
                     onOpen={handleOpenFile}

@@ -8,12 +8,13 @@ import {
     getFilteredRowModel,
     getPaginationRowModel,
     getSortedRowModel,
+    type Table as ReactTable,
     type Row,
     type SortingState,
     useReactTable,
     type VisibilityState,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react';
 import { Fragment, type ReactElement, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
@@ -56,6 +57,48 @@ interface DataTableProps<TData, TValue = unknown> {
 }
 
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100] as const;
+
+interface DataTableFilterProps<TData> {
+    column: string;
+    placeholder: string;
+    table: ReactTable<TData>;
+}
+
+/**
+ * Search input bound to a single TanStack Table column. Reads/writes the column's
+ * filter value directly — purely cosmetic shell around the table's existing
+ * filter API. Extracted out of `DataTable` so the toolbar JSX doesn't have to
+ * inline an IIFE just to capture the current `filterValue` once.
+ */
+const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilterProps<TData>) => {
+    const tableColumn = table.getColumn(column);
+    const filterValue = (tableColumn?.getFilterValue() as string) ?? '';
+
+    return (
+        <InputGroup className="max-w-sm">
+            <InputGroupAddon>
+                <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+                autoComplete="off"
+                onChange={(event) => tableColumn?.setFilterValue(event.target.value)}
+                placeholder={placeholder}
+                type="text"
+                value={filterValue}
+            />
+            {filterValue ? (
+                <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                        onClick={() => tableColumn?.setFilterValue('')}
+                        type="button"
+                    >
+                        <X />
+                    </InputGroupButton>
+                </InputGroupAddon>
+            ) : null}
+        </InputGroup>
+    );
+};
 
 function DataTable<TData, TValue = unknown>({
     columns,
@@ -210,21 +253,20 @@ function DataTable<TData, TValue = unknown>({
     return (
         <div className="w-full">
             <div className="flex items-center gap-4 py-4">
-                {filterColumn && (
-                    <Input
-                        className="max-w-sm"
-                        onChange={(event) => table.getColumn(filterColumn)?.setFilterValue(event.target.value)}
+                {filterColumn ? (
+                    <DataTableFilter
+                        column={filterColumn}
                         placeholder={filterPlaceholder}
-                        value={(table.getColumn(filterColumn)?.getFilterValue() as string) ?? ''}
+                        table={table}
                     />
-                )}
+                ) : null}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
                             className="ml-auto"
                             variant="outline"
                         >
-                            Columns <ChevronDown className="ml-2 h-4 w-4" />
+                            Columns <ChevronDown className="ml-2" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">

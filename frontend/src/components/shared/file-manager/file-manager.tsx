@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import {
     type MouseEvent as ReactMouseEvent,
     type ReactNode,
@@ -8,6 +9,7 @@ import {
     useState,
 } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
     ContextMenu,
@@ -16,6 +18,7 @@ import {
     ContextMenuSeparator,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { useLatestRef } from '@/hooks/use-latest-ref';
 import { cn } from '@/lib/utils';
 
 import type { FileManagerRowDisplay, FileManagerRowHandlers } from './file-manager-row';
@@ -24,6 +27,8 @@ import type {
     FileManagerBulkAction,
     FileManagerEmptyAreaAction,
     FileManagerProps,
+    FileManagerSortColumn,
+    FileManagerSortDirection,
     FileNode,
 } from './file-manager-types';
 
@@ -43,10 +48,34 @@ import { useFileManagerDnd } from './use-file-manager-dnd';
 import { useFileManagerExpansion } from './use-file-manager-expansion';
 import { useFileManagerKeyboardNavigation } from './use-file-manager-keyboard';
 import { useFileManagerSelection } from './use-file-manager-selection';
+import { useFileManagerSorting } from './use-file-manager-sorting';
 
 const EMPTY_ACTIONS: readonly FileManagerAction[] = Object.freeze([]);
 const EMPTY_BULK_ACTIONS: readonly FileManagerBulkAction[] = Object.freeze([]);
 const EMPTY_AREA_ACTIONS: readonly FileManagerEmptyAreaAction[] = Object.freeze([]);
+
+const COLUMN_LABEL_FOR_ARIA: Record<FileManagerSortColumn, string> = {
+    modified: 'modified date',
+    name: 'name',
+    size: 'size',
+};
+
+const defaultSortHeaderAriaLabel = (
+    column: FileManagerSortColumn,
+    direction: FileManagerSortDirection | null,
+): string => {
+    const label = COLUMN_LABEL_FOR_ARIA[column];
+
+    if (direction === 'asc') {
+        return `Sort by ${label} (descending)`;
+    }
+
+    if (direction === 'desc') {
+        return `Clear sorting on ${label}`;
+    }
+
+    return `Sort by ${label} (ascending)`;
+};
 
 /**
  * Renders the right-click context menu items for the empty area of the tree.
@@ -90,6 +119,8 @@ export const FileManager = ({
     emptyState,
     enableSelection,
     files,
+    initialSorting,
+    isFoldersFirst = true,
     isLoading,
     labels,
     onActiveRowChange,
@@ -98,13 +129,27 @@ export const FileManager = ({
     onOpen,
     onOpenDirectory,
     onSelectionChange,
+    onSortingChange,
     rootGroups,
     search,
+    sorting: controlledSorting,
+    sortStorageKey,
 }: FileManagerProps) => {
     const effectiveBulkActions = bulkActions ?? EMPTY_BULK_ACTIONS;
     const hasBulkActions = effectiveBulkActions.length > 0;
     const isCheckboxVisible = enableSelection ?? hasBulkActions;
     const hasActions = !!actions?.length;
+
+    const isNameSortable = columns?.isNameSortable ?? true;
+    const isSizeSortable = columns?.isSizeSortable ?? true;
+    const isModifiedSortable = columns?.isModifiedSortable ?? true;
+
+    const { sorting, toggleSort } = useFileManagerSorting({
+        controlledSorting,
+        initialSorting,
+        onSortingChange,
+        sortStorageKey,
+    });
 
     const {
         allSelectablePaths,
@@ -121,8 +166,10 @@ export const FileManager = ({
         columns,
         files,
         hasActions,
+        isFoldersFirst,
         rootGroups,
         searchQuery: search?.query,
+        sorting,
     });
 
     const { expandedPaths, toggleExpand } = useFileManagerExpansion({
@@ -181,43 +228,40 @@ export const FileManager = ({
     // Report selection changes upstream without forcing parents to memoize the
     // callback — stash it in a ref so the effect only re-fires when the actual
     // selection changes (not when a fresh function instance is passed in).
-    const onSelectionChangeRef = useRef(onSelectionChange);
-
-    useEffect(() => {
-        onSelectionChangeRef.current = onSelectionChange;
-    }, [onSelectionChange]);
+    const onSelectionChangeRef = useLatestRef(onSelectionChange);
 
     useEffect(() => {
         onSelectionChangeRef.current?.(selectedPaths);
+        // `onSelectionChangeRef` is a stable ref; only `selectedPaths` should
+        // re-trigger the upstream emit.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedPaths]);
 
     // Same latest-ref pattern for `onOpen` / `onOpenDirectory`: both bleed into
     // the keyboard handler's deps and through `TreeNode` → `Row`, so a
     // non-memoized parent callback would otherwise invalidate the memo on every
     // row whenever the parent re-renders.
-    const onOpenRef = useRef(onOpen);
-    const onOpenDirectoryRef = useRef(onOpenDirectory);
+    const onOpenRef = useLatestRef(onOpen);
+    const onOpenDirectoryRef = useLatestRef(onOpenDirectory);
 
-    useEffect(() => {
-        onOpenRef.current = onOpen;
-    }, [onOpen]);
-
-    useEffect(() => {
-        onOpenDirectoryRef.current = onOpenDirectory;
-    }, [onOpenDirectory]);
-
-    const handleOpen = useCallback((file: FileNode) => {
-        onOpenRef.current?.(file);
-    }, []);
+    const handleOpen = useCallback(
+        (file: FileNode) => {
+            onOpenRef.current?.(file);
+        },
+        [onOpenRef],
+    );
 
     // We need the row + keyboard handler to know whether the consumer registered
     // a custom directory-open callback so the default expand/collapse is bypassed
     // only when an override actually exists. Wrapping in a stable callback keeps
     // the row memo intact across parent re-renders, but we conditionally pass it
     // (vs. an always-defined wrapper) by gating on the prop reference itself.
-    const handleOpenDirectory = useCallback((dir: FileNode) => {
-        onOpenDirectoryRef.current?.(dir);
-    }, []);
+    const handleOpenDirectory = useCallback(
+        (dir: FileNode) => {
+            onOpenDirectoryRef.current?.(dir);
+        },
+        [onOpenDirectoryRef],
+    );
 
     const stableHandleOpenDirectory = onOpenDirectory ? handleOpenDirectory : undefined;
 
@@ -239,14 +283,11 @@ export const FileManager = ({
     // emit the raw `activeRowPath` (not `resolvedActiveRow`) so consumers can
     // distinguish "user picked something" from the auto-fallback to the first
     // visible row that the roving tabindex uses internally.
-    const onActiveRowChangeRef = useRef(onActiveRowChange);
-
-    useEffect(() => {
-        onActiveRowChangeRef.current = onActiveRowChange;
-    }, [onActiveRowChange]);
+    const onActiveRowChangeRef = useLatestRef(onActiveRowChange);
 
     useEffect(() => {
         onActiveRowChangeRef.current?.(activeRowPath);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeRowPath]);
 
     const focusRow = useCallback((path: null | string) => {
@@ -307,6 +348,28 @@ export const FileManager = ({
     const formatModified = effectiveLabels.formatModified;
     const effectiveActions = actions ?? EMPTY_ACTIONS;
     const searchQuery = trimmedSearch || undefined;
+    const sortHeaderAriaLabel = effectiveLabels.sortHeaderAriaLabel ?? defaultSortHeaderAriaLabel;
+
+    const renderSortableHeader = (column: FileManagerSortColumn, label: string, isSortable: boolean) => {
+        if (!isSortable) {
+            return <span aria-hidden="true">{label}</span>;
+        }
+
+        const direction: FileManagerSortDirection | null = sorting?.column === column ? sorting.direction : null;
+
+        return (
+            <Button
+                aria-label={sortHeaderAriaLabel(column, direction)}
+                aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
+                className="text-muted-foreground hover:text-primary -mx-2 flex h-auto justify-start gap-1.5 px-2 py-1 text-xs font-medium no-underline hover:no-underline"
+                onClick={() => toggleSort(column)}
+                variant="link"
+            >
+                {label}
+                {direction === 'asc' ? <ArrowDown /> : direction === 'desc' ? <ArrowUp /> : null}
+            </Button>
+        );
+    };
 
     // Bundle all per-tree-shared layout / i18n props into a single object so the
     // memoized `FileManagerRow` only does one reference check (instead of seven
@@ -418,13 +481,13 @@ export const FileManager = ({
 
     return (
         <div
-            className={cn('bg-card flex flex-col overflow-hidden rounded-lg border', className)}
+            className={cn('flex flex-col overflow-hidden rounded-lg border', className)}
             onClick={handleContainerClick}
             onKeyDown={handleKeyDown}
             ref={containerRef}
         >
             <div
-                className="bg-muted/30 text-muted-foreground grid items-center gap-3 border-b px-3 py-2 text-xs font-medium"
+                className="text-muted-foreground grid items-center gap-3 border-b px-3 py-2 text-xs font-medium"
                 style={{ gridTemplateColumns: gridTemplate }}
             >
                 {isCheckboxVisible ? (
@@ -439,9 +502,10 @@ export const FileManager = ({
                         className="size-4"
                     />
                 )}
-                <span aria-hidden="true">{effectiveLabels.columnName ?? 'Name'}</span>
-                {isSizeVisible && <span aria-hidden="true">{effectiveLabels.columnSize ?? 'Size'}</span>}
-                {isModifiedVisible && <span aria-hidden="true">{effectiveLabels.columnModified ?? 'Modified'}</span>}
+                {renderSortableHeader('name', effectiveLabels.columnName ?? 'Name', isNameSortable)}
+                {isSizeVisible && renderSortableHeader('size', effectiveLabels.columnSize ?? 'Size', isSizeSortable)}
+                {isModifiedVisible &&
+                    renderSortableHeader('modified', effectiveLabels.columnModified ?? 'Modified', isModifiedSortable)}
                 {hasActions && (
                     <span
                         aria-hidden="true"

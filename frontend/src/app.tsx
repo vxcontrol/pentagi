@@ -1,6 +1,13 @@
 import { ApolloProvider } from '@apollo/client';
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import {
+    createBrowserRouter,
+    createRoutesFromElements,
+    Navigate,
+    Outlet,
+    Route,
+    RouterProvider,
+} from 'react-router-dom';
 
 import AppLayout from '@/components/layouts/app-layout';
 import FlowsLayout from '@/components/layouts/flows-layout';
@@ -41,192 +48,195 @@ const SettingsPrompts = lazy(() => import('@/pages/settings/settings-prompts'));
 const SettingsProvider = lazy(() => import('@/pages/settings/settings-provider'));
 const SettingsProviders = lazy(() => import('@/pages/settings/settings-providers'));
 
-const App = () => {
-    const renderProtectedRoute = () => (
-        <ProtectedRoute>
-            <SystemSettingsProvider>
-                <ProvidersProvider>
-                    <SidebarFlowsProvider>
-                        <AppLayout />
-                    </SidebarFlowsProvider>
-                </ProvidersProvider>
-            </SystemSettingsProvider>
-        </ProtectedRoute>
-    );
+// Root layout for the data router. Everything that previously sat between
+// `<BrowserRouter>` and `<Routes>` (providers, Suspense) lives here so it has
+// access to router hooks (`useNavigate`, `useLocation`, ...) while still being
+// rendered under the data router. This is what enables `useBlocker` and other
+// data-router-only features inside our pages.
+const RootLayout = () => (
+    <UserProvider>
+        <FavoritesProvider>
+            <TemplatesProvider>
+                <KnowledgesProvider>
+                    <ResourcesProvider>
+                        <Suspense fallback={<PageLoader />}>
+                            <Outlet />
+                        </Suspense>
+                    </ResourcesProvider>
+                </KnowledgesProvider>
+            </TemplatesProvider>
+        </FavoritesProvider>
+    </UserProvider>
+);
 
-    const renderPublicRoute = () => (
-        <PublicRoute>
-            <Login />
-        </PublicRoute>
-    );
+const ProtectedAppLayout = () => (
+    <ProtectedRoute>
+        <SystemSettingsProvider>
+            <ProvidersProvider>
+                <SidebarFlowsProvider>
+                    <AppLayout />
+                </SidebarFlowsProvider>
+            </ProvidersProvider>
+        </SystemSettingsProvider>
+    </ProtectedRoute>
+);
 
-    return (
-        <ApolloProvider client={client}>
-            <ThemeProvider>
-                <Toaster />
-                <BrowserRouter>
-                    <UserProvider>
-                        <FavoritesProvider>
-                            <TemplatesProvider>
-                                <KnowledgesProvider>
-                                    <ResourcesProvider>
-                                        <Suspense fallback={<PageLoader />}>
-                                            <Routes>
-                                                {/* private routes */}
-                                                <Route element={renderProtectedRoute()}>
-                                                    {/* Main layout for chat pages */}
-                                                    <Route element={<MainLayout />}>
-                                                        <Route
-                                                            element={<Dashboard />}
-                                                            path="dashboard"
-                                                        />
+const ProtectedReportLayout = () => (
+    <ProtectedRoute>
+        <SystemSettingsProvider>
+            <FlowReport />
+        </SystemSettingsProvider>
+    </ProtectedRoute>
+);
 
-                                                        {/* Flows section with FlowsProvider */}
-                                                        <Route element={<FlowsLayout />}>
-                                                            <Route
-                                                                element={<Flows />}
-                                                                path="flows"
-                                                            />
-                                                            <Route
-                                                                element={<NewFlow />}
-                                                                path="flows/new"
-                                                            />
-                                                            <Route
-                                                                element={
-                                                                    <FlowProvider>
-                                                                        <Flow />
-                                                                    </FlowProvider>
-                                                                }
-                                                                path="flows/:flowId"
-                                                            />
-                                                        </Route>
+const PublicLoginLayout = () => (
+    <PublicRoute>
+        <Login />
+    </PublicRoute>
+);
 
-                                                        <Route
-                                                            element={<Templates />}
-                                                            path="templates"
-                                                        />
-                                                        <Route
-                                                            element={<Template />}
-                                                            path="templates/:templateId"
-                                                        />
+const FlowWithProvider = () => (
+    <FlowProvider>
+        <Flow />
+    </FlowProvider>
+);
 
-                                                        <Route
-                                                            element={<Knowledges />}
-                                                            path="knowledges"
-                                                        />
-                                                        <Route
-                                                            element={<Knowledge />}
-                                                            path="knowledges/:knowledgeId"
-                                                        />
+const router = createBrowserRouter(
+    createRoutesFromElements(
+        <Route element={<RootLayout />}>
+            {/* private routes */}
+            <Route element={<ProtectedAppLayout />}>
+                {/* Main layout for chat pages */}
+                <Route element={<MainLayout />}>
+                    <Route
+                        element={<Dashboard />}
+                        path="dashboard"
+                    />
 
-                                                        <Route
-                                                            element={<Resources />}
-                                                            path="resources"
-                                                        />
-                                                    </Route>
+                    {/* Flows section with FlowsProvider */}
+                    <Route element={<FlowsLayout />}>
+                        <Route
+                            element={<Flows />}
+                            path="flows"
+                        />
+                        <Route
+                            element={<NewFlow />}
+                            path="flows/new"
+                        />
+                        <Route
+                            element={<FlowWithProvider />}
+                            path="flows/:flowId"
+                        />
+                    </Route>
 
-                                                    {/* Settings with nested routes */}
-                                                    <Route
-                                                        element={<SettingsLayout />}
-                                                        path="settings"
-                                                    >
-                                                        <Route
-                                                            element={
-                                                                <Navigate
-                                                                    replace
-                                                                    to="providers"
-                                                                />
-                                                            }
-                                                            index
-                                                        />
-                                                        <Route
-                                                            element={<SettingsProviders />}
-                                                            path="providers"
-                                                        />
-                                                        <Route
-                                                            element={<SettingsProvider />}
-                                                            path="providers/:providerId"
-                                                        />
-                                                        <Route
-                                                            element={<SettingsPrompts />}
-                                                            path="prompts"
-                                                        />
-                                                        <Route
-                                                            element={<SettingsPrompt />}
-                                                            path="prompts/:promptId"
-                                                        />
-                                                        <Route
-                                                            element={<SettingsAPITokens />}
-                                                            path="api-tokens"
-                                                        />
-                                                        {/* <Route
-                                        path="mcp-servers"
-                                        element={<SettingsMcpServers />}
-                                        />
-                                        <Route
-                                            path="mcp-servers/new"
-                                            element={<SettingsMcpServer />}
-                                        />
-                                        <Route
-                                            path="mcp-servers/:mcpServerId"
-                                            element={<SettingsMcpServer />}
-                                        /> */}
-                                                        {/* Catch-all route for unknown settings paths */}
-                                                        <Route
-                                                            element={
-                                                                <Navigate
-                                                                    replace
-                                                                    to="/settings/providers"
-                                                                />
-                                                            }
-                                                            path="*"
-                                                        />
-                                                    </Route>
-                                                </Route>
+                    <Route
+                        element={<Templates />}
+                        path="templates"
+                    />
+                    <Route
+                        element={<Template />}
+                        path="templates/:templateId"
+                    />
 
-                                                {/* report routes */}
-                                                <Route
-                                                    element={
-                                                        <ProtectedRoute>
-                                                            <SystemSettingsProvider>
-                                                                <FlowReport />
-                                                            </SystemSettingsProvider>
-                                                        </ProtectedRoute>
-                                                    }
-                                                    path="flows/:flowId/report"
-                                                />
+                    <Route
+                        element={<Knowledges />}
+                        path="knowledges"
+                    />
+                    <Route
+                        element={<Knowledge />}
+                        path="knowledges/:knowledgeId"
+                    />
 
-                                                {/* public routes */}
-                                                <Route
-                                                    element={renderPublicRoute()}
-                                                    path="login"
-                                                />
+                    <Route
+                        element={<Resources />}
+                        path="resources"
+                    />
+                </Route>
 
-                                                <Route
-                                                    element={<OAuthResult />}
-                                                    path="oauth/result"
-                                                />
+                {/* Settings with nested routes */}
+                <Route
+                    element={<SettingsLayout />}
+                    path="settings"
+                >
+                    <Route
+                        element={
+                            <Navigate
+                                replace
+                                to="providers"
+                            />
+                        }
+                        index
+                    />
+                    <Route
+                        element={<SettingsProviders />}
+                        path="providers"
+                    />
+                    <Route
+                        element={<SettingsProvider />}
+                        path="providers/:providerId"
+                    />
+                    <Route
+                        element={<SettingsPrompts />}
+                        path="prompts"
+                    />
+                    <Route
+                        element={<SettingsPrompt />}
+                        path="prompts/:promptId"
+                    />
+                    <Route
+                        element={<SettingsAPITokens />}
+                        path="api-tokens"
+                    />
+                    {/* Catch-all route for unknown settings paths */}
+                    <Route
+                        element={
+                            <Navigate
+                                replace
+                                to="/settings/providers"
+                            />
+                        }
+                        path="*"
+                    />
+                </Route>
+            </Route>
 
-                                                {/* other routes */}
-                                                <Route
-                                                    element={<Navigate to="/dashboard" />}
-                                                    path="/"
-                                                />
-                                                <Route
-                                                    element={<Navigate to="/dashboard" />}
-                                                    path="*"
-                                                />
-                                            </Routes>
-                                        </Suspense>
-                                    </ResourcesProvider>
-                                </KnowledgesProvider>
-                            </TemplatesProvider>
-                        </FavoritesProvider>
-                    </UserProvider>
-                </BrowserRouter>
-            </ThemeProvider>
-        </ApolloProvider>
-    );
-};
+            {/* report routes */}
+            <Route
+                element={<ProtectedReportLayout />}
+                path="flows/:flowId/report"
+            />
+
+            {/* public routes */}
+            <Route
+                element={<PublicLoginLayout />}
+                path="login"
+            />
+
+            <Route
+                element={<OAuthResult />}
+                path="oauth/result"
+            />
+
+            {/* other routes */}
+            <Route
+                element={<Navigate to="/dashboard" />}
+                path="/"
+            />
+            <Route
+                element={<Navigate to="/dashboard" />}
+                path="*"
+            />
+        </Route>,
+    ),
+);
+
+const App = () => (
+    <ApolloProvider client={client}>
+        <ThemeProvider>
+            <Toaster />
+            <RouterProvider router={router} />
+        </ThemeProvider>
+    </ApolloProvider>
+);
 
 export default App;

@@ -8,8 +8,8 @@ import {
     ArrowUp,
     ChevronDown,
     Copy,
+    Ellipsis,
     Loader2,
-    MoreHorizontal,
     Pencil,
     Plus,
     Settings,
@@ -383,7 +383,7 @@ const SettingsProviders = () => {
                                         variant="ghost"
                                     >
                                         <span className="sr-only">Open menu</span>
-                                        <MoreHorizontal className="size-4" />
+                                        <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent

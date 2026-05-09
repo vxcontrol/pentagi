@@ -2,19 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { format, isToday } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import {
-    ArrowDown,
-    ArrowUp,
-    Eye,
-    GitFork,
-    Loader2,
-    MoreHorizontal,
-    Pause,
-    Pencil,
-    Plus,
-    Star,
-    Trash,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, Ellipsis, Eye, GitFork, Loader2, Pause, Pencil, Plus, Star, Trash } from 'lucide-react';
 import { Check, CheckCircle2, X, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -600,7 +588,7 @@ const Flows = () => {
                                         onClick={(e) => e.stopPropagation()}
                                         variant="ghost"
                                     >
-                                        <MoreHorizontal />
+                                        <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent

@@ -1,12 +1,14 @@
-import { ChevronRight, MoreVertical } from 'lucide-react';
+import { ChevronRight, Ellipsis } from 'lucide-react';
 import {
     type CSSProperties,
     memo,
     type FocusEvent as ReactFocusEvent,
     type MouseEvent as ReactMouseEvent,
     type ReactNode,
+    type PointerEvent as ReactPointerEvent,
     type SyntheticEvent,
     useMemo,
+    useState,
 } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -32,7 +34,7 @@ import type { FileManagerNodeDndHandlers } from './use-file-manager-dnd';
 
 import { FileManagerHighlightedName } from './file-manager-highlighted-name';
 import { getFileTypeIcon } from './file-manager-icons';
-import { formatModified as defaultFormatModified, formatFileSize } from './file-manager-utils';
+import { formatModifiedRelative as defaultFormatModified, formatFileSize } from './file-manager-utils';
 
 /**
  * Marker on every interactive child of the row that should NOT bubble into a row
@@ -310,6 +312,15 @@ const FileManagerRowImpl = ({
     const hasOwnContextMenu = contextItems.length > 0;
     const isActiveRow = activeRowPath === file.path;
 
+    // Mirror the hover highlight while a row-owned menu (right-click context
+    // menu or actions dropdown) is open so the user always knows which row
+    // the menu belongs to — pointer can drift off the row into the portaled
+    // menu content, which would otherwise drop the `:hover` state and leave
+    // the row visually indistinguishable from its neighbors.
+    const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+    const [isDropdownMenuOpen, setIsDropdownMenuOpen] = useState(false);
+    const isMenuOpen = isContextMenuOpen || isDropdownMenuOpen;
+
     const rowStyle = {
         '--fm-depth': file.depth,
         gridTemplateColumns: gridTemplate,
@@ -330,12 +341,12 @@ const FileManagerRowImpl = ({
             aria-selected={isSelected}
             aria-setsize={setSize}
             className={cn(
-                'group hover:bg-accent grid cursor-pointer items-center gap-3 px-3 py-1.5 transition-colors outline-none',
+                'group hover:bg-muted grid cursor-pointer items-center gap-3 px-3 py-1.5 transition-colors outline-none',
                 'focus-visible:bg-muted/70 focus-visible:ring-ring focus-visible:ring-1',
                 // `select-none` keeps double-click reserved for expand/collapse
                 // — without it the browser would highlight the row's text on dblclick.
                 'select-none',
-                isSelected && 'bg-muted',
+                (isSelected || isMenuOpen) && 'bg-muted',
                 isDropTarget && 'bg-primary/10 ring-primary/40 ring-1 ring-inset',
                 // Ghost every row that's part of the in-flight drag (the grabbed row
                 // plus any other selected rows being moved together) so the user sees
@@ -381,6 +392,27 @@ const FileManagerRowImpl = ({
 
                 onFocusRow(file.path);
             }}
+            // Touch counterpart of the `onContextMenu` guard above. Radix's
+            // `<ContextMenuTrigger>` opens the menu on touch devices via a
+            // long-press timer started in `onPointerDown` — the native
+            // `contextmenu` event the desktop guard relies on never fires.
+            // Without stopping React-tree bubble here, the OUTER empty-area
+            // trigger ALSO starts its own long-press timer, and the user
+            // ends up with two menus stacked on top of each other (inner
+            // row menu + empty-area menu) when long-pressing a row on
+            // mobile / tablets. Mouse `pointerdown` is left alone so click,
+            // selection and drag listeners higher up the tree keep working
+            // exactly as before — the desktop right-click path is already
+            // covered by `onContextMenu` above.
+            onPointerDown={
+                hasOwnContextMenu
+                    ? (event: ReactPointerEvent<HTMLDivElement>) => {
+                          if (event.pointerType !== 'mouse') {
+                              event.stopPropagation();
+                          }
+                      }
+                    : undefined
+            }
             role="treeitem"
             style={rowStyle}
             tabIndex={isActiveRow ? 0 : -1}
@@ -468,7 +500,7 @@ const FileManagerRowImpl = ({
             {hasActions && (
                 <span {...skipRowClickProps}>
                     {dropdownItems.length > 0 ? (
-                        <DropdownMenu>
+                        <DropdownMenu onOpenChange={setIsDropdownMenuOpen}>
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     aria-label="Row actions"
@@ -476,7 +508,7 @@ const FileManagerRowImpl = ({
                                     size="icon-xs"
                                     variant="ghost"
                                 >
-                                    <MoreVertical className="size-3.5" />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">{dropdownItems}</DropdownMenuContent>
@@ -492,7 +524,7 @@ const FileManagerRowImpl = ({
     }
 
     return (
-        <ContextMenu>
+        <ContextMenu onOpenChange={setIsContextMenuOpen}>
             <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
             <ContextMenuContent>{contextItems}</ContextMenuContent>
         </ContextMenu>

@@ -61,6 +61,12 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
     ) => {
         const onChangeRef = useRef(onChange);
         const onBlurRef = useRef(onBlur);
+        // Tracks the last markdown the editor reported externally. We compare
+        // against this to suppress echo updates: tiptap-markdown can re-serialize
+        // content slightly differently than the input string (whitespace/list
+        // markers/etc.), and we don't want to flag those normalizations as user
+        // edits — that would falsely flip RHF's `isDirty` flag.
+        const lastEmittedRef = useRef<string>(value);
 
         useEffect(() => {
             onChangeRef.current = onChange;
@@ -90,7 +96,14 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
             immediatelyRender: false,
             onBlur: () => onBlurRef.current?.(),
             onUpdate: ({ editor: instance }) => {
-                onChangeRef.current?.(instance.storage.markdown.getMarkdown());
+                const next = instance.storage.markdown.getMarkdown();
+
+                if (next === lastEmittedRef.current) {
+                    return;
+                }
+
+                lastEmittedRef.current = next;
+                onChangeRef.current?.(next);
             },
         });
 
@@ -115,6 +128,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
             if (current !== value) {
                 editor.commands.setContent(value, { emitUpdate: false });
             }
+
+            // Sync the echo baseline so subsequent user edits compare against
+            // the new external value, not the previously emitted one.
+            lastEmittedRef.current = value;
         }, [editor, value]);
 
         useEffect(() => {

@@ -1,5 +1,3 @@
-import { Fragment } from 'react';
-
 import type { FileManagerRowDisplay, FileManagerRowHandlers } from './file-manager-row';
 import type { FileManagerAction, FileManagerInternalNode } from './file-manager-types';
 import type { FileManagerNodeDndHandlers } from './use-file-manager-dnd';
@@ -62,7 +60,7 @@ export const FileManagerTreeNode = ({
     const subtreePaths = node.isDir ? dirSubtreePaths.get(node.path) : undefined;
 
     return (
-        <Fragment>
+        <>
             <FileManagerRow
                 actions={actions}
                 activeRowPath={activeRowPath}
@@ -95,6 +93,6 @@ export const FileManagerTreeNode = ({
                         setSize={node.children.length}
                     />
                 ))}
-        </Fragment>
+        </>
     );
 };

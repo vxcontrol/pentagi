@@ -91,7 +91,13 @@ export interface FileManagerBulkActionConfirm {
 
 /** Optional column toggles. Both columns default to visible. */
 export interface FileManagerColumnsConfig {
+    /** Disable sorting on the "Modified" column header. Defaults to `true`. */
+    isModifiedSortable?: boolean;
     isModifiedVisible?: boolean;
+    /** Disable sorting on the "Name" column header. Defaults to `true`. */
+    isNameSortable?: boolean;
+    /** Disable sorting on the "Size" column header. Defaults to `true`. */
+    isSizeSortable?: boolean;
     isSizeVisible?: boolean;
 }
 
@@ -156,6 +162,13 @@ export interface FileManagerLabels {
     selectAllAriaLabel?: string;
     /** Label rendered in the bulk bar, e.g. "3 selected". */
     selectedLabel?: (count: number) => string;
+    /**
+     * aria-label for a sortable column header button. Receives the column id and the
+     * current sort direction (`null` when the column is not currently sorted), and
+     * should describe the action the next click will perform. Defaults to a plain
+     * English description like `"Sort by name (ascending)"`.
+     */
+    sortHeaderAriaLabel?: (column: FileManagerSortColumn, direction: FileManagerSortDirection | null) => string;
 }
 
 export interface FileManagerProps {
@@ -193,6 +206,19 @@ export interface FileManagerProps {
      */
     enableSelection?: boolean;
     files: FileNode[];
+    /**
+     * Initial sort applied on first render when no value is loaded from
+     * `sortStorageKey`. Defaults to `null` (no sort, insertion order preserved).
+     */
+    initialSorting?: FileManagerSortState;
+    /**
+     * Group directories before files at every tree level when a sort is active.
+     * Default: `true` — matches Finder/Explorer behaviour. Set to `false` to mix
+     * directories and files together by the chosen sort criterion.
+     *
+     * Has no effect while sorting is `null` (insertion order is preserved as-is).
+     */
+    isFoldersFirst?: boolean;
     isLoading?: boolean;
     /** Localizable user-facing strings. */
     labels?: FileManagerLabels;
@@ -262,10 +288,28 @@ export interface FileManagerProps {
      * mutating it will desync the manager's internal state.
      */
     onSelectionChange?: (selectedPaths: ReadonlySet<string>) => void;
+    /**
+     * Fires whenever the active sort changes (header click). The supplied
+     * callback is read through a ref, so it does not need to be memoized.
+     */
+    onSortingChange?: (sorting: FileManagerSortState) => void;
     /** Synthetic top-level groups (e.g. Uploads / Container). When omitted, root is flat. */
     rootGroups?: FileManagerRootGroup[];
     /** Search query and matching empty state. Provide `query` to enable filtering. */
     search?: FileManagerSearchConfig;
+    /**
+     * Controlled sort state. When set, the manager renders this value and
+     * delegates updates to `onSortingChange` (it does NOT update its own
+     * state and ignores `sortStorageKey`). Pass `null` to render with no sort.
+     */
+    sorting?: FileManagerSortState;
+    /**
+     * When set, the active sort is persisted to `localStorage` under this key
+     * across page reloads. Ignored in controlled mode (when `sorting` is set).
+     * Pass a route-scoped key (e.g. `getSortingStorageKey('/flows/files')`)
+     * to avoid collisions across pages.
+     */
+    sortStorageKey?: string;
 }
 
 export interface FileManagerRootGroup {
@@ -285,6 +329,18 @@ export interface FileManagerSearchConfig {
     /** When set, the tree is filtered to nodes matching the query (and their ancestors), and matches are highlighted. */
     query?: string;
 }
+
+/** Sortable column identifier. Mirrors the visible column headers. */
+export type FileManagerSortColumn = 'modified' | 'name' | 'size';
+
+/** Direction of an active sort. */
+export type FileManagerSortDirection = 'asc' | 'desc';
+
+/** Active sort descriptor; `null` means "no sort, preserve insertion order". */
+export type FileManagerSortState = null | {
+    column: FileManagerSortColumn;
+    direction: FileManagerSortDirection;
+};
 
 export interface FileNode {
     id: string;

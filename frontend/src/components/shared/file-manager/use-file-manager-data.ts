@@ -4,6 +4,7 @@ import type {
     FileManagerColumnsConfig,
     FileManagerInternalNode,
     FileManagerRootGroup,
+    FileManagerSortState,
     FileNode,
 } from './file-manager-types';
 
@@ -14,6 +15,7 @@ import {
     collectSubtreePaths,
     filterFileManagerTree,
     normalizeRootGroups,
+    sortFileManagerTree,
 } from './file-manager-utils';
 
 interface UseFileManagerDataArgs {
@@ -25,9 +27,16 @@ interface UseFileManagerDataArgs {
      * — `FileManager` and the row component must agree on the same `gridTemplate`.
      */
     hasActions: boolean;
+    /**
+     * Whether to keep directories above files at every level when a sort is
+     * active. When `null`/no sort, this flag is a no-op.
+     */
+    isFoldersFirst: boolean;
     rootGroups: FileManagerRootGroup[] | undefined;
     /** Raw `search.query` from props; trimming and emptiness checks live inside the hook. */
     searchQuery: string | undefined;
+    /** Active sort descriptor; `null` preserves insertion order. */
+    sorting: FileManagerSortState;
 }
 
 interface UseFileManagerDataResult {
@@ -87,8 +96,10 @@ export const useFileManagerData = ({
     columns,
     files,
     hasActions,
+    isFoldersFirst,
     rootGroups,
     searchQuery,
+    sorting,
 }: UseFileManagerDataArgs): UseFileManagerDataResult => {
     const isSizeVisible = columns?.isSizeVisible ?? true;
     const isModifiedVisible = columns?.isModifiedVisible ?? true;
@@ -100,10 +111,16 @@ export const useFileManagerData = ({
     const trimmedSearch = searchQuery?.trim() ?? '';
     const isFiltering = trimmedSearch.length > 0;
 
-    const visibleTree = useMemo(
-        () => (isFiltering ? filterFileManagerTree(fullTree, trimmedSearch) : fullTree),
-        [fullTree, isFiltering, trimmedSearch],
-    );
+    // Sorting is applied AFTER the search filter so the filtered visible tree
+    // reads in the user's chosen order. `sortFileManagerTree` returns the
+    // input untouched when `sorting` is `null`, so the no-sort case stays a
+    // zero-cost reference pass-through (the parent `useMemo` below still
+    // bails out via reference equality).
+    const visibleTree = useMemo(() => {
+        const filtered = isFiltering ? filterFileManagerTree(fullTree, trimmedSearch) : fullTree;
+
+        return sortFileManagerTree(filtered, sorting, isFoldersFirst);
+    }, [fullTree, isFiltering, isFoldersFirst, sorting, trimmedSearch]);
 
     const allSelectablePaths = useMemo(() => collectAllNodePaths(visibleTree), [visibleTree]);
 

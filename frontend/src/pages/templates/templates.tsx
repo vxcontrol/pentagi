@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { ArrowDown, ArrowUp, FileText, Loader2, MoreHorizontal, Pencil, Plus, Trash } from 'lucide-react';
+import { ArrowDown, ArrowUp, Ellipsis, FileText, Loader2, Pencil, Plus, Trash } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,6 +18,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
+import { cycleColumnSort } from '@/lib/table-sort';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const Templates = () => {
@@ -68,7 +69,7 @@ const Templates = () => {
                 return (
                     <Button
                         className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        onClick={() => cycleColumnSort(column)}
                         variant="link"
                     >
                         Title
@@ -94,7 +95,7 @@ const Templates = () => {
                 return (
                     <Button
                         className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                        onClick={() => cycleColumnSort(column)}
                         variant="link"
                     >
                         Text
@@ -119,7 +120,7 @@ const Templates = () => {
                                     className="size-8 p-0"
                                     variant="ghost"
                                 >
-                                    <MoreHorizontal />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent

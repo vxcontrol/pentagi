@@ -6,8 +6,8 @@ import {
     ArrowUp,
     Bot,
     Code,
+    Ellipsis,
     Loader2,
-    MoreHorizontal,
     Pencil,
     RotateCcw,
     Settings,
@@ -400,7 +400,7 @@ const SettingsPrompts = () => {
                                     variant="ghost"
                                 >
                                     <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="size-4" />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -556,7 +556,7 @@ const SettingsPrompts = () => {
                                     variant="ghost"
                                 >
                                     <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="size-4" />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent

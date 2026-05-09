@@ -16,10 +16,14 @@ export type {
     FileManagerAction,
     FileManagerBulkAction,
     FileManagerBulkActionConfirm,
+    FileManagerColumnsConfig,
     FileManagerEmptyAreaAction,
     FileManagerLabels,
     FileManagerProps,
     FileManagerRootGroup,
+    FileManagerSortColumn,
+    FileManagerSortDirection,
+    FileManagerSortState,
     FileNode,
 } from './file-manager-types';
-export { dedupeOverlappingPaths } from './file-manager-utils';
+export { dedupeOverlappingPaths, formatModifiedAbsolute, formatModifiedRelative } from './file-manager-utils';

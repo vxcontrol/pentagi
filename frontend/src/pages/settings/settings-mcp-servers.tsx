@@ -2,18 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { format, isToday } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import {
-    AlertCircle,
-    ArrowDown,
-    ArrowUp,
-    Copy,
-    Loader2,
-    MoreHorizontal,
-    Pencil,
-    Plus,
-    Server,
-    Trash,
-} from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, Copy, Ellipsis, Loader2, Pencil, Plus, Server, Trash } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -453,7 +442,7 @@ const SettingsMcpServers = () => {
                                     variant="ghost"
                                 >
                                     <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="size-4" />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -466,7 +455,7 @@ const SettingsMcpServers = () => {
                                     Edit
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleClone(server.id)}>
-                                    <Copy className="size-4" />
+                                    <Copy className="size-3" />
                                     Clone
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />

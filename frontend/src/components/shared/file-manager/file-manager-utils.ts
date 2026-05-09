@@ -1,6 +1,26 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 
-import type { FileManagerInternalNode, FileManagerRootGroup, FileNode } from './file-manager-types';
+import {
+    differenceInDays,
+    differenceInHours,
+    differenceInMinutes,
+    differenceInMonths,
+    differenceInSeconds,
+    differenceInWeeks,
+    differenceInYears,
+    format,
+    isThisYear,
+    isToday,
+    isValid,
+} from 'date-fns';
+import { enUS } from 'date-fns/locale';
+
+import type {
+    FileManagerInternalNode,
+    FileManagerRootGroup,
+    FileManagerSortState,
+    FileNode,
+} from './file-manager-types';
 
 export const formatFileSize = (size?: number): string => {
     if (size == null) {
@@ -23,42 +43,91 @@ export const formatFileSize = (size?: number): string => {
     return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
-export const formatModified = (modifiedAt?: Date | string): string => {
+export const formatModifiedRelative = (modifiedAt?: Date | string): string => {
     if (!modifiedAt) {
         return '';
     }
 
     const date = typeof modifiedAt === 'string' ? new Date(modifiedAt) : modifiedAt;
 
-    if (Number.isNaN(date.getTime())) {
+    if (!isValid(date)) {
         return '';
     }
 
     const now = Date.now();
-    const diffMs = now - date.getTime();
-    const diffMin = Math.round(diffMs / 60_000);
+    // All `differenceIn*` helpers are computed up-front so each branch's
+    // fallback (`!minutes`, `!hours`, …) can guard against the upper unit
+    // rounding down to zero — without it, an edge case like 59 minutes 30s
+    // could fall through to the next branch and render as `0h ago`.
+    const seconds = differenceInSeconds(now, date);
+    const minutes = differenceInMinutes(now, date);
+    const hours = differenceInHours(now, date);
+    const days = differenceInDays(now, date);
+    const weeks = differenceInWeeks(now, date);
+    const months = differenceInMonths(now, date);
+    const years = differenceInYears(now, date);
 
-    if (diffMin < 1) {
+    if (seconds < 60 || !minutes) {
         return 'just now';
     }
 
-    if (diffMin < 60) {
-        return `${diffMin}m ago`;
+    if (minutes < 60 || !hours) {
+        return `${minutes}m ago`;
     }
 
-    const diffHours = Math.round(diffMin / 60);
-
-    if (diffHours < 24) {
-        return `${diffHours}h ago`;
+    if (hours < 24 || !days) {
+        return `${hours}h ago`;
     }
 
-    const diffDays = Math.round(diffHours / 24);
-
-    if (diffDays < 7) {
-        return `${diffDays}d ago`;
+    if (days < 7 || !weeks) {
+        return `${days}d ago`;
     }
 
-    return date.toLocaleDateString();
+    if (weeks < 4 || !months) {
+        return `${weeks}w ago`;
+    }
+
+    if (months < 12 || !years) {
+        return `${months}mo ago`;
+    }
+
+    return `${years}y ago`;
+};
+
+/**
+ * Alternative "Modified" formatter that prints an absolute, minute-precision
+ * timestamp instead of a relative ("5m ago") label. Used by hosts that let
+ * the user opt out of relative dates via a column toggle — see `resources.tsx`.
+ *
+ * The output is contextual, mirroring `lib/utils/format.ts#formatDate`:
+ *   - same day            → `HH:mm` (e.g. `14:32`)
+ *   - same calendar year  → `d MMM, HH:mm` (e.g. `15 Apr, 14:32`)
+ *   - any other year      → `d MMM yyyy, HH:mm` (e.g. `15 Apr 2024, 14:32`)
+ *
+ * Locale is forced to `en-US` so day/month tokens stay stable regardless of
+ * the user's browser locale (matches the rest of the FileManager UI strings,
+ * which are English-only by default).
+ */
+export const formatModifiedAbsolute = (modifiedAt?: Date | string): string => {
+    if (!modifiedAt) {
+        return '';
+    }
+
+    const date = typeof modifiedAt === 'string' ? new Date(modifiedAt) : modifiedAt;
+
+    if (!isValid(date)) {
+        return '';
+    }
+
+    if (isToday(date)) {
+        return format(date, 'HH:mm');
+    }
+
+    if (isThisYear(date)) {
+        return format(date, 'd MMM, HH:mm', { locale: enUS });
+    }
+
+    return format(date, 'd MMM yyyy, HH:mm', { locale: enUS });
 };
 
 /** Strip trailing slashes from a `pathPrefix`. Empty / `'/'` collapse to `''`. */
@@ -300,6 +369,134 @@ export const collectDirectoryPaths = (nodes: FileManagerInternalNode[]): string[
         descend: (node) => node.isDir,
         include: (node) => node.isDir,
     });
+
+/** Locale-aware case-insensitive name comparator. */
+const compareNames = (a: FileManagerInternalNode, b: FileManagerInternalNode): number =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+
+/**
+ * Compare by `size`. Directories and synthetic group roots have no own size —
+ * they are treated as `0` so the comparator stays total. Combined with the
+ * default `isFoldersFirst: true`, directories never actually mix with files
+ * inside a single comparator call.
+ */
+const compareSizes = (a: FileManagerInternalNode, b: FileManagerInternalNode): number => {
+    const aSize = a.isDir || a.isGroupRoot ? 0 : (a.size ?? 0);
+    const bSize = b.isDir || b.isGroupRoot ? 0 : (b.size ?? 0);
+
+    return aSize - bSize;
+};
+
+const toTimestamp = (value: Date | string | undefined): number => {
+    if (!value) {
+        return 0;
+    }
+
+    const date = typeof value === 'string' ? new Date(value) : value;
+    const time = date.getTime();
+
+    return Number.isNaN(time) ? 0 : time;
+};
+
+const compareModified = (a: FileManagerInternalNode, b: FileManagerInternalNode): number =>
+    toTimestamp(a.modifiedAt) - toTimestamp(b.modifiedAt);
+
+const SORT_COMPARATORS = {
+    modified: compareModified,
+    name: compareNames,
+    size: compareSizes,
+} as const;
+
+/**
+ * Recursively sort the tree by the given criterion. Pure: returns freshly
+ * cloned arrays so React reference-equality bail-outs still work for
+ * memoized consumers; nodes themselves are reused by reference (only the
+ * `children` array is rebuilt for nodes whose children actually changed).
+ *
+ * Sort rules:
+ *   - The synthetic group-root level (top level when groups are configured) is
+ *     never re-ordered — groups must follow the order specified in `rootGroups`.
+ *     Their children are sorted as usual.
+ *   - When `isFoldersFirst` is true (default), directories are grouped above
+ *     files at every level. This applies even when `sorting` is `null` —
+ *     within each group (folders / files) the original insertion order is
+ *     preserved (`Array.sort` is stable per the TC39 spec).
+ *   - When a `sorting` is supplied, the comparator runs *inside* each group
+ *     after the folders-first partition. A stable secondary sort by `name`
+ *     breaks ties so the result is deterministic across renders.
+ *   - When both `sorting` is `null` AND `isFoldersFirst` is `false`, the input
+ *     is returned by reference — zero-cost pass-through for the no-op case.
+ */
+export const sortFileManagerTree = (
+    nodes: readonly FileManagerInternalNode[],
+    sorting: FileManagerSortState,
+    isFoldersFirst: boolean,
+): FileManagerInternalNode[] => {
+    if (!sorting && !isFoldersFirst) {
+        return nodes as FileManagerInternalNode[];
+    }
+
+    const comparator = sorting ? SORT_COMPARATORS[sorting.column] : null;
+    const directionMultiplier = sorting?.direction === 'desc' ? -1 : 1;
+
+    const sortLevel = (level: readonly FileManagerInternalNode[], skipReorder: boolean): FileManagerInternalNode[] => {
+        const recursed = level.map((node) => {
+            if (node.children.length === 0) {
+                return node;
+            }
+
+            const sortedChildren = sortLevel(node.children, false);
+
+            return sortedChildren === node.children ? node : { ...node, children: sortedChildren };
+        });
+
+        if (skipReorder) {
+            return recursed;
+        }
+
+        const reordered = [...recursed].sort((a, b) => {
+            // `isFoldersFirst` is treated as a primary partition before any
+            // other criterion so directories always stay above files
+            // regardless of the active comparator (or its absence).
+            if (isFoldersFirst) {
+                const aIsDir = a.isDir || a.isGroupRoot;
+                const bIsDir = b.isDir || b.isGroupRoot;
+
+                if (aIsDir !== bIsDir) {
+                    return aIsDir ? -1 : 1;
+                }
+            }
+
+            // No comparator → preserve insertion order within each partition
+            // (Array.sort is stable per the TC39 spec since 2019).
+            if (!comparator) {
+                return 0;
+            }
+
+            const primary = comparator(a, b) * directionMultiplier;
+
+            if (primary !== 0) {
+                return primary;
+            }
+
+            // Stable secondary sort by name so equal-by-criterion rows have a
+            // deterministic order across renders. Direction is preserved so
+            // `desc` still reads top-down alphabetically reversed.
+            return compareNames(a, b) * directionMultiplier;
+        });
+
+        return reordered;
+    };
+
+    // Top-level group roots keep their declared order. We detect that case by
+    // checking whether every root is a group root — if any root is a regular
+    // node, the level is sorted normally. Children of group roots are always
+    // sorted (the recursion call inside `sortLevel` re-enables sorting via
+    // `skipReorder = false`).
+    const skipTopReorder = nodes.length > 0 && nodes.every((node) => node.isGroupRoot);
+
+    return sortLevel(nodes, skipTopReorder);
+};
 
 export const resolveSelectionModifier = (
     event: KeyboardEvent | MouseEvent | ReactMouseEvent,

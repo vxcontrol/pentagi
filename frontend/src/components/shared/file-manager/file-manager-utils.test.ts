@@ -1,3 +1,4 @@
+import { subMonths, subYears } from 'date-fns';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FileManagerInternalNode, FileManagerRootGroup, FileNode } from './file-manager-types';
@@ -20,16 +21,19 @@ import {
     filterFileManagerTree,
     findNodeByPath,
     formatFileSize,
-    formatModified,
+    formatModifiedAbsolute,
+    formatModifiedRelative,
     getCheckboxState,
     isEverySelected,
     normalizeRootGroups,
     pluralizeItemsEnglish,
     removeAllFromSet,
     resolveSelectionModifier,
+    sortFileManagerTree,
     toggleSubtreeOnSet,
     walkTree,
 } from './file-manager-utils';
+import { computeNextSort } from './use-file-manager-sorting';
 
 const file = (path: string, overrides: Partial<FileNode> = {}): FileNode => ({
     id: path,
@@ -66,7 +70,7 @@ describe('formatFileSize', () => {
     });
 });
 
-describe('formatModified', () => {
+describe('formatModifiedRelative', () => {
     const NOW = new Date('2026-04-28T12:00:00Z').getTime();
 
     beforeEach(() => {
@@ -79,30 +83,88 @@ describe('formatModified', () => {
     });
 
     it('returns empty for missing/invalid input', () => {
-        expect(formatModified(undefined)).toBe('');
-        expect(formatModified('not-a-date')).toBe('');
+        expect(formatModifiedRelative(undefined)).toBe('');
+        expect(formatModifiedRelative('not-a-date')).toBe('');
     });
 
     it('handles "just now"', () => {
-        expect(formatModified(new Date(NOW - 10_000))).toBe('just now');
+        expect(formatModifiedRelative(new Date(NOW - 10_000))).toBe('just now');
     });
 
     it('formats minutes / hours / days within a week', () => {
-        expect(formatModified(new Date(NOW - 5 * 60_000))).toBe('5m ago');
-        expect(formatModified(new Date(NOW - 3 * 60 * 60_000))).toBe('3h ago');
-        expect(formatModified(new Date(NOW - 4 * 24 * 60 * 60_000))).toBe('4d ago');
+        expect(formatModifiedRelative(new Date(NOW - 5 * 60_000))).toBe('5m ago');
+        expect(formatModifiedRelative(new Date(NOW - 3 * 60 * 60_000))).toBe('3h ago');
+        expect(formatModifiedRelative(new Date(NOW - 4 * 24 * 60 * 60_000))).toBe('4d ago');
     });
 
-    it('falls back to locale date for older entries', () => {
-        const old = new Date(NOW - 14 * 24 * 60 * 60_000);
+    it('formats weeks for entries within 4 weeks', () => {
+        expect(formatModifiedRelative(new Date(NOW - 14 * 24 * 60 * 60_000))).toBe('2w ago');
+        expect(formatModifiedRelative(new Date(NOW - 21 * 24 * 60 * 60_000))).toBe('3w ago');
+    });
 
-        expect(formatModified(old)).toBe(old.toLocaleDateString());
+    it('formats months for entries within a year', () => {
+        // 90 days ≈ 2 calendar months from the fake `NOW`. Using subMonths
+        // instead of arithmetic keeps the test robust against month-length
+        // variation (date-fns' differenceInMonths is calendar-based, not 30d).
+        expect(formatModifiedRelative(subMonths(new Date(NOW), 2))).toBe('2mo ago');
+        expect(formatModifiedRelative(subMonths(new Date(NOW), 6))).toBe('6mo ago');
+    });
+
+    it('formats years for entries older than a year', () => {
+        expect(formatModifiedRelative(subYears(new Date(NOW), 1))).toBe('1y ago');
+        expect(formatModifiedRelative(subYears(new Date(NOW), 5))).toBe('5y ago');
     });
 
     it('accepts ISO strings', () => {
         const iso = new Date(NOW - 10 * 60_000).toISOString();
 
-        expect(formatModified(iso)).toBe('10m ago');
+        expect(formatModifiedRelative(iso)).toBe('10m ago');
+    });
+});
+
+describe('formatModifiedAbsolute', () => {
+    // Use local-time constructors throughout: `format()` and `isToday` /
+    // `isThisYear` resolve in the host TZ, so anchoring the fake clock to
+    // a UTC literal would let the rendered hours / "today" boundary drift
+    // depending on where the test runs (CI's TZ is not guaranteed).
+    const NOW = new Date(2026, 3, 28, 14, 30);
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(NOW);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('returns empty for missing/invalid input', () => {
+        expect(formatModifiedAbsolute(undefined)).toBe('');
+        expect(formatModifiedAbsolute('not-a-date')).toBe('');
+    });
+
+    it('renders only the time for today', () => {
+        expect(formatModifiedAbsolute(new Date(2026, 3, 28, 9, 5))).toBe('09:05');
+        expect(formatModifiedAbsolute(new Date(2026, 3, 28, 23, 59))).toBe('23:59');
+    });
+
+    it('renders day, month and time within the current calendar year', () => {
+        expect(formatModifiedAbsolute(new Date(2026, 0, 3, 8, 7))).toBe('3 Jan, 08:07');
+        expect(formatModifiedAbsolute(new Date(2026, 11, 15, 18, 0))).toBe('15 Dec, 18:00');
+    });
+
+    it('includes the year for entries from previous calendar years', () => {
+        expect(formatModifiedAbsolute(new Date(2024, 5, 1, 6, 30))).toBe('1 Jun 2024, 06:30');
+        expect(formatModifiedAbsolute(new Date(2020, 11, 31, 23, 45))).toBe('31 Dec 2020, 23:45');
+    });
+
+    it('accepts ISO strings', () => {
+        // Build the ISO from the same local-time `Date` so the render is stable
+        // across host time zones — toISOString() shifts to UTC, but formatting
+        // back through the local clock returns the original wall-clock time.
+        const local = new Date(2026, 2, 14, 10, 5);
+
+        expect(formatModifiedAbsolute(local.toISOString())).toBe('14 Mar, 10:05');
     });
 });
 
@@ -1659,5 +1721,158 @@ describe('computeDirSelectionState — synthetic group root (path === "")', () =
                 selectedPaths: new Set(['uploads/a.txt']),
             }),
         ).toBe('indeterminate');
+    });
+});
+
+describe('sortFileManagerTree', () => {
+    const collectNames = (nodes: FileManagerInternalNode[]): string[] =>
+        nodes.flatMap((n) => [n.name, ...collectNames(n.children)]);
+
+    const collectTopNames = (nodes: FileManagerInternalNode[]): string[] => nodes.map((n) => n.name);
+
+    it('returns input unchanged (by reference) when sorting is null AND isFoldersFirst is false', () => {
+        const tree = buildFileManagerTree([file('b.txt'), file('a.txt')]);
+        const result = sortFileManagerTree(tree, null, false);
+
+        expect(result).toBe(tree);
+    });
+
+    it('partitions folders before files when sorting=null and isFoldersFirst=true', () => {
+        // Insertion order is `b.txt`, `alpha/...`, `a.txt`, `beta/...`. With no
+        // active sort and isFoldersFirst=true, the partitioner pulls folders to
+        // the top while *preserving* the original order WITHIN each partition.
+        const tree = buildFileManagerTree([
+            file('b.txt'),
+            file('alpha/inner.txt'),
+            file('a.txt'),
+            file('beta/inner.txt'),
+        ]);
+        const sorted = sortFileManagerTree(tree, null, true);
+
+        // `buildFileManagerTree` itself sorts the input by path before walking,
+        // so folders appear in path-alphabetical order (`alpha`, `beta`) and
+        // files likewise (`a.txt`, `b.txt`). The folders-first partition keeps
+        // both groups intact, only flipping their relative position.
+        expect(collectTopNames(sorted)).toEqual(['alpha', 'beta', 'a.txt', 'b.txt']);
+    });
+
+    it('preserves insertion order within each partition when sorting=null', () => {
+        // Same structure as above but verifying stability explicitly. Since
+        // `buildFileManagerTree` pre-sorts files by path, the file partition
+        // here reads in path order (z, then m), and the folder partition
+        // contains a single entry. The point is no comparator runs, only the
+        // folders-first partition.
+        const tree = buildFileManagerTree([file('m.txt'), file('z.txt'), file('dir/inner.txt')]);
+        const sorted = sortFileManagerTree(tree, null, true);
+
+        expect(collectTopNames(sorted)).toEqual(['dir', 'm.txt', 'z.txt']);
+    });
+
+    it('sorts files alphabetically asc with isFoldersFirst=true', () => {
+        const tree = buildFileManagerTree([file('b.txt'), file('a.txt'), dir('zzz'), file('c.txt')]);
+        const sorted = sortFileManagerTree(tree, { column: 'name', direction: 'asc' }, true);
+
+        expect(collectTopNames(sorted)).toEqual(['zzz', 'a.txt', 'b.txt', 'c.txt']);
+    });
+
+    it('sorts files alphabetically desc', () => {
+        const tree = buildFileManagerTree([file('a.txt'), file('b.txt'), file('c.txt')]);
+        const sorted = sortFileManagerTree(tree, { column: 'name', direction: 'desc' }, false);
+
+        expect(collectTopNames(sorted)).toEqual(['c.txt', 'b.txt', 'a.txt']);
+    });
+
+    it('mixes folders with files when isFoldersFirst=false', () => {
+        const tree = buildFileManagerTree([file('alpha/file.txt'), file('zzz.txt'), file('beta/file.txt')]);
+        const sorted = sortFileManagerTree(tree, { column: 'name', direction: 'asc' }, false);
+
+        expect(collectTopNames(sorted)).toEqual(['alpha', 'beta', 'zzz.txt']);
+    });
+
+    it('keeps folders above files when isFoldersFirst=true', () => {
+        const tree = buildFileManagerTree([
+            file('alpha/file.txt'),
+            file('zzz.txt'),
+            file('beta/file.txt'),
+            file('aaa.txt'),
+        ]);
+        const sorted = sortFileManagerTree(tree, { column: 'name', direction: 'asc' }, true);
+
+        expect(collectTopNames(sorted)).toEqual(['alpha', 'beta', 'aaa.txt', 'zzz.txt']);
+    });
+
+    it('sorts by size with `0` fallback for files lacking the field', () => {
+        const tree = buildFileManagerTree([
+            file('a.txt', { size: 100 }),
+            file('b.txt', { size: 50 }),
+            file('c.txt', { size: 200 }),
+        ]);
+        const sorted = sortFileManagerTree(tree, { column: 'size', direction: 'asc' }, false);
+
+        expect(collectTopNames(sorted)).toEqual(['b.txt', 'a.txt', 'c.txt']);
+    });
+
+    it('sorts by modified ascending then descending', () => {
+        const tree = buildFileManagerTree([
+            file('a.txt', { modifiedAt: '2024-01-01' }),
+            file('b.txt', { modifiedAt: '2026-01-01' }),
+            file('c.txt', { modifiedAt: '2025-01-01' }),
+        ]);
+        const ascending = sortFileManagerTree(tree, { column: 'modified', direction: 'asc' }, false);
+        const descending = sortFileManagerTree(tree, { column: 'modified', direction: 'desc' }, false);
+
+        expect(collectTopNames(ascending)).toEqual(['a.txt', 'c.txt', 'b.txt']);
+        expect(collectTopNames(descending)).toEqual(['b.txt', 'c.txt', 'a.txt']);
+    });
+
+    it('preserves the order of synthetic group roots but sorts their children', () => {
+        const groups: FileManagerRootGroup[] = [
+            { id: 'uploads', label: 'Uploads', pathPrefix: 'uploads' },
+            { id: 'container', label: 'Container', pathPrefix: 'container' },
+        ];
+        const tree = buildFileManagerTree(
+            [file('uploads/b.txt'), file('uploads/a.txt'), file('container/x.txt'), file('container/m.txt')],
+            groups,
+        );
+
+        const sorted = sortFileManagerTree(tree, { column: 'name', direction: 'asc' }, false);
+
+        expect(collectTopNames(sorted)).toEqual(['Uploads', 'Container']);
+        expect(collectNames(sorted[0]?.children ?? [])).toEqual(['a.txt', 'b.txt']);
+        expect(collectNames(sorted[1]?.children ?? [])).toEqual(['m.txt', 'x.txt']);
+    });
+
+    it('recursively sorts nested folder children', () => {
+        const tree = buildFileManagerTree([file('outer/sub/c.txt'), file('outer/sub/a.txt'), file('outer/sub/b.txt')]);
+        const sorted = sortFileManagerTree(tree, { column: 'name', direction: 'asc' }, true);
+
+        const outer = sorted[0];
+        const sub = outer?.children[0];
+        expect(sub?.name).toBe('sub');
+        expect(collectTopNames(sub?.children ?? [])).toEqual(['a.txt', 'b.txt', 'c.txt']);
+    });
+});
+
+describe('computeNextSort', () => {
+    it('cycles none → asc', () => {
+        expect(computeNextSort(null, 'name')).toEqual({ column: 'name', direction: 'asc' });
+    });
+
+    it('cycles asc → desc on the same column', () => {
+        expect(computeNextSort({ column: 'name', direction: 'asc' }, 'name')).toEqual({
+            column: 'name',
+            direction: 'desc',
+        });
+    });
+
+    it('cycles desc → none on the same column', () => {
+        expect(computeNextSort({ column: 'name', direction: 'desc' }, 'name')).toBeNull();
+    });
+
+    it('switches to a different column starting at asc', () => {
+        expect(computeNextSort({ column: 'name', direction: 'desc' }, 'size')).toEqual({
+            column: 'size',
+            direction: 'asc',
+        });
     });
 });

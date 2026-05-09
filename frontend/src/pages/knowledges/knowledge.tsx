@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { GripVertical, LibraryBig, Save } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router-dom';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type Control, type FieldPath, type SubmitHandler, useForm, useWatch } from 'react-hook-form';
+import { type BlockerFunction, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 
 import type {
@@ -18,6 +18,14 @@ import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupTextareaAutosize } from '@/components/ui/input-group';
@@ -28,7 +36,12 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Spinner } from '@/components/ui/spinner';
 import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType, useKnowledgeDocumentQuery } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { Log } from '@/lib/log';
 import { useKnowledges } from '@/providers/knowledges-provider';
+
+// ---------------------------------------------------------------------------
+// Schema, types, pure helpers
+// ---------------------------------------------------------------------------
 
 const docTypeValues = [KnowledgeDocType.Answer, KnowledgeDocType.Guide, KnowledgeDocType.Code] as const;
 const guideTypeValues = Object.values(KnowledgeGuideType) as KnowledgeGuideTypeT[];
@@ -45,27 +58,26 @@ const formSchema = z
         question: z.string().trim().min(1, { message: 'Question is required' }),
     })
     .superRefine((value, ctx) => {
-        if (value.docType === KnowledgeDocType.Guide && !value.guideType) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'Guide type is required',
-                path: ['guideType'],
-            });
+        const requiredByDocType: Partial<Record<KnowledgeDocType, { field: FieldPath<FormValues>; message: string }>> = {
+            [KnowledgeDocType.Answer]: { field: 'answerType', message: 'Answer type is required' },
+            [KnowledgeDocType.Code]: { field: 'codeLang', message: 'Code language is required' },
+            [KnowledgeDocType.Guide]: { field: 'guideType', message: 'Guide type is required' },
+        };
+
+        const rule = requiredByDocType[value.docType];
+
+        if (!rule) {
+            return;
         }
 
-        if (value.docType === KnowledgeDocType.Answer && !value.answerType) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: 'Answer type is required',
-                path: ['answerType'],
-            });
-        }
+        const fieldValue = value[rule.field];
+        const isMissing = fieldValue === undefined || fieldValue === null || fieldValue === '';
 
-        if (value.docType === KnowledgeDocType.Code && (!value.codeLang || value.codeLang.length === 0)) {
+        if (isMissing) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: 'Code language is required',
-                path: ['codeLang'],
+                message: rule.message,
+                path: [rule.field],
             });
         }
     });
@@ -92,81 +104,247 @@ const documentToFormValues = (k: KnowledgeDocumentFragmentFragment): FormValues 
     question: k.question,
 });
 
-interface KnowledgeFormViewProps {
-    initialValues: FormValues;
-    isNew: boolean;
-    knowledge?: KnowledgeDocumentFragmentFragment | null;
-    knowledgeName: null | string;
-    onSubmit: (values: FormValues) => Promise<void>;
+// `description` and `codeLang` are optional and we want empty strings to map
+// to `undefined` so the backend treats them as "absent" instead of "set to ''".
+const trimmedOrUndefined = (value: null | string | undefined): string | undefined => {
+    if (!value) {
+        return undefined;
+    }
+
+    const trimmed = value.trim();
+
+    return trimmed.length === 0 ? undefined : trimmed;
+};
+
+const formValuesToCreateInput = (v: FormValues): CreateKnowledgeDocumentInput => ({
+    answerType: v.docType === KnowledgeDocType.Answer ? v.answerType : undefined,
+    codeLang: v.docType === KnowledgeDocType.Code ? trimmedOrUndefined(v.codeLang) : undefined,
+    content: v.content,
+    description: trimmedOrUndefined(v.description),
+    docType: v.docType,
+    guideType: v.docType === KnowledgeDocType.Guide ? v.guideType : undefined,
+    question: v.question,
+});
+
+const formValuesToUpdateInput = (v: FormValues): UpdateKnowledgeDocumentInput => ({
+    answerType: v.docType === KnowledgeDocType.Answer ? v.answerType : undefined,
+    codeLang: v.docType === KnowledgeDocType.Code ? trimmedOrUndefined(v.codeLang) : undefined,
+    content: v.content,
+    description: trimmedOrUndefined(v.description),
+    guideType: v.docType === KnowledgeDocType.Guide ? v.guideType : undefined,
+    question: v.question,
+});
+
+// ---------------------------------------------------------------------------
+// Unsaved-changes guard hook
+// ---------------------------------------------------------------------------
+
+interface UnsavedChangesGuard {
+    handleCancel: () => void;
+    handleDiscard: () => void;
+    handleOpenChange: (open: boolean) => void;
+    handleSaveAndLeave: () => Promise<void>;
+    isOpen: boolean;
+    isSavingFromDialog: boolean;
+    /**
+     * Allows the next router navigation to bypass the blocker. Use this after
+     * a successful save when the form (or its parent) needs to navigate to
+     * a fresh URL (e.g. the new document page) without showing the dialog.
+     */
+    skipNextBlock: () => void;
 }
 
-const KnowledgeFormView = ({ initialValues, isNew, knowledge, knowledgeName, onSubmit }: KnowledgeFormViewProps) => {
-    const { isDesktop } = useBreakpoint();
-    const [isSaving, setIsSaving] = useState(false);
+interface UseUnsavedChangesGuardArgs {
+    isDirty: boolean;
+    isFormValid: boolean;
+    onSave: () => Promise<boolean>;
+}
 
-    const form = useForm<FormValues>({
-        defaultValues: initialValues,
-        mode: 'onChange',
-        resolver: zodResolver(formSchema),
-    });
+const useUnsavedChangesGuard = ({
+    isDirty,
+    isFormValid,
+    onSave,
+}: UseUnsavedChangesGuardArgs): UnsavedChangesGuard => {
+    const allowNextRef = useRef(false);
+    const isDirtyRef = useRef(isDirty);
 
-    const { control, formState, handleSubmit, reset, watch } = form;
+    useEffect(() => {
+        isDirtyRef.current = isDirty;
+    }, [isDirty]);
 
-    const docType = watch('docType');
-    const hasUnsavedChanges = formState.isDirty;
-    const canSubmit = !isSaving && formState.isValid && (isNew || hasUnsavedChanges);
+    const blockerFn = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => {
+        if (allowNextRef.current) {
+            allowNextRef.current = false;
 
-    const onSubmitWithGuard = async (values: FormValues) => {
-        if (isSaving) {
+            return false;
+        }
+
+        if (currentLocation.pathname === nextLocation.pathname && currentLocation.search === nextLocation.search) {
+            return false;
+        }
+
+        return isDirtyRef.current;
+    }, []);
+
+    const blocker = useBlocker(blockerFn);
+    const [isSavingFromDialog, setIsSavingFromDialog] = useState(false);
+
+    useEffect(() => {
+        if (!isDirty) {
             return;
         }
 
-        setIsSaving(true);
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [isDirty]);
+
+    const isOpen = blocker.state === 'blocked';
+
+    const handleCancel = useCallback(() => {
+        if (blocker.state === 'blocked') {
+            blocker.reset();
+        }
+    }, [blocker]);
+
+    const handleDiscard = useCallback(() => {
+        if (blocker.state === 'blocked') {
+            blocker.proceed();
+        }
+    }, [blocker]);
+
+    const handleSaveAndLeave = useCallback(async () => {
+        if (isSavingFromDialog || !isFormValid) {
+            return;
+        }
+
+        setIsSavingFromDialog(true);
 
         try {
-            await onSubmit(values);
+            const success = await onSave();
 
-            if (!isNew) {
-                reset(values, { keepDefaultValues: false });
+            if (success && blocker.state === 'blocked') {
+                blocker.proceed();
             }
-        } catch {
-            // Error already surfaced via toast in the provider
         } finally {
-            setIsSaving(false);
+            setIsSavingFromDialog(false);
         }
-    };
+    }, [blocker, isFormValid, isSavingFromDialog, onSave]);
 
-    const introBlock = (
-        <div className="flex flex-col gap-4">
-            <div className="text-center">
-                <h1 className="text-2xl font-semibold">
-                    {isNew ? 'Create a new knowledge document' : 'Edit knowledge document'}
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                    {isNew
-                        ? 'Add an entry to the vector knowledge base'
-                        : 'Edits to content or metadata will trigger re-embedding'}
-                </p>
-            </div>
+    const handleOpenChange = useCallback(
+        (open: boolean) => {
+            if (isSavingFromDialog) {
+                return;
+            }
 
-            {!isNew && knowledge ? (
-                <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-                    <Badge variant={knowledge.manual ? 'secondary' : 'outline'}>
-                        {knowledge.manual ? 'manual' : 'agent'}
-                    </Badge>
-                    {knowledge.flowId ? <Badge variant="outline">flow #{knowledge.flowId}</Badge> : null}
-                    {knowledge.taskId ? <Badge variant="outline">task #{knowledge.taskId}</Badge> : null}
-                    {knowledge.subtaskId ? <Badge variant="outline">subtask #{knowledge.subtaskId}</Badge> : null}
-                    <span>·</span>
-                    <span>
-                        chunk {knowledge.partSize} of {knowledge.totalSize}
-                    </span>
-                </div>
-            ) : null}
-        </div>
+            if (!open && blocker.state === 'blocked') {
+                blocker.reset();
+            }
+        },
+        [blocker, isSavingFromDialog],
     );
 
-    const metaFields = (
+    const skipNextBlock = useCallback(() => {
+        allowNextRef.current = true;
+    }, []);
+
+    return {
+        handleCancel,
+        handleDiscard,
+        handleOpenChange,
+        handleSaveAndLeave,
+        isOpen,
+        isSavingFromDialog,
+        skipNextBlock,
+    };
+};
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+interface KnowledgePageHeaderProps {
+    isNew: boolean;
+    knowledgeName: null | string;
+    saveButton?: ReactNode;
+}
+
+const KnowledgePageHeader = ({ isNew, knowledgeName, saveButton }: KnowledgePageHeaderProps) => (
+    <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator
+            className="mr-2 h-4"
+            orientation="vertical"
+        />
+        <Breadcrumb>
+            <BreadcrumbList>
+                <BreadcrumbItem>
+                    <LibraryBig className="size-4 shrink-0" />
+                    <BreadcrumbPage className="max-w-[240px] truncate">
+                        {isNew ? 'New knowledge' : (knowledgeName ?? 'Knowledge')}
+                    </BreadcrumbPage>
+                </BreadcrumbItem>
+            </BreadcrumbList>
+        </Breadcrumb>
+        {saveButton ? <div className="ml-auto flex items-center gap-2">{saveButton}</div> : null}
+    </header>
+);
+
+interface KnowledgeIntroBlockProps {
+    isNew: boolean;
+    knowledge?: KnowledgeDocumentFragmentFragment | null;
+}
+
+const KnowledgeIntroBlock = ({ isNew, knowledge }: KnowledgeIntroBlockProps) => (
+    <div className="flex flex-col gap-4">
+        <div className="text-center">
+            <h1 className="text-2xl font-semibold">
+                {isNew ? 'Create a new knowledge document' : 'Edit knowledge document'}
+            </h1>
+            <p className="text-muted-foreground mt-2">
+                {isNew
+                    ? 'Add an entry to the vector knowledge base'
+                    : 'Edits to content or metadata will trigger re-embedding'}
+            </p>
+        </div>
+
+        {!isNew && knowledge ? (
+            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+                <Badge variant={knowledge.manual ? 'secondary' : 'outline'}>
+                    {knowledge.manual ? 'manual' : 'agent'}
+                </Badge>
+                {knowledge.flowId ? <Badge variant="outline">flow #{knowledge.flowId}</Badge> : null}
+                {knowledge.taskId ? <Badge variant="outline">task #{knowledge.taskId}</Badge> : null}
+                {knowledge.subtaskId ? <Badge variant="outline">subtask #{knowledge.subtaskId}</Badge> : null}
+                <span>·</span>
+                <span>
+                    chunk {knowledge.partSize} of {knowledge.totalSize}
+                </span>
+            </div>
+        ) : null}
+    </div>
+);
+
+interface KnowledgeMetaFieldsProps {
+    control: Control<FormValues>;
+    isNew: boolean;
+    isSaving: boolean;
+}
+
+const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaFieldsProps) => {
+    // Targeted subscription: only this component re-renders when docType changes,
+    // not the whole form. The full-form `useWatch` from the original code
+    // re-rendered on every keystroke in the markdown editor.
+    const docType = useWatch({ control, name: 'docType' });
+
+    return (
         <div className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
@@ -344,147 +522,338 @@ const KnowledgeFormView = ({ initialValues, isNew, knowledge, knowledgeName, onS
             />
         </div>
     );
+};
 
-    const contentField = (
-        <FormField
-            control={control}
-            name="content"
-            render={({ field }) => (
-                <FormItem className="flex min-h-0 flex-1 flex-col">
-                    <FormControl>
-                        <MarkdownEditor
-                            className="min-h-0 flex-1"
-                            disabled={isSaving}
-                            onBlur={field.onBlur}
-                            onChange={field.onChange}
-                            placeholder="Knowledge content (will be embedded into the vector store)"
-                            value={field.value}
-                        />
-                    </FormControl>
-                    <FormMessage />
-                </FormItem>
-            )}
-        />
-    );
+interface KnowledgeContentFieldProps {
+    control: Control<FormValues>;
+    /** When `true`, the editor stretches to fill its parent (desktop split view). */
+    fillParent?: boolean;
+    isSaving: boolean;
+    showLabel?: boolean;
+}
 
-    const contentFieldStandalone = (
-        <FormField
-            control={control}
-            name="content"
-            render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Content</FormLabel>
-                    <FormControl>
-                        <MarkdownEditor
-                            className="min-h-[280px]"
-                            contentClassName="min-h-[240px]"
-                            disabled={isSaving}
-                            onBlur={field.onBlur}
-                            onChange={field.onChange}
-                            placeholder="Knowledge content (will be embedded into the vector store)"
-                            value={field.value}
-                        />
-                    </FormControl>
-                    <FormMessage />
-                </FormItem>
-            )}
-        />
-    );
+const KnowledgeContentField = ({ control, fillParent = false, isSaving, showLabel = false }: KnowledgeContentFieldProps) => (
+    <FormField
+        control={control}
+        name="content"
+        render={({ field }) => (
+            <FormItem className={fillParent ? 'flex min-h-0 flex-1 flex-col' : undefined}>
+                {showLabel ? <FormLabel>Content</FormLabel> : null}
+                <FormControl>
+                    <MarkdownEditor
+                        className={fillParent ? 'min-h-0 flex-1' : 'min-h-[280px]'}
+                        contentClassName={fillParent ? undefined : 'min-h-[240px]'}
+                        disabled={isSaving}
+                        onBlur={field.onBlur}
+                        onChange={field.onChange}
+                        placeholder="Knowledge content (will be embedded into the vector store)"
+                        value={field.value}
+                    />
+                </FormControl>
+                <FormMessage />
+            </FormItem>
+        )}
+    />
+);
 
-    const pageHeader = (
-        <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-                className="mr-2 h-4"
-                orientation="vertical"
-            />
-            <Breadcrumb>
-                <BreadcrumbList>
-                    <BreadcrumbItem>
-                        <LibraryBig className="size-4 shrink-0" />
-                        <BreadcrumbPage className="max-w-[240px] truncate">
-                            {isNew ? 'New knowledge' : (knowledgeName ?? 'Knowledge')}
-                        </BreadcrumbPage>
-                    </BreadcrumbItem>
-                </BreadcrumbList>
-            </Breadcrumb>
-            <div className="ml-auto flex items-center gap-2">
-                <Button
-                    disabled={!canSubmit}
-                    size="sm"
-                    type="submit"
-                >
-                    {isSaving ? <Spinner variant="circle" /> : <Save />}
-                    {isNew ? 'Create' : 'Save'}
-                </Button>
-            </div>
-        </header>
-    );
+interface KnowledgeBodyProps {
+    control: Control<FormValues>;
+    isNew: boolean;
+    isSaving: boolean;
+    knowledge?: KnowledgeDocumentFragmentFragment | null;
+}
 
-    if (isDesktop) {
-        return (
-            <Form {...form}>
-                <form
-                    className="flex h-full min-h-0 w-full flex-1 flex-col"
-                    onSubmit={handleSubmit(onSubmitWithGuard)}
-                >
-                    {pageHeader}
-                    <div className="flex h-[calc(100dvh-3rem)] min-h-0 w-full max-w-full flex-1 overflow-hidden">
-                        <ResizablePanelGroup
-                            className="w-full"
-                            direction="horizontal"
-                        >
-                            <ResizablePanel
-                                className="h-[calc(100dvh-3rem)] min-h-0"
-                                defaultSize={45}
-                                minSize={30}
-                            >
-                                <div className="h-full min-h-0 overflow-y-auto">
-                                    <Card className="mx-auto min-h-full w-full max-w-2xl rounded-none border-0">
-                                        <CardContent className="flex flex-col gap-6 py-6">
-                                            {introBlock}
-                                            {metaFields}
-                                        </CardContent>
-                                    </Card>
-                                </div>
-                            </ResizablePanel>
-                            <ResizableHandle withHandle>
-                                <GripVertical className="size-4" />
-                            </ResizableHandle>
-                            <ResizablePanel
-                                className="h-[calc(100dvh-3rem)] min-h-0"
-                                defaultSize={55}
-                                minSize={30}
-                            >
-                                <div className="flex h-full min-h-0 flex-col overflow-hidden p-4">{contentField}</div>
-                            </ResizablePanel>
-                        </ResizablePanelGroup>
-                    </div>
-                </form>
-            </Form>
-        );
-    }
-
-    return (
-        <Form {...form}>
-            <form
-                className="flex min-h-[100dvh] flex-col"
-                onSubmit={handleSubmit(onSubmitWithGuard)}
+const KnowledgeBodyDesktop = ({ control, isNew, isSaving, knowledge }: KnowledgeBodyProps) => (
+    <div className="flex h-[calc(100dvh-3rem)] min-h-0 w-full max-w-full flex-1 overflow-hidden">
+        <ResizablePanelGroup
+            className="w-full"
+            direction="horizontal"
+        >
+            <ResizablePanel
+                className="h-[calc(100dvh-3rem)] min-h-0"
+                defaultSize={45}
+                minSize={30}
             >
-                {pageHeader}
-                <div className="flex min-w-0 flex-1 items-start justify-center p-4">
-                    <Card className="w-full max-w-3xl">
-                        <CardContent className="flex flex-col gap-6 pt-6">
-                            {introBlock}
-                            {metaFields}
-                            {contentFieldStandalone}
+                <div className="h-full min-h-0 overflow-y-auto">
+                    <Card className="mx-auto min-h-full w-full max-w-2xl rounded-none border-0">
+                        <CardContent className="flex flex-col gap-6 py-6">
+                            <KnowledgeIntroBlock
+                                isNew={isNew}
+                                knowledge={knowledge}
+                            />
+                            <KnowledgeMetaFields
+                                control={control}
+                                isNew={isNew}
+                                isSaving={isSaving}
+                            />
                         </CardContent>
                     </Card>
                 </div>
-            </form>
-        </Form>
+            </ResizablePanel>
+            <ResizableHandle withHandle>
+                <GripVertical className="size-4" />
+            </ResizableHandle>
+            <ResizablePanel
+                className="h-[calc(100dvh-3rem)] min-h-0"
+                defaultSize={55}
+                minSize={30}
+            >
+                <div className="flex h-full min-h-0 flex-col overflow-hidden p-4">
+                    <KnowledgeContentField
+                        control={control}
+                        fillParent
+                        isSaving={isSaving}
+                    />
+                </div>
+            </ResizablePanel>
+        </ResizablePanelGroup>
+    </div>
+);
+
+const KnowledgeBodyMobile = ({ control, isNew, isSaving, knowledge }: KnowledgeBodyProps) => (
+    <div className="flex min-w-0 flex-1 items-start justify-center p-4">
+        <Card className="w-full max-w-3xl">
+            <CardContent className="flex flex-col gap-6 pt-6">
+                <KnowledgeIntroBlock
+                    isNew={isNew}
+                    knowledge={knowledge}
+                />
+                <KnowledgeMetaFields
+                    control={control}
+                    isNew={isNew}
+                    isSaving={isSaving}
+                />
+                <KnowledgeContentField
+                    control={control}
+                    isSaving={isSaving}
+                    showLabel
+                />
+            </CardContent>
+        </Card>
+    </div>
+);
+
+interface KnowledgeLeaveDialogProps extends Pick<UnsavedChangesGuard, 'handleCancel' | 'handleDiscard' | 'handleOpenChange' | 'handleSaveAndLeave' | 'isOpen' | 'isSavingFromDialog'> {
+    canSave: boolean;
+}
+
+const KnowledgeLeaveDialog = ({
+    canSave,
+    handleCancel,
+    handleDiscard,
+    handleOpenChange,
+    handleSaveAndLeave,
+    isOpen,
+    isSavingFromDialog,
+}: KnowledgeLeaveDialogProps) => (
+    <Dialog
+        onOpenChange={handleOpenChange}
+        open={isOpen}
+    >
+        <DialogContent
+            className="sm:max-w-md"
+            onEscapeKeyDown={(event) => {
+                if (isSavingFromDialog) {
+                    event.preventDefault();
+                }
+            }}
+            onInteractOutside={(event) => {
+                if (isSavingFromDialog) {
+                    event.preventDefault();
+                }
+            }}
+        >
+            <DialogHeader>
+                <DialogTitle>Unsaved changes</DialogTitle>
+                <DialogDescription>
+                    You have unsaved changes on this page. Would you like to save them before leaving?
+                </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                    disabled={isSavingFromDialog}
+                    onClick={handleCancel}
+                    variant="outline"
+                >
+                    Cancel
+                </Button>
+                <Button
+                    disabled={isSavingFromDialog}
+                    onClick={handleDiscard}
+                    variant="destructive"
+                >
+                    Discard
+                </Button>
+                <Button
+                    disabled={isSavingFromDialog || !canSave}
+                    onClick={handleSaveAndLeave}
+                    variant="default"
+                >
+                    {isSavingFromDialog ? <Spinner variant="circle" /> : <Save />}
+                    Save
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+);
+
+// ---------------------------------------------------------------------------
+// Form view (uses the form, owns navigation guard)
+// ---------------------------------------------------------------------------
+
+interface KnowledgeFormViewProps {
+    initialValues: FormValues;
+    isNew: boolean;
+    knowledge?: KnowledgeDocumentFragmentFragment | null;
+    knowledgeName: null | string;
+    onSubmit: (values: FormValues) => Promise<SubmitResult>;
+}
+
+interface SubmitResult {
+    redirectTo?: string;
+}
+
+const KnowledgeFormView = ({ initialValues, isNew, knowledge, knowledgeName, onSubmit }: KnowledgeFormViewProps) => {
+    const navigate = useNavigate();
+    const { isDesktop } = useBreakpoint();
+    const [isSaving, setIsSaving] = useState(false);
+
+    const form = useForm<FormValues>({
+        defaultValues: initialValues,
+        mode: 'onChange',
+        resolver: zodResolver(formSchema),
+    });
+
+    const { control, formState, handleSubmit, reset } = form;
+    const { isDirty, isValid } = formState;
+
+    const performSave = useCallback(
+        async (values: FormValues): Promise<boolean> => {
+            try {
+                const result = await onSubmit(values);
+
+                // Reset BEFORE navigate so `isDirty` is false by the time the
+                // blocker re-evaluates. We also `skipNextBlock` defensively
+                // because reset's state propagation is async.
+                reset(values, { keepDefaultValues: false });
+
+                if (result.redirectTo) {
+                    skipNextBlockRef.current();
+                    navigate(result.redirectTo);
+                }
+
+                return true;
+            } catch (error) {
+                Log.error('Failed to save knowledge document', error);
+
+                return false;
+            }
+        },
+        [navigate, onSubmit, reset],
+    );
+
+    const skipNextBlockRef = useRef<() => void>(() => {});
+
+    const onSubmitWithGuard: SubmitHandler<FormValues> = useCallback(
+        async (values) => {
+            if (isSaving) {
+                return;
+            }
+
+            setIsSaving(true);
+
+            try {
+                await performSave(values);
+            } finally {
+                setIsSaving(false);
+            }
+        },
+        [isSaving, performSave],
+    );
+
+    const onSaveFromDialog = useCallback(async (): Promise<boolean> => {
+        if (isSaving || !isValid) {
+            return false;
+        }
+
+        setIsSaving(true);
+
+        try {
+            return await performSave(form.getValues());
+        } finally {
+            setIsSaving(false);
+        }
+    }, [form, isSaving, isValid, performSave]);
+
+    const guard = useUnsavedChangesGuard({
+        isDirty,
+        isFormValid: isValid,
+        onSave: onSaveFromDialog,
+    });
+
+    // Wire the ref so `performSave` can call into the guard's `skipNextBlock`.
+    useEffect(() => {
+        skipNextBlockRef.current = guard.skipNextBlock;
+    }, [guard.skipNextBlock]);
+
+    const canSubmit = !isSaving && isValid && (isNew || isDirty);
+
+    const saveButton = (
+        <Button
+            disabled={!canSubmit}
+            size="sm"
+            type="submit"
+        >
+            {isSaving ? <Spinner variant="circle" /> : <Save />}
+            {isNew ? 'Create' : 'Save'}
+        </Button>
+    );
+
+    return (
+        <>
+            <Form {...form}>
+                <form
+                    className={isDesktop ? 'flex h-full min-h-0 w-full flex-1 flex-col' : 'flex min-h-[100dvh] flex-col'}
+                    onSubmit={handleSubmit(onSubmitWithGuard)}
+                >
+                    <KnowledgePageHeader
+                        isNew={isNew}
+                        knowledgeName={knowledgeName}
+                        saveButton={saveButton}
+                    />
+                    {isDesktop ? (
+                        <KnowledgeBodyDesktop
+                            control={control}
+                            isNew={isNew}
+                            isSaving={isSaving}
+                            knowledge={knowledge}
+                        />
+                    ) : (
+                        <KnowledgeBodyMobile
+                            control={control}
+                            isNew={isNew}
+                            isSaving={isSaving}
+                            knowledge={knowledge}
+                        />
+                    )}
+                </form>
+            </Form>
+            <KnowledgeLeaveDialog
+                canSave={isValid}
+                handleCancel={guard.handleCancel}
+                handleDiscard={guard.handleDiscard}
+                handleOpenChange={guard.handleOpenChange}
+                handleSaveAndLeave={guard.handleSaveAndLeave}
+                isOpen={guard.isOpen}
+                isSavingFromDialog={guard.isSavingFromDialog}
+            />
+        </>
     );
 };
+
+// ---------------------------------------------------------------------------
+// Page container
+// ---------------------------------------------------------------------------
 
 const Knowledge = () => {
     const navigate = useNavigate();
@@ -492,10 +861,11 @@ const Knowledge = () => {
     const { createKnowledge, updateKnowledge } = useKnowledges();
 
     const isNew = knowledgeId === 'new';
+    const shouldFetch = Boolean(knowledgeId) && !isNew;
 
     const { data, loading: isLoadingKnowledge } = useKnowledgeDocumentQuery({
-        skip: isNew || !knowledgeId,
-        variables: knowledgeId && !isNew ? { id: knowledgeId } : undefined,
+        skip: !shouldFetch,
+        variables: shouldFetch && knowledgeId ? { id: knowledgeId } : undefined,
     });
 
     const knowledge = data?.knowledgeDocument ?? null;
@@ -506,64 +876,34 @@ const Knowledge = () => {
         [knowledge],
     );
 
-    const handleSubmit = async (values: FormValues) => {
-        if (isNew) {
-            const input: CreateKnowledgeDocumentInput = {
-                answerType: values.docType === KnowledgeDocType.Answer ? values.answerType : undefined,
-                codeLang: values.docType === KnowledgeDocType.Code && values.codeLang ? values.codeLang : undefined,
-                content: values.content,
-                description: values.description ? values.description : undefined,
-                docType: values.docType,
-                guideType: values.docType === KnowledgeDocType.Guide ? values.guideType : undefined,
-                question: values.question,
-            };
+    const handleSubmit = useCallback(
+        async (values: FormValues): Promise<SubmitResult> => {
+            if (isNew) {
+                const created = await createKnowledge(formValuesToCreateInput(values));
 
-            const created = await createKnowledge(input);
-            navigate(created?.id ? `/knowledges/${created.id}` : '/knowledges');
+                return {
+                    redirectTo: created?.id ? `/knowledges/${created.id}` : '/knowledges',
+                };
+            }
 
-            return;
-        }
+            if (!knowledgeId) {
+                return {};
+            }
 
-        if (!knowledgeId) {
-            return;
-        }
+            await updateKnowledge(knowledgeId, formValuesToUpdateInput(values));
 
-        const input: UpdateKnowledgeDocumentInput = {
-            answerType: values.docType === KnowledgeDocType.Answer ? values.answerType : undefined,
-            codeLang: values.docType === KnowledgeDocType.Code && values.codeLang ? values.codeLang : undefined,
-            content: values.content,
-            description: values.description ? values.description : undefined,
-            guideType: values.docType === KnowledgeDocType.Guide ? values.guideType : undefined,
-            question: values.question,
-        };
-
-        await updateKnowledge(knowledgeId, input);
-    };
-
-    const placeholderHeader = (
-        <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-                className="mr-2 h-4"
-                orientation="vertical"
-            />
-            <Breadcrumb>
-                <BreadcrumbList>
-                    <BreadcrumbItem>
-                        <LibraryBig className="size-4 shrink-0" />
-                        <BreadcrumbPage className="max-w-[240px] truncate">
-                            {isNew ? 'New knowledge' : (knowledgeName ?? 'Knowledge')}
-                        </BreadcrumbPage>
-                    </BreadcrumbItem>
-                </BreadcrumbList>
-            </Breadcrumb>
-        </header>
+            return {};
+        },
+        [createKnowledge, isNew, knowledgeId, updateKnowledge],
     );
 
     if (!isNew && isLoadingKnowledge) {
         return (
             <>
-                {placeholderHeader}
+                <KnowledgePageHeader
+                    isNew={false}
+                    knowledgeName={knowledgeName}
+                />
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center">
                     <Spinner variant="circle" />
                 </div>
@@ -574,7 +914,10 @@ const Knowledge = () => {
     if (!isNew && !knowledge) {
         return (
             <>
-                {placeholderHeader}
+                <KnowledgePageHeader
+                    isNew={false}
+                    knowledgeName={knowledgeName}
+                />
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center p-4">
                     <Card className="w-full max-w-2xl">
                         <CardContent className="flex flex-col items-center gap-4 pt-6 text-center">
