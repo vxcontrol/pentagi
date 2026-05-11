@@ -116,24 +116,26 @@ const trimmedOrUndefined = (value: null | string | undefined): string | undefine
     return trimmed.length === 0 ? undefined : trimmed;
 };
 
-const formValuesToCreateInput = (v: FormValues): CreateKnowledgeDocumentInput => ({
-    answerType: v.docType === KnowledgeDocType.Answer ? v.answerType : undefined,
-    codeLang: v.docType === KnowledgeDocType.Code ? trimmedOrUndefined(v.codeLang) : undefined,
-    content: v.content,
-    description: trimmedOrUndefined(v.description),
-    docType: v.docType,
-    guideType: v.docType === KnowledgeDocType.Guide ? v.guideType : undefined,
-    question: v.question,
+// Shared field projection used by both create and update payloads. The only
+// difference between the two GraphQL inputs is that `docType` is required on
+// create and immutable on update — see `formValuesTo{Create,Update}Input`
+// below.
+const formValuesToBasePayload = (values: FormValues) => ({
+    answerType: values.docType === KnowledgeDocType.Answer ? values.answerType : undefined,
+    codeLang: values.docType === KnowledgeDocType.Code ? trimmedOrUndefined(values.codeLang) : undefined,
+    content: values.content,
+    description: trimmedOrUndefined(values.description),
+    guideType: values.docType === KnowledgeDocType.Guide ? values.guideType : undefined,
+    question: values.question,
 });
 
-const formValuesToUpdateInput = (v: FormValues): UpdateKnowledgeDocumentInput => ({
-    answerType: v.docType === KnowledgeDocType.Answer ? v.answerType : undefined,
-    codeLang: v.docType === KnowledgeDocType.Code ? trimmedOrUndefined(v.codeLang) : undefined,
-    content: v.content,
-    description: trimmedOrUndefined(v.description),
-    guideType: v.docType === KnowledgeDocType.Guide ? v.guideType : undefined,
-    question: v.question,
+const formValuesToCreateInput = (values: FormValues): CreateKnowledgeDocumentInput => ({
+    ...formValuesToBasePayload(values),
+    docType: values.docType,
 });
+
+const formValuesToUpdateInput = (values: FormValues): UpdateKnowledgeDocumentInput =>
+    formValuesToBasePayload(values);
 
 // ---------------------------------------------------------------------------
 // Unsaved-changes guard hook

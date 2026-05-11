@@ -1,6 +1,8 @@
 import type { Editor } from '@tiptap/react';
 
 import { Placeholder } from '@tiptap/extensions';
+import { history } from '@tiptap/pm/history';
+import { EditorState } from '@tiptap/pm/state';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
@@ -44,6 +46,55 @@ export interface MarkdownEditorProps {
     value: string;
 }
 
+// Replaces the editor's ProseMirror history plugin with a fresh instance,
+// effectively clearing the undo/redo stack. We call this on initial mount
+// (to discard the construction-time transactions from extensions like
+// `trailingNode`) and after every external content sync (`setContent`
+// itself is a transaction that lands in history). Crucially, we MUST NOT
+// call this on every value change — user edits also propagate through
+// `value`, and wiping then would break Ctrl+Z.
+const resetUndoHistory = (editor: Editor): void => {
+    const { state, view } = editor;
+    const historyIndex = state.plugins.findIndex((plugin) => {
+        const pluginKey = plugin.spec.key as undefined | { key?: string };
+
+        return pluginKey?.key?.startsWith('history$') ?? false;
+    });
+
+    if (historyIndex < 0) {
+        return;
+    }
+
+    const plugins = [...state.plugins];
+
+    plugins[historyIndex] = history();
+
+    // We MUST create a fresh `EditorState` rather than calling
+    // `state.reconfigure({ plugins })`. PM's `history()` factory uses a
+    // module-level singleton `PluginKey`, so every invocation returns a
+    // plugin keyed `history$`. `reconfigure` sees the same key in the old
+    // and new plugin arrays, decides "same plugin", and KEEPS the old
+    // state — meaning the undo stack stays populated even after our swap.
+    // `EditorState.create` has no prior state to carry over and initializes
+    // every plugin from scratch, which is exactly what we want here.
+    const newState = EditorState.create({
+        doc: state.doc,
+        plugins,
+        schema: state.schema,
+        selection: state.selection,
+        storedMarks: state.storedMarks,
+    });
+
+    view.updateState(newState);
+
+    // `view.updateState` bypasses PM's dispatch pipeline, so tiptap's
+    // `transaction` subscription doesn't fire — the toolbar would keep
+    // showing the stale `canUndo: true` value. Dispatch an empty
+    // transaction to wake the React subscription. The transaction is
+    // marked as non-historable so the freshly-empty stack stays empty.
+    view.dispatch(newState.tr.setMeta('addToHistory', false));
+};
+
 const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
     (
         {
@@ -64,9 +115,27 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
         // Tracks the last markdown the editor reported externally. We compare
         // against this to suppress echo updates: tiptap-markdown can re-serialize
         // content slightly differently than the input string (whitespace/list
-        // markers/etc.), and we don't want to flag those normalizations as user
-        // edits — that would falsely flip RHF's `isDirty` flag.
+        // markers/hard breaks/etc.), and we don't want to flag those
+        // normalizations as user edits — that would falsely flip RHF's
+        // `isDirty` flag.
+        //
+        // The baseline is the editor's own serialized markdown, NOT the raw
+        // input `value`. Comparing user edits against the canonical
+        // (post-normalization) form is what makes the comparison correct.
         const lastEmittedRef = useRef<string>(value);
+
+        // Tiptap dispatches transactions for the initial content during view
+        // construction. Those `onUpdate` calls are echoes of the initial
+        // parse, not real user edits — forwarding them to RHF would mark
+        // the form dirty on mount. We start forwarding edits only after
+        // `onCreate` has captured the canonical baseline.
+        const isInitializedRef = useRef(false);
+
+        // Tracks whether we have already cleared the undo stack on initial
+        // mount. After the first sync useEffect run we set this to true; on
+        // subsequent renders we only clear the stack when an external value
+        // arrived (see `shouldExternalSync` below).
+        const hasResetInitialHistoryRef = useRef(false);
 
         useEffect(() => {
             onChangeRef.current = onChange;
@@ -95,7 +164,15 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
             ],
             immediatelyRender: false,
             onBlur: () => onBlurRef.current?.(),
+            onCreate: ({ editor: instance }) => {
+                lastEmittedRef.current = instance.storage.markdown.getMarkdown();
+                isInitializedRef.current = true;
+            },
             onUpdate: ({ editor: instance }) => {
+                if (!isInitializedRef.current) {
+                    return;
+                }
+
                 const next = instance.storage.markdown.getMarkdown();
 
                 if (next === lastEmittedRef.current) {
@@ -124,14 +201,34 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
             }
 
             const current = editor.storage.markdown.getMarkdown();
+            const shouldExternalSync = current !== value;
 
-            if (current !== value) {
+            if (shouldExternalSync) {
                 editor.commands.setContent(value, { emitUpdate: false });
             }
 
-            // Sync the echo baseline so subsequent user edits compare against
-            // the new external value, not the previously emitted one.
-            lastEmittedRef.current = value;
+            // The editor's own serialized markdown is the canonical form —
+            // subsequent user edits will be compared against this
+            // representation, not the (possibly non-normalized) input
+            // `value`. Storing the raw `value` here would cause the first
+            // user keystroke to also re-emit the round-trip normalization.
+            lastEmittedRef.current = editor.storage.markdown.getMarkdown();
+
+            // Clear the undo stack:
+            //   - on initial mount, to discard the construction-time
+            //     transactions dispatched by extensions like `trailingNode`
+            //     plus the initial `setContent` we just ran above;
+            //   - on every external `setContent` (e.g. parent calls
+            //     form.reset(serverDocument)), because that transaction is
+            //     not a user edit either.
+            //
+            // We MUST NOT reset on every render: when the user types,
+            // `value` changes too, and resetting then would erase the
+            // user's own undo history.
+            if (!hasResetInitialHistoryRef.current || shouldExternalSync) {
+                hasResetInitialHistoryRef.current = true;
+                resetUndoHistory(editor);
+            }
         }, [editor, value]);
 
         useEffect(() => {
