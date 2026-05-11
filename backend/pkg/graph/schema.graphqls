@@ -905,6 +905,7 @@ input UpdateKnowledgeDocumentInput {
   content: String!
   question: String
   description: String
+  docType: KnowledgeDocType
   guideType: KnowledgeGuideType
   answerType: KnowledgeAnswerType
   codeLang: String

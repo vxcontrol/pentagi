@@ -561,6 +561,7 @@ type UpdateKnowledgeDocumentInput struct {
 	Content     string               `json:"content"`
 	Question    *string              `json:"question,omitempty"`
 	Description *string              `json:"description,omitempty"`
+	DocType     *KnowledgeDocType    `json:"docType,omitempty"`
 	GuideType   *KnowledgeGuideType  `json:"guideType,omitempty"`
 	AnswerType  *KnowledgeAnswerType `json:"answerType,omitempty"`
 	CodeLang    *string              `json:"codeLang,omitempty"`

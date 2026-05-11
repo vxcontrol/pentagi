@@ -533,6 +533,7 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 	if input.Description != nil {
 		meta.Description = *input.Description
 	}
+
 	if input.GuideType != nil {
 		meta.GuideType = string(*input.GuideType)
 	}
@@ -542,8 +543,35 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 	if input.CodeLang != nil {
 		meta.CodeLang = *input.CodeLang
 	}
-	meta.PartSize = len(content)
-	meta.TotalSize = len(content)
+
+	// Map of sub-type fields to their pointers to be cleared when DocType changes.
+	subTypeFields := map[string]*string{
+		"guide":  &meta.GuideType,
+		"answer": &meta.AnswerType,
+		"code":   &meta.CodeLang,
+	}
+
+	if input.DocType != nil {
+		newDocType := string(*input.DocType)
+		for subType, field := range subTypeFields {
+			if newDocType != subType {
+				*field = ""
+			}
+		}
+		meta.DocType = newDocType
+	}
+
+	deltaContentLen := len(content) - len(existing.Content)
+	if existing.PartSize <= 0 {
+		meta.PartSize = len(content)
+	} else {
+		meta.PartSize = existing.PartSize + deltaContentLen
+	}
+	if existing.TotalSize <= 0 {
+		meta.TotalSize = len(content)
+	} else {
+		meta.TotalSize = existing.TotalSize + deltaContentLen
+	}
 
 	// Compute new embedding.
 	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{content})

@@ -35362,7 +35362,7 @@ func (ec *executionContext) unmarshalInputUpdateKnowledgeDocumentInput(ctx conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"content", "question", "description", "guideType", "answerType", "codeLang"}
+	fieldsInOrder := [...]string{"content", "question", "description", "docType", "guideType", "answerType", "codeLang"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -35390,6 +35390,13 @@ func (ec *executionContext) unmarshalInputUpdateKnowledgeDocumentInput(ctx conte
 				return it, err
 			}
 			it.Description = data
+		case "docType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("docType"))
+			data, err := ec.unmarshalOKnowledgeDocType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DocType = data
 		case "guideType":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("guideType"))
 			data, err := ec.unmarshalOKnowledgeGuideType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx, v)
@@ -43426,6 +43433,22 @@ func (ec *executionContext) marshalOKnowledgeDocType2ᚕpentagiᚋpkgᚋgraphᚋ
 	}
 
 	return ret
+}
+
+func (ec *executionContext) unmarshalOKnowledgeDocType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx context.Context, v interface{}) (*model.KnowledgeDocType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.KnowledgeDocType)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOKnowledgeDocType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx context.Context, sel ast.SelectionSet, v *model.KnowledgeDocType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOKnowledgeFilter2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeFilter(ctx context.Context, v interface{}) (*model.KnowledgeFilter, error) {

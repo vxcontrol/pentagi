@@ -1346,6 +1346,346 @@ func TestUpdateDocument(t *testing.T) {
 	})
 }
 
+func TestUpdateDocumentDocTypeChange(t *testing.T) {
+	ctx := context.Background()
+	const userID = int64(20)
+
+	// buildDB returns a mockDB whose updateKnowledge echoes back the stored
+	// cmetadata so that the returned document reflects what was actually written.
+	buildDB := func(initialMeta string) (*mockDB, *string) {
+		stored := new(string)
+		return &mockDB{
+			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
+				return makeRow(uuid, "old", initialMeta), nil
+			},
+			updateKnowledge: func(_ context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
+				*stored = string(arg.Column4.RawMessage)
+				return database.UpdateKnowledgeDocumentRow{
+					ID:       arg.Column1.String,
+					Document: arg.Column3.String,
+					Cmetadata: sql.NullString{
+						String: string(arg.Column4.RawMessage),
+						Valid:  true,
+					},
+				}, nil
+			},
+		}, stored
+	}
+	newKS := func(db *mockDB) *knowledgeStore {
+		return &knowledgeStore{
+			db:       db,
+			embedder: &mockEmbedder{available: true},
+			newKnp:   newPublisherFactory(&mockPublisher{}),
+		}
+	}
+
+	t.Run("guide→answer: clears GuideType, sets AnswerType from input", func(t *testing.T) {
+		db, stored := buildDB(`{"doc_type":"guide","guide_type":"pentest","question":"q"}`)
+		ks := newKS(db)
+
+		doc, err := ks.UpdateDocument(ctx, userID, "id1", model.UpdateKnowledgeDocumentInput{
+			Content:    "new content",
+			DocType:    ptr(model.KnowledgeDocTypeAnswer),
+			AnswerType: ptr(model.KnowledgeAnswerTypeVulnerability),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if doc.DocType != model.KnowledgeDocTypeAnswer {
+			t.Fatalf("DocType: want answer, got %s", doc.DocType)
+		}
+		if doc.GuideType != nil {
+			t.Fatalf("GuideType must be cleared after doc_type change, got %v", *doc.GuideType)
+		}
+		if doc.AnswerType == nil || *doc.AnswerType != model.KnowledgeAnswerTypeVulnerability {
+			t.Fatal("AnswerType mismatch")
+		}
+
+		meta := parseMeta(*stored)
+		if meta.GuideType != "" {
+			t.Fatalf("stored guide_type must be empty, got %q", meta.GuideType)
+		}
+		if meta.AnswerType != "vulnerability" {
+			t.Fatalf("stored answer_type: want vulnerability, got %q", meta.AnswerType)
+		}
+	})
+
+	t.Run("answer→code: clears AnswerType, sets CodeLang from input", func(t *testing.T) {
+		db, stored := buildDB(`{"doc_type":"answer","answer_type":"vulnerability","question":"q"}`)
+		ks := newKS(db)
+
+		doc, err := ks.UpdateDocument(ctx, userID, "id2", model.UpdateKnowledgeDocumentInput{
+			Content:  "code here",
+			DocType:  ptr(model.KnowledgeDocTypeCode),
+			CodeLang: ptr("python"),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if doc.DocType != model.KnowledgeDocTypeCode {
+			t.Fatalf("DocType: want code, got %s", doc.DocType)
+		}
+		if doc.AnswerType != nil {
+			t.Fatalf("AnswerType must be cleared after doc_type change, got %v", *doc.AnswerType)
+		}
+		if doc.CodeLang == nil || *doc.CodeLang != "python" {
+			t.Fatal("CodeLang mismatch")
+		}
+
+		meta := parseMeta(*stored)
+		if meta.AnswerType != "" {
+			t.Fatalf("stored answer_type must be empty, got %q", meta.AnswerType)
+		}
+		if meta.CodeLang != "python" {
+			t.Fatalf("stored code_lang: want python, got %q", meta.CodeLang)
+		}
+	})
+
+	t.Run("code→guide: clears CodeLang, sets GuideType from input", func(t *testing.T) {
+		db, stored := buildDB(`{"doc_type":"code","code_lang":"go","question":"q"}`)
+		ks := newKS(db)
+
+		doc, err := ks.UpdateDocument(ctx, userID, "id3", model.UpdateKnowledgeDocumentInput{
+			Content:   "guide text",
+			DocType:   ptr(model.KnowledgeDocTypeGuide),
+			GuideType: ptr(model.KnowledgeGuideTypePentest),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if doc.DocType != model.KnowledgeDocTypeGuide {
+			t.Fatalf("DocType: want guide, got %s", doc.DocType)
+		}
+		if doc.CodeLang != nil {
+			t.Fatalf("CodeLang must be cleared after doc_type change, got %v", *doc.CodeLang)
+		}
+		if doc.GuideType == nil || *doc.GuideType != model.KnowledgeGuideTypePentest {
+			t.Fatal("GuideType mismatch")
+		}
+
+		meta := parseMeta(*stored)
+		if meta.CodeLang != "" {
+			t.Fatalf("stored code_lang must be empty, got %q", meta.CodeLang)
+		}
+		if meta.GuideType != "pentest" {
+			t.Fatalf("stored guide_type: want pentest, got %q", meta.GuideType)
+		}
+	})
+
+	t.Run("guide→answer: clears GuideType even without AnswerType in input", func(t *testing.T) {
+		db, stored := buildDB(`{"doc_type":"guide","guide_type":"install","question":"q"}`)
+		ks := newKS(db)
+
+		doc, err := ks.UpdateDocument(ctx, userID, "id4", model.UpdateKnowledgeDocumentInput{
+			Content: "new",
+			DocType: ptr(model.KnowledgeDocTypeAnswer),
+			// AnswerType intentionally omitted
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if doc.GuideType != nil {
+			t.Fatalf("GuideType must be nil after switching away from guide, got %v", *doc.GuideType)
+		}
+		if doc.AnswerType != nil {
+			t.Fatalf("AnswerType should be nil when not supplied, got %v", *doc.AnswerType)
+		}
+
+		meta := parseMeta(*stored)
+		if meta.GuideType != "" {
+			t.Fatalf("stored guide_type must be empty, got %q", meta.GuideType)
+		}
+	})
+
+	t.Run("same DocType: sub-type fields preserved without clearing", func(t *testing.T) {
+		db, stored := buildDB(`{"doc_type":"guide","guide_type":"pentest","question":"q"}`)
+		ks := newKS(db)
+
+		doc, err := ks.UpdateDocument(ctx, userID, "id5", model.UpdateKnowledgeDocumentInput{
+			Content: "updated guide",
+			DocType: ptr(model.KnowledgeDocTypeGuide), // same type
+			// GuideType not passed — should remain "pentest" from existing
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if doc.GuideType == nil || *doc.GuideType != model.KnowledgeGuideTypePentest {
+			t.Fatal("GuideType must be preserved when DocType is unchanged and no new GuideType supplied")
+		}
+
+		meta := parseMeta(*stored)
+		if meta.GuideType != "pentest" {
+			t.Fatalf("stored guide_type must remain pentest, got %q", meta.GuideType)
+		}
+	})
+
+	t.Run("DocType nil: existing sub-type fields preserved", func(t *testing.T) {
+		db, stored := buildDB(`{"doc_type":"code","code_lang":"rust","question":"q"}`)
+		ks := newKS(db)
+
+		doc, err := ks.UpdateDocument(ctx, userID, "id6", model.UpdateKnowledgeDocumentInput{
+			Content: "updated code",
+			// DocType nil — no type change
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if doc.DocType != model.KnowledgeDocTypeCode {
+			t.Fatalf("DocType should stay code, got %s", doc.DocType)
+		}
+		if doc.CodeLang == nil || *doc.CodeLang != "rust" {
+			t.Fatal("CodeLang must be preserved when DocType is not provided")
+		}
+
+		meta := parseMeta(*stored)
+		if meta.CodeLang != "rust" {
+			t.Fatalf("stored code_lang must remain rust, got %q", meta.CodeLang)
+		}
+	})
+
+	t.Run("same DocType with new sub-type: updates sub-type", func(t *testing.T) {
+		db, stored := buildDB(`{"doc_type":"answer","answer_type":"vulnerability","question":"q"}`)
+		ks := newKS(db)
+
+		doc, err := ks.UpdateDocument(ctx, userID, "id7", model.UpdateKnowledgeDocumentInput{
+			Content:    "updated",
+			DocType:    ptr(model.KnowledgeDocTypeAnswer),
+			AnswerType: ptr(model.KnowledgeAnswerTypeCode),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if doc.AnswerType == nil || *doc.AnswerType != model.KnowledgeAnswerTypeCode {
+			t.Fatal("AnswerType should be updated")
+		}
+
+		meta := parseMeta(*stored)
+		if meta.AnswerType != "code" {
+			t.Fatalf("stored answer_type: want code, got %q", meta.AnswerType)
+		}
+	})
+}
+
+func TestUpdateDocumentSizeCalculation(t *testing.T) {
+	ctx := context.Background()
+	const userID = int64(20)
+
+	buildDB := func(existingContent, existingMeta string) (*mockDB, *string) {
+		stored := new(string)
+		return &mockDB{
+			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
+				row := makeRow(uuid, existingContent, existingMeta)
+				return row, nil
+			},
+			updateKnowledge: func(_ context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
+				*stored = string(arg.Column4.RawMessage)
+				return database.UpdateKnowledgeDocumentRow{
+					ID:       arg.Column1.String,
+					Document: arg.Column3.String,
+					Cmetadata: sql.NullString{
+						String: string(arg.Column4.RawMessage),
+						Valid:  true,
+					},
+				}, nil
+			},
+		}, stored
+	}
+	newKS := func(db *mockDB) *knowledgeStore {
+		return &knowledgeStore{
+			db:       db,
+			embedder: &mockEmbedder{available: true},
+			newKnp:   newPublisherFactory(&mockPublisher{}),
+		}
+	}
+
+	t.Run("single-chunk doc: sizes equal new content length", func(t *testing.T) {
+		// part_size == total_size == len(old content) = 10
+		db, stored := buildDB("0123456789", `{"doc_type":"answer","part_size":10,"total_size":10}`)
+		ks := newKS(db)
+
+		_, err := ks.UpdateDocument(ctx, userID, "id", model.UpdateKnowledgeDocumentInput{
+			Content: "hello", // 5 chars, delta = -5
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		meta := parseMeta(*stored)
+		if meta.PartSize != 5 {
+			t.Fatalf("PartSize: want 5, got %d", meta.PartSize)
+		}
+		if meta.TotalSize != 5 {
+			t.Fatalf("TotalSize: want 5, got %d", meta.TotalSize)
+		}
+	})
+
+	t.Run("multi-chunk doc: TotalSize adjusted by delta, PartSize adjusted independently", func(t *testing.T) {
+		// 3 chunks: this chunk is 100 chars, total document is 300 chars
+		db, stored := buildDB(
+			string(make([]byte, 100)),
+			`{"doc_type":"guide","part_size":100,"total_size":300}`,
+		)
+		ks := newKS(db)
+
+		newContent := string(make([]byte, 80)) // 80 chars, delta = -20
+		_, err := ks.UpdateDocument(ctx, userID, "id", model.UpdateKnowledgeDocumentInput{
+			Content: newContent,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		meta := parseMeta(*stored)
+		if meta.PartSize != 80 {
+			t.Fatalf("PartSize: want 80 (100-20), got %d", meta.PartSize)
+		}
+		if meta.TotalSize != 280 {
+			t.Fatalf("TotalSize: want 280 (300-20), got %d", meta.TotalSize)
+		}
+	})
+
+	t.Run("multi-chunk doc: content grows, TotalSize increases", func(t *testing.T) {
+		db, stored := buildDB(
+			string(make([]byte, 50)),
+			`{"doc_type":"code","part_size":50,"total_size":150}`,
+		)
+		ks := newKS(db)
+
+		newContent := string(make([]byte, 70)) // delta = +20
+		_, err := ks.UpdateDocument(ctx, userID, "id", model.UpdateKnowledgeDocumentInput{
+			Content: newContent,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		meta := parseMeta(*stored)
+		if meta.PartSize != 70 {
+			t.Fatalf("PartSize: want 70, got %d", meta.PartSize)
+		}
+		if meta.TotalSize != 170 {
+			t.Fatalf("TotalSize: want 170 (150+20), got %d", meta.TotalSize)
+		}
+	})
+
+	t.Run("zero existing sizes fall back to new content length", func(t *testing.T) {
+		// legacy doc without size metadata
+		db, stored := buildDB("old", `{"doc_type":"answer"}`)
+		ks := newKS(db)
+
+		_, err := ks.UpdateDocument(ctx, userID, "id", model.UpdateKnowledgeDocumentInput{
+			Content: "new content",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		meta := parseMeta(*stored)
+		if meta.PartSize != len("new content") {
+			t.Fatalf("PartSize: want %d, got %d", len("new content"), meta.PartSize)
+		}
+		if meta.TotalSize != len("new content") {
+			t.Fatalf("TotalSize: want %d, got %d", len("new content"), meta.TotalSize)
+		}
+	})
+}
+
 func TestUpdateDocumentPreservesOriginalOwner(t *testing.T) {
 	// SECURITY: when an admin (userID=1) updates a document that belongs to
 	// user 99, the stored user_id in cmetadata must remain 99, not be replaced
