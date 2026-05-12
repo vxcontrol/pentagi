@@ -1,4 +1,4 @@
-import { type Control, useWatch } from 'react-hook-form';
+import { type Control, useFormContext, useWatch } from 'react-hook-form';
 
 import type {
     KnowledgeAnswerType as KnowledgeAnswerTypeT,
@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
 
 import type { FormValues } from './knowledge-form';
+
+import { KNOWLEDGE_LIMITS } from './knowledge-form';
 
 // `<Select>` option lists. Co-located with the controls they feed because no
 // other module needs them.
@@ -31,6 +33,28 @@ export const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaF
     // not the whole form. The full-form `useWatch` from the original code
     // re-rendered on every keystroke in the markdown editor.
     const docType = useWatch({ control, name: 'docType' });
+    // `setValue` is used to clear subtype fields that no longer apply when the
+    // user switches docType. We do this synchronously inside `onValueChange`
+    // (rather than via `useEffect`) so that a fresh load of an existing
+    // document doesn't wipe its persisted subtype on first render.
+    const { setValue } = useFormContext<FormValues>();
+
+    const handleDocTypeChange = (next: KnowledgeDocType, fieldOnChange: (value: KnowledgeDocType) => void) => {
+        fieldOnChange(next);
+        const opts = { shouldDirty: true, shouldValidate: true };
+
+        if (next !== KnowledgeDocType.Answer) {
+            setValue('answerType', undefined, opts);
+        }
+
+        if (next !== KnowledgeDocType.Code) {
+            setValue('codeLang', '', opts);
+        }
+
+        if (next !== KnowledgeDocType.Guide) {
+            setValue('guideType', undefined, opts);
+        }
+    };
 
     return (
         <div className="flex flex-col gap-4">
@@ -41,33 +65,29 @@ export const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaF
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>Document type</FormLabel>
-                            {isNew ? (
-                                <Select
-                                    disabled={isSaving}
-                                    onValueChange={field.onChange}
-                                    value={field.value}
-                                >
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select type" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        {docTypeValues.map((value) => (
-                                            <SelectItem
-                                                key={value}
-                                                value={value}
-                                            >
-                                                {value}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            ) : (
-                                <div className="border-input bg-muted/30 text-muted-foreground flex h-9 items-center rounded-md border px-3 text-sm">
-                                    {field.value || '—'}
-                                </div>
-                            )}
+                            <Select
+                                disabled={isSaving}
+                                onValueChange={(value) =>
+                                    handleDocTypeChange(value as KnowledgeDocType, field.onChange)
+                                }
+                                value={field.value}
+                            >
+                                <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {docTypeValues.map((value) => (
+                                        <SelectItem
+                                            key={value}
+                                            value={value}
+                                        >
+                                            {value}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -151,6 +171,7 @@ export const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaF
                                 <FormControl>
                                     <Input
                                         disabled={isSaving}
+                                        maxLength={KNOWLEDGE_LIMITS.codeLang}
                                         placeholder="e.g. python, go, typescript"
                                         {...field}
                                     />
@@ -175,6 +196,7 @@ export const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaF
                                     autoFocus={isNew}
                                     className="min-h-0"
                                     disabled={isSaving}
+                                    maxLength={KNOWLEDGE_LIMITS.question}
                                     maxRows={6}
                                     minRows={1}
                                     placeholder="Short title or question this document answers"
@@ -198,6 +220,7 @@ export const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaF
                                     {...field}
                                     className="min-h-0"
                                     disabled={isSaving}
+                                    maxLength={KNOWLEDGE_LIMITS.description}
                                     maxRows={8}
                                     minRows={1}
                                     placeholder="Optional short description"

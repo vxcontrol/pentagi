@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import {
+    type DirtyFlags,
     documentToFormValues,
     type FormValues,
     formValuesToCreateInput,
@@ -39,7 +40,12 @@ const Knowledge = () => {
     );
 
     const handleSubmit = useCallback(
-        async (values: FormValues): Promise<SubmitResult> => {
+        // `values` are the zod-parsed form output (trimmed, length-validated).
+        // CREATE sends a full payload; UPDATE sends only fields the user
+        // actually changed (`dirtyFields`) so untouched optional fields stay
+        // untouched on the backend and explicit clears (e.g. wiping an existing
+        // description) reach it as `""`.
+        async (values: FormValues, dirtyFields: DirtyFlags): Promise<SubmitResult> => {
             if (isNew) {
                 const created = await createKnowledge(formValuesToCreateInput(values));
 
@@ -53,7 +59,7 @@ const Knowledge = () => {
                 return {};
             }
 
-            const updated = await updateKnowledge(knowledgeId, formValuesToUpdateInput(values));
+            const updated = await updateKnowledge(knowledgeId, formValuesToUpdateInput(values, dirtyFields));
 
             return { document: updated ?? undefined };
         },

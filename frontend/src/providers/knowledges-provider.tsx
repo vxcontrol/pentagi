@@ -1,12 +1,13 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react';
 import { toast } from 'sonner';
 
-import type { CreateKnowledgeDocumentInput, UpdateKnowledgeDocumentInput } from '@/graphql/types';
+import type {
+    CreateKnowledgeDocumentInput,
+    KnowledgeDocumentFragmentFragment,
+    UpdateKnowledgeDocumentInput,
+} from '@/graphql/types';
 
 import {
-    KnowledgeAnswerType,
-    KnowledgeDocType,
-    KnowledgeGuideType,
     useCreateKnowledgeDocumentMutation,
     useDeleteKnowledgeDocumentMutation,
     useKnowledgeDocumentCreatedSubscription,
@@ -18,23 +19,12 @@ import {
 import { Log } from '@/lib/log';
 import { useUser } from '@/providers/user-provider';
 
-export interface Knowledge {
-    answerType?: KnowledgeAnswerType | null;
-    codeLang?: null | string;
-    content: string;
-    description?: null | string;
-    docType: KnowledgeDocType;
-    flowId?: null | string;
-    guideType?: KnowledgeGuideType | null;
-    id: string;
-    manual: boolean;
-    partSize: number;
-    question: string;
-    subtaskId?: null | string;
-    taskId?: null | string;
-    totalSize: number;
-    userId: string;
-}
+// The provider operates directly on the GraphQL fragment. Previously we kept a
+// hand-rolled `Knowledge` shape that mirrored the fragment field-by-field; that
+// duplication forced a manual mapping step and drifted from the schema. The
+// alias keeps the public surface (`Knowledge`) for callers while making it
+// obvious there is no extra translation layer.
+export type Knowledge = KnowledgeDocumentFragmentFragment;
 
 interface KnowledgesContextValue {
     createKnowledge: (input: CreateKnowledgeDocumentInput) => Promise<Knowledge | undefined>;
@@ -70,27 +60,7 @@ export const KnowledgesProvider = ({ children }: KnowledgesProviderProps) => {
     useKnowledgeDocumentUpdatedSubscription({ skip: !shouldFetch });
     useKnowledgeDocumentDeletedSubscription({ skip: !shouldFetch });
 
-    const knowledges = useMemo<Knowledge[]>(() => {
-        const raw = data?.knowledgeDocuments ?? [];
-
-        return raw.map((d) => ({
-            answerType: d.answerType ?? null,
-            codeLang: d.codeLang ?? null,
-            content: d.content,
-            description: d.description ?? null,
-            docType: d.docType,
-            flowId: d.flowId ?? null,
-            guideType: d.guideType ?? null,
-            id: d.id,
-            manual: d.manual,
-            partSize: d.partSize,
-            question: d.question,
-            subtaskId: d.subtaskId ?? null,
-            taskId: d.taskId ?? null,
-            totalSize: d.totalSize,
-            userId: d.userId,
-        }));
-    }, [data?.knowledgeDocuments]);
+    const knowledges = useMemo<Knowledge[]>(() => data?.knowledgeDocuments ?? [], [data?.knowledgeDocuments]);
 
     const getKnowledge = useCallback(
         (id: string): Knowledge | undefined => knowledges.find((k) => k.id === id),
@@ -102,7 +72,7 @@ export const KnowledgesProvider = ({ children }: KnowledgesProviderProps) => {
             try {
                 const { data: result } = await createKnowledgeMutation({ variables: { input } });
 
-                return result?.createKnowledgeDocument as Knowledge | undefined;
+                return result?.createKnowledgeDocument;
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Failed to create knowledge document';
                 toast.error('Failed to create knowledge document', { description: errorMessage });
@@ -118,7 +88,7 @@ export const KnowledgesProvider = ({ children }: KnowledgesProviderProps) => {
             try {
                 const { data: result } = await updateKnowledgeMutation({ variables: { id, input } });
 
-                return result?.updateKnowledgeDocument as Knowledge | undefined;
+                return result?.updateKnowledgeDocument;
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Failed to update knowledge document';
                 toast.error('Failed to update knowledge document', { description: errorMessage });

@@ -1229,6 +1229,7 @@ export type UpdateKnowledgeDocumentInput = {
     codeLang?: InputMaybe<Scalars['String']['input']>;
     content: Scalars['String']['input'];
     description?: InputMaybe<Scalars['String']['input']>;
+    docType?: InputMaybe<KnowledgeDocType>;
     guideType?: InputMaybe<KnowledgeGuideType>;
     question?: InputMaybe<Scalars['String']['input']>;
 };

@@ -27,15 +27,47 @@ import { KnowledgeHeader } from './knowledge-header';
 // Schema, types, pure helpers
 // ---------------------------------------------------------------------------
 
+// Length limits mirror the REST validation tags on the Go side
+// (`backend/pkg/server/models/knowledge.go`). The GraphQL layer itself does
+// not enforce them, so without these the user could submit a payload that
+// later round-trips through REST and gets rejected.
+export const KNOWLEDGE_LIMITS = {
+    codeLang: 100,
+    content: 65536,
+    description: 1000,
+    question: 2048,
+} as const;
+
+// Optional text fields are trimmed and length-checked but NOT collapsed to
+// `undefined` — the partial-update logic in `formValuesToUpdateInput` needs
+// to distinguish "user cleared a previously-set value" (send `""` so the
+// backend clears it) from "field was empty and untouched" (don't send at
+// all so the backend leaves it alone). Mapping `"" → undefined` here would
+// erase that signal and break the "clear an existing description" use case.
+const optionalTrimmed = (max: number, label: string) =>
+    z
+        .string()
+        .trim()
+        .max(max, { message: `${label} must be ${max} characters or fewer` })
+        .optional();
+
 export const formSchema = z
     .object({
         answerType: z.nativeEnum(KnowledgeAnswerType).optional(),
-        codeLang: z.string().trim().optional(),
-        content: z.string().trim().min(1, { message: 'Content is required' }),
-        description: z.string().trim().optional(),
+        codeLang: optionalTrimmed(KNOWLEDGE_LIMITS.codeLang, 'Code language'),
+        content: z
+            .string()
+            .trim()
+            .min(1, { message: 'Content is required' })
+            .max(KNOWLEDGE_LIMITS.content, { message: `Content must be ${KNOWLEDGE_LIMITS.content} characters or fewer` }),
+        description: optionalTrimmed(KNOWLEDGE_LIMITS.description, 'Description'),
         docType: z.nativeEnum(KnowledgeDocType),
         guideType: z.nativeEnum(KnowledgeGuideType).optional(),
-        question: z.string().trim().min(1, { message: 'Question is required' }),
+        question: z
+            .string()
+            .trim()
+            .min(1, { message: 'Question is required' })
+            .max(KNOWLEDGE_LIMITS.question, { message: `Question must be ${KNOWLEDGE_LIMITS.question} characters or fewer` }),
     })
     .superRefine((value, ctx) => {
         const requiredByDocType: Partial<Record<KnowledgeDocType, { field: FieldPath<FormValues>; message: string }>> =
@@ -85,38 +117,62 @@ export const documentToFormValues = (k: KnowledgeDocumentFragmentFragment): Form
     question: k.question,
 });
 
-// `description` and `codeLang` are optional and we want empty strings to map
-// to `undefined` so the backend treats them as "absent" instead of "set to ''".
-const trimmedOrUndefined = (value: null | string | undefined): string | undefined => {
-    if (!value) {
-        return undefined;
-    }
+// react-hook-form's `dirtyFields` is a partial map of the same shape as
+// `FormValues`, with `true` for fields the user actually changed compared to
+// `defaultValues`. We project it onto the (flat) FormValues keys here.
+export type DirtyFlags = Partial<Record<keyof FormValues, boolean>>;
 
-    const trimmed = value.trim();
-
-    return trimmed.length === 0 ? undefined : trimmed;
-};
-
-// Shared field projection used by both create and update payloads. The only
-// difference between the two GraphQL inputs is that `docType` is required on
-// create and immutable on update — see `formValuesTo{Create,Update}Input`
-// below.
-const formValuesToBasePayload = (values: FormValues) => ({
-    answerType: values.docType === KnowledgeDocType.Answer ? values.answerType : undefined,
-    codeLang: values.docType === KnowledgeDocType.Code ? trimmedOrUndefined(values.codeLang) : undefined,
+// CREATE: send all required fields and only non-empty optional fields. There
+// is no prior document to "clear", so an empty `description`/`codeLang` just
+// means "don't store anything in cmetadata for this field".
+export const formValuesToCreateInput = (values: FormValues): CreateKnowledgeDocumentInput => ({
+    answerType: values.answerType,
+    codeLang: values.codeLang ? values.codeLang : undefined,
     content: values.content,
-    description: trimmedOrUndefined(values.description),
-    guideType: values.docType === KnowledgeDocType.Guide ? values.guideType : undefined,
+    description: values.description ? values.description : undefined,
+    docType: values.docType,
+    guideType: values.guideType,
     question: values.question,
 });
 
-export const formValuesToCreateInput = (values: FormValues): CreateKnowledgeDocumentInput => ({
-    ...formValuesToBasePayload(values),
-    docType: values.docType,
-});
+// UPDATE: send only fields the user actually edited. `content` is GraphQL-
+// required (the backend always re-embeds), so it goes through unconditionally;
+// every other field is gated by `dirty`. This way:
+//   - untouched fields stay `undefined` and the backend keeps the existing value;
+//   - cleared fields go out as `""` so the backend wipes them;
+//   - subtype-related fields cleared by `setValue` on docType change are
+//     marked dirty by the form, so they reach the backend with the right
+//     "clear me" value (the backend additionally wipes mismatching subtypes
+//     itself, but we mirror the user-visible state explicitly).
+export const formValuesToUpdateInput = (values: FormValues, dirty: DirtyFlags): UpdateKnowledgeDocumentInput => {
+    const input: UpdateKnowledgeDocumentInput = { content: values.content };
 
-export const formValuesToUpdateInput = (values: FormValues): UpdateKnowledgeDocumentInput =>
-    formValuesToBasePayload(values);
+    if (dirty.docType) {
+        input.docType = values.docType;
+    }
+
+    if (dirty.question) {
+        input.question = values.question;
+    }
+
+    if (dirty.description) {
+        input.description = values.description ?? '';
+    }
+
+    if (dirty.guideType) {
+        input.guideType = values.guideType;
+    }
+
+    if (dirty.answerType) {
+        input.answerType = values.answerType;
+    }
+
+    if (dirty.codeLang) {
+        input.codeLang = values.codeLang ?? '';
+    }
+
+    return input;
+};
 
 // ---------------------------------------------------------------------------
 // Form component
@@ -132,7 +188,7 @@ interface KnowledgeFormProps {
     isNew: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
     knowledgeName: null | string;
-    onSubmit: (values: FormValues) => Promise<SubmitResult>;
+    onSubmit: (values: FormValues, dirtyFields: DirtyFlags) => Promise<SubmitResult>;
 }
 
 export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, onSubmit }: KnowledgeFormProps) => {
@@ -157,7 +213,11 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
     const performSave = useCallback(
         async (values: FormValues): Promise<boolean> => {
             try {
-                const result = await onSubmit(values);
+                // Snapshot dirty flags from the latest formState. We read it
+                // here (instead of capturing into deps) so partial-update
+                // logic in the page sees the same state RHF used to decide
+                // `isDirty`/`canSubmit` at submit time.
+                const result = await onSubmit(values, form.formState.dirtyFields as DirtyFlags);
 
                 // Prefer the server's view of the document — backend may have
                 // trimmed/normalized fields, attached derived data, or filled
@@ -183,7 +243,7 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
                 return false;
             }
         },
-        [navigate, onSubmit, reset],
+        [form, navigate, onSubmit, reset],
     );
 
     // The ref below breaks an otherwise circular hook dependency:
@@ -221,10 +281,20 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
             return false;
         }
 
+        // `form.getValues()` returns raw field state (no zod transforms applied),
+        // so we run it through the schema explicitly. This way the dialog path
+        // produces the same trimmed/normalized values as the form-button path
+        // (which gets parsed values directly from `handleSubmit`'s callback).
+        const parsed = formSchema.safeParse(form.getValues());
+
+        if (!parsed.success) {
+            return false;
+        }
+
         setIsSaving(true);
 
         try {
-            return await performSave(form.getValues());
+            return await performSave(parsed.data);
         } finally {
             setIsSaving(false);
         }
