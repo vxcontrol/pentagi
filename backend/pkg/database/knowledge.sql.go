@@ -21,10 +21,10 @@ WHERE collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = 'la
 
 // Delete all memory-type documents for a specific flow.
 // Called on flow deletion to free long-term memory that will never be re-used.
-// $1 is the decimal text representation of the flow ID (e.g. "55"), matching the
+// flow_id is the decimal text representation of the flow ID (e.g. "55"), matching the
 // text result of (cmetadata ->> 'flow_id') which uses JSON ->> extraction.
-func (q *Queries) DeleteFlowMemoryDocuments(ctx context.Context, dollar_1 sql.NullString) error {
-	_, err := q.db.ExecContext(ctx, deleteFlowMemoryDocuments, dollar_1)
+func (q *Queries) DeleteFlowMemoryDocuments(ctx context.Context, flowID sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, deleteFlowMemoryDocuments, flowID)
 	return err
 }
 
@@ -35,8 +35,8 @@ WHERE uuid::text = $1
 `
 
 // Delete a knowledge document by UUID (admin — no user_id check).
-func (q *Queries) DeleteKnowledgeDocument(ctx context.Context, dollar_1 sql.NullString) error {
-	_, err := q.db.ExecContext(ctx, deleteKnowledgeDocument, dollar_1)
+func (q *Queries) DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, deleteKnowledgeDocument, uuid)
 	return err
 }
 
@@ -48,13 +48,13 @@ WHERE uuid::text = $1
 `
 
 type DeleteUserKnowledgeDocumentParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Column2 sql.NullString `json:"column_2"`
+	Uuid   sql.NullString `json:"uuid"`
+	UserID sql.NullString `json:"user_id"`
 }
 
 // Delete a knowledge document by UUID, only if it belongs to the given user.
 func (q *Queries) DeleteUserKnowledgeDocument(ctx context.Context, arg DeleteUserKnowledgeDocumentParams) error {
-	_, err := q.db.ExecContext(ctx, deleteUserKnowledgeDocument, arg.Column1, arg.Column2)
+	_, err := q.db.ExecContext(ctx, deleteUserKnowledgeDocument, arg.Uuid, arg.UserID)
 	return err
 }
 
@@ -96,8 +96,8 @@ WHERE c.name = 'langchain'
 `
 
 type GetUserKnowledgeDocumentParams struct {
-	Uuid      string         `json:"uuid"`
-	Cmetadata sql.NullString `json:"cmetadata"`
+	Uuid   string         `json:"uuid"`
+	UserID sql.NullString `json:"user_id"`
 }
 
 type GetUserKnowledgeDocumentRow struct {
@@ -108,7 +108,7 @@ type GetUserKnowledgeDocumentRow struct {
 
 // Fetch a single knowledge document by UUID, scoped to a specific user.
 func (q *Queries) GetUserKnowledgeDocument(ctx context.Context, arg GetUserKnowledgeDocumentParams) (GetUserKnowledgeDocumentRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserKnowledgeDocument, arg.Uuid, arg.Cmetadata)
+	row := q.db.QueryRowContext(ctx, getUserKnowledgeDocument, arg.Uuid, arg.UserID)
 	var i GetUserKnowledgeDocumentRow
 	err := row.Scan(&i.ID, &i.Document, &i.Cmetadata)
 	return i, err
@@ -176,8 +176,8 @@ type ListFlowKnowledgeDocumentsRow struct {
 }
 
 // List non-memory knowledge documents belonging to a specific flow (admin scoped).
-func (q *Queries) ListFlowKnowledgeDocuments(ctx context.Context, cmetadata sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFlowKnowledgeDocuments, cmetadata)
+func (q *Queries) ListFlowKnowledgeDocuments(ctx context.Context, flowID sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFlowKnowledgeDocuments, flowID)
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +219,8 @@ type ListUserKnowledgeDocumentsRow struct {
 }
 
 // List all non-memory knowledge documents owned by a specific user (user-scoped view).
-func (q *Queries) ListUserKnowledgeDocuments(ctx context.Context, cmetadata sql.NullString) ([]ListUserKnowledgeDocumentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUserKnowledgeDocuments, cmetadata)
+func (q *Queries) ListUserKnowledgeDocuments(ctx context.Context, userID sql.NullString) ([]ListUserKnowledgeDocumentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUserKnowledgeDocuments, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -242,13 +242,146 @@ func (q *Queries) ListUserKnowledgeDocuments(ctx context.Context, cmetadata sql.
 	return items, nil
 }
 
+const searchKnowledgeDocuments = `-- name: SearchKnowledgeDocuments :many
+SELECT
+  e.uuid::text                                                         AS id,
+  COALESCE(e.document, '')                                             AS document,
+  COALESCE(e.cmetadata::text, '{}')                                   AS cmetadata,
+  (1.0 - (e.embedding <=> $1::vector))::float8       AS score
+FROM langchain_pg_embedding e
+INNER JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+WHERE c.name = 'langchain'
+  AND COALESCE(e.cmetadata ->> 'doc_type', '') NOT IN ('memory')
+  AND (e.embedding <=> $1::vector)::float8 < $2::float8
+ORDER BY e.embedding <=> $1::vector
+LIMIT $3::int
+`
+
+type SearchKnowledgeDocumentsParams struct {
+	Embedding   interface{} `json:"embedding"`
+	MaxDistance float64     `json:"max_distance"`
+	Lim         int32       `json:"lim"`
+}
+
+type SearchKnowledgeDocumentsRow struct {
+	ID        string         `json:"id"`
+	Document  string         `json:"document"`
+	Cmetadata sql.NullString `json:"cmetadata"`
+	Score     float64        `json:"score"`
+}
+
+// Vector similarity search over all knowledge documents (admin view, no user filter).
+// Returns rows ordered by cosine similarity descending (highest score first).
+// embedding    query vector as a PostgreSQL vector literal, e.g. '[0.1,0.2,...]'
+// max_distance cosine-distance upper bound (exclusive); equals (1 - score_threshold),
+//
+//	e.g. pass 0.8 to get documents with similarity score > 0.2
+//
+// lim          maximum number of rows to return
+func (q *Queries) SearchKnowledgeDocuments(ctx context.Context, arg SearchKnowledgeDocumentsParams) ([]SearchKnowledgeDocumentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchKnowledgeDocuments, arg.Embedding, arg.MaxDistance, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchKnowledgeDocumentsRow
+	for rows.Next() {
+		var i SearchKnowledgeDocumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Document,
+			&i.Cmetadata,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchUserKnowledgeDocuments = `-- name: SearchUserKnowledgeDocuments :many
+SELECT
+  e.uuid::text                                                         AS id,
+  COALESCE(e.document, '')                                             AS document,
+  COALESCE(e.cmetadata::text, '{}')                                   AS cmetadata,
+  (1.0 - (e.embedding <=> $1::vector))::float8       AS score
+FROM langchain_pg_embedding e
+INNER JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+WHERE c.name = 'langchain'
+  AND COALESCE(e.cmetadata ->> 'doc_type', '') NOT IN ('memory')
+  AND (e.cmetadata ->> 'user_id') = $2
+  AND (e.embedding <=> $1::vector)::float8 < $3::float8
+ORDER BY e.embedding <=> $1::vector
+LIMIT $4::int
+`
+
+type SearchUserKnowledgeDocumentsParams struct {
+	Embedding   interface{}    `json:"embedding"`
+	UserID      sql.NullString `json:"user_id"`
+	MaxDistance float64        `json:"max_distance"`
+	Lim         int32          `json:"lim"`
+}
+
+type SearchUserKnowledgeDocumentsRow struct {
+	ID        string         `json:"id"`
+	Document  string         `json:"document"`
+	Cmetadata sql.NullString `json:"cmetadata"`
+	Score     float64        `json:"score"`
+}
+
+// Vector similarity search scoped to a specific user (by cmetadata user_id).
+// Returns rows ordered by cosine similarity descending (highest score first).
+// embedding    query vector as a PostgreSQL vector literal, e.g. '[0.1,0.2,...]'
+// max_distance cosine-distance upper bound (exclusive); equals (1 - score_threshold)
+// lim          maximum number of rows to return
+// user_id      owner filter as a decimal text string (e.g. "42")
+func (q *Queries) SearchUserKnowledgeDocuments(ctx context.Context, arg SearchUserKnowledgeDocumentsParams) ([]SearchUserKnowledgeDocumentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchUserKnowledgeDocuments,
+		arg.Embedding,
+		arg.UserID,
+		arg.MaxDistance,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchUserKnowledgeDocumentsRow
+	for rows.Next() {
+		var i SearchUserKnowledgeDocumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Document,
+			&i.Cmetadata,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateKnowledgeDocument = `-- name: UpdateKnowledgeDocument :one
 UPDATE langchain_pg_embedding
 SET
-  embedding = $2::vector,
-  document  = $3,
-  cmetadata = $4::json
-WHERE uuid::text = $1
+  embedding = $1::vector,
+  document  = $2,
+  cmetadata = $3::json
+WHERE uuid::text = $4
   AND collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = 'langchain')
 RETURNING
   uuid::text                              AS id,
@@ -257,10 +390,10 @@ RETURNING
 `
 
 type UpdateKnowledgeDocumentParams struct {
-	Column1 sql.NullString        `json:"column_1"`
-	Column2 string                `json:"column_2"`
-	Column3 sql.NullString        `json:"column_3"`
-	Column4 pqtype.NullRawMessage `json:"column_4"`
+	Embedding string                `json:"embedding"`
+	Document  sql.NullString        `json:"document"`
+	Cmetadata pqtype.NullRawMessage `json:"cmetadata"`
+	Uuid      sql.NullString        `json:"uuid"`
 }
 
 type UpdateKnowledgeDocumentRow struct {
@@ -270,14 +403,14 @@ type UpdateKnowledgeDocumentRow struct {
 }
 
 // Update an existing document's embedding, text and metadata atomically.
-// $2 must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
-// $4 must be valid JSON text.
+// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
+// cmetadata must be valid JSON text.
 func (q *Queries) UpdateKnowledgeDocument(ctx context.Context, arg UpdateKnowledgeDocumentParams) (UpdateKnowledgeDocumentRow, error) {
 	row := q.db.QueryRowContext(ctx, updateKnowledgeDocument,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
+		arg.Embedding,
+		arg.Document,
+		arg.Cmetadata,
+		arg.Uuid,
 	)
 	var i UpdateKnowledgeDocumentRow
 	err := row.Scan(&i.ID, &i.Document, &i.Cmetadata)

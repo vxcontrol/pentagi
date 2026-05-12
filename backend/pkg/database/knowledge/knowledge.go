@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	collectionName         = "langchain"
 	defaultSearchLimit     = 10
 	defaultSearchThreshold = float32(0.2)
 	manualDocumentFlag     = "manual"
@@ -224,34 +223,6 @@ func applyGoFilters(docs []*model.KnowledgeDocument, filter *model.KnowledgeFilt
 	return result
 }
 
-// buildSearchFilters converts a KnowledgeFilter to a pgvector filter map.
-// Only single-value equality filters are expressed here; arrays are applied in Go.
-func buildSearchFilters(userID int64, filter *model.KnowledgeFilter) map[string]any {
-	f := make(map[string]any)
-	if userID > 0 {
-		f["user_id"] = strconv.FormatInt(userID, 10)
-	}
-	if filter == nil {
-		return f
-	}
-	if len(filter.DocTypes) == 1 {
-		f["doc_type"] = string(filter.DocTypes[0])
-	}
-	if len(filter.GuideTypes) == 1 {
-		f["guide_type"] = string(filter.GuideTypes[0])
-	}
-	if len(filter.AnswerTypes) == 1 {
-		f["answer_type"] = string(filter.AnswerTypes[0])
-	}
-	if len(filter.CodeLangs) == 1 {
-		f["code_lang"] = filter.CodeLangs[0]
-	}
-	if filter.FlowID != nil {
-		f["flow_id"] = strconv.FormatInt(*filter.FlowID, 10)
-	}
-	return f
-}
-
 func (ks *knowledgeStore) requireStore() error {
 	if ks.store == nil {
 		return fmt.Errorf("knowledge: embedding provider is not configured")
@@ -338,8 +309,8 @@ func (ks *knowledgeStore) GetDocument(ctx context.Context, id string) (*model.Kn
 
 func (ks *knowledgeStore) GetUserDocument(ctx context.Context, userID int64, id string) (*model.KnowledgeDocument, error) {
 	row, err := ks.db.GetUserKnowledgeDocument(ctx, database.GetUserKnowledgeDocumentParams{
-		Uuid:      id,
-		Cmetadata: nsOf(strconv.FormatInt(userID, 10)),
+		Uuid:   id,
+		UserID: nsOf(strconv.FormatInt(userID, 10)),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: get user document %s: %w", id, err)
@@ -359,61 +330,108 @@ func (ks *knowledgeStore) SearchUserDocuments(ctx context.Context, userID int64,
 	return ks.doSearch(ctx, userID, query, filter, limit)
 }
 
+// doSearch performs a parameterised vector similarity search and returns
+// matched documents with their cosine-similarity scores and correct UUIDs.
+//
+// Filters are applied in two layers:
+//  1. SQL layer  — user_id ownership (when userID > 0); cosine-distance
+//     threshold; row limit.  All values are bound as query parameters so
+//     there is no risk of SQL injection.
+//  2. Go layer   — multi-value enum filters (DocTypes, GuideTypes, etc.) and
+//     the Manual flag that cannot be expressed as static SQL predicates.
 func (ks *knowledgeStore) doSearch(ctx context.Context, userID int64, query string, filter *model.KnowledgeFilter, limit int) ([]*model.KnowledgeDocumentWithScore, error) {
-	if err := ks.requireStore(); err != nil {
+	if err := ks.requireEmbedder(); err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
 		limit = defaultSearchLimit
 	}
 
-	pgFilters := buildSearchFilters(userID, filter)
-	opts := []vectorstores.Option{
-		vectorstores.WithScoreThreshold(defaultSearchThreshold),
-	}
-	if len(pgFilters) > 0 {
-		opts = append(opts, vectorstores.WithFilters(pgFilters))
-	}
-
-	schemaDocs, err := ks.store.SimilaritySearch(ctx, query, limit, opts...)
+	// Compute query embedding.
+	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{query})
 	if err != nil {
-		return nil, fmt.Errorf("knowledge: similarity search: %w", err)
+		return nil, fmt.Errorf("knowledge: embed query: %w", err)
+	}
+	if len(vecs) == 0 {
+		return nil, fmt.Errorf("knowledge: embedder returned no vectors for query")
 	}
 
-	results := make([]*model.KnowledgeDocumentWithScore, 0, len(schemaDocs))
-	for _, sd := range schemaDocs {
-		doc := schemaDocToModel(sd)
-		if !passesGoFilter(doc, filter) {
+	vecLiteral := formatVector(vecs[0])
+	// maxDist is the cosine-distance upper bound (exclusive):
+	// distance = 1 - similarity, so maxDist = 1 - threshold.
+	maxDist := float64(1.0 - defaultSearchThreshold)
+
+	type searchRow struct {
+		ID        string
+		Document  string
+		Cmetadata sql.NullString
+		Score     float64
+	}
+
+	var rawRows []searchRow
+
+	if userID > 0 {
+		rows, err := ks.db.SearchUserKnowledgeDocuments(ctx, database.SearchUserKnowledgeDocumentsParams{
+			Embedding:   vecLiteral,
+			UserID:      nsOf(strconv.FormatInt(userID, 10)),
+			MaxDistance: maxDist,
+			Lim:         int32(limit), //nolint:gosec
+		})
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: similarity search (user %d): %w", userID, err)
+		}
+		rawRows = make([]searchRow, len(rows))
+		for i, r := range rows {
+			rawRows[i] = searchRow{r.ID, r.Document, r.Cmetadata, r.Score}
+		}
+	} else {
+		rows, err := ks.db.SearchKnowledgeDocuments(ctx, database.SearchKnowledgeDocumentsParams{
+			Embedding:   vecLiteral,
+			MaxDistance: maxDist,
+			Lim:         int32(limit), //nolint:gosec
+		})
+		if err != nil {
+			return nil, fmt.Errorf("knowledge: similarity search (admin): %w", err)
+		}
+		rawRows = make([]searchRow, len(rows))
+		for i, r := range rows {
+			rawRows[i] = searchRow{r.ID, r.Document, r.Cmetadata, r.Score}
+		}
+	}
+
+	results := make([]*model.KnowledgeDocumentWithScore, 0, len(rawRows))
+	for _, r := range rawRows {
+		doc := rowToModel(r.ID, r.Document, nullStr(r.Cmetadata), true)
+		if !passesSearchFilter(doc, filter) {
 			continue
 		}
 		results = append(results, &model.KnowledgeDocumentWithScore{
-			Score:    float64(sd.Score),
+			Score:    r.Score,
 			Document: doc,
 		})
 	}
 	return results, nil
 }
 
-func schemaDocToModel(sd schema.Document) *model.KnowledgeDocument {
-	raw, _ := json.Marshal(sd.Metadata)
-	meta := parseMeta(string(raw))
-	return metaToModelDoc("", sd.PageContent, meta)
-}
-
-func passesGoFilter(doc *model.KnowledgeDocument, filter *model.KnowledgeFilter) bool {
+// passesSearchFilter checks the Go-side filters that cannot be expressed as
+// static SQL predicates (FlowID equality, multi-value enums, and the Manual flag).
+func passesSearchFilter(doc *model.KnowledgeDocument, filter *model.KnowledgeFilter) bool {
 	if filter == nil {
 		return true
 	}
-	if len(filter.DocTypes) > 1 && !slices.Contains(filter.DocTypes, doc.DocType) {
+	if filter.FlowID != nil && (doc.FlowID == nil || *doc.FlowID != *filter.FlowID) {
 		return false
 	}
-	if len(filter.GuideTypes) > 1 && (doc.GuideType == nil || !slices.Contains(filter.GuideTypes, *doc.GuideType)) {
+	if len(filter.DocTypes) > 0 && !slices.Contains(filter.DocTypes, doc.DocType) {
 		return false
 	}
-	if len(filter.AnswerTypes) > 1 && (doc.AnswerType == nil || !slices.Contains(filter.AnswerTypes, *doc.AnswerType)) {
+	if len(filter.GuideTypes) > 0 && (doc.GuideType == nil || !slices.Contains(filter.GuideTypes, *doc.GuideType)) {
 		return false
 	}
-	if len(filter.CodeLangs) > 1 && (doc.CodeLang == nil || !slices.Contains(filter.CodeLangs, *doc.CodeLang)) {
+	if len(filter.AnswerTypes) > 0 && (doc.AnswerType == nil || !slices.Contains(filter.AnswerTypes, *doc.AnswerType)) {
+		return false
+	}
+	if len(filter.CodeLangs) > 0 && (doc.CodeLang == nil || !slices.Contains(filter.CodeLangs, *doc.CodeLang)) {
 		return false
 	}
 	if filter.Manual != nil && doc.Manual != *filter.Manual {
@@ -588,10 +606,10 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 	}
 
 	row, err := ks.db.UpdateKnowledgeDocument(ctx, database.UpdateKnowledgeDocumentParams{
-		Column1: nsOf(id),              // uuid::text = $1
-		Column2: formatVector(vecs[0]), // embedding = $2::vector
-		Column3: nsOf(content),         // document  = $3
-		Column4: cmJSON,                // cmetadata = $4::json
+		Uuid:      nsOf(id),
+		Embedding: formatVector(vecs[0]),
+		Document:  nsOf(content),
+		Cmetadata: cmJSON,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: update document %s: %w", id, err)
@@ -624,8 +642,8 @@ func (ks *knowledgeStore) DeleteUserDocument(ctx context.Context, userID int64, 
 		return err
 	}
 	if err := ks.db.DeleteUserKnowledgeDocument(ctx, database.DeleteUserKnowledgeDocumentParams{
-		Column1: nsOf(id),
-		Column2: nsOf(strconv.FormatInt(userID, 10)),
+		Uuid:   nsOf(id),
+		UserID: nsOf(strconv.FormatInt(userID, 10)),
 	}); err != nil {
 		return fmt.Errorf("knowledge: delete user document %s: %w", id, err)
 	}

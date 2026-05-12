@@ -40,12 +40,12 @@ type Querier interface {
 	DeleteFlowAssistantLog(ctx context.Context, id int64) error
 	// Delete all memory-type documents for a specific flow.
 	// Called on flow deletion to free long-term memory that will never be re-used.
-	// $1 is the decimal text representation of the flow ID (e.g. "55"), matching the
+	// flow_id is the decimal text representation of the flow ID (e.g. "55"), matching the
 	// text result of (cmetadata ->> 'flow_id') which uses JSON ->> extraction.
-	DeleteFlowMemoryDocuments(ctx context.Context, dollar_1 sql.NullString) error
+	DeleteFlowMemoryDocuments(ctx context.Context, flowID sql.NullString) error
 	DeleteFlowTemplate(ctx context.Context, arg DeleteFlowTemplateParams) error
 	// Delete a knowledge document by UUID (admin — no user_id check).
-	DeleteKnowledgeDocument(ctx context.Context, dollar_1 sql.NullString) error
+	DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error
 	DeletePrompt(ctx context.Context, id int64) error
 	DeleteProvider(ctx context.Context, id int64) (Provider, error)
 	DeleteSubtask(ctx context.Context, id int64) error
@@ -238,9 +238,23 @@ type Querier interface {
 	// List all knowledge documents excluding the noisy memory type (admin view).
 	ListAllKnowledgeDocuments(ctx context.Context) ([]ListAllKnowledgeDocumentsRow, error)
 	// List non-memory knowledge documents belonging to a specific flow (admin scoped).
-	ListFlowKnowledgeDocuments(ctx context.Context, cmetadata sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error)
+	ListFlowKnowledgeDocuments(ctx context.Context, flowID sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error)
 	// List all non-memory knowledge documents owned by a specific user (user-scoped view).
-	ListUserKnowledgeDocuments(ctx context.Context, cmetadata sql.NullString) ([]ListUserKnowledgeDocumentsRow, error)
+	ListUserKnowledgeDocuments(ctx context.Context, userID sql.NullString) ([]ListUserKnowledgeDocumentsRow, error)
+	// Vector similarity search over all knowledge documents (admin view, no user filter).
+	// Returns rows ordered by cosine similarity descending (highest score first).
+	// embedding    query vector as a PostgreSQL vector literal, e.g. '[0.1,0.2,...]'
+	// max_distance cosine-distance upper bound (exclusive); equals (1 - score_threshold),
+	//              e.g. pass 0.8 to get documents with similarity score > 0.2
+	// lim          maximum number of rows to return
+	SearchKnowledgeDocuments(ctx context.Context, arg SearchKnowledgeDocumentsParams) ([]SearchKnowledgeDocumentsRow, error)
+	// Vector similarity search scoped to a specific user (by cmetadata user_id).
+	// Returns rows ordered by cosine similarity descending (highest score first).
+	// embedding    query vector as a PostgreSQL vector literal, e.g. '[0.1,0.2,...]'
+	// max_distance cosine-distance upper bound (exclusive); equals (1 - score_threshold)
+	// lim          maximum number of rows to return
+	// user_id      owner filter as a decimal text string (e.g. "42")
+	SearchUserKnowledgeDocuments(ctx context.Context, arg SearchUserKnowledgeDocumentsParams) ([]SearchUserKnowledgeDocumentsRow, error)
 	UpdateAPIToken(ctx context.Context, arg UpdateAPITokenParams) (ApiToken, error)
 	UpdateAssistant(ctx context.Context, arg UpdateAssistantParams) (Assistant, error)
 	UpdateAssistantLanguage(ctx context.Context, arg UpdateAssistantLanguageParams) (Assistant, error)
@@ -263,8 +277,8 @@ type Querier interface {
 	UpdateFlowTitle(ctx context.Context, arg UpdateFlowTitleParams) (Flow, error)
 	UpdateFlowToolCallIDTemplate(ctx context.Context, arg UpdateFlowToolCallIDTemplateParams) (Flow, error)
 	// Update an existing document's embedding, text and metadata atomically.
-	// $2 must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
-	// $4 must be valid JSON text.
+	// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
+	// cmetadata must be valid JSON text.
 	UpdateKnowledgeDocument(ctx context.Context, arg UpdateKnowledgeDocumentParams) (UpdateKnowledgeDocumentRow, error)
 	UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error)
 	UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsageParams) (Msgchain, error)
