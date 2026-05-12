@@ -165,6 +165,25 @@ const Autocomplete = ({
         [commit, inputId, inputValue, open, openOnFocus, setInputValue, setOpen],
     );
 
+    // cmdk hard-codes a sr-only `<label cmdk-label for={cmdkUseId}>` inside
+    // `<Command>` and points its `for` at a useId that cmdk generates for
+    // *its own* input. Our visible input gets its id from `FormControl`'s
+    // Radix Slot instead, so the two ids never line up and Chrome flags
+    // "Incorrect use of <label for=FORM_ELEMENT>". The label can't be
+    // disabled from cmdk's API. Re-point the `for` at the real input id
+    // after mount so the HTML-level association is valid (cmdk already
+    // wires `aria-labelledby` to the same label element through Slot, so
+    // screen readers stayed correct — this fix is for DevTools/HTML
+    // validators).
+    React.useLayoutEffect(() => {
+        const input = inputRef.current;
+        const cmdkLabel = input?.closest('[cmdk-root]')?.querySelector<HTMLLabelElement>('label[cmdk-label]');
+
+        if (input?.id && cmdkLabel && cmdkLabel.htmlFor !== input.id) {
+            cmdkLabel.htmlFor = input.id;
+        }
+    });
+
     return (
         <AutocompleteContext.Provider value={ctxValue}>
             <Popover
@@ -192,7 +211,8 @@ export type AutocompleteInputProps = Omit<
 
 const AutocompleteInput = React.forwardRef<HTMLInputElement, AutocompleteInputProps>(
     ({ className, id, onFocus, onKeyDown, onPointerDown, ...props }, forwardedRef) => {
-        const { commit, inputId, inputRef, inputValue, openOnFocus, setInputValue, setOpen } = useAutocompleteContext();
+        const { commit, inputId, inputRef, inputValue, open, openOnFocus, setInputValue, setOpen } =
+            useAutocompleteContext();
 
         // True when Enter would land on a real match. Selecting a suggestion
         // commits through cmdk's `onSelect`; Enter without a match commits the
@@ -307,7 +327,17 @@ const AutocompleteInput = React.forwardRef<HTMLInputElement, AutocompleteInputPr
                     onValueChange={handleValueChange}
                     value={inputValue}
                 >
+                    {/*
+                     * `aria-expanded` is hard-coded to `true` inside cmdk —
+                     * the attribute lies whenever the popover is closed
+                     * (after Enter, Escape, outside click). Radix Slot
+                     * merges child props on top of slot props for non-handler
+                     * attributes, so passing `aria-expanded={open}` here
+                     * wins over cmdk's hard-coded value and keeps it in sync
+                     * with the real popover state for screen readers.
+                     */}
                     <Input
+                        aria-expanded={open}
                         className={className}
                         id={id ?? inputId}
                         onFocus={handleFocus}
