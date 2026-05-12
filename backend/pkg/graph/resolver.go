@@ -11,6 +11,7 @@ import (
 	"pentagi/pkg/templates"
 
 	"github.com/sirupsen/logrus"
+	"github.com/vxcontrol/cloud/anonymizer"
 )
 
 // This file will not be regenerated automatically.
@@ -27,4 +28,5 @@ type Resolver struct {
 	Controller      controller.FlowController
 	Subscriptions   subscriptions.SubscriptionsController
 	Knowledge       knowledge.KnowledgeStore
+	Replacer        anonymizer.Replacer
 }

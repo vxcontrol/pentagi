@@ -1009,6 +1009,10 @@ mutation deleteFavoriteFlow($flowId: ID!) {
     deleteFavoriteFlow(flowId: $flowId)
 }
 
+mutation anonymizeText($text: String!) {
+    anonymizeText(text: $text)
+}
+
 # ==================== Flow Templates ====================
 
 query flowTemplates {

@@ -452,6 +452,7 @@ export type ModelUsageStats = {
 
 export type Mutation = {
     addFavoriteFlow: ResultType;
+    anonymizeText: Scalars['String']['output'];
     callAssistant: ResultType;
     createAPIToken: ApiTokenWithSecret;
     createAssistant: FlowAssistant;
@@ -485,6 +486,10 @@ export type Mutation = {
 
 export type MutationAddFavoriteFlowArgs = {
     flowId: Scalars['ID']['input'];
+};
+
+export type MutationAnonymizeTextArgs = {
+    text: Scalars['String']['input'];
 };
 
 export type MutationCallAssistantArgs = {
@@ -1976,6 +1981,12 @@ export type DeleteFavoriteFlowMutationVariables = Exact<{
 }>;
 
 export type DeleteFavoriteFlowMutation = { deleteFavoriteFlow: ResultType };
+
+export type AnonymizeTextMutationVariables = Exact<{
+    text: Scalars['String']['input'];
+}>;
+
+export type AnonymizeTextMutation = { anonymizeText: string };
 
 export type FlowTemplatesQueryVariables = Exact<{ [key: string]: never }>;
 
@@ -5559,6 +5570,42 @@ export type DeleteFavoriteFlowMutationResult = Apollo.MutationResult<DeleteFavor
 export type DeleteFavoriteFlowMutationOptions = Apollo.BaseMutationOptions<
     DeleteFavoriteFlowMutation,
     DeleteFavoriteFlowMutationVariables
+>;
+export const AnonymizeTextDocument = gql`
+    mutation anonymizeText($text: String!) {
+        anonymizeText(text: $text)
+    }
+`;
+export type AnonymizeTextMutationFn = Apollo.MutationFunction<AnonymizeTextMutation, AnonymizeTextMutationVariables>;
+
+/**
+ * __useAnonymizeTextMutation__
+ *
+ * To run a mutation, you first call `useAnonymizeTextMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useAnonymizeTextMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [anonymizeTextMutation, { data, loading, error }] = useAnonymizeTextMutation({
+ *   variables: {
+ *      text: // value for 'text'
+ *   },
+ * });
+ */
+export function useAnonymizeTextMutation(
+    baseOptions?: Apollo.MutationHookOptions<AnonymizeTextMutation, AnonymizeTextMutationVariables>,
+) {
+    const options = { ...defaultOptions, ...baseOptions };
+    return Apollo.useMutation<AnonymizeTextMutation, AnonymizeTextMutationVariables>(AnonymizeTextDocument, options);
+}
+export type AnonymizeTextMutationHookResult = ReturnType<typeof useAnonymizeTextMutation>;
+export type AnonymizeTextMutationResult = Apollo.MutationResult<AnonymizeTextMutation>;
+export type AnonymizeTextMutationOptions = Apollo.BaseMutationOptions<
+    AnonymizeTextMutation,
+    AnonymizeTextMutationVariables
 >;
 export const FlowTemplatesDocument = gql`
     query flowTemplates {

@@ -37,6 +37,8 @@ import (
 	"github.com/sirupsen/logrus"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
+	"github.com/vxcontrol/cloud/anonymizer"
+	"github.com/vxcontrol/cloud/anonymizer/patterns"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
@@ -144,6 +146,22 @@ func NewRouter(
 	var knowledgeStore knowledge.KnowledgeStore
 	knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher)
 
+	// ---- Anonymizer replacer ------------------------------------------------
+	// Shared singleton used by the GraphQL anonymizeText mutation.
+	// Falls back to a no-op nil replacer on failure so the rest of the server still starts correctly.
+	var textReplacer anonymizer.Replacer
+	if allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll); err != nil {
+		logrus.WithError(err).Warn("failed to load anonymizer patterns; anonymizeText mutation will be unavailable")
+	} else {
+		allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
+
+		if r, err := anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names()); err != nil {
+			logrus.WithError(err).Warn("failed to create anonymizer replacer; anonymizeText mutation will be unavailable")
+		} else {
+			textReplacer = r
+		}
+	}
+
 	// services
 	authService := services.NewAuthService(
 		services.AuthServiceConfig{
@@ -176,8 +194,9 @@ func NewRouter(
 	analyticsService := services.NewAnalyticsService(orm)
 	tokenService := services.NewTokenService(orm, cfg.CookieSigningSalt, tokenCache, subscriptions)
 	knowledgeService := services.NewKnowledgeService(orm, knowledgeStore)
+	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
-		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions, knowledgeStore,
+		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions, knowledgeStore, textReplacer,
 	)
 
 	router := gin.Default()
@@ -271,6 +290,7 @@ func NewRouter(
 		setVecstorelogsGroup(privateGroup, vecstorelogService)
 		setScreenshotsGroup(privateGroup, screenshotService)
 		setPromptsGroup(privateGroup, promptService)
+		setAnonymizeGroup(privateGroup, anonymizerService)
 		setAnalyticsGroup(privateGroup, analyticsService)
 	}
 
@@ -568,6 +588,13 @@ func setScreenshotsGroup(parent *gin.RouterGroup, svc *services.ScreenshotServic
 		flowScreenshotsViewGroup.GET("/", svc.GetFlowScreenshots)
 		flowScreenshotsViewGroup.GET("/:screenshotID", svc.GetFlowScreenshot)
 		flowScreenshotsViewGroup.GET("/:screenshotID/file", svc.GetFlowScreenshotFile)
+	}
+}
+
+func setAnonymizeGroup(parent *gin.RouterGroup, svc *services.AnonymizerService) {
+	group := parent.Group("/anonymize")
+	{
+		group.POST("/text", svc.AnonymizeText)
 	}
 }
 

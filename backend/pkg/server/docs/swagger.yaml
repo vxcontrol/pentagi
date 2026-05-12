@@ -1748,6 +1748,18 @@ definitions:
       total:
         type: integer
     type: object
+  services.anonymizeTextRequest:
+    properties:
+      text:
+        type: string
+    required:
+    - text
+    type: object
+  services.anonymizeTextResponse:
+    properties:
+      text:
+        type: string
+    type: object
   services.assistantlogs:
     properties:
       assistantlogs:
@@ -2053,6 +2065,48 @@ paths:
       summary: Retrieve agentlogs list
       tags:
       - Agentlogs
+  /anonymize/text:
+    post:
+      consumes:
+      - application/json
+      description: Replace sensitive data patterns (credentials, keys, PII, etc.)
+        in the provided text with safe placeholders.
+      parameters:
+      - description: Text to anonymize
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.anonymizeTextRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: anonymized text returned successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.anonymizeTextResponse'
+              type: object
+        "400":
+          description: invalid request body
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: anonymize.call permission required
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: anonymizer is not configured
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Anonymize text
+      tags:
+      - Anonymize
   /assistantlogs/:
     get:
       parameters:

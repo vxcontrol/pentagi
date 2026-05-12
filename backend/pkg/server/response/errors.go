@@ -138,18 +138,23 @@ var ErrAssistantsInvalidData = NewHttpError(500, "Assistants.InvalidData", "inva
 // resources
 
 var ErrResourcesInvalidRequest = NewHttpError(400, "Resources.InvalidRequest", "invalid resource request data")
-var ErrResourcesNotFound       = NewHttpError(404, "Resources.NotFound", "resource not found")
-var ErrResourcesAlreadyExists  = NewHttpError(409, "Resources.AlreadyExists", "resource already exists")
-var ErrResourcesInvalidData    = NewHttpError(400, "Resources.InvalidData", "invalid resource data")
-var ErrResourcesConflict       = NewHttpError(409, "Resources.Conflict", "resource conflict: use force=true to merge")
+var ErrResourcesNotFound = NewHttpError(404, "Resources.NotFound", "resource not found")
+var ErrResourcesAlreadyExists = NewHttpError(409, "Resources.AlreadyExists", "resource already exists")
+var ErrResourcesInvalidData = NewHttpError(400, "Resources.InvalidData", "invalid resource data")
+var ErrResourcesConflict = NewHttpError(409, "Resources.Conflict", "resource conflict: use force=true to merge")
 
 // knowledge
 
 var ErrKnowledgeInvalidRequest = NewHttpError(400, "Knowledge.InvalidRequest", "invalid knowledge request data")
-var ErrKnowledgeNotFound       = NewHttpError(404, "Knowledge.NotFound", "knowledge document not found")
-var ErrKnowledgeUnauthorized   = NewHttpError(403, "Knowledge.Unauthorized", "not authorized to manage this knowledge document")
-var ErrKnowledgeStoreUnavail   = NewHttpError(503, "Knowledge.StoreUnavailable", "knowledge store (embedding provider) is not configured")
-var ErrKnowledgeInvalidData    = NewHttpError(500, "Knowledge.InvalidData", "invalid knowledge document data")
+var ErrKnowledgeNotFound = NewHttpError(404, "Knowledge.NotFound", "knowledge document not found")
+var ErrKnowledgeUnauthorized = NewHttpError(403, "Knowledge.Unauthorized", "not authorized to manage this knowledge document")
+var ErrKnowledgeStoreUnavail = NewHttpError(503, "Knowledge.StoreUnavailable", "knowledge store (embedding provider) is not configured")
+var ErrKnowledgeInvalidData = NewHttpError(500, "Knowledge.InvalidData", "invalid knowledge document data")
+
+// anonymize
+
+var ErrAnonymizeInvalidRequest = NewHttpError(400, "Anonymize.InvalidRequest", "invalid anonymize request data")
+var ErrAnonymizeUnavailable = NewHttpError(503, "Anonymize.Unavailable", "anonymizer is not configured")
 
 // tokens
 

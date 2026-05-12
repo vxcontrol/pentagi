@@ -346,6 +346,7 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AddFavoriteFlow         func(childComplexity int, flowID int64) int
+		AnonymizeText           func(childComplexity int, text string) int
 		CallAssistant           func(childComplexity int, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) int
 		CreateAPIToken          func(childComplexity int, input model.CreateAPITokenInput) int
 		CreateAssistant         func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) int
@@ -746,6 +747,7 @@ type MutationResolver interface {
 	CreateKnowledgeDocument(ctx context.Context, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
 	UpdateKnowledgeDocument(ctx context.Context, id string, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
 	DeleteKnowledgeDocument(ctx context.Context, id string) (model.ResultType, error)
+	AnonymizeText(ctx context.Context, text string) (string, error)
 }
 type QueryResolver interface {
 	Providers(ctx context.Context) ([]*model.Provider, error)
@@ -2225,6 +2227,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.AddFavoriteFlow(childComplexity, args["flowId"].(int64)), true
+
+	case "Mutation.anonymizeText":
+		if e.complexity.Mutation.AnonymizeText == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_anonymizeText_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AnonymizeText(childComplexity, args["text"].(string)), true
 
 	case "Mutation.callAssistant":
 		if e.complexity.Mutation.CallAssistant == nil {
@@ -4725,6 +4739,38 @@ func (ec *executionContext) field_Mutation_addFavoriteFlow_argsFlowID(
 	}
 
 	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_anonymizeText_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_anonymizeText_argsText(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["text"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_anonymizeText_argsText(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["text"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("text"))
+	if tmp, ok := rawArgs["text"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
 	return zeroVal, nil
 }
 
@@ -19325,6 +19371,61 @@ func (ec *executionContext) fieldContext_Mutation_deleteKnowledgeDocument(ctx co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteKnowledgeDocument_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_anonymizeText(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_anonymizeText(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().AnonymizeText(rctx, fc.Args["text"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_anonymizeText(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_anonymizeText_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -37637,6 +37738,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteKnowledgeDocument":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteKnowledgeDocument(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "anonymizeText":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_anonymizeText(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

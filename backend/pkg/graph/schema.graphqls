@@ -1027,6 +1027,7 @@ type Mutation {
   createKnowledgeDocument(input: CreateKnowledgeDocumentInput!): KnowledgeDocument!
   updateKnowledgeDocument(id: String!, input: UpdateKnowledgeDocumentInput!): KnowledgeDocument!
   deleteKnowledgeDocument(id: String!): ResultType!
+  anonymizeText(text: String!): String!
 }
 
 type Subscription {

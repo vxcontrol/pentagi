@@ -1181,6 +1181,24 @@ func (r *mutationResolver) DeleteKnowledgeDocument(ctx context.Context, id strin
 	return model.ResultTypeSuccess, nil
 }
 
+// AnonymizeText is the resolver for the anonymizeText field.
+func (r *mutationResolver) AnonymizeText(ctx context.Context, text string) (string, error) {
+	uid, _, err := validatePermission(ctx, "anonymize.call")
+	if err != nil {
+		return "", err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid": uid,
+	}).Debug("anonymize text")
+
+	if r.Replacer == nil {
+		return "", fmt.Errorf("anonymizer is not available")
+	}
+
+	return r.Replacer.ReplaceString(text), nil
+}
+
 // Providers is the resolver for the providers field.
 func (r *queryResolver) Providers(ctx context.Context) ([]*model.Provider, error) {
 	uid, _, err := validatePermission(ctx, "providers.view")
