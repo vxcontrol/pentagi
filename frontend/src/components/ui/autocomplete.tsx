@@ -205,9 +205,7 @@ const AutocompleteInput = React.forwardRef<HTMLInputElement, AutocompleteInputPr
         // does referential equality, so collapsing the two slots into one boolean
         // halves the per-keystroke re-renders without breaking the snapshot check
         // (which would happen if we returned a fresh object each time).
-        const hasActiveMatch = useCommandState(
-            (state) => state.filtered.count > 0 && Boolean(state.value),
-        );
+        const hasActiveMatch = useCommandState((state) => state.filtered.count > 0 && Boolean(state.value));
 
         // Skip the very first focus event — it's the `autoFocus` case (or any
         // other focus the parent fires synchronously during mount). Auto-opening

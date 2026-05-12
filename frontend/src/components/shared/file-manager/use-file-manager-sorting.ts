@@ -118,10 +118,7 @@ export const useFileManagerSorting = ({
 };
 
 /** Pure reducer for the header three-state cycle. Exported for unit tests. */
-export const computeNextSort = (
-    current: FileManagerSortState,
-    column: FileManagerSortColumn,
-): FileManagerSortState => {
+export const computeNextSort = (current: FileManagerSortState, column: FileManagerSortColumn): FileManagerSortState => {
     if (current?.column !== column) {
         return { column, direction: 'asc' };
     }

@@ -20,7 +20,6 @@ export const loadPageState = (key: string): null | StoredPageState => getStorage
 
 export const saveSorting = (key: string, sorting: SortingState): void => setStorageItem(key, sorting);
 
-export const saveColumnVisibility = (key: string, visibility: VisibilityState): void =>
-    setStorageItem(key, visibility);
+export const saveColumnVisibility = (key: string, visibility: VisibilityState): void => setStorageItem(key, visibility);
 
 export const savePageState = (key: string, state: StoredPageState): void => setStorageItem(key, state);

@@ -883,7 +883,10 @@ export const computeRowClickSelection = ({
     const expandDir = (p: string): readonly string[] => dirSubtreePaths?.get(p) ?? [p];
 
     const addRangeToPrev = (paths: Iterable<string>): Set<string> =>
-        addAll(prev, Array.from(paths).flatMap((p) => [...expandDir(p)]));
+        addAll(
+            prev,
+            Array.from(paths).flatMap((p) => [...expandDir(p)]),
+        );
 
     const buildAdditiveFallback = (): Set<string> => addRangeToPrev(hasSubtree && subtreePaths ? subtreePaths : [path]);
 
