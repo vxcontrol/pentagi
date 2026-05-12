@@ -165,10 +165,6 @@ func (aslw *flowAssistantLogWorker) putMsg(
 	streamID int64,
 	thinking, msg string,
 ) (int64, error) {
-	if len(msg) > defaultMaxMessageLength {
-		msg = msg[:defaultMaxMessageLength] + "..."
-	}
-
 	msgID, msgFound := aslw.streamCache.Get(streamID)
 	ch, workerFound := aslw.results[streamID]
 
