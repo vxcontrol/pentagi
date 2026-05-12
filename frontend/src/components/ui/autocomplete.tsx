@@ -12,15 +12,20 @@ import {
 } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor } from '@/components/ui/popover';
+import { useControllable } from '@/hooks/use-controllable';
 import { cn } from '@/lib/utils';
 
 /**
- * Free-text input with a popover dropdown of fuzzy-filtered suggestions.
+ * Free-text input with a popover dropdown of substring-filtered suggestions.
  *
- * Built on top of `cmdk` (filtering + arrow/Enter navigation) and Radix
- * Popover (positioning, outside-click, escape). The visible field is a real
- * text input — unlike the shadcn `Combobox` pattern, the user can type
- * arbitrary values that are not in the suggestion list.
+ * Built on top of `cmdk` (keyboard navigation) and Radix Popover (positioning,
+ * outside-click, escape). The visible field is a real text input — unlike the
+ * shadcn `Combobox` pattern, the user can type arbitrary values that are not
+ * in the suggestion list.
+ *
+ * Filtering defaults to a case-insensitive substring match against item
+ * `value` and `keywords`. Pass a custom `filter` prop (e.g. cmdk's
+ * `command-score` fuzzy matcher) when subsequence matching is desired.
  *
  * @example
  *  <Autocomplete value={path} onValueChange={setPath} onCommit={navigateTo}>
@@ -59,38 +64,29 @@ const useAutocompleteContext = (): AutocompleteContextValue => {
     return ctx;
 };
 
-/**
- * Minimal controllable-state hook so we don't pull in
- * `@radix-ui/react-use-controllable-state` just for two state slots.
- *
- * Mirrors Radix's behaviour: when `controlled` is `undefined` the hook owns
- * the state; otherwise the parent does and we just forward updates via
- * `onChange`. Updates always call `onChange` so consumers can observe even
- * fully-controlled changes (e.g. logging).
- */
-const useControllable = <T,>(controlled: T | undefined, defaultValue: T, onChange?: (value: T) => void) => {
-    const [internal, setInternal] = React.useState<T>(defaultValue);
-    const isControlled = controlled !== undefined;
-    const value = isControlled ? (controlled as T) : internal;
+// Case-insensitive substring matcher used as the default. cmdk ships
+// `command-score` (fuzzy/subsequence), which is great for command palettes
+// but surprising in plain autocomplete usage — e.g. typing `baa` would still
+// highlight `bash` because the characters appear in order. Substring matching
+// is the conventional autocomplete contract: results contain the typed text
+// somewhere, or they don't appear at all. Consumers that need fuzzy semantics
+// can opt back in via the `filter` prop.
+const substringFilter = (value: string, search: string, keywords?: string[]): number => {
+    const needle = search.trim().toLowerCase();
 
-    const onChangeRef = React.useRef(onChange);
+    if (!needle) {
+        return 1;
+    }
 
-    React.useEffect(() => {
-        onChangeRef.current = onChange;
-    }, [onChange]);
+    if (value.toLowerCase().includes(needle)) {
+        return 1;
+    }
 
-    const set = React.useCallback(
-        (next: T) => {
-            if (!isControlled) {
-                setInternal(next);
-            }
+    if (keywords?.some((kw) => kw.toLowerCase().includes(needle))) {
+        return 1;
+    }
 
-            onChangeRef.current?.(next);
-        },
-        [isControlled],
-    );
-
-    return [value, set] as const;
+    return 0;
 };
 
 export interface AutocompleteProps {
@@ -99,7 +95,9 @@ export interface AutocompleteProps {
     defaultValue?: string;
     /**
      * Custom matcher forwarded to `cmdk`. Returns `0..1` (1 = best match,
-     * 0 = hidden). Defaults to `command-score` fuzzy matching.
+     * 0 = hidden). Defaults to a case-insensitive substring match against
+     * the item `value` (and any provided `keywords`); pass cmdk's
+     * `command-score` here to opt back into fuzzy/subsequence matching.
      */
     filter?: (value: string, search: string, keywords?: string[]) => number;
     /**
@@ -174,7 +172,7 @@ const Autocomplete = ({
                 open={open}
             >
                 <Command
-                    filter={filter}
+                    filter={filter ?? substringFilter}
                     label="Suggestions"
                     shouldFilter={shouldFilter}
                 >
@@ -196,28 +194,18 @@ const AutocompleteInput = React.forwardRef<HTMLInputElement, AutocompleteInputPr
     ({ className, id, onFocus, onKeyDown, onPointerDown, ...props }, forwardedRef) => {
         const { commit, inputId, inputRef, inputValue, openOnFocus, setInputValue, setOpen } = useAutocompleteContext();
 
-        // Read live cmdk store so we know whether Enter would land on a real
-        // match. When there are no matches (or no highlighted value), we
-        // commit the raw input ourselves; otherwise we let cmdk fire the
-        // selected item's `onSelect`, which will commit through the context.
-        //
-        // Single subscription returning a primitive boolean — `useSyncExternalStore`
-        // does referential equality, so collapsing the two slots into one boolean
-        // halves the per-keystroke re-renders without breaking the snapshot check
-        // (which would happen if we returned a fresh object each time).
+        // True when Enter would land on a real match. Selecting a suggestion
+        // commits through cmdk's `onSelect`; Enter without a match commits the
+        // raw input ourselves. Returning a primitive (not an object) lets
+        // `useSyncExternalStore`'s referential check halve per-keystroke renders.
         const hasActiveMatch = useCommandState((state) => state.filtered.count > 0 && Boolean(state.value));
 
-        // Skip the very first focus event — it's the `autoFocus` case (or any
-        // other focus the parent fires synchronously during mount). Auto-opening
-        // a popover before the user did anything is jarring; browser address
-        // bars (Chrome, Firefox) behave the same way.
-        //
-        // No `setTimeout` needed: React's `autoFocus` lives in the commit phase
-        // (`commitMount`), and the native `focus` event fires synchronously
-        // inside that `el.focus()` call — so our `onFocus` handler runs before
-        // any passive effect. The flag is therefore still `true` during the
-        // mount-time focus and is flipped to `false` here, in time for every
-        // subsequent user-driven focus (click, Tab, re-focus after Escape).
+        // Suppress the autoFocus-fired `focus` on mount: opening the popover
+        // before the user did anything is jarring (browser address bars behave
+        // the same). React's autoFocus fires the native event synchronously
+        // during `commitMount`, before any effect — so the flag is still `true`
+        // for that first focus and flipped to `false` here for every
+        // user-driven focus (click, Tab, re-focus after Escape).
         const isMountFocusRef = React.useRef(true);
 
         React.useEffect(() => {
@@ -239,6 +227,10 @@ const AutocompleteInput = React.forwardRef<HTMLInputElement, AutocompleteInputPr
 
         const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
             onFocus?.(event);
+
+            if (event.defaultPrevented) {
+                return;
+            }
 
             if (openOnFocus && !isMountFocusRef.current) {
                 setOpen(true);
@@ -304,16 +296,11 @@ const AutocompleteInput = React.forwardRef<HTMLInputElement, AutocompleteInputPr
         return (
             <PopoverAnchor asChild>
                 {/*
-                 * `asChild` makes cmdk render through Radix `Slot`, which lets us
-                 * delegate the actual DOM `<input>` (and its shadcn styling) to
-                 * the project-wide `Input` component. cmdk still owns the value
-                 * sync, ARIA combobox attributes and `cmdk-input=""` data hook,
-                 * Slot just merges them into `Input` — handlers compose, primitive
-                 * props from cmdk fill in whatever the child doesn't define.
-                 *
-                 * Note: cmdk hard-codes `autoComplete="off"`, `autoCorrect="off"`
-                 * and `spellCheck={false}` on its primitive after the props spread,
-                 * so we don't repeat them here.
+                 * `asChild` delegates the DOM input (and shadcn styling) to the
+                 * project's `Input` while cmdk keeps value sync, ARIA combobox
+                 * attributes and `cmdk-input=""`. cmdk also hard-codes
+                 * `autoComplete/autoCorrect="off"` and `spellCheck={false}` —
+                 * don't repeat them.
                  */}
                 <CommandPrimitive.Input
                     asChild
@@ -354,6 +341,7 @@ const AutocompleteContent = React.forwardRef<
             children,
             className,
             listClassName,
+            onFocusOutside,
             onInteractOutside,
             onOpenAutoFocus,
             sideOffset = 4,
@@ -362,6 +350,19 @@ const AutocompleteContent = React.forwardRef<
         ref,
     ) => {
         const { inputRef } = useAutocompleteContext();
+        const contentRef = React.useRef<null | React.ElementRef<typeof PopoverPrimitive.Content>>(null);
+        const composedRef = React.useCallback(
+            (node: null | React.ElementRef<typeof PopoverPrimitive.Content>) => {
+                contentRef.current = node;
+
+                if (typeof ref === 'function') {
+                    ref(node);
+                } else if (ref) {
+                    (ref as React.MutableRefObject<typeof node>).current = node;
+                }
+            },
+            [ref],
+        );
 
         return (
             /*
@@ -387,6 +388,31 @@ const AutocompleteContent = React.forwardRef<
                     'max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) min-w-(--radix-popover-trigger-width) overflow-hidden p-0',
                     className,
                 )}
+                onFocusOutside={(event) => {
+                    onFocusOutside?.(event);
+
+                    if (event.defaultPrevented) {
+                        return;
+                    }
+
+                    // Radix `DismissableLayer` treats the anchor input as
+                    // "outside" (it isn't a Trigger), and its React-tree flag
+                    // races on Content's own focusin when our `CommandList`
+                    // synchronously bounces focus back to the input — both
+                    // produce spurious `focusOutside` events that would
+                    // dismiss the popover. Treat focus on the anchor input
+                    // or anywhere inside Content as "inside".
+                    //
+                    // Radix dispatches this event directly on the focused
+                    // element (`bubbles: false`), so `event.target` IS it.
+                    const focusTarget = event.target as Node | null;
+                    const focusInsideInput = !!(focusTarget && inputRef.current?.contains(focusTarget));
+                    const focusInsideContent = !!(focusTarget && contentRef.current?.contains(focusTarget));
+
+                    if (focusInsideInput || focusInsideContent) {
+                        event.preventDefault();
+                    }
+                }}
                 onInteractOutside={(event) => {
                     onInteractOutside?.(event);
 
@@ -395,8 +421,13 @@ const AutocompleteContent = React.forwardRef<
                     }
 
                     // Clicking the input itself shouldn't dismiss the popover —
-                    // Radix treats the anchor as "outside" since it isn't a Trigger.
-                    if (inputRef.current?.contains(event.target as Node)) {
+                    // Radix treats the anchor as "outside" since it isn't a
+                    // Trigger. The real pointer target is the focused
+                    // element via `event.target` (custom event is
+                    // dispatched on the target, `bubbles: false`).
+                    const interactTarget = event.target as Node | null;
+
+                    if (interactTarget && inputRef.current?.contains(interactTarget)) {
                         event.preventDefault();
                     }
                 }}
@@ -410,7 +441,7 @@ const AutocompleteContent = React.forwardRef<
                     // Keep focus on the input so typing keeps working immediately.
                     event.preventDefault();
                 }}
-                ref={ref}
+                ref={composedRef}
                 sideOffset={sideOffset}
                 {...props}
             >
@@ -422,7 +453,23 @@ const AutocompleteContent = React.forwardRef<
                  * list so a long suggestion set scrolls inside the popover
                  * instead of pushing the popover past the viewport.
                  */}
-                <CommandList className={cn('max-h-[280px] overflow-x-hidden overflow-y-auto', listClassName)}>
+                <CommandList
+                    className={cn('max-h-[280px] overflow-x-hidden overflow-y-auto', listClassName)}
+                    onFocus={(event) => {
+                        // cmdk re-focuses the input by id when its value
+                        // changes (`document.getElementById(inputId).focus()`),
+                        // falling back to the list when the lookup fails — and
+                        // it fails as soon as a wrapper like `FormControl`
+                        // overrides the input's id via Radix Slot. The listbox
+                        // then steals focus and typing breaks. Per the
+                        // aria-activedescendant pattern the listbox shouldn't
+                        // hold real focus (tabindex=-1), so bounce it back.
+                        // `target === currentTarget` skips legitimate child focus.
+                        if (event.target === event.currentTarget) {
+                            inputRef.current?.focus();
+                        }
+                    }}
+                >
                     {children}
                 </CommandList>
             </PopoverPrimitive.Content>

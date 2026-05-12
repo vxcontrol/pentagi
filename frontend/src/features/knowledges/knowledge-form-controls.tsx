@@ -6,8 +6,15 @@ import type {
 } from '@/graphql/types';
 
 import { MarkdownEditor } from '@/components/shared/markdown-editor';
+import {
+    Autocomplete,
+    AutocompleteContent,
+    AutocompleteEmpty,
+    AutocompleteGroup,
+    AutocompleteInput,
+    AutocompleteItem,
+} from '@/components/ui/autocomplete';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupTextareaAutosize } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
@@ -21,6 +28,45 @@ import { KNOWLEDGE_LIMITS } from './knowledge-form';
 const docTypeValues = [KnowledgeDocType.Answer, KnowledgeDocType.Guide, KnowledgeDocType.Code] as const;
 const guideTypeValues = Object.values(KnowledgeGuideType) as KnowledgeGuideTypeT[];
 const answerTypeValues = Object.values(KnowledgeAnswerType) as KnowledgeAnswerTypeT[];
+
+// The backend stores `code_lang` as a free-form string and uses it both as a
+// vector-store filter and as the markdown code-block tag (see
+// `backend/pkg/tools/code.go`). There is no enum to sync against — this is
+// purely a UX list of common values surfaced as combobox suggestions; users
+// can still type any custom identifier.
+const LANGUAGES = [
+    'bash',
+    'c',
+    'cpp',
+    'csharp',
+    'css',
+    'dockerfile',
+    'go',
+    'groovy',
+    'haskell',
+    'html',
+    'java',
+    'javascript',
+    'json',
+    'kotlin',
+    'lua',
+    'markdown',
+    'nginx',
+    'perl',
+    'php',
+    'powershell',
+    'python',
+    'ruby',
+    'rust',
+    'scala',
+    'shell',
+    'sql',
+    'swift',
+    'toml',
+    'typescript',
+    'xml',
+    'yaml',
+] as const;
 
 interface KnowledgeMetaFieldsProps {
     control: Control<FormValues>;
@@ -168,14 +214,40 @@ export const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaF
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Code language</FormLabel>
-                                <FormControl>
-                                    <Input
-                                        disabled={isSaving}
-                                        maxLength={KNOWLEDGE_LIMITS.codeLang}
-                                        placeholder="e.g. python, go, typescript"
-                                        {...field}
-                                    />
-                                </FormControl>
+                                {/*
+                                 * `Autocomplete` is a free-text input with a
+                                 * suggestion popover — the backend accepts any
+                                 * string here, so the dropdown is a UX hint
+                                 * rather than a closed enum.
+                                 */}
+                                <Autocomplete
+                                    onValueChange={field.onChange}
+                                    value={field.value ?? ''}
+                                >
+                                    <FormControl>
+                                        <AutocompleteInput
+                                            disabled={isSaving}
+                                            maxLength={KNOWLEDGE_LIMITS.codeLang}
+                                            name={field.name}
+                                            onBlur={field.onBlur}
+                                            placeholder="e.g. python, go, typescript"
+                                            ref={field.ref}
+                                        />
+                                    </FormControl>
+                                    <AutocompleteContent>
+                                        <AutocompleteEmpty>No matching language</AutocompleteEmpty>
+                                        <AutocompleteGroup>
+                                            {LANGUAGES.map((lang) => (
+                                                <AutocompleteItem
+                                                    key={lang}
+                                                    value={lang}
+                                                >
+                                                    {lang}
+                                                </AutocompleteItem>
+                                            ))}
+                                        </AutocompleteGroup>
+                                    </AutocompleteContent>
+                                </Autocomplete>
                                 <FormMessage />
                             </FormItem>
                         )}
