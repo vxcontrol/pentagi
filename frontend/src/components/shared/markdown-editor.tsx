@@ -159,7 +159,12 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
                     linkify: true,
                     tightLists: true,
                     transformCopiedText: true,
-                    transformPastedText: true,
+                    // Plain text pasted from the OS clipboard is left as-is.
+                    // With `transformPastedText: true`, a leading "- " (or
+                    // "1. ", "> ", etc.) would be parsed as markdown and
+                    // turn the paste into a list/blockquote — almost never
+                    // what the user wants for knowledge documents.
+                    transformPastedText: false,
                 }),
             ],
             immediatelyRender: false,
@@ -243,11 +248,29 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
             if (autoFocus && editor) {
                 editor.commands.focus('end');
             }
+            // `autoFocus` is intentionally omitted from the deps — it's a
+            // mount-time prop, equivalent to the native `<input autoFocus>`
+            // attribute. We don't want a parent flipping `autoFocus` later
+            // to steal focus back into the editor.
             // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [editor]);
 
+        // While tiptap is initializing (`useEditor` returns `null` on the
+        // first render with `immediatelyRender: false`), render a placeholder
+        // with the same outer classes so the bounding box is already correct
+        // and the parent layout doesn't jump when the editor mounts.
         if (!editor) {
-            return null;
+            return (
+                <div
+                    aria-busy="true"
+                    className={cn(
+                        'border-input dark:bg-input/30 group/markdown-editor flex w-full flex-col overflow-hidden rounded-md border shadow-2xs outline-hidden transition-[color,box-shadow]',
+                        disabled && 'pointer-events-none opacity-60',
+                        className,
+                    )}
+                    data-slot="markdown-editor"
+                />
+            );
         }
 
         return (
@@ -268,7 +291,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
                 ) : null}
                 <EditorContent
                     className={cn(
-                        'prose prose-sm dark:prose-invert tiptap-content min-w-0 max-w-none flex-1 overflow-auto px-3 py-2',
+                        'prose prose-sm dark:prose-invert tiptap-content max-w-none min-w-0 flex-1 overflow-auto px-3 py-2',
                         '[&_.ProseMirror]:min-h-full [&_.ProseMirror]:outline-none',
                         contentClassName,
                     )}

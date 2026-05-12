@@ -1,0 +1,30 @@
+import type { ReactNode } from 'react';
+
+import { cn } from '@/lib/utils';
+
+import { KnowledgeHeader } from './knowledge-header';
+
+interface KnowledgeLayoutProps {
+    children: ReactNode;
+    className?: string;
+    isNew: boolean;
+    knowledgeName: null | string;
+    saveButton?: ReactNode;
+}
+
+/**
+ * Shared layout shell for the knowledge page in non-form branches
+ * (loading, not-found). `KnowledgeForm` owns its own `<form>` root and
+ * renders the header inline because the form must be the parent of every
+ * input.
+ */
+export const KnowledgeLayout = ({ children, className, isNew, knowledgeName, saveButton }: KnowledgeLayoutProps) => (
+    <div className={cn('flex min-h-[100dvh] flex-col', className)}>
+        <KnowledgeHeader
+            isNew={isNew}
+            knowledgeName={knowledgeName}
+            saveButton={saveButton}
+        />
+        {children}
+    </div>
+);
