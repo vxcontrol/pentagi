@@ -1,8 +1,21 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { ArrowDown, ArrowUp, Ellipsis, FileText, Loader2, Pencil, Plus, Trash } from 'lucide-react';
-import { useState } from 'react';
+import {
+    ArrowDown,
+    ArrowUp,
+    Check,
+    Ellipsis,
+    FileText,
+    Loader2,
+    Pencil,
+    PencilLine,
+    Plus,
+    Trash,
+    X,
+} from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
@@ -14,8 +27,10 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
@@ -24,19 +39,65 @@ import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const Templates = () => {
     const navigate = useNavigate();
-    const { deleteTemplate, templates } = useTemplates();
+    const { deleteTemplate, templates, updateTemplate } = useTemplates();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingTemplate, setDeletingTemplate] = useState<null | Template>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+    const [editingTemplateId, setEditingTemplateId] = useState<null | string>(null);
+    const [isRenameLoading, setIsRenameLoading] = useState(false);
+    const editingInputRef = useRef<HTMLInputElement>(null);
 
-    const handleTemplateOpen = (templateId: string) => {
-        navigate(`/templates/${templateId}`);
-    };
+    const handleTemplateOpen = useCallback(
+        (templateId: string) => {
+            navigate(`/templates/${templateId}`);
+        },
+        [navigate],
+    );
 
-    const handleDeleteDialogOpen = (template: Template) => {
+    const handleDeleteDialogOpen = useCallback((template: Template) => {
         setDeletingTemplate(template);
         setIsDeleteDialogOpen(true);
-    };
+    }, []);
+
+    const handleTemplateRenameStart = useCallback((template: Template) => {
+        setEditingTemplateId(template.id);
+    }, []);
+
+    const handleTemplateRenameCancel = useCallback(() => {
+        setEditingTemplateId(null);
+    }, []);
+
+    const handleTemplateRenameSave = useCallback(async () => {
+        const newTitle = editingInputRef.current?.value.trim();
+
+        if (!editingTemplateId || !newTitle) {
+            return;
+        }
+
+        const template = templates.find((t) => t.id === editingTemplateId);
+
+        if (!template) {
+            return;
+        }
+
+        if (newTitle === template.title) {
+            setEditingTemplateId(null);
+
+            return;
+        }
+
+        setIsRenameLoading(true);
+
+        try {
+            await updateTemplate(editingTemplateId, { text: template.text, title: newTitle });
+            toast.success('Template renamed successfully');
+            setEditingTemplateId(null);
+        } catch {
+            // Error already handled in provider with toast
+        } finally {
+            setIsRenameLoading(false);
+        }
+    }, [editingTemplateId, templates, updateTemplate]);
 
     const handleDelete = async () => {
         if (!deletingTemplate) {
@@ -63,7 +124,60 @@ const Templates = () => {
     const columns: ColumnDef<Template>[] = [
         {
             accessorKey: 'title',
-            cell: ({ row }) => <div className="font-medium">{row.getValue('title')}</div>,
+            cell: ({ row }) => {
+                const template = row.original;
+                const isEditing = editingTemplateId === template.id;
+                const title = row.getValue('title') as string;
+
+                if (isEditing) {
+                    return (
+                        <InputGroup
+                            className="h-8"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <InputGroupInput
+                                autoFocus
+                                defaultValue={title}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleTemplateRenameSave();
+
+                                        return;
+                                    }
+
+                                    if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        handleTemplateRenameCancel();
+                                    }
+                                }}
+                                placeholder="Template title"
+                                ref={editingInputRef}
+                            />
+                            <InputGroupAddon
+                                align="inline-end"
+                                className="gap-0 pr-2"
+                            >
+                                <InputGroupButton
+                                    aria-label="Save"
+                                    disabled={isRenameLoading}
+                                    onClick={() => handleTemplateRenameSave()}
+                                >
+                                    {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
+                                </InputGroupButton>
+                                <InputGroupButton
+                                    aria-label="Cancel"
+                                    onClick={() => handleTemplateRenameCancel()}
+                                >
+                                    <X />
+                                </InputGroupButton>
+                            </InputGroupAddon>
+                        </InputGroup>
+                    );
+                }
+
+                return <div className="font-medium">{title}</div>;
+            },
             header: ({ column }) => {
                 const sorted = column.getIsSorted();
 
@@ -119,6 +233,7 @@ const Templates = () => {
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     className="size-8 p-0"
+                                    onClick={(e) => e.stopPropagation()}
                                     variant="ghost"
                                 >
                                     <Ellipsis />
@@ -127,11 +242,17 @@ const Templates = () => {
                             <DropdownMenuContent
                                 align="end"
                                 className="min-w-24"
+                                onClick={(e) => e.stopPropagation()}
                             >
                                 <DropdownMenuItem onClick={() => handleTemplateOpen(template.id)}>
                                     <Pencil />
                                     Edit
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleTemplateRenameStart(template)}>
+                                    <Pencil className="size-3" />
+                                    Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     disabled={deletingIds.has(template.id)}
                                     onClick={() => handleDeleteDialogOpen(template)}
@@ -166,6 +287,10 @@ const Templates = () => {
             <ContextMenuItem onClick={() => handleTemplateOpen(template.id)}>
                 <Pencil />
                 Edit
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleTemplateRenameStart(template)}>
+                <PencilLine />
+                Rename
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -239,7 +364,11 @@ const Templates = () => {
                     data={templates}
                     filterColumn="title"
                     filterPlaceholder="Filter templates..."
-                    onRowClick={(template) => handleTemplateOpen(template.id)}
+                    onRowClick={(template) => {
+                        if (editingTemplateId !== template.id) {
+                            handleTemplateOpen(template.id);
+                        }
+                    }}
                     renderRowContextMenu={renderRowContextMenu}
                 />
 
