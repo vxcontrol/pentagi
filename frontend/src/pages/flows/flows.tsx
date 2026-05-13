@@ -2,7 +2,20 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { format, isToday } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import { ArrowDown, ArrowUp, Ellipsis, Eye, GitFork, Loader2, Pause, Pencil, Plus, Star, Trash } from 'lucide-react';
+import {
+    ArrowDown,
+    ArrowUp,
+    Ellipsis,
+    Eye,
+    GitFork,
+    Loader2,
+    Pause,
+    Pencil,
+    PencilLine,
+    Plus,
+    Star,
+    Trash,
+} from 'lucide-react';
 import { Check, CheckCircle2, X, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -602,7 +615,7 @@ const Flows = () => {
                                         View
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleFlowRenameStart(flow)}>
-                                        <Pencil className="size-3" />
+                                        <PencilLine className="size-3" />
                                         Rename
                                     </DropdownMenuItem>
                                     {isRunning && (
