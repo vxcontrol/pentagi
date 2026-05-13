@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { HeaderButton } from '@/components/shared/header-button';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -195,14 +196,12 @@ const Templates = () => {
                 </Breadcrumb>
             </div>
             <div className="ml-auto flex items-center gap-2 px-4">
-                <Button
+                <HeaderButton
+                    icon={<Plus />}
+                    label="New Template"
                     onClick={() => navigate('/templates/new')}
-                    size="sm"
                     variant="secondary"
-                >
-                    <Plus />
-                    New Template
-                </Button>
+                />
             </div>
         </header>
     );

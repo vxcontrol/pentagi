@@ -23,6 +23,7 @@ import {
     formatModifiedAbsolute,
     formatModifiedRelative,
 } from '@/components/shared/file-manager';
+import { HeaderButton } from '@/components/shared/header-button';
 import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
 import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
@@ -397,24 +398,21 @@ const Resources = () => {
                 </Breadcrumb>
             </div>
             <div className="ml-auto flex items-center gap-2 px-4">
-                <Button
+                <HeaderButton
                     disabled={upload.isUploading}
+                    icon={<FolderPlus />}
+                    label="New folder"
                     onClick={() => setIsMkdirOpen(true)}
-                    size="sm"
                     variant="outline"
-                >
-                    <FolderPlus />
-                    New folder
-                </Button>
-                <Button
+                />
+                <HeaderButton
+                    aria-label={upload.isUploading ? 'Uploading...' : 'Upload files'}
                     disabled={upload.isUploading}
+                    icon={upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    label={upload.isUploading ? 'Uploading...' : 'Upload files'}
                     onClick={upload.openFilePicker}
-                    size="sm"
                     variant="secondary"
-                >
-                    {upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
-                    {upload.isUploading ? 'Uploading...' : 'Upload files'}
-                </Button>
+                />
             </div>
         </header>
     );

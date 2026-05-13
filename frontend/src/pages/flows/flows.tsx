@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { HeaderButton } from '@/components/shared/header-button';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -749,14 +750,12 @@ const Flows = () => {
                 </Breadcrumb>
             </div>
             <div className="ml-auto flex items-center gap-2 px-4">
-                <Button
+                <HeaderButton
+                    icon={<Plus />}
+                    label="New Flow"
                     onClick={() => navigate('/flows/new')}
-                    size="sm"
                     variant="secondary"
-                >
-                    <Plus />
-                    New Flow
-                </Button>
+                />
             </div>
         </header>
     );

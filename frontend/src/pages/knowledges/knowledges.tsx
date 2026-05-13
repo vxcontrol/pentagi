@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import type { BadgeVariant } from '@/components/ui/badge';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { HeaderButton } from '@/components/shared/header-button';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -311,14 +312,12 @@ const Knowledges = () => {
                 </Breadcrumb>
             </div>
             <div className="ml-auto flex items-center gap-2 px-4">
-                <Button
+                <HeaderButton
+                    icon={<Plus />}
+                    label="New Knowledge"
                     onClick={() => navigate('/knowledges/new')}
-                    size="sm"
                     variant="secondary"
-                >
-                    <Plus />
-                    New Knowledge
-                </Button>
+                />
             </div>
         </header>
     );

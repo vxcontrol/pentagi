@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
+import { HeaderButton } from '@/components/shared/header-button';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -94,15 +95,14 @@ const FlowReportDropdown = () => {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button
+                <HeaderButton
                     className="shrink-0"
                     disabled={isReportDisabled}
+                    endIcon={<ChevronDown className="opacity-50" />}
+                    icon={<NotepadText />}
+                    label="Report"
                     variant="ghost"
-                >
-                    <NotepadText />
-                    Report
-                    <ChevronDown className="opacity-50" />
-                </Button>
+                />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuItem

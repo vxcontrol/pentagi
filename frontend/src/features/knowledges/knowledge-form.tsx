@@ -11,8 +11,8 @@ import type {
     UpdateKnowledgeDocumentInput,
 } from '@/graphql/types';
 
+import { HeaderButton } from '@/components/shared/header-button';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
-import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Spinner } from '@/components/ui/spinner';
 import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
@@ -59,7 +59,9 @@ export const formSchema = z
             .string()
             .trim()
             .min(1, { message: 'Content is required' })
-            .max(KNOWLEDGE_LIMITS.content, { message: `Content must be ${KNOWLEDGE_LIMITS.content} characters or fewer` }),
+            .max(KNOWLEDGE_LIMITS.content, {
+                message: `Content must be ${KNOWLEDGE_LIMITS.content} characters or fewer`,
+            }),
         description: optionalTrimmed(KNOWLEDGE_LIMITS.description, 'Description'),
         docType: z.nativeEnum(KnowledgeDocType),
         guideType: z.nativeEnum(KnowledgeGuideType).optional(),
@@ -67,7 +69,9 @@ export const formSchema = z
             .string()
             .trim()
             .min(1, { message: 'Question is required' })
-            .max(KNOWLEDGE_LIMITS.question, { message: `Question must be ${KNOWLEDGE_LIMITS.question} characters or fewer` }),
+            .max(KNOWLEDGE_LIMITS.question, {
+                message: `Question must be ${KNOWLEDGE_LIMITS.question} characters or fewer`,
+            }),
     })
     .superRefine((value, ctx) => {
         const requiredByDocType: Partial<Record<KnowledgeDocType, { field: FieldPath<FormValues>; message: string }>> =
@@ -313,14 +317,12 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
     const canSubmit = !isSaving && isValid && (isNew || isDirty);
 
     const saveButton = (
-        <Button
+        <HeaderButton
             disabled={!canSubmit}
-            size="sm"
+            icon={isSaving ? <Spinner variant="circle" /> : <Save aria-hidden="true" />}
+            label={isNew ? 'Create' : 'Save'}
             type="submit"
-        >
-            {isSaving ? <Spinner variant="circle" /> : <Save aria-hidden="true" />}
-            {isNew ? 'Create' : 'Save'}
-        </Button>
+        />
     );
 
     return (
