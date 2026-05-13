@@ -191,11 +191,10 @@ interface KnowledgeFormProps {
     initialValues: FormValues;
     isNew: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
-    knowledgeName: null | string;
     onSubmit: (values: FormValues, dirtyFields: DirtyFlags) => Promise<SubmitResult>;
 }
 
-export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, onSubmit }: KnowledgeFormProps) => {
+export const KnowledgeForm = ({ initialValues, isNew, knowledge, onSubmit }: KnowledgeFormProps) => {
     const navigate = useNavigate();
     const { isDesktop } = useBreakpoint();
     const [isSaving, setIsSaving] = useState(false);
@@ -208,7 +207,20 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
         // markdown editor) — same UX after the first interaction, no waste
         // on initial mount or untouched fields.
         mode: 'onTouched',
+        resetOptions: {
+            // When `values` changes (e.g. a GraphQL subscription pushes an
+            // updated document after an inline rename from the header),
+            // refresh the form's defaults but keep any unsaved edits the
+            // user is still working on. Without this, an external update
+            // would silently wipe their in-flight changes.
+            keepDirtyValues: true,
+        },
         resolver: zodResolver(formSchema),
+        // `values` reactively syncs the form with `initialValues`. The page
+        // recomputes `initialValues` from `knowledge` whenever the cache
+        // refreshes (rename, refetch, etc.), and RHF reapplies the new
+        // values on top of the form respecting `resetOptions` above.
+        values: initialValues,
     });
 
     const { control, formState, handleSubmit, reset } = form;
@@ -338,7 +350,8 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
                 >
                     <KnowledgeHeader
                         isNew={isNew}
-                        knowledgeName={knowledgeName}
+                        knowledge={knowledge}
+                        onBeforeNavigateAway={() => skipNextBlockRef.current()}
                         saveButton={saveButton}
                     />
                     {isDesktop ? (

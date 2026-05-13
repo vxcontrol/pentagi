@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import type { KnowledgeDocumentFragmentFragment } from '@/graphql/types';
+
 import { cn } from '@/lib/utils';
 
 import { KnowledgeHeader } from './knowledge-header';
@@ -8,7 +10,7 @@ interface KnowledgeLayoutProps {
     children: ReactNode;
     className?: string;
     isNew: boolean;
-    knowledgeName: null | string;
+    knowledge?: KnowledgeDocumentFragmentFragment | null;
     saveButton?: ReactNode;
 }
 
@@ -18,11 +20,11 @@ interface KnowledgeLayoutProps {
  * renders the header inline because the form must be the parent of every
  * input.
  */
-export const KnowledgeLayout = ({ children, className, isNew, knowledgeName, saveButton }: KnowledgeLayoutProps) => (
+export const KnowledgeLayout = ({ children, className, isNew, knowledge, saveButton }: KnowledgeLayoutProps) => (
     <div className={cn('flex min-h-[100dvh] flex-col', className)}>
         <KnowledgeHeader
             isNew={isNew}
-            knowledgeName={knowledgeName}
+            knowledge={knowledge}
             saveButton={saveButton}
         />
         {children}

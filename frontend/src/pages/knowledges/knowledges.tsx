@@ -1,8 +1,21 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { ArrowDown, ArrowUp, Ellipsis, LibraryBig, Loader2, Pencil, Plus, Trash } from 'lucide-react';
-import { useState } from 'react';
+import {
+    ArrowDown,
+    ArrowUp,
+    Check,
+    Ellipsis,
+    LibraryBig,
+    Loader2,
+    Pencil,
+    PencilLine,
+    Plus,
+    Trash,
+    X,
+} from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import type { BadgeVariant } from '@/components/ui/badge';
 
@@ -17,8 +30,10 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
@@ -50,19 +65,70 @@ const docTypeSubtype = (k: Knowledge): null | string => {
 
 const Knowledges = () => {
     const navigate = useNavigate();
-    const { deleteKnowledge, isLoading, knowledges } = useKnowledges();
+    const { deleteKnowledge, isLoading, knowledges, updateKnowledge } = useKnowledges();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingKnowledge, setDeletingKnowledge] = useState<Knowledge | null>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+    const [editingKnowledgeId, setEditingKnowledgeId] = useState<null | string>(null);
+    const [isRenameLoading, setIsRenameLoading] = useState(false);
+    const editingInputRef = useRef<HTMLInputElement>(null);
 
-    const handleOpen = (id: string) => {
-        navigate(`/knowledges/${id}`);
-    };
+    const handleOpen = useCallback(
+        (id: string) => {
+            navigate(`/knowledges/${id}`);
+        },
+        [navigate],
+    );
 
-    const handleDeleteDialogOpen = (knowledge: Knowledge) => {
+    const handleDeleteDialogOpen = useCallback((knowledge: Knowledge) => {
         setDeletingKnowledge(knowledge);
         setIsDeleteDialogOpen(true);
-    };
+    }, []);
+
+    const handleKnowledgeRenameStart = useCallback((knowledge: Knowledge) => {
+        setEditingKnowledgeId(knowledge.id);
+    }, []);
+
+    const handleKnowledgeRenameCancel = useCallback(() => {
+        setEditingKnowledgeId(null);
+    }, []);
+
+    const handleKnowledgeRenameSave = useCallback(async () => {
+        const newQuestion = editingInputRef.current?.value.trim();
+
+        if (!editingKnowledgeId || !newQuestion) {
+            return;
+        }
+
+        const knowledge = knowledges.find((k) => k.id === editingKnowledgeId);
+
+        if (!knowledge) {
+            return;
+        }
+
+        if (newQuestion === knowledge.question) {
+            setEditingKnowledgeId(null);
+
+            return;
+        }
+
+        setIsRenameLoading(true);
+
+        try {
+            // Backend requires `content` on update (it always re-embeds), so we
+            // pass it through unchanged from the cached document.
+            await updateKnowledge(editingKnowledgeId, {
+                content: knowledge.content,
+                question: newQuestion,
+            });
+            toast.success('Knowledge renamed successfully');
+            setEditingKnowledgeId(null);
+        } catch {
+            // Error already handled in provider with toast
+        } finally {
+            setIsRenameLoading(false);
+        }
+    }, [editingKnowledgeId, knowledges, updateKnowledge]);
 
     const handleDelete = async () => {
         if (!deletingKnowledge) {
@@ -137,7 +203,56 @@ const Knowledges = () => {
         {
             accessorKey: 'question',
             cell: ({ row }) => {
+                const knowledge = row.original;
+                const isEditing = editingKnowledgeId === knowledge.id;
                 const question = row.getValue('question') as string;
+
+                if (isEditing) {
+                    return (
+                        <InputGroup
+                            className="h-8"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <InputGroupInput
+                                autoFocus
+                                defaultValue={question}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleKnowledgeRenameSave();
+
+                                        return;
+                                    }
+
+                                    if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        handleKnowledgeRenameCancel();
+                                    }
+                                }}
+                                placeholder="Knowledge question"
+                                ref={editingInputRef}
+                            />
+                            <InputGroupAddon
+                                align="inline-end"
+                                className="gap-0 pr-2"
+                            >
+                                <InputGroupButton
+                                    aria-label="Save"
+                                    disabled={isRenameLoading}
+                                    onClick={() => handleKnowledgeRenameSave()}
+                                >
+                                    {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
+                                </InputGroupButton>
+                                <InputGroupButton
+                                    aria-label="Cancel"
+                                    onClick={() => handleKnowledgeRenameCancel()}
+                                >
+                                    <X />
+                                </InputGroupButton>
+                            </InputGroupAddon>
+                        </InputGroup>
+                    );
+                }
 
                 return (
                     <div
@@ -246,6 +361,11 @@ const Knowledges = () => {
                                     <Pencil />
                                     Edit
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleKnowledgeRenameStart(k)}>
+                                    <PencilLine />
+                                    Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     disabled={deletingIds.has(k.id)}
                                     onClick={() => handleDeleteDialogOpen(k)}
@@ -282,6 +402,10 @@ const Knowledges = () => {
             <ContextMenuItem onClick={() => handleOpen(k.id)}>
                 <Pencil />
                 Edit
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleKnowledgeRenameStart(k)}>
+                <PencilLine />
+                Rename
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -370,7 +494,11 @@ const Knowledges = () => {
                     data={knowledges}
                     filterColumn="question"
                     filterPlaceholder="Filter knowledge documents..."
-                    onRowClick={(k) => handleOpen(k.id)}
+                    onRowClick={(k) => {
+                        if (editingKnowledgeId !== k.id) {
+                            handleOpen(k.id);
+                        }
+                    }}
                     renderRowContextMenu={renderRowContextMenu}
                 />
 
