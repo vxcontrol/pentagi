@@ -7,9 +7,9 @@ import Markdown from '@/components/shared/markdown';
 import Terminal from '@/components/shared/terminal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MessageLogType, ResultFormat } from '@/graphql/types';
+import { copyMessageToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/format';
-import { copyMessageToClipboard } from '@/lib/сlipboard';
 
 import FlowMessageTypeIcon from './flow-message-type-icon';
 

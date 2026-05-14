@@ -6,8 +6,8 @@ import type { SearchLogFragmentFragment } from '@/graphql/types';
 import Markdown from '@/components/shared/markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import FlowAgentIcon from '@/features/flows/agents/flow-agent-icon';
+import { copyMessageToClipboard } from '@/lib/clipboard';
 import { formatDate, formatName } from '@/lib/utils/format';
-import { copyMessageToClipboard } from '@/lib/сlipboard';
 
 interface FlowToolProps {
     log: SearchLogFragmentFragment;

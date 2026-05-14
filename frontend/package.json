@@ -127,11 +127,9 @@
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.0.1",
         "jsdom": "^29.1.1",
-        "lint-staged": "^16.2.6",
         "postcss": "^8.4.47",
         "prettier": "^3.3.3",
         "prettier-plugin-tailwindcss": "^0.7.2",
-        "simple-git-hooks": "^2.11.1",
         "tailwindcss": "^4.1.18",
         "tsx": "^4.19.3",
         "typescript": "^5.6.2",
@@ -144,8 +142,7 @@
     "pnpm": {
         "onlyBuiltDependencies": [
             "@swc/core",
-            "esbuild",
-            "simple-git-hooks"
+            "esbuild"
         ]
     },
     "eslintConfig": {
