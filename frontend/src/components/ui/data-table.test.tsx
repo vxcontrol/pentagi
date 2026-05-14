@@ -206,6 +206,61 @@ describe('DataTable — sorting state persists to storage', () => {
     });
 });
 
+describe('DataTable — controlled pageIndex reconciliation', () => {
+    it('asks the parent to clamp an out-of-range controlled pageIndex on mount', () => {
+        const onPageChange = vi.fn();
+
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={ROWS}
+                onPageChange={onPageChange}
+                pageIndex={9}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        // 3 rows / default pageSize 10 → 1 page. The URL-driven pageIndex 9
+        // is out of range, so the parent must be told to drop to 0 so the
+        // canonical URL no longer points past the dataset.
+        expect(onPageChange).toHaveBeenCalledWith(0);
+    });
+
+    it('clears the URL page when picking "All" on a high page in controlled mode', async () => {
+        const user = userEvent.setup();
+        // 15 rows × default pageSize 10 → 2 pages; start on page 2.
+        const manyRows: Row[] = Array.from({ length: 15 }, (_, index) => ({
+            id: String(index + 1),
+            name: `Row ${index + 1}`,
+        }));
+        const onPageChange = vi.fn();
+
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={manyRows}
+                onPageChange={onPageChange}
+                pageIndex={1}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        // Initial mirror of the controlled pageIndex shouldn't trigger a
+        // reconcile — page 2 of 2 is in range.
+        expect(onPageChange).not.toHaveBeenCalled();
+
+        // Open the rows-per-page select and pick "All".
+        const trigger = screen.getByRole('combobox');
+        await user.click(trigger);
+        const option = await screen.findByRole('option', { name: 'All' });
+        await user.click(option);
+
+        // "All" collapses the dataset to a single page; the parent has to
+        // hear about pageIndex 0 so `?page=2` is dropped from the URL.
+        expect(onPageChange).toHaveBeenCalledWith(0);
+    });
+});
+
 describe('DataTable — empty results', () => {
     it('does not render "Page 1 of 0" when there are no rows', () => {
         render(

@@ -173,6 +173,7 @@ const Knowledges = () => {
             },
             header: ({ column }) => <SortableColumnHeader column={column} label="Type" />,
             maxSize: 180,
+            meta: { columnMenuLabel: 'Type' },
             minSize: 110,
             size: 130,
         },
@@ -209,6 +210,7 @@ const Knowledges = () => {
                 );
             },
             header: ({ column }) => <SortableColumnHeader column={column} label="Question" />,
+            meta: { columnMenuLabel: 'Question' },
             minSize: 180,
             size: 280,
         },

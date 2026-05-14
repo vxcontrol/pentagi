@@ -289,10 +289,6 @@ function DataTable<TData, TValue = unknown>({
         }
     }, [externalPageIndex]);
 
-    const handlePageSizeChange = useCallback((newPageSize: number) => {
-        setPagination({ pageIndex: 0, pageSize: newPageSize });
-    }, []);
-
     const paginationReference = useLatestRef(pagination);
 
     const handlePaginationChange = useCallback(
@@ -310,6 +306,18 @@ function DataTable<TData, TValue = unknown>({
             }
         },
         [onPageChange, paginationReference],
+    );
+
+    // Route page-size changes through the same channel as TanStack's
+    // pagination mutations so `onPageChange` fires when the URL-driven
+    // pageIndex needs to drop to 0. Without this, picking "All" on a high
+    // page leaves `?page=5` stranded in the URL even though the display
+    // correctly clamps to "Page 1 of 1".
+    const handlePageSizeChange = useCallback(
+        (newPageSize: number) => {
+            handlePaginationChange({ pageIndex: 0, pageSize: newPageSize });
+        },
+        [handlePaginationChange],
     );
 
     const table = useReactTable({
@@ -370,21 +378,29 @@ function DataTable<TData, TValue = unknown>({
     // pipeline, which React forbids during render. The early return makes the
     // effect a no-op on every render where the URL is already in range, so
     // the cost on the happy path is one comparison.
+    //
+    // Controlled mode compares the URL (`externalPageIndex`) — the canonical
+    // source of truth — rather than the internal mirror, because internal
+    // state can drop to a clamped value via `handlePageSizeChange` while the
+    // URL still points at the stale page. Uncontrolled mode keeps comparing
+    // the internal pageIndex since there's no other source.
     useEffect(() => {
         if (pageCount === 0) {
             return;
         }
 
-        if (pagination.pageIndex === safePageIndex) {
+        if (isPageControlled) {
+            if (externalPageIndex !== undefined && externalPageIndex !== safePageIndex) {
+                onPageChange?.(safePageIndex);
+            }
+
             return;
         }
 
-        if (isPageControlled) {
-            onPageChange?.(safePageIndex);
-        } else {
+        if (pagination.pageIndex !== safePageIndex) {
             setPagination((previous) => ({ ...previous, pageIndex: safePageIndex }));
         }
-    }, [isPageControlled, onPageChange, pageCount, pagination.pageIndex, safePageIndex]);
+    }, [externalPageIndex, isPageControlled, onPageChange, pageCount, pagination.pageIndex, safePageIndex]);
 
     return (
         <div className="w-full">
