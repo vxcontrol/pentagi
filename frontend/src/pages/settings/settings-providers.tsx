@@ -183,7 +183,12 @@ const SettingsProviders = () => {
                 accessorKey: 'name',
                 cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
                 enableHiding: false,
-                header: ({ column }) => <SortableColumnHeader column={column} label="Name" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Name"
+                    />
+                ),
                 size: 400,
             },
             {
@@ -199,7 +204,12 @@ const SettingsProviders = () => {
                         </Badge>
                     );
                 },
-                header: ({ column }) => <SortableColumnHeader column={column} label="Type" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Type"
+                    />
+                ),
                 size: 160,
             },
             {
@@ -218,7 +228,12 @@ const SettingsProviders = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => <SortableColumnHeader column={column} label="Created" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Created"
+                    />
+                ),
                 meta: { columnMenuLabel: 'Created' },
                 size: 120,
                 sortingFn: (rowA, rowB) => {
@@ -244,7 +259,12 @@ const SettingsProviders = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => <SortableColumnHeader column={column} label="Updated" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Updated"
+                    />
+                ),
                 size: 120,
                 sortingFn: (rowA, rowB) => {
                     const dateA = new Date(rowA.getValue('updatedAt') as string);

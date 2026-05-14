@@ -168,7 +168,7 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                             renderItem={(item, isCurrent) => (
                                 <>
                                     <Badge
-                                        className="shrink-0 whitespace-nowrap text-[10px]"
+                                        className="shrink-0 text-[10px] whitespace-nowrap"
                                         variant="outline"
                                     >
                                         {item.docType}

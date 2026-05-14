@@ -41,8 +41,7 @@ const legacyStoragePathVariants = (path: string): string[] => {
     return canonical === path ? [canonical, withSlash] : [path, canonical];
 };
 
-const legacyKeysForPath = (p: string): string[] =>
-    LEGACY_TYPES.map((type) => `${type}${STORAGE_KEY_SEPARATOR}${p}`);
+const legacyKeysForPath = (p: string): string[] => LEGACY_TYPES.map((type) => `${type}${STORAGE_KEY_SEPARATOR}${p}`);
 
 /** Read the unified state. Returns `{}` when missing or invalid. */
 export const loadTableState = (key: string): TableState => getStorageItem(key, tableStateSchema) ?? {};

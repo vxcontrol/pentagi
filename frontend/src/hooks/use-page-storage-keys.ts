@@ -1,12 +1,7 @@
 import { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import {
-    getPeriodStorageKey,
-    getTableStorageKey,
-    getTopLevelPath,
-    getViewOptionsStorageKey,
-} from '@/lib/storage-keys';
+import { getPeriodStorageKey, getTableStorageKey, getTopLevelPath, getViewOptionsStorageKey } from '@/lib/storage-keys';
 
 interface PageStorageKeys {
     /** Dashboard analytics time window — single string value, no schema merge. */

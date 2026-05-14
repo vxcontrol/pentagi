@@ -248,9 +248,7 @@ export function ListNavigationSheet<T>({
                     <SheetTitle className="flex items-center gap-2 text-base">
                         {sheetIcon}
                         <span>{sheetTitle}</span>
-                        <span className="text-muted-foreground ml-auto text-sm font-normal tabular-nums">
-                            {total}
-                        </span>
+                        <span className="text-muted-foreground ml-auto text-sm font-normal tabular-nums">{total}</span>
                     </SheetTitle>
                 </SheetHeader>
                 {hasEntries ? (

@@ -73,7 +73,9 @@ const useFilterFromUrl = ({
  * the previous tab's `?q=` into the URL. The `storageKey` option is accepted
  * for API symmetry but ignored here — there is no storage interaction at all.
  */
-export const useTableQueryFilterReader = (options: UseTableQueryFilterOptions = {}): UseTableQueryFilterReaderResult => {
+export const useTableQueryFilterReader = (
+    options: UseTableQueryFilterOptions = {},
+): UseTableQueryFilterReaderResult => {
     return useFilterFromUrl(options);
 };
 

@@ -6,10 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { usePageStorageKeys } from './use-page-storage-keys';
 
-const renderWithRouter = (
-    initialEntries: string[],
-    options?: Parameters<typeof usePageStorageKeys>[0],
-) => {
+const renderWithRouter = (initialEntries: string[], options?: Parameters<typeof usePageStorageKeys>[0]) => {
     const Wrapper = ({ children }: { children: ReactNode }) => (
         <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>
     );

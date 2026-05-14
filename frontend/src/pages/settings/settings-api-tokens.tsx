@@ -391,7 +391,12 @@ const SettingsAPITokens = () => {
                     );
                 },
                 enableHiding: false,
-                header: ({ column }) => <SortableColumnHeader column={column} label="Name" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Name"
+                    />
+                ),
                 size: 300,
             },
             {
@@ -420,7 +425,12 @@ const SettingsAPITokens = () => {
                     );
                 },
                 enableHiding: false,
-                header: ({ column }) => <SortableColumnHeader column={column} label="Token ID" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Token ID"
+                    />
+                ),
                 size: 200,
             },
             {
@@ -464,7 +474,12 @@ const SettingsAPITokens = () => {
 
                     return <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>;
                 },
-                header: ({ column }) => <SortableColumnHeader column={column} label="Status" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Status"
+                    />
+                ),
                 size: 120,
             },
             {
@@ -528,7 +543,12 @@ const SettingsAPITokens = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => <SortableColumnHeader column={column} label="Expires" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Expires"
+                    />
+                ),
                 size: 150,
                 sortingFn: (rowA, rowB) => {
                     const expiresA = getTokenExpirationDate(rowA.original);
@@ -560,7 +580,12 @@ const SettingsAPITokens = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => <SortableColumnHeader column={column} label="Created" />,
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Created"
+                    />
+                ),
                 meta: { columnMenuLabel: 'Created' },
                 size: 120,
                 sortingFn: (rowA, rowB) => {

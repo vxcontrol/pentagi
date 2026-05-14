@@ -140,7 +140,12 @@ const Templates = () => {
 
                 return <div className="font-medium">{title}</div>;
             },
-            header: ({ column }) => <SortableColumnHeader column={column} label="Title" />,
+            header: ({ column }) => (
+                <SortableColumnHeader
+                    column={column}
+                    label="Title"
+                />
+            ),
         },
         {
             accessorKey: 'text',
@@ -149,7 +154,12 @@ const Templates = () => {
 
                 return <div className="text-muted-foreground max-w-[380px] truncate text-sm">{text}</div>;
             },
-            header: ({ column }) => <SortableColumnHeader column={column} label="Text" />,
+            header: ({ column }) => (
+                <SortableColumnHeader
+                    column={column}
+                    label="Text"
+                />
+            ),
         },
         {
             cell: ({ row }) => {

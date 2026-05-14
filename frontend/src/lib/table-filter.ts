@@ -9,7 +9,10 @@
  * one this module uses (e.g. server-side prefiltering).
  */
 export const normalizeForFilter = (text: string): string =>
-    text.normalize('NFKD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+    text
+        .normalize('NFKD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase();
 
 /**
  * Build a reusable text-matcher specialised for `query`. The query is
