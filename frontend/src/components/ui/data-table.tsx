@@ -252,9 +252,17 @@ function DataTable<TData, TValue = unknown>({
         updateTableState(tableKey, { columnVisibility: internalColumnVisibility });
     }, [internalColumnVisibility, isColumnVisibilityControlled, tableKey]);
 
+    // Only persist a non-default pageSize. `updateTableState` clears the
+    // field when handed `undefined`, so the storage slot stays empty until
+    // the user actively picks a different page size. Without this guard the
+    // StrictMode dev double-invoke of `useEffectAfterMount` would seed
+    // `{ pageSize: 10 }` on every fresh mount — harmless in prod, noisy in
+    // dev tooling and surprising when inspecting storage.
     useEffectAfterMount(() => {
-        updateTableState(tableKey, { pageSize: pagination.pageSize });
-    }, [pagination.pageSize, tableKey]);
+        updateTableState(tableKey, {
+            pageSize: pagination.pageSize === initialPageSize ? undefined : pagination.pageSize,
+        });
+    }, [initialPageSize, pagination.pageSize, tableKey]);
 
     const columnVisibility = externalColumnVisibility ?? internalColumnVisibility;
 
@@ -344,9 +352,39 @@ function DataTable<TData, TValue = unknown>({
     const pageSizeValue = pagination.pageSize >= data.length && data.length > 0 ? 'all' : String(pagination.pageSize);
 
     const totalRows = table.getFilteredRowModel().rows.length;
-    const rangeStart = totalRows > 0 ? pagination.pageIndex * pagination.pageSize + 1 : 0;
-    const rangeEnd = Math.min((pagination.pageIndex + 1) * pagination.pageSize, totalRows);
     const pageCount = table.getPageCount();
+
+    // `pagination.pageIndex` is mirrored from `?page=` (controlled) or the
+    // user's clicks (uncontrolled). Either source can point past the actual
+    // end of the dataset — hand-typed URLs, a filter narrowing results, or a
+    // page-size bump to "All" while we were on a high page. Derive a clamped
+    // view for the display values so the user never sees "Page 999 of 31",
+    // and reconcile the source of truth via the effect below.
+    const safePageIndex = pageCount > 0 ? Math.min(Math.max(0, pagination.pageIndex), pageCount - 1) : 0;
+    const rangeStart = totalRows > 0 ? safePageIndex * pagination.pageSize + 1 : 0;
+    const rangeEnd = Math.min((safePageIndex + 1) * pagination.pageSize, totalRows);
+
+    // Reconcile the canonical pageIndex once we know `pageCount`. The write
+    // has to happen in an effect because `setSearchParams` (controlled mode)
+    // and `setPagination` (uncontrolled) both mutate state outside the render
+    // pipeline, which React forbids during render. The early return makes the
+    // effect a no-op on every render where the URL is already in range, so
+    // the cost on the happy path is one comparison.
+    useEffect(() => {
+        if (pageCount === 0) {
+            return;
+        }
+
+        if (pagination.pageIndex === safePageIndex) {
+            return;
+        }
+
+        if (isPageControlled) {
+            onPageChange?.(safePageIndex);
+        } else {
+            setPagination((previous) => ({ ...previous, pageIndex: safePageIndex }));
+        }
+    }, [isPageControlled, onPageChange, pageCount, pagination.pageIndex, safePageIndex]);
 
     return (
         <div className="w-full">
@@ -524,7 +562,7 @@ function DataTable<TData, TValue = unknown>({
                 </div>
                 {pageCount > 0 ? (
                     <div className="flex items-center justify-center text-xs font-medium lg:w-20">
-                        Page {pagination.pageIndex + 1} of {pageCount}
+                        Page {safePageIndex + 1} of {pageCount}
                     </div>
                 ) : (
                     <div

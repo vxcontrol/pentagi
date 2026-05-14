@@ -53,6 +53,7 @@ import {
     useUpdateApiTokenMutation,
 } from '@/graphql/types';
 import { usePagination } from '@/hooks/use-pagination';
+import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
 import { cn } from '@/lib/utils';
 import { baseUrl } from '@/models/api';
 
@@ -208,6 +209,7 @@ const SettingsAPITokens = () => {
     const creatingInputRef = useRef<HTMLInputElement>(null);
 
     const { pageIndex: currentPage, setPage: handlePageChange } = usePagination();
+    const { filter, setFilter } = useTableQueryFilter();
 
     useApiTokenCreatedSubscription({
         onData: ({ client }) => {
@@ -792,6 +794,8 @@ const SettingsAPITokens = () => {
                 data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
                 filterColumn="name"
                 filterPlaceholder="Filter token names..."
+                filterValue={filter}
+                onFilterChange={setFilter}
                 onPageChange={handlePageChange}
                 pageIndex={currentPage}
                 renderRowContextMenu={renderRowContextMenu}

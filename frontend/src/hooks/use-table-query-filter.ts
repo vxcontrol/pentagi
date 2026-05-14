@@ -151,15 +151,21 @@ export const useTableQueryFilter = (options: UseTableQueryFilterOptions = {}): U
                 const next = new URLSearchParams(previous);
                 next.set(paramName, stored);
 
-                if (clearPageParamOnChange) {
-                    next.delete(URL_PARAMS.PAGE);
-                }
-
+                // Intentionally do NOT delete `?page=` here. The user's
+                // explicit `?page=N` (from a shared link or refresh) is their
+                // own request; the replay is restoring prior filter state,
+                // not a fresh filter change. If the replayed filter happens
+                // to make the requested page out-of-range, the page-index
+                // clamp in `DataTable` reconciles it on the next render —
+                // see the `safePageIndex` derivation. `clearPageParamOnChange`
+                // still applies to `setFilter` below, where the user is
+                // actively changing the filter and "page 5 of nothing" is
+                // the failure mode we want to avoid.
                 return next;
             },
             { replace: true },
         );
-    }, [clearPageParamOnChange, filter, paramName, setSearchParams, storageKey]);
+    }, [filter, paramName, setSearchParams, storageKey]);
 
     // Persist the URL filter into storage on every commit. Skipping the
     // first render is intentional: a fresh-mount empty `filter` would

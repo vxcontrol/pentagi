@@ -36,6 +36,7 @@ import { StatusCard } from '@/components/ui/status-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ProviderType, useDeleteProviderMutation, useSettingsProvidersQuery } from '@/graphql/types';
 import { usePagination } from '@/hooks/use-pagination';
+import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
 type Provider = ProviderConfigFragmentFragment;
 
 const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
@@ -132,6 +133,7 @@ const SettingsProviders = () => {
     const navigate = useNavigate();
 
     const { pageIndex: currentPage, setPage: handlePageChange } = usePagination();
+    const { filter, setFilter } = useTableQueryFilter();
 
     const handleProviderDelete = useCallback(
         async (providerId: string | undefined) => {
@@ -477,6 +479,8 @@ const SettingsProviders = () => {
                 data={providers}
                 filterColumn="name"
                 filterPlaceholder="Filter provider names..."
+                filterValue={filter}
+                onFilterChange={setFilter}
                 onPageChange={handlePageChange}
                 pageIndex={currentPage}
                 renderRowContextMenu={renderRowContextMenu}

@@ -259,7 +259,11 @@ const Knowledges = () => {
                 );
             },
             enableSorting: false,
-            header: () => null,
+            header: () => (
+                <span className="text-muted-foreground inline-flex items-center justify-end text-sm font-medium">
+                    Flags
+                </span>
+            ),
             id: 'flags',
             maxSize: 200,
             meta: { columnMenuLabel: 'Flags' },
