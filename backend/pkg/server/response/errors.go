@@ -151,6 +151,12 @@ var ErrKnowledgeUnauthorized = NewHttpError(403, "Knowledge.Unauthorized", "not 
 var ErrKnowledgeStoreUnavail = NewHttpError(503, "Knowledge.StoreUnavailable", "knowledge store (embedding provider) is not configured")
 var ErrKnowledgeInvalidData = NewHttpError(500, "Knowledge.InvalidData", "invalid knowledge document data")
 
+// toolcalls
+
+var ErrToolcallsInvalidRequest = NewHttpError(400, "Toolcalls.InvalidRequest", "invalid toolcall request data")
+var ErrToolcallsNotFound       = NewHttpError(404, "Toolcalls.NotFound", "toolcall not found")
+var ErrToolcallsInvalidData    = NewHttpError(500, "Toolcalls.InvalidData", "invalid toolcall data")
+
 // anonymize
 
 var ErrAnonymizeInvalidRequest = NewHttpError(400, "Anonymize.InvalidRequest", "invalid anonymize request data")
