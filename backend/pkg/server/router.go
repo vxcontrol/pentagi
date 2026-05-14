@@ -182,6 +182,7 @@ func NewRouter(
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
+	toolcallService := services.NewToolcallService(orm)
 	assistantService := services.NewAssistantService(orm, providers, controller, subscriptions)
 	agentlogService := services.NewAgentlogService(orm)
 	assistantlogService := services.NewAssistantlogService(orm)
@@ -281,6 +282,7 @@ func NewRouter(
 		setTasksGroup(privateGroup, taskService)
 		setSubtasksGroup(privateGroup, subtaskService)
 		setContainersGroup(privateGroup, containerService)
+		setToolcallsGroup(privateGroup, toolcallService)
 		setAssistantsGroup(privateGroup, assistantService)
 		setAgentlogsGroup(privateGroup, agentlogService)
 		setAssistantlogsGroup(privateGroup, assistantlogService)
@@ -479,6 +481,19 @@ func setContainersGroup(parent *gin.RouterGroup, svc *services.ContainerService)
 	{
 		flowContainersViewGroup.GET("/", svc.GetFlowContainers)
 		flowContainersViewGroup.GET("/:containerID", svc.GetFlowContainer)
+	}
+}
+
+func setToolcallsGroup(parent *gin.RouterGroup, svc *services.ToolcallService) {
+	toolcallsViewGroup := parent.Group("/toolcalls")
+	{
+		toolcallsViewGroup.GET("/", svc.GetToolcalls)
+	}
+
+	flowToolcallsViewGroup := parent.Group("/flows/:flowID/toolcalls")
+	{
+		flowToolcallsViewGroup.GET("/", svc.GetFlowToolcalls)
+		flowToolcallsViewGroup.GET("/:toolcallID", svc.GetFlowToolcall)
 	}
 }
 

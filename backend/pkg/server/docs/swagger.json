@@ -3872,6 +3872,207 @@
                 }
             }
         },
+        "/flows/{flowID}/toolcalls/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Toolcalls"
+                ],
+                "summary": "Retrieve toolcalls list by flow id",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "toolcalls list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.toolcalls"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting toolcalls not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting toolcalls",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/toolcalls/{toolcallID}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Toolcalls"
+                ],
+                "summary": "Retrieve toolcall info by id and flow id",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "toolcall id",
+                        "name": "toolcallID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "toolcall info received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Toolcall"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting toolcall not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "toolcall not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting toolcall",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/flows/{flowID}/usage": {
             "get": {
                 "security": [
@@ -6589,6 +6790,121 @@
                     },
                     "500": {
                         "description": "internal error on deleting token",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/toolcalls/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Toolcalls"
+                ],
+                "summary": "Retrieve toolcalls list",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "toolcalls list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.toolcalls"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting toolcalls not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting toolcalls",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -9403,6 +9719,59 @@
                 }
             }
         },
+        "models.Toolcall": {
+            "type": "object",
+            "required": [
+                "args",
+                "call_id",
+                "flow_id",
+                "name",
+                "status"
+            ],
+            "properties": {
+                "args": {
+                    "type": "string"
+                },
+                "call_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "duration_seconds": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "name": {
+                    "type": "string"
+                },
+                "result": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subtask_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "task_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "models.ToolcallsStats": {
             "type": "object",
             "properties": {
@@ -9976,6 +10345,20 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/models.APIToken"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.toolcalls": {
+            "type": "object",
+            "properties": {
+                "toolcalls": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Toolcall"
                     }
                 },
                 "total": {
