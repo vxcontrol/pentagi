@@ -37,7 +37,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
-import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -51,9 +50,9 @@ import { useResourcesSearch } from '@/features/resources/use-resources-search';
 import { useResourcesUpload } from '@/features/resources/use-resources-upload';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
+import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { copyToClipboard } from '@/lib/report';
-import { getColumnStorageKey } from '@/lib/storage-keys';
-import { loadColumnVisibility, saveColumnVisibility } from '@/lib/table-storage';
+import { migrateLegacyViewOptions, saveViewOptions } from '@/lib/view-options-storage';
 import { useResources } from '@/providers/resources-provider';
 
 /**
@@ -65,8 +64,9 @@ import { useResources } from '@/providers/resources-provider';
  *                              the FileManager default) when `true`, or as an
  *                              absolute, minute-precision timestamp when `false`
  *
- * All flags persist into the same `column` storage bucket because the schema is
- * `Record<string, boolean>` — adding more toggles later does not require a new key.
+ * All flags persist into the page's `viewOptions` storage bucket; the schema
+ * is `Record<string, boolean>` so adding more toggles later does not require
+ * a new key.
  */
 interface ResourcesViewOptions {
     foldersFirst: boolean;
@@ -74,6 +74,8 @@ interface ResourcesViewOptions {
     modified: boolean;
     size: boolean;
 }
+
+const RESOURCES_PATH = '/resources';
 
 /** Defaults match FileManager's out-of-the-box behaviour (relative dates, folders first, both columns visible). */
 const defaultViewOptions: ResourcesViewOptions = {
@@ -85,8 +87,8 @@ const defaultViewOptions: ResourcesViewOptions = {
 
 type ResourcesViewOptionKey = keyof ResourcesViewOptions;
 
-const loadViewOptions = (storageKey: string): ResourcesViewOptions => {
-    const stored = loadColumnVisibility(storageKey) ?? {};
+const seedViewOptions = (storageKey: string): ResourcesViewOptions => {
+    const stored = migrateLegacyViewOptions(RESOURCES_PATH, storageKey);
 
     return {
         foldersFirst: stored.foldersFirst ?? defaultViewOptions.foldersFirst,
@@ -112,14 +114,14 @@ const Resources = () => {
     const [filesToMove, setFilesToMove] = useState<FileNode[] | null>(null);
     const [filesToCopy, setFilesToCopy] = useState<FileNode[] | null>(null);
 
-    const viewOptionsStorageKey = useMemo(() => getColumnStorageKey('/resources'), []);
-    const [viewOptions, setViewOptions] = useState<ResourcesViewOptions>(() => loadViewOptions(viewOptionsStorageKey));
+    const { viewOptions: viewOptionsStorageKey } = usePageStorageKeys();
+    const [viewOptions, setViewOptions] = useState<ResourcesViewOptions>(() => seedViewOptions(viewOptionsStorageKey));
 
     useEffectAfterMount(() => {
         // Cast: `ResourcesViewOptions` is structurally a `Record<string, boolean>`
         // but TS doesn't widen object types with declared keys to an index
         // signature implicitly.
-        saveColumnVisibility(viewOptionsStorageKey, viewOptions as unknown as Record<string, boolean>);
+        saveViewOptions(viewOptionsStorageKey, viewOptions as unknown as Record<string, boolean>);
     }, [viewOptions, viewOptionsStorageKey]);
 
     const toggleViewOption = useCallback((option: ResourcesViewOptionKey) => {
@@ -470,39 +472,29 @@ const Resources = () => {
                 )}
 
                 <div className="flex items-center gap-2">
-                    <Form {...search.form}>
-                        <FormField
-                            control={search.form.control}
-                            name="search"
-                            render={({ field }) => (
-                                <FormItem className="max-w-sm flex-1">
-                                    <FormControl>
-                                        <InputGroup>
-                                            <InputGroupAddon>
-                                                <Search />
-                                            </InputGroupAddon>
-                                            <InputGroupInput
-                                                {...field}
-                                                autoComplete="off"
-                                                placeholder="Search resources..."
-                                                type="text"
-                                            />
-                                            {field.value && (
-                                                <InputGroupAddon align="inline-end">
-                                                    <InputGroupButton
-                                                        onClick={search.resetSearch}
-                                                        type="button"
-                                                    >
-                                                        <X />
-                                                    </InputGroupButton>
-                                                </InputGroupAddon>
-                                            )}
-                                        </InputGroup>
-                                    </FormControl>
-                                </FormItem>
-                            )}
+                    <InputGroup className="max-w-sm flex-1">
+                        <InputGroupAddon>
+                            <Search />
+                        </InputGroupAddon>
+                        <InputGroupInput
+                            aria-label="Search resources"
+                            autoComplete="off"
+                            onChange={(event) => search.setQuery(event.target.value)}
+                            placeholder="Search resources..."
+                            type="text"
+                            value={search.rawQuery}
                         />
-                    </Form>
+                        {search.rawQuery ? (
+                            <InputGroupAddon align="inline-end">
+                                <InputGroupButton
+                                    onClick={search.resetSearch}
+                                    type="button"
+                                >
+                                    <X />
+                                </InputGroupButton>
+                            </InputGroupAddon>
+                        ) : null}
+                    </InputGroup>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button

@@ -1,24 +1,14 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import {
-    ArrowDown,
-    ArrowUp,
-    Check,
-    Ellipsis,
-    FileText,
-    Loader2,
-    Pencil,
-    PencilLine,
-    Plus,
-    Trash,
-    X,
-} from 'lucide-react';
+import { Ellipsis, FileText, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
+import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { SortableColumnHeader } from '@/components/shared/sortable-column-header';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -30,15 +20,16 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
-import { cycleColumnSort } from '@/lib/table-sort';
+import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
+import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const Templates = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { deleteTemplate, templates, updateTemplate } = useTemplates();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingTemplate, setDeletingTemplate] = useState<null | Template>(null);
@@ -47,11 +38,13 @@ const Templates = () => {
     const [isRenameLoading, setIsRenameLoading] = useState(false);
     const editingInputRef = useRef<HTMLInputElement>(null);
 
+    const { filter, setFilter } = useTableQueryFilter();
+
     const handleTemplateOpen = useCallback(
         (templateId: string) => {
-            navigate(`/templates/${templateId}`);
+            navigate(mergeHrefWithSearchParams(`/templates/${templateId}`, new URLSearchParams(location.search)));
         },
-        [navigate],
+        [navigate, location.search],
     );
 
     const handleDeleteDialogOpen = useCallback((template: Template) => {
@@ -131,71 +124,23 @@ const Templates = () => {
 
                 if (isEditing) {
                     return (
-                        <InputGroup
-                            className="h-8"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <InputGroupInput
+                        <div onClick={(e) => e.stopPropagation()}>
+                            <InlineRenameInput
                                 autoFocus
+                                busy={isRenameLoading}
                                 defaultValue={title}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleTemplateRenameSave();
-
-                                        return;
-                                    }
-
-                                    if (e.key === 'Escape') {
-                                        e.preventDefault();
-                                        handleTemplateRenameCancel();
-                                    }
-                                }}
+                                inputRef={editingInputRef}
+                                onCancel={handleTemplateRenameCancel}
+                                onSave={handleTemplateRenameSave}
                                 placeholder="Template title"
-                                ref={editingInputRef}
                             />
-                            <InputGroupAddon
-                                align="inline-end"
-                                className="gap-0 pr-2"
-                            >
-                                <InputGroupButton
-                                    aria-label="Save"
-                                    disabled={isRenameLoading}
-                                    onClick={() => handleTemplateRenameSave()}
-                                >
-                                    {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
-                                </InputGroupButton>
-                                <InputGroupButton
-                                    aria-label="Cancel"
-                                    onClick={() => handleTemplateRenameCancel()}
-                                >
-                                    <X />
-                                </InputGroupButton>
-                            </InputGroupAddon>
-                        </InputGroup>
+                        </div>
                     );
                 }
 
                 return <div className="font-medium">{title}</div>;
             },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => cycleColumnSort(column)}
-                        variant="link"
-                    >
-                        Title
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
-            },
+            header: ({ column }) => <SortableColumnHeader column={column} label="Title" />,
         },
         {
             accessorKey: 'text',
@@ -204,24 +149,7 @@ const Templates = () => {
 
                 return <div className="text-muted-foreground max-w-[380px] truncate text-sm">{text}</div>;
             },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => cycleColumnSort(column)}
-                        variant="link"
-                    >
-                        Text
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
-            },
+            header: ({ column }) => <SortableColumnHeader column={column} label="Text" />,
         },
         {
             cell: ({ row }) => {
@@ -364,6 +292,8 @@ const Templates = () => {
                     data={templates}
                     filterColumn="title"
                     filterPlaceholder="Filter templates..."
+                    filterValue={filter}
+                    onFilterChange={setFilter}
                     onRowClick={(template) => {
                         if (editingTemplateId !== template.id) {
                             handleTemplateOpen(template.id);

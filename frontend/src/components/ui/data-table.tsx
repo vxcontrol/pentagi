@@ -1,4 +1,5 @@
 import {
+    type Column,
     type ColumnDef,
     type ColumnFiltersState,
     type ExpandedState,
@@ -11,11 +12,13 @@ import {
     type Table as ReactTable,
     type Row,
     type SortingState,
+    type Updater,
     useReactTable,
     type VisibilityState,
 } from '@tanstack/react-table';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react';
-import { Fragment, type ReactElement, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { Fragment, type ReactElement, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -29,26 +32,36 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
-import { getColumnStorageKey, getPageStorageKey, getSortingStorageKey } from '@/lib/storage-keys';
-import {
-    loadColumnVisibility,
-    loadPageState,
-    loadSorting,
-    saveColumnVisibility,
-    savePageState,
-    saveSorting,
-} from '@/lib/table-storage';
+import { useLatestRef } from '@/hooks/use-latest-ref';
+import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
 import { cn } from '@/lib/utils';
 
 interface DataTableProps<TData, TValue = unknown> {
     columns: ColumnDef<TData, TValue>[];
     columnVisibility?: VisibilityState;
     data: TData[];
+    /**
+     * Column id targeted by the search input. When omitted, the search input
+     * is not rendered — useful for tables where filtering is unnecessary
+     * (e.g. tooling subscreens that already filter server-side, or small
+     * static lists). When provided, the column id must exist in `columns`.
+     */
     filterColumn?: string;
     filterPlaceholder?: string;
+    /**
+     * Controlled filter value. When provided together with `onFilterChange`
+     * the parent owns the source of truth — typically `useTableQueryFilter`
+     * for URL/storage-backed filters. The value is projected into
+     * `state.columnFilters` and surfaces through TanStack's filter API just
+     * like an uncontrolled value would, so `DataTableFilter` and the column
+     * filter machinery never need to branch on controlled vs uncontrolled.
+     */
+    filterValue?: string;
     initialPageSize?: number;
     initialSorting?: SortingState;
     onColumnVisibilityChange?: (visibility: VisibilityState) => void;
+    onFilterChange?: (value: string) => void;
     onPageChange?: (pageIndex: number) => void;
     onRowClick?: (row: TData) => void;
     pageIndex?: number;
@@ -58,6 +71,14 @@ interface DataTableProps<TData, TValue = unknown> {
 
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100] as const;
 
+const columnPickerLabel = <TData,>(column: Column<TData, unknown>): string =>
+    column.columnDef.meta?.columnMenuLabel ?? column.id;
+
+// Shared empty array for the controlled-filter projection. Using a module
+// constant keeps the reference stable across renders so the memoized
+// `controlledColumnFilters` doesn't flap between two distinct empty arrays.
+const EMPTY_COLUMN_FILTERS: ColumnFiltersState = [];
+
 interface DataTableFilterProps<TData> {
     column: string;
     placeholder: string;
@@ -65,14 +86,15 @@ interface DataTableFilterProps<TData> {
 }
 
 /**
- * Search input bound to a single TanStack Table column. Reads/writes the column's
- * filter value directly — purely cosmetic shell around the table's existing
- * filter API. Extracted out of `DataTable` so the toolbar JSX doesn't have to
- * inline an IIFE just to capture the current `filterValue` once.
+ * Search input bound to a single TanStack Table column. Reads/writes through
+ * the column's filter API exclusively — `DataTable`'s `onColumnFiltersChange`
+ * funnels the write to the parent (`onFilterChange`) when the table is in
+ * controlled-filter mode, so this component stays uniform regardless.
  */
 const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilterProps<TData>) => {
     const tableColumn = table.getColumn(column);
     const filterValue = (tableColumn?.getFilterValue() as string) ?? '';
+    const fieldId = `data-table-filter-${column}`;
 
     return (
         <InputGroup className="max-w-sm">
@@ -80,7 +102,10 @@ const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilter
                 <Search />
             </InputGroupAddon>
             <InputGroupInput
+                aria-label={placeholder}
                 autoComplete="off"
+                id={fieldId}
+                name={column}
                 onChange={(event) => tableColumn?.setFilterValue(event.target.value)}
                 placeholder={placeholder}
                 type="text"
@@ -104,11 +129,13 @@ function DataTable<TData, TValue = unknown>({
     columns,
     columnVisibility: externalColumnVisibility,
     data,
-    filterColumn = 'name',
+    filterColumn,
     filterPlaceholder = 'Filter...',
+    filterValue: externalFilterValue,
     initialPageSize = 10,
     initialSorting = [],
     onColumnVisibilityChange,
+    onFilterChange,
     onPageChange,
     onRowClick,
     pageIndex: externalPageIndex,
@@ -117,46 +144,117 @@ function DataTable<TData, TValue = unknown>({
 }: DataTableProps<TData, TValue>) {
     const isColumnVisibilityControlled = externalColumnVisibility !== undefined;
     const isPageControlled = externalPageIndex !== undefined;
+    const isFilterControlled = externalFilterValue !== undefined && onFilterChange !== undefined;
     const isRowInteractive = !!onRowClick || !!renderSubComponent;
 
-    const sortingKey = useMemo(() => getSortingStorageKey(), []);
-    const columnKey = useMemo(() => getColumnStorageKey(), []);
-    const pageKey = useMemo(() => getPageStorageKey(), []);
+    const { pathname } = useLocation();
+    // Reuse the pathname we just read instead of letting the hook subscribe
+    // independently — react-router caches `useLocation` so the cost is
+    // negligible, but the explicit pass keeps the data flow obvious and
+    // makes it easy to migrate the table to a different storage scope (e.g.
+    // a workspace-prefixed path) without grepping for every subscription.
+    const { table: tableKey } = usePageStorageKeys({ pathname });
 
-    const [sorting, setSorting] = useState<SortingState>(() => loadSorting(sortingKey) ?? initialSorting);
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+    // Run the legacy → unified migration exactly once on mount via `useState`
+    // lazy init. The lazy initializer runs in a single commit, so the
+    // localStorage hit happens once even under StrictMode's double-invoke.
+    // After mount, the `useEffect` below re-runs migration when `tableKey`
+    // rotates (route change inside a persistent layout).
+    const [initialState] = useState(() => migrateLegacyTableState(pathname, tableKey));
+
+    const [sorting, setSorting] = useState<SortingState>(() => initialState.sorting ?? initialSorting);
+    const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
+    const [internalColumnVisibility, setInternalColumnVisibility] = useState<VisibilityState>(() =>
+        isColumnVisibilityControlled ? {} : (initialState.columnVisibility ?? {}),
+    );
+    const [pagination, setPagination] = useState(() => ({
+        pageIndex: isPageControlled ? (externalPageIndex ?? 0) : 0,
+        pageSize: initialState.pageSize ?? initialPageSize,
+    }));
     const [rowSelection, setRowSelection] = useState({});
     const [expanded, setExpanded] = useState<ExpandedState>({});
 
-    const [internalColumnVisibility, setInternalColumnVisibility] = useState<VisibilityState>(() =>
-        isColumnVisibilityControlled ? {} : (loadColumnVisibility(columnKey) ?? {}),
+    // Track which tableKey we've already migrated + seeded from. When the
+    // key rotates (route change inside a persistent layout, or an explicit
+    // override) we re-run the migration for the new path and refresh local
+    // state with whatever's stored under the new key.
+    const seededForKeyReference = useRef(tableKey);
+
+    useEffect(() => {
+        if (seededForKeyReference.current === tableKey) {
+            return;
+        }
+
+        seededForKeyReference.current = tableKey;
+        const stored = migrateLegacyTableState(pathname, tableKey);
+
+        setSorting(stored.sorting ?? initialSorting);
+
+        if (!isColumnVisibilityControlled) {
+            setInternalColumnVisibility(stored.columnVisibility ?? {});
+        }
+
+        setPagination((previous) => ({
+            ...previous,
+            pageSize: stored.pageSize ?? initialPageSize,
+        }));
+    }, [initialPageSize, initialSorting, isColumnVisibilityControlled, pathname, tableKey]);
+
+    // Project the controlled filter value into TanStack's columnFilters shape.
+    // Kept separate from `internalColumnFilters` so the controlled branch
+    // doesn't pull internal state into its deps and trigger spurious memo
+    // invalidations. Memoized so the reference is stable across renders when
+    // the inputs don't change — otherwise TanStack treats every render as a
+    // filter mutation and the downstream `useLatestRef(columnFilters)` would
+    // re-fire its effect each commit.
+    const controlledColumnFilters = useMemo<ColumnFiltersState>(
+        () =>
+            isFilterControlled && filterColumn && externalFilterValue
+                ? [{ id: filterColumn, value: externalFilterValue }]
+                : EMPTY_COLUMN_FILTERS,
+        [externalFilterValue, filterColumn, isFilterControlled],
     );
 
-    const [pagination, setPagination] = useState(() => {
-        const stored = loadPageState(pageKey);
+    const columnFilters = isFilterControlled ? controlledColumnFilters : internalColumnFilters;
 
-        return {
-            pageIndex: isPageControlled ? (externalPageIndex ?? 0) : (stored?.page ?? 0),
-            pageSize: stored?.pageSize ?? initialPageSize,
-        };
-    });
+    const columnFiltersReference = useLatestRef(columnFilters);
+
+    // Funnel every TanStack filter change through the right sink: parent
+    // callback in controlled mode, internal state otherwise.
+    const handleColumnFiltersChange = useCallback(
+        (updater: Updater<ColumnFiltersState>) => {
+            if (!isFilterControlled) {
+                setInternalColumnFilters(updater);
+
+                return;
+            }
+
+            const next = typeof updater === 'function' ? updater(columnFiltersReference.current) : updater;
+            const entry = filterColumn ? next.find((candidate) => candidate.id === filterColumn) : undefined;
+            onFilterChange?.((entry?.value as string) ?? '');
+        },
+        [columnFiltersReference, filterColumn, isFilterControlled, onFilterChange],
+    );
+
+    // Persist sorting + column visibility + page size into the unified
+    // `table_4_<path>` slot. Skipping the first render is intentional: a
+    // fresh mount would otherwise overwrite the seeded values with the
+    // same payload on the next commit.
+    useEffectAfterMount(() => {
+        updateTableState(tableKey, { sorting });
+    }, [sorting, tableKey]);
 
     useEffectAfterMount(() => {
-        saveSorting(sortingKey, sorting);
-    }, [sorting, sortingKey]);
-
-    useEffectAfterMount(() => {
-        if (!isColumnVisibilityControlled) {
-            saveColumnVisibility(columnKey, internalColumnVisibility);
+        if (isColumnVisibilityControlled) {
+            return;
         }
-    }, [internalColumnVisibility, columnKey, isColumnVisibilityControlled]);
+
+        updateTableState(tableKey, { columnVisibility: internalColumnVisibility });
+    }, [internalColumnVisibility, isColumnVisibilityControlled, tableKey]);
 
     useEffectAfterMount(() => {
-        savePageState(pageKey, {
-            page: isPageControlled ? 0 : pagination.pageIndex,
-            pageSize: pagination.pageSize,
-        });
-    }, [pagination.pageIndex, pagination.pageSize, pageKey, isPageControlled]);
+        updateTableState(tableKey, { pageSize: pagination.pageSize });
+    }, [pagination.pageSize, tableKey]);
 
     const columnVisibility = externalColumnVisibility ?? internalColumnVisibility;
 
@@ -187,8 +285,7 @@ function DataTable<TData, TValue = unknown>({
         setPagination({ pageIndex: 0, pageSize: newPageSize });
     }, []);
 
-    const paginationReference = useRef(pagination);
-    paginationReference.current = pagination;
+    const paginationReference = useLatestRef(pagination);
 
     const handlePaginationChange = useCallback(
         (
@@ -204,7 +301,7 @@ function DataTable<TData, TValue = unknown>({
                 onPageChange(newPagination.pageIndex);
             }
         },
-        [onPageChange],
+        [onPageChange, paginationReference],
     );
 
     const table = useReactTable({
@@ -217,7 +314,7 @@ function DataTable<TData, TValue = unknown>({
         getFilteredRowModel: getFilteredRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         getSortedRowModel: getSortedRowModel(),
-        onColumnFiltersChange: setColumnFilters,
+        onColumnFiltersChange: handleColumnFiltersChange,
         onColumnVisibilityChange: handleColumnVisibilityChange,
         onExpandedChange: setExpanded,
         onPaginationChange: handlePaginationChange,
@@ -249,6 +346,7 @@ function DataTable<TData, TValue = unknown>({
     const totalRows = table.getFilteredRowModel().rows.length;
     const rangeStart = totalRows > 0 ? pagination.pageIndex * pagination.pageSize + 1 : 0;
     const rangeEnd = Math.min((pagination.pageIndex + 1) * pagination.pageSize, totalRows);
+    const pageCount = table.getPageCount();
 
     return (
         <div className="w-full">
@@ -276,12 +374,12 @@ function DataTable<TData, TValue = unknown>({
                             .map((column) => (
                                 <DropdownMenuCheckboxItem
                                     checked={column.getIsVisible()}
-                                    className="capitalize"
+                                    className={column.columnDef.meta?.columnMenuLabel ? undefined : 'capitalize'}
                                     key={column.id}
                                     onCheckedChange={(value) => column.toggleVisibility(!!value)}
                                     onSelect={(event) => event.preventDefault()}
                                 >
-                                    {column.id}
+                                    {columnPickerLabel(column)}
                                 </DropdownMenuCheckboxItem>
                             ))}
                     </DropdownMenuContent>
@@ -424,9 +522,16 @@ function DataTable<TData, TValue = unknown>({
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="flex items-center justify-center text-xs font-medium lg:w-20">
-                    Page {pagination.pageIndex + 1} of {table.getPageCount()}
-                </div>
+                {pageCount > 0 ? (
+                    <div className="flex items-center justify-center text-xs font-medium lg:w-20">
+                        Page {pagination.pageIndex + 1} of {pageCount}
+                    </div>
+                ) : (
+                    <div
+                        aria-hidden
+                        className="lg:w-20"
+                    />
+                )}
                 <div className="flex items-center gap-1">
                     <Button
                         disabled={!table.getCanPreviousPage()}

@@ -1,24 +1,25 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-    Check,
     ChevronDown,
     Ellipsis,
     FileSymlink,
+    FileText,
     Loader2,
     PanelRightClose,
     PanelRightOpen,
     Pencil,
     Save,
     Trash,
-    X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { ListNavigationToolbar } from '@/components/shared/list-navigation-toolbar';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,22 +33,18 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import {
-    InputGroup,
-    InputGroupAddon,
-    InputGroupButton,
-    InputGroupInput,
-    InputGroupTextareaAutosize,
-} from '@/components/ui/input-group';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextareaAutosize } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTemplateDetailNavigation } from '@/features/templates/use-template-detail-navigation';
 import { useFlowTemplateQuery } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useInlineEditTitle } from '@/hooks/use-inline-edit-title';
 import { cn } from '@/lib/utils';
-import { useTemplates } from '@/providers/templates-provider';
+import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const formSchema = z.object({
     text: z.string().trim().min(1, { message: 'Text is required' }),
@@ -240,16 +237,28 @@ const Template = () => {
 
     const { isMobile } = useBreakpoint();
     const isNew = templateId === 'new';
+
+    // Pass `null` while creating a new template — there is no "current item"
+    // to highlight, and the toolbar shouldn't render at all anyway (gated
+    // below by `canShowActions`).
+    const { toolbarProps: templateToolbarProps } = useTemplateDetailNavigation(isNew ? null : templateId);
+
     const [isAsideOpen, setIsAsideOpen] = useState(false);
     const [expandedPresetIndex, setExpandedPresetIndex] = useState<null | number>(null);
     const [isReplaceConfirmOpen, setIsReplaceConfirmOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [pendingPreset, setPendingPreset] = useState<null | { text: string; title: string }>(null);
-    const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const editingInputRef = useRef<HTMLInputElement>(null);
+
+    const {
+        handleDropdownCloseAutoFocus,
+        inputRef: editingInputRef,
+        isEditing: isEditingTitle,
+        startEdit: handleTemplateRenameStart,
+        stopEdit: handleTemplateRenameCancel,
+    } = useInlineEditTitle({ resetKey: templateId });
 
     // Fetch template data when editing
     const { data: templateData, loading: isLoadingTemplate } = useFlowTemplateQuery({
@@ -275,49 +284,9 @@ const Template = () => {
         reset({ text, title }, { keepDefaultValues: false });
     }, [templateData, isNew, reset]);
 
-    // Reset inline-edit state when navigating between templates so the input
-    // doesn't carry over a stale draft from a previous template.
-    useEffect(() => {
-        setIsEditingTitle(false);
-    }, [templateId]);
-
-    // Focus and select the rename input when the inline editor opens. We can't
-    // rely on `autoFocus` here: the input mounts inside the same render cycle
-    // that closes the Radix DropdownMenu, and the dropdown's own focus restore
-    // (which it schedules via `requestAnimationFrame`) wins the race against
-    // React's autoFocus effect. Defer our focus to the next frame so it lands
-    // *after* Radix has finished its restore. Selecting the text lets the user
-    // overwrite the title in one keystroke.
-    useEffect(() => {
-        if (!isEditingTitle) {
-            return;
-        }
-
-        const id = requestAnimationFrame(() => {
-            const input = editingInputRef.current;
-
-            if (!input) {
-                return;
-            }
-
-            input.focus();
-            input.select();
-        });
-
-        return () => cancelAnimationFrame(id);
-    }, [isEditingTitle]);
-
     // Check if form has unsaved changes
     const hasUnsavedChanges = formState.isDirty;
     const templateName = templateData?.flowTemplate?.title ?? null;
-
-    const handleTemplateRenameStart = useCallback(() => {
-        setIsEditingTitle(true);
-    }, []);
-
-    const handleTemplateRenameCancel = useCallback(() => {
-        setIsEditingTitle(false);
-    }, []);
 
     const handleTemplateRenameSave = useCallback(async () => {
         const newTitle = editingInputRef.current?.value.trim();
@@ -328,7 +297,7 @@ const Template = () => {
         }
 
         if (newTitle === template.title) {
-            setIsEditingTitle(false);
+            handleTemplateRenameCancel();
 
             return;
         }
@@ -340,13 +309,13 @@ const Template = () => {
             // rename never overwrites unsaved edits in the form below.
             await updateTemplate(templateId, { text: template.text, title: newTitle });
             toast.success('Template renamed successfully');
-            setIsEditingTitle(false);
+            handleTemplateRenameCancel();
         } catch {
             // Error already handled in provider with toast
         } finally {
             setIsRenaming(false);
         }
-    }, [templateId, templateData?.flowTemplate, updateTemplate]);
+    }, [editingInputRef, handleTemplateRenameCancel, templateId, templateData?.flowTemplate, updateTemplate]);
 
     const handleTemplateDelete = useCallback(async () => {
         if (!templateId) {
@@ -435,45 +404,15 @@ const Template = () => {
                 <BreadcrumbList>
                     <BreadcrumbItem className="gap-2">
                         {isEditingTitle && canShowActions ? (
-                            <InputGroup className="h-8 w-64 max-w-full">
-                                <InputGroupInput
-                                    className="text-foreground"
-                                    defaultValue={templateName ?? ''}
-                                    onKeyDown={(event) => {
-                                        if (event.key === 'Enter') {
-                                            event.preventDefault();
-                                            handleTemplateRenameSave();
-
-                                            return;
-                                        }
-
-                                        if (event.key === 'Escape') {
-                                            event.preventDefault();
-                                            handleTemplateRenameCancel();
-                                        }
-                                    }}
-                                    placeholder="Template title"
-                                    ref={editingInputRef}
-                                />
-                                <InputGroupAddon
-                                    align="inline-end"
-                                    className="gap-0 pr-2"
-                                >
-                                    <InputGroupButton
-                                        aria-label="Save"
-                                        disabled={isRenaming}
-                                        onClick={() => handleTemplateRenameSave()}
-                                    >
-                                        {isRenaming ? <Loader2 className="animate-spin" /> : <Check />}
-                                    </InputGroupButton>
-                                    <InputGroupButton
-                                        aria-label="Cancel"
-                                        onClick={() => handleTemplateRenameCancel()}
-                                    >
-                                        <X />
-                                    </InputGroupButton>
-                                </InputGroupAddon>
-                            </InputGroup>
+                            <InlineRenameInput
+                                busy={isRenaming}
+                                className="w-64 max-w-full"
+                                defaultValue={templateName ?? ''}
+                                inputRef={editingInputRef}
+                                onCancel={handleTemplateRenameCancel}
+                                onSave={handleTemplateRenameSave}
+                                placeholder="Template title"
+                            />
                         ) : canShowActions ? (
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -493,6 +432,13 @@ const Template = () => {
                 </BreadcrumbList>
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
+                {canShowActions && (
+                    <ListNavigationToolbar<Template>
+                        {...templateToolbarProps}
+                        sheetIcon={<FileText className="size-4" />}
+                        sheetTitle="Templates"
+                    />
+                )}
                 <Button
                     onClick={() => setIsAsideOpen((open) => !open)}
                     size="icon"
@@ -514,14 +460,7 @@ const Template = () => {
                         <DropdownMenuContent
                             align="end"
                             className="min-w-24"
-                            onCloseAutoFocus={(event) => {
-                                // Radix returns focus to the trigger on close. When the
-                                // selected action mounts the rename input, prevent that
-                                // restore so our deferred focus actually wins.
-                                if (isEditingTitle) {
-                                    event.preventDefault();
-                                }
-                            }}
+                            onCloseAutoFocus={handleDropdownCloseAutoFocus}
                         >
                             <DropdownMenuItem onClick={handleTemplateRenameStart}>
                                 <Pencil className="size-3" />

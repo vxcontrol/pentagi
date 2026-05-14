@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react';
 
-import { Check, Ellipsis, LibraryBig, Loader2, Pencil, Trash, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Ellipsis, LibraryBig, Loader2, Pencil, Trash } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { KnowledgeDocumentFragmentFragment } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { ListNavigationToolbar } from '@/components/shared/list-navigation-toolbar';
+import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,11 +20,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useKnowledges } from '@/providers/knowledges-provider';
+import { useInlineEditTitle } from '@/hooks/use-inline-edit-title';
+import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
+
+import { useKnowledgeDetailNavigation } from './use-knowledge-detail-navigation';
 
 interface KnowledgeHeaderProps {
     isNew: boolean;
@@ -39,13 +44,14 @@ interface KnowledgeHeaderProps {
 export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveButton }: KnowledgeHeaderProps) => {
     const navigate = useNavigate();
     const { deleteKnowledge, updateKnowledge } = useKnowledges();
-    const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const editingInputRef = useRef<HTMLInputElement>(null);
 
     const knowledgeId = knowledge?.id ?? null;
+
+    const { toolbarProps: knowledgeToolbarProps } = useKnowledgeDetailNavigation(knowledgeId);
+
     // Title source-of-truth is the server-side `question`. We intentionally do
     // not read it from the form draft below — the inline rename flow in this
     // header writes through `updateKnowledge`, which refreshes `knowledge` via
@@ -53,44 +59,13 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
     const knowledgeName = knowledge?.question ?? null;
     const canShowActions = !isNew && !!knowledge;
 
-    // Reset inline-edit state when navigating between documents so the input
-    // doesn't carry over a stale draft from a previous document.
-    useEffect(() => {
-        setIsEditingTitle(false);
-    }, [knowledgeId]);
-
-    // Focus and select the rename input when the inline editor opens. We can't
-    // rely on `autoFocus` here: the input mounts inside the same render cycle
-    // that closes the Radix DropdownMenu, and the dropdown's own focus restore
-    // (scheduled via `requestAnimationFrame`) wins the race against React's
-    // autoFocus effect. Defer our focus to the next frame so it lands *after*
-    // Radix has finished its restore.
-    useEffect(() => {
-        if (!isEditingTitle) {
-            return;
-        }
-
-        const id = requestAnimationFrame(() => {
-            const input = editingInputRef.current;
-
-            if (!input) {
-                return;
-            }
-
-            input.focus();
-            input.select();
-        });
-
-        return () => cancelAnimationFrame(id);
-    }, [isEditingTitle]);
-
-    const handleRenameStart = useCallback(() => {
-        setIsEditingTitle(true);
-    }, []);
-
-    const handleRenameCancel = useCallback(() => {
-        setIsEditingTitle(false);
-    }, []);
+    const {
+        handleDropdownCloseAutoFocus,
+        inputRef: editingInputRef,
+        isEditing: isEditingTitle,
+        startEdit: handleRenameStart,
+        stopEdit: handleRenameCancel,
+    } = useInlineEditTitle({ resetKey: knowledgeId });
 
     const handleRenameSave = useCallback(async () => {
         const newQuestion = editingInputRef.current?.value.trim();
@@ -100,7 +75,7 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
         }
 
         if (newQuestion === knowledge.question) {
-            setIsEditingTitle(false);
+            handleRenameCancel();
 
             return;
         }
@@ -118,13 +93,13 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                 question: newQuestion,
             });
             toast.success('Knowledge renamed successfully');
-            setIsEditingTitle(false);
+            handleRenameCancel();
         } catch {
             // Error already handled in provider with toast
         } finally {
             setIsRenaming(false);
         }
-    }, [knowledge, updateKnowledge]);
+    }, [editingInputRef, handleRenameCancel, knowledge, updateKnowledge]);
 
     const handleDelete = useCallback(async () => {
         if (!knowledgeId) {
@@ -157,45 +132,15 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                         <BreadcrumbItem className="gap-2">
                             <LibraryBig className="size-4 shrink-0" />
                             {isEditingTitle && canShowActions ? (
-                                <InputGroup className="h-8 w-64 max-w-full">
-                                    <InputGroupInput
-                                        className="text-foreground"
-                                        defaultValue={knowledgeName ?? ''}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter') {
-                                                event.preventDefault();
-                                                handleRenameSave();
-
-                                                return;
-                                            }
-
-                                            if (event.key === 'Escape') {
-                                                event.preventDefault();
-                                                handleRenameCancel();
-                                            }
-                                        }}
-                                        placeholder="Knowledge question"
-                                        ref={editingInputRef}
-                                    />
-                                    <InputGroupAddon
-                                        align="inline-end"
-                                        className="gap-0 pr-2"
-                                    >
-                                        <InputGroupButton
-                                            aria-label="Save"
-                                            disabled={isRenaming}
-                                            onClick={() => handleRenameSave()}
-                                        >
-                                            {isRenaming ? <Loader2 className="animate-spin" /> : <Check />}
-                                        </InputGroupButton>
-                                        <InputGroupButton
-                                            aria-label="Cancel"
-                                            onClick={() => handleRenameCancel()}
-                                        >
-                                            <X />
-                                        </InputGroupButton>
-                                    </InputGroupAddon>
-                                </InputGroup>
+                                <InlineRenameInput
+                                    busy={isRenaming}
+                                    className="w-64 max-w-full"
+                                    defaultValue={knowledgeName ?? ''}
+                                    inputRef={editingInputRef}
+                                    onCancel={handleRenameCancel}
+                                    onSave={handleRenameSave}
+                                    placeholder="Knowledge question"
+                                />
                             ) : canShowActions ? (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
@@ -217,6 +162,26 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                     </BreadcrumbList>
                 </Breadcrumb>
                 <div className="ml-auto flex items-center gap-2">
+                    {canShowActions && (
+                        <ListNavigationToolbar<Knowledge>
+                            {...knowledgeToolbarProps}
+                            renderItem={(item, isCurrent) => (
+                                <>
+                                    <Badge
+                                        className="shrink-0 whitespace-nowrap text-[10px]"
+                                        variant="outline"
+                                    >
+                                        {item.docType}
+                                    </Badge>
+                                    <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>
+                                        {item.question}
+                                    </span>
+                                </>
+                            )}
+                            sheetIcon={<LibraryBig className="size-4" />}
+                            sheetTitle="Knowledges"
+                        />
+                    )}
                     {saveButton}
                     {canShowActions && (
                         <DropdownMenu>
@@ -233,14 +198,7 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                             <DropdownMenuContent
                                 align="end"
                                 className="min-w-24"
-                                onCloseAutoFocus={(event) => {
-                                    // Radix returns focus to the trigger on close. When the
-                                    // selected action mounts the rename input, prevent that
-                                    // restore so our deferred focus actually wins.
-                                    if (isEditingTitle) {
-                                        event.preventDefault();
-                                    }
-                                }}
+                                onCloseAutoFocus={handleDropdownCloseAutoFocus}
                             >
                                 <DropdownMenuItem onClick={handleRenameStart}>
                                     <Pencil className="size-3" />

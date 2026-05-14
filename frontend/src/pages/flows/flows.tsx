@@ -2,30 +2,18 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { format, isToday } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import {
-    ArrowDown,
-    ArrowUp,
-    Ellipsis,
-    Eye,
-    GitFork,
-    Loader2,
-    Pause,
-    Pencil,
-    PencilLine,
-    Plus,
-    Star,
-    Trash,
-} from 'lucide-react';
-import { Check, CheckCircle2, X, XCircle } from 'lucide-react';
+import { Ellipsis, Eye, GitFork, Loader2, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
+import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { SortableColumnHeader } from '@/components/shared/sortable-column-header';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -38,13 +26,15 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResultType, StatusType, type TerminalFragmentFragment, useRenameFlowMutation } from '@/graphql/types';
+import { usePagination } from '@/hooks/use-pagination';
+import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
+import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { useFavorites } from '@/providers/favorites-provider';
 import { type Flow, useFlows } from '@/providers/flows-provider';
 
@@ -92,7 +82,7 @@ const formatFullDateTime = (dateString: string) => {
 
 const Flows = () => {
     const navigate = useNavigate();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const location = useLocation();
     const { deleteFlow, finishFlow, flows, isLoading } = useFlows();
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -103,55 +93,14 @@ const Flows = () => {
     const editingInputRef = useRef<HTMLInputElement>(null);
     const [renameFlowMutation, { loading: isRenameLoading }] = useRenameFlowMutation();
 
-    // Three-way sorting handler: null -> asc -> desc -> null
-    const handleColumnSort = useMemo(
-        () =>
-            (column: {
-                clearSorting: () => void;
-                getIsSorted: () => 'asc' | 'desc' | false;
-                toggleSorting: (desc?: boolean) => void;
-            }) => {
-                const sorted = column.getIsSorted();
-
-                if (sorted === 'asc') {
-                    column.toggleSorting(true);
-                } else if (sorted === 'desc') {
-                    column.clearSorting();
-                } else {
-                    column.toggleSorting(false);
-                }
-            },
-        [],
-    );
-
-    // Get current page from URL
-    const currentPage = useMemo(() => {
-        const page = searchParams.get('page');
-
-        return page ? Math.max(0, Number.parseInt(page, 10) - 1) : 0;
-    }, [searchParams]);
-
-    // Handle page change
-    const handlePageChange = useCallback(
-        (pageIndex: number) => {
-            const newParams = new URLSearchParams(searchParams);
-
-            if (pageIndex === 0) {
-                newParams.delete('page');
-            } else {
-                newParams.set('page', String(pageIndex + 1));
-            }
-
-            setSearchParams(newParams);
-        },
-        [searchParams, setSearchParams],
-    );
+    const { filter, setFilter } = useTableQueryFilter();
+    const { pageIndex: currentPage, setPage: handlePageChange } = usePagination();
 
     const handleFlowOpen = useCallback(
         (flowId: string) => {
-            navigate(`/flows/${flowId}`);
+            navigate(mergeHrefWithSearchParams(`/flows/${flowId}`, new URLSearchParams(location.search)));
         },
-        [navigate],
+        [navigate, location.search],
     );
 
     const handleFlowDeleteDialogOpen = useCallback((flow: Flow) => {
@@ -239,24 +188,12 @@ const Flows = () => {
                 accessorKey: 'id',
                 cell: ({ row }) => <div className="font-mono text-sm">{row.getValue('id')}</div>,
                 enableHiding: false,
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            ID
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="ID"
+                    />
+                ),
                 maxSize: 80,
                 minSize: 60,
                 size: 70,
@@ -270,68 +207,29 @@ const Flows = () => {
 
                     if (isEditing) {
                         return (
-                            <InputGroup
-                                className="h-8"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <InputGroupInput
+                            <div onClick={(e) => e.stopPropagation()}>
+                                <InlineRenameInput
                                     autoFocus
+                                    busy={isRenameLoading}
                                     defaultValue={title}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            handleFlowRenameSave();
-
-                                            return;
-                                        }
-
-                                        if (e.key === 'Escape') {
-                                            handleFlowRenameCancel();
-
-                                            return;
-                                        }
-                                    }}
+                                    inputRef={editingInputRef}
+                                    onCancel={handleFlowRenameCancel}
+                                    onSave={handleFlowRenameSave}
                                     placeholder="Flow title"
-                                    ref={editingInputRef}
                                 />
-                                <InputGroupAddon
-                                    align="inline-end"
-                                    className="gap-0 pr-2"
-                                >
-                                    <InputGroupButton
-                                        disabled={isRenameLoading}
-                                        onClick={() => handleFlowRenameSave()}
-                                    >
-                                        {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
-                                    </InputGroupButton>
-                                    <InputGroupButton onClick={() => handleFlowRenameCancel()}>
-                                        <X />
-                                    </InputGroupButton>
-                                </InputGroupAddon>
-                            </InputGroup>
+                            </div>
                         );
                     }
 
                     return <div className="truncate font-medium">{title}</div>;
                 },
                 enableHiding: false,
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Title
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Title"
+                    />
+                ),
                 minSize: 200,
                 size: 300,
             },
@@ -351,24 +249,12 @@ const Flows = () => {
                         </Badge>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Status
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Status"
+                    />
+                ),
                 maxSize: 130,
                 minSize: 80,
                 size: 100,
@@ -388,24 +274,12 @@ const Flows = () => {
                         </div>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Provider
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Provider"
+                    />
+                ),
                 maxSize: 150,
                 minSize: 80,
                 size: 100,
@@ -459,24 +333,12 @@ const Flows = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Terminals
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Terminals"
+                    />
+                ),
                 maxSize: 220,
                 minSize: 160,
                 size: 180,
@@ -503,25 +365,14 @@ const Flows = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Created
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Created"
+                    />
+                ),
                 maxSize: 140,
+                meta: { columnMenuLabel: 'Created' },
                 minSize: 100,
                 size: 120,
                 sortingFn: (rowA, rowB) => {
@@ -547,25 +398,14 @@ const Flows = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Updated
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <SortableColumnHeader
+                        column={column}
+                        label="Updated"
+                    />
+                ),
                 maxSize: 140,
+                meta: { columnMenuLabel: 'Updated' },
                 minSize: 100,
                 size: 120,
                 sortingFn: (rowA, rowB) => {
@@ -671,7 +511,6 @@ const Flows = () => {
             deletingFlowIds,
             editingFlowId,
             finishingFlowIds,
-            handleColumnSort,
             handleFlowDeleteDialogOpen,
             handleFlowFinish,
             handleFlowOpen,
@@ -822,6 +661,8 @@ const Flows = () => {
                     data={flows}
                     filterColumn="title"
                     filterPlaceholder="Filter flows..."
+                    filterValue={filter}
+                    onFilterChange={setFilter}
                     onPageChange={handlePageChange}
                     onRowClick={handleRowClick}
                     pageIndex={currentPage}

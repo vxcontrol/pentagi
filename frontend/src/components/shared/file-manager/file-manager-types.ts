@@ -310,7 +310,7 @@ export interface FileManagerProps {
     /**
      * When set, the active sort is persisted to `localStorage` under this key
      * across page reloads. Ignored in controlled mode (when `sorting` is set).
-     * Pass a route-scoped key (e.g. `getSortingStorageKey('/flows/files')`)
+     * Pass a route-scoped key (e.g. `getTableStorageKey('/flows/files')`)
      * to avoid collisions across pages.
      */
     sortStorageKey?: string;

@@ -1,10 +1,10 @@
 import {
-    Check,
     ChevronDown,
     Copy,
     Download,
     Ellipsis,
     ExternalLink,
+    GitFork,
     GripVertical,
     Loader2,
     NotepadText,
@@ -12,9 +12,8 @@ import {
     PencilLine,
     Star,
     Trash,
-    X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -22,6 +21,9 @@ import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
+import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { ListNavigationToolbar } from '@/components/shared/list-navigation-toolbar';
+import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,22 +33,23 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import FlowCentralTabs from '@/features/flows/flow-central-tabs';
 import FlowTabs from '@/features/flows/flow-tabs';
+import { useFlowDetailNavigation } from '@/features/flows/use-flow-detail-navigation';
 import { ResultType, StatusType, useRenameFlowMutation } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
+import { useInlineEditTitle } from '@/hooks/use-inline-edit-title';
 import { Log } from '@/lib/log';
 import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 import { formatName } from '@/lib/utils/format';
 import { useFavorites } from '@/providers/favorites-provider';
 import { useFlow } from '@/providers/flow-provider';
-import { useFlows } from '@/providers/flows-provider';
+import { type Flow as FlowItem, useFlows } from '@/providers/flows-provider';
 
 const FlowReportDropdown = () => {
     const { flowData, flowId } = useFlow();
@@ -175,44 +178,24 @@ const Flow = () => {
     const flowTitle = flow?.title ?? '';
     const isFlowRunning = flow ? ![StatusType.Failed, StatusType.Finished].includes(flow.status) : false;
 
-    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    // Walk the same `?q=` filtered subset the list page renders. The hook
+    // also restores the filter from `localStorage` when the page is opened
+    // via a bookmark, so the toolbar stays in lockstep with the user's last
+    // persisted intent.
+    const { toolbarProps: flowToolbarProps } = useFlowDetailNavigation(flowId);
+
+    const {
+        handleDropdownCloseAutoFocus,
+        inputRef: editingInputRef,
+        isEditing: isEditingTitle,
+        startEdit: handleFlowRenameStart,
+        stopEdit: handleFlowRenameCancel,
+    } = useInlineEditTitle({ resetKey: flowId });
+
     const [isFinishing, setIsFinishing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const editingInputRef = useRef<HTMLInputElement>(null);
     const [renameFlowMutation, { loading: isRenameLoading }] = useRenameFlowMutation();
-
-    // Reset inline-edit state when navigating between flows so the input doesn't
-    // carry over a stale draft from a previous flow.
-    useEffect(() => {
-        setIsEditingTitle(false);
-    }, [flowId]);
-
-    // Focus and select the rename input when the inline editor opens. We can't
-    // rely on `autoFocus` here: the input mounts inside the same render cycle
-    // that closes the Radix DropdownMenu, and the dropdown's own focus restore
-    // (which it schedules via `requestAnimationFrame`) wins the race against
-    // React's autoFocus effect. Defer our focus to the next frame so it lands
-    // *after* Radix has finished its restore. Selecting the text lets the user
-    // overwrite the title in one keystroke.
-    useEffect(() => {
-        if (!isEditingTitle) {
-            return;
-        }
-
-        const id = requestAnimationFrame(() => {
-            const input = editingInputRef.current;
-
-            if (!input) {
-                return;
-            }
-
-            input.focus();
-            input.select();
-        });
-
-        return () => cancelAnimationFrame(id);
-    }, [isEditingTitle]);
 
     // Redirect to flows list if there's an error loading flow data or flow not found
     useEffect(() => {
@@ -220,14 +203,6 @@ const Flow = () => {
             navigate('/flows', { replace: true });
         }
     }, [flowError, flowData, isFlowLoading, navigate]);
-
-    const handleFlowRenameStart = useCallback(() => {
-        setIsEditingTitle(true);
-    }, []);
-
-    const handleFlowRenameCancel = useCallback(() => {
-        setIsEditingTitle(false);
-    }, []);
 
     const handleFlowRenameSave = useCallback(async () => {
         const newTitle = editingInputRef.current?.value.trim();
@@ -246,13 +221,13 @@ const Flow = () => {
 
             if (data?.renameFlow === ResultType.Success) {
                 toast.success('Flow renamed successfully');
-                setIsEditingTitle(false);
+                handleFlowRenameCancel();
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to rename flow';
             toast.error(errorMessage);
         }
-    }, [flowId, renameFlowMutation]);
+    }, [editingInputRef, flowId, handleFlowRenameCancel, renameFlowMutation]);
 
     const handleFlowFinish = useCallback(async () => {
         if (!flow) {
@@ -333,45 +308,15 @@ const Flow = () => {
                                         </>
                                     )}
                                     {isEditingTitle && flow ? (
-                                        <InputGroup className="h-8 w-64 max-w-full">
-                                            <InputGroupInput
-                                                className="text-foreground"
-                                                defaultValue={flowTitle}
-                                                onKeyDown={(event) => {
-                                                    if (event.key === 'Enter') {
-                                                        event.preventDefault();
-                                                        handleFlowRenameSave();
-
-                                                        return;
-                                                    }
-
-                                                    if (event.key === 'Escape') {
-                                                        event.preventDefault();
-                                                        handleFlowRenameCancel();
-                                                    }
-                                                }}
-                                                placeholder="Flow title"
-                                                ref={editingInputRef}
-                                            />
-                                            <InputGroupAddon
-                                                align="inline-end"
-                                                className="gap-0 pr-2"
-                                            >
-                                                <InputGroupButton
-                                                    aria-label="Save"
-                                                    disabled={isRenameLoading}
-                                                    onClick={() => handleFlowRenameSave()}
-                                                >
-                                                    {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
-                                                </InputGroupButton>
-                                                <InputGroupButton
-                                                    aria-label="Cancel"
-                                                    onClick={() => handleFlowRenameCancel()}
-                                                >
-                                                    <X />
-                                                </InputGroupButton>
-                                            </InputGroupAddon>
-                                        </InputGroup>
+                                        <InlineRenameInput
+                                            busy={isRenameLoading}
+                                            className="w-64 max-w-full"
+                                            defaultValue={flowTitle}
+                                            inputRef={editingInputRef}
+                                            onCancel={handleFlowRenameCancel}
+                                            onSave={handleFlowRenameSave}
+                                            placeholder="Flow title"
+                                        />
                                     ) : flow ? (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
@@ -392,6 +337,30 @@ const Flow = () => {
                         </Breadcrumb>
                     </div>
                     <div className="flex items-center gap-2">
+                        {flow && (
+                            <ListNavigationToolbar<FlowItem>
+                                {...flowToolbarProps}
+                                renderItem={(item, isCurrent) => (
+                                    <>
+                                        <FlowStatusIcon
+                                            className="size-3 shrink-0"
+                                            status={item.status}
+                                        />
+                                        <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>
+                                            {item.title || `Flow #${item.id}`}
+                                        </span>
+                                        <Badge
+                                            className="ml-auto shrink-0 font-mono text-[10px]"
+                                            variant="outline"
+                                        >
+                                            #{item.id}
+                                        </Badge>
+                                    </>
+                                )}
+                                sheetIcon={<GitFork className="size-4" />}
+                                sheetTitle="Flows"
+                            />
+                        )}
                         {flowId && (
                             <Button
                                 className="shrink-0"
@@ -417,14 +386,7 @@ const Flow = () => {
                                 <DropdownMenuContent
                                     align="end"
                                     className="min-w-24"
-                                    onCloseAutoFocus={(event) => {
-                                        // Radix returns focus to the trigger on close. When the
-                                        // selected action mounts the rename input, prevent that
-                                        // restore so the input's `autoFocus` actually wins.
-                                        if (isEditingTitle) {
-                                            event.preventDefault();
-                                        }
-                                    }}
+                                    onCloseAutoFocus={handleDropdownCloseAutoFocus}
                                 >
                                     <DropdownMenuItem onClick={handleFlowRenameStart}>
                                         <PencilLine className="size-3" />

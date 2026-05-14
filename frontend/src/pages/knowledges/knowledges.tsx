@@ -1,26 +1,16 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import {
-    ArrowDown,
-    ArrowUp,
-    Check,
-    Ellipsis,
-    LibraryBig,
-    Loader2,
-    Pencil,
-    PencilLine,
-    Plus,
-    Trash,
-    X,
-} from 'lucide-react';
+import { Ellipsis, LibraryBig, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { BadgeVariant } from '@/components/ui/badge';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
+import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { SortableColumnHeader } from '@/components/shared/sortable-column-header';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -33,12 +23,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { KnowledgeDocType } from '@/graphql/types';
-import { cycleColumnSort } from '@/lib/table-sort';
+import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
+import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 const docTypeBadgeVariant: Record<KnowledgeDocType, BadgeVariant> = {
@@ -65,6 +55,7 @@ const docTypeSubtype = (k: Knowledge): null | string => {
 
 const Knowledges = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { deleteKnowledge, isLoading, knowledges, updateKnowledge } = useKnowledges();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingKnowledge, setDeletingKnowledge] = useState<Knowledge | null>(null);
@@ -73,11 +64,13 @@ const Knowledges = () => {
     const [isRenameLoading, setIsRenameLoading] = useState(false);
     const editingInputRef = useRef<HTMLInputElement>(null);
 
+    const { filter, setFilter } = useTableQueryFilter();
+
     const handleOpen = useCallback(
         (id: string) => {
-            navigate(`/knowledges/${id}`);
+            navigate(mergeHrefWithSearchParams(`/knowledges/${id}`, new URLSearchParams(location.search)));
         },
-        [navigate],
+        [navigate, location.search],
     );
 
     const handleDeleteDialogOpen = useCallback((knowledge: Knowledge) => {
@@ -178,24 +171,7 @@ const Knowledges = () => {
                     </div>
                 );
             },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => cycleColumnSort(column)}
-                        variant="link"
-                    >
-                        Type
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
-            },
+            header: ({ column }) => <SortableColumnHeader column={column} label="Type" />,
             maxSize: 180,
             minSize: 110,
             size: 130,
@@ -209,48 +185,17 @@ const Knowledges = () => {
 
                 if (isEditing) {
                     return (
-                        <InputGroup
-                            className="h-8"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <InputGroupInput
+                        <div onClick={(e) => e.stopPropagation()}>
+                            <InlineRenameInput
                                 autoFocus
+                                busy={isRenameLoading}
                                 defaultValue={question}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleKnowledgeRenameSave();
-
-                                        return;
-                                    }
-
-                                    if (e.key === 'Escape') {
-                                        e.preventDefault();
-                                        handleKnowledgeRenameCancel();
-                                    }
-                                }}
+                                inputRef={editingInputRef}
+                                onCancel={handleKnowledgeRenameCancel}
+                                onSave={handleKnowledgeRenameSave}
                                 placeholder="Knowledge question"
-                                ref={editingInputRef}
                             />
-                            <InputGroupAddon
-                                align="inline-end"
-                                className="gap-0 pr-2"
-                            >
-                                <InputGroupButton
-                                    aria-label="Save"
-                                    disabled={isRenameLoading}
-                                    onClick={() => handleKnowledgeRenameSave()}
-                                >
-                                    {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
-                                </InputGroupButton>
-                                <InputGroupButton
-                                    aria-label="Cancel"
-                                    onClick={() => handleKnowledgeRenameCancel()}
-                                >
-                                    <X />
-                                </InputGroupButton>
-                            </InputGroupAddon>
-                        </InputGroup>
+                        </div>
                     );
                 }
 
@@ -263,24 +208,7 @@ const Knowledges = () => {
                     </div>
                 );
             },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => cycleColumnSort(column)}
-                        variant="link"
-                    >
-                        Question
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
-            },
+            header: ({ column }) => <SortableColumnHeader column={column} label="Question" />,
             minSize: 180,
             size: 280,
         },
@@ -303,6 +231,7 @@ const Knowledges = () => {
                 <span className="text-muted-foreground inline-flex items-center text-sm font-medium">Preview</span>
             ),
             maxSize: 800,
+            meta: { columnMenuLabel: 'Preview' },
             minSize: 160,
             size: 380,
         },
@@ -333,6 +262,7 @@ const Knowledges = () => {
             header: () => null,
             id: 'flags',
             maxSize: 200,
+            meta: { columnMenuLabel: 'Flags' },
             minSize: 110,
             size: 150,
         },
@@ -494,6 +424,8 @@ const Knowledges = () => {
                     data={knowledges}
                     filterColumn="question"
                     filterPlaceholder="Filter knowledge documents..."
+                    filterValue={filter}
+                    onFilterChange={setFilter}
                     onRowClick={(k) => {
                         if (editingKnowledgeId !== k.id) {
                             handleOpen(k.id);
