@@ -1127,7 +1127,12 @@ func SanitizeJSONControlChars(s string) string {
 // SanitizeToolCallArguments scans every tool call in the chain and ensures its Arguments
 // field is valid JSON. Literal control characters that some LLM providers occasionally
 // emit inside string values are escaped so that downstream consumers (e.g. vLLM's
-// _postprocess_messages) can parse the arguments without errors.
+// _postprocess_messages) can parse the arguments without errors. If the arguments are
+// still not valid JSON after escaping (e.g. a truncated object like "{" produced by a
+// partial LLM response), they are replaced with a fallback empty object so that the
+// chain can be replayed without triggering an API-level 400 Bad Request. The missing
+// arguments will then cause the tool call to fail, which in turn triggers the tool-call
+// fixer to regenerate correct arguments.
 func (ast *ChainAST) SanitizeToolCallArguments() {
 	for _, section := range ast.Sections {
 		for _, bodyPair := range section.Body {
@@ -1146,6 +1151,9 @@ func (ast *ChainAST) SanitizeToolCallArguments() {
 				}
 
 				sanitized := SanitizeJSONControlChars(toolCall.FunctionCall.Arguments)
+				if !json.Valid([]byte(sanitized)) {
+					sanitized = fallbackRequestArgs
+				}
 				if sanitized != toolCall.FunctionCall.Arguments {
 					toolCall.FunctionCall.Arguments = sanitized
 					bodyPair.AIMessage.Parts[pdx] = toolCall

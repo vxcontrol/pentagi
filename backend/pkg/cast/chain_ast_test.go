@@ -3176,6 +3176,29 @@ func TestSanitizeToolCallArguments(t *testing.T) {
 			args:     `{}`,
 			wantArgs: `{}`,
 		},
+		{
+			// Simulates a truncated LLM response where only the opening brace was emitted.
+			// This exact pattern was observed with Qwen3 models via LiteLLM and caused
+			// repeated 400 Bad Request errors on subsequent chain calls.
+			name:     "single opening brace (truncated output) - replaced with empty object",
+			args:     `{`,
+			wantArgs: `{}`,
+		},
+		{
+			name:     "partially constructed JSON object - replaced with empty object",
+			args:     `{"input": "ls -la"`,
+			wantArgs: `{}`,
+		},
+		{
+			name:     "empty string - replaced with empty object",
+			args:     ``,
+			wantArgs: `{}`,
+		},
+		{
+			name:     "JSON array instead of object - unchanged (valid JSON)",
+			args:     `[]`,
+			wantArgs: `[]`,
+		},
 	}
 
 	for _, tt := range tests {
