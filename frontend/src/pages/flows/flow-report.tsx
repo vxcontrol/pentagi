@@ -3,9 +3,9 @@ import { useParams, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/logo';
 import Markdown from '@/components/shared/markdown';
-import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/features/report';
 import { useFlowReportQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
+import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
 type PdfPhase = 'done' | 'error' | 'idle';
 type ReportState = 'content' | 'error' | 'generating' | 'loading';

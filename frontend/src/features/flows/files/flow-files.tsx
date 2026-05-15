@@ -21,9 +21,9 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { copyToClipboard } from '@/features/report';
 import { StatusType } from '@/graphql/types';
 import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
+import { copyToClipboard } from '@/lib/report';
 import { useFlow } from '@/providers/flow-provider';
 
 import { FlowFilesAttachResourcesDialog } from './flow-files-attach-resources-dialog';
