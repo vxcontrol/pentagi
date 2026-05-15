@@ -607,8 +607,7 @@ const Template = () => {
 
     const asideContent = useMemo(
         () => (
-            <div className="flex h-full max-h-[calc(100dvh-3rem)] flex-col overflow-y-auto p-4">
-                <h3 className="text-muted-foreground mb-2 text-sm font-medium">Preset templates</h3>
+            <div className="flex h-full max-h-[calc(100dvh-3rem)] flex-col overflow-y-auto px-4 pb-4">
                 {PRESET_TEMPLATES.map((preset, index) => (
                     <Collapsible
                         key={index}
@@ -669,20 +668,14 @@ const Template = () => {
                     open={isAsideOpen}
                 >
                     <SheetContent
-                        // Radix expects either a `<Description>` or an
-                        // explicit `aria-describedby={undefined}` opt-out;
-                        // the panel is a simple list of presets with no
-                        // descriptive sub-text, so the opt-out is honest.
+                        // The Sheet body is just a list of presets with no
+                        // descriptive sub-text — opt out of the Radix
+                        // Description warning explicitly.
                         aria-describedby={undefined}
-                        className="w-full max-w-[min(20rem,100vw)] p-2"
+                        className="w-full max-w-[min(20rem,100vw)] p-0"
                         side="right"
                     >
-                        {/* Radix dialogs require a title for screen readers.
-                            The visible h3 lives inside `asideContent` and is
-                            reused on desktop, where Sheet doesn't render — so
-                            mirror it here as an sr-only SheetTitle that only
-                            assistive tech picks up. */}
-                        <SheetTitle className="sr-only">Preset templates</SheetTitle>
+                        <SheetTitle className="px-4 pt-4 pb-2 text-base">Preset templates</SheetTitle>
                         {asideContent}
                     </SheetContent>
                 </Sheet>
@@ -693,7 +686,14 @@ const Template = () => {
                         isAsideOpen ? 'w-80 border-l sm:w-96' : 'w-0',
                     )}
                 >
-                    {isAsideOpen ? <div className="h-full w-80 sm:w-96">{asideContent}</div> : null}
+                    {isAsideOpen ? (
+                        <div className="h-full w-80 sm:w-96">
+                            <h3 className="text-muted-foreground px-4 pt-4 pb-2 text-sm font-medium">
+                                Preset templates
+                            </h3>
+                            {asideContent}
+                        </div>
+                    ) : null}
                 </aside>
             ),
         [isMobile, isAsideOpen, asideContent],
