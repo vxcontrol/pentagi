@@ -1,7 +1,7 @@
 import { Document, Font, Page, pdf, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { marked } from 'marked';
 
-import { Log } from './log';
+import { Log } from '@/lib/log';
 
 // Register Noto Sans (covers Latin + Cyrillic + Greek + many other scripts)
 Font.register({

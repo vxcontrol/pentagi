@@ -3,8 +3,7 @@ import GithubSlugger from 'github-slugger';
 import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
 
 import { StatusType } from '@/graphql/types';
-
-import { Log } from './log';
+import { Log } from '@/lib/log';
 
 // Helper function to get emoji for status
 const getStatusEmoji = (status: StatusType): string => {
