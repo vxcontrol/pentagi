@@ -2,7 +2,7 @@ import { ChevronDown, Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, 
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
+import type { OverwriteConflict } from '@/components/shared/overwrite';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
@@ -24,8 +24,7 @@ import {
     formatModifiedRelative,
 } from '@/components/shared/file-manager';
 import { HeaderButton } from '@/components/shared/header-button';
-import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
-import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
+import { OverwriteConfirmDialog, useOverwriteAction } from '@/components/shared/overwrite';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {

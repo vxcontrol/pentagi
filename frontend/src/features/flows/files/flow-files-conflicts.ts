@@ -1,5 +1,5 @@
 import type { FileNode } from '@/components/shared/file-manager';
-import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
+import type { OverwriteConflict } from '@/components/shared/overwrite';
 
 import { CONTAINER_PATH_PREFIX, RESOURCES_PATH_PREFIX } from './flow-files-constants';
 

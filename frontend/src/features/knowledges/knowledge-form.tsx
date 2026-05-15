@@ -12,12 +12,11 @@ import type {
 } from '@/graphql/types';
 
 import { HeaderButton } from '@/components/shared/header-button';
-import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
+import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Form } from '@/components/ui/form';
 import { Spinner } from '@/components/ui/spinner';
 import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { Log } from '@/lib/log';
 
 import { KnowledgeFormLayoutDesktop, KnowledgeFormLayoutMobile } from './knowledge-form-layout';

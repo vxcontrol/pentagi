@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
+import type { OverwriteConflict } from './overwrite-confirm-dialog';
 
 /**
  * Discriminated outcome of a server action that supports an overwrite flag.

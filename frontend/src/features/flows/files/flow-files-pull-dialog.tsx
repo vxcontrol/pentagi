@@ -7,9 +7,7 @@ import {
     type FileManagerBulkAction,
     type FileNode,
 } from '@/components/shared/file-manager';
-import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
-import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
-import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
+import { OverwriteConfirmDialog, OverwriteCtaButtons, useOverwriteAction } from '@/components/shared/overwrite';
 import {
     Autocomplete,
     AutocompleteContent,

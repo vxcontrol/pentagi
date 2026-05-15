@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 
-import type { OverwriteOutcome } from '@/components/shared/use-overwrite-action';
+import type { OverwriteOutcome } from '@/components/shared/overwrite';
 
 import { resourceIdsToWire } from '@/features/resources/resources-rest';
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';

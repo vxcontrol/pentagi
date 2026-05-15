@@ -4,11 +4,9 @@ import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
 import type { FileNode } from '@/components/shared/file-manager';
-import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
+import type { OverwriteConflict } from '@/components/shared/overwrite';
 
-import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
-import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
-import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
+import { OverwriteConfirmDialog, OverwriteCtaButtons, useOverwriteAction } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
