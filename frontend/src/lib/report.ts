@@ -225,8 +225,17 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
     }
 };
 
-// Export new PDF generation functions from report-pdf.tsx
-export {
-    generatePDFBlobNew as generatePDFBlob,
-    generatePDFFromMarkdownNew as generatePDFFromMarkdown,
-} from './report-pdf';
+// Lazy-load the PDF generator so @react-pdf/renderer (~1.5 MB) is fetched
+// only when the user actually triggers a PDF export, not on every page that
+// imports report utilities (flow.tsx, flow-report.tsx).
+export const generatePDFFromMarkdown = async (content: string, fileName: string): Promise<void> => {
+    const { generatePDFFromMarkdownNew } = await import('./report-pdf');
+
+    return generatePDFFromMarkdownNew(content, fileName);
+};
+
+export const generatePDFBlob = async (content: string): Promise<Blob> => {
+    const { generatePDFBlobNew } = await import('./report-pdf');
+
+    return generatePDFBlobNew(content);
+};
