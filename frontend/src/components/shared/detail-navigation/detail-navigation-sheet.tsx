@@ -245,7 +245,7 @@ export function DetailNavigationSheet<T>({
                 side="right"
             >
                 <SheetHeader className="border-b p-4">
-                    <SheetTitle className="flex items-center gap-2 text-base">
+                    <SheetTitle className="flex items-center gap-2 pr-8 text-base">
                         {sheetIcon}
                         <span>{sheetTitle}</span>
                         <span className="text-muted-foreground ml-auto text-sm font-normal tabular-nums">{total}</span>
