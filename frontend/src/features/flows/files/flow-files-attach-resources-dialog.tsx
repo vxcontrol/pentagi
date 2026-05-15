@@ -2,7 +2,7 @@ import { FolderInput, Search, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { FileManager, type FileNode } from '@/components/shared/file-manager';
-import { OverwriteButtons, OverwriteDialog, useOverwriteAction } from '@/components/shared/overwrite';
+import { OverwriteButtons, OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -84,7 +84,7 @@ const FlowFilesAttachResourcesDialogBody = ({
      * the backend) and the resource paths (used by preflight against the
      * flow's existing cache mirror).
      */
-    const overwriteAction = useOverwriteAction<AttachPlan>({
+    const overwriteAction = useOverwrite<AttachPlan>({
         execute: async ({ ids }, force) => attach({ ids: [...ids], shouldOverwrite: force }),
         findConflicts: ({ resourcePaths }) => findAttachConflicts(resourcePaths, cachedFiles),
         onSuccess: () => {

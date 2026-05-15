@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import type { FileNode } from '@/components/shared/file-manager';
 import type { OverwriteConflict } from '@/components/shared/overwrite';
 
-import { OverwriteButtons, OverwriteDialog, useOverwriteAction } from '@/components/shared/overwrite';
+import { OverwriteButtons, OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -139,7 +139,7 @@ const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProp
      * with a single atomic batch request. Backend handles `sources[]` in one
      * DB transaction (all-or-nothing).
      */
-    const overwriteAction = useOverwriteAction<CopyPlan>({
+    const overwriteAction = useOverwrite<CopyPlan>({
         execute: (plan, force) => copy(plan.sources, plan.destination, force),
         // Copy never deletes the sources, so collisions with sources are real
         // conflicts (unlike move). Just intersect targets with existing paths.

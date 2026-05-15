@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import type { FileNode } from '@/components/shared/file-manager';
 import type { OverwriteConflict } from '@/components/shared/overwrite';
 
-import { OverwriteButtons, OverwriteDialog, useOverwriteAction } from '@/components/shared/overwrite';
+import { OverwriteButtons, OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -137,7 +137,7 @@ const FlowFilesPromoteDialogForm = ({ files, flowId, onClose }: FlowFilesPromote
      * with a single atomic batch request. Backend handles `sources[]` in one
      * DB transaction (all-or-nothing) — no per-source aggregation needed here.
      */
-    const overwriteAction = useOverwriteAction<PromotePlan>({
+    const overwriteAction = useOverwrite<PromotePlan>({
         execute: (plan, force) => promote(plan.sources, plan.destination, force),
         // Local preflight against the resource library snapshot — flags the
         // exact destinations already taken so the dialog can name them.

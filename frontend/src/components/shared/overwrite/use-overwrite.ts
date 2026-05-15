@@ -30,7 +30,7 @@ const ANONYMOUS_FALLBACK_CONFLICT: OverwriteConflict = {
     destinationName: 'an item',
 };
 
-interface UseOverwriteActionOptions<TPlan> {
+interface UseOverwriteOptions<TPlan> {
     /**
      * Execute the REST call. Receives the plan + a boolean `force` flag.
      * Should return a discriminated outcome — see `OverwriteOutcome`.
@@ -54,7 +54,7 @@ interface UseOverwriteActionOptions<TPlan> {
     synthesizeFallbackConflicts?: (plan: TPlan) => OverwriteConflict[];
 }
 
-interface UseOverwriteActionResult<TPlan> {
+interface UseOverwriteResult<TPlan> {
     /** Live conflict descriptors. Wire to `<OverwriteDialog conflicts={…} />`. */
     conflicts: OverwriteConflict[];
     /**
@@ -95,9 +95,7 @@ interface UseOverwriteActionResult<TPlan> {
  * to wrap them in `useCallback`. This keeps the hook ergonomic at the call
  * site without sacrificing reference stability for the returned actions.
  */
-export const useOverwriteAction = <TPlan>(
-    options: UseOverwriteActionOptions<TPlan>,
-): UseOverwriteActionResult<TPlan> => {
+export const useOverwrite = <TPlan>(options: UseOverwriteOptions<TPlan>): UseOverwriteResult<TPlan> => {
     const [conflicts, setConflicts] = useState<OverwriteConflict[]>([]);
     const [pendingPlan, setPendingPlan] = useState<null | TPlan>(null);
 

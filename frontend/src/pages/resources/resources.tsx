@@ -24,7 +24,7 @@ import {
     formatModifiedRelative,
 } from '@/components/shared/file-manager';
 import { HeaderButton } from '@/components/shared/header-button';
-import { OverwriteDialog, useOverwriteAction } from '@/components/shared/overwrite';
+import { OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -185,7 +185,7 @@ const Resources = () => {
         targets: OverwriteConflict[];
     }
 
-    const dndMoveAction = useOverwriteAction<DndMovePlan>({
+    const dndMoveAction = useOverwrite<DndMovePlan>({
         execute: (plan, force) => move(plan.sources, plan.destination, force),
         findConflicts: (plan) => {
             const movedPaths = new Set(plan.sources);
