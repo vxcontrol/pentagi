@@ -4,18 +4,7 @@ import { type KeyboardEvent, type Ref } from 'react';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { cn } from '@/lib/utils';
 
-/**
- * Default upper bound on title length. Chosen as a balance between letting
- * users name things expressively and preventing accidental paste-bombs that
- * would break truncation in tables and breadcrumbs. Backend columns are
- * unbounded `varchar`, so this is purely a UX guard — the HTML `maxLength`
- * attribute below silently stops further typing rather than rejecting the
- * existing value (which lets existing records that exceed this limit still
- * be edited and re-saved without surprise validation errors).
- */
-export const INLINE_RENAME_MAX_LENGTH = 200;
-
-interface InlineRenameInputProps {
+interface InlineEditInputProps {
     /**
      * Auto-focus the input on mount. Needed for table-cell call sites that
      * switch into edit mode in-place: the parent flips a flag (e.g.
@@ -29,14 +18,15 @@ interface InlineRenameInputProps {
     className?: string;
     /** Initial value rendered inside the uncontrolled input. */
     defaultValue?: string;
-    /** Ref to the underlying `<input>` element. Pair with `useInlineEditTitle().inputRef`. */
+    /** Ref to the underlying `<input>` element. Pair with `useInlineEdit().inputRef`. */
     inputRef?: Ref<HTMLInputElement>;
     /**
      * Max length applied via the native HTML `maxLength` attribute. Defaults
-     * to {@link INLINE_RENAME_MAX_LENGTH}. The browser stops typing past the
-     * limit without altering programmatically-set `defaultValue`, so this is
-     * a UX guard, not a hard validation gate. Override only when a specific
-     * surface has a stricter or looser constraint.
+     * to a UX-safe `200` to prevent accidental paste-bombs that would break
+     * truncation in tables and breadcrumbs. Override per call site when a
+     * stricter or looser constraint applies; the browser silently stops
+     * typing past the limit without altering programmatically-set
+     * `defaultValue`, so this is a guard rather than a validation gate.
      */
     maxLength?: number;
     onCancel: () => void;
@@ -50,29 +40,30 @@ interface InlineRenameInputProps {
 }
 
 /**
- * Inline rename input used inside table cells and detail-page breadcrumbs.
+ * Generic inline-edit input used inside table cells and detail-page
+ * breadcrumbs (rename flows, quick-create entries, in-place note edits).
  *
- * Pairs with {@link useInlineEditTitle} — the parent owns the open/close
- * state and supplies a ref via that hook; this component owns the
- * presentation (input + Save/Cancel addon buttons), keyboard semantics
- * (`Enter` saves, `Escape` cancels), and the loading spinner during save.
+ * Pairs with {@link useInlineEdit} — the parent owns the open/close state
+ * and supplies a ref via that hook; this component owns the presentation
+ * (input + Save/Cancel addon buttons), keyboard semantics (`Enter` saves,
+ * `Escape` cancels), and the loading spinner during save.
  *
  * The input is uncontrolled (`defaultValue`) to match the pattern across
  * the codebase: callers read the value at submit time from `inputRef.current`,
  * not from React state, which avoids a re-render per keystroke for a value
  * that's only relevant once.
  */
-export const InlineRenameInput = ({
+export const InlineEditInput = ({
     autoFocus = false,
     busy = false,
     className,
     defaultValue,
     inputRef,
-    maxLength = INLINE_RENAME_MAX_LENGTH,
+    maxLength = 200,
     onCancel,
     onSave,
     placeholder,
-}: InlineRenameInputProps) => {
+}: InlineEditInputProps) => {
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter') {
             event.preventDefault();

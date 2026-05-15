@@ -22,7 +22,7 @@ import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailNavigationToolbar } from '@/components/shared/detail-navigation';
 import { HeaderButton } from '@/components/shared/header-button';
-import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,6 @@ import { useFlowDetailNavigation } from '@/features/flows/use-flow-detail-naviga
 import { ResultType, StatusType, useRenameFlowMutation } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
-import { useInlineEditTitle } from '@/hooks/use-inline-edit-title';
 import { Log } from '@/lib/log';
 import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 import { formatName } from '@/lib/utils/format';
@@ -190,7 +189,7 @@ const Flow = () => {
         isEditing: isEditingTitle,
         startEdit: handleFlowRenameStart,
         stopEdit: handleFlowRenameCancel,
-    } = useInlineEditTitle({ resetKey: flowId });
+    } = useInlineEdit({ resetKey: flowId });
 
     const [isFinishing, setIsFinishing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -308,7 +307,7 @@ const Flow = () => {
                                         </>
                                     )}
                                     {isEditingTitle && flow ? (
-                                        <InlineRenameInput
+                                        <InlineEditInput
                                             busy={isRenameLoading}
                                             className="w-64 max-w-full"
                                             defaultValue={flowTitle}

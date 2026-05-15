@@ -12,7 +12,7 @@ import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
-import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { InlineEditInput } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -207,7 +207,7 @@ const Flows = () => {
                     if (isEditing) {
                         return (
                             <div onClick={(e) => e.stopPropagation()}>
-                                <InlineRenameInput
+                                <InlineEditInput
                                     autoFocus
                                     busy={isRenameLoading}
                                     defaultValue={title}

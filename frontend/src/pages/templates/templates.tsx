@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
-import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { InlineEditInput } from '@/components/shared/inline-edit';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -124,7 +124,7 @@ const Templates = () => {
                 if (isEditing) {
                     return (
                         <div onClick={(e) => e.stopPropagation()}>
-                            <InlineRenameInput
+                            <InlineEditInput
                                 autoFocus
                                 busy={isRenameLoading}
                                 defaultValue={title}

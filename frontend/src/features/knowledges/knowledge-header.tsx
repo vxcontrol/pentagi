@@ -9,7 +9,7 @@ import type { KnowledgeDocumentFragmentFragment } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailNavigationToolbar } from '@/components/shared/detail-navigation';
-import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,6 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useInlineEditTitle } from '@/hooks/use-inline-edit-title';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 import { useKnowledgeDetailNavigation } from './use-knowledge-detail-navigation';
@@ -65,7 +64,7 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
         isEditing: isEditingTitle,
         startEdit: handleRenameStart,
         stopEdit: handleRenameCancel,
-    } = useInlineEditTitle({ resetKey: knowledgeId });
+    } = useInlineEdit({ resetKey: knowledgeId });
 
     const handleRenameSave = useCallback(async () => {
         const newQuestion = editingInputRef.current?.value.trim();
@@ -132,7 +131,7 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                         <BreadcrumbItem className="gap-2">
                             <LibraryBig className="size-4 shrink-0" />
                             {isEditingTitle && canShowActions ? (
-                                <InlineRenameInput
+                                <InlineEditInput
                                     busy={isRenaming}
                                     className="w-64 max-w-full"
                                     defaultValue={knowledgeName ?? ''}

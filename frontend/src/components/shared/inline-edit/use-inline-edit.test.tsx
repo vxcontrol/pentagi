@@ -1,16 +1,16 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { useInlineEditTitle } from './use-inline-edit-title';
+import { useInlineEdit } from './use-inline-edit';
 
-describe('useInlineEditTitle', () => {
+describe('useInlineEdit', () => {
     it('starts in non-editing state', () => {
-        const { result } = renderHook(() => useInlineEditTitle({ resetKey: 'a' }));
+        const { result } = renderHook(() => useInlineEdit({ resetKey: 'a' }));
         expect(result.current.isEditing).toBe(false);
     });
 
     it('startEdit flips to editing, stopEdit flips back', () => {
-        const { result } = renderHook(() => useInlineEditTitle({ resetKey: 'a' }));
+        const { result } = renderHook(() => useInlineEdit({ resetKey: 'a' }));
 
         act(() => result.current.startEdit());
         expect(result.current.isEditing).toBe(true);
@@ -20,7 +20,7 @@ describe('useInlineEditTitle', () => {
     });
 
     it('exits edit mode when resetKey changes', () => {
-        const { rerender, result } = renderHook(({ resetKey }) => useInlineEditTitle({ resetKey }), {
+        const { rerender, result } = renderHook(({ resetKey }) => useInlineEdit({ resetKey }), {
             initialProps: { resetKey: 'a' as null | string | undefined },
         });
 
@@ -32,7 +32,7 @@ describe('useInlineEditTitle', () => {
     });
 
     it('keeps edit mode across rerenders with the same resetKey', () => {
-        const { rerender, result } = renderHook(({ resetKey }) => useInlineEditTitle({ resetKey }), {
+        const { rerender, result } = renderHook(({ resetKey }) => useInlineEdit({ resetKey }), {
             initialProps: { resetKey: 'a' as null | string | undefined },
         });
 
@@ -42,7 +42,7 @@ describe('useInlineEditTitle', () => {
     });
 
     it('treats `null` and `undefined` as distinct keys (state reset on transition)', () => {
-        const { rerender, result } = renderHook(({ resetKey }) => useInlineEditTitle({ resetKey }), {
+        const { rerender, result } = renderHook(({ resetKey }) => useInlineEdit({ resetKey }), {
             initialProps: { resetKey: null as null | string | undefined },
         });
 
@@ -56,12 +56,12 @@ describe('useInlineEditTitle', () => {
     });
 
     it('returns a ref object whose .current starts at null', () => {
-        const { result } = renderHook(() => useInlineEditTitle({ resetKey: 'a' }));
+        const { result } = renderHook(() => useInlineEdit({ resetKey: 'a' }));
         expect(result.current.inputRef.current).toBeNull();
     });
 
     it('handleDropdownCloseAutoFocus prevents default while editing', () => {
-        const { result } = renderHook(() => useInlineEditTitle({ resetKey: 'a' }));
+        const { result } = renderHook(() => useInlineEdit({ resetKey: 'a' }));
 
         act(() => result.current.startEdit());
 
@@ -74,7 +74,7 @@ describe('useInlineEditTitle', () => {
     });
 
     it('handleDropdownCloseAutoFocus is a no-op when not editing', () => {
-        const { result } = renderHook(() => useInlineEditTitle({ resetKey: 'a' }));
+        const { result } = renderHook(() => useInlineEdit({ resetKey: 'a' }));
 
         const event = new Event('autofocus', { cancelable: true });
         result.current.handleDropdownCloseAutoFocus(event);
@@ -83,7 +83,7 @@ describe('useInlineEditTitle', () => {
     });
 
     it('focuses and selects the input on the next animation frame after startEdit', async () => {
-        const { result } = renderHook(() => useInlineEditTitle({ resetKey: 'a' }));
+        const { result } = renderHook(() => useInlineEdit({ resetKey: 'a' }));
 
         const input = document.createElement('input');
         input.value = 'hello';
@@ -109,7 +109,7 @@ describe('useInlineEditTitle', () => {
     });
 
     it('cancels the pending focus when isEditing flips off before the frame fires', async () => {
-        const { result } = renderHook(() => useInlineEditTitle({ resetKey: 'a' }));
+        const { result } = renderHook(() => useInlineEdit({ resetKey: 'a' }));
 
         const input = document.createElement('input');
         document.body.appendChild(input);

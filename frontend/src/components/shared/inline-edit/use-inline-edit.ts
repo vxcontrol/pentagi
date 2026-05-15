@@ -2,7 +2,7 @@ import type React from 'react';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-interface UseInlineEditTitleOptions {
+interface UseInlineEditOptions {
     /**
      * When this value changes, the edit session is reset (closes any open
      * input). Use it for the entity id that owns the editor — navigating
@@ -11,7 +11,7 @@ interface UseInlineEditTitleOptions {
     resetKey?: null | string | undefined;
 }
 
-interface UseInlineEditTitleResult<TElement extends HTMLElement = HTMLInputElement> {
+interface UseInlineEditResult<TElement extends HTMLElement = HTMLInputElement> {
     /**
      * Spread onto a Radix `<DropdownMenuContent>` (or any component with the
      * same `onCloseAutoFocus` semantics) when the dropdown contains a button
@@ -29,10 +29,10 @@ interface UseInlineEditTitleResult<TElement extends HTMLElement = HTMLInputEleme
 }
 
 /**
- * Shared state machine for "double-click to rename" headers / table cells.
+ * Shared state machine for inline-edit surfaces (double-click to rename,
+ * quick-add, in-place note edits).
  *
- * Combines four micro-responsibilities that every renameable surface in the
- * app needs:
+ * Combines four micro-responsibilities that every editable surface needs:
  *   - `isEditing` boolean + start/stop helpers,
  *   - a ref for the inline input,
  *   - deferred focus + select-all on the next animation frame, so the focus
@@ -44,9 +44,9 @@ interface UseInlineEditTitleResult<TElement extends HTMLElement = HTMLInputEleme
  * Pass the entity id as `resetKey` so navigation between items closes any
  * stale editor automatically.
  */
-export const useInlineEditTitle = <TElement extends HTMLElement = HTMLInputElement>({
+export const useInlineEdit = <TElement extends HTMLElement = HTMLInputElement>({
     resetKey,
-}: UseInlineEditTitleOptions = {}): UseInlineEditTitleResult<TElement> => {
+}: UseInlineEditOptions = {}): UseInlineEditResult<TElement> => {
     const [isEditing, setIsEditing] = useState(false);
     const inputRef = useRef<null | TElement>(null);
 

@@ -42,7 +42,7 @@ that every list reuses.
 | File                                                       | Role                                                                                                    |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [`detail-navigation/`](detail-navigation/)                 | Prev / Position / Next toolbar + listbox sheet for detail pages, and the navigation hooks that feed it. |
-| [`inline-rename-input.tsx`](inline-rename-input.tsx)       | `<input>` + Save/Cancel addon with Enter/Escape keybindings.                                            |
+| [`inline-edit/`](inline-edit/)                             | Generic inline-edit input (Save/Cancel addons, Enter/Escape) plus the paired `useInlineEdit` state machine. |
 
 ## Hooks
 
@@ -53,7 +53,7 @@ that every list reuses.
 | `usePagination`             | `@/hooks/`                      | URL `?page=`    | yes     | Canonicalizes `?page=1` away so the URL has one form per view.     |
 | `useNavigation`             | `detail-navigation/` (internal) | props           | no      | Pure computation of Prev/Next around a `currentId`.                |
 | `useDetailNavigation`       | `detail-navigation/`            | URL + props     | no      | Bundles the three above into a single hook for detail pages.       |
-| `useInlineEditTitle`        | `@/hooks/`                      | local state     | no      | Edit-mode toggle + deferred focus (Radix dropdown race fix).       |
+| `useInlineEdit`             | `inline-edit/`                  | local state     | no      | Edit-mode toggle + deferred focus (Radix dropdown race fix).       |
 | `usePageStorageKeys`        | `@/hooks/`                      | router          | no      | Resolves the three per-page storage keys reactively.               |
 
 ## Library helpers (in `@/lib/`)
@@ -146,7 +146,7 @@ and deletes them.
 
 - `vitest run` covers the pure utilities (`table-filter`, `table-state`,
   `view-options-storage`, `url-params`, `table-sort`), the hook behaviours
-  (`use-pagination`, `use-table-query-filter`, `use-inline-edit-title`,
+  (`use-pagination`, `use-table-query-filter`, `use-inline-edit`,
   `use-page-storage-keys`, `use-detail-navigation`), and the components
   (`detail-navigation/`, `data-table`).
 - jsdom doesn't ship `Element.prototype.scrollIntoView` or `ResizeObserver`

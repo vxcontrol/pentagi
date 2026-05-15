@@ -19,7 +19,7 @@ import { z } from 'zod';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailNavigationToolbar } from '@/components/shared/detail-navigation';
-import { InlineRenameInput } from '@/components/shared/inline-rename-input';
+import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -42,7 +42,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTemplateDetailNavigation } from '@/features/templates/use-template-detail-navigation';
 import { useFlowTemplateQuery } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { useInlineEditTitle } from '@/hooks/use-inline-edit-title';
 import { cn } from '@/lib/utils';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
@@ -258,7 +257,7 @@ const Template = () => {
         isEditing: isEditingTitle,
         startEdit: handleTemplateRenameStart,
         stopEdit: handleTemplateRenameCancel,
-    } = useInlineEditTitle({ resetKey: templateId });
+    } = useInlineEdit({ resetKey: templateId });
 
     // Fetch template data when editing
     const { data: templateData, loading: isLoadingTemplate } = useFlowTemplateQuery({
@@ -404,7 +403,7 @@ const Template = () => {
                 <BreadcrumbList>
                     <BreadcrumbItem className="gap-2">
                         {isEditingTitle && canShowActions ? (
-                            <InlineRenameInput
+                            <InlineEditInput
                                 busy={isRenaming}
                                 className="w-64 max-w-full"
                                 defaultValue={templateName ?? ''}
