@@ -48,15 +48,15 @@ const NewFlow = () => {
     return (
         <>
             <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-                <SidebarTrigger className="-ml-1" />
+                <SidebarTrigger className="-ml-1 shrink-0" />
                 <Separator
-                    className="mr-2 h-4"
+                    className="mr-2 h-4 shrink-0"
                     orientation="vertical"
                 />
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <BreadcrumbPage>New flow</BreadcrumbPage>
+                <Breadcrumb className="min-w-0 flex-1">
+                    <BreadcrumbList className="min-w-0 flex-nowrap">
+                        <BreadcrumbItem className="min-w-0">
+                            <BreadcrumbPage className="min-w-0 truncate">New flow</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>

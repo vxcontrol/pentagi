@@ -89,11 +89,14 @@ const SettingsProvidersHeader = () => {
 
     return (
         <div className="flex items-center justify-between gap-4">
-            <p className="text-muted-foreground">Manage language model providers</p>
+            <p className="text-muted-foreground min-w-0 flex-1 truncate">Manage language model providers</p>
 
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="secondary">
+                    <Button
+                        className="shrink-0"
+                        variant="secondary"
+                    >
                         Create Provider
                         <ChevronDown className="size-4" />
                     </Button>

@@ -142,8 +142,8 @@ const copyToClipboard = async (text: string): Promise<boolean> => {
 const SettingsAPITokensHeader = ({ onCreateClick }: { onCreateClick: () => void }) => {
     return (
         <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-col gap-2">
-                <p className="text-muted-foreground">Manage API tokens for programmatic access</p>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <p className="text-muted-foreground truncate">Manage API tokens for programmatic access</p>
                 <div className="flex gap-4 text-sm">
                     <a
                         className="text-primary inline-flex items-center gap-1 underline hover:no-underline"
@@ -167,6 +167,7 @@ const SettingsAPITokensHeader = ({ onCreateClick }: { onCreateClick: () => void 
             </div>
 
             <Button
+                className="shrink-0"
                 onClick={onCreateClick}
                 variant="secondary"
             >
