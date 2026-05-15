@@ -125,7 +125,7 @@ describe('DetailNavigationToolbar', () => {
     it('narrows the listbox to filtered items', async () => {
         const user = userEvent.setup();
         // "pha" matches only "Alpha" — substring is case-insensitive and
-        // diacritic-insensitive (see lib/table-filter tests).
+        // diacritic-insensitive (see ./text-filter tests).
         renderToolbar({ currentId: 'a', filter: 'pha' });
 
         await user.click(screen.getByRole('button', { name: /1\/1/ }));

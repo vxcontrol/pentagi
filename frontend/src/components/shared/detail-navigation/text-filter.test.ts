@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createTextMatcher, matchesTextFilter, normalizeForFilter } from './table-filter';
+import { createTextMatcher, matchesTextFilter, normalizeForFilter } from './text-filter';
 
 describe('normalizeForFilter', () => {
     it('lowercases ASCII text', () => {
