@@ -28,7 +28,7 @@ const containerPathToCachePath = (containerPath: string): string => {
  * (re-pulling a file the user already has) without an extra REST round-trip.
  * Nested conflicts (the user pulls `/etc/` while only `/etc/nginx.conf` is
  * cached) still surface server-side as a 409 and are auto-redialed by the
- * caller through the same `OverwriteConfirmDialog` flow.
+ * caller through the same `OverwriteDialog` flow.
  */
 export const findPullConflicts = (
     pullTargets: readonly string[],

@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import type { FileNode } from '@/components/shared/file-manager';
 import type { OverwriteConflict } from '@/components/shared/overwrite';
 
-import { OverwriteConfirmDialog, OverwriteCtaButtons, useOverwriteAction } from '@/components/shared/overwrite';
+import { OverwriteButtons, OverwriteDialog, useOverwriteAction } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -230,7 +230,7 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
                             >
                                 Cancel
                             </Button>
-                            <OverwriteCtaButtons
+                            <OverwriteButtons
                                 isDisabled={isSubmitDisabled}
                                 isProcessing={isMoving}
                                 onOverwrite={() => {
@@ -246,7 +246,7 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
                 </Form>
             </DialogContent>
 
-            <OverwriteConfirmDialog
+            <OverwriteDialog
                 conflicts={overwriteAction.conflicts}
                 onCancel={overwriteAction.resetConflicts}
                 onReplaceAll={overwriteAction.handleReplaceAll}

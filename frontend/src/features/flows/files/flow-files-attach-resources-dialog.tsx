@@ -2,7 +2,7 @@ import { FolderInput, Search, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { FileManager, type FileNode } from '@/components/shared/file-manager';
-import { OverwriteConfirmDialog, OverwriteCtaButtons, useOverwriteAction } from '@/components/shared/overwrite';
+import { OverwriteButtons, OverwriteDialog, useOverwriteAction } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -251,7 +251,7 @@ const FlowFilesAttachResourcesDialogBody = ({
                         >
                             Cancel
                         </Button>
-                        <OverwriteCtaButtons
+                        <OverwriteButtons
                             isDisabled={isAttachDisabled}
                             isProcessing={isAttaching}
                             onOverwrite={handleOverwrite}
@@ -264,7 +264,7 @@ const FlowFilesAttachResourcesDialogBody = ({
                 </DialogFooter>
             </DialogContent>
 
-            <OverwriteConfirmDialog
+            <OverwriteDialog
                 conflicts={overwriteAction.conflicts}
                 onCancel={overwriteAction.resetConflicts}
                 onReplaceAll={overwriteAction.handleReplaceAll}

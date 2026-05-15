@@ -7,7 +7,7 @@ import {
     type FileManagerBulkAction,
     type FileNode,
 } from '@/components/shared/file-manager';
-import { OverwriteConfirmDialog, OverwriteCtaButtons, useOverwriteAction } from '@/components/shared/overwrite';
+import { OverwriteButtons, OverwriteDialog, useOverwriteAction } from '@/components/shared/overwrite';
 import {
     Autocomplete,
     AutocompleteContent,
@@ -428,7 +428,7 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
                     >
                         Cancel
                     </Button>
-                    <OverwriteCtaButtons
+                    <OverwriteButtons
                         isDisabled={isPullDisabled}
                         isProcessing={isPulling}
                         onOverwrite={() => {
@@ -444,7 +444,7 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
                 </DialogFooter>
             </DialogContent>
 
-            <OverwriteConfirmDialog
+            <OverwriteDialog
                 conflicts={overwriteAction.conflicts}
                 onCancel={overwriteAction.resetConflicts}
                 onReplaceAll={overwriteAction.handleReplaceAll}

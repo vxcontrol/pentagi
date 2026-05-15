@@ -24,7 +24,7 @@ import {
     formatModifiedRelative,
 } from '@/components/shared/file-manager';
 import { HeaderButton } from '@/components/shared/header-button';
-import { OverwriteConfirmDialog, useOverwriteAction } from '@/components/shared/overwrite';
+import { OverwriteDialog, useOverwriteAction } from '@/components/shared/overwrite';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -574,7 +574,7 @@ const Resources = () => {
                     onClose={() => setFilesToCopy(null)}
                 />
 
-                <OverwriteConfirmDialog
+                <OverwriteDialog
                     conflicts={dndMoveAction.conflicts}
                     onCancel={dndMoveAction.resetConflicts}
                     onReplaceAll={dndMoveAction.handleReplaceAll}
