@@ -37,7 +37,7 @@ import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextareaAutosize } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -263,9 +263,7 @@ const Template = () => {
                 return;
             }
 
-            const target = mobileNav.filteredItems.find(
-                (item) => String(templateToolbarProps.getId(item)) === id,
-            );
+            const target = mobileNav.filteredItems.find((item) => String(templateToolbarProps.getId(item)) === id);
 
             if (!target) {
                 return;
@@ -461,7 +459,7 @@ const Template = () => {
                                 {isEditingTitle && canShowActions ? (
                                     <InlineEditInput
                                         busy={isRenaming}
-                                        className="w-64 min-w-0 max-w-full flex-1"
+                                        className="w-64 max-w-full min-w-0 flex-1"
                                         defaultValue={templateName ?? ''}
                                         inputRef={editingInputRef}
                                         onCancel={handleTemplateRenameCancel}
@@ -472,7 +470,7 @@ const Template = () => {
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <BreadcrumbPage
-                                                className="min-w-0 cursor-text select-none truncate"
+                                                className="min-w-0 cursor-text truncate select-none"
                                                 onDoubleClick={handleTemplateRenameStart}
                                             >
                                                 {templateName ?? 'Template'}
@@ -671,9 +669,20 @@ const Template = () => {
                     open={isAsideOpen}
                 >
                     <SheetContent
-                        className="w-full max-w-[min(20rem,100vw)]"
+                        // Radix expects either a `<Description>` or an
+                        // explicit `aria-describedby={undefined}` opt-out;
+                        // the panel is a simple list of presets with no
+                        // descriptive sub-text, so the opt-out is honest.
+                        aria-describedby={undefined}
+                        className="w-full max-w-[min(20rem,100vw)] p-2"
                         side="right"
                     >
+                        {/* Radix dialogs require a title for screen readers.
+                            The visible h3 lives inside `asideContent` and is
+                            reused on desktop, where Sheet doesn't render — so
+                            mirror it here as an sr-only SheetTitle that only
+                            assistive tech picks up. */}
+                        <SheetTitle className="sr-only">Preset templates</SheetTitle>
                         {asideContent}
                     </SheetContent>
                 </Sheet>

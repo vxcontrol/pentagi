@@ -241,6 +241,10 @@ export function DetailNavigationSheet<T>({
             open={open}
         >
             <SheetContent
+                // Radix expects either a `<Description>` or an explicit
+                // `aria-describedby={undefined}` opt-out. The sheet is just a
+                // listbox of items, the `SheetTitle` already describes it.
+                aria-describedby={undefined}
                 className="flex w-full max-w-sm flex-col gap-0 p-0 sm:max-w-sm"
                 side="right"
             >
