@@ -18,8 +18,8 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { DetailNavigationToolbar } from '@/components/shared/detail-navigation';
 import { InlineRenameInput } from '@/components/shared/inline-rename-input';
-import { ListNavigationToolbar } from '@/components/shared/list-navigation-toolbar';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -433,7 +433,7 @@ const Template = () => {
             </Breadcrumb>
             <div className="ml-auto flex items-center gap-2">
                 {canShowActions && (
-                    <ListNavigationToolbar<Template>
+                    <DetailNavigationToolbar<Template>
                         {...templateToolbarProps}
                         sheetIcon={<FileText className="size-4" />}
                         sheetTitle="Templates"

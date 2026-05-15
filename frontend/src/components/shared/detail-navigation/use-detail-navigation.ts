@@ -1,21 +1,21 @@
 import { useMemo } from 'react';
 
-import type { ListNavigationToolbarProps } from '@/components/shared/list-navigation-toolbar';
-
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { useTableQueryFilterReader } from '@/hooks/use-table-query-filter';
 
+import type { DetailNavigationToolbarProps } from './detail-navigation-toolbar';
+
 /**
- * Data-only slice of `ListNavigationToolbarProps<T>`. Derived from the
- * single source of truth in `list-navigation-toolbar.tsx` so a new required
- * prop (or a rename) can't silently desync the two surfaces.
+ * Data-only slice of `DetailNavigationToolbarProps<T>`. Derived from the
+ * single source of truth in `detail-navigation-toolbar.tsx` so a new
+ * required prop (or a rename) can't silently desync the two surfaces.
  *
  * Presentation-only fields (`sheetTitle`, `sheetIcon`, `renderItem`,
  * `sortFn`) are intentionally excluded — those are supplied per-page at the
  * call site of the toolbar, not by the navigation hook.
  */
-type ListNavigationToolbarDataProps<T> = Pick<
-    ListNavigationToolbarProps<T>,
+type DetailNavigationToolbarDataProps<T> = Pick<
+    DetailNavigationToolbarProps<T>,
     'currentId' | 'filter' | 'getHref' | 'getId' | 'getLabel' | 'getSearchableText' | 'items'
 >;
 
@@ -56,7 +56,7 @@ interface UseDetailNavigationOptions<T extends { id: string }> {
 
 interface UseDetailNavigationResult<T extends { id: string }> {
     debouncedFilter: string;
-    toolbarProps: ListNavigationToolbarDataProps<T>;
+    toolbarProps: DetailNavigationToolbarDataProps<T>;
 }
 
 // Module-level so the reference is stable across renders. Typed against
@@ -75,7 +75,7 @@ const defaultGetId = (item: { id: string }): string => item.id;
  *      (read-only — the detail page never mutates the filter from here),
  *   3. supplying a default `getId` (most domain types use a plain `id`).
  *
- * The returned `toolbarProps` plug straight into `<ListNavigationToolbar>` —
+ * The returned `toolbarProps` plug straight into `<DetailNavigationToolbar>` —
  * callers add presentation-only props (`sheetTitle`, `renderItem`, etc.).
  *
  * Pass each callback through `useCallback`: the toolbar's filter memo relies
@@ -104,7 +104,7 @@ export const useDetailNavigation = <T extends { id: string }>({
     // `toolbarProps` memo below would invalidate on every render.
     const resolvedGetId = useMemo<(item: T) => string>(() => getId ?? defaultGetId, [getId]);
 
-    const toolbarProps = useMemo<ListNavigationToolbarDataProps<T>>(
+    const toolbarProps = useMemo<DetailNavigationToolbarDataProps<T>>(
         () => ({
             currentId,
             filter: debouncedFilter,

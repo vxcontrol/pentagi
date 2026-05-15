@@ -4,7 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
-interface ListNavigationSheetProps<T> {
+interface DetailNavigationSheetProps<T> {
     currentId: null | string | undefined;
     /**
      * Pre-computed index of `currentId` inside `items` (or `-1` when the
@@ -37,7 +37,7 @@ interface ListNavigationSheetProps<T> {
  * Initial focus on open targets the current entry (if it's part of the
  * filtered subset) so users land oriented inside their own context.
  */
-export function ListNavigationSheet<T>({
+export function DetailNavigationSheet<T>({
     currentId,
     currentIndex,
     getId,
@@ -50,7 +50,7 @@ export function ListNavigationSheet<T>({
     sheetIcon,
     sheetTitle,
     total,
-}: ListNavigationSheetProps<T>) {
+}: DetailNavigationSheetProps<T>) {
     const listRef = useRef<HTMLUListElement>(null);
     const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
     const [focusedId, setFocusedId] = useState<null | string>(null);

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import { createTextMatcher } from '@/lib/table-filter';
 
-interface ListNavigationInput<T> {
+interface NavigationInput<T> {
     currentId: null | string | undefined;
     getId: (item: T) => string;
     /**
@@ -21,7 +21,7 @@ interface ListNavigationInput<T> {
     sortFn?: (a: T, b: T) => number;
 }
 
-interface ListNavigationResult<T> {
+interface NavigationResult<T> {
     currentIndex: number;
     currentItem: null | T;
     filteredItems: readonly T[];
@@ -31,8 +31,8 @@ interface ListNavigationResult<T> {
 }
 
 /**
- * Pure core of {@link useFilteredListNavigation}: filter, sort, and resolve
- * Prev/Next around `currentId`. Exposed without React so the algorithm can be
+ * Pure core of {@link useNavigation}: filter, sort, and resolve Prev/Next
+ * around `currentId`. Exposed without React so the algorithm can be
  * unit-tested directly — the hook is a thin `useMemo` wrapper around this.
  *
  * The Map of `id → index` is built once per invocation so the `currentId`
@@ -40,14 +40,14 @@ interface ListNavigationResult<T> {
  * intentionally not exposed — callers should walk `filteredItems` or use the
  * returned `prevId` / `nextId`.
  */
-export const computeListNavigation = <T>({
+export const computeNavigation = <T>({
     currentId,
     getId,
     getSearchableText,
     items,
     query,
     sortFn,
-}: ListNavigationInput<T>): ListNavigationResult<T> => {
+}: NavigationInput<T>): NavigationResult<T> => {
     const hasQuery = query !== undefined && query.length > 0;
     const filtered =
         hasQuery && getSearchableText
@@ -89,7 +89,7 @@ export const computeListNavigation = <T>({
     };
 };
 
-interface UseFilteredListNavigationOptions<T> {
+interface UseNavigationOptions<T> {
     currentId: null | string | undefined;
     getId: (item: T) => string;
     /**
@@ -108,7 +108,7 @@ interface UseFilteredListNavigationOptions<T> {
     sortFn?: (a: T, b: T) => number;
 }
 
-type UseFilteredListNavigationResult<T> = ListNavigationResult<T>;
+type UseNavigationResult<T> = NavigationResult<T>;
 
 /**
  * Resolve Prev/Next siblings for a detail page that's tied to a filtered list.
@@ -130,16 +130,16 @@ type UseFilteredListNavigationResult<T> = ListNavigationResult<T>;
  * keystroke, and `getSearchableText` is naturally module-scoped at the
  * feature level (see `use-flow-detail-navigation` etc.).
  */
-export const useFilteredListNavigation = <T>({
+export const useNavigation = <T>({
     currentId,
     getId,
     getSearchableText,
     items,
     query,
     sortFn,
-}: UseFilteredListNavigationOptions<T>): UseFilteredListNavigationResult<T> => {
+}: UseNavigationOptions<T>): UseNavigationResult<T> => {
     return useMemo(
-        () => computeListNavigation({ currentId, getId, getSearchableText, items, query, sortFn }),
+        () => computeNavigation({ currentId, getId, getSearchableText, items, query, sortFn }),
         [currentId, getId, getSearchableText, items, query, sortFn],
     );
 };

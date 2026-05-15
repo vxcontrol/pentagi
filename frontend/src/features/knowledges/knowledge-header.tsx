@@ -8,8 +8,8 @@ import { toast } from 'sonner';
 import type { KnowledgeDocumentFragmentFragment } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { DetailNavigationToolbar } from '@/components/shared/detail-navigation';
 import { InlineRenameInput } from '@/components/shared/inline-rename-input';
-import { ListNavigationToolbar } from '@/components/shared/list-navigation-toolbar';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -163,7 +163,7 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                 </Breadcrumb>
                 <div className="ml-auto flex items-center gap-2">
                     {canShowActions && (
-                        <ListNavigationToolbar<Knowledge>
+                        <DetailNavigationToolbar<Knowledge>
                             {...knowledgeToolbarProps}
                             renderItem={(item, isCurrent) => (
                                 <>

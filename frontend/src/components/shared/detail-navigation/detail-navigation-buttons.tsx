@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-interface ListNavigationButtonsProps {
+interface DetailNavigationButtonsProps {
     /** Disable the position-button when the filtered subset is empty. */
     hasEntries: boolean;
     /** No next sibling — disable the right chevron. */
@@ -21,14 +21,14 @@ interface ListNavigationButtonsProps {
 
 /**
  * Prev / Position / Next button cluster for a detail page. Stateless and
- * presentation-only — `ListNavigationToolbar` owns the navigation logic
+ * presentation-only — `DetailNavigationToolbar` owns the navigation logic
  * and feeds the resolved indices, labels, and click handlers down.
  *
- * Kept separate from `ListNavigationSheet` so the same buttons could in
+ * Kept separate from `DetailNavigationSheet` so the same buttons could in
  * principle be reused without the sheet (e.g. a future variant that ships
  * keyboard-only navigation without an overlay).
  */
-export const ListNavigationButtons = ({
+export const DetailNavigationButtons = ({
     hasEntries,
     nextDisabled,
     onNext,
@@ -37,7 +37,7 @@ export const ListNavigationButtons = ({
     positionLabel,
     prevDisabled,
     sheetTitle,
-}: ListNavigationButtonsProps) => {
+}: DetailNavigationButtonsProps) => {
     const lowerTitle = sheetTitle.toLowerCase();
 
     return (

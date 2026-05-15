@@ -1,4 +1,4 @@
-import { useDetailNavigation } from '@/hooks/use-detail-navigation';
+import { useDetailNavigation } from '@/components/shared/detail-navigation';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const getLabel = (item: Template) => item.title;

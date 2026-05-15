@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-import { ListNavigationToolbar } from './list-navigation-toolbar';
+import { DetailNavigationToolbar } from './detail-navigation-toolbar';
 
 interface Item {
     id: string;
@@ -52,7 +52,7 @@ const renderToolbar = (overrides: { currentId?: null | string; filter?: string; 
     );
 
     return render(
-        <ListNavigationToolbar<Item>
+        <DetailNavigationToolbar<Item>
             currentId={overrides.currentId ?? 'c'}
             filter={overrides.filter ?? ''}
             getHref={getHref}
@@ -65,7 +65,7 @@ const renderToolbar = (overrides: { currentId?: null | string; filter?: string; 
     );
 };
 
-describe('ListNavigationToolbar', () => {
+describe('DetailNavigationToolbar', () => {
     it('renders nothing when items list is empty', () => {
         renderToolbar({ items: [] });
         // The toolbar should not emit any of its own controls — the wrapper
@@ -298,7 +298,7 @@ describe('ListNavigationToolbar', () => {
     });
 });
 
-describe('ListNavigationToolbar — predicate stability', () => {
+describe('DetailNavigationToolbar — predicate stability', () => {
     it('updates the filtered subset when the filter prop changes', async () => {
         const user = userEvent.setup();
 
@@ -316,7 +316,7 @@ describe('ListNavigationToolbar — predicate stability', () => {
         );
 
         const { rerender } = render(
-            <ListNavigationToolbar<Item>
+            <DetailNavigationToolbar<Item>
                 currentId="a"
                 filter=""
                 getHref={getHref}
@@ -331,7 +331,7 @@ describe('ListNavigationToolbar — predicate stability', () => {
         expect(screen.getByRole('button', { name: /1\/4/ })).toBeInTheDocument();
 
         rerender(
-            <ListNavigationToolbar<Item>
+            <DetailNavigationToolbar<Item>
                 currentId="a"
                 filter="Alpha"
                 getHref={getHref}

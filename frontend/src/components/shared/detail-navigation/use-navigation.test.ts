@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeListNavigation } from './use-filtered-list-navigation';
+import { computeNavigation } from './use-navigation';
 
 interface Row {
     id: string;
@@ -17,9 +17,9 @@ const ROWS: readonly Row[] = [
     { id: 'd', title: 'Delta' },
 ] as const;
 
-describe('computeListNavigation', () => {
+describe('computeNavigation', () => {
     it('returns prev/next neighbours for a middle item', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'c',
             getId,
             items: ROWS,
@@ -32,7 +32,7 @@ describe('computeListNavigation', () => {
     });
 
     it('returns null prev for the first item', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'a',
             getId,
             items: ROWS,
@@ -44,7 +44,7 @@ describe('computeListNavigation', () => {
     });
 
     it('returns null next for the last item', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'd',
             getId,
             items: ROWS,
@@ -56,7 +56,7 @@ describe('computeListNavigation', () => {
     });
 
     it('reports currentIndex=-1 when the current item is missing from the filtered subset', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'zzz',
             getId,
             items: ROWS,
@@ -70,7 +70,7 @@ describe('computeListNavigation', () => {
     });
 
     it('reports currentIndex=-1 when currentId is null or undefined', () => {
-        const nullResult = computeListNavigation({
+        const nullResult = computeNavigation({
             currentId: null,
             getId,
             items: ROWS,
@@ -80,7 +80,7 @@ describe('computeListNavigation', () => {
         expect(nullResult.prevId).toBeNull();
         expect(nullResult.nextId).toBeNull();
 
-        const undefinedResult = computeListNavigation({
+        const undefinedResult = computeNavigation({
             currentId: undefined,
             getId,
             items: ROWS,
@@ -90,7 +90,7 @@ describe('computeListNavigation', () => {
     });
 
     it('honours `query` when narrowing the subset', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'c',
             getId,
             getSearchableText: getTitle,
@@ -107,7 +107,7 @@ describe('computeListNavigation', () => {
     });
 
     it('drops the current item from the result when it does not match the query', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'a',
             getId,
             getSearchableText: getTitle,
@@ -122,7 +122,7 @@ describe('computeListNavigation', () => {
     });
 
     it('treats an empty/undefined query as "no filter" even when getSearchableText is provided', () => {
-        const empty = computeListNavigation({
+        const empty = computeNavigation({
             currentId: 'c',
             getId,
             getSearchableText: getTitle,
@@ -132,7 +132,7 @@ describe('computeListNavigation', () => {
 
         expect(empty.filteredItems.map(getId)).toEqual(['a', 'b', 'c', 'd']);
 
-        const missing = computeListNavigation({
+        const missing = computeNavigation({
             currentId: 'c',
             getId,
             getSearchableText: getTitle,
@@ -146,7 +146,7 @@ describe('computeListNavigation', () => {
         // Documents the boundary: without a haystack accessor we cannot evaluate
         // the query against rows, so we degrade to "no filter" instead of
         // throwing — keeps the hook usable while a caller forgets to wire one up.
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'c',
             getId,
             items: ROWS,
@@ -158,7 +158,7 @@ describe('computeListNavigation', () => {
 
     it('preserves input order when no sortFn is provided', () => {
         const reversed = [...ROWS].reverse();
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'c',
             getId,
             items: reversed,
@@ -171,7 +171,7 @@ describe('computeListNavigation', () => {
     });
 
     it('applies sortFn to the filtered subset', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'b',
             getId,
             items: ROWS,
@@ -185,7 +185,7 @@ describe('computeListNavigation', () => {
     });
 
     it('handles an empty items array', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'anything',
             getId,
             items: [],
@@ -199,7 +199,7 @@ describe('computeListNavigation', () => {
     });
 
     it('returns the current item when present', () => {
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'c',
             getId,
             items: ROWS,
@@ -210,7 +210,7 @@ describe('computeListNavigation', () => {
 
     it('does not mutate the input array even when sorting', () => {
         const before = ROWS.map(getId);
-        computeListNavigation({
+        computeNavigation({
             currentId: 'a',
             getId,
             items: ROWS,
@@ -226,7 +226,7 @@ describe('computeListNavigation', () => {
         // must surface this as currentIndex=-1 / no neighbours so the UI
         // disables Prev/Next rather than jumping to an unrelated row.
         const trimmed = ROWS.filter((row) => row.id !== 'b');
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: 'b',
             getId,
             items: trimmed,
@@ -246,7 +246,7 @@ describe('computeListNavigation', () => {
             { id: '3', title: 'resume' },
         ];
 
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: '1',
             getId,
             getSearchableText: getTitle,
@@ -267,7 +267,7 @@ describe('computeListNavigation', () => {
         ];
         const getNumericId = (row: NumRow) => String(row.id);
 
-        const result = computeListNavigation({
+        const result = computeNavigation({
             currentId: '20',
             getId: getNumericId,
             items: rows,

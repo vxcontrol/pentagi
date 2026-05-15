@@ -1,4 +1,4 @@
-import { useDetailNavigation } from '@/hooks/use-detail-navigation';
+import { useDetailNavigation } from '@/components/shared/detail-navigation';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 const getLabel = (item: Knowledge) => item.question;

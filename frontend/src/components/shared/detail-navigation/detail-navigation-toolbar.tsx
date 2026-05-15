@@ -1,12 +1,13 @@
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { ListNavigationButtons } from '@/components/shared/list-navigation-buttons';
-import { ListNavigationSheet } from '@/components/shared/list-navigation-sheet';
-import { useFilteredListNavigation } from '@/hooks/use-filtered-list-navigation';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 
-export interface ListNavigationToolbarProps<T> {
+import { DetailNavigationButtons } from './detail-navigation-buttons';
+import { DetailNavigationSheet } from './detail-navigation-sheet';
+import { useNavigation } from './use-navigation';
+
+export interface DetailNavigationToolbarProps<T> {
     currentId: null | string | undefined;
     /**
      * Current free-text filter the list page applies. The toolbar narrows the
@@ -56,7 +57,7 @@ export interface ListNavigationToolbarProps<T> {
  * supports a free-text filter.
  *
  * - "Prev" / "Next" walk the same filtered subset the list page renders.
- * - The middle button opens `<ListNavigationSheet>`, a listbox of every
+ * - The middle button opens `<DetailNavigationSheet>`, a listbox of every
  *   entry in the filtered subset with the current one highlighted — the
  *   user can jump anywhere in one click.
  * - When the current item is missing from the filtered subset (e.g. the
@@ -70,7 +71,7 @@ export interface ListNavigationToolbarProps<T> {
  * Returns `null` when there are no items at all — there's nothing useful to
  * render and a "–/0" disabled toolbar would just be visual noise.
  */
-export function ListNavigationToolbar<T>({
+export function DetailNavigationToolbar<T>({
     currentId,
     filter,
     getHref,
@@ -82,7 +83,7 @@ export function ListNavigationToolbar<T>({
     sheetIcon,
     sheetTitle,
     sortFn,
-}: ListNavigationToolbarProps<T>) {
+}: DetailNavigationToolbarProps<T>) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -92,7 +93,7 @@ export function ListNavigationToolbar<T>({
     // data shape (`getSearchableText` / `getLabel`), never the comparison.
     const haystack = getSearchableText ?? getLabel;
 
-    const { currentIndex, filteredItems, nextId, prevId, total } = useFilteredListNavigation({
+    const { currentIndex, filteredItems, nextId, prevId, total } = useNavigation({
         currentId,
         getId,
         getSearchableText: haystack,
@@ -153,7 +154,7 @@ export function ListNavigationToolbar<T>({
 
     return (
         <>
-            <ListNavigationButtons
+            <DetailNavigationButtons
                 hasEntries={total > 0}
                 nextDisabled={!nextId}
                 onNext={goToNext}
@@ -163,7 +164,7 @@ export function ListNavigationToolbar<T>({
                 prevDisabled={!prevId}
                 sheetTitle={sheetTitle}
             />
-            <ListNavigationSheet<T>
+            <DetailNavigationSheet<T>
                 currentId={currentId}
                 currentIndex={currentIndex}
                 getId={getId}

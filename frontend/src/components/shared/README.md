@@ -1,7 +1,7 @@
 # Shared list/detail building blocks
 
 This directory hosts the reusable surface for list-and-detail pages: a
-filterable table, a Prev/Next/Sheet toolbar that walks the *same* filtered
+filterable table, a Prev/Next/Sheet toolbar that walks the _same_ filtered
 subset on detail pages, and the inline-rename + sortable-header primitives
 that every list reuses.
 
@@ -18,10 +18,10 @@ that every list reuses.
               usePagination                    │
                          │                     │
                          ▼                     ▼
-                    <DataTable>      useFilteredListNavigation
+                    <DataTable>      useNavigation
                     (list page)             │
                          │                  ▼
-                         ▼          <ListNavigationToolbar>
+                         ▼          <DetailNavigationToolbar>
                   table_4_<path>       (detail page)
                   in localStorage
                   (cold-start fallback)
@@ -33,90 +33,91 @@ that every list reuses.
   into `localStorage` under `table_4_<path>`. The detail page never writes
   storage and never replays storage into the URL — opening a shared link
   shows exactly what the link says.
-- **Prev/Next walks the same subset.** `ListNavigationToolbar` runs the
+- **Prev/Next walks the same subset.** `DetailNavigationToolbar` runs the
   same matcher (`createTextMatcher`) the list filter uses, so siblings stay
   in lockstep with what the user sees in the table.
 
 ## Components
 
-| File                                                            | Role                                                                       |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [`list-navigation-toolbar.tsx`](list-navigation-toolbar.tsx)    | Prev / Position / Next cluster + sheet trigger on detail pages.            |
-| [`list-navigation-buttons.tsx`](list-navigation-buttons.tsx)    | Presentation-only button trio; stateless.                                  |
-| [`list-navigation-sheet.tsx`](list-navigation-sheet.tsx)        | WAI-ARIA listbox sheet — roving tabindex, focus reconciliation.            |
-| [`sortable-column-header.tsx`](sortable-column-header.tsx)      | DRY header for TanStack columns — `none → asc → desc → none` cycle.        |
-| [`inline-rename-input.tsx`](inline-rename-input.tsx)            | `<input>` + Save/Cancel addon with Enter/Escape keybindings.               |
+| File                                                       | Role                                                                                                    |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [`detail-navigation/`](detail-navigation/)                 | Prev / Position / Next toolbar + listbox sheet for detail pages, and the navigation hooks that feed it. |
+| [`sortable-column-header.tsx`](sortable-column-header.tsx) | DRY header for TanStack columns — `none → asc → desc → none` cycle.                                     |
+| [`inline-rename-input.tsx`](inline-rename-input.tsx)       | `<input>` + Save/Cancel addon with Enter/Escape keybindings.                                            |
 
-## Hooks (in `@/hooks/`)
+## Hooks
 
-| Hook                            | Source of truth | Writes? | Notes                                                              |
-| ------------------------------- | --------------- | ------- | ------------------------------------------------------------------ |
-| `useTableQueryFilter`           | URL `?q=`       | yes     | List pages. Restores from `localStorage` on cold start.            |
-| `useTableQueryFilterReader`     | URL `?q=`       | no      | Detail pages. Storage-blind — shared links never gain stale `?q=`. |
-| `usePagination`                 | URL `?page=`    | yes     | Canonicalizes `?page=1` away so the URL has one form per view.     |
-| `useFilteredListNavigation`     | props           | no      | Pure computation of Prev/Next around a `currentId`.                |
-| `useDetailNavigation`           | URL + props     | no      | Bundles the three above into a single hook for detail pages.       |
-| `useInlineEditTitle`            | local state     | no      | Edit-mode toggle + deferred focus (Radix dropdown race fix).       |
-| `usePageStorageKeys`            | router          | no      | Resolves the three per-page storage keys reactively.               |
+| Hook                        | Where                           | Source of truth | Writes? | Notes                                                              |
+| --------------------------- | ------------------------------- | --------------- | ------- | ------------------------------------------------------------------ |
+| `useTableQueryFilter`       | `@/hooks/`                      | URL `?q=`       | yes     | List pages. Restores from `localStorage` on cold start.            |
+| `useTableQueryFilterReader` | `@/hooks/`                      | URL `?q=`       | no      | Detail pages. Storage-blind — shared links never gain stale `?q=`. |
+| `usePagination`             | `@/hooks/`                      | URL `?page=`    | yes     | Canonicalizes `?page=1` away so the URL has one form per view.     |
+| `useNavigation`             | `detail-navigation/` (internal) | props           | no      | Pure computation of Prev/Next around a `currentId`.                |
+| `useDetailNavigation`       | `detail-navigation/`            | URL + props     | no      | Bundles the three above into a single hook for detail pages.       |
+| `useInlineEditTitle`        | `@/hooks/`                      | local state     | no      | Edit-mode toggle + deferred focus (Radix dropdown race fix).       |
+| `usePageStorageKeys`        | `@/hooks/`                      | router          | no      | Resolves the three per-page storage keys reactively.               |
 
 ## Library helpers (in `@/lib/`)
 
-| Module                  | Purpose                                                                          |
-| ----------------------- | -------------------------------------------------------------------------------- |
-| `table-filter.ts`       | `createTextMatcher` — case + diacritic-insensitive substring matcher.            |
-| `table-state.ts`        | Unified `table_4_<path>` JSON slot. Carries filter + sorting + columnVis + pageSize. |
-| `table-sort.ts`         | `cycleColumnSort` — pure none/asc/desc cycle for TanStack columns.               |
-| `view-options-storage.ts` | `viewOptions_4_<path>` for FileManager-style screens (folders-first, etc.).    |
-| `storage-keys.ts`       | Single source of truth for storage-key conventions and `getTopLevelPath`.        |
-| `url-params.ts`         | `URL_PARAMS` constants + `mergeHrefWithSearchParams` (preserves hash on merge).  |
+| Module                    | Purpose                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `table-filter.ts`         | `createTextMatcher` — case + diacritic-insensitive substring matcher.                |
+| `table-state.ts`          | Unified `table_4_<path>` JSON slot. Carries filter + sorting + columnVis + pageSize. |
+| `table-sort.ts`           | `cycleColumnSort` — pure none/asc/desc cycle for TanStack columns.                   |
+| `view-options-storage.ts` | `viewOptions_4_<path>` for FileManager-style screens (folders-first, etc.).          |
+| `storage-keys.ts`         | Single source of truth for storage-key conventions and `getTopLevelPath`.            |
+| `url-params.ts`           | `URL_PARAMS` constants + `mergeHrefWithSearchParams` (preserves hash on merge).      |
 
 ## How to add a new list + detail pair
 
 1. **List page** (`/<entities>/`):
-   ```tsx
-   const { filter, setFilter } = useTableQueryFilter();
-   const { pageIndex, setPage } = usePagination();
 
-   return (
-     <DataTable
-       columns={columns /* use <SortableColumnHeader column={column} label="..." /> */}
-       data={entities}
-       filterColumn="title"
-       filterValue={filter}
-       onFilterChange={setFilter}
-       onPageChange={setPage}
-       pageIndex={pageIndex}
-     />
-   );
-   ```
+    ```tsx
+    const { filter, setFilter } = useTableQueryFilter();
+    const { pageIndex, setPage } = usePagination();
+
+    return (
+        <DataTable
+            columns={columns /* use <SortableColumnHeader column={column} label="..." /> */}
+            data={entities}
+            filterColumn="title"
+            filterValue={filter}
+            onFilterChange={setFilter}
+            onPageChange={setPage}
+            pageIndex={pageIndex}
+        />
+    );
+    ```
 
 2. **Feature-scoped navigation hook** (`@/features/<entity>/use-<entity>-detail-navigation.ts`):
-   ```ts
-   const getLabel = (item: Entity) => item.title;
-   const getHref = (item: Entity) => `/<entities>/${item.id}`;
 
-   export const useEntityDetailNavigation = (currentId: null | string | undefined) => {
-     const { entities } = useEntities();
+    ```ts
+    const getLabel = (item: Entity) => item.title;
+    const getHref = (item: Entity) => `/<entities>/${item.id}`;
 
-     return useDetailNavigation<Entity>({ currentId, getHref, getLabel, items: entities });
-   };
-   ```
+    export const useEntityDetailNavigation = (currentId: null | string | undefined) => {
+        const { entities } = useEntities();
+
+        return useDetailNavigation<Entity>({ currentId, getHref, getLabel, items: entities });
+    };
+    ```
 
 3. **Detail page** (`/<entities>/:id`):
-   ```tsx
-   const { toolbarProps } = useEntityDetailNavigation(entityId);
 
-   return (
-     <header>
-       <ListNavigationToolbar<Entity>
-         {...toolbarProps}
-         sheetIcon={<Icon className="size-4" />}
-         sheetTitle="Entities"
-         renderItem={(item, isCurrent) => <span>{item.title}</span>}
-       />
-     </header>
-   );
-   ```
+    ```tsx
+    const { toolbarProps } = useEntityDetailNavigation(entityId);
+
+    return (
+        <header>
+            <DetailNavigationToolbar<Entity>
+                {...toolbarProps}
+                sheetIcon={<Icon className="size-4" />}
+                sheetTitle="Entities"
+                renderItem={(item, isCurrent) => <span>{item.title}</span>}
+            />
+        </header>
+    );
+    ```
 
 ## Why URL > storage
 
@@ -148,7 +149,7 @@ and deletes them.
   `view-options-storage`, `url-params`, `table-sort`), the hook behaviours
   (`use-pagination`, `use-table-query-filter`, `use-inline-edit-title`,
   `use-page-storage-keys`, `use-detail-navigation`), and the components
-  (`list-navigation-toolbar`, `data-table`).
+  (`detail-navigation/`, `data-table`).
 - jsdom doesn't ship `Element.prototype.scrollIntoView` or `ResizeObserver`
   — both are polyfilled in `vitest.setup.ts`.
 - React Testing Library auto-cleans the DOM after every test (see the same
