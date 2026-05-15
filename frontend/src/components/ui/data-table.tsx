@@ -44,7 +44,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
-import { cycleColumnSort } from '@/lib/table-sort';
 import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
 import { cn } from '@/lib/utils';
 
@@ -141,6 +140,31 @@ interface DataTableColumnHeaderProps<TData, TValue> {
     column: Column<TData, TValue>;
     /** Visible label rendered as the button text. Named after the shadcn convention. */
     title: ReactNode;
+}
+
+/**
+ * Cycle a TanStack column through `none → asc → desc → none`. Pure with
+ * respect to React (no hooks called) so a header `onClick` can invoke it
+ * directly without `useCallback`/`useMemo` ceremony. Exported alongside
+ * {@link DataTableColumnHeader} so a custom header can drive the same
+ * sort cycle without duplicating the if/else.
+ */
+export function cycleColumnSort<TData, TValue = unknown>(column: Column<TData, TValue>): void {
+    const sorted = column.getIsSorted();
+
+    if (sorted === 'asc') {
+        column.toggleSorting(true);
+
+        return;
+    }
+
+    if (sorted === 'desc') {
+        column.clearSorting();
+
+        return;
+    }
+
+    column.toggleSorting(false);
 }
 
 function DataTable<TData, TValue = unknown>({

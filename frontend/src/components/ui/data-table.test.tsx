@@ -1,4 +1,4 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type { Column, ColumnDef } from '@tanstack/react-table';
 import type { ReactNode } from 'react';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-import { DataTable } from './data-table';
+import { cycleColumnSort, DataTable } from './data-table';
 
 interface Row {
     id: string;
@@ -292,5 +292,53 @@ describe('DataTable — empty results', () => {
         const input = screen.getByRole('textbox');
         expect(input).toHaveAttribute('name', 'name');
         expect(input).toHaveAttribute('id', 'data-table-filter-name');
+    });
+});
+
+interface FakeColumn {
+    clearSorting: ReturnType<typeof vi.fn>;
+    getIsSorted: ReturnType<typeof vi.fn>;
+    toggleSorting: ReturnType<typeof vi.fn>;
+}
+
+// Stub the subset of `Column` `cycleColumnSort` actually touches. The cast
+// through `unknown as Column<...>` keeps the test free of @tanstack/react-table
+// internals while preserving the typed call signature.
+const makeColumn = (sorted: 'asc' | 'desc' | false): FakeColumn => ({
+    clearSorting: vi.fn(),
+    getIsSorted: vi.fn().mockReturnValue(sorted),
+    toggleSorting: vi.fn(),
+});
+
+describe('cycleColumnSort', () => {
+    it('starts the cycle on a column with no sort by setting ascending', () => {
+        const column = makeColumn(false);
+        cycleColumnSort(column as unknown as Column<unknown>);
+
+        expect(column.toggleSorting).toHaveBeenCalledWith(false);
+        expect(column.clearSorting).not.toHaveBeenCalled();
+    });
+
+    it('advances ascending to descending', () => {
+        const column = makeColumn('asc');
+        cycleColumnSort(column as unknown as Column<unknown>);
+
+        expect(column.toggleSorting).toHaveBeenCalledWith(true);
+        expect(column.clearSorting).not.toHaveBeenCalled();
+    });
+
+    it('clears the sort after descending — the third tap removes the sort entirely', () => {
+        const column = makeColumn('desc');
+        cycleColumnSort(column as unknown as Column<unknown>);
+
+        expect(column.clearSorting).toHaveBeenCalledTimes(1);
+        expect(column.toggleSorting).not.toHaveBeenCalled();
+    });
+
+    it('reads `getIsSorted` exactly once per call — no double-evaluation between branches', () => {
+        const column = makeColumn('asc');
+        cycleColumnSort(column as unknown as Column<unknown>);
+
+        expect(column.getIsSorted).toHaveBeenCalledTimes(1);
     });
 });

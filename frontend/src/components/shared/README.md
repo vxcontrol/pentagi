@@ -62,7 +62,6 @@ that every list reuses.
 | ------------------------- | ------------------------------------------------------------------------------------ |
 | `table-filter.ts`         | `createTextMatcher` — case + diacritic-insensitive substring matcher.                |
 | `table-state.ts`          | Unified `table_4_<path>` JSON slot. Carries filter + sorting + columnVis + pageSize. |
-| `table-sort.ts`           | `cycleColumnSort` — pure none/asc/desc cycle for TanStack columns.                   |
 | `view-options-storage.ts` | `viewOptions_4_<path>` for FileManager-style screens (folders-first, etc.).          |
 | `storage-keys.ts`         | Single source of truth for storage-key conventions and `getTopLevelPath`.            |
 | `url-params.ts`           | `URL_PARAMS` constants + `mergeHrefWithSearchParams` (preserves hash on merge).      |
@@ -145,7 +144,7 @@ and deletes them.
 ## Testing notes
 
 - `vitest run` covers the pure utilities (`table-filter`, `table-state`,
-  `view-options-storage`, `url-params`, `table-sort`), the hook behaviours
+  `view-options-storage`, `url-params`), the hook behaviours
   (`use-pagination`, `use-table-query-filter`, `use-inline-edit`,
   `use-page-storage-keys`, `use-detail-navigation`), and the components
   (`detail-navigation/`, `data-table`).
