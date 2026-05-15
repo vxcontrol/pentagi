@@ -8,11 +8,10 @@ import { toast } from 'sonner';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
 import { InlineRenameInput } from '@/components/shared/inline-rename-input';
-import { SortableColumnHeader } from '@/components/shared/sortable-column-header';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -141,9 +140,9 @@ const Templates = () => {
                 return <div className="font-medium">{title}</div>;
             },
             header: ({ column }) => (
-                <SortableColumnHeader
+                <DataTableColumnHeader
                     column={column}
-                    label="Title"
+                    title="Title"
                 />
             ),
         },
@@ -155,9 +154,9 @@ const Templates = () => {
                 return <div className="text-muted-foreground max-w-[380px] truncate text-sm">{text}</div>;
             },
             header: ({ column }) => (
-                <SortableColumnHeader
+                <DataTableColumnHeader
                     column={column}
-                    label="Text"
+                    title="Text"
                 />
             ),
         },

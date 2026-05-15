@@ -22,13 +22,12 @@ import { toast } from 'sonner';
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { SortableColumnHeader } from '@/components/shared/sortable-column-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
@@ -392,9 +391,9 @@ const SettingsAPITokens = () => {
                 },
                 enableHiding: false,
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Name"
+                        title="Name"
                     />
                 ),
                 size: 300,
@@ -426,9 +425,9 @@ const SettingsAPITokens = () => {
                 },
                 enableHiding: false,
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Token ID"
+                        title="Token ID"
                     />
                 ),
                 size: 200,
@@ -475,9 +474,9 @@ const SettingsAPITokens = () => {
                     return <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>;
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Status"
+                        title="Status"
                     />
                 ),
                 size: 120,
@@ -544,9 +543,9 @@ const SettingsAPITokens = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Expires"
+                        title="Expires"
                     />
                 ),
                 size: 150,
@@ -581,9 +580,9 @@ const SettingsAPITokens = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Created"
+                        title="Created"
                     />
                 ),
                 meta: { columnMenuLabel: 'Created' },

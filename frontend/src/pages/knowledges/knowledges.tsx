@@ -10,12 +10,11 @@ import type { BadgeVariant } from '@/components/ui/badge';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
 import { InlineRenameInput } from '@/components/shared/inline-rename-input';
-import { SortableColumnHeader } from '@/components/shared/sortable-column-header';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -172,9 +171,9 @@ const Knowledges = () => {
                 );
             },
             header: ({ column }) => (
-                <SortableColumnHeader
+                <DataTableColumnHeader
                     column={column}
-                    label="Type"
+                    title="Type"
                 />
             ),
             maxSize: 180,
@@ -215,9 +214,9 @@ const Knowledges = () => {
                 );
             },
             header: ({ column }) => (
-                <SortableColumnHeader
+                <DataTableColumnHeader
                     column={column}
-                    label="Question"
+                    title="Question"
                 />
             ),
             meta: { columnMenuLabel: 'Question' },

@@ -13,12 +13,11 @@ import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
 import { InlineRenameInput } from '@/components/shared/inline-rename-input';
-import { SortableColumnHeader } from '@/components/shared/sortable-column-header';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -189,9 +188,9 @@ const Flows = () => {
                 cell: ({ row }) => <div className="font-mono text-sm">{row.getValue('id')}</div>,
                 enableHiding: false,
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="ID"
+                        title="ID"
                     />
                 ),
                 maxSize: 80,
@@ -225,9 +224,9 @@ const Flows = () => {
                 },
                 enableHiding: false,
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Title"
+                        title="Title"
                     />
                 ),
                 minSize: 200,
@@ -250,9 +249,9 @@ const Flows = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Status"
+                        title="Status"
                     />
                 ),
                 maxSize: 130,
@@ -275,9 +274,9 @@ const Flows = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Provider"
+                        title="Provider"
                     />
                 ),
                 maxSize: 150,
@@ -334,9 +333,9 @@ const Flows = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Terminals"
+                        title="Terminals"
                     />
                 ),
                 maxSize: 220,
@@ -366,9 +365,9 @@ const Flows = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Created"
+                        title="Created"
                     />
                 ),
                 maxSize: 140,
@@ -399,9 +398,9 @@ const Flows = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Updated"
+                        title="Updated"
                     />
                 ),
                 maxSize: 140,

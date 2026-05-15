@@ -19,12 +19,11 @@ import Ollama from '@/components/icons/ollama';
 import OpenAi from '@/components/icons/open-ai';
 import Qwen from '@/components/icons/qwen';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { SortableColumnHeader } from '@/components/shared/sortable-column-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -184,9 +183,9 @@ const SettingsProviders = () => {
                 cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
                 enableHiding: false,
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Name"
+                        title="Name"
                     />
                 ),
                 size: 400,
@@ -205,9 +204,9 @@ const SettingsProviders = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Type"
+                        title="Type"
                     />
                 ),
                 size: 160,
@@ -229,9 +228,9 @@ const SettingsProviders = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Created"
+                        title="Created"
                     />
                 ),
                 meta: { columnMenuLabel: 'Created' },
@@ -260,9 +259,9 @@ const SettingsProviders = () => {
                     );
                 },
                 header: ({ column }) => (
-                    <SortableColumnHeader
+                    <DataTableColumnHeader
                         column={column}
-                        label="Updated"
+                        title="Updated"
                     />
                 ),
                 size: 120,

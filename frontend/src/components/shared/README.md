@@ -42,7 +42,6 @@ that every list reuses.
 | File                                                       | Role                                                                                                    |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [`detail-navigation/`](detail-navigation/)                 | Prev / Position / Next toolbar + listbox sheet for detail pages, and the navigation hooks that feed it. |
-| [`sortable-column-header.tsx`](sortable-column-header.tsx) | DRY header for TanStack columns — `none → asc → desc → none` cycle.                                     |
 | [`inline-rename-input.tsx`](inline-rename-input.tsx)       | `<input>` + Save/Cancel addon with Enter/Escape keybindings.                                            |
 
 ## Hooks
@@ -78,7 +77,7 @@ that every list reuses.
 
     return (
         <DataTable
-            columns={columns /* use <SortableColumnHeader column={column} label="..." /> */}
+            columns={columns /* use <DataTableColumnHeader column={column} title="..." /> */}
             data={entities}
             filterColumn="title"
             filterValue={filter}

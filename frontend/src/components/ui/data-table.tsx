@@ -16,7 +16,17 @@ import {
     useReactTable,
     type VisibilityState,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react';
+import {
+    ArrowDown,
+    ArrowUp,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
+    Search,
+    X,
+} from 'lucide-react';
 import { Fragment, type ReactElement, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -34,6 +44,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { cycleColumnSort } from '@/lib/table-sort';
 import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
 import { cn } from '@/lib/utils';
 
@@ -124,6 +135,13 @@ const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilter
         </InputGroup>
     );
 };
+
+interface DataTableColumnHeaderProps<TData, TValue> {
+    /** TanStack column. Sorting state and the cycle action both target it. */
+    column: Column<TData, TValue>;
+    /** Visible label rendered as the button text. Named after the shadcn convention. */
+    title: ReactNode;
+}
 
 function DataTable<TData, TValue = unknown>({
     columns,
@@ -625,4 +643,35 @@ function DataTable<TData, TValue = unknown>({
     );
 }
 
-export { DataTable };
+/**
+ * Reusable header for sortable `DataTable` columns. Wraps the conventional
+ * "label + asc/desc arrow + onClick → cycleColumnSort" pattern so every list
+ * page reuses one component instead of repeating ~20 lines per column header.
+ *
+ * The header reads sort direction directly from `column.getIsSorted()` so the
+ * caller does not have to plumb it. The arrow icon mirrors the TanStack
+ * convention: `asc` shows ↓ ("ascending continues to grow downward") and
+ * `desc` shows ↑. No arrow means "not sorted by this column".
+ *
+ * Naming follows the canonical shadcn `DataTableColumnHeader` (see
+ * https://ui.shadcn.com/docs/components/data-table) so call sites read like
+ * the upstream docs — only the click model is simpler here (none → asc →
+ * desc → none toggle vs. a dropdown menu).
+ */
+function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataTableColumnHeaderProps<TData, TValue>) {
+    const sorted = column.getIsSorted();
+
+    return (
+        <Button
+            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+            onClick={() => cycleColumnSort(column)}
+            variant="link"
+        >
+            {title}
+            {sorted === 'asc' ? <ArrowDown className="size-4" /> : null}
+            {sorted === 'desc' ? <ArrowUp className="size-4" /> : null}
+        </Button>
+    );
+}
+
+export { DataTable, DataTableColumnHeader };
