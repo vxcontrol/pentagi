@@ -1,7 +1,7 @@
+import type { ReactNode } from 'react';
+
 import {
     ChevronDown,
-    ChevronLeft,
-    ChevronRight,
     Copy,
     Download,
     Ellipsis,
@@ -15,14 +15,18 @@ import {
     Star,
     Trash,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { DetailNavigationSheet, DetailNavigationToolbar, useNavigation } from '@/components/shared/detail-navigation';
+import {
+    DetailNavigationButtons,
+    DetailNavigationSheet,
+    DetailNavigationToolbar,
+} from '@/components/shared/detail-navigation';
 import { HeaderButton } from '@/components/shared/header-button';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
@@ -47,11 +51,26 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
 import { Log } from '@/lib/log';
 import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
-import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { formatName } from '@/lib/utils/format';
 import { useFavorites } from '@/providers/favorites-provider';
 import { useFlow } from '@/providers/flow-provider';
 import { type Flow as FlowItem, useFlows } from '@/providers/flows-provider';
+
+const renderFlowItem = (item: FlowItem, isCurrent: boolean): ReactNode => (
+    <>
+        <FlowStatusIcon
+            className="size-3 shrink-0"
+            status={item.status}
+        />
+        <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>{item.title || `Flow #${item.id}`}</span>
+        <Badge
+            className="ml-auto shrink-0 font-mono text-[10px]"
+            variant="outline"
+        >
+            #{item.id}
+        </Badge>
+    </>
+);
 
 const FlowReportDropdown = () => {
     const { flowData, flowId } = useFlow();
@@ -171,7 +190,6 @@ const FlowReportDropdown = () => {
 const Flow = () => {
     const { isDesktop, isMobile } = useBreakpoint();
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
 
     const { flowData, flowError, flowId, isLoading: isFlowLoading } = useFlow();
     const { deleteFlow, finishFlow } = useFlows();
@@ -181,56 +199,10 @@ const Flow = () => {
     const flowTitle = flow?.title ?? '';
     const isFlowRunning = flow ? ![StatusType.Failed, StatusType.Finished].includes(flow.status) : false;
 
-    // Walk the same `?q=` filtered subset the list page renders. The hook
-    // also restores the filter from `localStorage` when the page is opened
-    // via a bookmark, so the toolbar stays in lockstep with the user's last
-    // persisted intent.
-    const { toolbarProps: flowToolbarProps } = useFlowDetailNavigation(flowId);
-
-    // Mirror what `<DetailNavigationToolbar>` computes internally so the
-    // mobile menu items (Previous / Open list / Next) and the sheet trigger
-    // share the same filtered subset and ordering as the desktop toolbar.
-    const mobileNav = useNavigation<FlowItem>({
-        currentId: flowToolbarProps.currentId,
-        getId: flowToolbarProps.getId,
-        getSearchableText: flowToolbarProps.getSearchableText ?? flowToolbarProps.getLabel,
-        items: flowToolbarProps.items,
-        query: flowToolbarProps.filter,
-    });
-    const [isMobileNavSheetOpen, setIsMobileNavSheetOpen] = useState(false);
-
-    const mobileNavGoTo = useCallback(
-        (id: null | string) => {
-            if (!id) {
-                return;
-            }
-
-            const target = mobileNav.filteredItems.find((item) => String(flowToolbarProps.getId(item)) === id);
-
-            if (!target) {
-                return;
-            }
-
-            navigate(mergeHrefWithSearchParams(flowToolbarProps.getHref(target), searchParams), { replace: true });
-        },
-        [flowToolbarProps, mobileNav.filteredItems, navigate, searchParams],
-    );
-
-    const mobileNavSelectItem = useCallback(
-        (item: FlowItem) => {
-            setIsMobileNavSheetOpen(false);
-            navigate(mergeHrefWithSearchParams(flowToolbarProps.getHref(item), searchParams), { replace: true });
-        },
-        [flowToolbarProps, navigate, searchParams],
-    );
-
-    const mobilePositionLabel = useMemo(
-        () =>
-            mobileNav.total === 0 || mobileNav.currentIndex === -1
-                ? `–/${mobileNav.total}`
-                : `${mobileNav.currentIndex + 1}/${mobileNav.total}`,
-        [mobileNav.currentIndex, mobileNav.total],
-    );
+    // Single controller drives the desktop toolbar AND the mobile dropdown
+    // row + sheet — Prev/Next, sheet open state, and the position label all
+    // live on one source of truth.
+    const flowNav = useFlowDetailNavigation(flowId);
 
     const {
         handleDropdownCloseAutoFocus,
@@ -389,24 +361,8 @@ const Flow = () => {
                     <div className="flex shrink-0 items-center gap-2">
                         {flow && !isMobile && (
                             <DetailNavigationToolbar<FlowItem>
-                                {...flowToolbarProps}
-                                renderItem={(item, isCurrent) => (
-                                    <>
-                                        <FlowStatusIcon
-                                            className="size-3 shrink-0"
-                                            status={item.status}
-                                        />
-                                        <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>
-                                            {item.title || `Flow #${item.id}`}
-                                        </span>
-                                        <Badge
-                                            className="ml-auto shrink-0 font-mono text-[10px]"
-                                            variant="outline"
-                                        >
-                                            #{item.id}
-                                        </Badge>
-                                    </>
-                                )}
+                                controller={flowNav}
+                                renderItem={renderFlowItem}
                                 sheetIcon={<GitFork className="size-4" />}
                                 sheetTitle="Flows"
                             />
@@ -438,15 +394,13 @@ const Flow = () => {
                                     className="min-w-24"
                                     onCloseAutoFocus={handleDropdownCloseAutoFocus}
                                 >
-                                    {isMobile && mobileNav.total > 0 && (
+                                    {isMobile && flowNav.total > 0 && (
                                         <>
                                             {/* Single row that mirrors the desktop toolbar: label on
                                                 the left, prev / position / next button group on the
                                                 right. `onSelect={preventDefault}` stops the menu from
-                                                closing on label clicks; the inner buttons own their
-                                                own click handlers and don't bubble into menu-item
-                                                selection. Position button doubles as the sheet
-                                                trigger, matching the toolbar's middle-button role. */}
+                                                closing on label clicks; `<DetailNavigationButtons>`
+                                                owns its own click handlers and tooltips. */}
                                             <DropdownMenuItem
                                                 className="cursor-default hover:bg-transparent focus:bg-transparent"
                                                 onSelect={(event) => event.preventDefault()}
@@ -454,35 +408,11 @@ const Flow = () => {
                                                 <GitFork className="size-4" />
                                                 Flows
                                                 <div className="-my-1.5 -mr-2 ml-auto flex items-center">
-                                                    <Button
-                                                        aria-label="Previous"
-                                                        className="size-7 rounded-r-none border-r-0 p-0"
-                                                        disabled={!mobileNav.prevId}
-                                                        onClick={() => mobileNavGoTo(mobileNav.prevId)}
-                                                        size="icon"
-                                                        variant="outline"
-                                                    >
-                                                        <ChevronLeft />
-                                                    </Button>
-                                                    <Button
-                                                        aria-label="Open flows list"
-                                                        className="h-7 min-w-12 rounded-none border-x px-2 font-mono text-xs tabular-nums"
-                                                        disabled={mobileNav.currentIndex === -1}
-                                                        onClick={() => setIsMobileNavSheetOpen(true)}
-                                                        variant="outline"
-                                                    >
-                                                        {mobilePositionLabel}
-                                                    </Button>
-                                                    <Button
-                                                        aria-label="Next"
-                                                        className="size-7 rounded-l-none border-l-0 p-0"
-                                                        disabled={!mobileNav.nextId}
-                                                        onClick={() => mobileNavGoTo(mobileNav.nextId)}
-                                                        size="icon"
-                                                        variant="outline"
-                                                    >
-                                                        <ChevronRight />
-                                                    </Button>
+                                                    <DetailNavigationButtons<FlowItem>
+                                                        controller={flowNav}
+                                                        sheetTitle="Flows"
+                                                        size="sm"
+                                                    />
                                                 </div>
                                             </DropdownMenuItem>
                                             {flowId && (
@@ -549,34 +479,10 @@ const Flow = () => {
             </header>
             {isMobile && flow && (
                 <DetailNavigationSheet<FlowItem>
-                    currentId={flowToolbarProps.currentId}
-                    currentIndex={mobileNav.currentIndex}
-                    getId={flowToolbarProps.getId}
-                    getLabel={flowToolbarProps.getLabel}
-                    items={mobileNav.filteredItems}
-                    onItemSelect={mobileNavSelectItem}
-                    onOpenChange={setIsMobileNavSheetOpen}
-                    open={isMobileNavSheetOpen}
-                    renderItem={(item, isCurrent) => (
-                        <>
-                            <FlowStatusIcon
-                                className="size-3 shrink-0"
-                                status={item.status}
-                            />
-                            <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>
-                                {item.title || `Flow #${item.id}`}
-                            </span>
-                            <Badge
-                                className="ml-auto shrink-0 font-mono text-[10px]"
-                                variant="outline"
-                            >
-                                #{item.id}
-                            </Badge>
-                        </>
-                    )}
+                    controller={flowNav}
+                    renderItem={renderFlowItem}
                     sheetIcon={<GitFork className="size-4" />}
                     sheetTitle="Flows"
-                    total={mobileNav.total}
                 />
             )}
             <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">

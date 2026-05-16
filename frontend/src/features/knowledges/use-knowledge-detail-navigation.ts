@@ -5,7 +5,9 @@ const getLabel = (item: Knowledge) => item.question;
 const getHref = (item: Knowledge) => `/knowledges/${item.id}`;
 
 /**
- * Detail-page navigation wired up for knowledge documents. The list page
+ * Detail-page navigation wired up for knowledge documents. Returns a
+ * `DetailNavigationController<Knowledge>` for `<DetailNavigationToolbar>` /
+ * `<DetailNavigationButtons>` / `<DetailNavigationSheet>`. The list page
  * filters on `question` and the header shows the same, so `getLabel`
  * doubles as the default searchable text.
  */

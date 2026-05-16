@@ -5,26 +5,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
-interface DetailNavigationSheetProps<T> {
-    currentId: null | string | undefined;
-    /**
-     * Pre-computed index of `currentId` inside `items` (or `-1` when the
-     * current entry doesn't belong to the filtered subset). Supplied by the
-     * parent toolbar so the sheet doesn't re-scan `items` for membership.
-     */
-    currentIndex: number;
-    getId: (item: T) => string;
-    getLabel: (item: T) => string;
-    /** Filtered + sorted items rendered as the sheet's listbox. */
-    items: readonly T[];
-    onItemSelect: (item: T) => void;
-    onOpenChange: (open: boolean) => void;
-    open: boolean;
+import type { DetailNavigationController } from './use-detail-navigation';
+
+interface DetailNavigationSheetProps<T extends { id: string }> {
+    controller: DetailNavigationController<T>;
     renderItem?: (item: T, isCurrent: boolean) => ReactNode;
     sheetIcon?: ReactNode;
     sheetTitle: string;
-    /** Total count shown in the header — same as `items.length`, named explicitly for clarity. */
-    total: number;
 }
 
 /**
@@ -38,20 +25,27 @@ interface DetailNavigationSheetProps<T> {
  * Initial focus on open targets the current entry (if it's part of the
  * filtered subset) so users land oriented inside their own context.
  */
-export function DetailNavigationSheet<T>({
-    currentId,
-    currentIndex,
-    getId,
-    getLabel,
-    items,
-    onItemSelect,
-    onOpenChange,
-    open,
+export const DetailNavigationSheet = <T extends { id: string }>({
+    controller,
     renderItem,
     sheetIcon,
     sheetTitle,
-    total,
-}: DetailNavigationSheetProps<T>) {
+}: DetailNavigationSheetProps<T>) => {
+    // Destructure at the top so existing `useMemo` / `useEffect` deps below
+    // read individual fields rather than the controller object — keeps the
+    // identity story the same as before the refactor.
+    const {
+        currentId,
+        currentIndex,
+        filteredItems: items,
+        getId,
+        getLabel,
+        handleItemSelect: onItemSelect,
+        isSheetOpen: open,
+        setSheetOpen: onOpenChange,
+        total,
+    } = controller;
+
     const listRef = useRef<HTMLUListElement>(null);
     const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
     const [focusedId, setFocusedId] = useState<null | string>(null);
@@ -107,7 +101,7 @@ export function DetailNavigationSheet<T>({
                 return null;
             }
 
-            // `currentId != null` narrows to `string`; the parent toolbar
+            // `currentId != null` narrows to `string`; the controller has
             // already verified `currentId` belongs to the filtered subset
             // when it computed `currentIndex`, so no re-scan needed.
             return currentId != null && currentIndex >= 0 ? String(currentId) : String(getId(firstItem));
@@ -313,4 +307,4 @@ export function DetailNavigationSheet<T>({
             </SheetContent>
         </Sheet>
     );
-}
+};

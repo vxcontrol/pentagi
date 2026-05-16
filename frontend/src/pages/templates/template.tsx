@@ -1,8 +1,8 @@
+import type { ReactNode } from 'react';
+
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
     ChevronDown,
-    ChevronLeft,
-    ChevronRight,
     Ellipsis,
     FileSymlink,
     FileText,
@@ -15,12 +15,16 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { DetailNavigationSheet, DetailNavigationToolbar, useNavigation } from '@/components/shared/detail-navigation';
+import {
+    DetailNavigationButtons,
+    DetailNavigationSheet,
+    DetailNavigationToolbar,
+} from '@/components/shared/detail-navigation';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
@@ -45,7 +49,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTemplateDetailNavigation } from '@/features/templates/use-template-detail-navigation';
 import { useFlowTemplateQuery } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { cn } from '@/lib/utils';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
@@ -233,9 +236,12 @@ Action plan:
     },
 ];
 
+const renderTemplateItem = (item: Template, isCurrent: boolean): ReactNode => (
+    <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>{item.title}</span>
+);
+
 const Template = () => {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
     const { templateId } = useParams<{ templateId?: string }>();
     const { createTemplate, deleteTemplate, updateTemplate } = useTemplates();
 
@@ -245,55 +251,7 @@ const Template = () => {
     // Pass `null` while creating a new template — there is no "current item"
     // to highlight, and the toolbar shouldn't render at all anyway (gated
     // below by `canShowActions`).
-    const { toolbarProps: templateToolbarProps } = useTemplateDetailNavigation(isNew ? null : templateId);
-
-    // Mirror what `<DetailNavigationToolbar>` computes internally so the
-    // mobile menu items share the same filtered subset as the desktop toolbar.
-    const mobileNav = useNavigation<Template>({
-        currentId: templateToolbarProps.currentId,
-        getId: templateToolbarProps.getId,
-        getSearchableText: templateToolbarProps.getSearchableText ?? templateToolbarProps.getLabel,
-        items: templateToolbarProps.items,
-        query: templateToolbarProps.filter,
-    });
-    const [isMobileNavSheetOpen, setIsMobileNavSheetOpen] = useState(false);
-
-    const mobileNavGoTo = useCallback(
-        (id: null | string) => {
-            if (!id) {
-                return;
-            }
-
-            const target = mobileNav.filteredItems.find((item) => String(templateToolbarProps.getId(item)) === id);
-
-            if (!target) {
-                return;
-            }
-
-            navigate(mergeHrefWithSearchParams(templateToolbarProps.getHref(target), searchParams), {
-                replace: true,
-            });
-        },
-        [mobileNav.filteredItems, navigate, searchParams, templateToolbarProps],
-    );
-
-    const mobileNavSelectItem = useCallback(
-        (item: Template) => {
-            setIsMobileNavSheetOpen(false);
-            navigate(mergeHrefWithSearchParams(templateToolbarProps.getHref(item), searchParams), {
-                replace: true,
-            });
-        },
-        [navigate, searchParams, templateToolbarProps],
-    );
-
-    const mobilePositionLabel = useMemo(
-        () =>
-            mobileNav.total === 0 || mobileNav.currentIndex === -1
-                ? `–/${mobileNav.total}`
-                : `${mobileNav.currentIndex + 1}/${mobileNav.total}`,
-        [mobileNav.currentIndex, mobileNav.total],
-    );
+    const templateNav = useTemplateDetailNavigation(isNew ? null : templateId);
 
     const [isAsideOpen, setIsAsideOpen] = useState(false);
     const [expandedPresetIndex, setExpandedPresetIndex] = useState<null | number>(null);
@@ -491,7 +449,8 @@ const Template = () => {
                 <div className="flex shrink-0 items-center gap-2">
                     {canShowActions && !isMobile && (
                         <DetailNavigationToolbar<Template>
-                            {...templateToolbarProps}
+                            controller={templateNav}
+                            renderItem={renderTemplateItem}
                             sheetIcon={<FileText className="size-4" />}
                             sheetTitle="Templates"
                         />
@@ -519,7 +478,7 @@ const Template = () => {
                                 className="min-w-24"
                                 onCloseAutoFocus={handleDropdownCloseAutoFocus}
                             >
-                                {isMobile && mobileNav.total > 0 && (
+                                {isMobile && templateNav.total > 0 && (
                                     <>
                                         <DropdownMenuItem
                                             className="cursor-default hover:bg-transparent focus:bg-transparent"
@@ -528,35 +487,11 @@ const Template = () => {
                                             <FileText className="size-4" />
                                             Templates
                                             <div className="-my-1.5 -mr-2 ml-auto flex items-center">
-                                                <Button
-                                                    aria-label="Previous"
-                                                    className="size-7 rounded-r-none border-r-0 p-0"
-                                                    disabled={!mobileNav.prevId}
-                                                    onClick={() => mobileNavGoTo(mobileNav.prevId)}
-                                                    size="icon"
-                                                    variant="outline"
-                                                >
-                                                    <ChevronLeft />
-                                                </Button>
-                                                <Button
-                                                    aria-label="Open templates list"
-                                                    className="h-7 min-w-12 rounded-none border-x px-2 font-mono text-xs tabular-nums"
-                                                    disabled={mobileNav.currentIndex === -1}
-                                                    onClick={() => setIsMobileNavSheetOpen(true)}
-                                                    variant="outline"
-                                                >
-                                                    {mobilePositionLabel}
-                                                </Button>
-                                                <Button
-                                                    aria-label="Next"
-                                                    className="size-7 rounded-l-none border-l-0 p-0"
-                                                    disabled={!mobileNav.nextId}
-                                                    onClick={() => mobileNavGoTo(mobileNav.nextId)}
-                                                    size="icon"
-                                                    variant="outline"
-                                                >
-                                                    <ChevronRight />
-                                                </Button>
+                                                <DetailNavigationButtons<Template>
+                                                    controller={templateNav}
+                                                    sheetTitle="Templates"
+                                                    size="sm"
+                                                />
                                             </div>
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
@@ -590,17 +525,10 @@ const Template = () => {
             </header>
             {isMobile && canShowActions && (
                 <DetailNavigationSheet<Template>
-                    currentId={templateToolbarProps.currentId}
-                    currentIndex={mobileNav.currentIndex}
-                    getId={templateToolbarProps.getId}
-                    getLabel={templateToolbarProps.getLabel}
-                    items={mobileNav.filteredItems}
-                    onItemSelect={mobileNavSelectItem}
-                    onOpenChange={setIsMobileNavSheetOpen}
-                    open={isMobileNavSheetOpen}
+                    controller={templateNav}
+                    renderItem={renderTemplateItem}
                     sheetIcon={<FileText className="size-4" />}
                     sheetTitle="Templates"
-                    total={mobileNav.total}
                 />
             )}
         </>

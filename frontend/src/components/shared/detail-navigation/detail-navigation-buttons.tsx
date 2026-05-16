@@ -2,43 +2,40 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
-interface DetailNavigationButtonsProps {
-    /** Disable the position-button when the filtered subset is empty. */
-    hasEntries: boolean;
-    /** No next sibling — disable the right chevron. */
-    nextDisabled: boolean;
-    onNext: () => void;
-    onOpen: () => void;
-    onPrev: () => void;
-    /** Pre-formatted `"3/10"` (or `"–/0"` when no current). */
-    positionLabel: string;
-    /** No previous sibling — disable the left chevron. */
-    prevDisabled: boolean;
+import type { DetailNavigationController } from './use-detail-navigation';
+
+interface DetailNavigationButtonsProps<T extends { id: string }> {
+    controller: DetailNavigationController<T>;
     /** Lowercased plural used in the aria-label / tooltip ("flows", "templates"). */
     sheetTitle: string;
+    /**
+     * Size variant. `'default'` is the desktop toolbar's `size-8` cluster;
+     * `'sm'` shrinks the cluster to `size-7` for embedding inside a
+     * `<DropdownMenuItem>` on mobile, where the host row is already padded.
+     */
+    size?: 'default' | 'sm';
 }
 
 /**
- * Prev / Position / Next button cluster for a detail page. Stateless and
- * presentation-only — `DetailNavigationToolbar` owns the navigation logic
- * and feeds the resolved indices, labels, and click handlers down.
+ * Prev / Position / Next button cluster bound to a `DetailNavigationController`.
+ * Stateless: the controller owns navigation, `isSheetOpen`, and the
+ * pre-formatted `positionLabel`.
  *
- * Kept separate from `DetailNavigationSheet` so the same buttons could in
- * principle be reused without the sheet (e.g. a future variant that ships
- * keyboard-only navigation without an overlay).
+ * Reused in both the desktop toolbar (`size="default"`) and the mobile
+ * dropdown row (`size="sm"`) — same a11y contract, same tooltips, same
+ * keyboard semantics in both places.
  */
-export const DetailNavigationButtons = ({
-    hasEntries,
-    nextDisabled,
-    onNext,
-    onOpen,
-    onPrev,
-    positionLabel,
-    prevDisabled,
+export const DetailNavigationButtons = <T extends { id: string }>({
+    controller,
     sheetTitle,
-}: DetailNavigationButtonsProps) => {
+    size = 'default',
+}: DetailNavigationButtonsProps<T>) => {
     const lowerTitle = sheetTitle.toLowerCase();
+    const isSm = size === 'sm';
+    const sideButtonSize = isSm ? 'size-7' : 'size-8';
+    const middleHeight = isSm ? 'h-7' : 'h-8';
 
     return (
         <div className="flex items-center">
@@ -46,9 +43,9 @@ export const DetailNavigationButtons = ({
                 <TooltipTrigger asChild>
                     <Button
                         aria-label="Previous"
-                        className="size-8 rounded-r-none border-r-0 p-0"
-                        disabled={prevDisabled}
-                        onClick={onPrev}
+                        className={cn(sideButtonSize, 'rounded-r-none border-r-0 p-0')}
+                        disabled={!controller.prevId}
+                        onClick={controller.goToPrev}
                         size="icon"
                         variant="outline"
                     >
@@ -60,13 +57,13 @@ export const DetailNavigationButtons = ({
             <Tooltip>
                 <TooltipTrigger asChild>
                     <Button
-                        aria-label={`Open ${lowerTitle} list (${positionLabel})`}
-                        className="h-8 min-w-12 rounded-none border-x px-2 font-mono text-xs tabular-nums"
-                        disabled={!hasEntries}
-                        onClick={onOpen}
+                        aria-label={`Open ${lowerTitle} list (${controller.positionLabel})`}
+                        className={cn(middleHeight, 'min-w-12 rounded-none border-x px-2 font-mono text-xs tabular-nums')}
+                        disabled={!controller.hasEntries}
+                        onClick={controller.openSheet}
                         variant="outline"
                     >
-                        {positionLabel}
+                        {controller.positionLabel}
                     </Button>
                 </TooltipTrigger>
                 <TooltipContent>Show all matching {lowerTitle}</TooltipContent>
@@ -75,9 +72,9 @@ export const DetailNavigationButtons = ({
                 <TooltipTrigger asChild>
                     <Button
                         aria-label="Next"
-                        className="size-8 rounded-l-none border-l-0 p-0"
-                        disabled={nextDisabled}
-                        onClick={onNext}
+                        className={cn(sideButtonSize, 'rounded-l-none border-l-0 p-0')}
+                        disabled={!controller.nextId}
+                        onClick={controller.goToNext}
                         size="icon"
                         variant="outline"
                     >
