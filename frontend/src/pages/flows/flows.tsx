@@ -262,7 +262,12 @@ const Flows = () => {
                 size: 100,
             },
             {
-                accessorKey: 'provider',
+                // accessorFn returns the provider name as a plain string so it
+                // participates in the DataTable global filter (search input).
+                // The cell renderer still reads the original provider object
+                // directly through `row.original`, so the icon + label stay
+                // intact.
+                accessorFn: (row) => row.provider?.name ?? '',
                 cell: ({ row }) => {
                     const flow = row.original;
 
@@ -282,7 +287,9 @@ const Flows = () => {
                         title="Provider"
                     />
                 ),
+                id: 'provider',
                 maxSize: 150,
+                meta: { searchable: true },
                 minSize: 80,
                 size: 100,
                 sortingFn: (rowA, rowB) => {
@@ -293,7 +300,11 @@ const Flows = () => {
                 },
             },
             {
-                accessorKey: 'terminals',
+                // accessorFn joins all terminal images into one string for the
+                // global search; the cell still derives its presentation from
+                // the original array on `row.original`, and sortingFn keeps
+                // ordering by count (more intuitive than alphabetical).
+                accessorFn: (row) => (row.terminals ?? []).map((t) => t.image).join(' '),
                 cell: ({ row }) => {
                     const flow = row.original;
                     const terminals = flow.terminals || [];
@@ -341,7 +352,9 @@ const Flows = () => {
                         title="Terminals"
                     />
                 ),
+                id: 'terminals',
                 maxSize: 220,
+                meta: { searchable: true },
                 minSize: 160,
                 size: 180,
                 sortingFn: (rowA, rowB) => {
