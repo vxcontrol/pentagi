@@ -36,8 +36,9 @@ import {
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextareaAutosize } from '@/components/ui/input-group';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -607,7 +608,7 @@ const Template = () => {
 
     const asideContent = useMemo(
         () => (
-            <div className="flex h-full max-h-[calc(100dvh-3rem)] flex-col overflow-y-auto px-4 pb-4">
+            <div className="flex flex-col p-4">
                 {PRESET_TEMPLATES.map((preset, index) => (
                     <Collapsible
                         key={index}
@@ -672,11 +673,19 @@ const Template = () => {
                         // descriptive sub-text — opt out of the Radix
                         // Description warning explicitly.
                         aria-describedby={undefined}
-                        className="w-full max-w-[min(20rem,100vw)] p-0"
+                        className="flex w-full max-w-sm flex-col gap-0 p-0 sm:max-w-sm"
                         side="right"
                     >
-                        <SheetTitle className="px-4 pt-4 pb-2 text-base">Preset templates</SheetTitle>
-                        {asideContent}
+                        <SheetHeader className="border-b p-4">
+                            <SheetTitle className="flex items-center gap-2 pr-8 text-base">
+                                <FileText className="size-4" />
+                                <span>Preset templates</span>
+                                <span className="text-muted-foreground ml-auto text-sm font-normal tabular-nums">
+                                    {PRESET_TEMPLATES.length}
+                                </span>
+                            </SheetTitle>
+                        </SheetHeader>
+                        <ScrollArea className="flex-1">{asideContent}</ScrollArea>
                     </SheetContent>
                 </Sheet>
             ) : (
@@ -687,11 +696,17 @@ const Template = () => {
                     )}
                 >
                     {isAsideOpen ? (
-                        <div className="h-full w-80 sm:w-96">
-                            <h3 className="text-muted-foreground px-4 pt-4 pb-2 text-sm font-medium">
-                                Preset templates
-                            </h3>
-                            {asideContent}
+                        <div className="flex h-full w-80 flex-col sm:w-96">
+                            <div className="border-b p-4">
+                                <h3 className="flex items-center gap-2 text-base font-semibold">
+                                    <FileText className="size-4" />
+                                    <span>Preset templates</span>
+                                    <span className="text-muted-foreground ml-auto text-sm font-normal tabular-nums">
+                                        {PRESET_TEMPLATES.length}
+                                    </span>
+                                </h3>
+                            </div>
+                            <ScrollArea className="flex-1">{asideContent}</ScrollArea>
                         </div>
                     ) : null}
                 </aside>
