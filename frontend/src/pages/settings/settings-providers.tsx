@@ -191,6 +191,7 @@ const SettingsProviders = () => {
                         title="Name"
                     />
                 ),
+                meta: { searchable: true },
                 size: 400,
             },
             {
@@ -212,6 +213,7 @@ const SettingsProviders = () => {
                         title="Type"
                     />
                 ),
+                meta: { searchable: true },
                 size: 160,
             },
             {
@@ -499,8 +501,7 @@ const SettingsProviders = () => {
             <DataTable<Provider>
                 columns={columns}
                 data={providers}
-                filterColumn="name"
-                filterPlaceholder="Filter provider names..."
+                filterPlaceholder="Filter providers..."
                 filterValue={filter}
                 onFilterChange={setFilter}
                 onPageChange={handlePageChange}
