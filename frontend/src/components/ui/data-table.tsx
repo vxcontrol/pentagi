@@ -396,24 +396,29 @@ function DataTable<TData, TValue = unknown>({
 
     // Active column set for the global filter: when the user has narrowed via
     // the picker, honour the explicit list; otherwise fall back to all
-    // candidates ("empty selection = search everywhere"). Recomputed on each
-    // render — cheap because it's just a couple of arrays — and consumed by
-    // the closure below.
-    const getColumnCanGlobalFilter = useCallback(
-        (column: Column<TData, unknown>) => {
-            const active = searchColumns.length > 0 ? searchColumns : searchCandidateIds;
+    // candidates ("empty selection = search everywhere"). Bake the predicate
+    // into per-column `enableGlobalFilter` so TanStack re-evaluates the row
+    // model whenever the set changes — a `getColumnCanGlobalFilter` closure
+    // alone would update silently because `state.globalFilter` stays equal.
+    const tanstackColumns = useMemo<ColumnDef<TData, TValue>[]>(() => {
+        const active = searchColumns.length > 0 ? searchColumns : searchCandidateIds;
 
-            return active.includes(column.id);
-        },
-        [searchCandidateIds, searchColumns],
-    );
+        return columns.map((column) => {
+            const withId = column as { id?: string };
+            const withAccessor = column as { accessorKey?: string };
+            const columnId =
+                withId.id ?? (typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined);
+            const enableGlobalFilter = typeof columnId === 'string' && active.includes(columnId);
+
+            return { ...column, enableGlobalFilter };
+        });
+    }, [columns, searchCandidateIds, searchColumns]);
 
     const table = useReactTable({
         autoResetPageIndex: false,
-        columns,
+        columns: tanstackColumns,
         data,
         enableSortingRemoval: true,
-        getColumnCanGlobalFilter,
         getCoreRowModel: getCoreRowModel(),
         getExpandedRowModel: getExpandedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
@@ -435,22 +440,6 @@ function DataTable<TData, TValue = unknown>({
             sorting,
         },
     });
-
-    // TanStack doesn't re-run the filter pipeline when only the
-    // `getColumnCanGlobalFilter` predicate's closure changes — it watches
-    // `state.globalFilter`. Re-set the same value through TanStack's API on
-    // every `searchColumns` change so the pipeline picks up the new predicate.
-    // Skip the very first render to avoid a redundant cycle on mount.
-    const isFirstRefilterRender = useRef(true);
-    useEffect(() => {
-        if (isFirstRefilterRender.current) {
-            isFirstRefilterRender.current = false;
-
-            return;
-        }
-
-        table.setGlobalFilter((current: string) => current);
-    }, [searchColumns, table]);
 
     const handleRowClick = useCallback(
         (row: Row<TData>) => {
