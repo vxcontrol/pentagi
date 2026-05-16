@@ -36,7 +36,6 @@ import {
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextareaAutosize } from '@/components/ui/input-group';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -608,15 +607,16 @@ const Template = () => {
 
     const asideContent = useMemo(
         () => (
-            <div className="flex flex-col p-4">
+            <div className="flex w-full min-w-0 flex-col gap-2 p-2">
                 {PRESET_TEMPLATES.map((preset, index) => (
                     <Collapsible
+                        className="w-full min-w-0"
                         key={index}
                         onOpenChange={(open) => setExpandedPresetIndex(open ? index : null)}
                         open={expandedPresetIndex === index}
                     >
-                        <Card>
-                            <div className="flex">
+                        <Card className="w-full min-w-0">
+                            <div className="flex w-full min-w-0">
                                 <Button
                                     className={cn(
                                         'h-auto min-w-0 flex-1 justify-start rounded-none rounded-tl-[0.6875rem] px-3 py-2 text-left text-start',
@@ -625,7 +625,7 @@ const Template = () => {
                                     onClick={() => handleApplyPreset(preset)}
                                     variant="ghost"
                                 >
-                                    <span className={cn(expandedPresetIndex !== index && 'truncate')}>
+                                    <span className={cn('min-w-0', expandedPresetIndex !== index && 'truncate')}>
                                         {preset.title}
                                     </span>
                                 </Button>
@@ -685,7 +685,13 @@ const Template = () => {
                                 </span>
                             </SheetTitle>
                         </SheetHeader>
-                        <ScrollArea className="flex-1">{asideContent}</ScrollArea>
+                        {/* Plain overflow-y-auto instead of Radix ScrollArea —
+                            ScrollArea's Viewport wraps children in a
+                            `display: table` div whose width grows to fit
+                            intrinsic content, defeating `w-full min-w-0` on
+                            inner flex rows and pushing the chevron buttons
+                            off-screen. */}
+                        <div className="min-w-0 flex-1 overflow-y-auto">{asideContent}</div>
                     </SheetContent>
                 </Sheet>
             ) : (
@@ -696,7 +702,7 @@ const Template = () => {
                     )}
                 >
                     {isAsideOpen ? (
-                        <div className="flex h-full w-80 flex-col sm:w-96">
+                        <div className="flex h-full w-80 min-w-0 flex-col sm:w-96">
                             <div className="border-b p-4">
                                 <h3 className="flex items-center gap-2 text-base font-semibold">
                                     <FileText className="size-4" />
@@ -706,7 +712,7 @@ const Template = () => {
                                     </span>
                                 </h3>
                             </div>
-                            <ScrollArea className="flex-1">{asideContent}</ScrollArea>
+                            <div className="min-w-0 flex-1 overflow-y-auto">{asideContent}</div>
                         </div>
                     ) : null}
                 </aside>
