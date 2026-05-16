@@ -26,7 +26,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { KnowledgeDocType } from '@/graphql/types';
-import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
+import { useTableState } from '@/hooks/use-table-state';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
@@ -63,7 +63,7 @@ const Knowledges = () => {
     const [isRenameLoading, setIsRenameLoading] = useState(false);
     const editingInputRef = useRef<HTMLInputElement>(null);
 
-    const { filter, setFilter } = useTableQueryFilter();
+    const { filter, setFilter } = useTableState();
 
     const handleOpen = useCallback(
         (id: string) => {

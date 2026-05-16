@@ -34,8 +34,7 @@ import {
 import { StatusCard } from '@/components/ui/status-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ProviderType, useDeleteProviderMutation, useSettingsProvidersQuery } from '@/graphql/types';
-import { usePagination } from '@/hooks/use-pagination';
-import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
+import { useTableState } from '@/hooks/use-table-state';
 type Provider = ProviderConfigFragmentFragment;
 
 const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
@@ -134,8 +133,7 @@ const SettingsProviders = () => {
     const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
     const navigate = useNavigate();
 
-    const { pageIndex: currentPage, setPage: handlePageChange } = usePagination();
-    const { filter, setFilter } = useTableQueryFilter();
+    const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
     const handleProviderDelete = useCallback(
         async (providerId: string | undefined) => {

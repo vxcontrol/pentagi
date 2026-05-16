@@ -22,7 +22,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
-import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
+import { useTableState } from '@/hooks/use-table-state';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
@@ -37,7 +37,7 @@ const Templates = () => {
     const [isRenameLoading, setIsRenameLoading] = useState(false);
     const editingInputRef = useRef<HTMLInputElement>(null);
 
-    const { filter, setFilter } = useTableQueryFilter();
+    const { filter, setFilter } = useTableState();
 
     const handleTemplateOpen = useCallback(
         (templateId: string) => {

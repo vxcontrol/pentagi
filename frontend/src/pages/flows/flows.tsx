@@ -31,8 +31,7 @@ import { StatusCard } from '@/components/ui/status-card';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResultType, StatusType, type TerminalFragmentFragment, useRenameFlowMutation } from '@/graphql/types';
-import { usePagination } from '@/hooks/use-pagination';
-import { useTableQueryFilter } from '@/hooks/use-table-query-filter';
+import { useTableState } from '@/hooks/use-table-state';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { useFavorites } from '@/providers/favorites-provider';
 import { type Flow, useFlows } from '@/providers/flows-provider';
@@ -92,8 +91,7 @@ const Flows = () => {
     const editingInputRef = useRef<HTMLInputElement>(null);
     const [renameFlowMutation, { loading: isRenameLoading }] = useRenameFlowMutation();
 
-    const { filter, setFilter } = useTableQueryFilter();
-    const { pageIndex: currentPage, setPage: handlePageChange } = usePagination();
+    const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
     const handleFlowOpen = useCallback(
         (flowId: string) => {
