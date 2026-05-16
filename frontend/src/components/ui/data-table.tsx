@@ -155,6 +155,13 @@ interface DataTableFilterProps {
 }
 
 const FILTER_DEBOUNCE_MS = 150;
+// Hard cap on the filter query length. 200 chars is more than any realistic
+// search term and protects against pathological inputs (paste of a multi-KB
+// chunk) that would otherwise blow past URL limits — browsers handle ~8 KB,
+// reverse-proxies typically cap at 2–4 KB, so a 5 KB share-link becomes
+// unreliable. `<input maxLength>` truncates typing and paste at the DOM
+// boundary, which is the only entry point users have here.
+const FILTER_MAX_LENGTH = 200;
 
 /**
  * Search input for the table's global filter. Keystrokes update an internal
@@ -211,6 +218,7 @@ const DataTableFilter = ({ onQueryChange, placeholder, query }: DataTableFilterP
                 aria-label={placeholder}
                 autoComplete="off"
                 id={fieldId}
+                maxLength={FILTER_MAX_LENGTH}
                 name={fieldId}
                 onChange={(event) => setLocalValue(event.target.value)}
                 placeholder={placeholder}

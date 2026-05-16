@@ -319,6 +319,27 @@ describe('DataTable — empty results', () => {
         const secondInput = screen.getByRole('textbox');
         expect(secondInput.getAttribute('id')).not.toBe(firstId);
     });
+
+    it('caps the filter input length so a paste of multi-KB content cannot blow past URL limits', () => {
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={ROWS}
+                filterColumn="name"
+                filterValue=""
+                onFilterChange={() => {
+                    /* no-op */
+                }}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByRole('textbox') as HTMLInputElement;
+        // The DOM `maxLength` is the only choke point we need — `<input>`
+        // truncates both typing and paste at this boundary, which keeps
+        // shared `?q=` URLs under the practical reverse-proxy limit (~2–4 KB).
+        expect(input.maxLength).toBe(200);
+    });
 });
 
 interface MultiRow {
