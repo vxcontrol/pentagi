@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Ellipsis, LibraryBig, Loader2, Pencil, Trash } from 'lucide-react';
+import { Ellipsis, LibraryBig, Loader2, Pencil, Trash, HatGlasses } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import {
     DetailNavigationSheet,
     DetailNavigationToolbar,
 } from '@/components/shared/detail-navigation';
+import { HeaderButton } from '@/components/shared/header-button';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
@@ -26,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
@@ -33,6 +35,13 @@ import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 import { useKnowledgeDetailNavigation } from './use-knowledge-detail-navigation';
 
 interface KnowledgeHeaderProps {
+    // Anonymize action — visible only to users with the `anonymize.call`
+    // privilege. The header itself renders both desktop button and mobile
+    // dropdown item from these primitives so the icon/loading state stay in
+    // sync between layouts.
+    canAnonymize?: boolean;
+    isAnonymizeDisabled?: boolean;
+    isAnonymizing?: boolean;
     isNew: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
     /**
@@ -41,6 +50,7 @@ interface KnowledgeHeaderProps {
      * guard, so it passes `skipNextBlock` here to suppress the "Save before
      * leaving?" dialog — there is nothing to save once the document is gone.
      */
+    onAnonymize?: () => void;
     onBeforeNavigateAway?: () => void;
     saveButton?: ReactNode;
 }
@@ -57,7 +67,16 @@ const renderKnowledgeItem = (item: Knowledge, isCurrent: boolean): ReactNode => 
     </>
 );
 
-export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveButton }: KnowledgeHeaderProps) => {
+export const KnowledgeHeader = ({
+    canAnonymize = false,
+    isAnonymizeDisabled = false,
+    isAnonymizing = false,
+    isNew,
+    knowledge,
+    onAnonymize,
+    onBeforeNavigateAway,
+    saveButton,
+}: KnowledgeHeaderProps) => {
     const navigate = useNavigate();
     const { isMobile } = useBreakpoint();
     const { deleteKnowledge, updateKnowledge } = useKnowledges();
@@ -154,7 +173,7 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                                 {isEditingTitle && canShowActions ? (
                                     <InlineEditInput
                                         busy={isRenaming}
-                                        className="w-64 min-w-0 max-w-full flex-1"
+                                        className="w-64 max-w-full min-w-0 flex-1"
                                         defaultValue={knowledgeName ?? ''}
                                         inputRef={editingInputRef}
                                         onCancel={handleRenameCancel}
@@ -165,7 +184,7 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <BreadcrumbPage
-                                                className="min-w-0 cursor-text select-none truncate"
+                                                className="min-w-0 cursor-text truncate select-none"
                                                 onDoubleClick={handleRenameStart}
                                             >
                                                 {knowledgeName ?? 'Knowledge'}
@@ -191,8 +210,18 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                             sheetTitle="Knowledges"
                         />
                     )}
+                    {canAnonymize && !isMobile && (
+                        <HeaderButton
+                            disabled={isAnonymizeDisabled}
+                            icon={isAnonymizing ? <Spinner variant="circle" /> : <HatGlasses aria-hidden="true" />}
+                            label="Anonymize"
+                            onClick={onAnonymize}
+                            type="button"
+                            variant="outline"
+                        />
+                    )}
                     {saveButton}
-                    {canShowActions && (
+                    {(canShowActions || (isMobile && canAnonymize)) && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -209,6 +238,27 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                                 className="min-w-24"
                                 onCloseAutoFocus={handleDropdownCloseAutoFocus}
                             >
+                                {isMobile && canAnonymize && (
+                                    <>
+                                        <DropdownMenuItem
+                                            disabled={isAnonymizeDisabled}
+                                            onClick={onAnonymize}
+                                        >
+                                            {isAnonymizing ? (
+                                                <>
+                                                    <Loader2 className="size-4 animate-spin" />
+                                                    Anonymizing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <HatGlasses className="size-4" />
+                                                    Anonymize
+                                                </>
+                                            )}
+                                        </DropdownMenuItem>
+                                        {canShowActions && <DropdownMenuSeparator />}
+                                    </>
+                                )}
                                 {isMobile && knowledgeNav.total > 0 && (
                                     <>
                                         <DropdownMenuItem
@@ -228,27 +278,31 @@ export const KnowledgeHeader = ({ isNew, knowledge, onBeforeNavigateAway, saveBu
                                         <DropdownMenuSeparator />
                                     </>
                                 )}
-                                <DropdownMenuItem onClick={handleRenameStart}>
-                                    <Pencil className="size-3" />
-                                    Rename
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    disabled={isDeleting}
-                                    onClick={() => setIsDeleteDialogOpen(true)}
-                                >
-                                    {isDeleting ? (
-                                        <>
-                                            <Loader2 className="size-4 animate-spin" />
-                                            Deleting...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Trash className="size-4" />
-                                            Delete
-                                        </>
-                                    )}
-                                </DropdownMenuItem>
+                                {canShowActions && (
+                                    <>
+                                        <DropdownMenuItem onClick={handleRenameStart}>
+                                            <Pencil className="size-3" />
+                                            Rename
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            disabled={isDeleting}
+                                            onClick={() => setIsDeleteDialogOpen(true)}
+                                        >
+                                            {isDeleting ? (
+                                                <>
+                                                    <Loader2 className="size-4 animate-spin" />
+                                                    Deleting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Trash className="size-4" />
+                                                    Delete
+                                                </>
+                                            )}
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}

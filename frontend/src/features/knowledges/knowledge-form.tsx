@@ -3,6 +3,7 @@ import { Save } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type FieldPath, type SubmitHandler, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { z } from 'zod';
 
 import type {
@@ -15,9 +16,10 @@ import { HeaderButton } from '@/components/shared/header-button';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Form } from '@/components/ui/form';
 import { Spinner } from '@/components/ui/spinner';
-import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
+import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType, useAnonymizeTextMutation } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { Log } from '@/lib/log';
+import { useUser } from '@/providers/user-provider';
 
 import { KnowledgeFormLayoutDesktop, KnowledgeFormLayoutMobile } from './knowledge-form-layout';
 import { KnowledgeHeader } from './knowledge-header';
@@ -197,6 +199,10 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, onSubmit }: Kno
     const navigate = useNavigate();
     const { isDesktop } = useBreakpoint();
     const [isSaving, setIsSaving] = useState(false);
+    const [isAnonymizing, setIsAnonymizing] = useState(false);
+    const [anonymizeMutation] = useAnonymizeTextMutation();
+    const { authInfo } = useUser();
+    const canAnonymize = authInfo?.privileges?.includes('anonymize.call') ?? false;
 
     const form = useForm<FormValues>({
         defaultValues: initialValues,
@@ -336,6 +342,47 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, onSubmit }: Kno
         />
     );
 
+    // Subscribe to `content` so the anonymize button toggles its disabled
+    // state as the user types. `form.watch('content')` triggers a re-render
+    // on every keystroke, which is what we want for snappy UX.
+    const contentValue = form.watch('content');
+    const isAnonymizeDisabled = isAnonymizing || isSaving || !contentValue?.trim();
+
+    const handleAnonymize = useCallback(async () => {
+        const currentContent = form.getValues('content');
+
+        if (!currentContent?.trim()) {
+            return;
+        }
+
+        setIsAnonymizing(true);
+
+        try {
+            const { data } = await anonymizeMutation({ variables: { text: currentContent } });
+            const anonymizedContent = data?.anonymizeText;
+
+            if (anonymizedContent == null) {
+                toast.error('Anonymizer returned no result');
+
+                return;
+            }
+
+            if (anonymizedContent === currentContent) {
+                toast.info('No sensitive data detected');
+
+                return;
+            }
+
+            form.setValue('content', anonymizedContent, { shouldDirty: true, shouldValidate: true });
+            toast.success('Content anonymized');
+        } catch (error) {
+            Log.error('Failed to anonymize content', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to anonymize content');
+        } finally {
+            setIsAnonymizing(false);
+        }
+    }, [anonymizeMutation, form]);
+
     return (
         <>
             <Form {...form}>
@@ -348,8 +395,12 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, onSubmit }: Kno
                     onSubmit={handleSubmit(onSubmitWithGuard)}
                 >
                     <KnowledgeHeader
+                        canAnonymize={canAnonymize}
+                        isAnonymizeDisabled={isAnonymizeDisabled}
+                        isAnonymizing={isAnonymizing}
                         isNew={isNew}
                         knowledge={knowledge}
+                        onAnonymize={handleAnonymize}
                         onBeforeNavigateAway={() => skipNextBlockRef.current()}
                         saveButton={saveButton}
                     />
