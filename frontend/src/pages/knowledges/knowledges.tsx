@@ -177,7 +177,7 @@ const Knowledges = () => {
                 />
             ),
             maxSize: 180,
-            meta: { columnMenuLabel: 'Type' },
+            meta: { columnMenuLabel: 'Type', searchable: true },
             minSize: 110,
             size: 130,
         },
@@ -219,7 +219,7 @@ const Knowledges = () => {
                     title="Question"
                 />
             ),
-            meta: { columnMenuLabel: 'Question' },
+            meta: { columnMenuLabel: 'Question', searchable: true },
             minSize: 180,
             size: 280,
         },
@@ -242,7 +242,7 @@ const Knowledges = () => {
                 <span className="text-muted-foreground inline-flex items-center text-sm font-medium">Preview</span>
             ),
             maxSize: 800,
-            meta: { columnMenuLabel: 'Preview' },
+            meta: { columnMenuLabel: 'Preview', searchable: true },
             minSize: 160,
             size: 380,
         },
@@ -437,7 +437,6 @@ const Knowledges = () => {
                 <DataTable
                     columns={columns}
                     data={knowledges}
-                    filterColumn="question"
                     filterPlaceholder="Filter knowledge documents..."
                     filterValue={filter}
                     onFilterChange={setFilter}
