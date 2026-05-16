@@ -20,6 +20,7 @@ const tableStateSchema = z.object({
     columnVisibility: visibilitySchema.optional(),
     filter: z.string().optional(),
     pageSize: z.number().int().positive().optional(),
+    searchColumns: z.array(z.string()).optional(),
     sorting: sortingSchema.optional(),
 });
 

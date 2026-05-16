@@ -290,8 +290,156 @@ describe('DataTable — empty results', () => {
         );
 
         const input = screen.getByRole('textbox');
-        expect(input).toHaveAttribute('name', 'name');
-        expect(input).toHaveAttribute('id', 'data-table-filter-name');
+        expect(input).toHaveAttribute('name', 'search');
+        expect(input).toHaveAttribute('id', 'data-table-search');
+    });
+});
+
+interface MultiRow {
+    id: string;
+    name: string;
+    role: string;
+}
+
+const MULTI_ROWS: MultiRow[] = [
+    { id: 'a', name: 'Alpha', role: 'admin' },
+    { id: 'b', name: 'Bravo', role: 'user' },
+    { id: 'c', name: 'Charlie', role: 'reader' },
+];
+
+const MULTI_COLUMNS: ColumnDef<MultiRow>[] = [
+    { accessorKey: 'id', header: 'ID' },
+    { accessorKey: 'name', header: 'Name', meta: { searchable: true } },
+    { accessorKey: 'role', header: 'Role', meta: { searchable: true } },
+];
+
+describe('DataTable — multi-column search', () => {
+    it('searches across all candidate columns with OR semantics (meta.searchable opt-in)', async () => {
+        const user = userEvent.setup();
+        render(
+            <DataTable<MultiRow>
+                columns={MULTI_COLUMNS}
+                data={MULTI_ROWS}
+                filterPlaceholder="Filter..."
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...');
+        // "reader" only appears in the `role` column — multi-column search
+        // must surface Charlie even though her `name` doesn't contain it.
+        await user.type(input, 'reader');
+
+        expect(screen.getByText('Charlie')).toBeInTheDocument();
+        expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        expect(screen.queryByText('Bravo')).not.toBeInTheDocument();
+    });
+
+    it('narrows the search when the picker disables a candidate', async () => {
+        const user = userEvent.setup();
+        render(
+            <DataTable<MultiRow>
+                columns={MULTI_COLUMNS}
+                data={MULTI_ROWS}
+                filterPlaceholder="Filter..."
+            />,
+            { wrapper: Wrapper },
+        );
+
+        await user.click(screen.getByRole('button', { name: /Search in/ }));
+        // Uncheck the `Role` column so "reader" can no longer match Charlie.
+        await user.click(await screen.findByRole('menuitemcheckbox', { name: /role/i }));
+
+        // Close the dropdown so it doesn't intercept subsequent input focus
+        // events. Pressing Escape is the user-facing way out.
+        await user.keyboard('{Escape}');
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'reader');
+
+        expect(screen.getByText('No results.')).toBeInTheDocument();
+    });
+
+    it('persists the narrowed search column set to the unified storage slot', async () => {
+        const user = userEvent.setup();
+        render(
+            <DataTable<MultiRow>
+                columns={MULTI_COLUMNS}
+                data={MULTI_ROWS}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        await user.click(screen.getByRole('button', { name: /Search in/ }));
+        await user.click(await screen.findByRole('menuitemcheckbox', { name: /role/i }));
+
+        const stored = JSON.parse(localStorage.getItem('table_4_/flows') ?? '{}');
+        expect(stored.searchColumns).toEqual(['name']);
+    });
+
+    it('activates multi-column mode when filterColumn is an array (without meta.searchable)', async () => {
+        const user = userEvent.setup();
+        const PLAIN_COLUMNS: ColumnDef<MultiRow>[] = [
+            { accessorKey: 'id', header: 'ID' },
+            { accessorKey: 'name', header: 'Name' },
+            { accessorKey: 'role', header: 'Role' },
+        ];
+
+        render(
+            <DataTable<MultiRow>
+                columns={PLAIN_COLUMNS}
+                data={MULTI_ROWS}
+                filterColumn={['name', 'role']}
+                filterPlaceholder="Filter..."
+            />,
+            { wrapper: Wrapper },
+        );
+
+        // Picker is visible — confirms multi-mode activation via the array prop.
+        expect(screen.getByRole('button', { name: /Search in/ })).toBeInTheDocument();
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'user');
+
+        // "user" matches Bravo's role; Alpha and Charlie don't contain it.
+        expect(screen.getByText('Bravo')).toBeInTheDocument();
+        expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        expect(screen.queryByText('Charlie')).not.toBeInTheDocument();
+    });
+
+    it('hides the input entirely when filterColumn is undefined and no column opts in', () => {
+        const PLAIN_COLUMNS: ColumnDef<MultiRow>[] = [
+            { accessorKey: 'id', header: 'ID' },
+            { accessorKey: 'name', header: 'Name' },
+            { accessorKey: 'role', header: 'Role' },
+        ];
+
+        render(
+            <DataTable<MultiRow>
+                columns={PLAIN_COLUMNS}
+                data={MULTI_ROWS}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Search in/ })).not.toBeInTheDocument();
+    });
+
+    it('does not render the picker in legacy single-column mode', () => {
+        render(
+            <DataTable<MultiRow>
+                columns={MULTI_COLUMNS}
+                data={MULTI_ROWS}
+                filterColumn="name"
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(screen.getByRole('textbox')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Search in/ })).not.toBeInTheDocument();
+        // The "Columns" trigger still renders.
+        expect(screen.getByRole('button', { name: /Columns/ })).toBeInTheDocument();
     });
 });
 

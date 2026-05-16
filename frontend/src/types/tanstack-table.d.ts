@@ -8,5 +8,7 @@ declare module '@tanstack/react-table' {
         columnMenuLabel?: string;
         headerClassName?: string;
         preventRowClick?: boolean;
+        /** When true, the column participates in the multi-column search picker (used when DataTable.filterColumn is omitted). */
+        searchable?: boolean;
     }
 }

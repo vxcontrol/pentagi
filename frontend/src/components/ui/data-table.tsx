@@ -1,7 +1,6 @@
 import {
     type Column,
     type ColumnDef,
-    type ColumnFiltersState,
     type ExpandedState,
     flexRender,
     getCoreRowModel,
@@ -24,6 +23,7 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
+    ListFilter,
     Search,
     X,
 } from 'lucide-react';
@@ -52,20 +52,27 @@ interface DataTableProps<TData, TValue = unknown> {
     columnVisibility?: VisibilityState;
     data: TData[];
     /**
-     * Column id targeted by the search input. When omitted, the search input
-     * is not rendered — useful for tables where filtering is unnecessary
-     * (e.g. tooling subscreens that already filter server-side, or small
-     * static lists). When provided, the column id must exist in `columns`.
+     * Search target(s) for the filter input. Three modes:
+     * - `string` (legacy single-column): the input searches only this column;
+     *   the column-picker dropdown is not rendered. Backward-compatible with
+     *   pre-multi-column call sites.
+     * - `string[]` (explicit multi-column): the input searches across all
+     *   listed columns with OR semantics; a "Search in" dropdown lets the
+     *   user narrow the set.
+     * - `undefined` (zero-config multi-column): candidate columns are picked
+     *   from those with `columnDef.meta.searchable === true`. If none match,
+     *   the search input is not rendered at all.
+     *
+     * When provided, every column id must exist in `columns`.
      */
-    filterColumn?: string;
+    filterColumn?: string | string[];
     filterPlaceholder?: string;
     /**
      * Controlled filter value. When provided together with `onFilterChange`
      * the parent owns the source of truth — typically `useTableQueryFilter`
-     * for URL/storage-backed filters. The value is projected into
-     * `state.columnFilters` and surfaces through TanStack's filter API just
-     * like an uncontrolled value would, so `DataTableFilter` and the column
-     * filter machinery never need to branch on controlled vs uncontrolled.
+     * for URL/storage-backed filters. The value flows through TanStack's
+     * `state.globalFilter`, so `DataTableFilter` stays uniform regardless
+     * of whether the table is single- or multi-column.
      */
     filterValue?: string;
     initialPageSize?: number;
@@ -84,27 +91,20 @@ const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100] as const;
 const columnPickerLabel = <TData,>(column: Column<TData, unknown>): string =>
     column.columnDef.meta?.columnMenuLabel ?? column.id;
 
-// Shared empty array for the controlled-filter projection. Using a module
-// constant keeps the reference stable across renders so the memoized
-// `controlledColumnFilters` doesn't flap between two distinct empty arrays.
-const EMPTY_COLUMN_FILTERS: ColumnFiltersState = [];
-
 interface DataTableFilterProps<TData> {
-    column: string;
     placeholder: string;
     table: ReactTable<TData>;
 }
 
 /**
- * Search input bound to a single TanStack Table column. Reads/writes through
- * the column's filter API exclusively — `DataTable`'s `onColumnFiltersChange`
+ * Search input bound to TanStack's `state.globalFilter`. Reads/writes through
+ * `table.setGlobalFilter` exclusively — `DataTable`'s `onGlobalFilterChange`
  * funnels the write to the parent (`onFilterChange`) when the table is in
- * controlled-filter mode, so this component stays uniform regardless.
+ * controlled-filter mode, so this component stays uniform regardless of
+ * single- vs multi-column mode.
  */
-const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilterProps<TData>) => {
-    const tableColumn = table.getColumn(column);
-    const filterValue = (tableColumn?.getFilterValue() as string) ?? '';
-    const fieldId = `data-table-filter-${column}`;
+const DataTableFilter = <TData,>({ placeholder, table }: DataTableFilterProps<TData>) => {
+    const filterValue = (table.getState().globalFilter as string | undefined) ?? '';
 
     return (
         <InputGroup className="max-w-sm">
@@ -114,9 +114,9 @@ const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilter
             <InputGroupInput
                 aria-label={placeholder}
                 autoComplete="off"
-                id={fieldId}
-                name={column}
-                onChange={(event) => tableColumn?.setFilterValue(event.target.value)}
+                id="data-table-search"
+                name="search"
+                onChange={(event) => table.setGlobalFilter(event.target.value)}
                 placeholder={placeholder}
                 type="text"
                 value={filterValue}
@@ -124,7 +124,7 @@ const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilter
             {filterValue ? (
                 <InputGroupAddon align="inline-end">
                     <InputGroupButton
-                        onClick={() => tableColumn?.setFilterValue('')}
+                        onClick={() => table.setGlobalFilter('')}
                         type="button"
                     >
                         <X />
@@ -205,7 +205,8 @@ function DataTable<TData, TValue = unknown>({
     const [initialState] = useState(() => migrateLegacyTableState(pathname, tableKey));
 
     const [sorting, setSorting] = useState<SortingState>(() => initialState.sorting ?? initialSorting);
-    const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
+    const [internalGlobalFilter, setInternalGlobalFilter] = useState<string>('');
+    const [searchColumns, setSearchColumns] = useState<string[]>(() => initialState.searchColumns ?? []);
     const [internalColumnVisibility, setInternalColumnVisibility] = useState<VisibilityState>(() =>
         isColumnVisibilityControlled ? {} : (initialState.columnVisibility ?? {}),
     );
@@ -215,6 +216,37 @@ function DataTable<TData, TValue = unknown>({
     }));
     const [rowSelection, setRowSelection] = useState({});
     const [expanded, setExpanded] = useState<ExpandedState>({});
+
+    // Resolve the set of column ids the search input may target.
+    // Priority: explicit array prop > legacy single-string prop > columns with
+    // `meta.searchable === true`. Falls through to `[]` when no opt-in exists,
+    // which suppresses the search input entirely (see JSX below).
+    const searchCandidateIds = useMemo<string[]>(() => {
+        if (Array.isArray(filterColumn)) {
+            return filterColumn;
+        }
+
+        if (typeof filterColumn === 'string') {
+            return [filterColumn];
+        }
+
+        return columns
+            .filter((column) => column.meta?.searchable === true)
+            .map((column) => {
+                const withId = column as { id?: string };
+
+                if (withId.id) {
+                    return withId.id;
+                }
+
+                const withAccessor = column as { accessorKey?: string };
+
+                return typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined;
+            })
+            .filter((id): id is string => typeof id === 'string');
+    }, [columns, filterColumn]);
+
+    const isMultiMode = Array.isArray(filterColumn) || (filterColumn === undefined && searchCandidateIds.length > 0);
 
     // Track which tableKey we've already migrated + seeded from. When the
     // key rotates (route change inside a persistent layout, or an explicit
@@ -231,6 +263,7 @@ function DataTable<TData, TValue = unknown>({
         const stored = migrateLegacyTableState(pathname, tableKey);
 
         setSorting(stored.sorting ?? initialSorting);
+        setSearchColumns(stored.searchColumns ?? []);
 
         if (!isColumnVisibilityControlled) {
             setInternalColumnVisibility(stored.columnVisibility ?? {});
@@ -242,40 +275,32 @@ function DataTable<TData, TValue = unknown>({
         }));
     }, [initialPageSize, initialSorting, isColumnVisibilityControlled, pathname, tableKey]);
 
-    // Project the controlled filter value into TanStack's columnFilters shape.
-    // Kept separate from `internalColumnFilters` so the controlled branch
-    // doesn't pull internal state into its deps and trigger spurious memo
-    // invalidations. Memoized so the reference is stable across renders when
-    // the inputs don't change — otherwise TanStack treats every render as a
-    // filter mutation and the downstream `useLatestRef(columnFilters)` would
-    // re-fire its effect each commit.
-    const controlledColumnFilters = useMemo<ColumnFiltersState>(
-        () =>
-            isFilterControlled && filterColumn && externalFilterValue
-                ? [{ id: filterColumn, value: externalFilterValue }]
-                : EMPTY_COLUMN_FILTERS,
-        [externalFilterValue, filterColumn, isFilterControlled],
-    );
+    // Effective global filter: controlled-mode parents own the value via
+    // `useTableQueryFilter` (URL `?q=`), uncontrolled tables drive it from
+    // internal state. Either way TanStack reads from `state.globalFilter`
+    // exclusively.
+    const effectiveGlobalFilter = isFilterControlled ? (externalFilterValue ?? '') : internalGlobalFilter;
 
-    const columnFilters = isFilterControlled ? controlledColumnFilters : internalColumnFilters;
+    const externalFilterValueReference = useLatestRef(externalFilterValue);
 
-    const columnFiltersReference = useLatestRef(columnFilters);
-
-    // Funnel every TanStack filter change through the right sink: parent
-    // callback in controlled mode, internal state otherwise.
-    const handleColumnFiltersChange = useCallback(
-        (updater: Updater<ColumnFiltersState>) => {
+    // Funnel every TanStack global-filter change through the right sink:
+    // parent callback in controlled mode, internal state otherwise. The
+    // updater signature mirrors TanStack's own — we resolve the function
+    // form against the latest external value before calling `onFilterChange`,
+    // so the parent always sees the next string, not a function.
+    const handleGlobalFilterChange = useCallback(
+        (updater: Updater<string>) => {
             if (!isFilterControlled) {
-                setInternalColumnFilters(updater);
+                setInternalGlobalFilter(updater);
 
                 return;
             }
 
-            const next = typeof updater === 'function' ? updater(columnFiltersReference.current) : updater;
-            const entry = filterColumn ? next.find((candidate) => candidate.id === filterColumn) : undefined;
-            onFilterChange?.((entry?.value as string) ?? '');
+            const previous = externalFilterValueReference.current ?? '';
+            const next = typeof updater === 'function' ? updater(previous) : updater;
+            onFilterChange?.(next);
         },
-        [columnFiltersReference, filterColumn, isFilterControlled, onFilterChange],
+        [externalFilterValueReference, isFilterControlled, onFilterChange],
     );
 
     // Persist sorting + column visibility + page size into the unified
@@ -305,6 +330,13 @@ function DataTable<TData, TValue = unknown>({
             pageSize: pagination.pageSize === initialPageSize ? undefined : pagination.pageSize,
         });
     }, [initialPageSize, pagination.pageSize, tableKey]);
+
+    // Empty array is the "default for everyone" sentinel — `updateTableState`
+    // collapses `[]` to a delete so the storage slot stays empty until the
+    // user actively narrows the search column set.
+    useEffectAfterMount(() => {
+        updateTableState(tableKey, { searchColumns });
+    }, [searchColumns, tableKey]);
 
     const columnVisibility = externalColumnVisibility ?? internalColumnVisibility;
 
@@ -362,31 +394,63 @@ function DataTable<TData, TValue = unknown>({
         [handlePaginationChange],
     );
 
+    // Active column set for the global filter: when the user has narrowed via
+    // the picker, honour the explicit list; otherwise fall back to all
+    // candidates ("empty selection = search everywhere"). Recomputed on each
+    // render — cheap because it's just a couple of arrays — and consumed by
+    // the closure below.
+    const getColumnCanGlobalFilter = useCallback(
+        (column: Column<TData, unknown>) => {
+            const active = searchColumns.length > 0 ? searchColumns : searchCandidateIds;
+
+            return active.includes(column.id);
+        },
+        [searchCandidateIds, searchColumns],
+    );
+
     const table = useReactTable({
         autoResetPageIndex: false,
         columns,
         data,
         enableSortingRemoval: true,
+        getColumnCanGlobalFilter,
         getCoreRowModel: getCoreRowModel(),
         getExpandedRowModel: getExpandedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         getSortedRowModel: getSortedRowModel(),
-        onColumnFiltersChange: handleColumnFiltersChange,
+        globalFilterFn: 'includesString',
         onColumnVisibilityChange: handleColumnVisibilityChange,
         onExpandedChange: setExpanded,
+        onGlobalFilterChange: handleGlobalFilterChange,
         onPaginationChange: handlePaginationChange,
         onRowSelectionChange: setRowSelection,
         onSortingChange: setSorting,
         state: {
-            columnFilters,
             columnVisibility,
             expanded,
+            globalFilter: effectiveGlobalFilter,
             pagination,
             rowSelection,
             sorting,
         },
     });
+
+    // TanStack doesn't re-run the filter pipeline when only the
+    // `getColumnCanGlobalFilter` predicate's closure changes — it watches
+    // `state.globalFilter`. Re-set the same value through TanStack's API on
+    // every `searchColumns` change so the pipeline picks up the new predicate.
+    // Skip the very first render to avoid a redundant cycle on mount.
+    const isFirstRefilterRender = useRef(true);
+    useEffect(() => {
+        if (isFirstRefilterRender.current) {
+            isFirstRefilterRender.current = false;
+
+            return;
+        }
+
+        table.setGlobalFilter((current: string) => current);
+    }, [searchColumns, table]);
 
     const handleRowClick = useCallback(
         (row: Row<TData>) => {
@@ -447,12 +511,58 @@ function DataTable<TData, TValue = unknown>({
     return (
         <div className="w-full">
             <div className="flex items-center gap-4 py-4">
-                {filterColumn ? (
+                {searchCandidateIds.length > 0 ? (
                     <DataTableFilter
-                        column={filterColumn}
                         placeholder={filterPlaceholder}
                         table={table}
                     />
+                ) : null}
+                {isMultiMode && searchCandidateIds.length > 1 ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline">
+                                <ListFilter className="mr-2" />
+                                Search in <ChevronDown className="ml-2" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                            {searchCandidateIds.map((id) => {
+                                const column = table.getColumn(id);
+
+                                if (!column) {
+                                    return null;
+                                }
+
+                                const isChecked = searchColumns.length === 0 ? true : searchColumns.includes(id);
+
+                                return (
+                                    <DropdownMenuCheckboxItem
+                                        checked={isChecked}
+                                        className={column.columnDef.meta?.columnMenuLabel ? undefined : 'capitalize'}
+                                        key={id}
+                                        onCheckedChange={(value) => {
+                                            setSearchColumns((prev) => {
+                                                // Treat the empty-selection
+                                                // sentinel as "all candidates"
+                                                // before mutating, so the user
+                                                // never lands in a state where
+                                                // unchecking one box silently
+                                                // re-enables every column.
+                                                const base = prev.length === 0 ? [...searchCandidateIds] : prev;
+
+                                                return value
+                                                    ? Array.from(new Set([id, ...base]))
+                                                    : base.filter((x) => x !== id);
+                                            });
+                                        }}
+                                        onSelect={(event) => event.preventDefault()}
+                                    >
+                                        {columnPickerLabel(column)}
+                                    </DropdownMenuCheckboxItem>
+                                );
+                            })}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 ) : null}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
