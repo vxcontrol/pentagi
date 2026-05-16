@@ -104,7 +104,7 @@ export const useTableQueryFilterReader = (
  */
 export const useTableQueryFilter = (options: UseTableQueryFilterOptions = {}): UseTableQueryFilterResult => {
     const { clearPageParamOnChange = true, paramName = URL_PARAMS.QUERY, storageKey: explicitStorageKey } = options;
-    const [, setSearchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { table: defaultStorageKey } = usePageStorageKeys();
     const storageKey = explicitStorageKey ?? defaultStorageKey;
 
@@ -177,26 +177,48 @@ export const useTableQueryFilter = (options: UseTableQueryFilterOptions = {}): U
         updateTableState(storageKey, { filter: filter.length > 0 ? filter : undefined });
     }, [filter, storageKey]);
 
+    // Sync a ref to the latest committed `searchParams` on every render.
+    // Used as a fallback below when `window.location` isn't a faithful
+    // mirror of the router state — that happens under `MemoryRouter`,
+    // which is what our hook tests use. Updating the ref in render is safe
+    // because we never read it during render; we only read it inside event
+    // callbacks (`setFilter` below). `useEffect`-synced refs (see
+    // `useLatestRef`) lag one commit, which is fatal here: two updates
+    // fired in the same tick must both see the same authoritative latest
+    // value, not the prior-render snapshot.
+    const searchParamsReference = useRef(searchParams);
+    // eslint-disable-next-line react-hooks/refs
+    searchParamsReference.current = searchParams;
+
     const setFilter = useCallback(
         (value: string) => {
-            setSearchParams(
-                (previous) => {
-                    const next = new URLSearchParams(previous);
+            // Avoid the functional `(previous) => ...` form of
+            // `setSearchParams`. When two updates fire in the same React tick
+            // (e.g. a debounced filter commit landing alongside a paging
+            // button click), react-router v6 feeds **both** updaters the same
+            // pre-batch snapshot — the second write erases the first, so
+            // `?q=foo` plus `setPage(5)` collapses to `?page=6` and `q` is
+            // lost. `window.location.search` is the freshest source under
+            // `BrowserRouter` (production) and immune to that batching race;
+            // under `MemoryRouter` (tests) the in-memory history is *not*
+            // synced to `window.location`, so we fall back to the ref-stashed
+            // latest react-router snapshot.
+            const fromWindow = typeof window !== 'undefined' ? window.location.search : '';
+            const next = fromWindow
+                ? new URLSearchParams(fromWindow)
+                : new URLSearchParams(searchParamsReference.current);
 
-                    if (value.length === 0) {
-                        next.delete(paramName);
-                    } else {
-                        next.set(paramName, value);
-                    }
+            if (value.length === 0) {
+                next.delete(paramName);
+            } else {
+                next.set(paramName, value);
+            }
 
-                    if (clearPageParamOnChange) {
-                        next.delete(URL_PARAMS.PAGE);
-                    }
+            if (clearPageParamOnChange) {
+                next.delete(URL_PARAMS.PAGE);
+            }
 
-                    return next;
-                },
-                { replace: true },
-            );
+            setSearchParams(next, { replace: true });
         },
         [clearPageParamOnChange, paramName, setSearchParams],
     );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { URL_PARAMS } from '@/lib/url-params';
@@ -83,19 +83,37 @@ export const usePagination = ({ paramName = URL_PARAMS.PAGE }: UsePaginationOpti
         );
     }, [paramName, searchParams, setSearchParams]);
 
+    // See `use-table-query-filter.ts` for the full rationale — render-time
+    // mutation is safe because the ref is only read from event callbacks
+    // (`setPage`), never during render. We deliberately skip `useLatestRef`
+    // because its passive-`useEffect` sync lags by one commit, which is
+    // exactly the gap that lets a batched filter+page race lose state.
+    const searchParamsReference = useRef(searchParams);
+    // eslint-disable-next-line react-hooks/refs
+    searchParamsReference.current = searchParams;
+
     const setPage = useCallback(
         (newPageIndex: number) => {
-            setSearchParams((previous) => {
-                const next = new URLSearchParams(previous);
+            // Avoid the functional `(previous) => ...` form: react-router v6
+            // feeds the same pre-batch snapshot to every functional updater
+            // queued in a single tick, so a `setFilter` + `setPage` pair
+            // (e.g. debounced filter commit landing alongside a paging click)
+            // would collapse — the second write erases the first. Prefer
+            // `window.location.search` under `BrowserRouter`; fall back to
+            // the latest committed `searchParams` (via ref) under
+            // `MemoryRouter`, which doesn't sync `window.location`.
+            const fromWindow = typeof window !== 'undefined' ? window.location.search : '';
+            const next = fromWindow
+                ? new URLSearchParams(fromWindow)
+                : new URLSearchParams(searchParamsReference.current);
 
-                if (newPageIndex <= 0) {
-                    next.delete(paramName);
-                } else {
-                    next.set(paramName, String(newPageIndex + 1));
-                }
+            if (newPageIndex <= 0) {
+                next.delete(paramName);
+            } else {
+                next.set(paramName, String(newPageIndex + 1));
+            }
 
-                return next;
-            });
+            setSearchParams(next);
         },
         [paramName, setSearchParams],
     );
