@@ -194,6 +194,7 @@ const Flows = () => {
                     />
                 ),
                 maxSize: 80,
+                meta: { searchable: true },
                 minSize: 60,
                 size: 70,
             },
@@ -229,6 +230,7 @@ const Flows = () => {
                         title="Title"
                     />
                 ),
+                meta: { searchable: true },
                 minSize: 200,
                 size: 300,
             },
@@ -255,6 +257,7 @@ const Flows = () => {
                     />
                 ),
                 maxSize: 130,
+                meta: { searchable: true },
                 minSize: 80,
                 size: 100,
             },
@@ -658,7 +661,6 @@ const Flows = () => {
                 <DataTable<Flow>
                     columns={columns}
                     data={flows}
-                    filterColumn="title"
                     filterPlaceholder="Filter flows..."
                     filterValue={filter}
                     onFilterChange={setFilter}
