@@ -22,6 +22,7 @@ import { z } from 'zod';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailNavigationSheet, DetailNavigationToolbar, useNavigation } from '@/components/shared/detail-navigation';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
+import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -680,9 +681,12 @@ const Template = () => {
                             <SheetTitle className="flex items-center gap-2 pr-8 text-base">
                                 <FileText className="size-4" />
                                 <span>Preset templates</span>
-                                <span className="text-muted-foreground ml-auto text-sm font-normal tabular-nums">
+                                <Badge
+                                    className="ml-auto font-normal tabular-nums"
+                                    variant="secondary"
+                                >
                                     {PRESET_TEMPLATES.length}
-                                </span>
+                                </Badge>
                             </SheetTitle>
                         </SheetHeader>
                         {/* Plain overflow-y-auto instead of Radix ScrollArea —
@@ -707,9 +711,12 @@ const Template = () => {
                                 <h3 className="flex items-center gap-2 text-base font-semibold">
                                     <FileText className="size-4" />
                                     <span>Preset templates</span>
-                                    <span className="text-muted-foreground ml-auto text-sm font-normal tabular-nums">
+                                    <Badge
+                                        className="ml-auto font-normal tabular-nums"
+                                        variant="secondary"
+                                    >
                                         {PRESET_TEMPLATES.length}
-                                    </span>
+                                    </Badge>
                                 </h3>
                             </div>
                             <div className="min-w-0 flex-1 overflow-y-auto">{asideContent}</div>

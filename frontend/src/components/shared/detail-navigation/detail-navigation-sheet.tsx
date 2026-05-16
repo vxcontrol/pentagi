@@ -1,5 +1,6 @@
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -252,7 +253,12 @@ export function DetailNavigationSheet<T>({
                     <SheetTitle className="flex items-center gap-2 pr-8 text-base">
                         {sheetIcon}
                         <span>{sheetTitle}</span>
-                        <span className="text-muted-foreground ml-auto text-sm font-normal tabular-nums">{total}</span>
+                        <Badge
+                            className="ml-auto font-normal tabular-nums"
+                            variant="secondary"
+                        >
+                            {total}
+                        </Badge>
                     </SheetTitle>
                 </SheetHeader>
                 {hasEntries ? (
