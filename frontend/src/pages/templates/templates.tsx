@@ -145,6 +145,7 @@ const Templates = () => {
                     title="Title"
                 />
             ),
+            meta: { searchable: true },
         },
         {
             accessorKey: 'text',
@@ -159,6 +160,7 @@ const Templates = () => {
                     title="Text"
                 />
             ),
+            meta: { searchable: true },
         },
         {
             cell: ({ row }) => {
@@ -299,7 +301,6 @@ const Templates = () => {
                 <DataTable
                     columns={columns}
                     data={templates}
-                    filterColumn="title"
                     filterPlaceholder="Filter templates..."
                     filterValue={filter}
                     onFilterChange={setFilter}
