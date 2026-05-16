@@ -111,6 +111,16 @@ interface DataTableProps<TData, TValue = unknown> {
      * one DataTable. Pages that mount multiple DataTables on the same route
      * (e.g. `/settings/prompts`) must pass distinct keys per instance, or
      * their persisted state will alias and overwrite each other.
+     *
+     * Recommended composition for multi-table routes — take the route base
+     * through `usePageStorageKeys` and append a per-table suffix instead of
+     * hard-coding the `table_4_<path>` prefix:
+     *
+     * ```tsx
+     * const { table: base } = usePageStorageKeys();
+     * <DataTable storageKey={`${base}:agents`} … />
+     * <DataTable storageKey={`${base}:tools`} … />
+     * ```
      */
     storageKey?: string;
 }
